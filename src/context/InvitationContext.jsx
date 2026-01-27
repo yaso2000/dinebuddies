@@ -94,6 +94,44 @@ export const InvitationProvider = ({ children }) => {
         { id: 'n1', title: 'تم قبول طلبك!', message: 'وافق أحمد على انضمامك لدعوة العشاء.', time: '١٠ دقائق', read: false, type: 'approval' }
     ]);
 
+    // --- ADMIN DATA (Mock Database) ---
+    const [allUsers, setAllUsers] = useState([
+        { id: 'current_user', name: 'ياسر', email: 'yaser@example.com', role: 'user', status: 'active', joinDate: '2024-01-01' },
+        { id: 'user_1', name: 'أحمد محمد', email: 'ahmed@example.com', role: 'user', status: 'active', joinDate: '2024-01-15' },
+        { id: 'user_2', name: 'سارة علي', email: 'sara@example.com', role: 'user', status: 'banned', joinDate: '2024-01-20' },
+        { id: 'partner_1', name: 'مدير مطعم Le Bistro', email: 'manager@lebistro.com', role: 'partner_owner', status: 'active', joinDate: '2024-01-10' }
+    ]);
+
+    const [reports, setReports] = useState([
+        { id: 'r1', type: 'violation', target: 'دعوة غير لائقة', reporter: 'user_1', status: 'pending', date: '2024-01-25', details: 'تحتوي الدعوة على تفاصيل غير واضحة' },
+        { id: 'r2', type: 'bug', target: 'الخريطة لا تعمل', reporter: 'user_2', status: 'resolved', date: '2024-01-26', details: 'عند فتح الخريطة تظهر شاشة سوداء' }
+    ]);
+
+    const [subscriptionPlans, setSubscriptionPlans] = useState([
+        { id: 'p1', name: 'الباقة الأساسية', type: 'user', price: 0, features: ['إنشاء دعوات', 'الانضمام لدعوات'], active: true },
+        { id: 'p2', name: 'باقة VIP', type: 'user', price: 49, features: ['دعوات مميزة', 'شعار VIP', 'دعم أولوية'], active: true },
+        { id: 'p3', name: 'باقة الشريك', type: 'partner', price: 199, features: ['لوحة تحكم', 'إحصائيات', 'ظهور مميز'], active: true }
+    ]);
+
+    // Admin Functions
+    const banUser = (userId) => {
+        setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'active' ? 'banned' : 'active' } : u));
+    };
+
+    const resolveReport = (reportId) => {
+        setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'resolved' } : r));
+    };
+
+    const updatePlan = (planId, newData) => {
+        setSubscriptionPlans(prev => prev.map(p => p.id === planId ? { ...p, ...newData } : p));
+    };
+
+    const sendSystemMessage = (target, message) => {
+        // Mock sending message
+        console.log(`Sending message to ${target}: ${message}`);
+        addNotification('تم الإرسال', `تم إرسال الرسالة إلى ${target === 'all' ? 'الجميع' : target}`, 'success');
+    };
+
     useEffect(() => {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(currentUser));
     }, [currentUser]);
@@ -143,7 +181,18 @@ export const InvitationProvider = ({ children }) => {
             }
 
             return invite.id;
+            return invite.id;
         } catch (err) { return false; }
+    };
+
+    const addReport = (reportData) => {
+        setReports(prev => [...prev, {
+            id: uuidv4(),
+            status: 'pending',
+            date: new Date().toISOString().split('T')[0],
+            ...reportData
+        }]);
+        addNotification('تم الإرسال', 'تم استلام بلاغك وسيقوم فريقنا بمراجعته.', 'success');
     };
 
     // Helper function to add partner notifications
@@ -407,7 +456,9 @@ export const InvitationProvider = ({ children }) => {
             notifications, updateProfile, updateRestaurant, markAllAsRead, addNotification,
             restoreDefaults, toggleFollow, getFollowingInvitations, submitRating, toggleCommunity,
             // New permission and demo mode functions
-            canEditRestaurant, isDemoMode, toggleDemoMode, switchUserAccount
+            canEditRestaurant, isDemoMode, toggleDemoMode, switchUserAccount,
+            // Admin Exports
+            allUsers, reports, subscriptionPlans, banUser, resolveReport, updatePlan, sendSystemMessage, addReport
         }}>
             {children}
         </InvitationContext.Provider>

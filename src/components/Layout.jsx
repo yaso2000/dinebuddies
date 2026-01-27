@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
 import { FaHome, FaPlusCircle, FaUser, FaGlobe, FaBell, FaStore, FaUsers } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
@@ -37,7 +37,7 @@ const Layout = ({ children }) => {
             </header>
 
             <main style={{ minHeight: '80vh', paddingBottom: '100px' }}>
-                {children}
+                {children || <Outlet />}
             </main>
 
             <nav className="bottom-nav">

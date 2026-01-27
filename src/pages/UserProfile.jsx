@@ -2,13 +2,15 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
-import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle } from 'react-icons/fa';
+import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag } from 'react-icons/fa';
+import { useState } from 'react';
 
 const UserProfile = () => {
     const { t, i18n } = useTranslation();
     const { userId } = useParams();
     const navigate = useNavigate();
-    const { invitations, currentUser, toggleFollow } = useInvitations();
+    const { invitations, currentUser, toggleFollow, addReport } = useInvitations();
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     // Find user from invitations (author data)
     const userInvitation = invitations.find(inv => inv.author?.id === userId);
@@ -108,40 +110,102 @@ const UserProfile = () => {
                         </div>
                     </div>
 
-                    {/* Follow Button */}
-                    <button
-                        onClick={() => toggleFollow(userId)}
-                        className="btn btn-block"
-                        style={{
-                            height: '55px',
-                            background: isFollowing
-                                ? 'transparent'
-                                : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                            border: isFollowing ? '2px solid var(--primary)' : 'none',
-                            color: 'white',
-                            fontSize: '1rem',
-                            fontWeight: '900',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '10px',
-                            maxWidth: '400px',
-                            margin: '0 auto'
-                        }}
-                    >
-                        {isFollowing ? (
-                            <>
-                                <FaCheckCircle />
-                                <span>{i18n.language === 'ar' ? 'تتابع' : 'Following'}</span>
-                            </>
-                        ) : (
-                            <>
-                                <FaUserFriends />
-                                <span>{i18n.language === 'ar' ? 'متابعة' : 'Follow'}</span>
-                            </>
-                        )}
-                    </button>
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '400px', margin: '0 auto' }}>
+                        <button
+                            onClick={() => toggleFollow(userId)}
+                            className="btn"
+                            style={{
+                                flex: 1,
+                                height: '55px',
+                                background: isFollowing
+                                    ? 'transparent'
+                                    : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+                                border: isFollowing ? '2px solid var(--primary)' : 'none',
+                                color: 'white',
+                                fontSize: '1rem',
+                                fontWeight: '900',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '10px'
+                            }}
+                        >
+                            {isFollowing ? (
+                                <>
+                                    <FaCheckCircle />
+                                    <span>{i18n.language === 'ar' ? 'تتابع' : 'Following'}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <FaUserFriends />
+                                    <span>{i18n.language === 'ar' ? 'متابعة' : 'Follow'}</span>
+                                </>
+                            )}
+                        </button>
+
+                        <button
+                            onClick={() => setIsReportModalOpen(true)}
+                            className="btn"
+                            style={{
+                                width: '55px',
+                                height: '55px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                color: '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.2rem',
+                                padding: 0
+                            }}
+                            title="Report User"
+                        >
+                            <FaFlag />
+                        </button>
+                    </div>
                 </div>
+
+                {isReportModalOpen && (
+                    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4" onClick={() => setIsReportModalOpen(false)}>
+                        <div className="bg-white rounded-xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+                            <h3 className="text-xl font-bold mb-4 text-gray-900">
+                                {i18n.language === 'ar' ? 'الإبلاغ عن مستخدم' : 'Report User'}
+                            </h3>
+                            <textarea
+                                className="w-full p-3 border rounded-lg mb-4 text-gray-900 bg-gray-50 focus:ring-2 focus:ring-red-500"
+                                rows="4"
+                                placeholder={i18n.language === 'ar' ? 'سبب الإبلاغ...' : 'Reason for reporting...'}
+                                id="reportReason"
+                            ></textarea>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        const reason = document.getElementById('reportReason').value;
+                                        if (reason) {
+                                            addReport({
+                                                type: 'violation',
+                                                target: user.name,
+                                                reporter: currentUser.name,
+                                                details: reason
+                                            });
+                                            setIsReportModalOpen(false);
+                                        }
+                                    }}
+                                    className="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold"
+                                >
+                                    {i18n.language === 'ar' ? 'إرسال' : 'Send'}
+                                </button>
+                                <button
+                                    onClick={() => setIsReportModalOpen(false)}
+                                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg"
+                                >
+                                    {i18n.language === 'ar' ? 'إلغاء' : 'Cancel'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* User's Invitations */}
                 <div style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>

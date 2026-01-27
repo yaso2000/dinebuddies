@@ -19,12 +19,22 @@ import FollowersList from './pages/FollowersList';
 import PrivateChat from './pages/PrivateChat';
 import PartnerNotifications from './pages/PartnerNotifications';
 
+// Admin Imports
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminPartners from './pages/admin/AdminPartners';
+import AdminSubscriptions from './pages/admin/AdminSubscriptions';
+import AdminSupport from './pages/admin/AdminSupport';
+import AdminLegal from './pages/admin/AdminLegal';
+
 function App() {
     return (
         <InvitationProvider>
             <Router>
-                <Layout>
-                    <Routes>
+                <Routes>
+                    {/* User Routes (Wrapped in Main Layout) */}
+                    <Route element={<Layout />}>
                         <Route path="/" element={<Home />} />
                         <Route path="/create" element={<CreateInvitation />} />
                         <Route path="/invitation/:id" element={<InvitationDetails />} />
@@ -38,8 +48,18 @@ function App() {
                         <Route path="/profile/:userId" element={<UserProfile />} />
                         <Route path="/profile" element={<Profile />} />
                         <Route path="/notifications" element={<Notifications />} />
-                    </Routes>
-                </Layout>
+                    </Route>
+
+                    {/* Admin Routes (Dedicated Layout) */}
+                    <Route path="/admin" element={<AdminLayout />}>
+                        <Route index element={<AdminDashboard />} />
+                        <Route path="users" element={<AdminUsers />} />
+                        <Route path="partners" element={<AdminPartners />} />
+                        <Route path="subscriptions" element={<AdminSubscriptions />} />
+                        <Route path="support" element={<AdminSupport />} />
+                        <Route path="legal" element={<AdminLegal />} />
+                    </Route>
+                </Routes>
             </Router>
         </InvitationProvider>
     );
