@@ -1,6 +1,10 @@
-# DineBuddies - Social Dining Platform
+# DineBuddies - Social Dining Platform 🍽️
 
-A modern social platform for connecting people through dining experiences. Share invitations to restaurants, cafes, and entertainment venues, and meet new friends who share your interests.
+A modern social platform for organizing dining experiences and connecting food lovers.
+
+## 🚀 Live Demo
+- **Production:** https://dinebuddies.vercel.app
+- **Status:** ✅ Auto-deployed from GitHub
 
 ## Features
 
