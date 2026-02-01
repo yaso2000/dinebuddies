@@ -360,50 +360,57 @@ const Profile = () => {
 
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '2rem', marginTop: '1.5rem' }}>
                             <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers')}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{currentUser.followersCount || 124}</div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{currentUser.followersCount || 0}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('followers')}</div>
                             </div>
                             <div style={{ borderRight: '1px solid var(--border-color)' }}></div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--luxury-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                    <FaStar style={{ fontSize: '0.9rem' }} /> {currentUser.reputation || 450}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('reputation_points')}</div>
-                            </div>
-                            <div style={{ borderRight: '1px solid var(--border-color)' }}></div>
                             <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers')}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{currentUser.following?.length || 2}</div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{currentUser.following?.length || 0}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('following')}</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Plan & Subscription Card */}
-                    <div className="premium-plan-card" style={{ padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
-                        <div style={{ position: 'absolute', top: '-10px', right: '-10px', width: '60px', height: '60px', background: 'var(--luxury-gold)', borderRadius: '50%', filter: 'blur(30px)', opacity: 0.2 }}></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span>💳</span> {i18n.language === 'ar' ? 'خطتي الحالية' : 'My Plan'}
-                            </h3>
-                            <span style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'var(--luxury-gold)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
-                                PREMIUM
-                            </span>
+                    {/* Plan & Subscription Card - Only show if user has active subscription */}
+                    {userProfile?.subscription?.status === 'active' && (
+                        <div className="premium-plan-card" style={{ padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+                            <div style={{ position: 'absolute', top: '-10px', right: '-10px', width: '60px', height: '60px', background: 'var(--luxury-gold)', borderRadius: '50%', filter: 'blur(30px)', opacity: 0.2 }}></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span>💳</span> {i18n.language === 'ar' ? 'خطتي الحالية' : 'My Plan'}
+                                </h3>
+                                <span style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'var(--luxury-gold)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+                                    {userProfile?.subscription?.planName || 'PREMIUM'}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {userProfile?.subscription?.features?.map((feature, index) => (
+                                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}>
+                                        <FaCheckCircle style={{ color: 'var(--primary)' }} />
+                                        <span>{feature}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => navigate('/plans')}
+                                style={{
+                                    width: '100%',
+                                    marginTop: '1rem',
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '12px',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '700',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {i18n.language === 'ar' ? 'إدارة الاشتراك' : 'Manage Subscription'}
+                            </button>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}>
-                                <FaCheckCircle style={{ color: 'var(--primary)' }} />
-                                <span>{i18n.language === 'ar' ? 'دعوات غير محدودة' : 'Unlimited Invitations'}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}>
-                                <FaCheckCircle style={{ color: 'var(--primary)' }} />
-                                <span>{i18n.language === 'ar' ? 'خصم 20% في المطاعم الشريكة' : '20% Off at Partner Restaurants'}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}>
-                                <FaCheckCircle style={{ color: 'var(--primary)' }} />
-                                <span>{i18n.language === 'ar' ? 'شارة العضو المميز' : 'Premium Member Badge'}</span>
-                            </div>
-                        </div>
-                    </div>
+                    )}
 
                     <div style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
                         <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', overflowX: 'auto' }}>
