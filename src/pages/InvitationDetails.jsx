@@ -363,7 +363,7 @@ const InvitationDetails = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                     <FaCalendarAlt style={{ color: 'var(--primary)' }} />
-                                    <span>{date ? new Date(date).toLocaleDateString('ar-SA') : 'قريباً'}</span>
+                                    <span>{date ? new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US') : (i18n.language === 'ar' ? 'قريباً' : 'Soon')}</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                     <FaClock style={{ color: 'var(--accent)' }} />
@@ -371,7 +371,7 @@ const InvitationDetails = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                     <FaUsers style={{ color: 'var(--secondary)' }} />
-                                    <span>مطلوب {guestsNeeded} أشخاص</span>
+                                    <span>{i18n.language === 'ar' ? `مطلوب ${guestsNeeded} أشخاص` : `${guestsNeeded} guests needed`}</span>
                                 </div>
                             </div>
                         </div>
@@ -530,7 +530,7 @@ const InvitationDetails = () => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 {chat.length === 0 ? (
                                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                        لا توجد رسائل بعد. ابدأ المحادثة!
+                                        {i18n.language === 'ar' ? 'لا توجد رسائل بعد. ابدأ المحادثة!' : 'No messages yet. Start the conversation!'}
                                     </div>
                                 ) : (
                                     chat.map((msg) => (

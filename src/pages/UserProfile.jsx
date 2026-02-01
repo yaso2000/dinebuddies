@@ -297,7 +297,7 @@ const UserProfile = () => {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                             <span>{inv.location}</span>
                                             <span>•</span>
-                                            <span>{inv.date ? inv.date.split('T')[0] : 'قريباً'}</span>
+                                            <span>{inv.date ? inv.date.split('T')[0] : (i18n.language === 'ar' ? 'قريباً' : 'Soon')}</span>
                                         </div>
                                     </div>
                                     <div style={{
