@@ -96,7 +96,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         color: '#64748b',
                         textAlign: 'center'
                     }}>
-                        v1.0.0 • Admin Panel
+                        v1.0.0 • Admin Panel • Auto-Deploy ✅
                     </div>
                 </div>
             </div>
