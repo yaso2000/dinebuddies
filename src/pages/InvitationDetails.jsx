@@ -27,7 +27,7 @@ const InvitationDetails = () => {
         }
     };
 
-    const { invitations, currentUser, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating } = useInvitations();
+    const { invitations, currentUser, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
     const [message, setMessage] = useState('');
     const [groupChatId, setGroupChatId] = useState(null);
     const [loadingGroupChat, setLoadingGroupChat] = useState(false);
@@ -64,8 +64,6 @@ const InvitationDetails = () => {
         sendChatMessage(id, message);
         setMessage('');
     };
-
-    const { requestToJoin, cancelRequest } = useInvitations();
 
     // Load group chat ID if user is participant
     useEffect(() => {
