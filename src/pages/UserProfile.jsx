@@ -1,25 +1,63 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
-import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag } from 'react-icons/fa';
-import { useState } from 'react';
+import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment } from 'react-icons/fa';
+import NewReportModal from '../components/NewReportModal';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const UserProfile = () => {
     const { t, i18n } = useTranslation();
     const { userId } = useParams();
     const navigate = useNavigate();
-    const { invitations, currentUser, toggleFollow, addReport } = useInvitations();
+    const { invitations, currentUser, toggleFollow, submitReport } = useInvitations();
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    // Find user from invitations (author data)
-    const userInvitation = invitations.find(inv => inv.author?.id === userId);
-    const user = userInvitation?.author;
+    // Fetch user data from Firestore
+    useEffect(() => {
+        const fetchUser = async () => {
+            if (!userId) return;
 
-    // If it's the current user, redirect to /profile
-    if (userId === currentUser.id) {
-        navigate('/profile');
-        return null;
+            // If it's the current user, redirect to /profile
+            if (userId === currentUser?.id) {
+                navigate('/profile');
+                return;
+            }
+
+            try {
+                console.log('🔍 Fetching user data for:', userId);
+                const userRef = doc(db, 'users', userId);
+                const userDoc = await getDoc(userRef);
+
+                if (userDoc.exists()) {
+                    const userData = { id: userDoc.id, ...userDoc.data() };
+                    console.log('✅ User data loaded:', userData);
+                    setUser(userData);
+                } else {
+                    console.log('❌ User not found in Firestore');
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error('❌ Error fetching user:', error);
+                setUser(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUser();
+    }, [userId, currentUser, navigate]);
+
+    // Loading state
+    if (loading) {
+        return (
+            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
+                <p>{i18n.language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+            </div>
+        );
     }
 
     // If user not found
@@ -37,6 +75,7 @@ const UserProfile = () => {
     const isFollowing = currentUser.following?.includes(userId);
     const userPostedInvitations = invitations.filter(inv => inv.author?.id === userId);
     const userJoinedInvitations = invitations.filter(inv => inv.joined?.includes(userId));
+
 
     return (
         <div className="profile-page" style={{ paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out' }}>
@@ -111,7 +150,7 @@ const UserProfile = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '400px', margin: '0 auto' }}>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '500px', margin: '0 auto' }}>
                         <button
                             onClick={() => toggleFollow(userId)}
                             className="btn"
@@ -145,6 +184,27 @@ const UserProfile = () => {
                         </button>
 
                         <button
+                            onClick={() => navigate(`/chat/${userId}`)}
+                            className="btn"
+                            style={{
+                                flex: 1,
+                                height: '55px',
+                                background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                                border: 'none',
+                                color: 'white',
+                                fontSize: '1rem',
+                                fontWeight: '900',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '10px'
+                            }}
+                        >
+                            <FaComment />
+                            <span>{i18n.language === 'ar' ? 'رسالة' : 'Message'}</span>
+                        </button>
+
+                        <button
                             onClick={() => setIsReportModalOpen(true)}
                             className="btn"
                             style={{
@@ -167,44 +227,14 @@ const UserProfile = () => {
                 </div>
 
                 {isReportModalOpen && (
-                    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4" onClick={() => setIsReportModalOpen(false)}>
-                        <div className="bg-white rounded-xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
-                            <h3 className="text-xl font-bold mb-4 text-gray-900">
-                                {i18n.language === 'ar' ? 'الإبلاغ عن مستخدم' : 'Report User'}
-                            </h3>
-                            <textarea
-                                className="w-full p-3 border rounded-lg mb-4 text-gray-900 bg-gray-50 focus:ring-2 focus:ring-red-500"
-                                rows="4"
-                                placeholder={i18n.language === 'ar' ? 'سبب الإبلاغ...' : 'Reason for reporting...'}
-                                id="reportReason"
-                            ></textarea>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => {
-                                        const reason = document.getElementById('reportReason').value;
-                                        if (reason) {
-                                            addReport({
-                                                type: 'violation',
-                                                target: user.name,
-                                                reporter: currentUser.name,
-                                                details: reason
-                                            });
-                                            setIsReportModalOpen(false);
-                                        }
-                                    }}
-                                    className="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold"
-                                >
-                                    {i18n.language === 'ar' ? 'إرسال' : 'Send'}
-                                </button>
-                                <button
-                                    onClick={() => setIsReportModalOpen(false)}
-                                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg"
-                                >
-                                    {i18n.language === 'ar' ? 'إلغاء' : 'Cancel'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <NewReportModal
+                        isOpen={isReportModalOpen}
+                        onClose={() => setIsReportModalOpen(false)}
+                        reportType="user"
+                        targetId={user.id}
+                        targetName={user.name}
+                        onSubmit={submitReport}
+                    />
                 )}
 
                 {/* User's Invitations */}

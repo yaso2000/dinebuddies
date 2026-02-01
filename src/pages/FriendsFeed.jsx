@@ -1,30 +1,42 @@
 import React, { useMemo } from 'react';
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
-import InvitationCard from '../components/InvitationCard';
-import { FaUsers, FaUserPlus } from 'react-icons/fa';
+import PostCard from '../components/PostCard';
+import { FaGlobe, FaBuilding } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 const FriendsFeed = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { getFollowingInvitations, currentUser } = useInvitations();
+    const { partnerPosts, restaurants } = useInvitations();
 
-    const followingInvitations = useMemo(() => getFollowingInvitations(), [getFollowingInvitations]);
+    // All City Posts (Public Feed)
+    const cityPosts = useMemo(() => {
+        if (!partnerPosts) return [];
+        // Filter: Must be explicitly public, OR legacy posts (undefined) are treated as public for now to avoid empty feed
+        // But the user specifically wants separation.
+        // Let's filter: display if isPublic is true.
+        // Legacy posts without flags were "Community" by default in the code logic (only spread in IF block).
+        // So legacy posts are effectively private/community.
+        return partnerPosts
+            .filter(post => post.isPublic !== false)
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }, [partnerPosts]);
 
     return (
         <div className="page-container" style={{ paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out' }}>
             <div style={{ padding: '1.5rem 1.25rem' }}>
-                <h1 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem' }}>
-                    {i18n.language === 'ar' ? 'دعوات الأصدقاء' : 'Friends Circle'}
+                <h1 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <FaGlobe style={{ color: 'var(--primary)' }} />
+                    {i18n.language === 'ar' ? 'المجتمع' : 'Community'}
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    {i18n.language === 'ar' ? 'شاهد ما يخطط له الأشخاص الذين تتابعهم' : 'See what your network is planning'}
+                    {i18n.language === 'ar' ? 'اكتشف أحدث العروض والفعاليات من جميع الشركاء' : 'Discover latest offers and events from all partners'}
                 </p>
             </div>
 
             <div style={{ padding: '0 1.25rem' }}>
-                {followingInvitations.length === 0 ? (
+                {cityPosts.length === 0 ? (
                     <div style={{
                         textAlign: 'center',
                         padding: '5rem 2rem',
@@ -33,29 +45,30 @@ const FriendsFeed = () => {
                         border: '1px dashed var(--border-color)',
                         marginTop: '1rem'
                     }}>
-                        <FaUsers style={{ fontSize: '3.5rem', color: 'var(--primary)', opacity: 0.3, marginBottom: '1.5rem' }} />
+                        <FaBuilding style={{ fontSize: '3.5rem', color: 'var(--primary)', opacity: 0.3, marginBottom: '1.5rem' }} />
                         <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-                            {i18n.language === 'ar' ? 'دائرتك هادئة حالياً' : 'Your circle is quiet'}
+                            {i18n.language === 'ar' ? 'المدينة هادئة الآن' : 'The city is quiet now'}
                         </h3>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '2rem' }}>
                             {i18n.language === 'ar'
-                                ? 'تابع المزيد من الأشخاص لتظهر دعواتهم هنا وتكون أول المنضمين!'
-                                : 'Follow more people to see their invitations here and be the first to join!'}
+                                ? 'لا توجد منشورات عامة حالياً. كن أول من ينشر!'
+                                : 'No public posts yet. Be the first to post!'}
                         </p>
                         <button
-                            onClick={() => navigate('/')}
+                            onClick={() => navigate('/restaurants')}
                             className="btn btn-primary"
                             style={{ borderRadius: '15px', padding: '12px 25px' }}
                         >
-                            <FaUserPlus style={{ marginInlineEnd: '8px' }} />
-                            {i18n.language === 'ar' ? 'استكشاف أشخاص جدد' : 'Explore New People'}
+                            {i18n.language === 'ar' ? 'تصفح الشركاء' : 'Browse Partners'}
                         </button>
                     </div>
                 ) : (
                     <div className="feed-list">
-                        {followingInvitations.map(inv => (
-                            <InvitationCard key={inv.id} invitation={inv} />
-                        ))}
+                        {cityPosts.map(post => {
+                            const restaurant = restaurants.find(r => r.id === post.restaurantId);
+                            if (!restaurant) return null;
+                            return <PostCard key={post.id} post={post} restaurant={restaurant} />;
+                        })}
                     </div>
                 )}
             </div>

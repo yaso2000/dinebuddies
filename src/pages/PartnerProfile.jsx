@@ -1,752 +1,761 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaEdit, FaSave, FaTimes, FaArrowLeft, FaUtensils, FaGlobe } from 'react-icons/fa';
-import { useInvitations } from '../context/InvitationContext';
-import { useTranslation } from 'react-i18next';
-import ShareButtons from '../components/ShareButtons';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers } from 'react-icons/fa';
+import { HiBuildingStorefront } from 'react-icons/hi2';
+import SimpleMap from '../components/SimpleMap';
+import { useAuth } from '../context/AuthContext';
+import { joinCommunity, leaveCommunity, isCommunityMember, getCommunityMemberCount } from '../utils/communityHelpers';
+import { ServiceIcon } from '../utils/serviceIcons.jsx';
+import CommunityManagement from '../components/CommunityManagement';
 
 const PartnerProfile = () => {
-    const { t, i18n } = useTranslation();
-    const { id } = useParams();
+    const { partnerId } = useParams();
     const navigate = useNavigate();
-    const context = useInvitations();
+    const { currentUser, userProfile } = useAuth();
+    const [partner, setPartner] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('about');
+    const [isMember, setIsMember] = useState(false);
+    const [memberCount, setMemberCount] = useState(0);
+    const [joiningCommunity, setJoiningCommunity] = useState(false);
+    const [activeInvitationsCount, setActiveInvitationsCount] = useState(0);
 
-    const restaurants = context?.restaurants || [];
-    const currentUser = context?.currentUser || {};
-    const canEditRestaurant = context?.canEditRestaurant || (() => false);
-    const isDemoMode = context?.isDemoMode || false;
-    const switchUserAccount = context?.switchUserAccount || (() => { });
-
-    const restaurant = restaurants.find(r => r && r.id === id);
-
-    // Check if current user can edit this restaurant
-    const canEdit = canEditRestaurant(id);
-
-    const [isEditing, setIsEditing] = useState(false);
-    const [formData, setFormData] = useState({
-        name: '',
-        type: '',
-        description: '',
-        menuDescription: '',
-        phone: '',
-        website: '',
-        workingHours: {
-            sunday: { open: '12:00', close: '23:00', isOpen: true },
-            monday: { open: '12:00', close: '23:00', isOpen: true },
-            tuesday: { open: '12:00', close: '23:00', isOpen: true },
-            wednesday: { open: '12:00', close: '23:00', isOpen: true },
-            thursday: { open: '12:00', close: '23:00', isOpen: true },
-            friday: { open: '14:00', close: '02:00', isOpen: true },
-            saturday: { open: '14:00', close: '02:00', isOpen: true }
-        }
-    });
+    const days = [
+        { key: 'sunday', label: 'Sunday' },
+        { key: 'monday', label: 'Monday' },
+        { key: 'tuesday', label: 'Tuesday' },
+        { key: 'wednesday', label: 'Wednesday' },
+        { key: 'thursday', label: 'Thursday' },
+        { key: 'friday', label: 'Friday' },
+        { key: 'saturday', label: 'Saturday' }
+    ];
 
     useEffect(() => {
-        if (restaurant) {
-            setFormData({
-                name: restaurant.name || '',
-                type: restaurant.type || '',
-                description: restaurant.description || restaurant.promoText || '',
-                menuDescription: restaurant.menuDescription || '',
-                phone: restaurant.phone || '+966 50 123 4567',
-                website: restaurant.website || 'www.example.com',
-                workingHours: restaurant.workingHours || formData.workingHours
-            });
-        }
-    }, [restaurant]);
+        fetchPartner();
+    }, [partnerId]);
 
-    if (!restaurant) {
+    useEffect(() => {
+        const loadAllData = async () => {
+            if (currentUser && partnerId) {
+                // Fetch all data in parallel
+                await Promise.all([
+                    checkMembership(),
+                    fetchMemberCount(),
+                    fetchActiveInvitations()
+                ]);
+            }
+        };
+
+        loadAllData();
+    }, [currentUser, partnerId, partner]);
+
+    const fetchPartner = async () => {
+        try {
+            setLoading(true);
+            const docRef = doc(db, 'users', partnerId);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists() && docSnap.data().accountType === 'business') {
+                setPartner({ uid: docSnap.id, ...docSnap.data() });
+            } else {
+                console.error('Partner not found or not a business account');
+            }
+        } catch (error) {
+            console.error('Error fetching partner:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const checkMembership = async () => {
+        const memberStatus = await isCommunityMember(currentUser.uid, partnerId);
+        setIsMember(memberStatus);
+    };
+
+    const fetchMemberCount = async () => {
+        console.log('📊 Fetching member count for:', partnerId);
+        const count = await getCommunityMemberCount(partnerId);
+        console.log('✅ Member count:', count);
+        setMemberCount(count);
+    };
+
+    const fetchActiveInvitations = async () => {
+        try {
+            console.log('📋 Fetching active invitations for:', partnerId);
+            const invitationsRef = collection(db, 'invitations');
+            const q = query(
+                invitationsRef,
+                where('restaurantId', '==', partnerId)
+            );
+            const snapshot = await getDocs(q);
+
+            // Filter for active invitations (not expired)
+            const now = new Date();
+            const activeInvitations = snapshot.docs.filter(doc => {
+                const data = doc.data();
+                const inviteDate = new Date(`${data.date}T${data.time}`);
+                return inviteDate > now;
+            });
+
+            console.log('✅ Active invitations count:', activeInvitations.length);
+            setActiveInvitationsCount(activeInvitations.length);
+        } catch (error) {
+            console.error('❌ Error fetching active invitations:', error);
+            setActiveInvitationsCount(0);
+        }
+    };
+
+
+    const handleJoinCommunity = async () => {
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+
+        setJoiningCommunity(true);
+        try {
+            if (isMember) {
+                await leaveCommunity(currentUser.uid, partnerId);
+                setIsMember(false);
+                setMemberCount(prev => prev - 1);
+            } else {
+                await joinCommunity(currentUser.uid, partnerId);
+                setIsMember(true);
+                setMemberCount(prev => prev + 1);
+            }
+            // Re-check membership to ensure consistency
+            await checkMembership();
+            await fetchMemberCount();
+        } catch (error) {
+            console.error('Error toggling community membership:', error);
+            // Revert state on error
+            await checkMembership();
+            await fetchMemberCount();
+        } finally {
+            setJoiningCommunity(false);
+        }
+    };
+
+    const handleCreateInvitation = () => {
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+
+        const businessInfo = partner.businessInfo || {};
+
+        // Navigate to create invitation with pre-filled data
+        navigate('/create', {
+            state: {
+                prefilledData: {
+                    restaurantName: businessInfo.businessName,
+                    restaurantImage: businessInfo.coverImage,
+                    location: businessInfo.address,
+                    city: businessInfo.city,
+                    lat: businessInfo.lat,
+                    lng: businessInfo.lng
+                }
+            }
+        });
+    };
+
+    const handleBookInvitation = () => {
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+
+        // Navigate to partner's community/invitations page
+        navigate(`/partner/${partnerId}/invitations`);
+    };
+
+    const formatTime = (time) => {
+        if (!time) return '';
+        const [hours, minutes] = time.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        return `${displayHour}:${minutes} ${ampm}`;
+    };
+
+    const handleShare = async () => {
+        const shareData = {
+            title: businessInfo.businessName || 'Business Profile',
+            text: `Check out ${businessInfo.businessName || 'this business'} on DineBuddies!`,
+            url: window.location.href
+        };
+
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+            } else {
+                await navigator.clipboard.writeText(window.location.href);
+                alert('Link copied!');
+            }
+        } catch (err) {
+            console.error('Error sharing:', err);
+        }
+    };
+
+    if (loading) {
         return (
-            <div className="page-container" style={{ textAlign: 'center', padding: '5rem 2rem', color: 'white' }}>
-                <h2>{i18n.language === 'ar' ? 'المطعم غير موجود' : 'Restaurant not found'}</h2>
-                <button onClick={() => navigate('/')} className="btn btn-primary" style={{ marginTop: '1rem' }}>
-                    {i18n.language === 'ar' ? 'العودة للرئيسية' : 'Back to Home'}
+            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
+                <div style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '4px solid var(--border-color)',
+                    borderTop: '4px solid var(--primary)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto 1rem'
+                }} />
+                <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+            </div>
+        );
+    }
+
+    if (!partner) {
+        return (
+            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
+                <HiBuildingStorefront style={{ fontSize: '4rem', color: 'var(--primary)', marginBottom: '1rem' }} />
+                <h2>Partner not found</h2>
+                <button onClick={() => navigate('/partners')} className="btn btn-primary" style={{ marginTop: '1.5rem' }}>
+                    Back to Partners
                 </button>
             </div>
         );
     }
 
-    const handleInputChange = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-    };
-
-    const handleWorkingHoursChange = (day, field, value) => {
-        setFormData(prev => ({
-            ...prev,
-            workingHours: {
-                ...prev.workingHours,
-                [day]: {
-                    ...prev.workingHours[day],
-                    [field]: value
-                }
-            }
-        }));
-    };
-
-    // Validate for external links
-    const containsExternalLinks = (text) => {
-        const urlPattern = /(https?:\/\/|www\.|@[a-zA-Z0-9_]+|instagram\.com|facebook\.com|twitter\.com|tiktok\.com|snapchat\.com)/gi;
-        return urlPattern.test(text);
-    };
-
-    const handleSave = () => {
-        // Check for external links in description and menu
-        if (containsExternalLinks(formData.description) || containsExternalLinks(formData.menuDescription)) {
-            alert(i18n.language === 'ar'
-                ? '⚠️ ممنوع نشر روابط خارجية أو حسابات تواصل اجتماعي في البروفايل'
-                : '⚠️ External links and social media accounts are not allowed in profile');
-            return;
-        }
-
-        // Here you would save to context/backend
-        console.log('Saving partner profile:', formData);
-        setIsEditing(false);
-        alert(i18n.language === 'ar' ? '✓ تم حفظ التغييرات بنجاح' : '✓ Changes saved successfully');
-    };
-
-    const handleCancel = () => {
-        setIsEditing(false);
-        // Reset to original data
-        setFormData({
-            name: restaurant.name || '',
-            type: restaurant.type || '',
-            description: restaurant.description || restaurant.promoText || '',
-            menuDescription: restaurant.menuDescription || '',
-            phone: restaurant.phone || '+966 50 123 4567',
-            website: restaurant.website || 'www.example.com',
-            workingHours: restaurant.workingHours || formData.workingHours
-        });
-    };
-
-    const daysOfWeek = i18n.language === 'ar'
-        ? ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-        : ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-    const dayNames = {
-        ar: {
-            sunday: 'الأحد',
-            monday: 'الإثنين',
-            tuesday: 'الثلاثاء',
-            wednesday: 'الأربعاء',
-            thursday: 'الخميس',
-            friday: 'الجمعة',
-            saturday: 'السبت'
-        },
-        en: {
-            sunday: 'Sunday',
-            monday: 'Monday',
-            tuesday: 'Tuesday',
-            wednesday: 'Wednesday',
-            thursday: 'Thursday',
-            friday: 'Friday',
-            saturday: 'Saturday'
-        }
-    };
+    const businessInfo = partner.businessInfo || {};
 
     return (
-        <div className="partner-profile-page" style={{
-            paddingBottom: '100px',
-            animation: 'fadeIn 0.5s ease-out',
-            minHeight: '100vh',
-            background: 'var(--bg-body)',
-            color: 'white'
-        }}>
-            {/* Hero Section */}
-            <div style={{ position: 'relative', height: '280px', width: '100%' }}>
-                <img
-                    src={restaurant.image}
-                    alt={formData.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+        <div className="page-container" style={{ paddingBottom: '100px' }}>
+            {/* Header */}
+            <header className="app-header sticky-header-glass">
+                <button className="back-btn" onClick={() => navigate('/partners')}>
+                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
+                </button>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
+                        {businessInfo.businessType || 'Business'}
+                    </h3>
+                </div>
+                <div style={{ width: '40px' }}></div>
+            </header>
+
+            {/* Same content as BusinessProfile but without Edit button */}
+            {/* Cover Image */}
+            <div style={{
+                position: 'relative',
+                width: '100%',
+                height: '250px',
+                background: businessInfo.coverImage
+                    ? `url(${businessInfo.coverImage})`
+                    : 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3))',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                marginTop: '-1rem'
+            }}>
                 <div style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'linear-gradient(to top, var(--bg-body) 0%, transparent 70%)'
-                }}></div>
+                    background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 100%)'
+                }} />
 
-                {/* Back Button */}
-                <button
-                    onClick={() => navigate(-1)}
-                    style={{
-                        position: 'absolute',
-                        top: '20px',
-                        [i18n.language === 'ar' ? 'right' : 'left']: '20px',
-                        zIndex: 10,
-                        background: 'rgba(0,0,0,0.6)',
-                        backdropFilter: 'blur(10px)',
-                        border: 'none',
-                        color: 'white',
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease'
-                    }}
-                >
-                    {i18n.language === 'ar' ? <FaArrowRight /> : <FaArrowLeft />}
-                </button>
-
-                {/* Edit/Save Button - Only show if user has permission */}
-                {canEdit && (
-                    <button
-                        onClick={isEditing ? handleSave : () => setIsEditing(true)}
-                        style={{
-                            position: 'absolute',
-                            top: '20px',
-                            [i18n.language === 'ar' ? 'left' : 'right']: '20px',
-                            zIndex: 10,
-                            background: isEditing
-                                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                                : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                            border: 'none',
-                            color: 'white',
-                            padding: '10px 20px',
-                            borderRadius: '25px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            cursor: 'pointer',
-                            fontWeight: '700',
-                            fontSize: '0.9rem',
-                            boxShadow: '0 4px 15px rgba(139, 92, 246, 0.4)',
-                            transition: 'all 0.3s ease'
-                        }}
-                    >
-                        {isEditing ? (
-                            <>
-                                <FaSave /> {i18n.language === 'ar' ? 'حفظ' : 'Save'}
-                            </>
-                        ) : (
-                            <>
-                                <FaEdit /> {i18n.language === 'ar' ? 'تعديل' : 'Edit'}
-                            </>
-                        )}
-                    </button>
-                )}
-
-                {/* Cancel Button (when editing) */}
-                {isEditing && canEdit && (
-                    <button
-                        onClick={handleCancel}
-                        style={{
-                            position: 'absolute',
-                            top: '75px',
-                            [i18n.language === 'ar' ? 'left' : 'right']: '20px',
-                            zIndex: 10,
-                            background: 'rgba(239, 68, 68, 0.9)',
-                            border: 'none',
-                            color: 'white',
-                            padding: '10px 20px',
-                            borderRadius: '25px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            cursor: 'pointer',
-                            fontWeight: '700',
-                            fontSize: '0.9rem',
-                            transition: 'all 0.3s ease'
-                        }}
-                    >
-                        <FaTimes /> {i18n.language === 'ar' ? 'إلغاء' : 'Cancel'}
-                    </button>
-                )}
+                {/* Logo */}
+                <div style={{
+                    position: 'absolute',
+                    bottom: '-40px',
+                    left: '1.5rem',
+                    width: '100px',
+                    height: '100px',
+                    background: businessInfo.logoImage
+                        ? `url(${businessInfo.logoImage})`
+                        : 'linear-gradient(135deg, var(--primary), #f97316)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: '20px',
+                    border: '4px solid var(--bg-body)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '2.5rem'
+                }}>
+                    {!businessInfo.logoImage && '🏪'}
+                </div>
             </div>
 
-            {/* Demo Mode Banner - Only show in demo mode */}
-            {isDemoMode && (
+            {/* Business Info */}
+            <div style={{
+                padding: '3rem 1.5rem 1.5rem',
+                borderBottom: '1px solid var(--border-color)'
+            }}>
+                <h1 style={{
+                    fontSize: '1.8rem',
+                    fontWeight: '900',
+                    marginBottom: '0.5rem',
+                    color: 'white'
+                }}>
+                    {businessInfo.businessName || 'Business Name'}
+                </h1>
+
+                {businessInfo.tagline && (
+                    <p style={{
+                        fontSize: '0.95rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.75rem',
+                        fontStyle: 'italic'
+                    }}>
+                        {businessInfo.tagline}
+                    </p>
+                )}
+
                 <div style={{
-                    background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.15) 100%)',
-                    border: '1px solid rgba(251, 191, 36, 0.3)',
-                    borderRadius: '15px',
-                    padding: '12px 16px',
-                    margin: '1rem 1.5rem',
+                    display: 'inline-block',
+                    padding: '6px 16px',
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    borderRadius: '20px',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    color: 'var(--primary)',
+                    marginBottom: '1.25rem'
+                }}>
+                    {businessInfo.businessType || 'Restaurant'}
+                </div>
+
+                {/* Social Media */}
+                {businessInfo.socialMedia && (Object.values(businessInfo.socialMedia).some(v => v)) && (
+                    <div style={{
+                        display: 'flex',
+                        gap: '12px',
+                        marginBottom: '1.25rem',
+                        flexWrap: 'wrap'
+                    }}>
+                        {businessInfo.socialMedia.instagram && (
+                            <div style={{
+                                padding: '8px 16px',
+                                background: 'rgba(225, 48, 108, 0.1)',
+                                border: '1px solid rgba(225, 48, 108, 0.3)',
+                                borderRadius: '12px',
+                                color: '#E1306C',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                opacity: 0.7
+                            }}>
+                                📷 {businessInfo.socialMedia.instagram}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Action Buttons */}
+                <div style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '10px'
+                    gap: '10px',
+                    marginTop: '1rem'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '1.2rem' }}>🔓</span>
-                            <div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--luxury-gold)' }}>
-                                    {i18n.language === 'ar' ? 'وضع التجربة مفعّل' : 'Demo Mode Active'}
-                                </div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                    {i18n.language === 'ar'
-                                        ? `الحساب الحالي: ${currentUser.name} (${currentUser.userRole})`
-                                        : `Current: ${currentUser.name} (${currentUser.userRole})`}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Quick Account Switcher */}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Join Community Button - Only show if not the owner */}
+                    {currentUser?.uid !== partnerId ? (
                         <button
-                            onClick={() => switchUserAccount('user')}
+                            onClick={handleJoinCommunity}
+                            disabled={joiningCommunity}
                             style={{
-                                background: currentUser.userRole === 'user' ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)',
-                                color: currentUser.userRole === 'user' ? 'black' : 'white',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                fontSize: '0.7rem',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            👤 {i18n.language === 'ar' ? 'مستخدم عادي' : 'Regular User'}
-                        </button>
-                        <button
-                            onClick={() => switchUserAccount('partner')}
-                            style={{
-                                background: currentUser.userRole === 'partner_owner' ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)',
-                                color: currentUser.userRole === 'partner_owner' ? 'black' : 'white',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                fontSize: '0.7rem',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            🏢 {i18n.language === 'ar' ? 'مالك منشأة' : 'Partner Owner'}
-                        </button>
-                        <button
-                            onClick={() => switchUserAccount('admin')}
-                            style={{
-                                background: currentUser.userRole === 'admin' ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)',
-                                color: currentUser.userRole === 'admin' ? 'black' : 'white',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                fontSize: '0.7rem',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            👑 {i18n.language === 'ar' ? 'مدير' : 'Admin'}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Content */}
-            <div style={{ padding: '0 1.5rem', marginTop: '-40px', position: 'relative' }}>
-                {/* Header Section */}
-                <div style={{ marginBottom: '2rem' }}>
-                    {isEditing ? (
-                        <div style={{ marginBottom: '1rem' }}>
-                            <input
-                                type="text"
-                                value={formData.name}
-                                onChange={(e) => handleInputChange('name', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    fontSize: '1.8rem',
-                                    fontWeight: '900',
-                                    background: 'var(--bg-card)',
-                                    border: '2px solid var(--primary)',
-                                    borderRadius: '12px',
-                                    padding: '12px',
-                                    color: 'white',
-                                    marginBottom: '10px'
-                                }}
-                                placeholder={i18n.language === 'ar' ? 'اسم المنشأة' : 'Business Name'}
-                            />
-                            <input
-                                type="text"
-                                value={formData.type}
-                                onChange={(e) => handleInputChange('type', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    fontSize: '1rem',
-                                    fontWeight: '700',
-                                    background: 'var(--bg-card)',
-                                    border: '1px solid var(--luxury-gold)',
-                                    borderRadius: '10px',
-                                    padding: '10px',
-                                    color: 'var(--luxury-gold)'
-                                }}
-                                placeholder={i18n.language === 'ar' ? 'نوع المنشأة' : 'Business Type'}
-                            />
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                                <h1 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '8px' }}>
-                                    {formData.name}
-                                </h1>
-                                <span style={{
-                                    color: 'var(--luxury-gold)',
-                                    fontWeight: '800',
-                                    fontSize: '1rem'
-                                }}>
-                                    {formData.type}
-                                </span>
-                            </div>
-                            <div style={{
-                                background: 'rgba(251, 191, 36, 0.15)',
-                                padding: '10px 16px',
+                                padding: '14px',
+                                background: isMember
+                                    ? 'var(--bg-card)'
+                                    : 'linear-gradient(135deg, var(--primary), #f97316)',
+                                border: isMember ? '1px solid var(--border-color)' : 'none',
                                 borderRadius: '12px',
+                                color: 'white',
+                                fontWeight: '700',
+                                fontSize: '0.95rem',
+                                cursor: joiningCommunity ? 'not-allowed' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                border: '1px solid var(--luxury-gold)'
-                            }}>
-                                <FaStar style={{ color: 'var(--luxury-gold)' }} />
-                                <span style={{ color: 'var(--luxury-gold)', fontWeight: '900' }}>
-                                    {restaurant.rating}
-                                </span>
-                            </div>
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s',
+                                opacity: joiningCommunity ? 0.6 : 1
+                            }}
+                        >
+                            <FaUsers />
+                            {joiningCommunity
+                                ? 'Processing...'
+                                : isMember
+                                    ? `Joined (${memberCount} members)`
+                                    : `Join Community (${memberCount} members)`
+                            }
+                        </button>
+                    ) : (
+                        <div style={{
+                            padding: '14px',
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '12px',
+                            color: 'var(--text-primary)',
+                            fontWeight: '700',
+                            fontSize: '0.95rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                        }}>
+                            <FaUsers />
+                            Your Community ({memberCount} members)
                         </div>
                     )}
-                </div>
 
-                {/* Description Section */}
-                <div style={{
-                    background: 'var(--bg-card)',
-                    padding: '1.5rem',
-                    borderRadius: '20px',
-                    border: '1px solid var(--border-color)',
-                    marginBottom: '1.5rem'
-                }}>
-                    <h3 style={{
-                        fontSize: '1rem',
-                        fontWeight: '800',
-                        marginBottom: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                    }}>
-                        📝 {i18n.language === 'ar' ? 'نبذة عن المنشأة' : 'About'}
-                    </h3>
-                    {isEditing ? (
-                        <textarea
-                            value={formData.description}
-                            onChange={(e) => handleInputChange('description', e.target.value)}
+                    {/* Create Invitation Button - Only for non-owners */}
+                    {currentUser?.uid !== partnerId ? (
+                        <button
+                            onClick={handleCreateInvitation}
                             style={{
-                                width: '100%',
-                                minHeight: '100px',
-                                background: 'var(--bg-body)',
+                                padding: '14px',
+                                background: 'var(--bg-card)',
                                 border: '1px solid var(--border-color)',
                                 borderRadius: '12px',
-                                padding: '12px',
                                 color: 'white',
-                                fontSize: '0.95rem',
-                                lineHeight: '1.6',
-                                resize: 'vertical',
-                                fontFamily: 'inherit'
+                                fontWeight: '700',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s'
                             }}
-                            placeholder={i18n.language === 'ar' ? 'أضف وصفاً للمنشأة...' : 'Add description...'}
-                        />
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
+                                e.currentTarget.style.borderColor = 'var(--primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'var(--bg-card)';
+                                e.currentTarget.style.borderColor = 'var(--border-color)';
+                            }}
+                        >
+                            <FaUserPlus />
+                            Create Invitation Here
+                        </button>
                     ) : (
-                        <p style={{
+                        <div style={{
+                            padding: '14px',
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '12px',
+                            color: 'var(--text-primary)',
+                            fontWeight: '700',
                             fontSize: '0.95rem',
-                            lineHeight: '1.7',
-                            color: 'var(--text-muted)'
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
                         }}>
-                            {formData.description || (i18n.language === 'ar' ? 'لا يوجد وصف' : 'No description available')}
-                        </p>
+                            <FaUserPlus />
+                            {activeInvitationsCount} Active Invitation{activeInvitationsCount !== 1 ? 's' : ''}
+                        </div>
                     )}
                 </div>
+            </div>
 
-                {/* Menu/Services Description */}
-                <div style={{
-                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(244, 63, 94, 0.08) 100%)',
-                    padding: '1.5rem',
-                    borderRadius: '20px',
-                    border: '1px solid rgba(139, 92, 246, 0.2)',
-                    marginBottom: '1.5rem'
-                }}>
-                    <h3 style={{
-                        fontSize: '1rem',
-                        fontWeight: '800',
-                        marginBottom: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                    }}>
-                        <FaUtensils style={{ color: 'var(--primary)' }} />
-                        {i18n.language === 'ar' ? 'المنيو / الخدمات المقدمة' : 'Menu / Services Offered'}
-                    </h3>
-                    {isEditing ? (
-                        <textarea
-                            value={formData.menuDescription}
-                            onChange={(e) => handleInputChange('menuDescription', e.target.value)}
-                            style={{
-                                width: '100%',
-                                minHeight: '120px',
-                                background: 'var(--bg-card)',
-                                border: '1px solid var(--primary)',
-                                borderRadius: '12px',
-                                padding: '12px',
-                                color: 'white',
-                                fontSize: '0.95rem',
-                                lineHeight: '1.6',
-                                resize: 'vertical',
-                                fontFamily: 'inherit'
-                            }}
-                            placeholder={i18n.language === 'ar'
-                                ? 'مثال: برجر كلاسيك، برجر حار، سلطات، مشروبات...'
-                                : 'Example: Classic Burger, Spicy Burger, Salads, Drinks...'}
-                        />
-                    ) : (
-                        <p style={{
-                            fontSize: '0.95rem',
-                            lineHeight: '1.7',
-                            color: 'rgba(255, 255, 255, 0.85)',
-                            whiteSpace: 'pre-line'
-                        }}>
-                            {formData.menuDescription || (i18n.language === 'ar'
-                                ? 'لم يتم إضافة وصف للمنيو أو الخدمات بعد'
-                                : 'No menu or services description added yet')}
-                        </p>
-                    )}
-                </div>
-
-                {/* Working Hours Section */}
-                <div style={{
-                    background: 'var(--bg-card)',
-                    padding: '1.5rem',
-                    borderRadius: '20px',
-                    border: '1px solid var(--border-color)',
-                    marginBottom: '1.5rem'
-                }}>
-                    <h3 style={{
-                        fontSize: '1rem',
-                        fontWeight: '800',
-                        marginBottom: '1.2rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                    }}>
-                        <FaClock style={{ color: 'var(--accent)' }} />
-                        {i18n.language === 'ar' ? 'أوقات الدوام' : 'Working Hours'}
-                    </h3>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {daysOfWeek.map(day => (
-                            <div
-                                key={day}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
-                                    padding: '12px',
-                                    background: formData.workingHours[day].isOpen
-                                        ? 'rgba(139, 92, 246, 0.05)'
-                                        : 'rgba(100, 100, 100, 0.05)',
-                                    borderRadius: '12px',
-                                    border: '1px solid',
-                                    borderColor: formData.workingHours[day].isOpen
-                                        ? 'rgba(139, 92, 246, 0.2)'
-                                        : 'rgba(100, 100, 100, 0.2)'
-                                }}
-                            >
-                                {isEditing && (
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.workingHours[day].isOpen}
-                                        onChange={(e) => handleWorkingHoursChange(day, 'isOpen', e.target.checked)}
-                                        style={{
-                                            width: '18px',
-                                            height: '18px',
-                                            cursor: 'pointer',
-                                            accentColor: 'var(--primary)'
-                                        }}
-                                    />
-                                )}
-
-                                <div style={{
-                                    flex: '0 0 90px',
-                                    fontWeight: '700',
-                                    fontSize: '0.9rem',
-                                    color: formData.workingHours[day].isOpen ? 'white' : 'var(--text-muted)'
-                                }}>
-                                    {dayNames[i18n.language][day]}
-                                </div>
-
-                                {formData.workingHours[day].isOpen ? (
-                                    isEditing ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                                            <input
-                                                type="time"
-                                                value={formData.workingHours[day].open}
-                                                onChange={(e) => handleWorkingHoursChange(day, 'open', e.target.value)}
-                                                style={{
-                                                    background: 'var(--bg-body)',
-                                                    border: '1px solid var(--border-color)',
-                                                    borderRadius: '8px',
-                                                    padding: '6px 10px',
-                                                    color: 'white',
-                                                    fontSize: '0.85rem',
-                                                    flex: 1
-                                                }}
-                                            />
-                                            <span style={{ color: 'var(--text-muted)' }}>-</span>
-                                            <input
-                                                type="time"
-                                                value={formData.workingHours[day].close}
-                                                onChange={(e) => handleWorkingHoursChange(day, 'close', e.target.value)}
-                                                style={{
-                                                    background: 'var(--bg-body)',
-                                                    border: '1px solid var(--border-color)',
-                                                    borderRadius: '8px',
-                                                    padding: '6px 10px',
-                                                    color: 'white',
-                                                    fontSize: '0.85rem',
-                                                    flex: 1
-                                                }}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div style={{
-                                            fontSize: '0.85rem',
-                                            color: 'var(--text-muted)',
-                                            fontWeight: '600'
-                                        }}>
-                                            {formData.workingHours[day].open} - {formData.workingHours[day].close}
-                                        </div>
-                                    )
-                                ) : (
-                                    <div style={{
-                                        fontSize: '0.85rem',
-                                        color: 'var(--text-muted)',
-                                        fontStyle: 'italic'
-                                    }}>
-                                        {i18n.language === 'ar' ? 'مغلق' : 'Closed'}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Contact Information */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '1rem',
-                    marginBottom: '2rem'
-                }}>
-                    <div style={{
-                        background: 'var(--bg-card)',
-                        padding: '1.2rem',
-                        borderRadius: '15px',
-                        border: '1px solid var(--border-color)'
-                    }}>
-                        <FaPhone style={{ color: 'var(--primary)', marginBottom: '8px', fontSize: '1.2rem' }} />
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                            {i18n.language === 'ar' ? 'الهاتف' : 'Phone'}
-                        </div>
-                        {isEditing ? (
-                            <input
-                                type="tel"
-                                value={formData.phone}
-                                onChange={(e) => handleInputChange('phone', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    background: 'var(--bg-body)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '8px',
-                                    padding: '6px',
-                                    color: 'white',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '600'
-                                }}
-                            />
-                        ) : (
-                            <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>
-                                {formData.phone}
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{
-                        background: 'var(--bg-card)',
-                        padding: '1.2rem',
-                        borderRadius: '15px',
-                        border: '1px solid var(--border-color)'
-                    }}>
-                        <FaGlobe style={{ color: 'var(--accent)', marginBottom: '8px', fontSize: '1.2rem' }} />
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                            {i18n.language === 'ar' ? 'الموقع الإلكتروني' : 'Website'}
-                        </div>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={formData.website}
-                                onChange={(e) => handleInputChange('website', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    background: 'var(--bg-body)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '8px',
-                                    padding: '6px',
-                                    color: 'white',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '600'
-                                }}
-                            />
-                        ) : (
-                            <div style={{ fontSize: '0.8rem', fontWeight: '700', wordBreak: 'break-all' }}>
-                                {formData.website}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Location */}
-                <div style={{
-                    background: 'var(--bg-card)',
-                    padding: '1.2rem',
-                    borderRadius: '15px',
-                    border: '1px solid var(--border-color)',
-                    marginBottom: '2rem'
-                }}>
-                    <FaMapMarkerAlt style={{ color: 'var(--primary)', marginBottom: '8px', fontSize: '1.2rem' }} />
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                        {i18n.language === 'ar' ? 'الموقع' : 'Location'}
-                    </div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: '700' }}>
-                        {restaurant.location}
-                    </div>
-
-                    {/* Share Buttons - at bottom of card */}
-                    <ShareButtons
-                        title={formData.name}
-                        description={formData.description}
-                        url={window.location.href}
-                        type="restaurant"
-                    />
-                </div>
-
-                {/* Action Button */}
-                {!isEditing && (
+            {/* Tabs - Same as BusinessProfile */}
+            <div style={{
+                display: 'flex',
+                gap: '8px',
+                padding: '1rem 1.5rem',
+                borderBottom: '1px solid var(--border-color)',
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch'
+            }}>
+                {['about', 'services', 'hours', 'contact'].map(tab => (
                     <button
-                        onClick={() => navigate('/create', {
-                            state: {
-                                fromRestaurant: true,
-                                restaurantData: {
-                                    name: restaurant.name,
-                                    location: restaurant.location,
-                                    image: restaurant.image,
-                                    lat: restaurant.lat,
-                                    lng: restaurant.lng,
-                                    type: restaurant.type
-                                }
-                            }
-                        })}
-                        className="btn btn-primary"
-                        style={{ width: '100%', height: '55px', fontSize: '1.1rem' }}
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        style={{
+                            padding: '10px 20px',
+                            background: activeTab === tab ? 'var(--primary)' : 'transparent',
+                            border: activeTab === tab ? 'none' : '1px solid var(--border-color)',
+                            color: 'white',
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            fontWeight: '700',
+                            fontSize: '0.85rem',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s'
+                        }}
                     >
-                        {t('book_venue_btn')}
+                        {tab === 'about' ? 'About' : tab === 'services' ? 'Services' : tab === 'hours' ? 'Hours' : 'Contact'}
                     </button>
+                ))}
+            </div>
+
+            {/* Content - Copy from BusinessProfile */}
+            <div style={{ padding: '1.5rem' }}>
+                {activeTab === 'about' && (
+                    <div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
+                            About the Business
+                        </h3>
+                        {businessInfo.description ? (
+                            <p style={{
+                                color: 'var(--text-secondary)',
+                                lineHeight: '1.8',
+                                fontSize: '0.95rem'
+                            }}>
+                                {businessInfo.description}
+                            </p>
+                        ) : (
+                            <p style={{ color: 'var(--text-muted)' }}>No description available</p>
+                        )}
+                    </div>
                 )}
+
+                {/* Services Tab */}
+                {activeTab === 'services' && (
+                    <div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
+                            Services & Menu
+                        </h3>
+                        {businessInfo.services && businessInfo.services.length > 0 ? (
+                            <div style={{ display: 'grid', gap: '12px' }}>
+                                {businessInfo.services.map((service, index) => (
+                                    <div key={index} style={{
+                                        background: 'var(--bg-card)',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: '16px',
+                                        overflow: 'hidden',
+                                        transition: 'transform 0.2s, box-shadow 0.2s'
+                                    }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(139, 92, 246, 0.2)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}>
+                                        <div style={{ display: 'flex', gap: '1rem' }}>
+                                            {/* Icon or Image */}
+                                            <div style={{
+                                                width: '100px',
+                                                minWidth: '100px',
+                                                height: '100px',
+                                                background: service.image
+                                                    ? `url(${service.image})`
+                                                    : 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(244, 63, 94, 0.1) 100%)',
+                                                backgroundSize: 'cover',
+                                                backgroundPosition: 'center',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderRight: '1px solid var(--border-color)'
+                                            }}>
+                                                {!service.image && service.icon && (
+                                                    <ServiceIcon iconId={service.icon} size={40} />
+                                                )}
+                                                {!service.image && !service.icon && (
+                                                    <span style={{ fontSize: '2.5rem' }}>🍽️</span>
+                                                )}
+                                            </div>
+
+                                            {/* Content */}
+                                            <div style={{ flex: 1, padding: '1rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                                                    <h4 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0 }}>
+                                                        {service.name}
+                                                    </h4>
+                                                    <span style={{
+                                                        fontSize: '1.2rem',
+                                                        fontWeight: '900',
+                                                        color: 'var(--primary)',
+                                                        whiteSpace: 'nowrap',
+                                                        marginLeft: '1rem'
+                                                    }}>
+                                                        {service.price} {service.currency || 'SAR'}
+                                                    </span>
+                                                </div>
+                                                {service.description && (
+                                                    <p style={{
+                                                        color: 'var(--text-muted)',
+                                                        fontSize: '0.85rem',
+                                                        marginBottom: '0.75rem',
+                                                        lineHeight: '1.5'
+                                                    }}>
+                                                        {service.description}
+                                                    </p>
+                                                )}
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    {service.category && (
+                                                        <span style={{
+                                                            display: 'inline-block',
+                                                            padding: '4px 10px',
+                                                            background: 'rgba(139, 92, 246, 0.15)',
+                                                            border: '1px solid rgba(139, 92, 246, 0.3)',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '600',
+                                                            color: 'var(--primary)'
+                                                        }}>
+                                                            {service.category}
+                                                        </span>
+                                                    )}
+                                                    {service.isPopular && (
+                                                        <span style={{
+                                                            display: 'inline-block',
+                                                            padding: '4px 10px',
+                                                            background: 'rgba(251, 191, 36, 0.15)',
+                                                            border: '1px solid rgba(251, 191, 36, 0.3)',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '600',
+                                                            color: '#f59e0b'
+                                                        }}>
+                                                            ⭐ Popular
+                                                        </span>
+                                                    )}
+                                                    {service.isNew && (
+                                                        <span style={{
+                                                            display: 'inline-block',
+                                                            padding: '4px 10px',
+                                                            background: 'rgba(16, 185, 129, 0.15)',
+                                                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '600',
+                                                            color: '#10b981'
+                                                        }}>
+                                                            🆕 New
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                No services added yet.
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {/* Hours Tab */}
+                {activeTab === 'hours' && (
+                    <div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
+                            Working Hours
+                        </h3>
+                        <div style={{ display: 'grid', gap: '12px' }}>
+                            {days.map(day => {
+                                const hours = businessInfo.workingHours?.[day.key];
+                                const isOpen = hours?.isOpen;
+                                return (
+                                    <div key={day.key} style={{
+                                        background: 'var(--bg-card)',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <span style={{ fontWeight: '700', textTransform: 'capitalize' }}>{day.label}</span>
+                                        <span style={{ color: isOpen ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                                            {isOpen ? `${formatTime(hours.open)} - ${formatTime(hours.close)}` : 'Closed'}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Contact Tab */}
+                {activeTab === 'contact' && (
+                    <div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
+                            Contact Information
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {businessInfo.phone && (
+                                <div style={{
+                                    background: 'var(--bg-card)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '12px',
+                                    padding: '1.25rem',
+                                    display: 'flex', alignItems: 'center', gap: '1rem'
+                                }}>
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e', fontSize: '1.3rem' }}><FaPhone /></div>
+                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Phone</div><div style={{ fontWeight: '700' }}>{businessInfo.phone}</div></div>
+                                </div>
+                            )}
+                            {businessInfo.address && (
+                                <div style={{
+                                    background: 'var(--bg-card)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '12px',
+                                    padding: '1.25rem',
+                                    display: 'flex', alignItems: 'center', gap: '1rem'
+                                }}>
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', fontSize: '1.3rem' }}><FaMapMarkerAlt /></div>
+                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Address</div><div style={{ fontWeight: '700' }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
+                                </div>
+                            )}
+
+                            {/* Embedded Map */}
+                            {businessInfo.lat && businessInfo.lng && (
+                                <div style={{
+                                    height: '300px',
+                                    borderRadius: '16px',
+                                    overflow: 'hidden',
+                                    border: '2px solid var(--border-color)',
+                                    marginTop: '1rem',
+                                    position: 'relative',
+                                    zIndex: 0
+                                }}>
+                                    <SimpleMap
+                                        lat={businessInfo.lat}
+                                        lng={businessInfo.lng}
+                                        businessName={businessInfo.businessName}
+                                        address={businessInfo.address}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Community Management - Only visible to partner owner */}
+                {(() => {
+                    const userId = currentUser?.uid || userProfile?.id;
+                    const isOwner = userId === partnerId;
+                    const isBusiness = userProfile?.accountType === 'business';
+                    const shouldShow = isOwner && isBusiness;
+
+                    console.log('🔍 Community Management Visibility Check:', {
+                        userId,
+                        partnerId,
+                        isOwner,
+                        accountType: userProfile?.accountType,
+                        isBusiness,
+                        shouldShow
+                    });
+
+                    return shouldShow;
+                })() && (
+                        <CommunityManagement
+                            partnerId={partnerId}
+                            partnerName={businessInfo?.businessName || 'Business'}
+                            currentUserId={currentUser?.uid || userProfile?.id}
+                        />
+                    )}
+
             </div>
         </div>
     );

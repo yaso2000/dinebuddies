@@ -1,127 +1,78 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useInvitations } from '../../context/InvitationContext';
-import { FaUserShield, FaUsers, FaStore, FaMoneyBillWave, FaHeadset, FaGavel, FaSignOutAlt, FaChartLine, FaBars, FaTimes } from 'react-icons/fa';
-import './admin.css'; // Import the CSS file
+import { Outlet } from 'react-router-dom';
+import Sidebar from '../../components/admin/Sidebar';
+import { useAuth } from '../../context/AuthContext';
+import { FaBars, FaSignOutAlt, FaUser } from 'react-icons/fa';
+import '../../styles/admin.css';
 
 const AdminLayout = () => {
-    const { currentUser, switchUserAccount } = useInvitations();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { currentUser, logout } = useAuth();
 
-    // Close mobile menu when route changes
-    React.useEffect(() => {
-        setIsMobileMenuOpen(false);
-    }, [location]);
-
-    // Protect Admin Route
-    if (currentUser?.userRole !== 'admin') {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', textAlign: 'center' }}>
-                <FaUserShield size={60} color="#ef4444" style={{ marginBottom: '20px' }} />
-                <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '10px' }}>الدخول غير مصرح به</h1>
-                <p style={{ color: '#666', marginBottom: '30px' }}>هذه المنطقة مخصصة للمشرفين فقط.</p>
-                <div style={{ display: 'flex', gap: '15px' }}>
-                    <button
-                        onClick={() => navigate('/')}
-                        className="btn-primary-admin"
-                        style={{ background: '#64748b' }}
-                    >
-                        العودة للرئيسية
-                    </button>
-                    {/* Dev Only: Quick Switch for testing */}
-                    <button
-                        onClick={() => switchUserAccount('admin')} // This reloads/updates context
-                        className="btn-primary-admin"
-                    >
-                        [TEST] التبديل لحساب الأدمن
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    const menuItems = [
-        { path: '/admin', icon: <FaChartLine />, label: 'لوحة التحكم' },
-        { path: '/admin/users', icon: <FaUsers />, label: 'الأعضاء' },
-        { path: '/admin/partners', icon: <FaStore />, label: 'الشركاء' },
-        { path: '/admin/subscriptions', icon: <FaMoneyBillWave />, label: 'الاشتراكات' },
-        { path: '/admin/support', icon: <FaHeadset />, label: 'الدعم الفني' },
-        { path: '/admin/legal', icon: <FaGavel />, label: 'القانونية' },
-    ];
+    const handleLogout = async () => {
+        if (window.confirm('Are you sure you want to logout?')) {
+            await logout();
+        }
+    };
 
     return (
         <div className="admin-container">
-            {/* Mobile Overlay */}
-            {isMobileMenuOpen && (
-                <div className="sidebar-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
-            )}
+            <div className="admin-layout">
+                {/* Sidebar */}
+                <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-            {/* Top Bar for Mobile (Optional, can be integrated into main content header or separate) */}
+                {/* Main Content */}
+                <div className="admin-main">
+                    {/* Top Bar */}
+                    <div className="admin-topbar">
+                        <div className="admin-flex admin-gap-2" style={{ alignItems: 'center' }}>
+                            <button
+                                onClick={() => setSidebarOpen(!sidebarOpen)}
+                                className="admin-btn-secondary admin-btn-sm lg:hidden"
+                                style={{
+                                    padding: '0.5rem',
+                                    borderRadius: '0.5rem',
+                                    background: '#334155',
+                                    border: 'none',
+                                    color: '#ffffff',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <FaBars />
+                            </button>
+                            <h2 className="admin-topbar-title">Admin Panel</h2>
+                        </div>
 
-            {/* Sidebar */}
-            <aside className={`admin-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-                <div className="admin-sidebar-header">
-                    <button
-                        className="mobile-nav-toggle"
-                        style={{ color: 'white', marginRight: 'auto' }}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                        <FaTimes />
-                    </button>
-                    <FaUserShield size={28} color="#f59e0b" />
-                    <div>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>لوحة الإدارة</h2>
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>DineBuddies Admin</span>
+                        <div className="admin-topbar-user">
+                            <div style={{ textAlign: 'right', marginRight: '0.5rem' }}>
+                                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#ffffff' }}>
+                                    {currentUser?.displayName || 'Admin'}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                    {currentUser?.email}
+                                </div>
+                            </div>
+                            <div className="admin-topbar-avatar">
+                                {currentUser?.displayName?.charAt(0)?.toUpperCase() ||
+                                    currentUser?.email?.charAt(0)?.toUpperCase() ||
+                                    'A'}
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className="admin-btn-danger admin-btn-sm"
+                                title="Sign Out"
+                            >
+                                <FaSignOutAlt />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Page Content */}
+                    <div className="admin-content">
+                        <Outlet />
                     </div>
                 </div>
-
-                <nav className="admin-sidebar-nav">
-                    {menuItems.map((item) => (
-                        <NavLink
-                            key={item.path}
-                            to={item.path}
-                            end={item.path === '/admin'}
-                            className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
-                        >
-                            {item.icon}
-                            <span>{item.label}</span>
-                        </NavLink>
-                    ))}
-                </nav>
-
-                <div className="admin-sidebar-footer">
-                    <button
-                        onClick={() => {
-                            switchUserAccount('user');
-                            navigate('/');
-                        }}
-                        className="btn-logout"
-                    >
-                        <FaSignOutAlt />
-                        <span>تسجيل خروج</span>
-                    </button>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="admin-main">
-                {/* Mobile Header Toggle */}
-                <div className="md:hidden" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-                    <button
-                        className="mobile-nav-toggle"
-                        onClick={() => setIsMobileMenuOpen(true)}
-                    >
-                        <FaBars />
-                    </button>
-                    {/* Only show on mobile top bar if needed, otherwise rely on page headers */}
-                </div>
-
-                <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                    <Outlet />
-                </div>
-            </main>
+            </div>
         </div>
     );
 };

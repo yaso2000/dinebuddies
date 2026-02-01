@@ -1,108 +1,256 @@
-import React from 'react';
-import { useInvitations } from '../../context/InvitationContext';
-import { FaUsers, FaStore, FaCalendarAlt, FaMoneyBillWave, FaExclamationTriangle } from 'react-icons/fa';
-
-const StatCard = ({ title, value, icon, color, subtext }) => (
-    <div className="stat-card" style={{ borderColor: color }}>
-        <div className="stat-content">
-            <p className="text-gray-500 text-sm font-medium mb-1">{title}</p>
-            <h3>{value}</h3>
-            {subtext && <p>{subtext}</p>}
-        </div>
-        <div className="stat-icon" style={{ backgroundColor: color + '20', color: color }}>
-            {icon}
-        </div>
-    </div>
-);
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { FaUsers, FaStore, FaCreditCard, FaDollarSign, FaEnvelope, FaExclamationTriangle, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 
 const AdminDashboard = () => {
-    const { allUsers, restaurants, invitations, reports } = useInvitations();
+    const navigate = useNavigate();
+    const [stats, setStats] = useState({
+        totalUsers: 0,
+        totalPartners: 0,
+        activeSubscriptions: 0,
+        monthlyRevenue: 0,
+        pendingInvitations: 0,
+        pendingReports: 0
+    });
+    const [loading, setLoading] = useState(true);
 
-    // Calculate Stats
-    const totalUsers = allUsers.filter(u => u.role === 'user').length;
-    const totalPartners = restaurants.filter(r => r.isPartner).length;
-    const totalRevenue = 12500;
-    const pendingReports = reports.filter(r => r.status === 'pending').length;
+    useEffect(() => {
+        fetchStats();
+    }, []);
+
+    const fetchStats = async () => {
+        try {
+            setLoading(true);
+
+            // Fetch users
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            const totalUsers = users.length;
+            const totalPartners = users.filter(u => u.accountType === 'business').length;
+            const activeSubscriptions = users.filter(u => u.subscription?.status === 'active').length;
+
+            // Calculate revenue
+            const monthlyRevenue = users
+                .filter(u => u.subscription?.status === 'active')
+                .reduce((sum, u) => sum + (u.subscription?.price || 0), 0);
+
+            // Fetch invitations
+            const invitationsSnapshot = await getDocs(collection(db, 'invitations'));
+            const pendingInvitations = invitationsSnapshot.size;
+
+            // Fetch reports
+            try {
+                const reportsSnapshot = await getDocs(
+                    query(collection(db, 'reports'), where('status', '==', 'pending'))
+                );
+                const pendingReports = reportsSnapshot.size;
+
+                setStats({
+                    totalUsers,
+                    totalPartners,
+                    activeSubscriptions,
+                    monthlyRevenue,
+                    pendingInvitations,
+                    pendingReports
+                });
+            } catch (error) {
+                // If reports collection doesn't exist
+                setStats({
+                    totalUsers,
+                    totalPartners,
+                    activeSubscriptions,
+                    monthlyRevenue,
+                    pendingInvitations,
+                    pendingReports: 0
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const StatCard = ({ icon: Icon, label, value, change, color, bgColor, onClick }) => (
+        <div className="admin-stat-card" onClick={onClick} style={{ borderColor: '#334155' }}>
+            <div className="admin-flex-between admin-mb-2">
+                <div className="admin-stat-icon" style={{ backgroundColor: bgColor }}>
+                    <Icon style={{ color: color }} />
+                </div>
+                {change && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        color: change > 0 ? '#22c55e' : '#ef4444'
+                    }}>
+                        {change > 0 ? <FaArrowUp /> : <FaArrowDown />}
+                        {Math.abs(change)}%
+                    </div>
+                )}
+            </div>
+            <div>
+                <p className="admin-stat-label">{label}</p>
+                <p className="admin-stat-value">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+            </div>
+        </div>
+    );
+
+    const QuickAction = ({ icon: Icon, label, description, color, onClick }) => (
+        <button
+            onClick={onClick}
+            className="admin-card"
+            style={{
+                textAlign: 'left',
+                cursor: 'pointer',
+                border: '1px solid #334155',
+                background: '#1e293b',
+                width: '100%'
+            }}
+        >
+            <div className="admin-flex admin-gap-2" style={{ alignItems: 'center' }}>
+                <div style={{
+                    width: '2.5rem',
+                    height: '2.5rem',
+                    borderRadius: '0.5rem',
+                    backgroundColor: `${color}20`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}>
+                    <Icon style={{ fontSize: '1.25rem', color: color }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '1rem', fontWeight: '600', color: '#ffffff', marginBottom: '0.25rem' }}>
+                        {label}
+                    </p>
+                    <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>
+                        {description}
+                    </p>
+                </div>
+            </div>
+        </button>
+    );
+
+    if (loading) {
+        return (
+            <div className="admin-loading">
+                <div style={{ textAlign: 'center' }}>
+                    <div className="admin-spinner" />
+                    <p style={{ color: '#94a3b8', fontSize: '1rem', marginTop: '1rem' }}>Loading dashboard...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="space-y-6">
-            <div className="admin-header">
-                <h1 className="admin-title">نظرة عامة</h1>
+        <div>
+            {/* Header */}
+            <div className="admin-page-header">
+                <h1 className="admin-page-title">Dashboard</h1>
+                <p className="admin-page-subtitle">
+                    Welcome back! Here's what's happening with your platform.
+                </p>
             </div>
 
             {/* Stats Grid */}
-            <div className="stats-grid">
+            <div className="admin-grid admin-grid-4 admin-mb-4">
                 <StatCard
-                    title="إجمالي الأعضاء"
-                    value={totalUsers}
-                    icon={<FaUsers />}
-                    color="#3B82F6"
-                    subtext="+12% هذا الشهر"
+                    icon={FaUsers}
+                    label="Total Users"
+                    value={stats.totalUsers}
+                    change={12}
+                    color="#6366f1"
+                    bgColor="rgba(99, 102, 241, 0.1)"
+                    onClick={() => navigate('/admin/users')}
                 />
                 <StatCard
-                    title="الشركاء النشطين"
-                    value={totalPartners}
-                    icon={<FaStore />}
-                    color="#10B981"
-                    subtext="3 طلبات انضمام جديدة"
+                    icon={FaStore}
+                    label="Partners"
+                    value={stats.totalPartners}
+                    change={8}
+                    color="#8b5cf6"
+                    bgColor="rgba(139, 92, 246, 0.1)"
+                    onClick={() => navigate('/admin/partners')}
                 />
                 <StatCard
-                    title="إجمالي الدعوات"
-                    value={invitations.length}
-                    icon={<FaCalendarAlt />}
-                    color="#8B5CF6"
-                    subtext="آخر 30 يوم"
+                    icon={FaCreditCard}
+                    label="Active Subscriptions"
+                    value={stats.activeSubscriptions}
+                    change={15}
+                    color="#22c55e"
+                    bgColor="rgba(34, 197, 94, 0.1)"
+                    onClick={() => navigate('/admin/subscriptions')}
                 />
                 <StatCard
-                    title="إجمالي الإيرادات"
-                    value={`${totalRevenue} ر.س`}
-                    icon={<FaMoneyBillWave />}
-                    color="#F59E0B"
-                    subtext="المتوقع: 15,000 ر.س"
+                    icon={FaDollarSign}
+                    label="Monthly Revenue"
+                    value={`$${stats.monthlyRevenue}`}
+                    change={23}
+                    color="#f59e0b"
+                    bgColor="rgba(245, 158, 11, 0.1)"
                 />
             </div>
 
-            {/* Quick Actions & Alerts */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
-                {/* Reports Widget */}
-                <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                        <h3 style={{ fontWeight: 'bold' }}>البلاغات الأخيرة</h3>
-                        {pendingReports > 0 && <span className="badge badge-banned">{pendingReports} جديد</span>}
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {reports.slice(0, 3).map(report => (
-                            <div key={report.id} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '10px', background: '#f9fafb', borderRadius: '8px' }}>
-                                <FaExclamationTriangle color="#ef4444" />
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: 0 }}>{report.target}</h4>
-                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{report.details}</p>
-                                </div>
-                                <span className={`badge ${report.status === 'resolved' ? 'badge-active' : 'badge-pending'}`}>
-                                    {report.status === 'resolved' ? 'تم الحل' : 'قيد المراجعة'}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
+            {/* Quick Actions */}
+            <div className="admin-mb-4">
+                <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: '700',
+                    color: '#ffffff',
+                    marginBottom: '1rem',
+                    letterSpacing: '-0.025em'
+                }}>
+                    Quick Actions
+                </h2>
+                <div className="admin-grid admin-grid-3">
+                    <QuickAction
+                        icon={FaUsers}
+                        label="Manage Users"
+                        description="View and manage all users"
+                        color="#6366f1"
+                        onClick={() => navigate('/admin/users')}
+                    />
+                    <QuickAction
+                        icon={FaCreditCard}
+                        label="Manage Plans"
+                        description="Create and edit subscription plans"
+                        color="#8b5cf6"
+                        onClick={() => navigate('/admin/plans')}
+                    />
+                    <QuickAction
+                        icon={FaExclamationTriangle}
+                        label="Review Reports"
+                        description={`${stats.pendingReports} pending reports`}
+                        color="#ef4444"
+                        onClick={() => navigate('/admin/reports')}
+                    />
                 </div>
+            </div>
 
-                {/* System Status Mock */}
-                <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', height: 'fit-content' }}>
-                    <h3 style={{ fontWeight: 'bold', marginBottom: '15px' }}>حالة النظام</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '14px', color: '#6b7280' }}>الخوادم</span>
-                            <span style={{ color: '#10B981', fontSize: '12px', fontWeight: 'bold' }}>● تعمل بكفاءة</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '14px', color: '#6b7280' }}>قاعدة البيانات</span>
-                            <span style={{ color: '#10B981', fontSize: '12px', fontWeight: 'bold' }}>● متصلة</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '14px', color: '#6b7280' }}>إصدار التطبيق</span>
-                            <span style={{ fontSize: '12px', fontFamily: 'monospace' }}>v1.2.0</span>
-                        </div>
+            {/* Recent Activity */}
+            <div>
+                <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: '700',
+                    color: '#ffffff',
+                    marginBottom: '1rem',
+                    letterSpacing: '-0.025em'
+                }}>
+                    Recent Activity
+                </h2>
+                <div className="admin-card">
+                    <div className="admin-empty">
+                        <div className="admin-empty-icon">📊</div>
+                        <h3 className="admin-empty-title">Activity Tracking</h3>
+                        <p className="admin-empty-text">
+                            Activity tracking coming soon...
+                        </p>
                     </div>
                 </div>
             </div>

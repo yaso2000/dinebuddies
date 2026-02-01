@@ -126,11 +126,37 @@ h4 {
   box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
 }
 
-/* Header & Nav Styling */
+/* Layout constraints for Mobile-App feel on Desktop */
+html,
+body {
+  background-color: #000;
+  /* Dark background outside the app */
+  height: 100%;
+}
+
+.app-layout {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--bg-body);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Main Content Wrapper - Ensures content isn't hidden behind fixed bottom nav */
+.app-main {
+  padding-bottom: calc(var(--nav-height) + 40px);
+  min-height: calc(100vh - var(--header-height));
+  position: relative;
+}
+
+/* Header & Nav Styling - Constrained to App Width */
 .app-header {
   height: var(--header-height);
   padding: 0 1.5rem;
-  background: rgba(2, 6, 23, 0.8);
+  background: rgba(2, 6, 23, 0.9);
   backdrop-filter: blur(15px);
   display: flex;
   align-items: center;
@@ -140,6 +166,32 @@ h4 {
   z-index: 100;
   border-bottom: 1px solid var(--border-color);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  /* Relative to .app-layout parent */
+}
+
+/* Bottom Nav - Constrained to App Width & Perfectly Centered */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  /* The stable way to center fixed elements */
+  width: 100%;
+  max-width: var(--max-width);
+  /* Strict Max Width */
+  height: var(--nav-height);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 100;
+  padding-bottom: 15px;
+  /* Safe area for modern phones */
+  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
 }
 
 .back-btn {
@@ -187,14 +239,20 @@ h4 {
   border-radius: var(--radius-lg);
   overflow: hidden;
   position: relative;
-  min-height: 480px;
+  min-height: 580px;
   box-shadow: var(--shadow-premium);
   cursor: pointer;
-  transition: transform var(--transition-fast);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
 }
 
+/* Fixed Flicker: Removed scaling, using only Subtle Lift + Shadow */
 .smart-invitation-card:hover {
-  transform: translateY(-4px) scale(1.005);
+  transform: translateY(-4px);
+  /* Only move up, don't change size */
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  /* Bring to front relative to siblings */
 }
 
 .card-bg-image {
@@ -360,21 +418,22 @@ h4 {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 85px;
-  background: #0f172a;
-  /* Solid background just in case */
+  height: 65px;
+  /* Reduced from 85px */
   background: rgba(15, 23, 42, 0.98);
   backdrop-filter: blur(25px);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   display: flex !important;
   justify-content: space-around !important;
-  align-items: stretch !important;
+  align-items: center !important;
+  /* Changed from stretch */
   max-width: var(--max-width);
   margin: 0 auto;
   z-index: 99999 !important;
-  /* ULTRA HIGH */
-  box-shadow: 0 -10px 50px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.5);
   pointer-events: auto !important;
+  padding: 0 8px;
+  /* Added padding */
 }
 
 .nav-item {
@@ -382,14 +441,27 @@ h4 {
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  color: var(--text-muted);
-  font-size: 0.7rem;
+  gap: 4px;
+  /* Space between icon and text */
+  color: rgba(148, 163, 184, 0.8);
+  /* Subtle inactive color */
+  font-size: 0.65rem;
+  /* Smaller text */
+  font-weight: 600;
   flex: 1;
   cursor: pointer !important;
   position: relative;
   height: 100%;
   pointer-events: auto !important;
   z-index: 2;
+  transition: all 0.2s ease;
+  padding: 8px 4px;
+  /* Reduced padding */
+}
+
+.nav-item:hover {
+  color: var(--primary);
+  transform: translateY(-2px);
 }
 
 .nav-item.active {
@@ -402,26 +474,61 @@ h4 {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 25px;
+  width: 30px;
   height: 3px;
-  background: var(--primary);
-  border-radius: 0 0 5px 5px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  border-radius: 0 0 3px 3px;
   box-shadow: 0 0 10px var(--primary);
 }
 
 .nav-icon {
-  font-size: 1.4rem;
-  margin-bottom: 2px;
+  font-size: 1.2rem;
+  /* Reduced from 1.4rem */
   pointer-events: none !important;
+  transition: transform 0.2s ease;
+}
+
+.nav-item.active .nav-icon {
+  transform: scale(1.1);
 }
 
 .fab-nav-item {
   overflow: visible;
+  margin-top: -8px;
+  /* Adjusted for smaller nav */
+}
+
+.fab-container {
+  width: 50px;
+  height: 50px;
+  /* Reduced from larger size */
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), #f97316);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  position: relative;
+  top: -15px;
+  /* Reduced from higher */
+}
+
+.fab-container:hover {
+  transform: scale(1.15) rotate(90deg);
+  box-shadow: 0 8px 30px rgba(239, 68, 68, 0.6);
+}
+
+.fab-container .nav-icon {
+  font-size: 1.5rem;
+  /* Adjusted for smaller FAB */
+  color: white;
 }
 
 .fab-label {
   display: block;
-  margin-top: 5px;
+  margin-top: -8px;
+  /* Adjusted for smaller FAB */
   font-size: 0.65rem;
   pointer-events: none !important;
 }
@@ -1087,4 +1194,323 @@ select.input-field {
 
 .leaflet-container {
   background: #0f172a !important;
+}
+
+/* Header Actions Alignment */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  /* Space between bell and avatar */
+}
+
+/* Logo Wrapper Alignment */
+.logo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.logo-wrapper:hover {
+  opacity: 0.8;
+}
+
+.app-name {
+  font-weight: 800;
+  font-size: 1.4rem;
+  background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
+}
+
+.notification-bell {
+  position: relative;
+  font-size: 1.3rem;
+  color: var(--text-muted);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-bell:hover {
+  color: var(--text-main);
+}
+
+.notification-bell .badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: var(--secondary);
+  color: white;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0 4px;
+  border: 2px solid var(--bg-body);
+  line-height: normal;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Scrollbar hiding utilities */
+.hide-scrollbar::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+
+
+/* --- New Component Classes --- */
+.premium-plan-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+.sticky-header-glass {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(25px);
+}
+
+.chat-footer-glass {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(25px);
+}
+
+/* =========================================
+   NEW LIGHT MODE (High Contrast / Burnt Orange)
+   ========================================= */
+body.light-mode {
+  /* 1. Backgrounds & Surfaces */
+  --bg-body: #FFFFFF;
+  /* Pure White */
+  --bg-card: #F8FAFC;
+  /* Very Light Slate (Off-White) */
+  --bg-input: #FFFFFF;
+  /* White Input */
+  --bg-overlay: rgba(255, 255, 255, 0.98);
+
+  /* 2. Brand Identity */
+  --primary: #EA580C;
+  /* Burnt Orange (High Contrast) */
+  --primary-hover: #C2410C;
+  /* Darker Orange */
+  --secondary: #DC2626;
+  /* Red-600 */
+  --accent: #16A34A;
+  /* Green-600 */
+  --luxury-gold: #D97706;
+  /* Amber-600 */
+
+  /* 3. Text Colors (Maximum Readability) */
+  --text-main: #0F172A;
+  /* Slate-900 (Deep Black) */
+  --text-muted: #475569;
+  /* Slate-600 (Dark Gray) */
+  --text-white: #FFFFFF;
+  /* Stays white for special elements */
+
+  /* 4. Borders & Shadows */
+  --border-color: #E2E8F0;
+  /* Slate-200 */
+  --shadow-premium: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 15px rgba(234, 88, 12, 0.25);
+}
+
+/* --- Global Overrides for Light Mode --- */
+
+/* Specific Fix: Force inline styles (color: white) to switch to black, 
+   UNLESS they are inside specific components like Buttons or Image Cards */
+body.light-mode [style*="color: white"],
+body.light-mode [style*="color: #fff"],
+body.light-mode [style*="color: #ffffff"],
+body.light-mode [style*="color: var(--text-main)"] {
+  color: var(--text-main) !important;
+}
+
+/* --- EXCEPTION: Elements that MUST stay White --- */
+
+/* 1. Primary Buttons & Badges */
+body.light-mode .btn-primary,
+body.light-mode .btn-primary *,
+body.light-mode .badge,
+body.light-mode .category-pill.active,
+body.light-mode .notification-badge-small,
+body.light-mode [style*="background: var(--primary)"],
+body.light-mode [style*="background-color: var(--primary)"] {
+  color: #FFFFFF !important;
+}
+
+/* 2. Invitation Cards & Restaurant Cards (Image Based) */
+/* These have dark image backgrounds, so text must remain WHITE */
+body.light-mode .smart-invitation-card,
+body.light-mode .smart-invitation-card *,
+body.light-mode .restaurant-card,
+body.light-mode .restaurant-card * {
+  color: #FFFFFF !important;
+  /* Restore specific colors for icons if needed, but white is safest for readability on images */
+}
+
+body.light-mode .smart-invitation-card .spots-count {
+  color: #FFFFFF !important;
+}
+
+/* 3. Partner Profile Header (Image Background) */
+body.light-mode .partner-profile-header,
+body.light-mode .partner-profile-header * {
+  color: #FFFFFF !important;
+}
+
+/* --- Component Specific Styling --- */
+
+/* Cards (Glass Cards -> Solid Light Cards) */
+body.light-mode .glass-card,
+body.light-mode .feed-list>div {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Bottom Nav */
+body.light-mode .bottom-nav {
+  background: #FFFFFF;
+  border-top: 1px solid var(--border-color);
+}
+
+body.light-mode .bottom-nav .nav-item {
+  color: #64748B;
+  /* Slate-500 */
+}
+
+body.light-mode .bottom-nav .nav-item.active {
+  color: var(--primary);
+}
+
+/* Headers */
+body.light-mode .app-header {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Inputs */
+body.light-mode input,
+body.light-mode textarea,
+body.light-mode select {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  /* Slate-300 */
+  color: #0F172A !important;
+}
+
+body.light-mode ::placeholder {
+  color: #94A3B8 !important;
+  /* Slate-400 */
+}
+
+/* Modal / Sheet Bg */
+body.light-mode .sheet-content {
+  background: #FFFFFF !important;
+  color: var(--text-main);
+}
+
+/* --- Additional Light Mode Overrides for Detail Pages --- */
+body.light-mode .premium-plan-card {
+  background: #FFFFFF !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .premium-plan-card h3 {
+  color: var(--text-main) !important;
+}
+
+/* Fix Header & Footer Backgrounds */
+body.light-mode .sticky-header-glass,
+body.light-mode .chat-footer-glass {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Fix Header Text & Icons (Share button was white) */
+body.light-mode .sticky-header-glass h3,
+body.light-mode .sticky-header-glass button,
+body.light-mode .sticky-header-glass svg {
+  color: var(--text-main) !important;
+}
+
+/* Fix Chat Input Footer */
+body.light-mode .chat-footer-glass .input-field {
+  background: #F8FAFC !important;
+  border: 1px solid #CBD5E1 !important;
+  color: var(--text-main) !important;
+}
+
+/* Fix Invitation Card Action Button (Must be Black text on the White button, even in Light Mode) */
+body.light-mode .smart-invitation-card .invitation-action-btn:not(:disabled) {
+  color: #000000 !important;
+}
+
+body.light-mode .smart-invitation-card .invitation-action-btn:disabled {
+  color: #d1d5db !important;
+}
+
+/* ========================================
+   ELEGANT LABELS FOR CREATE INVITATION
+   ======================================== */
+
+.elegant-label {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+
+.label-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(249, 115, 22, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--primary);
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.elegant-label:hover .label-icon {
+  transform: scale(1.1);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(249, 115, 22, 0.15));
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+/* Light mode adjustments */
+body.light-mode .label-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(249, 115, 22, 0.08));
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+body.light-mode .elegant-label:hover .label-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(249, 115, 22, 0.12));
 }
