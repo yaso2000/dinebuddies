@@ -1,83 +1,169 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useInvitations } from '../context/InvitationContext';
+import { useNotifications } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { FaBell, FaCheckCircle, FaCommentAlt, FaChevronLeft, FaTrash } from 'react-icons/fa';
+import {
+    FaBell,
+    FaCheckCircle,
+    FaCommentAlt,
+    FaChevronLeft,
+    FaTrash,
+    FaUserPlus,
+    FaCalendarCheck,
+    FaTimesCircle,
+    FaHeart,
+    FaExclamationCircle,
+    FaFlask
+} from 'react-icons/fa';
+import './Notifications.css';
 
 const Notifications = () => {
-    const { t, i18n } = useTranslation();
+    const { i18n } = useTranslation();
     const navigate = useNavigate();
-    const { notifications, markAllAsRead } = useInvitations();
+    const { currentUser } = useAuth();
+    const {
+        notifications,
+        unreadCount,
+        loading,
+        markAsRead,
+        markAllAsRead,
+        deleteNotification,
+        deleteAllNotifications,
+        formatTime,
+        createNotification
+    } = useNotifications();
 
-    useEffect(() => {
-        // Mark as read when viewing the page
-        return () => markAllAsRead();
-    }, []);
+    // Create test notification
+    const createTestNotification = () => {
+        if (!currentUser?.uid) {
+            alert('Please login first!');
+            return;
+        }
+
+        createNotification({
+            userId: currentUser.uid,
+            type: 'follow',
+            title: 'Test Notification',
+            message: 'This is a test notification. It works! 🎉',
+            fromUserName: 'Test User',
+            fromUserAvatar: 'https://i.pravatar.cc/150?img=12'
+        });
+    };
 
     const getIcon = (type) => {
+        const iconStyle = { fontSize: '1.2rem' };
         switch (type) {
-            case 'approval': return <FaCheckCircle style={{ color: 'var(--accent)' }} />;
-            case 'message': return <FaCommentAlt style={{ color: 'var(--primary)' }} />;
-            default: return <FaBell style={{ color: 'var(--secondary)' }} />;
+            case 'follow':
+                return <FaUserPlus style={{ ...iconStyle, color: 'var(--primary)' }} />;
+            case 'invitation_accepted':
+                return <FaCheckCircle style={{ ...iconStyle, color: '#10b981' }} />;
+            case 'invitation_rejected':
+                return <FaTimesCircle style={{ ...iconStyle, color: '#ef4444' }} />;
+            case 'message':
+                return <FaCommentAlt style={{ ...iconStyle, color: 'var(--secondary)' }} />;
+            case 'like':
+                return <FaHeart style={{ ...iconStyle, color: '#f472b6' }} />;
+            case 'reminder':
+                return <FaExclamationCircle style={{ ...iconStyle, color: '#f59e0b' }} />;
+            default:
+                return <FaBell style={{ ...iconStyle, color: 'var(--text-secondary)' }} />;
         }
     };
 
+    const handleNotificationClick = (notification) => {
+        // Mark as read
+        if (!notification.read) {
+            markAsRead(notification.id);
+        }
+
+        // Navigate to action URL if exists
+        if (notification.actionUrl) {
+            navigate(notification.actionUrl);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="page-container">
+                <div className="loading-spinner">Loading...</div>
+            </div>
+        );
+    }
+
     return (
-        <div className="page-container" style={{ animation: 'fadeIn 0.5s ease-out', padding: '1rem 1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '2rem' }}>
-                <button onClick={() => navigate(-1)} className="back-btn" style={{ background: 'var(--bg-card)' }}>
+        <div className="notifications-page">
+            {/* Header */}
+            <div className="notifications-header">
+                <button onClick={() => navigate(-1)} className="back-btn">
                     <FaChevronLeft style={{ transform: i18n.language === 'ar' ? 'rotate(180deg)' : 'none' }} />
                 </button>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: '900' }}>{i18n.language === 'ar' ? 'التنبيهات' : 'Notifications'}</h2>
+                <h1>{i18n.language === 'ar' ? 'التنبيهات' : 'Notifications'}</h1>
+                <div className="header-actions">
+                    {/* Test button - for development */}
+                    <button onClick={createTestNotification} className="test-btn" title="Create test notification">
+                        <FaFlask />
+                    </button>
+                    {notifications.length > 0 && (
+                        <>
+                            {unreadCount > 0 && (
+                                <button onClick={markAllAsRead} className="mark-all-btn">
+                                    Mark all read
+                                </button>
+                            )}
+                            <button onClick={deleteAllNotifications} className="delete-all-btn" title="Delete all">
+                                <FaTrash />
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Notifications List */}
+            <div className="notifications-list">
                 {notifications.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '5rem 1rem', opacity: 0.5 }}>
-                        <FaBell style={{ fontSize: '3rem', marginBottom: '1rem' }} />
-                        <p>{i18n.language === 'ar' ? 'لا توجد تنبيهات حالياً' : 'No notifications yet'}</p>
+                    <div className="empty-state">
+                        <FaBell className="empty-icon" />
+                        <h3>{i18n.language === 'ar' ? 'لا توجد تنبيهات' : 'No notifications yet'}</h3>
+                        <p>{i18n.language === 'ar' ? 'سيتم عرض التنبيهات هنا' : 'Your notifications will appear here'}</p>
                     </div>
                 ) : (
                     notifications.map(notif => (
-                        <div key={notif.id} style={{
-                            background: notif.read ? 'var(--bg-card)' : 'linear-gradient(135deg, var(--bg-card) 0%, rgba(139, 92, 246, 0.05) 100%)',
-                            padding: '1.25rem',
-                            borderRadius: 'var(--radius-lg)',
-                            border: `1px solid ${notif.read ? 'var(--border-color)' : 'var(--primary)'}`,
-                            display: 'flex',
-                            gap: '1rem',
-                            position: 'relative',
-                            transition: 'all 0.3s'
-                        }}>
-                            {!notif.read && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '1.25rem',
-                                    [i18n.language === 'ar' ? 'left' : 'right']: '1.25rem',
-                                    width: '8px',
-                                    height: '8px',
-                                    background: 'var(--secondary)',
-                                    borderRadius: '50%'
-                                }}></div>
-                            )}
-                            <div style={{
-                                width: '45px',
-                                height: '45px',
-                                borderRadius: 'var(--radius-md)',
-                                background: 'var(--bg-body)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.2rem',
-                                flexShrink: 0
-                            }}>
-                                {getIcon(notif.type)}
+                        <div
+                            key={notif.id}
+                            className={`notification-item ${!notif.read ? 'unread' : ''}`}
+                            onClick={() => handleNotificationClick(notif)}
+                        >
+                            {/* Unread Indicator */}
+                            {!notif.read && <div className="unread-dot"></div>}
+
+                            {/* Avatar/Icon */}
+                            <div className="notification-icon">
+                                {notif.fromUserAvatar ? (
+                                    <img src={notif.fromUserAvatar} alt={notif.fromUserName || 'User'} />
+                                ) : (
+                                    getIcon(notif.type)
+                                )}
                             </div>
-                            <div style={{ flex: 1 }}>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '0.25rem', color: notif.read ? 'var(--text-white)' : 'var(--primary)' }}>{notif.title}</h4>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '0.5rem' }}>{notif.message}</p>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.6 }}>{notif.time}</span>
+
+                            {/* Content */}
+                            <div className="notification-content">
+                                <h4 className="notification-title">{notif.title}</h4>
+                                <p className="notification-message">{notif.message}</p>
+                                <span className="notification-time">{formatTime(notif.createdAt)}</span>
                             </div>
+
+                            {/* Delete Button */}
+                            <button
+                                className="delete-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteNotification(notif.id);
+                                }}
+                                title="Delete"
+                            >
+                                <FaTrash />
+                            </button>
                         </div>
                     ))
                 )}

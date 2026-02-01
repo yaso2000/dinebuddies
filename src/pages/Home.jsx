@@ -4,18 +4,75 @@ import InvitationCard from '../components/InvitationCard';
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar } from 'react-icons/fa';
+import AdvancedFilters from '../components/AdvancedFilters';
 
 const Home = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { invitations, restaurants, currentUser } = useInvitations();
+
+    // Debugging to ensure we don't have posts mixing in
+    useEffect(() => {
+        console.log("Home Component Loaded - Enforcing Invitations Display");
+        console.log("currentUser:", currentUser);
+    }, [currentUser]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState('All');
     const [viewMode, setViewMode] = useState('list');
+    const [advancedFilters, setAdvancedFilters] = useState({
+        paymentType: 'all',
+        dateRange: 'all',
+        distance: 'all',
+        guestsMin: '',
+        ageRange: 'all',
+        genderPreference: 'all'
+    });
+
+    // User location state
+    const [userLocation, setUserLocation] = useState(null);
+    const [locationError, setLocationError] = useState(null);
 
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
     const markersLayer = useRef(null);
+
+    // Calculate distance between two points (Haversine formula)
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // Earth's radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; // Distance in km
+    };
+
+    // Get user location on component mount
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                    setLocationError(null);
+                },
+                (error) => {
+                    console.log('Location access denied or unavailable:', error);
+                    setLocationError(error.message);
+                    // Default to Riyadh if location denied
+                    setUserLocation({ lat: 24.7136, lng: 46.6753 });
+                }
+            );
+        } else {
+            setLocationError('Geolocation not supported');
+            setUserLocation({ lat: 24.7136, lng: 46.6753 });
+        }
+    }, []);
 
     const categories = [
         { id: 'All', label: t('filter_all'), icon: null },
@@ -31,7 +88,7 @@ const Home = () => {
 
     const filteredInvitations = useMemo(() => {
         const now = new Date();
-        return safeInvitations.filter(inv => {
+        let filtered = safeInvitations.filter(inv => {
             if (!inv || !inv.author) return false;
 
             // 1. OWNERSHIP (Always show mine)
@@ -48,19 +105,81 @@ const Home = () => {
             }
 
             // 3. SOCIAL PRIVACY
-            const isFollowing = currentUser.following?.includes(inv.author.id);
+            const isFollowing = currentUser?.following?.includes(inv.author.id);
             const canView = !inv.isFollowersOnly || isFollowing;
             if (!canView) return false;
 
-            // 4. SEARCH
+            // 4. ENHANCED SEARCH (title + location + description)
             const matchesSearch = !searchQuery ||
                 (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (inv.location?.toLowerCase().includes(searchQuery.toLowerCase()));
+                (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
             const matchesFilter = activeFilter === 'All' || inv.type === activeFilter;
 
-            return matchesSearch && matchesFilter;
+            if (!matchesSearch || !matchesFilter) return false;
+
+            // 5. ADVANCED FILTERS
+            // Payment Type
+            const matchesPayment = advancedFilters.paymentType === 'all' ||
+                inv.paymentType === advancedFilters.paymentType;
+
+            // Date Range
+            let matchesDate = true;
+            if (advancedFilters.dateRange !== 'all' && inv.date) {
+                const invDate = new Date(inv.date);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                if (advancedFilters.dateRange === 'today') {
+                    matchesDate = invDate.toDateString() === today.toDateString();
+                } else if (advancedFilters.dateRange === 'week') {
+                    const weekFromNow = new Date(today);
+                    weekFromNow.setDate(today.getDate() + 7);
+                    matchesDate = invDate >= today && invDate <= weekFromNow;
+                } else if (advancedFilters.dateRange === 'month') {
+                    const monthFromNow = new Date(today);
+                    monthFromNow.setMonth(today.getMonth() + 1);
+                    matchesDate = invDate >= today && invDate <= monthFromNow;
+                }
+            }
+
+            // Gender Preference
+            const matchesGender = advancedFilters.genderPreference === 'all' ||
+                !inv.genderPreference ||
+                inv.genderPreference === advancedFilters.genderPreference;
+
+            // Distance Filter (if user location available)
+            let matchesDistance = true;
+            if (userLocation && inv.lat && inv.lng && advancedFilters.distance !== 'all') {
+                const distance = calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng);
+                const maxDistance = parseInt(advancedFilters.distance); // e.g., "10km" -> 10
+                if (!isNaN(maxDistance)) {
+                    matchesDistance = distance <= maxDistance;
+                }
+            }
+
+            return matchesPayment && matchesDate && matchesGender && matchesDistance;
         });
-    }, [safeInvitations, searchQuery, activeFilter, currentUser]);
+
+        // Calculate distance for each invitation and add it to the object
+        if (userLocation) {
+            filtered = filtered.map(inv => ({
+                ...inv,
+                distance: inv.lat && inv.lng
+                    ? calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng)
+                    : null
+            }));
+
+            // Sort by distance (closest first)
+            filtered.sort((a, b) => {
+                if (a.distance === null) return 1;
+                if (b.distance === null) return -1;
+                return a.distance - b.distance;
+            });
+        }
+
+        return filtered;
+    }, [safeInvitations, searchQuery, activeFilter, currentUser, advancedFilters, userLocation]);
 
     const premiumAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 3), [safeRestaurants]);
     const inFeedAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 2), [safeRestaurants]);
@@ -109,10 +228,10 @@ const Home = () => {
                     });
 
                     const popupContent = `
-                        <div style="min-width:180px; font-family: 'Tajawal', sans-serif; text-align: ${i18n.language === 'ar' ? 'right' : 'left'}">
+                        <div style="min-width:180px; font-family: 'Tajawal', sans-serif; text-align: ${i18n.language === 'ar' ? 'right' : 'left'}; background-color: #1e293b; color: white; padding: 5px; border-radius: 8px;">
                             <img src="${inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}" style="width:100%; height:90px; object-fit:cover; border-radius:12px; margin-bottom:12px;" />
-                            <h4 style="margin:0 0 5px 0; color:#1e293b; font-size:1rem; font-weight:900;">${inv.title}</h4>
-                            <p style="margin:0 0 5px 0; color:#64748b; font-size:0.8rem; font-weight:700;">${inv.author?.name}</p>
+                            <h4 style="margin:0 0 5px 0; color:#f8fafc; font-size:1rem; font-weight:900;">${inv.title}</h4>
+                            <p style="margin:0 0 5px 0; color:#cbd5e1; font-size:0.8rem; font-weight:700;">${inv.author?.name}</p>
                             <button id="inv-popup-btn-${inv.id}" style="width:100%; padding:10px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:900; font-size:0.85rem; margin-top: 10px">
                                 ${i18n.language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
                             </button>
@@ -182,9 +301,12 @@ const Home = () => {
                     </div>
                 </div>
 
-                <div className="search-container">
-                    <input type="text" placeholder={t('search_placeholder')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" />
-                    <FaSearch className="search-icon" />
+                <div className="search-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                        <input type="text" placeholder={t('search_placeholder')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" />
+                        <FaSearch className="search-icon" />
+                    </div>
+                    <AdvancedFilters onApplyFilters={setAdvancedFilters} />
                 </div>
             </div>
 
@@ -228,19 +350,23 @@ const Home = () => {
                     )}
 
                     <div className="feed-list">
-                        {filteredInvitations.length === 0 ? (
-                            <div className="empty-state">
-                                <p>{i18n.language === 'ar' ? 'لا يوجد دعوات تطابق بحثك حالياً..' : 'No invitations found matching your search..'}</p>
-                            </div>
+                        {filteredInvitations.length > 0 ? (
+                            <>
+                                {filteredInvitations.map((inv, idx) => {
+                                    const shouldShowAd = inFeedAds.length > 0 && idx > 0 && idx % 4 === 0;
+                                    const adIndex = Math.floor(idx / 4) % inFeedAds.length;
+                                    return (
+                                        <React.Fragment key={inv.id}>
+                                            <InvitationCard invitation={inv} />
+                                            {shouldShowAd && <RestaurantAdCard restaurant={inFeedAds[adIndex]} />}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </>
                         ) : (
-                            filteredInvitations.map((inv, index) => {
-                                const elements = [<InvitationCard key={inv.id} invitation={inv} />];
-                                if ((index + 1) % 3 === 0 && inFeedAds.length > 0) {
-                                    const ad = inFeedAds[(Math.floor(index / 3)) % inFeedAds.length];
-                                    elements.push(<RestaurantAdCard key={`ad-${index}`} restaurant={ad} />);
-                                }
-                                return elements;
-                            })
+                            <div className="empty-state">
+                                <p>{i18n.language === 'ar' ? 'لا توجد دعوات متاحة حالياً' : 'No invitations available'}</p>
+                            </div>
                         )}
                     </div>
                 </div>

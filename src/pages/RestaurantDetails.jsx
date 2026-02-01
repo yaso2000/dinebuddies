@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArrowLeft } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
+import RestaurantRating from '../components/RestaurantRating';
 
 const RestaurantDetails = () => {
     const { t, i18n } = useTranslation();
@@ -82,7 +83,7 @@ const RestaurantDetails = () => {
                     </div>
                     <div style={{ background: 'rgba(251, 191, 36, 0.15)', padding: '8px 15px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--luxury-gold)' }}>
                         <FaStar style={{ color: 'var(--luxury-gold)' }} />
-                        <span style={{ color: 'var(--luxury-gold)', fontWeight: '900' }}>{rating}</span>
+                        <span style={{ color: 'var(--luxury-gold)', fontWeight: '900' }}>{Number(rating || 0).toFixed(1)}</span>
                     </div>
                 </div>
 
@@ -144,57 +145,14 @@ const RestaurantDetails = () => {
                         </div>
                     </div>
 
-                    {/* Community Members Avatars */}
+                    {/* Community Members - Will be fetched from Firestore in future */}
                     <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(139, 92, 246, 0.2)' }}>
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
                             {i18n.language === 'ar' ? 'أعضاء المجتمع' : 'Community Members'}
                         </p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            {/* Overlapping Avatars */}
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                {[
-                                    'https://api.dicebear.com/7.x/avataaars/svg?seed=Member1',
-                                    'https://api.dicebear.com/7.x/avataaars/svg?seed=Member2',
-                                    'https://api.dicebear.com/7.x/avataaars/svg?seed=Member3',
-                                    'https://api.dicebear.com/7.x/avataaars/svg?seed=Member4',
-                                    'https://api.dicebear.com/7.x/avataaars/svg?seed=Member5'
-                                ].map((avatar, index) => (
-                                    <div
-                                        key={index}
-                                        style={{
-                                            width: '32px',
-                                            height: '32px',
-                                            borderRadius: '50%',
-                                            border: '2px solid var(--bg-body)',
-                                            overflow: 'hidden',
-                                            marginLeft: index > 0 ? '-10px' : '0',
-                                            zIndex: 5 - index,
-                                            position: 'relative'
-                                        }}
-                                    >
-                                        <img src={avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Show All Button */}
-                            <button
-                                onClick={() => alert(i18n.language === 'ar' ? '📋 قائمة الأعضاء قيد التطوير' : '📋 Members list coming soon')}
-                                style={{
-                                    background: 'rgba(139, 92, 246, 0.1)',
-                                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                                    color: 'var(--primary)',
-                                    padding: '4px 10px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.7rem',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
-                                }}
-                            >
-                                +1,229 {i18n.language === 'ar' ? 'المزيد' : 'more'}
-                            </button>
-                        </div>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {i18n.language === 'ar' ? 'سيتم عرض الأعضاء قريباً' : 'Members will be displayed soon'}
+                        </p>
                     </div>
                 </div>
 
@@ -215,6 +173,14 @@ const RestaurantDetails = () => {
                     <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1rem' }}>{i18n.language === 'ar' ? 'موقع المطعم' : 'Venue Location'}</h3>
                     <div ref={mapRef} style={{ height: '180px', width: '100%', borderRadius: '20px', border: '1px solid var(--border-color)', overflow: 'hidden' }}></div>
                 </div>
+
+
+                {/* Rating Section */}
+                <RestaurantRating
+                    restaurant={restaurant}
+                    currentUser={currentUser}
+                    submitRestaurantRating={context?.submitRestaurantRating}
+                />
 
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <button

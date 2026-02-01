@@ -1,29 +1,33 @@
-import React from 'react';
-import { FaMapMarkerAlt, FaUserFriends, FaMoneyBillWave, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaMoneyBillWave, FaUserFriends, FaShareAlt } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useNavigate } from 'react-router-dom';
 import ShareButtons from './ShareButtons';
+import NewReportModal from './NewReportModal';
 
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, requestToJoin, cancelRequest, toggleFollow } = useInvitations();
-    const { id, author, title, type, location, paymentType, guestsNeeded, joined = [], requests = [], date, image, time } = invitation;
+    const { currentUser, toggleFollow, submitReport } = useInvitations();
+    const [showReportModal, setShowReportModal] = useState(false);
+
+    const {
+        id, author, title, type, location, paymentType,
+        guestsNeeded, joined = [], requests = [], date,
+        image, time, description, genderPreference, ageRange
+    } = invitation;
 
     const isHost = author?.id === currentUser?.id;
     const isPending = (requests || []).includes(currentUser?.id);
     const isAccepted = (joined || []).includes(currentUser?.id);
     const spotsLeft = Math.max(0, guestsNeeded - (joined || []).length);
     const isFollowing = currentUser.following?.includes(author?.id);
+    // User app only - no partner checks needed
 
     const handleAction = (e) => {
         e.stopPropagation();
-        if (isHost || isAccepted) {
-            navigate(`/invitation/${id}`);
-        } else if (isPending) {
-            cancelRequest(id);
-        } else if (spotsLeft > 0) {
+        if (isHost || isAccepted || isPending || spotsLeft > 0) {
             navigate(`/invitation/${id}`);
         }
     };
@@ -35,54 +39,35 @@ const InvitationCard = ({ invitation }) => {
 
     const handleAvatarClick = (e) => {
         e.stopPropagation();
-        navigate(`/profile/${author?.id}`);
+        navigate(author?.id === currentUser?.id ? '/profile' : `/profile/${author?.id}`);
     };
 
-    // Check if user meets invitation requirements
     const checkEligibility = () => {
-        // Check gender preference
-        if (invitation.genderPreference && invitation.genderPreference !== 'any') {
-            if (currentUser.gender !== invitation.genderPreference) {
-                return {
-                    eligible: false,
-                    reason: i18n.language === 'ar'
-                        ? `هذه الدعوة مخصصة ${invitation.genderPreference === 'male' ? 'للذكور' : 'للإناث'} فقط`
-                        : `This invitation is for ${invitation.genderPreference === 'male' ? 'males' : 'females'} only`
-                };
-            }
+        if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
+            return { eligible: false, reason: i18n.language === 'ar' ? 'الجنس غير مطابق' : 'Gender mismatch' };
         }
-
-        // Check age range
-        if (invitation.ageRange && invitation.ageRange !== 'any' && currentUser.age) {
-            const userAge = currentUser.age;
-            let minAge, maxAge;
-
-            if (invitation.ageRange === '18-25') {
-                minAge = 18; maxAge = 25;
-            } else if (invitation.ageRange === '26-35') {
-                minAge = 26; maxAge = 35;
-            } else if (invitation.ageRange === '36-45') {
-                minAge = 36; maxAge = 45;
-            } else if (invitation.ageRange === '46+') {
-                minAge = 46; maxAge = 999;
-            }
-
-            if (userAge < minAge || userAge > maxAge) {
-                return {
-                    eligible: false,
-                    reason: i18n.language === 'ar'
-                        ? `هذه الدعوة مخصصة للفئة العمرية ${invitation.ageRange}`
-                        : `This invitation is for ages ${invitation.ageRange}`
-                };
-            }
-        }
-
         return { eligible: true };
     };
-
     const eligibility = checkEligibility();
 
-    // Default image if none provided
+    const handleShare = async (e) => {
+        e.stopPropagation();
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: title,
+                    text: `${title} at ${location}`,
+                    url: `${window.location.origin}/invitation/${id}`,
+                });
+            } catch (err) {
+                // User cancelled
+            }
+        } else {
+            navigator.clipboard.writeText(`${window.location.origin}/invitation/${id}`);
+            alert(i18n.language === 'ar' ? 'تم نسخ الرابط' : 'Link copied to clipboard!');
+        }
+    };
+
     const cardImage = image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 
     return (
@@ -91,437 +76,200 @@ const InvitationCard = ({ invitation }) => {
             onClick={() => navigate(`/invitation/${id}`)}
             style={{
                 position: 'relative',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                borderRadius: '20px',
+                overflow: 'hidden',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: '380px', // Ensure height for content
+                aspectRatio: '3/4', // Portrait-ish aspect ratio like stories
+                border: '1px solid rgba(255,255,255,0.1)'
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-5px) scale(1.01)';
+                e.currentTarget.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)';
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4)';
             }}
         >
-            {/* Layer 1: Background Image - الطبقة الأولى: صورة الخلفية */}
-            <div
-                className="card-bg-image"
-                style={{
-                    backgroundImage: `url(${cardImage})`,
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    borderRadius: 'var(--radius-lg)',
-                    zIndex: 1
-                }}
-            >
-                {/* Layer 2: Gradient Overlay - الطبقة الثانية: التدرج */}
-                <div
-                    className="card-gradient-overlay"
+            {/* 1. FULL BACKGROUND IMAGE */}
+            <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+                <img
+                    src={cardImage}
+                    alt={title}
                     style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%)',
-                        borderRadius: 'var(--radius-lg)',
-                        zIndex: 2
+                        width: '100%', height: '100%', objectFit: 'cover',
+                        transition: 'transform 0.5s ease' // Subtle zoom on hover effect
                     }}
-                ></div>
+                />
+
+                {/* 2. REFINED OVERLAY (Clear Middle, Dark Bottom) */}
+                <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 25%, transparent 50%, rgba(0,0,0,0.8) 75%, rgba(0,0,0,0.98) 100%)',
+                }} />
             </div>
 
-            {/* Layer 3: Content Container - الطبقة الثالثة: المحتوى */}
-            <div style={{ position: 'relative', zIndex: 3, padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
+            {/* 3. CONTENT LAYER */}
+            <div style={{
+                position: 'relative', zIndex: 10, padding: '20px',
+                flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
+            }}>
 
-                {/* Top Section: Avatar & Type Badge */}
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '8rem'
-                }}>
-                    {/* Avatar Container with Follow Button */}
-                    <div style={{ position: 'relative' }}>
-                        {/* Avatar - Layer 4 */}
-                        <div
-                            onClick={handleAvatarClick}
-                            style={{
-                                width: '75px',
-                                height: '75px',
-                                borderRadius: '50%',
-                                border: `3px solid ${isHost ? 'var(--luxury-gold)' : 'var(--primary)'}`,
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                                position: 'relative',
-                                zIndex: 4,
-                                background: 'var(--bg-card)'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 0 25px rgba(139, 92, 246, 0.7)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                        >
+                {/* Header: Host & Type */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ position: 'relative' }} onClick={handleAvatarClick}>
                             <img
                                 src={author?.avatar}
                                 alt={author?.name}
                                 style={{
-                                    width: '100%',
-                                    height: '100%',
+                                    width: '44px', height: '44px', borderRadius: '50%',
+                                    border: '2px solid rgba(255,255,255,0.8)',
                                     objectFit: 'cover'
                                 }}
                             />
-                            {/* Online Status Indicator */}
-                            <div
-                                style={{
-                                    position: 'absolute',
-                                    bottom: '2px',
-                                    right: '2px',
-                                    width: '14px',
-                                    height: '14px',
-                                    background: '#10b981',
-                                    border: '2px solid white',
-                                    borderRadius: '50%',
-                                    zIndex: 5
-                                }}
-                            ></div>
+                            {!isHost && author?.accountType !== 'business' && (
+                                <button
+                                    onClick={handleFollowClick}
+                                    style={{
+                                        position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%)',
+                                        width: '18px', height: '18px', borderRadius: '50%',
+                                        background: isFollowing ? '#10b981' : '#ef4444', border: '1.5px solid white',
+                                        color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', padding: 0
+                                    }}>
+                                    {isFollowing ? <FaCheck /> : <FaPlus />}
+                                </button>
+                            )}
                         </div>
+                        <div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{author?.name}</div>
+                            <div style={{
+                                fontSize: '0.7rem', color: 'rgba(255,255,255,0.9)',
+                                background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px',
+                                display: 'inline-block', marginTop: '4px', backdropFilter: 'blur(4px)'
+                            }}>
+                                {t(`type_${type?.toLowerCase().replace(/ /g, '_')}`, { defaultValue: type })}
+                            </div>
+                        </div>
+                    </div>
 
-                        {/* Follow Button - Layer 5 (Highest) - زر دائري في الأسفل */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={handleShare}
+                            style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '50%', width: '30px', height: '30px', border: '1px solid rgba(255,255,255,0.2)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
+                            <FaShareAlt style={{ fontSize: '13px', opacity: 0.9 }} />
+                        </button>
                         {!isHost && (
-                            <button
-                                onClick={handleFollowClick}
-                                style={{
-                                    position: 'absolute',
-                                    bottom: '-8px',
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '50%',
-                                    border: '2px solid white',
-                                    background: isFollowing
-                                        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                                        : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                                    color: 'white',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    boxShadow: isFollowing
-                                        ? '0 4px 12px rgba(16, 185, 129, 0.5)'
-                                        : '0 4px 12px rgba(239, 68, 68, 0.5)',
-                                    transition: 'all 0.3s ease',
-                                    zIndex: 10,
-                                    fontSize: '1rem',
-                                    fontWeight: '900',
-                                    padding: 0
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateX(-50%) scale(1.15)';
-                                    e.currentTarget.style.boxShadow = isFollowing
-                                        ? '0 6px 20px rgba(16, 185, 129, 0.7)'
-                                        : '0 6px 20px rgba(239, 68, 68, 0.7)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
-                                    e.currentTarget.style.boxShadow = isFollowing
-                                        ? '0 4px 12px rgba(16, 185, 129, 0.5)'
-                                        : '0 4px 12px rgba(239, 68, 68, 0.5)';
-                                }}
-                            >
-                                {isFollowing ? <FaCheck /> : <FaPlus />}
+                            <button onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }}
+                                style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '50%', width: '30px', height: '30px', border: '1px solid rgba(255,255,255,0.2)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
+                                <FaFlag style={{ fontSize: '12px', opacity: 0.8 }} />
                             </button>
                         )}
                     </div>
-
-                    {/* Author Name Badge - Next to Avatar */}
-                    <div style={{
-                        background: 'rgba(0, 0, 0, 0.7)',
-                        backdropFilter: 'blur(10px)',
-                        padding: '8px 14px',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        fontSize: '0.85rem',
-                        fontWeight: '800',
-                        color: 'white',
-                        whiteSpace: 'nowrap',
-                        zIndex: 4
-                    }}>
-                        {author?.name}
-                    </div>
-
-                    {/* Type Badge */}
-                    <div
-                        style={{
-                            background: 'rgba(0,0,0,0.6)',
-                            backdropFilter: 'blur(10px)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            padding: '6px 14px',
-                            borderRadius: '20px',
-                            fontSize: '0.75rem',
-                            fontWeight: '800',
-                            color: 'white',
-                            zIndex: 4
-                        }}
-                    >
-                        {t(`type_${type?.toLowerCase().replace(/ /g, '_')}`) || type}
-                    </div>
                 </div>
 
-                {/* Bottom Section: Info */}
-                <div>
-                    {/* Title & Location */}
-                    <div style={{ marginBottom: '1.25rem' }}>
-                        <h3
-                            style={{
-                                fontSize: '1.65rem',
-                                fontWeight: '900',
-                                lineHeight: '1.2',
-                                marginBottom: '0.5rem',
-                                color: 'white',
-                                textShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                            }}
-                        >
-                            {title}
-                        </h3>
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                color: 'rgba(255,255,255,0.9)',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            <FaMapMarkerAlt style={{ color: 'var(--luxury-gold)', fontSize: '0.85rem' }} />
-                            <span style={{ fontWeight: '500' }}>{location}</span>
+                {/* Body: Title & Details (Pushed down by flex) */}
+                <div style={{ marginTop: 'auto' }}>
+                    <h3 style={{
+                        fontSize: '1.5rem', fontWeight: '900', color: 'white',
+                        marginBottom: '8px', lineHeight: '1.2',
+                        textShadow: '0 2px 10px rgba(0,0,0,0.8)'
+                    }}>
+                        {title}
+                    </h3>
+
+                    {/* Meta Row: Date | Time | Payment */}
+                    <div style={{
+                        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px',
+                        marginBottom: '12px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', fontWeight: '500'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <FaCalendarAlt style={{ color: '#c084fc' }} />
+                            <span>{date ? new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { day: 'numeric', month: 'short' }) : '--'}</span>
+                        </div>
+                        <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.4)' }}></div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <FaClock style={{ color: '#c084fc' }} />
+                            <span>{time}</span>
+                        </div>
+                        <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.4)' }}></div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <FaMoneyBillWave style={{ color: '#fbbf24' }} />
+                            <span>{t(`payment_${(paymentType || 'Split').toLowerCase().split(' ')[0]}`, { defaultValue: paymentType || 'Split' })}</span>
                         </div>
                     </div>
 
-                    {/* Meta Info Pills */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(3, 1fr)',
-                            gap: '8px',
-                            marginBottom: '1.25rem'
-                        }}
-                    >
-                        <div
-                            style={{
-                                background: 'rgba(139, 92, 246, 0.2)',
-                                backdropFilter: 'blur(10px)',
-                                border: '1px solid rgba(139, 92, 246, 0.3)',
-                                padding: '8px 10px',
-                                borderRadius: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: 'white'
-                            }}
-                        >
-                            <FaCalendarAlt style={{ fontSize: '0.7rem' }} />
-                            <span>{date ? new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { day: 'numeric', month: 'short' }) : '---'}</span>
-                        </div>
-                        <div
-                            style={{
-                                background: 'rgba(139, 92, 246, 0.2)',
-                                backdropFilter: 'blur(10px)',
-                                border: '1px solid rgba(139, 92, 246, 0.3)',
-                                padding: '8px 10px',
-                                borderRadius: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: 'white'
-                            }}
-                        >
-                            <FaClock style={{ fontSize: '0.7rem' }} />
-                            <span>{time || '20:30'}</span>
-                        </div>
-                        <div
-                            style={{
-                                background: 'rgba(251, 191, 36, 0.2)',
-                                backdropFilter: 'blur(10px)',
-                                border: '1px solid rgba(251, 191, 36, 0.4)',
-                                padding: '8px 10px',
-                                borderRadius: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: 'var(--luxury-gold)'
-                            }}
-                        >
-                            <FaMoneyBillWave style={{ fontSize: '0.7rem' }} />
-                            <span>{t(`payment_${paymentType?.toLowerCase().split(' ')[0]}`) || paymentType}</span>
-                        </div>
+                    {/* Location */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '15px', color: 'rgba(255,255,255,0.8)' }}>
+                        <FaMapMarkerAlt style={{ color: '#f87171' }} />
+                        <span style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {location || t('venue_selected')}
+                        </span>
                     </div>
 
-                    {/* Footer Stats - Updated Layout */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: '1rem'
-                        }}
-                    >
-                        <div
+                    {/* Footer Actions Row */}
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        {/* Main Join Button */}
+                        <button
+                            className="invitation-action-btn"
+                            onClick={handleAction}
                             style={{
-                                background: 'rgba(244, 63, 94, 0.25)',
-                                backdropFilter: 'blur(10px)',
-                                border: '1px solid rgba(244, 63, 94, 0.4)',
-                                padding: '6px 14px',
-                                borderRadius: '20px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.85rem',
-                                fontWeight: '800',
-                                color: 'white'
+                                flex: 1, padding: '12px', borderRadius: '14px', border: 'none',
+                                background: !eligibility.eligible ? 'rgba(55, 65, 81, 0.8)' : 'white',
+                                color: !eligibility.eligible ? '#d1d5db' : 'black',
+                                fontWeight: '800', fontSize: '0.95rem', cursor: 'pointer',
+                                display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
+                                boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                                transition: 'transform 0.2s',
+                                backdropFilter: 'blur(5px)'
                             }}
+                            disabled={!eligibility.eligible && !isHost}
                         >
-                            <FaUserFriends style={{ color: 'var(--secondary)', fontSize: '0.8rem' }} />
-                            <span>{t('spots_remaining', { count: spotsLeft })}</span>
-                        </div>
+                            {isHost ? t('manage_invitation') :
+                                isAccepted ? t('request_approved') :
+                                    !eligibility.eligible ? t('invite_unavailable') || 'Unavailable' :
+                                        isPending ? t('request_pending') : t('join_btn')}
+                        </button>
 
-                        {/* Gender Preference Badge */}
-                        {invitation.genderPreference && (
-                            <div
-                                style={{
-                                    background: 'rgba(139, 92, 246, 0.25)',
-                                    backdropFilter: 'blur(10px)',
-                                    border: '1px solid rgba(139, 92, 246, 0.4)',
-                                    padding: '6px 14px',
-                                    borderRadius: '20px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '700',
-                                    color: 'white'
-                                }}
-                            >
-                                <span>
-                                    {invitation.genderPreference === 'male' ? '👨' :
-                                        invitation.genderPreference === 'female' ? '👩' : '👥'}
-                                </span>
-                                <span>
-                                    {i18n.language === 'ar'
-                                        ? (invitation.genderPreference === 'male' ? 'ذكور' :
-                                            invitation.genderPreference === 'female' ? 'إناث' : 'لا يهم')
-                                        : (invitation.genderPreference === 'male' ? 'Male' :
-                                            invitation.genderPreference === 'female' ? 'Female' : 'Any')}
-                                </span>
+                        {/* Quick Stats Box (Spots & Gender) */}
+                        <div style={{
+                            background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)',
+                            borderRadius: '14px', padding: '0 12px', height: '45px',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            border: '1px solid rgba(255,255,255,0.2)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', color: 'white' }}>
+                                <FaUserFriends style={{ opacity: 0.8 }} />
+                                <span style={{ fontWeight: 'bold' }}>{spotsLeft}</span>
                             </div>
-                        )}
-
-                        {/* Age Range Badge */}
-                        {invitation.ageRange && invitation.ageRange !== 'any' && (
-                            <div
-                                style={{
-                                    background: 'rgba(251, 191, 36, 0.25)',
-                                    backdropFilter: 'blur(10px)',
-                                    border: '1px solid rgba(251, 191, 36, 0.4)',
-                                    padding: '6px 14px',
-                                    borderRadius: '20px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '700',
-                                    color: 'var(--luxury-gold)'
-                                }}
-                            >
-                                <span>
-                                    {invitation.ageRange === '18-25' ? '🧒' :
-                                        invitation.ageRange === '26-35' ? '👨' :
-                                            invitation.ageRange === '36-45' ? '🧔' : '👴'}
-                                </span>
-                                <span>{invitation.ageRange}</span>
+                            <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.3)' }} />
+                            <div style={{ fontSize: '1rem', color: 'white' }}>
+                                {(!genderPreference || genderPreference === 'any') ? <FaVenusMars /> : genderPreference === 'male' ? <FaMars style={{ color: '#93c5fd' }} /> : <FaVenus style={{ color: '#f9a8d4' }} />}
                             </div>
-                        )}
+                        </div>
                     </div>
 
-                    {/* Action Button */}
-                    <button
-                        onClick={handleAction}
-                        disabled={!isHost && !isAccepted && !eligibility.eligible}
-                        style={{
-                            width: '100%',
-                            height: '55px',
-                            borderRadius: '16px',
-                            fontSize: '1rem',
-                            fontWeight: '900',
-                            border: (isPending || !eligibility.eligible) ? '2px solid rgba(255,255,255,0.3)' : 'none',
-                            background: !eligibility.eligible
-                                ? 'rgba(239, 68, 68, 0.2)'
-                                : (isPending
-                                    ? 'transparent'
-                                    : (isAccepted || isHost
-                                        ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)'
-                                        : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)')),
-                            color: 'white',
-                            cursor: (!isHost && !isAccepted && !eligibility.eligible) ? 'not-allowed' : 'pointer',
-                            boxShadow: (isPending || !eligibility.eligible) ? 'none' : '0 8px 20px rgba(139, 92, 246, 0.4)',
-                            transition: 'all 0.3s ease',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '10px',
-                            opacity: (!isHost && !isAccepted && !eligibility.eligible) ? 0.6 : 1
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!isPending && eligibility.eligible) {
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 12px 28px rgba(139, 92, 246, 0.5)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = (isPending || !eligibility.eligible) ? 'none' : '0 8px 20px rgba(139, 92, 246, 0.4)';
-                        }}
-                    >
-                        {isHost ? (
-                            <>
-                                <FaChevronRight />
-                                <span>{t('manage_invitation')}</span>
-                            </>
-                        ) : isAccepted ? (
-                            <>
-                                <FaPaperPlane />
-                                <span>{t('request_approved')}</span>
-                            </>
-                        ) : !eligibility.eligible ? (
-                            <span style={{ opacity: 0.9, fontSize: '0.85rem', textAlign: 'center' }}>
-                                {eligibility.reason}
-                            </span>
-                        ) : isPending ? (
-                            <span style={{ opacity: 0.7 }}>{t('request_pending')}</span>
-                        ) : (
-                            <span>{t('join_btn')}</span>
-                        )}
-                    </button>
-
-                    {/* Share Buttons - at bottom of card */}
-                    <ShareButtons
-                        title={title}
-                        description={`${location} • ${date ? new Date(date).toLocaleDateString() : ''}`}
-                        url={`${window.location.origin}/invitation/${id}`}
-                        type="invitation"
-                    />
                 </div>
             </div>
+
+            {/* Report Modal */}
+            {showReportModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }}>
+                    <NewReportModal
+                        key={Date.now()}
+                        isOpen={showReportModal}
+                        onClose={() => setShowReportModal(false)}
+                        reportType="invitation"
+                        targetId={id}
+                        targetName={title}
+                        onSubmit={submitReport}
+                    />
+                </div>
+            )}
         </div>
     );
 };

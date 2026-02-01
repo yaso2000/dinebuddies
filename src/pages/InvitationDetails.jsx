@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaEdit, FaCheckCircle, FaStar } from 'react-icons/fa';
+import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaEdit, FaCheckCircle, FaStar, FaComments } from 'react-icons/fa';
 
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
+import { getInvitationGroupChat } from '../utils/groupChatHelpers';
+import { updateInvitationDateTime, getInvitationEditStatus } from '../utils/invitationValidation';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -27,6 +29,8 @@ const InvitationDetails = () => {
 
     const { invitations, currentUser, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating } = useInvitations();
     const [message, setMessage] = useState('');
+    const [groupChatId, setGroupChatId] = useState(null);
+    const [loadingGroupChat, setLoadingGroupChat] = useState(false);
     const chatEndRef = useRef(null);
 
     const invitation = invitations.find(inv => inv.id === id);
@@ -63,10 +67,32 @@ const InvitationDetails = () => {
 
     const { requestToJoin, cancelRequest } = useInvitations();
 
+    // Load group chat ID if user is participant
+    useEffect(() => {
+        const loadGroupChat = async () => {
+            if (!invitation?.id || !isAccepted) {
+                setGroupChatId(null);
+                return;
+            }
+
+            try {
+                setLoadingGroupChat(true);
+                const chatId = await getInvitationGroupChat(invitation.id);
+                setGroupChatId(chatId);
+            } catch (error) {
+                console.error('Error loading group chat:', error);
+            } finally {
+                setLoadingGroupChat(false);
+            }
+        };
+
+        loadGroupChat();
+    }, [invitation?.id, isAccepted]);
+
     return (
         <div className="page-container details-page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
             {/* Elegant Header */}
-            <header className="app-header" style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(25px)', padding: '0 1rem', flexShrink: 0 }}>
+            <header className="app-header sticky-header-glass" style={{ position: 'sticky', top: 0, zIndex: 100, padding: '0 1rem', flexShrink: 0 }}>
                 <button className="back-btn" onClick={() => navigate('/')} aria-label="Go back">
                     <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
                 </button>
@@ -100,9 +126,7 @@ const InvitationDetails = () => {
                                 <h2 style={{ fontSize: '1.5rem', fontWeight: '900' }}>{title}</h2>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                                     <div style={{ background: 'var(--primary)', color: 'white', padding: '4px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.7rem', fontWeight: '800' }}>
-                                        {t(`type_${invitation.type?.toLowerCase()}`) !== `type_${invitation.type?.toLowerCase()}`
-                                            ? t(`type_${invitation.type?.toLowerCase()}`)
-                                            : (invitation.type || 'Other')}
+                                        {t(`type_${invitation.type?.toLowerCase().replace(/ /g, '_')}`, { defaultValue: invitation.type || 'Other' })}
                                     </div>
                                     {!isHost && (
                                         <button
@@ -193,18 +217,88 @@ const InvitationDetails = () => {
                                         )}
                                         {isHost && (
                                             <>
-                                                {invitation.timeChangeCount < 1 && (
+                                                {(!invitation.editHistory || invitation.editHistory.length === 0) && (
                                                     <button
-                                                        onClick={() => {
-                                                            const newDate = prompt(i18n.language === 'ar' ? 'أدخل التاريخ الجديد (YYYY-MM-DD):' : 'Enter new date:', date.split('T')[0]);
-                                                            const newTime = prompt(i18n.language === 'ar' ? 'أدخل الوقت الجديد (HH:MM):' : 'Enter new time:', time);
-                                                            if (newDate && newTime) updateInvitationTime(id, newDate, newTime);
+                                                        onClick={async () => {
+                                                            const editStatus = getInvitationEditStatus(invitation);
+
+                                                            if (!editStatus.canEdit) {
+                                                                alert(editStatus.message);
+                                                                return;
+                                                            }
+
+                                                            const newDate = prompt(
+                                                                i18n.language === 'ar'
+                                                                    ? 'أدخل التاريخ الجديد (YYYY-MM-DD):'
+                                                                    : 'Enter new date (YYYY-MM-DD):',
+                                                                date.split('T')[0]
+                                                            );
+
+                                                            if (!newDate) return;
+
+                                                            const newTime = prompt(
+                                                                i18n.language === 'ar'
+                                                                    ? 'أدخل الوقت الجديد (HH:MM):'
+                                                                    : 'Enter new time (HH:MM):',
+                                                                time
+                                                            );
+
+                                                            if (!newTime) return;
+
+                                                            const confirmMessage = i18n.language === 'ar'
+                                                                ? `⚠️ تنبيه مهم:\n\nسيتم:\n1. تغيير الموعد من ${date} ${time} إلى ${newDate} ${newTime}\n2. إرسال إشعار لجميع المشاركين (${joined.length} شخص)\n3. تحويل حالتهم من "مقبول" إلى "تحت النظر"\n4. لن تتمكن من تعديل الموعد مرة أخرى\n\nهل أنت متأكد؟`
+                                                                : `⚠️ Important:\n\nThis will:\n1. Change time from ${date} ${time} to ${newDate} ${newTime}\n2. Notify all participants (${joined.length} people)\n3. Move them from "Accepted" to "Pending"\n4. You won't be able to edit again\n\nAre you sure?`;
+
+                                                            if (!window.confirm(confirmMessage)) return;
+
+                                                            const result = await updateInvitationDateTime(
+                                                                id,
+                                                                newDate,
+                                                                newTime,
+                                                                currentUser
+                                                            );
+
+                                                            if (result.success) {
+                                                                alert(
+                                                                    i18n.language === 'ar'
+                                                                        ? `✅ تم تعديل الموعد بنجاح!\n\nتم إرسال إشعارات لـ ${result.affectedUsers} مشارك.`
+                                                                        : `✅ Time updated successfully!\n\nNotified ${result.affectedUsers} participants.`
+                                                                );
+                                                                window.location.reload();
+                                                            } else {
+                                                                alert(
+                                                                    i18n.language === 'ar'
+                                                                        ? `❌ فشل التعديل: ${result.error}`
+                                                                        : `❌ Update failed: ${result.error}`
+                                                                );
+                                                            }
                                                         }}
                                                         className="btn btn-outline"
-                                                        style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', borderColor: 'var(--primary)', color: 'white' }}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '8px',
+                                                            fontSize: '0.75rem',
+                                                            borderRadius: '8px',
+                                                            borderColor: 'var(--primary)',
+                                                            color: 'white'
+                                                        }}
                                                     >
-                                                        <FaEdit /> تغيير الموعد (مرة واحدة)
+                                                        <FaEdit /> {i18n.language === 'ar' ? 'تغيير الموعد (مرة واحدة)' : 'Change Time (Once)'}
                                                     </button>
+                                                )}
+                                                {invitation.editHistory && invitation.editHistory.length > 0 && (
+                                                    <div style={{
+                                                        flex: 1,
+                                                        padding: '8px',
+                                                        fontSize: '0.7rem',
+                                                        borderRadius: '8px',
+                                                        background: 'rgba(255,255,255,0.05)',
+                                                        color: 'var(--text-muted)',
+                                                        textAlign: 'center',
+                                                        border: '1px solid var(--border-color)'
+                                                    }}>
+                                                        🔒 {i18n.language === 'ar' ? 'تم التعديل مسبقاً' : 'Already Edited'}
+                                                    </div>
                                                 )}
                                                 {meetingStatus !== 'completed' && (
                                                     <button onClick={() => updateMeetingStatus(id, 'completed')} className="btn btn-primary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', background: 'var(--luxury-gold)', border: 'none', color: 'black' }}>
@@ -313,6 +407,51 @@ const InvitationDetails = () => {
                             <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
                                 {isPending ? 'لقد تم إرسال طلبك، بانتظار موافقة صاحب الدعوة.' : 'بمجرد قبولك، ستتمكن من الدخول إلى الدردشة الجماعية.'}
                             </p>
+                        </div>
+                    )}
+
+                    {/* Group Chat Button - For Participants */}
+                    {(isHost || isAccepted) && groupChatId && (
+                        <div style={{ marginTop: '1.5rem' }}>
+                            <button
+                                className="btn btn-block"
+                                onClick={() => navigate(`/group/${groupChatId}`)}
+                                style={{
+                                    height: '60px',
+                                    fontSize: '1.1rem',
+                                    background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '12px',
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                <FaComments size={20} />
+                                <span>{i18n.language === 'ar' ? 'فتح الدردشة الجماعية' : 'Open Group Chat'}</span>
+                                <span style={{
+                                    background: 'rgba(255,255,255,0.25)',
+                                    padding: '4px 10px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '700'
+                                }}>
+                                    {joined.length + 1} {i18n.language === 'ar' ? 'عضو' : 'members'}
+                                </span>
+                            </button>
+                            <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                <span>💬</span>
+                                <span>{i18n.language === 'ar' ? 'تواصل مع الأعضاء قبل اللقاء' : 'Chat with members before the meetup'}</span>
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Loading indicator */}
+                    {(isHost || isAccepted) && loadingGroupChat && !groupChatId && (
+                        <div style={{ marginTop: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                            <span>⏳ {i18n.language === 'ar' ? 'جاري تحميل الدردشة...' : 'Loading chat...'}</span>
                         </div>
                     )}
                 </div>
@@ -426,7 +565,7 @@ const InvitationDetails = () => {
 
             {/* Message Input - Only for members */}
             {(isHost || isAccepted) && (
-                <div style={{ padding: '1.25rem', background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(25px)', borderTop: '1px solid var(--border-color)' }}>
+                <div className="chat-footer-glass" style={{ padding: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
                     <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '0.75rem' }}>
                         <input
                             type="text"

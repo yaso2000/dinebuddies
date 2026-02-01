@@ -1,197 +1,135 @@
-# 🍽️ DineBuddies - منصة التواصل الاجتماعي للطعام
+# DineBuddies - Social Dining Platform
 
-<div dir="rtl">
+A modern social platform for connecting people through dining experiences. Share invitations to restaurants, cafes, and entertainment venues, and meet new friends who share your interests.
 
-## 📱 نظرة عامة
+## Features
 
-**DineBuddies** هو تطبيق ويب اجتماعي يربط محبي الطعام معاً لتجارب طعام مشتركة. سواء كنت تبحث عن رفيق لتجربة مطعم جديد أو ترغب في تنظيم عشاء جماعي، DineBuddies هو المكان المثالي!
+### For Users
+- **Create & Join Invitations**: Post dining invitations or join existing ones
+- **Social Networking**: Follow other users and build your network
+- **Real-time Chat**: Private messaging and group chats
+- **Location-based Discovery**: Find nearby dining opportunities
+- **Community Features**: Join communities and interact with like-minded people
 
-### ✨ الميزات الرئيسية
+### For Business Partners
+- **Business Profiles**: Showcase your restaurant or cafe
+- **Community Management**: Build and manage your customer community
+- **Invitation Hosting**: Create special dining events
+- **Analytics**: Track engagement and community growth
 
-- 🎉 **إنشاء الدعوات**: أنشئ دعوات لتجارب الطعام المختلفة
-- 👥 **الانضمام للمجموعات**: انضم لدعوات الآخرين وكوّن صداقات جديدة
-- 💬 **الدردشة الجماعية**: تواصل مع أعضاء المجموعة قبل وأثناء اللقاء
-- 🏪 **دليل المطاعم**: استكشف المطاعم الشريكة واحجز مباشرة
-- 🔔 **إشعارات الشركاء**: المطاعم تتلقى إشعارات فورية عن الحجوزات
-- 🌐 **تعدد اللغات**: دعم العربية والإنجليزية
-- 📱 **تصميم متجاوب**: يعمل بشكل مثالي على جميع الأجهزة
+## Tech Stack
 
----
+- **Frontend**: React + Vite
+- **Backend**: Firebase (Authentication, Firestore, Storage, Functions)
+- **Styling**: CSS3 with modern design patterns
+- **Maps**: Google Maps API
+- **Payments**: Stripe Integration
+- **Deployment**: Vercel
 
-## 🚀 البدء السريع
+## Getting Started
 
-### المتطلبات
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Firebase account
+- Google Maps API key
+- Stripe account (for payments)
 
-- Node.js 18+ 
-- npm أو yarn
+### Installation
 
-### التثبيت
-
+1. Clone the repository
 ```bash
-# استنساخ المشروع
-git clone https://github.com/YOUR_USERNAME/dinebuddies.git
+git clone <repository-url>
+cd temporal-coronal
+```
 
-# الانتقال للمجلد
-cd dinebuddies
-
-# تثبيت التبعيات
+2. Install dependencies
+```bash
 npm install
+```
 
-# تشغيل التطبيق
+3. Configure environment variables
+Create a `.env` file based on `.env.example`:
+```bash
+cp .env.example .env
+```
+
+Fill in your credentials:
+- Firebase configuration
+- Google Maps API key
+- Stripe keys
+
+4. Run development server
+```bash
 npm run dev
 ```
 
-التطبيق سيعمل على: `http://localhost:5173`
-
----
-
-## 📦 البناء للإنتاج
-
+5. Build for production
 ```bash
-# بناء التطبيق
 npm run build
-
-# معاينة البناء
-npm run preview
 ```
 
----
+## Firebase Setup
 
-## 🌐 النشر
-
-### Vercel (موصى به)
-
+1. Create a Firebase project
+2. Enable Authentication (Email/Password, Google)
+3. Create Firestore database
+4. Set up Storage
+5. Deploy Firestore rules and indexes:
 ```bash
-# تثبيت Vercel CLI
-npm i -g vercel
-
-# النشر
-vercel
+firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes
+firebase deploy --only storage
 ```
 
-أو استخدم واجهة Vercel:
-1. اذهب إلى [vercel.com](https://vercel.com)
-2. استورد المشروع من GitHub
-3. اضغط Deploy
+## Deployment
 
-### Netlify
-
+### Vercel (Recommended)
 ```bash
-# تثبيت Netlify CLI
-npm i -g netlify-cli
-
-# النشر
-netlify deploy --prod
+npm run build
+vercel --prod
 ```
 
----
-
-## 🛠️ التقنيات المستخدمة
-
-### Frontend
-- **React 18** - مكتبة واجهة المستخدم
-- **Vite** - أداة البناء السريعة
-- **React Router** - التنقل بين الصفحات
-- **i18next** - تعدد اللغات
-- **React Icons** - الأيقونات
-
-### Styling
-- **CSS Variables** - نظام الألوان
-- **Responsive Design** - تصميم متجاوب
-- **Dark Mode** - الوضع الداكن
-
-### State Management
-- **React Context** - إدارة الحالة
-- **localStorage** - التخزين المحلي (مؤقت)
-
----
-
-## 📁 هيكل المشروع
-
-```
-dinebuddies/
-├── src/
-│   ├── components/      # المكونات القابلة لإعادة الاستخدام
-│   ├── pages/          # صفحات التطبيق
-│   ├── context/        # Context API
-│   ├── data/           # البيانات التجريبية
-│   ├── locales/        # ملفات الترجمة
-│   ├── index.css       # الأنماط الرئيسية
-│   └── App.jsx         # المكون الرئيسي
-├── public/             # الملفات الثابتة
-├── vercel.json         # إعدادات Vercel
-└── package.json        # التبعيات
+### Firebase Hosting
+```bash
+firebase deploy --only hosting
 ```
 
----
+## Project Structure
 
-## 🎯 الميزات التفصيلية
+```
+src/
+├── components/       # Reusable UI components
+├── context/         # React Context providers
+├── pages/           # Page components
+├── utils/           # Utility functions
+├── firebase/        # Firebase configuration
+└── App.jsx          # Main app component
+```
 
-### 1. نظام الدعوات
-- إنشاء دعوات مع تفاصيل كاملة (تاريخ، وقت، موقع، عدد الأشخاص)
-- طلب الانضمام والموافقة/الرفض
-- فلترة حسب النوع والموقع
-- تتبع حالة اللقاء (تخطيط، في الطريق، وصلنا)
+## Environment Variables
 
-### 2. نظام المطاعم
-- دليل شامل للمطاعم الشريكة
-- تفاصيل المطعم مع الصور والمعلومات
-- الحجز المباشر من المطعم
-- إشعارات فورية للشركاء
+Required environment variables:
 
-### 3. التواصل الاجتماعي
-- متابعة المستخدمين
-- دردشة خاصة (1-to-1) للمتابعة المتبادلة
-- دردشة جماعية لكل دعوة
-- نظام السمعة والتقييمات
+```
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_GOOGLE_MAPS_API_KEY=
+VITE_STRIPE_PUBLIC_KEY=
+```
 
-### 4. الإشعارات
-- إشعارات للمستخدمين عن الطلبات والقبول
-- إشعارات للشركاء عن الحجوزات الجديدة
-- إشعارات عند انضمام أعضاء جدد
-- إشعارات عند اكتمال العدد
+## Contributing
 
----
+This is a private project. For any questions or issues, please contact the development team.
 
-## 🔮 الميزات القادمة
+## License
 
-- [ ] Backend حقيقي (Firebase/Supabase)
-- [ ] نظام المصادقة الكامل (Email, Google, Phone)
-- [ ] نظام الدفع والاشتراكات
-- [ ] لوحة تحكم الأدمن
-- [ ] تطبيق موبايل (React Native)
-- [ ] إشعارات Push
-- [ ] نظام النقاط والمكافآت
-- [ ] مراجعات المطاعم
+Proprietary - All rights reserved
 
----
+## Support
 
-## 📄 الترخيص
-
-هذا المشروع مرخص تحت رخصة MIT.
-
----
-
-## 👨‍💻 المطور
-
-تم تطويره بواسطة **ياسر**
-
----
-
-## 🤝 المساهمة
-
-المساهمات مرحب بها! لا تتردد في فتح Issue أو Pull Request.
-
----
-
-## 📞 التواصل
-
-لأي استفسارات أو اقتراحات، يمكنك التواصل عبر:
-- GitHub Issues
-- Email: [your-email@example.com]
-
----
-
-**صُنع بـ ❤️ في السعودية**
-
-</div>
+For support, email: support@dinebuddies.com
