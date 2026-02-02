@@ -71,7 +71,11 @@ const InvitationDetails = () => {
     // Load group chat ID if user is participant
     useEffect(() => {
         const loadGroupChat = async () => {
-            if (!invitation?.id || !invitation.joined?.includes(currentUser?.id)) {
+            // Check if user is host or has joined
+            const isHost = invitation?.author?.id === currentUser?.id;
+            const hasJoined = invitation?.joined?.includes(currentUser?.id);
+
+            if (!invitation?.id || (!isHost && !hasJoined)) {
                 setGroupChatId(null);
                 return;
             }
@@ -88,7 +92,7 @@ const InvitationDetails = () => {
         };
 
         loadGroupChat();
-    }, [invitation?.id, invitation?.joined, currentUser?.id]);
+    }, [invitation?.id, invitation?.joined, invitation?.author?.id, currentUser?.id]);
 
     // Fetch requesters data
     useEffect(() => {
