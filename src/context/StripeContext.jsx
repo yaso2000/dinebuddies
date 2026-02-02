@@ -4,8 +4,9 @@ import { Elements } from '@stripe/react-stripe-js';
 
 const StripeContext = createContext();
 
-// تحميل Stripe بالـ Publishable Key
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+// تحميل Stripe بالـ Publishable Key (optional - won't crash if not set)
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = stripeKey ? loadStripe(stripeKey) : Promise.resolve(null);
 
 export const StripeProvider = ({ children }) => {
     return (

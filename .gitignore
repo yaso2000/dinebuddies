@@ -43,3 +43,4 @@ ui-debug.log
 *.cache
 .runtimeconfig.json
 .vercel
+.env*.local
