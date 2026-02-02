@@ -514,12 +514,16 @@ const InvitationDetails = () => {
                         <div style={{ marginTop: '1.5rem' }}>
                             <button
                                 className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
-                                onClick={() => {
+                                onClick={async () => {
                                     if (!eligibility.eligible) return;
                                     if (isPending) {
+                                        console.log('🔴 Canceling request for invitation:', id);
                                         cancelRequest(id);
                                     } else {
-                                        requestToJoin(id);
+                                        console.log('🟢 Requesting to join invitation:', id);
+                                        console.log('Current user:', currentUser);
+                                        await requestToJoin(id);
+                                        console.log('✅ Request sent successfully');
                                         alert(t('join_request_sent'));
                                         // Force a full page reload to ensure the home page renders correctly
                                         window.location.href = '/';
