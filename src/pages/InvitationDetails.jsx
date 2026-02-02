@@ -13,27 +13,49 @@ const InvitationDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
 
-    const handleShare = () => {
-        if (navigator.share) {
-            navigator.share({
-                title: title,
-                text: description,
-                url: window.location.href,
-            }).catch(console.error);
-        } else {
-            // Fallback: Copy to clipboard
-            navigator.clipboard.writeText(window.location.href);
-            alert(i18n.language === 'ar' ? 'تم نسخ الرابط!' : 'Link copied!');
-        }
-    };
-
-    const { invitations, currentUser, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
+    const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
     const [message, setMessage] = useState('');
     const [groupChatId, setGroupChatId] = useState(null);
     const [loadingGroupChat, setLoadingGroupChat] = useState(false);
+    const [userLocation, setUserLocation] = useState(null);
     const chatEndRef = useRef(null);
 
     const invitation = invitations.find(inv => inv.id === id);
+
+    // Calculate distance between two points (Haversine formula)
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // Earth's radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; // Distance in km
+    };
+
+    // Get user location
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                },
+                (error) => {
+                    console.log('Location access denied:', error);
+                }
+            );
+        }
+    }, []);
+
+    // Calculate distance and travel time
+    const distance = userLocation && invitation?.lat && invitation?.lng
+        ? calculateDistance(userLocation.lat, userLocation.lng, invitation.lat, invitation.lng)
+        : null;
+    const travelTime = distance ? Math.round((distance / 40) * 60) : null;
 
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,6 +65,70 @@ const InvitationDetails = () => {
         scrollToBottom();
     }, [invitation?.chat]);
 
+    // Load group chat ID if user is participant
+    useEffect(() => {
+        const loadGroupChat = async () => {
+            if (!invitation?.id || !invitation.joined?.includes(currentUser?.id)) {
+                setGroupChatId(null);
+                return;
+            }
+
+            try {
+                setLoadingGroupChat(true);
+                const chatId = await getInvitationGroupChat(invitation.id);
+                setGroupChatId(chatId);
+            } catch (error) {
+                console.error('Error loading group chat:', error);
+            } finally {
+                setLoadingGroupChat(false);
+            }
+        };
+
+        loadGroupChat();
+    }, [invitation?.id, invitation?.joined, currentUser?.id]);
+
+    const handleShare = () => {
+        if (navigator.share) {
+            navigator.share({
+                title: invitation?.title || '',
+                text: invitation?.description || '',
+                url: window.location.href,
+            }).catch(console.error);
+        } else {
+            // Fallback: Copy to clipboard
+            navigator.clipboard.writeText(window.location.href);
+            alert(t('link_copied'));
+        }
+    };
+
+    // Show loading while invitations are being fetched from Firebase
+    if (loadingInvitations) {
+        return (
+            <div className="page-container" style={{
+                padding: '2rem',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '100vh'
+            }}>
+                <div style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '4px solid var(--border-color)',
+                    borderTop: '4px solid var(--primary)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                }}></div>
+                <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
+                    {t('loading')}
+                </p>
+            </div>
+        );
+    }
+
+    // After loading, if invitation is not found, show error
     if (!invitation) {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -65,27 +151,6 @@ const InvitationDetails = () => {
         setMessage('');
     };
 
-    // Load group chat ID if user is participant
-    useEffect(() => {
-        const loadGroupChat = async () => {
-            if (!invitation?.id || !isAccepted) {
-                setGroupChatId(null);
-                return;
-            }
-
-            try {
-                setLoadingGroupChat(true);
-                const chatId = await getInvitationGroupChat(invitation.id);
-                setGroupChatId(chatId);
-            } catch (error) {
-                console.error('Error loading group chat:', error);
-            } finally {
-                setLoadingGroupChat(false);
-            }
-        };
-
-        loadGroupChat();
-    }, [invitation?.id, isAccepted]);
 
     return (
         <div className="page-container details-page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
@@ -97,7 +162,7 @@ const InvitationDetails = () => {
                 <div style={{ flex: 1, textAlign: 'center' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: '800', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px', margin: '0 auto' }}>{title}</h3>
                     <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: '700' }}>
-                        {isHost ? t('manage_invitation') : (isAccepted ? t('comments_title') : 'تفاصيل الدعوة')}
+                        {isHost ? t('manage_invitation') : (isAccepted ? t('comments_title') : t('invitation_details'))}
                     </span>
                 </div>
                 <button className="back-btn" onClick={handleShare} aria-label="Share" style={{ background: 'transparent', border: 'none' }}>
@@ -141,8 +206,8 @@ const InvitationDetails = () => {
                                             }}
                                         >
                                             {currentUser.following.includes(author.id)
-                                                ? (i18n.language === 'ar' ? '✓ نتابع' : '✓ Following')
-                                                : (i18n.language === 'ar' ? '+ متابعة' : '+ Follow')}
+                                                ? t('following_user')
+                                                : t('follow_user')}
                                         </button>
                                     )}
                                 </div>
@@ -161,10 +226,10 @@ const InvitationDetails = () => {
                                     {/* NEW: Time Change Approval Bar */}
                                     {invitation.pendingChangeApproval && invitation.pendingChangeApproval.includes(currentUser.id) && (
                                         <div style={{ background: 'var(--primary)', padding: '12px', borderRadius: '12px', marginBottom: '1rem', animation: 'pulse 2s infinite' }}>
-                                            <p style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '8px' }}>⚠️ قام المنظم بتغيير الموعد. هل يناسبك الوقت الجديد؟</p>
+                                            <p style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '8px' }}>{t('time_change_warning')}</p>
                                             <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button onClick={() => approveNewTime(id)} style={{ flex: 1, padding: '6px', background: 'white', color: 'var(--primary)', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>موافق ✔️</button>
-                                                <button onClick={() => rejectNewTime(id)} style={{ flex: 1, padding: '6px', background: 'rgba(0,0,0,0.2)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>انسحاب ✖️</button>
+                                                <button onClick={() => approveNewTime(id)} style={{ flex: 1, padding: '6px', background: 'white', color: 'var(--primary)', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>{t('approve_time')}</button>
+                                                <button onClick={() => rejectNewTime(id)} style={{ flex: 1, padding: '6px', background: 'rgba(0,0,0,0.2)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>{t('withdraw')}</button>
                                             </div>
                                         </div>
                                     )}
@@ -181,7 +246,7 @@ const InvitationDetails = () => {
 
                                         <div style={{ textAlign: 'center', zIndex: 5, flex: 1 }}>
                                             <div style={{ width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto 5px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🖊️</div>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: 'white' }}>تخطيط</span>
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: 'white' }}>{t('status_planning')}</span>
                                         </div>
                                         <div style={{ textAlign: 'center', zIndex: 5, flex: 1 }}>
                                             <div style={{
@@ -189,7 +254,7 @@ const InvitationDetails = () => {
                                                 background: meetingStatus === 'on_way' || meetingStatus === 'arrived' || meetingStatus === 'completed' ? 'var(--primary)' : 'var(--bg-card)',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', fontSize: '1rem'
                                             }}>🚗</div>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: meetingStatus === 'on_way' ? 'var(--primary)' : 'var(--text-muted)' }}>في الطريق</span>
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: meetingStatus === 'on_way' ? 'var(--primary)' : 'var(--text-muted)' }}>{t('status_on_way')}</span>
                                         </div>
                                         <div style={{ textAlign: 'center', zIndex: 5, flex: 1 }}>
                                             <div style={{
@@ -197,7 +262,7 @@ const InvitationDetails = () => {
                                                 background: meetingStatus === 'arrived' || meetingStatus === 'completed' ? 'var(--primary)' : 'var(--bg-card)',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', fontSize: '1rem'
                                             }}>📍</div>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: meetingStatus === 'arrived' ? 'var(--primary)' : 'var(--text-muted)' }}>وصلنا</span>
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: meetingStatus === 'arrived' ? 'var(--primary)' : 'var(--text-muted)' }}>{t('status_arrived')}</span>
                                         </div>
                                     </div>
 
@@ -205,12 +270,12 @@ const InvitationDetails = () => {
                                     <div style={{ display: 'flex', gap: '8px', marginTop: '1rem', flexWrap: 'wrap' }}>
                                         {isAccepted && meetingStatus === 'planning' && (
                                             <button onClick={() => updateMeetingStatus(id, 'on_way')} className="btn btn-primary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px' }}>
-                                                🚀 أنا في الطريق
+                                                {t('im_on_way')}
                                             </button>
                                         )}
                                         {isAccepted && meetingStatus === 'on_way' && (
                                             <button onClick={() => updateMeetingStatus(id, 'arrived')} className="btn btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px' }}>
-                                                📍 لقد وصلت
+                                                {t('ive_arrived')}
                                             </button>
                                         )}
                                         {isHost && (
@@ -226,26 +291,26 @@ const InvitationDetails = () => {
                                                             }
 
                                                             const newDate = prompt(
-                                                                i18n.language === 'ar'
-                                                                    ? 'أدخل التاريخ الجديد (YYYY-MM-DD):'
-                                                                    : 'Enter new date (YYYY-MM-DD):',
+                                                                t('enter_new_date'),
                                                                 date.split('T')[0]
                                                             );
 
                                                             if (!newDate) return;
 
                                                             const newTime = prompt(
-                                                                i18n.language === 'ar'
-                                                                    ? 'أدخل الوقت الجديد (HH:MM):'
-                                                                    : 'Enter new time (HH:MM):',
+                                                                t('enter_new_time'),
                                                                 time
                                                             );
 
                                                             if (!newTime) return;
 
-                                                            const confirmMessage = i18n.language === 'ar'
-                                                                ? `⚠️ تنبيه مهم:\n\nسيتم:\n1. تغيير الموعد من ${date} ${time} إلى ${newDate} ${newTime}\n2. إرسال إشعار لجميع المشاركين (${joined.length} شخص)\n3. تحويل حالتهم من "مقبول" إلى "تحت النظر"\n4. لن تتمكن من تعديل الموعد مرة أخرى\n\nهل أنت متأكد؟`
-                                                                : `⚠️ Important:\n\nThis will:\n1. Change time from ${date} ${time} to ${newDate} ${newTime}\n2. Notify all participants (${joined.length} people)\n3. Move them from "Accepted" to "Pending"\n4. You won't be able to edit again\n\nAre you sure?`;
+                                                            const confirmMessage = t('time_change_confirm', {
+                                                                oldDate: date,
+                                                                oldTime: time,
+                                                                newDate: newDate,
+                                                                newTime: newTime,
+                                                                count: joined.length
+                                                            });
 
                                                             if (!window.confirm(confirmMessage)) return;
 
@@ -258,16 +323,12 @@ const InvitationDetails = () => {
 
                                                             if (result.success) {
                                                                 alert(
-                                                                    i18n.language === 'ar'
-                                                                        ? `✅ تم تعديل الموعد بنجاح!\n\nتم إرسال إشعارات لـ ${result.affectedUsers} مشارك.`
-                                                                        : `✅ Time updated successfully!\n\nNotified ${result.affectedUsers} participants.`
+                                                                    t('time_change_success', { count: result.affectedUsers })
                                                                 );
                                                                 window.location.reload();
                                                             } else {
                                                                 alert(
-                                                                    i18n.language === 'ar'
-                                                                        ? `❌ فشل التعديل: ${result.error}`
-                                                                        : `❌ Update failed: ${result.error}`
+                                                                    t('time_change_error', { error: result.error })
                                                                 );
                                                             }
                                                         }}
@@ -281,7 +342,7 @@ const InvitationDetails = () => {
                                                             color: 'white'
                                                         }}
                                                     >
-                                                        <FaEdit /> {i18n.language === 'ar' ? 'تغيير الموعد (مرة واحدة)' : 'Change Time (Once)'}
+                                                        <FaEdit /> {t('change_time_once')}
                                                     </button>
                                                 )}
                                                 {invitation.editHistory && invitation.editHistory.length > 0 && (
@@ -295,12 +356,12 @@ const InvitationDetails = () => {
                                                         textAlign: 'center',
                                                         border: '1px solid var(--border-color)'
                                                     }}>
-                                                        🔒 {i18n.language === 'ar' ? 'تم التعديل مسبقاً' : 'Already Edited'}
+                                                        🔒 {t('already_edited')}
                                                     </div>
                                                 )}
                                                 {meetingStatus !== 'completed' && (
                                                     <button onClick={() => updateMeetingStatus(id, 'completed')} className="btn btn-primary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', background: 'var(--luxury-gold)', border: 'none', color: 'black' }}>
-                                                        <FaCheckCircle /> إنهاء اللقاء
+                                                        <FaCheckCircle /> {t('complete_meeting')}
                                                     </button>
                                                 )}
                                             </>
@@ -315,7 +376,7 @@ const InvitationDetails = () => {
                                                 marginTop: '1rem'
                                             }}>
                                                 <h4 style={{ color: 'var(--luxury-gold)', fontSize: '0.9rem', marginBottom: '1rem', textAlign: 'center' }}>
-                                                    {i18n.language === 'ar' ? 'كيف كانت تجربتك؟ ✨' : 'How was your experience? ✨'}
+                                                    {t('rate_experience')}
                                                 </h4>
                                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '1.5rem' }}>
                                                     {[1, 2, 3, 4, 5].map(star => (
@@ -331,19 +392,19 @@ const InvitationDetails = () => {
                                                     ))}
                                                 </div>
                                                 <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                                                    {i18n.language === 'ar' ? 'بتقييمك تكسب 10+ نقاط سمعة' : 'Earn +10 Rep Points by rating'}
+                                                    {t('earn_rep_points')}
                                                 </p>
                                             </div>
                                         )}
 
                                         {meetingStatus === 'completed' && invitation.rating && (
                                             <div style={{ flex: 1, textAlign: 'center', color: 'var(--luxury-gold)', fontWeight: '800', fontSize: '0.8rem', padding: '15px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '12px', width: '100%' }}>
-                                                ✨ تم اللقاء والتقييم بنجاح! شكراً لمساهمتك في مجتمعنا.
+                                                {t('meeting_completed')}
                                             </div>
                                         )}
                                         {meetingStatus === 'completed' && !invitation.rating && isHost && (
                                             <div style={{ flex: 1, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', padding: '10px' }}>
-                                                بانتظار تقييمات المشاركين...
+                                                {t('waiting_ratings')}
                                             </div>
                                         )}
                                     </div>
@@ -351,8 +412,9 @@ const InvitationDetails = () => {
                             )}
 
                             <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-                                {description || 'لا يوجد وصف متاح لهذه الدعوة.'}
+                                {description || t('no_description')}
                             </p>
+
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
@@ -361,7 +423,7 @@ const InvitationDetails = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                     <FaCalendarAlt style={{ color: 'var(--primary)' }} />
-                                    <span>{date ? new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US') : (i18n.language === 'ar' ? 'قريباً' : 'Soon')}</span>
+                                    <span>{date ? new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US') : t('soon')}</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                     <FaClock style={{ color: 'var(--accent)' }} />
@@ -369,8 +431,20 @@ const InvitationDetails = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                     <FaUsers style={{ color: 'var(--secondary)' }} />
-                                    <span>{i18n.language === 'ar' ? `مطلوب ${guestsNeeded} أشخاص` : `${guestsNeeded} guests needed`}</span>
+                                    <span>{t('guests_needed', { count: guestsNeeded })}</span>
                                 </div>
+                                {distance !== null && (
+                                    <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#10b981' }}>
+                                            <span>📏</span>
+                                            <span style={{ fontWeight: '700' }}>{distance.toFixed(1)} km</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#10b981' }}>
+                                            <span>⏱️</span>
+                                            <span style={{ fontWeight: '700' }}>~{travelTime} {t('minutes')}</span>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -393,7 +467,7 @@ const InvitationDetails = () => {
                                         cancelRequest(id);
                                     } else {
                                         requestToJoin(id);
-                                        alert(i18n.language === 'ar' ? 'تم إرسال طلب الانضمام بنجاح!' : 'Join request sent successfully!');
+                                        alert(t('join_request_sent'));
                                         // Force a full page reload to ensure the home page renders correctly
                                         window.location.href = '/';
                                     }
@@ -403,7 +477,7 @@ const InvitationDetails = () => {
                                 {isPending ? t('joined_btn') : t('join_btn')}
                             </button>
                             <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
-                                {isPending ? 'لقد تم إرسال طلبك، بانتظار موافقة صاحب الدعوة.' : 'بمجرد قبولك، ستتمكن من الدخول إلى الدردشة الجماعية.'}
+                                {isPending ? t('request_sent_waiting') : t('join_to_chat')}
                             </p>
                         </div>
                     )}
@@ -428,7 +502,7 @@ const InvitationDetails = () => {
                                 }}
                             >
                                 <FaComments size={20} />
-                                <span>{i18n.language === 'ar' ? 'فتح الدردشة الجماعية' : 'Open Group Chat'}</span>
+                                <span>{t('open_group_chat')}</span>
                                 <span style={{
                                     background: 'rgba(255,255,255,0.25)',
                                     padding: '4px 10px',
@@ -436,12 +510,12 @@ const InvitationDetails = () => {
                                     fontSize: '0.85rem',
                                     fontWeight: '700'
                                 }}>
-                                    {joined.length + 1} {i18n.language === 'ar' ? 'عضو' : 'members'}
+                                    {joined.length + 1} {t('members_count')}
                                 </span>
                             </button>
                             <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                 <span>💬</span>
-                                <span>{i18n.language === 'ar' ? 'تواصل مع الأعضاء قبل اللقاء' : 'Chat with members before the meetup'}</span>
+                                <span>{t('chat_before_meetup')}</span>
                             </p>
                         </div>
                     )}
@@ -449,7 +523,7 @@ const InvitationDetails = () => {
                     {/* Loading indicator */}
                     {(isHost || isAccepted) && loadingGroupChat && !groupChatId && (
                         <div style={{ marginTop: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                            <span>⏳ {i18n.language === 'ar' ? 'جاري تحميل الدردشة...' : 'Loading chat...'}</span>
+                            <span>⏳ {t('loading_chat')}</span>
                         </div>
                     )}
                 </div>
@@ -477,7 +551,7 @@ const InvitationDetails = () => {
                                         <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid var(--primary)', padding: '2px' }}>
                                             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`} alt="Member" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
                                         </div>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>ياسر</span>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>Member</span>
                                     </div>
                                 ))}
                                 {/* Empty Spots */}
@@ -504,15 +578,15 @@ const InvitationDetails = () => {
                         {isHost && requests.length > 0 && (
                             <div style={{ padding: '0 1.25rem', marginBottom: '2rem' }}>
                                 <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800' }}>
-                                    <FaUsers /> طلبات معلقة ({requests.length})
+                                    <FaUsers /> {t('pending_requests', { count: requests.length })}
                                 </h4>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                     {requests.map(userId => (
                                         <div key={userId} style={{ padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                                            <span style={{ fontWeight: '700' }}>مستخدم جديد</span>
+                                            <span style={{ fontWeight: '700' }}>{t('new_user')}</span>
                                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">قبول</button>
-                                                <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">رفض</button>
+                                                <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">{t('accept')}</button>
+                                                <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">{t('reject')}</button>
                                             </div>
                                         </div>
                                     ))}
@@ -528,7 +602,7 @@ const InvitationDetails = () => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 {chat.length === 0 ? (
                                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                        {i18n.language === 'ar' ? 'لا توجد رسائل بعد. ابدأ المحادثة!' : 'No messages yet. Start the conversation!'}
+                                        {t('no_messages')}
                                     </div>
                                 ) : (
                                     chat.map((msg) => (
@@ -554,8 +628,8 @@ const InvitationDetails = () => {
                     <div style={{ padding: '2rem 1.25rem', textAlign: 'center' }}>
                         <div style={{ background: 'rgba(255,255,255,0.02)', padding: '2rem', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border-color)' }}>
                             <FaPaperPlane style={{ fontSize: '2rem', color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.2 }} />
-                            <h4 style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>الدردشة مغلقة</h4>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>يجب أن تكون عضواً مقلوباً لتتمكن من رؤية المحادثة والمشاركة فيها.</p>
+                            <h4 style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{t('chat_closed')}</h4>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('members_only_chat')}</p>
                         </div>
                     </div>
                 )}

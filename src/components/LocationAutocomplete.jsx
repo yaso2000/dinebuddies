@@ -210,10 +210,10 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city }) => {
                             </div>
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827' }}>
-                                    {i18n.language === 'ar' ? `استخدم "${value}"` : `Use "${value}"`}
+                                    {t('use_location', { value })}
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: '#166534' }}>
-                                    {i18n.language === 'ar' ? 'إضافة مكان جديد يدوياً' : 'Add manual location (no map link)'}
+                                    {t('add_manual_location')}
                                 </div>
                             </div>
                         </div>

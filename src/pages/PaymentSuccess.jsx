@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaCheckCircle, FaHome, FaCrown } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 
 const PaymentSuccess = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const sessionId = searchParams.get('session_id');
     const [countdown, setCountdown] = useState(5);
+    const { t } = useTranslation();
 
     useEffect(() => {
         console.log('Payment Session ID:', sessionId);
 
-        // عد تنازلي للرجوع
+        // Countdown timer
         const timer = setInterval(() => {
             setCountdown(prev => {
                 if (prev <= 1) {
@@ -58,7 +60,7 @@ const PaymentSuccess = () => {
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent'
                 }}>
-                    تم الاشتراك بنجاح! 🎉
+                    {t('subscription_success')}
                 </h1>
 
                 <p style={{
@@ -67,8 +69,8 @@ const PaymentSuccess = () => {
                     marginBottom: '30px',
                     lineHeight: '1.8'
                 }}>
-                    شكراً لاشتراكك معنا!<br />
-                    تم تفعيل الباقة على حسابك فوراً
+                    {t('thank_you_subscription')}<br />
+                    {t('plan_activated')}
                 </p>
 
                 <div style={{
@@ -79,13 +81,13 @@ const PaymentSuccess = () => {
                 }}>
                     <FaCrown style={{ fontSize: '2rem', color: '#fbbf24', marginBottom: '10px' }} />
                     <p style={{ fontSize: '1.1rem' }}>
-                        الآن يمكنك الاستمتاع بجميع الميزات المتقدمة!
+                        {t('enjoy_features')}
                     </p>
                 </div>
 
                 <div style={{ marginBottom: '30px' }}>
                     <p style={{ color: 'var(--text-muted)' }}>
-                        سيتم توجيهك للرئيسية خلال <strong>{countdown}</strong> ثوانٍ
+                        <span dangerouslySetInnerHTML={{ __html: t('redirect_in_seconds', { count: countdown }) }} />
                     </p>
                 </div>
 
@@ -108,7 +110,7 @@ const PaymentSuccess = () => {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <FaHome /> العودة للرئيسية
+                    <FaHome /> {t('back_to_home')}
                 </button>
             </div>
         </div>

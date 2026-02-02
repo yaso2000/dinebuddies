@@ -3,7 +3,7 @@ import { FaFilter, FaTimes, FaCalendar, FaDollarSign, FaMapMarkerAlt, FaUsers } 
 import { useTranslation } from 'react-i18next';
 
 const AdvancedFilters = ({ onApplyFilters }) => {
-    const { i18n } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [showFilters, setShowFilters] = useState(false);
     const [filters, setFilters] = useState({
         paymentType: 'all',
@@ -107,7 +107,7 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                             marginBottom: '1.5rem'
                         }}>
                             <h3 style={{ fontSize: '1.3rem', fontWeight: '900' }}>
-                                {i18n.language === 'ar' ? 'فلاتر متقدمة' : 'Advanced Filters'}
+                                {t('advanced_filters')}
                             </h3>
                             <button
                                 onClick={() => setShowFilters(false)}
@@ -138,7 +138,7 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                     marginBottom: '0.75rem'
                                 }}>
                                     <FaDollarSign style={{ color: 'var(--accent)' }} />
-                                    {i18n.language === 'ar' ? 'طريقة الدفع' : 'Payment Type'}
+                                    {t('payment_type')}
                                 </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                                     {['all', 'Host Pays', 'Split', 'Each pays'].map(type => (
@@ -157,7 +157,7 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                                 transition: 'all 0.2s'
                                             }}
                                         >
-                                            {type === 'all' ? (i18n.language === 'ar' ? 'الكل' : 'All') : type}
+                                            {type === 'all' ? t('all') : type}
                                         </button>
                                     ))}
                                 </div>
@@ -175,14 +175,14 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                     marginBottom: '0.75rem'
                                 }}>
                                     <FaCalendar style={{ color: 'var(--accent)' }} />
-                                    {i18n.language === 'ar' ? 'التاريخ' : 'Date Range'}
+                                    {t('date_range')}
                                 </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                                     {[
-                                        { value: 'all', label: i18n.language === 'ar' ? 'أي وقت' : 'Anytime' },
-                                        { value: 'today', label: i18n.language === 'ar' ? 'اليوم' : 'Today' },
-                                        { value: 'week', label: i18n.language === 'ar' ? 'هذا الأسبوع' : 'This Week' },
-                                        { value: 'month', label: i18n.language === 'ar' ? 'هذا الشهر' : 'This Month' }
+                                        { value: 'all', label: t('anytime') },
+                                        { value: 'today', label: t('today') },
+                                        { value: 'week', label: t('this_week') },
+                                        { value: 'month', label: t('this_month') }
                                     ].map(option => (
                                         <button
                                             key={option.value}
@@ -217,11 +217,11 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                     marginBottom: '0.75rem'
                                 }}>
                                     <FaMapMarkerAlt style={{ color: 'var(--accent)' }} />
-                                    {i18n.language === 'ar' ? 'المسافة' : 'Distance'}
+                                    {t('distance')}
                                 </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                                     {[
-                                        { value: 'all', label: i18n.language === 'ar' ? 'الكل' : 'All' },
+                                        { value: 'all', label: t('all') },
                                         { value: '10km', label: '< 10km' },
                                         { value: '25km', label: '< 25km' },
                                         { value: '50km', label: '< 50km' }
@@ -259,14 +259,14 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                     marginBottom: '0.75rem'
                                 }}>
                                     <FaUsers style={{ color: 'var(--accent)' }} />
-                                    {i18n.language === 'ar' ? 'الجنس' : 'Gender'}
+                                    {t('gender')}
                                 </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
                                     {[
-                                        { value: 'all', label: i18n.language === 'ar' ? 'الكل' : 'All' },
-                                        { value: 'Male', label: i18n.language === 'ar' ? 'ذكور' : 'Male' },
-                                        { value: 'Female', label: i18n.language === 'ar' ? 'إناث' : 'Female' },
-                                        { value: 'Any', label: i18n.language === 'ar' ? 'مختلط' : 'Mixed' }
+                                        { value: 'all', label: t('all') },
+                                        { value: 'Male', label: t('male') },
+                                        { value: 'Female', label: t('female') },
+                                        { value: 'Any', label: t('mixed') }
                                     ].map(option => (
                                         <button
                                             key={option.value}
@@ -313,7 +313,7 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                     fontSize: '1rem'
                                 }}
                             >
-                                {i18n.language === 'ar' ? 'إعادة تعيين' : 'Reset'}
+                                {t('reset')}
                             </button>
                             <button
                                 onClick={handleApply}
@@ -329,7 +329,7 @@ const AdvancedFilters = ({ onApplyFilters }) => {
                                     fontSize: '1rem'
                                 }}
                             >
-                                {i18n.language === 'ar' ? 'تطبيق الفلاتر' : 'Apply Filters'}
+                                {t('apply_filters')}
                             </button>
                         </div>
                     </div>

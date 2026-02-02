@@ -44,7 +44,7 @@ const InvitationCard = ({ invitation }) => {
 
     const checkEligibility = () => {
         if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
-            return { eligible: false, reason: i18n.language === 'ar' ? 'الجنس غير مطابق' : 'Gender mismatch' };
+            return { eligible: false, reason: t('gender_mismatch') };
         }
         return { eligible: true };
     };
@@ -64,7 +64,7 @@ const InvitationCard = ({ invitation }) => {
             }
         } else {
             navigator.clipboard.writeText(`${window.location.origin}/invitation/${id}`);
-            alert(i18n.language === 'ar' ? 'تم نسخ الرابط' : 'Link copied to clipboard!');
+            alert(t('link_copied_clipboard'));
         }
     };
 
@@ -204,12 +204,37 @@ const InvitationCard = ({ invitation }) => {
                     </div>
 
                     {/* Location */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '15px', color: 'rgba(255,255,255,0.8)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', color: 'rgba(255,255,255,0.8)' }}>
                         <FaMapMarkerAlt style={{ color: '#f87171' }} />
                         <span style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {location || t('venue_selected')}
                         </span>
                     </div>
+
+                    {/* Distance & Travel Time */}
+                    {invitation.distance !== null && invitation.distance !== undefined && (
+                        <div style={{
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            borderRadius: '12px',
+                            padding: '8px 12px',
+                            marginBottom: '15px',
+                            display: 'flex',
+                            gap: '15px',
+                            alignItems: 'center',
+                            backdropFilter: 'blur(10px)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', color: '#10b981', fontWeight: '700' }}>
+                                <span>📏</span>
+                                <span style={{ color: 'white' }}>{invitation.distance.toFixed(1)} km</span>
+                            </div>
+                            <div style={{ width: '1px', height: '14px', background: 'rgba(16, 185, 129, 0.4)' }}></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', color: '#10b981', fontWeight: '700' }}>
+                                <span>⏱️</span>
+                                <span style={{ color: 'white' }}>~{Math.round((invitation.distance / 40) * 60)} {t('minutes')}</span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Footer Actions Row */}
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

@@ -67,24 +67,22 @@ const Settings = () => {
     const handlePasswordChange = async (e) => {
         e.preventDefault();
         if (passwordData.new !== passwordData.confirm) {
-            alert(i18n.language === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match');
+            alert(t('passwords_not_match'));
             return;
         }
         if (passwordData.new.length < 6) {
-            alert(i18n.language === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters');
+            alert(t('password_min_6_chars'));
             return;
         }
 
-        // TODO: تنفيذ تغيير كلمة المرور مع Firebase
-        alert(i18n.language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
+        // TODO: Implement password change with Firebase
+        alert(t('password_changed_success'));
         setShowPasswordModal(false);
         setPasswordData({ current: '', new: '', confirm: '' });
     };
 
     const handleLogout = async () => {
-        const confirmMsg = i18n.language === 'ar'
-            ? 'هل أنت متأكد من تسجيل الخروج؟'
-            : 'Are you sure you want to logout?';
+        const confirmMsg = t('confirm_logout');
 
         if (window.confirm(confirmMsg)) {
             try {
@@ -97,26 +95,20 @@ const Settings = () => {
     };
 
     const handleDeleteAccount = async () => {
-        const confirmMsg = i18n.language === 'ar'
-            ? 'تحذير! هذا الإجراء لا يمكن التراجع عنه. هل أنت متأكد من حذف حسابك نهائياً؟'
-            : 'Warning! This action cannot be undone. Are you sure you want to permanently delete your account?';
+        const confirmMsg = t('delete_account_warning');
 
         if (window.confirm(confirmMsg)) {
-            const doubleCheck = i18n.language === 'ar'
-                ? 'تأكيد أخير: اكتب "حذف" للمتابعة'
-                : 'Final confirmation: Type "DELETE" to proceed';
+            const doubleCheck = t('confirm_delete_type');
 
             const userInput = prompt(doubleCheck);
             if (userInput === 'حذف' || userInput === 'DELETE') {
                 try {
                     await deleteUserAccount();
-                    alert(i18n.language === 'ar' ? 'تم حذف الحساب' : 'Account deleted');
+                    alert(t('account_deleted'));
                     navigate('/login');
                 } catch (error) {
                     console.error('Delete account error:', error);
-                    alert(i18n.language === 'ar'
-                        ? 'حدث خطأ أثناء حذف الحساب. لأسباب أمنية، يرجى تسجيل الدخول مرة أخرى والمحاولة.'
-                        : 'Error deleting account. For security reasons, please re-login and try again.');
+                    alert(t('delete_account_error'));
                 }
             }
         }
@@ -291,7 +283,7 @@ const Settings = () => {
                         {i18n.language === 'ar' ? <FaArrowRight /> : <FaArrowLeft />}
                     </button>
                     <h1 style={{ fontSize: '1.5rem', fontWeight: '900' }}>
-                        {i18n.language === 'ar' ? 'الإعدادات' : 'Settings'}
+                        {t('settings')}
                     </h1>
                 </div>
             </div>
@@ -309,12 +301,12 @@ const Settings = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
-                        {i18n.language === 'ar' ? '👤 الحساب' : '👤 Account'}
+                        {t('account')}
                     </h3>
 
                     <SettingItem
                         icon={FaUser}
-                        title={i18n.language === 'ar' ? 'تعديل الملف الشخصي' : 'Edit Profile'}
+                        title={t('edit_profile')}
                         subtitle={currentUser?.name}
                         action={() => navigate('/profile')}
                     />
@@ -322,8 +314,8 @@ const Settings = () => {
                     {firebaseUser?.email && (
                         <SettingItem
                             icon={FaLock}
-                            title={i18n.language === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
-                            subtitle={i18n.language === 'ar' ? 'آخر تحديث: شهر واحد' : 'Last updated: 1 month ago'}
+                            title={t('change_password')}
+                            subtitle={t('last_updated_month')}
                             action={() => setShowPasswordModal(true)}
                         />
                     )}
@@ -339,15 +331,15 @@ const Settings = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
-                        {i18n.language === 'ar' ? '🎨 المظهر' : '🎨 Appearance'}
+                        {t('appearance')}
                     </h3>
 
 
 
                     <ToggleItem
                         icon={darkMode ? FaMoon : FaSun}
-                        title={i18n.language === 'ar' ? 'الوضع الداكن' : 'Dark Mode'}
-                        subtitle={darkMode ? (i18n.language === 'ar' ? 'مفعل' : 'Enabled') : (i18n.language === 'ar' ? 'معطل' : 'Disabled')}
+                        title={t('dark_mode')}
+                        subtitle={darkMode ? t('enabled') : t('disabled')}
                         value={darkMode}
                         onChange={toggleDarkMode}
                     />
@@ -363,37 +355,37 @@ const Settings = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
-                        {i18n.language === 'ar' ? '🔔 الإشعارات' : '🔔 Notifications'}
+                        {t('notifications')}
                     </h3>
 
                     <ToggleItem
                         icon={FaBell}
-                        title={i18n.language === 'ar' ? 'إشعارات الدعوات' : 'Invitation Notifications'}
-                        subtitle={i18n.language === 'ar' ? 'عند تلقي دعوة جديدة' : 'When you receive a new invitation'}
+                        title={t('invitation_notifications')}
+                        subtitle={t('when_receive_invitation')}
                         value={notifications.invitations}
                         onChange={() => handleNotificationChange('invitations')}
                     />
 
                     <ToggleItem
                         icon={FaEnvelope}
-                        title={i18n.language === 'ar' ? 'إشعارات الرسائل' : 'Message Notifications'}
-                        subtitle={i18n.language === 'ar' ? 'عند تلقي رسالة جديدة' : 'When you receive a new message'}
+                        title={t('message_notifications')}
+                        subtitle={t('when_receive_message')}
                         value={notifications.messages}
                         onChange={() => handleNotificationChange('messages')}
                     />
 
                     <ToggleItem
                         icon={FaPhone}
-                        title={i18n.language === 'ar' ? 'إشعارات التحديثات' : 'Update Notifications'}
-                        subtitle={i18n.language === 'ar' ? 'ميزات جديدة وتحديثات' : 'New features and updates'}
+                        title={t('update_notifications')}
+                        subtitle={t('new_features_updates')}
                         value={notifications.updates}
                         onChange={() => handleNotificationChange('updates')}
                     />
 
                     <ToggleItem
                         icon={FaPalette}
-                        title={i18n.language === 'ar' ? 'العروض والتسويق' : 'Marketing & Offers'}
-                        subtitle={i18n.language === 'ar' ? 'عروض حصرية وخصومات' : 'Exclusive offers and discounts'}
+                        title={t('marketing_offers')}
+                        subtitle={t('exclusive_offers')}
                         value={notifications.marketing}
                         onChange={() => handleNotificationChange('marketing')}
                     />
@@ -410,7 +402,7 @@ const Settings = () => {
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px'
                         }}>
-                            {i18n.language === 'ar' ? '🏢 حساب منشأة' : '🏢 Business Account'}
+                            {t('business_account')}
                         </h3>
 
                         <div style={{
@@ -440,13 +432,10 @@ const Settings = () => {
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <h4 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'white' }}>
-                                        {i18n.language === 'ar' ? 'حوّل حسابك إلى منشأة' : 'Convert to Business Account'}
+                                        {t('convert_to_business')}
                                     </h4>
                                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '0.75rem' }}>
-                                        {i18n.language === 'ar'
-                                            ? 'احصل على صفحة احترافية، شارك المنيو والعروض، وتواصل مع العملاء'
-                                            : 'Get a professional page, share menu & offers, and connect with customers'
-                                        }
+                                        {t('business_description')}
                                     </p>
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         <span style={{
@@ -457,7 +446,7 @@ const Settings = () => {
                                             fontWeight: '600',
                                             color: 'var(--primary)'
                                         }}>
-                                            ✨ {i18n.language === 'ar' ? 'مجاني' : 'Free'}
+                                            ✨ {t('free')}
                                         </span>
                                         <span style={{
                                             padding: '4px 10px',
@@ -467,7 +456,7 @@ const Settings = () => {
                                             fontWeight: '600',
                                             color: '#ec4899'
                                         }}>
-                                            🚀 {i18n.language === 'ar' ? 'سريع' : 'Quick Setup'}
+                                            🚀 {t('quick_setup')}
                                         </span>
                                     </div>
                                 </div>
@@ -486,18 +475,18 @@ const Settings = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
-                        {i18n.language === 'ar' ? '🔒 الخصوصية والأمان' : '🔒 Privacy & Security'}
+                        {t('privacy_security')}
                     </h3>
 
                     <SettingItem
                         icon={FaShieldAlt}
-                        title={i18n.language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                        title={t('privacy_policy')}
                         action={() => navigate('/privacy')}
                     />
 
                     <SettingItem
                         icon={FaShieldAlt}
-                        title={i18n.language === 'ar' ? 'الشروط والأحكام' : 'Terms & Conditions'}
+                        title={t('terms_conditions')}
                         action={() => navigate('/terms')}
                     />
                 </div>
@@ -512,20 +501,20 @@ const Settings = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
-                        {i18n.language === 'ar' ? '⚡ الإجراءات' : '⚡ Actions'}
+                        {t('actions')}
                     </h3>
 
                     <SettingItem
                         icon={FaSignOutAlt}
-                        title={i18n.language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
-                        subtitle={i18n.language === 'ar' ? 'الخروج من الحساب الحالي' : 'Sign out of current account'}
+                        title={t('logout')}
+                        subtitle={t('sign_out_account')}
                         action={handleLogout}
                     />
 
                     <SettingItem
                         icon={FaTrash}
-                        title={i18n.language === 'ar' ? 'حذف الحساب' : 'Delete Account'}
-                        subtitle={i18n.language === 'ar' ? 'حذف نهائي لا يمكن التراجع عنه' : 'Permanent deletion, cannot be undone'}
+                        title={t('delete_account')}
+                        subtitle={t('permanent_deletion')}
                         action={handleDeleteAccount}
                         danger={true}
                     />
@@ -542,7 +531,7 @@ const Settings = () => {
                         DineBuddies v1.0.0
                     </div>
                     <div>
-                        {i18n.language === 'ar' ? '© 2026 جميع الحقوق محفوظة' : '© 2026 All Rights Reserved'}
+                        {t('all_rights_reserved')}
                     </div>
                 </div>
             </div>
@@ -568,7 +557,7 @@ const Settings = () => {
                         border: '1px solid var(--border-color)'
                     }}>
                         <h3 style={{ fontSize: '1.3rem', fontWeight: '900', marginBottom: '1.5rem' }}>
-                            {i18n.language === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
+                            {t('change_password')}
                         </h3>
 
                         <form onSubmit={handlePasswordChange}>
@@ -579,7 +568,7 @@ const Settings = () => {
                                     fontSize: '0.85rem',
                                     color: 'var(--text-muted)'
                                 }}>
-                                    {i18n.language === 'ar' ? 'كلمة المرور الحالية' : 'Current Password'}
+                                    {t('current_password')}
                                 </label>
                                 <input
                                     type="password"
@@ -605,7 +594,7 @@ const Settings = () => {
                                     fontSize: '0.85rem',
                                     color: 'var(--text-muted)'
                                 }}>
-                                    {i18n.language === 'ar' ? 'كلمة المرور الجديدة' : 'New Password'}
+                                    {t('new_password')}
                                 </label>
                                 <input
                                     type="password"
@@ -632,7 +621,7 @@ const Settings = () => {
                                     fontSize: '0.85rem',
                                     color: 'var(--text-muted)'
                                 }}>
-                                    {i18n.language === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password'}
+                                    {t('confirm_password')}
                                 </label>
                                 <input
                                     type="password"
@@ -670,7 +659,7 @@ const Settings = () => {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    {i18n.language === 'ar' ? 'إلغاء' : 'Cancel'}
+                                    {t('cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -685,7 +674,7 @@ const Settings = () => {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    {i18n.language === 'ar' ? 'تحديث' : 'Update'}
+                                    {t('update')}
                                 </button>
                             </div>
                         </form>

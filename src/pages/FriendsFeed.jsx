@@ -28,10 +28,10 @@ const FriendsFeed = () => {
             <div style={{ padding: '1.5rem 1.25rem' }}>
                 <h1 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <FaGlobe style={{ color: 'var(--primary)' }} />
-                    {i18n.language === 'ar' ? 'المجتمع' : 'Community'}
+                    {t('community')}
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    {i18n.language === 'ar' ? 'اكتشف أحدث العروض والفعاليات من جميع الشركاء' : 'Discover latest offers and events from all partners'}
+                    {t('discover_offers')}
                 </p>
             </div>
 
@@ -47,11 +47,11 @@ const FriendsFeed = () => {
                     }}>
                         <FaBuilding style={{ fontSize: '3.5rem', color: 'var(--primary)', opacity: 0.3, marginBottom: '1.5rem' }} />
                         <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-                            {i18n.language === 'ar' ? 'المدينة هادئة الآن' : 'The city is quiet now'}
+                            {t('city_quiet')}
                         </h3>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '2rem' }}>
                             {i18n.language === 'ar'
-                                ? 'لا توجد منشورات عامة حالياً. كن أول من ينشر!'
+                                ? t('no_public_posts')
                                 : 'No public posts yet. Be the first to post!'}
                         </p>
                         <button
@@ -59,7 +59,7 @@ const FriendsFeed = () => {
                             className="btn btn-primary"
                             style={{ borderRadius: '15px', padding: '12px 25px' }}
                         >
-                            {i18n.language === 'ar' ? 'تصفح الشركاء' : 'Browse Partners'}
+                            {t('browse_partners')}
                         </button>
                     </div>
                 ) : (

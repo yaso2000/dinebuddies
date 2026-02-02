@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile, signOut as fbSignOut } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
+import { useTranslation } from 'react-i18next';
 
 const AuthPage = () => {
     const navigate = useNavigate();
@@ -19,6 +20,7 @@ const AuthPage = () => {
         setupRecaptcha,
         currentUser
     } = useAuth();
+    const { t } = useTranslation();
 
     const [authMode, setAuthMode] = useState('login');
     const [loginMethod, setLoginMethod] = useState('phone');
@@ -57,7 +59,7 @@ const AuthPage = () => {
             setOtpSent(true);
         } catch (error) {
             console.error('Error sending OTP:', error);
-            setError('فشل إرسال الرمز. تأكد من رقم الجوال وحاول مرة أخرى.');
+            setError(t('failed_send_code'));
         } finally {
             setLoading(false);
         }
@@ -89,7 +91,7 @@ const AuthPage = () => {
                 navigate('/select-account-type');
             } catch (error) {
                 console.error('Error verifying OTP:', error);
-                setError('رمز التحقق غير صحيح. حاول مرة أخرى.');
+                setError(t('invalid_verification_code'));
             } finally {
                 setLoading(false);
             }
@@ -111,15 +113,15 @@ const AuthPage = () => {
         } catch (error) {
             console.error('Error with email auth:', error);
             if (error.code === 'auth/email-already-in-use') {
-                setError('البريد الإلكتروني مستخدم بالفعل');
+                setError(t('email_already_in_use'));
             } else if (error.code === 'auth/wrong-password') {
-                setError('كلمة المرور غير صحيحة');
+                setError(t('wrong_password'));
             } else if (error.code === 'auth/user-not-found') {
-                setError('المستخدم غير موجود');
+                setError(t('user_not_found'));
             } else if (error.code === 'auth/weak-password') {
-                setError('كلمة المرور ضعيفة. يجب أن تكون 6 أحرف على الأقل');
+                setError(t('weak_password'));
             } else {
-                setError('حدث خطأ. حاول مرة أخرى');
+                setError(t('error_occurred'));
             }
         } finally {
             setLoading(false);
@@ -146,9 +148,9 @@ const AuthPage = () => {
         } catch (error) {
             console.error(`Error with ${provider} login:`, error);
             if (error.code === 'auth/popup-closed-by-user') {
-                setError('تم إلغاء تسجيل الدخول');
+                setError(t('login_cancelled'));
             } else {
-                setError('حدث خطأ في تسجيل الدخول');
+                setError(t('login_error'));
             }
         } finally {
             setLoading(false);
@@ -214,10 +216,10 @@ const AuthPage = () => {
                         WebkitTextFillColor: 'transparent',
                         marginBottom: '0.5rem'
                     }}>
-                        {authMode === 'login' ? 'مرحباً بعودتك!' : 'انضم إلينا'}
+                        {authMode === 'login' ? t('welcome_back') : t('join_us')}
                     </h1>
                     <p style={{ color: '#718096', fontSize: '0.95rem' }}>
-                        {authMode === 'login' ? 'سجل دخولك للمتابعة' : 'أنشئ حساباً جديداً'}
+                        {authMode === 'login' ? t('login_to_continue') : t('create_new_account')}
                     </p>
                 </div>
 
@@ -262,7 +264,7 @@ const AuthPage = () => {
                             boxShadow: authMode === 'login' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
                         }}
                     >
-                        تسجيل الدخول
+                        {t('login')}
                     </button>
                     <button
                         onClick={() => {
@@ -282,7 +284,7 @@ const AuthPage = () => {
                             boxShadow: authMode === 'signup' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
                         }}
                     >
-                        حساب جديد
+                        {t('new_account')}
                     </button>
                 </div>
 
@@ -313,7 +315,7 @@ const AuthPage = () => {
                             transition: 'all 0.3s'
                         }}
                     >
-                        <FaMobileAlt /> رقم الجوال
+                        <FaMobileAlt /> {t('phone_number')}
                     </button>
                     <button
                         onClick={() => {
@@ -336,7 +338,7 @@ const AuthPage = () => {
                             transition: 'all 0.3s'
                         }}
                     >
-                        <FaEnvelope /> البريد الإلكتروني
+                        <FaEnvelope /> {t('email')}
                     </button>
                 </div>
 
@@ -347,7 +349,7 @@ const AuthPage = () => {
                             <div style={{ marginBottom: '1rem' }}>
                                 <input
                                     type="text"
-                                    placeholder="الاسم الكامل"
+                                    placeholder={t('full_name')}
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     required
@@ -369,7 +371,7 @@ const AuthPage = () => {
                         <div style={{ marginBottom: '1.5rem' }}>
                             <input
                                 type="tel"
-                                placeholder="5XXXXXXXX (بدون صفر أو كود الدولة)"
+                                placeholder={t('phone_placeholder')}
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 required
@@ -389,7 +391,7 @@ const AuthPage = () => {
                                 onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                             />
                             <p style={{ fontSize: '0.75rem', color: '#718096', marginTop: '0.5rem', textAlign: 'right' }}>
-                                مثال: 512345678 (سيتم إضافة +966 تلقائياً)
+                                {t('phone_example')}
                             </p>
                         </div>
                         <button
@@ -412,9 +414,9 @@ const AuthPage = () => {
                                 gap: '0.5rem'
                             }}
                         >
-                            {loading ? 'جارٍ الإرسال...' : (
+                            {loading ? t('sending') : (
                                 <>
-                                    إرسال رمز التحقق <FaArrowRight style={{ transform: 'rotate(180deg)' }} />
+                                    {t('send_verification_code')} <FaArrowRight style={{ transform: 'rotate(180deg)' }} />
                                 </>
                             )}
                         </button>
@@ -425,7 +427,7 @@ const AuthPage = () => {
                 {loginMethod === 'phone' && otpSent && (
                     <form onSubmit={handleVerifyOTP}>
                         <p style={{ textAlign: 'center', color: '#4a5568', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-                            أدخل الرمز المرسل إلى <strong>+966{phone}</strong>
+                            {t('code_sent_to')} <strong>+966{phone}</strong>
                         </p>
                         <div style={{
                             display: 'flex',
@@ -476,9 +478,9 @@ const AuthPage = () => {
                                 gap: '0.5rem'
                             }}
                         >
-                            {loading ? 'جارٍ التحقق...' : (
+                            {loading ? t('verifying') : (
                                 <>
-                                    <FaCheck /> تأكيد
+                                    <FaCheck /> {t('confirm')}
                                 </>
                             )}
                         </button>
@@ -500,7 +502,7 @@ const AuthPage = () => {
                                 marginTop: '1rem'
                             }}
                         >
-                            تغيير رقم الجوال
+                            {t('change_phone_number')}
                         </button>
                     </form>
                 )}
@@ -512,7 +514,7 @@ const AuthPage = () => {
                             <div style={{ marginBottom: '1rem' }}>
                                 <input
                                     type="text"
-                                    placeholder="الاسم الكامل"
+                                    placeholder={t('full_name')}
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     required
@@ -555,7 +557,7 @@ const AuthPage = () => {
                         <div style={{ marginBottom: '1.5rem' }}>
                             <input
                                 type="password"
-                                placeholder="كلمة المرور (6 أحرف على الأقل)"
+                                placeholder={t('password_placeholder')}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
@@ -589,7 +591,7 @@ const AuthPage = () => {
                                 cursor: loading ? 'not-allowed' : 'pointer'
                             }}
                         >
-                            {loading ? 'جارٍ...' : (authMode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب')}
+                            {loading ? t('loading') : (authMode === 'login' ? t('login') : t('create_account'))}
                         </button>
                     </form>
                 )}
@@ -602,7 +604,7 @@ const AuthPage = () => {
                     gap: '1rem'
                 }}>
                     <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
-                    <span style={{ color: '#718096', fontSize: '0.875rem' }}>أو</span>
+                    <span style={{ color: '#718096', fontSize: '0.875rem' }}>{t('or')}</span>
                     <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
                 </div>
 
@@ -638,7 +640,7 @@ const AuthPage = () => {
                             e.currentTarget.style.borderColor = '#e2e8f0';
                         }}
                     >
-                        <FcGoogle size={24} /> المتابعة مع Google
+                        <FcGoogle size={24} /> {t('continue_with_google')}
                     </button>
 
                     <button
@@ -663,7 +665,7 @@ const AuthPage = () => {
                         onMouseEnter={(e) => !loading && (e.currentTarget.style.background = '#1a1a1a')}
                         onMouseLeave={(e) => e.currentTarget.style.background = '#000'}
                     >
-                        <FaApple size={24} /> المتابعة مع Apple
+                        <FaApple size={24} /> {t('continue_with_apple')}
                     </button>
                 </div>
 
@@ -675,7 +677,7 @@ const AuthPage = () => {
                     marginTop: '2rem',
                     lineHeight: '1.6'
                 }}>
-                    بالمتابعة، أنت توافق على <a href="/terms" style={{ color: '#667eea', textDecoration: 'none' }}>الشروط والأحكام</a> و <a href="/privacy" style={{ color: '#667eea', textDecoration: 'none' }}>سياسة الخصوصية</a>
+                    {t('terms_agreement')}
                 </p>
 
 
