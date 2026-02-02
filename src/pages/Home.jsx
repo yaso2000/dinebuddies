@@ -94,13 +94,22 @@ const Home = () => {
             const isOwn = inv.author.id === currentUser.id;
             if (isOwn) return true;
 
-            // 2. AUTO-CLOSE (Hide 1 hour after time)
-            const inviteDate = new Date(inv.date || now);
-            if (!isNaN(inviteDate.getTime())) {
-                const [hours, minutes] = (inv.time || "20:30").split(':');
-                inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
-                const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
-                if (now > expiry) return false;
+            // 2. AUTO-CLOSE LOGIC
+            // For completed invitations: hide after 1 hour from completion
+            if (inv.meetingStatus === 'completed' && inv.completedAt) {
+                const completedTime = inv.completedAt.toDate ? inv.completedAt.toDate() : new Date(inv.completedAt);
+                const oneHourAfterCompletion = new Date(completedTime.getTime() + 60 * 60 * 1000); // +1 hour
+                if (now > oneHourAfterCompletion) return false;
+            }
+            // For non-completed invitations: hide 1 hour after scheduled time
+            else {
+                const inviteDate = new Date(inv.date || now);
+                if (!isNaN(inviteDate.getTime())) {
+                    const [hours, minutes] = (inv.time || "20:30").split(':');
+                    inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
+                    const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
+                    if (now > expiry) return false;
+                }
             }
 
             // 3. SOCIAL PRIVACY

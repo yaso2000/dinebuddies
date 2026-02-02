@@ -267,56 +267,7 @@ export const ChatProvider = ({ children }) => {
         return null; // Will be created when first message is sent
     };
 
-    // Create group chat for invitation
-    const createGroupChat = async (invitation) => {
-        if (!currentUser?.uid) return null;
 
-        try {
-            // Calculate expiry (24 hours after invitation date + time)
-            const invitationDateTime = new Date(`${invitation.date}T${invitation.time}`);
-            const expiresAt = new Date(invitationDateTime.getTime() + (24 * 60 * 60 * 1000));
-
-            const groupData = {
-                type: 'group',
-                invitationId: invitation.id,
-                participants: invitation.participants.map(p => p.id || p),
-                createdAt: serverTimestamp(),
-                lastMessageAt: serverTimestamp(),
-                lastMessage: 'Group chat created',
-                lastMessageSenderId: 'system',
-                expiresAt: expiresAt,
-                status: 'active',
-                groupName: invitation.title,
-                groupImage: invitation.image,
-                unreadCount: {}
-            };
-
-            // Initialize unread count for all participants
-            invitation.participants.forEach(p => {
-                const participantId = p.id || p;
-                groupData.unreadCount[participantId] = 0;
-            });
-
-            const conversationsRef = collection(db, 'conversations');
-            const docRef = await addDoc(conversationsRef, groupData);
-
-            // Add system message
-            const messagesRef = collection(db, 'conversations', docRef.id, 'messages');
-            await addDoc(messagesRef, {
-                text: `Group chat created for "${invitation.title}". This chat will close 24 hours after the event.`,
-                type: 'system',
-                senderId: 'system',
-                senderName: 'System',
-                createdAt: serverTimestamp(),
-                read: false
-            });
-
-            return docRef.id;
-        } catch (error) {
-            console.error('Error creating group chat:', error);
-            throw error;
-        }
-    };
 
     // Check and close expired group chats
     const checkExpiredChats = async () => {
@@ -376,7 +327,6 @@ export const ChatProvider = ({ children }) => {
         sendMessage,
         markAsRead,
         getConversation,
-        createGroupChat,
         checkExpiredChats
     };
 
