@@ -83,6 +83,20 @@ service cloud.firestore {
       
       // Admins can modify any invitation
       allow update, delete: if isAdmin();
+      
+      // ========================================
+      // INVITATION MESSAGES SUBCOLLECTION (Group Chat)
+      // ========================================
+      match /messages/{messageId} {
+        // If you can see the invitation and you're a member, you can read and write messages
+        allow read, create: if isAuthenticated() && (
+          get(/databases/$(database)/documents/invitations/$(invitationId)).data.author.id == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/invitations/$(invitationId)).data.joined
+        );
+        
+        // Admins can do anything
+        allow read, write, delete: if isAdmin();
+      }
     }
     
     // ========================================

@@ -537,6 +537,16 @@ export const InvitationProvider = ({ children }) => {
     const approveUser = async (invId, userId) => {
         try {
             const invRef = doc(db, 'invitations', invId);
+            const invDoc = await getDoc(invRef);
+
+            if (!invDoc.exists()) {
+                console.error("Invitation not found");
+                return;
+            }
+
+            const invData = invDoc.data();
+
+            // Update invitation with approved user
             await updateDoc(invRef, {
                 requests: arrayRemove(userId),
                 joined: arrayUnion(userId)
@@ -581,6 +591,7 @@ export const InvitationProvider = ({ children }) => {
                     title: '✅ Request Approved',
                     message: `Your request to join "${inv.title}" has been approved`,
                     invitationId: invId,
+                    actionUrl: `/invitation/${invId}`,
                     createdAt: serverTimestamp(),
                     read: false
                 });
@@ -605,14 +616,30 @@ export const InvitationProvider = ({ children }) => {
         setInvitations(prev => prev.map(inv => inv.id === invId ? { ...inv, chat: [...(inv.chat || []), msg] } : inv));
     };
 
-    const updateMeetingStatus = (id, status) => {
-        setInvitations(prev => prev.map(inv => {
-            if (inv.id === id) {
-                const sysMsg = { id: uuidv4(), senderId: 'system', senderName: 'DineBuddies', text: `تحديث الحالة: ${status}`, timestamp: new Date().toISOString() };
-                return { ...inv, meetingStatus: status, chat: [...(inv.chat || []), sysMsg] };
+    const updateMeetingStatus = async (id, status) => {
+        try {
+            const invitationRef = doc(db, 'invitations', id);
+            const updateData = {
+                meetingStatus: status
+            };
+
+            // If status is 'completed', save the completion timestamp
+            if (status === 'completed') {
+                updateData.completedAt = serverTimestamp();
             }
-            return inv;
-        }));
+
+            await updateDoc(invitationRef, updateData);
+
+            // Update local state
+            setInvitations(prev => prev.map(inv => {
+                if (inv.id === id) {
+                    return { ...inv, meetingStatus: status, completedAt: status === 'completed' ? new Date() : inv.completedAt };
+                }
+                return inv;
+            }));
+        } catch (error) {
+            console.error('Error updating meeting status:', error);
+        }
     };
 
     const updateInvitationTime = (id, newDate, newTime) => {

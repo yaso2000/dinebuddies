@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
 import { updateInvitationDateTime, getInvitationEditStatus } from '../utils/invitationValidation';
 import { db } from '../firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -16,6 +16,7 @@ const InvitationDetails = () => {
 
     const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
     const [message, setMessage] = useState('');
+    const [groupChatMessages, setGroupChatMessages] = useState([]);
     const [userLocation, setUserLocation] = useState(null);
     const [requestersData, setRequestersData] = useState({});
     const chatEndRef = useRef(null);
@@ -124,6 +125,70 @@ const InvitationDetails = () => {
 
         fetchJoinedMembersData();
     }, [invitation?.joined]);
+
+    // Real-time listener for group chat messages
+    useEffect(() => {
+        if (!id) return;
+
+        const messagesRef = collection(db, 'invitations', id, 'messages');
+        const q = query(messagesRef, orderBy('createdAt', 'asc'));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const messages = [];
+            snapshot.forEach((doc) => {
+                messages.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
+            setGroupChatMessages(messages);
+        }, (error) => {
+            console.error('Error listening to messages:', error);
+        });
+
+        return () => unsubscribe();
+    }, [id]);
+
+    // Scroll to bottom when messages change
+    useEffect(() => {
+        scrollToBottom();
+    }, [groupChatMessages]);
+
+    // Handle sending group chat message
+    const handleSendGroupMessage = async (e) => {
+        e.preventDefault();
+
+        console.log('Sending message...', { message, currentUser });
+
+        if (!message.trim()) {
+            console.log('Message is empty');
+            return;
+        }
+
+        if (!currentUser?.id) {
+            console.log('No current user');
+            return;
+        }
+
+        try {
+            const messagesRef = collection(db, 'invitations', id, 'messages');
+            const newMessage = {
+                text: message.trim(),
+                senderId: currentUser.id,
+                senderName: currentUser.display_name || currentUser.name || 'User',
+                senderAvatar: currentUser.photo_url || currentUser.avatar || '',
+                createdAt: serverTimestamp()
+            };
+
+            console.log('Adding message to Firestore:', newMessage);
+            await addDoc(messagesRef, newMessage);
+            console.log('Message sent successfully!');
+            setMessage('');
+        } catch (error) {
+            console.error('Error sending message:', error);
+            alert('Failed to send message: ' + error.message);
+        }
+    };
 
     const handleShare = () => {
         if (navigator.share) {
@@ -602,6 +667,51 @@ const InvitationDetails = () => {
                             </div>
                         </div>
 
+                        {/* Group Chat Button - For Approved Members */}
+                        {invitation.groupChatId && (
+                            <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
+                                <button
+                                    onClick={() => navigate(`/group-chat/${invitation.groupChatId}`)}
+                                    className="btn btn-primary btn-block"
+                                    style={{
+                                        height: '60px',
+                                        fontSize: '1.1rem',
+                                        fontWeight: '800',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '12px',
+                                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+                                        boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
+                                        border: 'none',
+                                        borderRadius: 'var(--radius-lg)',
+                                        position: 'relative',
+                                        overflow: 'hidden'
+                                    }}
+                                >
+                                    <span style={{ fontSize: '1.5rem' }}>💬</span>
+                                    <span>{t('open_group_chat', { defaultValue: 'Open Group Chat' })}</span>
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
+                                        animation: 'shimmer 2s infinite'
+                                    }}></div>
+                                </button>
+                                <p style={{
+                                    textAlign: 'center',
+                                    fontSize: '0.75rem',
+                                    color: 'var(--text-muted)',
+                                    marginTop: '0.5rem'
+                                }}>
+                                    {t('group_chat_description', { defaultValue: 'Chat with all members in real-time' })}
+                                </p>
+                            </div>
+                        )}
+
                         {/* Host Management */}
                         {isHost && requests.length > 0 && (
                             <div style={{ padding: '0 1.25rem', marginBottom: '2rem' }}>
@@ -632,34 +742,163 @@ const InvitationDetails = () => {
                             </div>
                         )}
 
-                        {/* Chat */}
-                        <div style={{ padding: '0 1.25rem' }}>
-                            <div style={{ textAlign: 'center', margin: '1.5rem 0', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: '800' }}>
-                                {t('comments_title')}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                {chat.length === 0 ? (
-                                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                        {t('no_messages')}
-                                    </div>
-                                ) : (
-                                    chat.map((msg) => (
-                                        <div key={msg.id} style={{ alignSelf: msg.senderId === currentUser.id ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                        {/* Group Chat - For Host and Accepted Members */}
+                        {(isHost || isAccepted) && (
+                            <div style={{ padding: '0 1.25rem', marginBottom: '2rem' }}>
+                                <h4 style={{
+                                    fontSize: '0.9rem',
+                                    marginBottom: '1rem',
+                                    color: 'var(--primary)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    fontWeight: '800'
+                                }}>
+                                    💬 {t('group_chat', { defaultValue: 'Group Chat' })}
+                                </h4>
+
+                                <div style={{
+                                    background: 'var(--bg-card)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    border: '1px solid var(--border-color)',
+                                    minHeight: '300px',
+                                    maxHeight: '500px',
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    <div style={{
+                                        flex: 1,
+                                        overflowY: 'auto',
+                                        padding: '1rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '1rem'
+                                    }}>
+                                        {groupChatMessages.length === 0 ? (
                                             <div style={{
-                                                background: msg.senderId === currentUser.id ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)' : 'var(--bg-input)',
-                                                padding: '0.8rem 1.2rem',
-                                                borderRadius: msg.senderId === currentUser.id ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                                                color: 'white',
-                                                fontSize: '0.95rem'
+                                                textAlign: 'center',
+                                                padding: '3rem 1rem',
+                                                color: 'var(--text-muted)'
                                             }}>
-                                                {msg.text}
+                                                <div style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.3 }}>💬</div>
+                                                <p style={{ fontSize: '0.9rem' }}>
+                                                    {t('no_messages_yet', { defaultValue: 'No messages yet. Start the conversation!' })}
+                                                </p>
                                             </div>
-                                        </div>
-                                    ))
-                                )}
-                                <div ref={chatEndRef} />
+                                        ) : (
+                                            groupChatMessages.map((msg) => {
+                                                const isOwnMessage = msg.senderId === currentUser?.id;
+                                                return (
+                                                    <div
+                                                        key={msg.id}
+                                                        style={{
+                                                            alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+                                                            maxWidth: '75%',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: '0.25rem'
+                                                        }}
+                                                    >
+                                                        {!isOwnMessage && (
+                                                            <div style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.5rem',
+                                                                marginBottom: '0.25rem'
+                                                            }}>
+                                                                <img
+                                                                    src={msg.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderId}`}
+                                                                    alt={msg.senderName}
+                                                                    style={{
+                                                                        width: '24px',
+                                                                        height: '24px',
+                                                                        borderRadius: '50%',
+                                                                        objectFit: 'cover'
+                                                                    }}
+                                                                />
+                                                                <span style={{
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '600',
+                                                                    color: 'var(--text-muted)'
+                                                                }}>
+                                                                    {msg.senderName}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <div style={{
+                                                            background: isOwnMessage
+                                                                ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)'
+                                                                : 'var(--bg-input)',
+                                                            padding: '0.75rem 1rem',
+                                                            borderRadius: isOwnMessage
+                                                                ? '18px 18px 4px 18px'
+                                                                : '18px 18px 18px 4px',
+                                                            color: 'white',
+                                                            fontSize: '0.95rem',
+                                                            wordWrap: 'break-word'
+                                                        }}>
+                                                            {msg.text}
+                                                        </div>
+                                                        <span style={{
+                                                            fontSize: '0.7rem',
+                                                            color: 'var(--text-muted)',
+                                                            alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+                                                            paddingLeft: isOwnMessage ? '0' : '0.5rem',
+                                                            paddingRight: isOwnMessage ? '0.5rem' : '0'
+                                                        }}>
+                                                            {msg.createdAt?.toDate ?
+                                                                new Date(msg.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                                : 'Sending...'
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                        <div ref={chatEndRef} />
+                                    </div>
+
+                                    <div style={{
+                                        padding: '1rem',
+                                        borderTop: '1px solid var(--border-color)',
+                                        background: 'var(--bg-body)'
+                                    }}>
+                                        <form onSubmit={handleSendGroupMessage} style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <input
+                                                type="text"
+                                                value={message}
+                                                onChange={(e) => setMessage(e.target.value)}
+                                                placeholder={t('type_message', { defaultValue: 'Type a message...' })}
+                                                className="input-field"
+                                                style={{
+                                                    borderRadius: 'var(--radius-full)',
+                                                    background: 'var(--bg-input)',
+                                                    flex: 1,
+                                                    border: '1px solid var(--border-color)'
+                                                }}
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={!message.trim()}
+                                                className="btn btn-primary"
+                                                style={{
+                                                    width: '50px',
+                                                    height: '50px',
+                                                    minWidth: '50px',
+                                                    padding: 0,
+                                                    borderRadius: '50%',
+                                                    opacity: message.trim() ? 1 : 0.5
+                                                }}
+                                            >
+                                                <FaPaperPlane />
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
+
                     </>
                 ) : (
                     /* Locked Chat Message for non-members */
@@ -672,25 +911,6 @@ const InvitationDetails = () => {
                     </div>
                 )}
             </div>
-
-            {/* Message Input - Only for members */}
-            {(isHost || isAccepted) && (
-                <div className="chat-footer-glass" style={{ padding: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
-                    <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '0.75rem' }}>
-                        <input
-                            type="text"
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            placeholder={t('comment_placeholder')}
-                            className="input-field"
-                            style={{ borderRadius: 'var(--radius-full)', background: 'var(--bg-body)', flex: 1 }}
-                        />
-                        <button type="submit" disabled={!message.trim()} className="btn btn-primary" style={{ width: '55px', height: '55px', minWidth: '55px', padding: 0, borderRadius: '50%' }}>
-                            <FaPaperPlane />
-                        </button>
-                    </form>
-                </div>
-            )}
         </div>
     );
 };

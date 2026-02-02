@@ -122,5 +122,15 @@
     "notification_join_accept": "تم قبول طلب انضمامك",
     "new_posts_available": "يوجد منشورات جديدة",
     "refresh_feed": "تحديث",
-    "invite_unavailable": "غير متاح"
+    "invite_unavailable": "غير متاح",
+    "open_group_chat": "فتح الشات الجماعي",
+    "group_chat_description": "تحدث مع جميع الأعضاء بشكل مباشر",
+    "group_chat_active": "الشات الجماعي نشط!",
+    "use_group_chat_button": "استخدم زر 'فتح الشات الجماعي' في الأعلى للتحدث مع جميع الأعضاء بشكل مباشر",
+    "group_chat": "الشات الجماعي",
+    "no_messages_yet": "لا توجد رسائل بعد. ابدأ المحادثة!",
+    "type_message": "اكتب رسالة...",
+    "chat_closed_24h": "تم إغلاق الشات - مرت 24 ساعة على موعد الدعوة",
+    "invitation_completed": "مكتملة",
+    "completed_recently": "مكتملة مؤخراً"
 }
