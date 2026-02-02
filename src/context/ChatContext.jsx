@@ -46,8 +46,7 @@ export const ChatProvider = ({ children }) => {
         const conversationsRef = collection(db, 'conversations');
         const q = query(
             conversationsRef,
-            where('participants', 'array-contains', currentUser.uid),
-            orderBy('lastMessageAt', 'desc')
+            where('participants', 'array-contains', currentUser.uid)
         );
 
         const unsubscribe = onSnapshot(
@@ -68,6 +67,9 @@ export const ChatProvider = ({ children }) => {
                         lastMessageAt: data.lastMessageAt?.toDate() || new Date()
                     });
                 }
+
+                // Sort by lastMessageAt (newest first)
+                convos.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
 
                 setConversations(convos);
 
