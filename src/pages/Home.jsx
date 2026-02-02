@@ -218,11 +218,56 @@ const Home = () => {
                         `, { className: 'premium-popup' });
                 }
 
+
                 invitationsWithCoords.forEach(inv => {
+                    // Check eligibility
+                    const checkEligibility = () => {
+                        if (inv.author?.id === currentUser?.id) return { eligible: true };
+
+                        if (inv.genderPreference && inv.genderPreference !== 'any' && currentUser?.gender) {
+                            if (currentUser.gender !== inv.genderPreference) {
+                                return { eligible: false, reason: t('gender_mismatch') };
+                            }
+                        }
+
+                        if (inv.ageRange && currentUser?.age) {
+                            const [minAge, maxAge] = inv.ageRange.split('-').map(Number);
+                            if (currentUser.age < minAge || currentUser.age > maxAge) {
+                                return { eligible: false, reason: `${t('age_range_preference')}: ${inv.ageRange}` };
+                            }
+                        }
+
+                        return { eligible: true };
+                    };
+                    const eligibility = checkEligibility();
+                    const isOwn = inv.author?.id === currentUser?.id;
+
+                    // Determine pulse color based on status
+                    const pulseColor = isOwn ? '#fbbf24' : (eligibility.eligible ? '#10b981' : '#ef4444');
+
                     const avatarIcon = L.divIcon({
                         className: 'leaflet-avatar-icon',
                         html: `
-                            <div class="avatar-marker-outer" style="cursor: pointer">
+                            <div class="avatar-marker-outer" style="cursor: pointer; ${!eligibility.eligible ? 'opacity: 0.6;' : ''}">
+                                <div class="avatar-marker-pulse" style="
+                                    position: absolute;
+                                    width: 100%;
+                                    height: 100%;
+                                    border-radius: 50%;
+                                    background: ${pulseColor};
+                                    opacity: 0.6;
+                                    animation: marker-pulse 2s ease-out infinite;
+                                "></div>
+                                <div class="avatar-marker-pulse" style="
+                                    position: absolute;
+                                    width: 100%;
+                                    height: 100%;
+                                    border-radius: 50%;
+                                    background: ${pulseColor};
+                                    opacity: 0.6;
+                                    animation: marker-pulse 2s ease-out infinite;
+                                    animation-delay: 1s;
+                                "></div>
                                 <div class="avatar-marker-ring"></div>
                                 <div class="avatar-marker-frame">
                                     <img src="${inv.author?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" class="avatar-marker-image" />
@@ -237,7 +282,7 @@ const Home = () => {
                     let distanceInfo = '';
                     if (userLocation && inv.lat && inv.lng) {
                         const distance = calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng);
-                        const travelTime = Math.round((distance / 40) * 60); // Assuming 40 km/h average speed, result in minutes
+                        const travelTime = Math.round((distance / 40) * 60);
 
                         distanceInfo = `
                             <div style="background: rgba(16, 185, 129, 0.1); padding: 8px; border-radius: 8px; margin: 10px 0; border: 1px solid rgba(16, 185, 129, 0.3);">
@@ -253,14 +298,22 @@ const Home = () => {
                         `;
                     }
 
+                    // Eligibility warning
+                    const eligibilityWarning = !eligibility.eligible ? `
+                        <div style="background: rgba(239, 68, 68, 0.15); padding: 8px; border-radius: 8px; margin: 10px 0; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            <span style="color: #ef4444; font-size: 0.8rem; font-weight: 700;">⚠️ ${eligibility.reason}</span>
+                        </div>
+                    ` : '';
+
                     const popupContent = `
                         <div style="min-width:200px; font-family: 'Tajawal', sans-serif; text-align: ${i18n.language === 'ar' ? 'right' : 'left'}; background-color: #1e293b; color: white; padding: 5px; border-radius: 8px;">
                             <img src="${inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}" style="width:100%; height:90px; object-fit:cover; border-radius:12px; margin-bottom:12px;" />
                             <h4 style="margin:0 0 5px 0; color:#f8fafc; font-size:1rem; font-weight:900;">${inv.title}</h4>
                             <p style="margin:0 0 5px 0; color:#cbd5e1; font-size:0.8rem; font-weight:700;">${inv.author?.name}</p>
                             ${distanceInfo}
-                            <button id="inv-popup-btn-${inv.id}" style="width:100%; padding:10px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:900; font-size:0.85rem; margin-top: 10px">
-                                ${t('view_details')}
+                            ${eligibilityWarning}
+                            <button id="inv-popup-btn-${inv.id}" style="width:100%; padding:10px; background:${!eligibility.eligible ? 'rgba(55, 65, 81, 0.8)' : 'var(--primary)'}; color:${!eligibility.eligible ? '#d1d5db' : 'white'}; border:none; border-radius:10px; cursor:${!eligibility.eligible ? 'not-allowed' : 'pointer'}; font-weight:900; font-size:0.85rem; margin-top: 10px">
+                                ${!eligibility.eligible ? eligibility.reason : t('view_details')}
                             </button>
                         </div>
                     `;
@@ -269,7 +322,7 @@ const Home = () => {
                         .bindPopup(popupContent, { className: 'premium-popup' })
                         .on('popupopen', () => {
                             const btn = document.getElementById(`inv-popup-btn-${inv.id}`);
-                            if (btn) btn.onclick = () => navigate(`/invitation/${inv.id}`);
+                            if (btn && eligibility.eligible) btn.onclick = () => navigate(`/invitation/${inv.id}`);
                         });
                 });
 
@@ -340,10 +393,10 @@ const Home = () => {
                             background: 'var(--bg-card)',
                             color: 'white',
                             border: '1px solid var(--border-color)',
-                            borderRadius: '12px',
-                            padding: '10px',
-                            minWidth: '120px',
-                            fontSize: '0.9rem',
+                            borderRadius: '8px',
+                            padding: '8px 10px',
+                            minWidth: '90px',
+                            fontSize: '0.75rem',
                             fontWeight: '600'
                         }}
                     >
@@ -356,17 +409,7 @@ const Home = () => {
                 </div>
             </div>
 
-            <div className="categories-scroller hide-scrollbar">
-                {categories.map(cat => (
-                    <button
-                        key={cat.id}
-                        onClick={() => handleCategoryClick(cat)}
-                        className={`category-pill ${activeFilter === cat.id ? 'active' : ''}`}
-                    >
-                        {cat.label}
-                    </button>
-                ))}
-            </div>
+
 
             {viewMode === 'map' ? (
                 <div className="map-view-container">

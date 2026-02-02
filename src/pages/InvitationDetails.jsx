@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
 import { getInvitationGroupChat } from '../utils/groupChatHelpers';
 import { updateInvitationDateTime, getInvitationEditStatus } from '../utils/invitationValidation';
+import { db } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -18,6 +20,7 @@ const InvitationDetails = () => {
     const [groupChatId, setGroupChatId] = useState(null);
     const [loadingGroupChat, setLoadingGroupChat] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
+    const [requestersData, setRequestersData] = useState({});
     const chatEndRef = useRef(null);
 
     const invitation = invitations.find(inv => inv.id === id);
@@ -87,6 +90,35 @@ const InvitationDetails = () => {
         loadGroupChat();
     }, [invitation?.id, invitation?.joined, currentUser?.id]);
 
+    // Fetch requesters data
+    useEffect(() => {
+        const fetchRequestersData = async () => {
+            if (!invitation?.requests || invitation.requests.length === 0) {
+                setRequestersData({});
+                return;
+            }
+
+            const data = {};
+            for (const userId of invitation.requests) {
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', userId));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        data[userId] = {
+                            name: userData.display_name || userData.name || 'User',
+                            avatar: userData.photo_url || userData.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + userId
+                        };
+                    }
+                } catch (error) {
+                    console.error('Error fetching requester data:', error);
+                }
+            }
+            setRequestersData(data);
+        };
+
+        fetchRequestersData();
+    }, [invitation?.requests]);
+
     const handleShare = () => {
         if (navigator.share) {
             navigator.share({
@@ -138,11 +170,31 @@ const InvitationDetails = () => {
         );
     }
 
-    const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning' } = invitation;
+    const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange } = invitation;
     const isHost = author?.id === currentUser?.id;
     const isAccepted = joined.includes(currentUser.id);
     const isPending = requests.includes(currentUser.id);
     const spotsLeft = guestsNeeded - joined.length;
+
+    // Check eligibility based on gender and age
+    const checkEligibility = () => {
+        // Check gender preference
+        if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
+            return { eligible: false, reason: t('gender_mismatch') };
+        }
+
+        // Check age range preference
+        if (ageRange && currentUser.age) {
+            const [minAge, maxAge] = ageRange.split('-').map(Number);
+            const userAge = currentUser.age;
+            if (userAge < minAge || userAge > maxAge) {
+                return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+            }
+        }
+
+        return { eligible: true };
+    };
+    const eligibility = checkEligibility();
 
     const handleSendMessage = (e) => {
         e.preventDefault();
@@ -461,8 +513,9 @@ const InvitationDetails = () => {
                     {!isHost && !isAccepted && (
                         <div style={{ marginTop: '1.5rem' }}>
                             <button
-                                className={`btn btn-block ${isPending ? 'btn-outline' : 'btn-primary'}`}
+                                className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
                                 onClick={() => {
+                                    if (!eligibility.eligible) return;
                                     if (isPending) {
                                         cancelRequest(id);
                                     } else {
@@ -472,12 +525,19 @@ const InvitationDetails = () => {
                                         window.location.href = '/';
                                     }
                                 }}
-                                style={{ height: '60px', fontSize: '1.1rem' }}
+                                disabled={!eligibility.eligible}
+                                style={{
+                                    height: '60px',
+                                    fontSize: '1.1rem',
+                                    background: !eligibility.eligible ? 'rgba(55, 65, 81, 0.8)' : undefined,
+                                    color: !eligibility.eligible ? '#d1d5db' : undefined,
+                                    cursor: !eligibility.eligible ? 'not-allowed' : 'pointer'
+                                }}
                             >
-                                {isPending ? t('joined_btn') : t('join_btn')}
+                                {!eligibility.eligible ? (eligibility.reason || t('invite_unavailable')) : (isPending ? t('joined_btn') : t('join_btn'))}
                             </button>
                             <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
-                                {isPending ? t('request_sent_waiting') : t('join_to_chat')}
+                                {!eligibility.eligible ? eligibility.reason : (isPending ? t('request_sent_waiting') : t('join_to_chat'))}
                             </p>
                         </div>
                     )}
@@ -581,15 +641,25 @@ const InvitationDetails = () => {
                                     <FaUsers /> {t('pending_requests', { count: requests.length })}
                                 </h4>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    {requests.map(userId => (
-                                        <div key={userId} style={{ padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                                            <span style={{ fontWeight: '700' }}>{t('new_user')}</span>
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">{t('accept')}</button>
-                                                <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">{t('reject')}</button>
+                                    {requests.map(userId => {
+                                        const requester = requestersData[userId] || { name: t('loading'), avatar: '' };
+                                        return (
+                                            <div key={userId} style={{ padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <img
+                                                        src={requester.avatar}
+                                                        alt={requester.name}
+                                                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                                                    />
+                                                    <span style={{ fontWeight: '700' }}>{requester.name}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">{t('accept')}</button>
+                                                    <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">{t('reject')}</button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

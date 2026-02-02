@@ -121,5 +121,6 @@
     "notification_join_request": "طلب {{name}} الانضمام",
     "notification_join_accept": "تم قبول طلب انضمامك",
     "new_posts_available": "يوجد منشورات جديدة",
-    "refresh_feed": "تحديث"
+    "refresh_feed": "تحديث",
+    "invite_unavailable": "غير متاح"
 }

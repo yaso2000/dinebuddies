@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 
 const QuickLogin = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
     const [email, setEmail] = useState('');

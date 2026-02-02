@@ -43,9 +43,20 @@ const InvitationCard = ({ invitation }) => {
     };
 
     const checkEligibility = () => {
+        // Check gender preference
         if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
             return { eligible: false, reason: t('gender_mismatch') };
         }
+
+        // Check age range preference
+        if (ageRange && currentUser.age) {
+            const [minAge, maxAge] = ageRange.split('-').map(Number);
+            const userAge = currentUser.age;
+            if (userAge < minAge || userAge > maxAge) {
+                return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+            }
+        }
+
         return { eligible: true };
     };
     const eligibility = checkEligibility();
@@ -256,7 +267,7 @@ const InvitationCard = ({ invitation }) => {
                         >
                             {isHost ? t('manage_invitation') :
                                 isAccepted ? t('request_approved') :
-                                    !eligibility.eligible ? t('invite_unavailable') || 'Unavailable' :
+                                    !eligibility.eligible ? (eligibility.reason || t('invite_unavailable')) :
                                         isPending ? t('request_pending') : t('join_btn')}
                         </button>
 
