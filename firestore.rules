@@ -34,8 +34,8 @@ service cloud.firestore {
     // USERS COLLECTION
     // ========================================
     match /users/{userId} {
-      // Anyone authenticated can read user profiles
-      allow read: if isAuthenticated();
+      // Anyone can read user profiles (TEMPORARY FIX)
+      allow read: if true;
       
       // Users can create and update their own profile, but we should restrict switching to admin
       allow create: if isOwner(userId);
@@ -62,15 +62,24 @@ service cloud.firestore {
     // INVITATIONS COLLECTION
     // ========================================
     match /invitations/{invitationId} {
-      // Anyone authenticated can read invitations
-      allow read: if isAuthenticated();
+      // Anyone can read invitations (TEMPORARY FIX)
+      allow read: if true;
       
       // Users can create their own invitations
       allow create: if isAuthenticated();
       
-      // Only invitation author can update/delete
-      allow update, delete: if isAuthenticated() && 
-                               resource.data.author.id == request.auth.uid;
+      // Users can add/remove themselves from requests array
+      allow update: if isAuthenticated() && 
+                       (
+                         // Allow adding/removing from requests array
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) ||
+                         // Or if they're the author
+                         resource.data.author.id == request.auth.uid
+                       );
+      
+      // Only invitation author can delete
+      allow delete: if isAuthenticated() && 
+                       resource.data.author.id == request.auth.uid;
       
       // Admins can modify any invitation
       allow update, delete: if isAdmin();

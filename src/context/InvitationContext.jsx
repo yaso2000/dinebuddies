@@ -468,10 +468,40 @@ export const InvitationProvider = ({ children }) => {
     const requestToJoin = async (invId) => {
         try {
             const invRef = doc(db, 'invitations', invId);
+            const invDoc = await getDoc(invRef);
+
+            if (!invDoc.exists()) {
+                console.error("Invitation not found");
+                return;
+            }
+
+            const invData = invDoc.data();
+            const hostId = invData.author?.id;
+
+            // Update invitation with new request
             await updateDoc(invRef, {
                 requests: arrayUnion(currentUser.id)
             });
-        } catch (err) { console.error("Error requesting to join:", err); }
+
+            // Send notification to host
+            if (hostId && hostId !== currentUser.id) {
+                await addDoc(collection(db, 'notifications'), {
+                    userId: hostId,
+                    type: 'join_request',
+                    title: '🙋 طلب انضمام جديد',
+                    message: `${currentUser.name} يريد الانضمام إلى دعوتك "${invData.title}"`,
+                    invitationId: invId,
+                    requesterId: currentUser.id,
+                    requesterName: currentUser.name,
+                    requesterAvatar: currentUser.avatar,
+                    createdAt: serverTimestamp(),
+                    read: false
+                });
+                console.log('✅ Join request notification sent to host');
+            }
+        } catch (err) {
+            console.error("Error requesting to join:", err);
+        }
     };
 
     const cancelRequest = async (invId) => {
@@ -546,6 +576,20 @@ export const InvitationProvider = ({ children }) => {
             } catch (chatError) {
                 console.error('⚠️ Error adding to group chat:', chatError);
                 // Don't block approval if chat fails
+            }
+
+            // Send notification to approved user
+            if (inv) {
+                await addDoc(collection(db, 'notifications'), {
+                    userId: userId,
+                    type: 'request_approved',
+                    title: '✅ تمت الموافقة على طلبك',
+                    message: `تمت الموافقة على طلبك للانضمام إلى "${inv.title}"`,
+                    invitationId: invId,
+                    createdAt: serverTimestamp(),
+                    read: false
+                });
+                console.log('✅ Approval notification sent to user');
             }
         } catch (err) {
             console.error("Error approving user:", err);

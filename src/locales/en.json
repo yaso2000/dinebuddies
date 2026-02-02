@@ -444,5 +444,6 @@
     "your_location": "Your Location",
     "distance": "Distance",
     "travel_time": "Travel Time",
-    "minutes": "min"
+    "minutes": "min",
+    "invite_unavailable": "Unavailable"
 }

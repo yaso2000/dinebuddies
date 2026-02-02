@@ -19,7 +19,7 @@ import {
 import './Notifications.css';
 
 const Notifications = () => {
-    const { i18n } = useTranslation();
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
     const {
