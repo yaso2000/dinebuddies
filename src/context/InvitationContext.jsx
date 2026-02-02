@@ -573,32 +573,6 @@ export const InvitationProvider = ({ children }) => {
                 }
             }
 
-            // ✨ NEW: Add user to group chat automatically
-            try {
-                const { handleInvitationJoin } = await import('../utils/groupChatHelpers');
-
-                // Get user details
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                const userData = userDoc.exists() ? userDoc.data() : null;
-                const userName = userData?.display_name || userData?.name || 'User';
-
-                // Get full invitation data
-                const invDoc = await getDoc(invRef);
-                const fullInvitation = { id: invId, ...invDoc.data() };
-
-                // Create or add to group chat
-                await handleInvitationJoin(
-                    fullInvitation,
-                    userId,
-                    userName
-                );
-
-                console.log('✅ User added to group chat');
-            } catch (chatError) {
-                console.error('⚠️ Error adding to group chat:', chatError);
-                // Don't block approval if chat fails
-            }
-
             // Send notification to approved user
             if (inv) {
                 await addDoc(collection(db, 'notifications'), {

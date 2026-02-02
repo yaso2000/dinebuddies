@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaEdit, FaCheckCircle, FaStar, FaComments } from 'react-icons/fa';
+import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaEdit, FaCheckCircle, FaStar } from 'react-icons/fa';
 
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
-import { getInvitationGroupChat } from '../utils/groupChatHelpers';
 import { updateInvitationDateTime, getInvitationEditStatus } from '../utils/invitationValidation';
 import { db } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -17,8 +16,6 @@ const InvitationDetails = () => {
 
     const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
     const [message, setMessage] = useState('');
-    const [groupChatId, setGroupChatId] = useState(null);
-    const [loadingGroupChat, setLoadingGroupChat] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
     const [requestersData, setRequestersData] = useState({});
     const chatEndRef = useRef(null);
@@ -67,32 +64,6 @@ const InvitationDetails = () => {
     useEffect(() => {
         scrollToBottom();
     }, [invitation?.chat]);
-
-    // Load group chat ID if user is participant
-    useEffect(() => {
-        const loadGroupChat = async () => {
-            // Check if user is host or has joined
-            const isHost = invitation?.author?.id === currentUser?.id;
-            const hasJoined = invitation?.joined?.includes(currentUser?.id);
-
-            if (!invitation?.id || (!isHost && !hasJoined)) {
-                setGroupChatId(null);
-                return;
-            }
-
-            try {
-                setLoadingGroupChat(true);
-                const chatId = await getInvitationGroupChat(invitation.id);
-                setGroupChatId(chatId);
-            } catch (error) {
-                console.error('Error loading group chat:', error);
-            } finally {
-                setLoadingGroupChat(false);
-            }
-        };
-
-        loadGroupChat();
-    }, [invitation?.id, invitation?.joined, invitation?.author?.id, currentUser?.id]);
 
     // Fetch requesters data
     useEffect(() => {
@@ -578,51 +549,6 @@ const InvitationDetails = () => {
                             <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
                                 {!eligibility.eligible ? eligibility.reason : (isPending ? t('request_sent_waiting') : t('join_to_chat'))}
                             </p>
-                        </div>
-                    )}
-
-                    {/* Group Chat Button - For Participants */}
-                    {(isHost || isAccepted) && groupChatId && (
-                        <div style={{ marginTop: '1.5rem' }}>
-                            <button
-                                className="btn btn-block"
-                                onClick={() => navigate(`/group/${groupChatId}`)}
-                                style={{
-                                    height: '60px',
-                                    fontSize: '1.1rem',
-                                    background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                                    border: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '12px',
-                                    position: 'relative',
-                                    overflow: 'hidden'
-                                }}
-                            >
-                                <FaComments size={20} />
-                                <span>{t('open_group_chat')}</span>
-                                <span style={{
-                                    background: 'rgba(255,255,255,0.25)',
-                                    padding: '4px 10px',
-                                    borderRadius: '12px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: '700'
-                                }}>
-                                    {joined.length + 1} {t('members_count')}
-                                </span>
-                            </button>
-                            <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                                <span>💬</span>
-                                <span>{t('chat_before_meetup')}</span>
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Loading indicator */}
-                    {(isHost || isAccepted) && loadingGroupChat && !groupChatId && (
-                        <div style={{ marginTop: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                            <span>⏳ {t('loading_chat')}</span>
                         </div>
                     )}
                 </div>
