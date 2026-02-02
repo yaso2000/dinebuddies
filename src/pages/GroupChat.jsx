@@ -130,10 +130,10 @@ const GroupChat = () => {
             if (conversation?.participants) {
                 const messagePreview = selectedImage ? '📷 Image' : messageText.substring(0, 50);
 
-                for (const participant of conversation.participants) {
-                    if (participant.id !== firebaseUser.uid) {
+                for (const participantId of conversation.participants) {
+                    if (participantId !== firebaseUser.uid) {
                         await createNotification({
-                            userId: participant.id,
+                            userId: participantId,
                             type: 'group_message',
                             title: conversation.groupName || 'Group Chat',
                             message: `${userProfile?.name || 'Someone'}: ${messagePreview}`,

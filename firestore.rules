@@ -329,5 +329,24 @@ service cloud.firestore {
       // Admins can moderate all posts
       allow read, write, delete: if isAdmin();
     }
+    
+    // ========================================
+    // TYPING STATUS COLLECTION
+    // ========================================
+    match /typing/{conversationId} {
+      // Any authenticated user can read/write typing status
+      allow read, write: if isAuthenticated();
+    }
+    
+    // ========================================
+    // PRESENCE COLLECTION
+    // ========================================
+    match /presence/{userId} {
+      // Any authenticated user can read presence
+      allow read: if isAuthenticated();
+      
+      // Users can update their own presence
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
   }
 }
