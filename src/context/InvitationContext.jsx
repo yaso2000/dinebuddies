@@ -485,19 +485,40 @@ export const InvitationProvider = ({ children }) => {
 
             // Send notification to host
             if (hostId && hostId !== currentUser.id) {
-                await addDoc(collection(db, 'notifications'), {
-                    userId: hostId,
-                    type: 'join_request',
-                    title: '🙋 طلب انضمام جديد',
-                    message: `${currentUser.name} يريد الانضمام إلى دعوتك "${invData.title}"`,
-                    invitationId: invId,
-                    requesterId: currentUser.id,
-                    requesterName: currentUser.name,
-                    requesterAvatar: currentUser.avatar,
-                    createdAt: serverTimestamp(),
-                    read: false
+                console.log('📧 Preparing notification:', {
+                    hostId,
+                    currentUserId: currentUser.id,
+                    currentUserName: currentUser.name,
+                    invitationTitle: invData.title
                 });
-                console.log('✅ Join request notification sent to host');
+
+                try {
+                    const notificationData = {
+                        userId: hostId,
+                        type: 'join_request',
+                        title: '🙋 طلب انضمام جديد',
+                        message: `${currentUser.name} يريد الانضمام إلى دعوتك "${invData.title}"`,
+                        invitationId: invId,
+                        requesterId: currentUser.id,
+                        requesterName: currentUser.name,
+                        requesterAvatar: currentUser.avatar,
+                        createdAt: serverTimestamp(),
+                        read: false
+                    };
+
+                    console.log('📝 Notification data:', notificationData);
+
+                    const docRef = await addDoc(collection(db, 'notifications'), notificationData);
+                    console.log('✅ Join request notification sent to host. Doc ID:', docRef.id);
+                } catch (notifError) {
+                    console.error('❌ Error creating notification:', notifError);
+                }
+            } else {
+                console.log('⚠️ Notification not sent. Reason:', {
+                    hostId,
+                    currentUserId: currentUser.id,
+                    isSameUser: hostId === currentUser.id
+                });
             }
         } catch (err) {
             console.error("Error requesting to join:", err);
