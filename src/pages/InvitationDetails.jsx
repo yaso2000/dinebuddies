@@ -119,6 +119,37 @@ const InvitationDetails = () => {
         fetchRequestersData();
     }, [invitation?.requests]);
 
+    // Fetch joined members data
+    const [joinedMembersData, setJoinedMembersData] = useState({});
+
+    useEffect(() => {
+        const fetchJoinedMembersData = async () => {
+            if (!invitation?.joined || invitation.joined.length === 0) {
+                setJoinedMembersData({});
+                return;
+            }
+
+            const data = {};
+            for (const userId of invitation.joined) {
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', userId));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        data[userId] = {
+                            name: userData.display_name || userData.name || 'User',
+                            avatar: userData.photo_url || userData.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + userId
+                        };
+                    }
+                } catch (error) {
+                    console.error('Error fetching joined member data:', error);
+                }
+            }
+            setJoinedMembersData(data);
+        };
+
+        fetchJoinedMembersData();
+    }, [invitation?.joined]);
+
     const handleShare = () => {
         if (navigator.share) {
             navigator.share({
@@ -610,14 +641,17 @@ const InvitationDetails = () => {
                                     <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px', maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{author?.name}</span>
                                 </div>
                                 {/* Joined Members */}
-                                {joined.map(userId => (
-                                    <div key={userId} style={{ textAlign: 'center' }}>
-                                        <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid var(--primary)', padding: '2px' }}>
-                                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`} alt="Member" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                                {joined.map(userId => {
+                                    const member = joinedMembersData[userId] || { name: 'Loading...', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
+                                    return (
+                                        <div key={userId} style={{ textAlign: 'center' }}>
+                                            <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid var(--primary)', padding: '2px' }}>
+                                                <img src={member.avatar} alt={member.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                                            </div>
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px', maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name}</span>
                                         </div>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>Member</span>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                                 {/* Empty Spots */}
                                 {[...Array(Math.max(0, spotsLeft))].map((_, i) => (
                                     <div key={i} style={{
