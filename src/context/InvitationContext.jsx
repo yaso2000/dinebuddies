@@ -496,8 +496,8 @@ export const InvitationProvider = ({ children }) => {
                     const notificationData = {
                         userId: hostId,
                         type: 'join_request',
-                        title: '🙋 طلب انضمام جديد',
-                        message: `${currentUser.name} يريد الانضمام إلى دعوتك "${invData.title}"`,
+                        title: '🙋 New Join Request',
+                        message: `${currentUser.name} wants to join your invitation "${invData.title}"`,
                         invitationId: invId,
                         requesterId: currentUser.id,
                         requesterName: currentUser.name,
@@ -604,8 +604,8 @@ export const InvitationProvider = ({ children }) => {
                 await addDoc(collection(db, 'notifications'), {
                     userId: userId,
                     type: 'request_approved',
-                    title: '✅ تمت الموافقة على طلبك',
-                    message: `تمت الموافقة على طلبك للانضمام إلى "${inv.title}"`,
+                    title: '✅ Request Approved',
+                    message: `Your request to join "${inv.title}" has been approved`,
                     invitationId: invId,
                     createdAt: serverTimestamp(),
                     read: false
