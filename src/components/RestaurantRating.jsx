@@ -43,11 +43,11 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
         const diffTime = Math.abs(now - date);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) return i18n.language === 'ar' ? 'اليوم' : 'Today';
-        if (diffDays === 1) return i18n.language === 'ar' ? 'أمس' : 'Yesterday';
-        if (diffDays < 7) return i18n.language === 'ar' ? `منذ ${diffDays} أيام` : `${diffDays} days ago`;
-        if (diffDays < 30) return i18n.language === 'ar' ? `منذ ${Math.floor(diffDays / 7)} أسابيع` : `${Math.floor(diffDays / 7)} weeks ago`;
-        return i18n.language === 'ar' ? `منذ ${Math.floor(diffDays / 30)} شهور` : `${Math.floor(diffDays / 30)} months ago`;
+        if (diffDays === 0) return t('today');
+        if (diffDays === 1) return t('yesterday');
+        if (diffDays < 7) return t('days_ago', { count: diffDays });
+        if (diffDays < 30) return t('weeks_ago', { count: Math.floor(diffDays / 7) });
+        return t('months_ago', { count: Math.floor(diffDays / 30) });
     };
 
     return (
@@ -62,7 +62,7 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
             }}>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <FaStar style={{ color: 'var(--luxury-gold)' }} />
-                    {i18n.language === 'ar' ? 'التقييمات' : 'Reviews'}
+                    {t('reviews')}
                 </h3>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -80,7 +80,7 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                             ))}
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            {totalReviews} {i18n.language === 'ar' ? 'تقييم' : 'reviews'}
+                            {totalReviews} {t('reviews_count')}
                         </div>
                     </div>
 
@@ -126,8 +126,8 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                         }}
                     >
                         {showRatingForm
-                            ? (i18n.language === 'ar' ? 'إلغاء' : 'Cancel')
-                            : (i18n.language === 'ar' ? '✍️ اكتب تقييمك' : '✍️ Write a Review')
+                            ? t('cancel')
+                            : t('write_review')
                         }
                     </button>
                 )}
@@ -143,13 +143,13 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                     marginBottom: '1.5rem'
                 }}>
                     <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '1rem' }}>
-                        {i18n.language === 'ar' ? 'أضف تقييمك' : 'Add Your Review'}
+                        {t('add_your_review')}
                     </h4>
 
                     {/* Star Rating */}
                     <div style={{ marginBottom: '1rem' }}>
                         <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>
-                            {i18n.language === 'ar' ? 'التقييم' : 'Rating'}
+                            {t('rating')}
                         </label>
                         <div style={{ display: 'flex', gap: '8px' }}>
                             {[1, 2, 3, 4, 5].map(star => (
@@ -172,12 +172,12 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                     {/* Comment */}
                     <div style={{ marginBottom: '1rem' }}>
                         <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>
-                            {i18n.language === 'ar' ? 'التعليق (اختياري)' : 'Comment (Optional)'}
+                            {t('comment_optional')}
                         </label>
                         <textarea
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
-                            placeholder={i18n.language === 'ar' ? 'شاركنا تجربتك...' : 'Share your experience...'}
+                            placeholder={t('share_experience')}
                             rows={4}
                             style={{
                                 width: '100%',
@@ -208,7 +208,7 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                             fontSize: '1rem'
                         }}
                     >
-                        {i18n.language === 'ar' ? '✨ نشر التقييم' : '✨ Submit Review'}
+                        {t('submit_review')}
                     </button>
                 </form>
             )}
@@ -217,7 +217,7 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
             {reviews.length > 0 && (
                 <div style={{ marginTop: '1.5rem' }}>
                     <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '1rem' }}>
-                        {i18n.language === 'ar' ? `جميع التقييمات (${reviews.length})` : `All Reviews (${reviews.length})`}
+                        {t('all_reviews', { count: reviews.length })}
                     </h4>
                     {reviews.slice().reverse().map(review => (
                         <div
@@ -285,7 +285,7 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                                     }}
                                 >
                                     <FaThumbsUp style={{ fontSize: '0.75rem' }} />
-                                    {i18n.language === 'ar' ? 'مفيد' : 'Helpful'} ({review.helpful || 0})
+                                    {t('helpful')} ({review.helpful || 0})
                                 </button>
                             </div>
                         </div>

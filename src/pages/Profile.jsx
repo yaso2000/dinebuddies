@@ -58,14 +58,14 @@ const Profile = () => {
         // Validate mandatory fields
         if (!formData.gender) {
             alert(i18n.language === 'ar'
-                ? '⚠️ الرجاء تحديد الجنس'
+                ? t('please_select_gender')
                 : '⚠️ Please select your gender');
             return;
         }
 
         if (!formData.age || formData.age < 18) {
             alert(i18n.language === 'ar'
-                ? '⚠️ الرجاء إدخال عمرك (الحد الأدنى 18 سنة)'
+                ? t('please_enter_age')
                 : '⚠️ Please enter your age (minimum 18 years)');
             return;
         }
@@ -73,7 +73,7 @@ const Profile = () => {
         // Check for external links in bio
         if (containsExternalLinks(formData.bio)) {
             alert(i18n.language === 'ar'
-                ? '⚠️ ممنوع نشر روابط خارجية أو حسابات تواصل اجتماعي في البروفايل'
+                ? t('no_external_links')
                 : '⚠️ External links and social media accounts are not allowed in profile');
             return;
         }
@@ -102,7 +102,7 @@ const Profile = () => {
         } catch (e) {
             console.error(e);
             alert(i18n.language === 'ar'
-                ? 'فشل حفظ الملف الشخصي'
+                ? t('failed_save_profile')
                 : 'Failed to save profile'
             );
         } finally {
@@ -162,7 +162,7 @@ const Profile = () => {
                                     onImageSelect={setAvatarFile}
                                     shape="circle"
                                     size="large"
-                                    label={i18n.language === 'ar' ? 'تغيير الصورة' : 'Change Photo'}
+                                    label={t('change_photo')}
                                 />
                             ) : (
                                 <div style={{ position: 'relative' }}>
@@ -211,7 +211,7 @@ const Profile = () => {
                                     fontSize: '0.85rem'
                                 }}>
                                     <div style={{ marginBottom: '5px', color: 'var(--text-secondary)' }}>
-                                        {i18n.language === 'ar' ? 'جاري الرفع...' : 'Uploading...'} {Math.round(uploadProgress)}%
+                                        {t('uploading_progress')} {Math.round(uploadProgress)}%
                                     </div>
                                     <div style={{
                                         height: '4px',
@@ -240,7 +240,7 @@ const Profile = () => {
                                 {/* Gender Selection - Required */}
                                 <div className="form-group">
                                     <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>
-                                        {i18n.language === 'ar' ? 'الجنس' : 'Gender'} <span style={{ color: 'var(--secondary)' }}>*</span>
+                                        {t('gender')} <span style={{ color: 'var(--secondary)' }}>*</span>
                                     </label>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                         <button
@@ -262,7 +262,7 @@ const Profile = () => {
                                             }}
                                         >
                                             <span>👨</span>
-                                            <span>{i18n.language === 'ar' ? 'ذكر' : 'Male'}</span>
+                                            <span>{t('male')}</span>
                                         </button>
                                         <button
                                             type="button"
@@ -283,7 +283,7 @@ const Profile = () => {
                                             }}
                                         >
                                             <span>👩</span>
-                                            <span>{i18n.language === 'ar' ? 'أنثى' : 'Female'}</span>
+                                            <span>{t('female')}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -291,7 +291,7 @@ const Profile = () => {
                                 {/* Age Input - Required */}
                                 <div className="form-group">
                                     <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textAlign: 'center' }}>
-                                        {i18n.language === 'ar' ? 'العمر' : 'Age'} <span style={{ color: 'var(--secondary)' }}>*</span>
+                                        {t('age')} <span style={{ color: 'var(--secondary)' }}>*</span>
                                     </label>
                                     <input
                                         type="number"
@@ -304,7 +304,7 @@ const Profile = () => {
                                         placeholder="18"
                                     />
                                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '5px' }}>
-                                        {i18n.language === 'ar' ? 'الحد الأدنى 18 سنة' : 'Minimum age 18'}
+                                        {t('minimum_age_18')}
                                     </div>
                                 </div>
 
@@ -314,7 +314,7 @@ const Profile = () => {
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button onClick={handleSave} disabled={isSaving} className="btn btn-primary" style={{ flex: 1 }}>
-                                        {isSaving ? (i18n.language === 'ar' ? 'جاري الحفظ...' : 'Saving...') : t('save_btn')}
+                                        {isSaving ? t('saving') : t('save_btn')}
                                     </button>
                                     <button onClick={() => setIsEditing(false)} disabled={isSaving} className="btn btn-outline" style={{ flex: 1 }}>{t('cancel_btn')}</button>
                                 </div>
@@ -322,7 +322,7 @@ const Profile = () => {
                         ) : (
                             <>
                                 <h1 style={{ fontSize: '2rem', fontWeight: '900', marginTop: '1rem', marginBottom: '0.25rem' }}>{currentUser.name}</h1>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{currentUser.bio || (i18n.language === 'ar' ? 'عضو DineBuddies نشط' : 'Active DineBuddies member')}</p>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{currentUser.bio || t('active_member')}</p>
                                 {/* Display Gender and Age */}
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '1.5rem' }}>
                                     <div style={{
@@ -337,7 +337,7 @@ const Profile = () => {
                                         gap: '6px'
                                     }}>
                                         <span>{currentUser.gender === 'male' ? '👨' : '👩'}</span>
-                                        <span>{i18n.language === 'ar' ? (currentUser.gender === 'male' ? 'ذكر' : 'أنثى') : (currentUser.gender === 'male' ? 'Male' : 'Female')}</span>
+                                        <span>{currentUser.gender === 'male' ? t('male') : t('female')}</span>
                                     </div>
                                     <div style={{
                                         background: 'rgba(251, 191, 36, 0.15)',
@@ -352,7 +352,7 @@ const Profile = () => {
                                         gap: '6px'
                                     }}>
                                         <span>🎂</span>
-                                        <span>{currentUser.age} {i18n.language === 'ar' ? 'سنة' : 'years'}</span>
+                                        <span>{currentUser.age} {t('years')}</span>
                                     </div>
                                 </div>
                             </>
@@ -377,7 +377,7 @@ const Profile = () => {
                             <div style={{ position: 'absolute', top: '-10px', right: '-10px', width: '60px', height: '60px', background: 'var(--luxury-gold)', borderRadius: '50%', filter: 'blur(30px)', opacity: 0.2 }}></div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span>💳</span> {i18n.language === 'ar' ? 'خطتي الحالية' : 'My Plan'}
+                                    <span>💳</span> {t('my_plan')}
                                 </h3>
                                 <span style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'var(--luxury-gold)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
                                     {userProfile?.subscription?.planName || 'PREMIUM'}
@@ -407,7 +407,7 @@ const Profile = () => {
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {i18n.language === 'ar' ? 'إدارة الاشتراك' : 'Manage Subscription'}
+                                {t('manage_subscription')}
                             </button>
                         </div>
                     )}
@@ -442,7 +442,7 @@ const Profile = () => {
 
                             {(activeTab === 'posted' ? myPostedInvitations : myJoinedInvitations).length === 0 && (activeTab === 'posted' || activeTab === 'joined') && (
                                 <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                    {i18n.language === 'ar' ? 'لا يوجد بيانات حالياً' : 'Nothing to show yet'}
+                                    {t('nothing_to_show')}
                                 </p>
                             )}
                         </div>

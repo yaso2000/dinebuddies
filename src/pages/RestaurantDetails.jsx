@@ -51,8 +51,8 @@ const RestaurantDetails = () => {
     if (!restaurant) {
         return (
             <div className="page-container" style={{ textAlign: 'center', padding: '5rem 2rem', color: 'white' }}>
-                <h2>{i18n.language === 'ar' ? 'المطعم غير موجود' : 'Restaurant not found'}</h2>
-                <button onClick={() => navigate('/')} className="btn btn-primary" style={{ marginTop: '1rem' }}>{i18n.language === 'ar' ? 'العودة للرئيسية' : 'Back to Home'}</button>
+                <h2>{t('restaurant_not_found')}</h2>
+                <button onClick={() => navigate('/')} className="btn btn-primary" style={{ marginTop: '1rem' }}>{t('back_to_home')}</button>
             </div>
         );
     }
@@ -96,10 +96,10 @@ const RestaurantDetails = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <div>
                             <h3 style={{ fontSize: '1.1rem', fontWeight: '900', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                👥 {i18n.language === 'ar' ? 'مجتمع المطعم' : 'Restaurant Community'}
+                                👥 {t('restaurant_community')}
                             </h3>
                             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {i18n.language === 'ar' ? '1,234 عضو' : '1,234 members'}
+                                {t('members_count', { count: '1,234' })}
                             </p>
                         </div>
                         <button
@@ -126,32 +126,32 @@ const RestaurantDetails = () => {
                             }}
                         >
                             {(currentUser.joinedCommunities || []).includes(id)
-                                ? (i18n.language === 'ar' ? '✓ عضو' : '✓ Joined')
-                                : (i18n.language === 'ar' ? '+ انضم' : '+ Join')}
+                                ? t('member_joined')
+                                : t('join_plus')}
                         </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ color: 'var(--primary)' }}>✓</span>
-                            <span>{i18n.language === 'ar' ? 'إشعارات فورية عند نشر دعوات جديدة' : 'Instant notifications for new invitations'}</span>
+                            <span>{t('instant_notifications')}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ color: 'var(--primary)' }}>✓</span>
-                            <span>{i18n.language === 'ar' ? 'عروض حصرية لأعضاء المجتمع' : 'Exclusive offers for community members'}</span>
+                            <span>{t('exclusive_offers')}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ color: 'var(--primary)' }}>✓</span>
-                            <span>{i18n.language === 'ar' ? 'أولوية في الحجوزات الجماعية' : 'Priority in group bookings'}</span>
+                            <span>{t('priority_bookings')}</span>
                         </div>
                     </div>
 
                     {/* Community Members - Will be fetched from Firestore in future */}
                     <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(139, 92, 246, 0.2)' }}>
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
-                            {i18n.language === 'ar' ? 'أعضاء المجتمع' : 'Community Members'}
+                            {t('community_members')}
                         </p>
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            {i18n.language === 'ar' ? 'سيتم عرض الأعضاء قريباً' : 'Members will be displayed soon'}
+                            {t('members_soon')}
                         </p>
                     </div>
                 </div>
@@ -170,7 +170,7 @@ const RestaurantDetails = () => {
                 </div>
 
                 <div style={{ marginBottom: '2rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1rem' }}>{i18n.language === 'ar' ? 'موقع المطعم' : 'Venue Location'}</h3>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1rem' }}>{t('venue_location')}</h3>
                     <div ref={mapRef} style={{ height: '180px', width: '100%', borderRadius: '20px', border: '1px solid var(--border-color)', overflow: 'hidden' }}></div>
                 </div>
 

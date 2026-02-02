@@ -32,9 +32,9 @@ const CreateInvitation = () => {
 
     const [formData, setFormData] = useState({
         title: restaurantData
-            ? `${i18n.language === 'ar' ? 'دعوة في' : 'Dinner at'} ${restaurantData.name}`
+            ? `${t('dinner_at')} ${restaurantData.name}`
             : prefilledData?.restaurantName
-                ? `${i18n.language === 'ar' ? 'دعوة في' : 'Dinner at'} ${prefilledData.restaurantName}`
+                ? `${t('dinner_at')} ${prefilledData.restaurantName}`
                 : '',
         restaurantId: restaurantData?.id || null,
         restaurantName: restaurantData?.name || prefilledData?.restaurantName || '',
@@ -61,7 +61,7 @@ const CreateInvitation = () => {
         if (restaurantData) {
             setFormData(prev => ({
                 ...prev,
-                title: `${i18n.language === 'ar' ? 'دعوة في' : 'Dinner at'} ${restaurantData.name}`
+                title: `${t('dinner_at')} ${restaurantData.name}`
             }));
         }
     }, [i18n.language, restaurantData]);
@@ -94,17 +94,17 @@ const CreateInvitation = () => {
 
         // Validation
         if (!formData.title.trim()) {
-            alert(i18n.language === 'ar' ? '⚠️ الرجاء إدخال عنوان الدعوة' : '⚠️ Please enter invitation title');
+            alert(t('please_enter_title'));
             return;
         }
 
         if (!formData.date || !formData.time) {
-            alert(i18n.language === 'ar' ? '⚠️ الرجاء تحديد التاريخ والوقت' : '⚠️ Please set date and time');
+            alert(t('please_set_datetime'));
             return;
         }
 
         if (!formData.location.trim()) {
-            alert(i18n.language === 'ar' ? '⚠️ الرجاء إدخال الموقع' : '⚠️ Please enter location');
+            alert(t('please_enter_location'));
             return;
         }
 
@@ -112,7 +112,7 @@ const CreateInvitation = () => {
         const validation = await validateInvitationCreation(currentUser.uid);
         if (!validation.valid) {
             const confirmMessage = i18n.language === 'ar'
-                ? `${validation.error}\n\nهل تريد الذهاب إلى دعوتك الحالية؟`
+                ? `${validation.error}\n\n${t('go_to_current_invitation')}`
                 : `${validation.error}\n\nDo you want to go to your current invitation?`;
 
             if (window.confirm(confirmMessage)) {
@@ -147,7 +147,7 @@ const CreateInvitation = () => {
             }
         } catch (error) {
             console.error('Error creating invitation:', error);
-            alert(i18n.language === 'ar' ? 'فشل إنشاء الدعوة' : 'Failed to create invitation');
+            alert(t('failed_create_invitation'));
         } finally {
             setIsSubmitting(false);
             setUploadProgress(0);
@@ -155,7 +155,7 @@ const CreateInvitation = () => {
     };
 
     const generateTitle = (placeName) => {
-        const prefix = i18n.language === 'ar' ? 'دعوة في' : 'Invitation at';
+        const prefix = t('invitation_at');
         return `${prefix} ${placeName}`;
     };
 
@@ -288,7 +288,7 @@ const CreateInvitation = () => {
                     marginBottom: '1.5rem'
                 }}>
                     <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🌍 {i18n.language === 'ar' ? 'حدد المنطقة والمدينة' : 'Select Region & City'}
+                        🌍 {t('select_region_city')}
                     </h3>
 
                     {/* Country Badge */}
@@ -296,7 +296,7 @@ const CreateInvitation = () => {
                         marginBottom: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)',
                         display: 'flex', alignItems: 'center', gap: '6px'
                     }}>
-                        <span>🔐 {i18n.language === 'ar' ? 'البلد الحالي:' : 'Current Region:'}</span>
+                        <span>🔐 {t('current_region')}</span>
                         <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{currentCountry?.name}</span>
                         <span>{currentCountry?.flag}</span>
                     </div>
@@ -304,7 +304,7 @@ const CreateInvitation = () => {
                     <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         {/* State Selection */}
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontSize: '0.8rem' }}>{i18n.language === 'ar' ? 'المناطق / المقاطعة' : 'State / Province'}</label>
+                            <label style={{ fontSize: '0.8rem' }}>{t('state_province')}</label>
                             <select
                                 name="state"
                                 value={formData.state}
@@ -312,7 +312,7 @@ const CreateInvitation = () => {
                                 className="input-field"
                                 style={{ padding: '10px' }}
                             >
-                                <option value="">{i18n.language === 'ar' ? 'اختر المنطقة' : 'Select State'}</option>
+                                <option value="">{t('select_state')}</option>
                                 {availableStates.map(st => (
                                     <option key={st.isoCode} value={st.isoCode}>{st.name}</option>
                                 ))}
@@ -321,7 +321,7 @@ const CreateInvitation = () => {
 
                         {/* City Selection - Searchable */}
                         <div className="form-group" style={{ marginBottom: 0, position: 'relative' }}>
-                            <label style={{ fontSize: '0.8rem' }}>{i18n.language === 'ar' ? 'المدينة (ابحث)' : 'City (Search)'}</label>
+                            <label style={{ fontSize: '0.8rem' }}>{t('city_search')}</label>
                             <div style={{ position: 'relative' }}>
                                 <input
                                     type="text"
@@ -336,7 +336,7 @@ const CreateInvitation = () => {
                                     onBlur={() => setTimeout(() => setCitySearchOpen(false), 200)}
                                     className="input-field"
                                     style={{ padding: '10px', height: '48px', width: '100%' }}
-                                    placeholder={i18n.language === 'ar' ? 'اكتب للبحث...' : 'Type to search...'}
+                                    placeholder={t('type_to_search')}
                                 />
                                 <div style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }}>
                                     ▼
@@ -384,7 +384,7 @@ const CreateInvitation = () => {
                                         ))}
                                     {availableCities.filter(c => c.name.toLowerCase().includes(formData.city.toLowerCase())).length === 0 && (
                                         <div style={{ padding: '15px', color: '#6b7280', fontSize: '0.9rem', textAlign: 'center' }}>
-                                            {i18n.language === 'ar' ? 'لا توجد مدن مطابقة' : 'No matching cities found'}
+                                            {t('no_matching_cities')}
                                         </div>
                                     )}
                                 </div>
@@ -417,7 +417,7 @@ const CreateInvitation = () => {
                     <input
                         type="text"
                         name="title"
-                        placeholder={i18n.language === 'ar' ? 'مثال: عشاء في مطعم...' : 'e.g. Dinner at...'}
+                        placeholder={t('form_title_placeholder')}
                         value={formData.title}
                         onChange={handleChange}
                         required
@@ -511,7 +511,7 @@ const CreateInvitation = () => {
                         <span className="label-icon">
                             <FaVenusMars />
                         </span>
-                        {i18n.language === 'ar' ? 'جنس المدعوين' : 'Guest Gender Preference'}
+                        {t('guest_gender_preference')}
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                         <button
@@ -533,7 +533,7 @@ const CreateInvitation = () => {
                         >
                             <IoMale style={{ fontSize: '1.8rem', color: formData.genderPreference === 'male' ? 'var(--primary)' : 'var(--text-secondary)' }} />
                             <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                {i18n.language === 'ar' ? 'ذكور' : 'Male'}
+                                {t('male')}
                             </span>
                         </button>
 
@@ -556,7 +556,7 @@ const CreateInvitation = () => {
                         >
                             <IoFemale style={{ fontSize: '1.8rem', color: formData.genderPreference === 'female' ? 'var(--primary)' : 'var(--text-secondary)' }} />
                             <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                {i18n.language === 'ar' ? 'إناث' : 'Female'}
+                                {t('female')}
                             </span>
                         </button>
 
@@ -579,7 +579,7 @@ const CreateInvitation = () => {
                         >
                             <IoMaleFemale style={{ fontSize: '1.8rem', color: formData.genderPreference === 'any' ? 'var(--primary)' : 'var(--text-secondary)' }} />
                             <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                {i18n.language === 'ar' ? 'لا يهم' : 'Any'}
+                                {t('any')}
                             </span>
                         </button>
                     </div>
@@ -591,7 +591,7 @@ const CreateInvitation = () => {
                         <span className="label-icon">
                             <FaBirthdayCake />
                         </span>
-                        {i18n.language === 'ar' ? 'الفئة العمرية' : 'Age Range Preference'}
+                        {t('age_range_preference')}
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                         {[
@@ -599,7 +599,7 @@ const CreateInvitation = () => {
                             { value: '26-35', label: '26-35' },
                             { value: '36-45', label: '36-45' },
                             { value: '46+', label: '46+' },
-                            { value: 'any', label: i18n.language === 'ar' ? 'لا يهم' : 'Any' }
+                            { value: 'any', label: t('any') }
                         ].map((option) => (
                             <button
                                 key={option.value}
@@ -646,10 +646,10 @@ const CreateInvitation = () => {
                         />
                         <div>
                             <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>
-                                {i18n.language === 'ar' ? 'للمتابعين فقط' : 'Followers Only'}
+                                {t('followers_only')}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {i18n.language === 'ar' ? 'لن يظهر هذا اللقاء إلا للأصدقاء الذين يتابعونك' : 'Only people you follow will see this on the main map'}
+                                {t('followers_only_desc')}
                             </div>
                         </div>
                     </label>
@@ -684,7 +684,7 @@ const CreateInvitation = () => {
                                 fontSize: '0.85rem',
                                 color: 'var(--text-secondary)'
                             }}>
-                                <span>{i18n.language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}</span>
+                                <span>{t('uploading')}</span>
                                 <span>{uploadProgress}%</span>
                             </div>
                             <div style={{
@@ -719,7 +719,7 @@ const CreateInvitation = () => {
                 </div>
 
                 <button type="submit" className="btn btn-primary btn-block" style={{ height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
-                    {isSubmitting ? (i18n.language === 'ar' ? 'جاري النشر...' : 'Publishing...') : t('submit_btn')}
+                    {isSubmitting ? t('publishing') : t('submit_btn')}
                 </button>
             </form >
         </div >

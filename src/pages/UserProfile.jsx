@@ -55,7 +55,7 @@ const UserProfile = () => {
     if (loading) {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
-                <p>{i18n.language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+                <p>{t('loading')}</p>
             </div>
         );
     }
@@ -64,7 +64,7 @@ const UserProfile = () => {
     if (!user) {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
-                <h2 style={{ marginBottom: '1rem' }}>{i18n.language === 'ar' ? 'المستخدم غير موجود' : 'User not found'}</h2>
+                <h2 style={{ marginBottom: '1rem' }}>{t('user_not_found')}</h2>
                 <button onClick={() => navigate('/')} className="btn btn-primary">
                     {t('nav_home')}
                 </button>
@@ -86,7 +86,7 @@ const UserProfile = () => {
                 </button>
                 <div style={{ flex: 1, textAlign: 'center' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: '800' }}>
-                        {i18n.language === 'ar' ? 'الملف الشخصي' : 'Profile'}
+                        {t('profile')}
                     </h3>
                 </div>
                 <div style={{ width: '40px' }}></div>
@@ -116,7 +116,7 @@ const UserProfile = () => {
                     </h1>
 
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-                        {i18n.language === 'ar' ? 'عضو نشط في DineBuddies' : 'Active DineBuddies member'}
+                        {t('active_member')}
                     </p>
 
                     {/* Stats */}
@@ -126,7 +126,7 @@ const UserProfile = () => {
                                 {userPostedInvitations.length}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {i18n.language === 'ar' ? 'دعوات' : 'Invitations'}
+                                {t('invitations')}
                             </div>
                         </div>
                         <div style={{ borderRight: '1px solid var(--border-color)' }}></div>
@@ -144,7 +144,7 @@ const UserProfile = () => {
                                 {userJoinedInvitations.length}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {i18n.language === 'ar' ? 'انضم' : 'Joined'}
+                                {t('joined')}
                             </div>
                         </div>
                     </div>
@@ -173,12 +173,12 @@ const UserProfile = () => {
                             {isFollowing ? (
                                 <>
                                     <FaCheckCircle />
-                                    <span>{i18n.language === 'ar' ? 'تتابع' : 'Following'}</span>
+                                    <span>{t('following')}</span>
                                 </>
                             ) : (
                                 <>
                                     <FaUserFriends />
-                                    <span>{i18n.language === 'ar' ? 'متابعة' : 'Follow'}</span>
+                                    <span>{t('follow')}</span>
                                 </>
                             )}
                         </button>
@@ -201,7 +201,7 @@ const UserProfile = () => {
                             }}
                         >
                             <FaComment />
-                            <span>{i18n.language === 'ar' ? 'رسالة' : 'Message'}</span>
+                            <span>{t('message')}</span>
                         </button>
 
                         <button
@@ -241,7 +241,7 @@ const UserProfile = () => {
                 <div style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <span>📋</span>
-                        {i18n.language === 'ar' ? 'دعوات ' + user.name : user.name + "'s Invitations"}
+                        {t('user_invitations', { name: user.name })}
                         <span style={{
                             background: 'var(--primary)',
                             color: 'white',
@@ -256,7 +256,7 @@ const UserProfile = () => {
 
                     {userPostedInvitations.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                            <p>{i18n.language === 'ar' ? 'لم ينشر أي دعوات بعد' : 'No invitations posted yet'}</p>
+                            <p>{t('no_invitations_posted')}</p>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -297,7 +297,7 @@ const UserProfile = () => {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                             <span>{inv.location}</span>
                                             <span>•</span>
-                                            <span>{inv.date ? inv.date.split('T')[0] : (i18n.language === 'ar' ? 'قريباً' : 'Soon')}</span>
+                                            <span>{inv.date ? inv.date.split('T')[0] : t('soon')}</span>
                                         </div>
                                     </div>
                                     <div style={{
@@ -309,7 +309,7 @@ const UserProfile = () => {
                                         color: 'var(--primary)',
                                         whiteSpace: 'nowrap'
                                     }}>
-                                        {Math.max(0, inv.guestsNeeded - (inv.joined?.length || 0))} {i18n.language === 'ar' ? 'متبقي' : 'left'}
+                                        {Math.max(0, inv.guestsNeeded - (inv.joined?.length || 0))} {t('left')}
                                     </div>
                                 </div>
                             ))}

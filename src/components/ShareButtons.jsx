@@ -11,7 +11,7 @@ const ShareButtons = ({ title, description, url, type = 'invitation' }) => {
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(url);
-        alert(i18n.language === 'ar' ? '✓ تم نسخ الرابط' : '✓ Link copied');
+        alert(t('link_copied_success'));
     };
 
     const platforms = [

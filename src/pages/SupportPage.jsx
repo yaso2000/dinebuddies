@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 
 const FAQItem = ({ question, answer }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -22,51 +23,52 @@ const FAQItem = ({ question, answer }) => {
 };
 
 const SupportPage = () => {
+    const { t } = useTranslation();
     return (
         <div className="max-w-4xl mx-auto p-6 md:p-8 min-h-screen">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">كيف يمكننا مساعدتك؟</h1>
-            <p className="text-gray-500 mb-8">اعثر على إجابات للأسئلة الشائعة أو تواصل معنا مباشرة.</p>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">{t('how_can_we_help')}</h1>
+            <p className="text-gray-500 mb-8">{t('faq_description')}</p>
 
             <div className="grid md:grid-cols-2 gap-8">
                 {/* FAQs */}
                 <div className="space-y-4">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4">الأسئلة الشائعة</h2>
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">{t('faq_title')}</h2>
                     <FAQItem
-                        question="كيف أقوم بإنشاء دعوة جديدة؟"
-                        answer="يمكنك إنشاء دعوة جديدة بالضغط على زر (+) في القائمة السفلية، ثم اختيار المطعم وتحديد الوقت وعدد الضيوف."
+                        question={t('faq_create_invitation')}
+                        answer={t('faq_create_answer')}
                     />
                     <FAQItem
-                        question="هل التطبيق مجاني؟"
-                        answer="نعم، التطبيق مجاني للاستخدام الأساسي. يمكن الاشتراك في الباقات المميزة للحصول على ميزات إضافية."
+                        question={t('faq_is_free')}
+                        answer={t('faq_free_answer')}
                     />
                     <FAQItem
-                        question="كيف أحذف حسابي؟"
-                        answer="يمكنك حذف حسابك من خلال صفحة الإعدادات في البروفايل، أو التواصل مع الدعم الفني."
+                        question={t('faq_delete_account')}
+                        answer={t('faq_delete_answer')}
                     />
                     <FAQItem
-                        question="ما هي نقاط السمعة؟"
-                        answer="نقاط السمعة هي مقياس لمصداقيتك في التطبيق. تزيد عند التزامك بالدعوات وتقييم الآخرين لك، وتنقص عند التغيب المتكرر."
+                        question={t('faq_reputation')}
+                        answer={t('faq_reputation_answer')}
                     />
                 </div>
 
                 {/* Contact Form */}
                 <div className="bg-white p-6 rounded-xl shadow-sm h-fit">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4">تواصل معنا</h2>
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">{t('contact_us')}</h2>
                     <form className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">الاسم</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('name')}</label>
                             <input type="text" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('email')}</label>
                             <input type="email" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">الرسالة</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('message_label')}</label>
                             <textarea rows="4" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
                         </div>
                         <button className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-bold">
-                            إرسال
+                            {t('send')}
                         </button>
                     </form>
                 </div>

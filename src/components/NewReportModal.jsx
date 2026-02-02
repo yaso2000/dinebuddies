@@ -12,24 +12,24 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
     const getReasons = () => {
         const baseReasons = {
             invitation: [
-                { id: 'inappropriate', label: i18n.language === 'ar' ? 'محتوى غير لائق' : 'Inappropriate Content' },
-                { id: 'fraud', label: i18n.language === 'ar' ? 'احتيال أو نصب' : 'Fraud or Scam' },
-                { id: 'spam', label: i18n.language === 'ar' ? 'إزعاج' : 'Spam' },
-                { id: 'fake', label: i18n.language === 'ar' ? 'معلومات مزيفة' : 'False Information' },
-                { id: 'other', label: i18n.language === 'ar' ? 'سبب آخر' : 'Other' }
+                { id: 'inappropriate', label: t('inappropriate_content') },
+                { id: 'fraud', label: t('fraud_scam') },
+                { id: 'spam', label: t('spam') },
+                { id: 'fake', label: t('false_information') },
+                { id: 'other', label: t('other') }
             ],
             user: [
-                { id: 'harassment', label: i18n.language === 'ar' ? 'مضايقة' : 'Harassment' },
-                { id: 'impersonation', label: i18n.language === 'ar' ? 'انتحال شخصية' : 'Impersonation' },
-                { id: 'inappropriate', label: i18n.language === 'ar' ? 'محتوى غير لائق' : 'Inappropriate Content' },
-                { id: 'spam', label: i18n.language === 'ar' ? 'حساب spam' : 'Spam Account' },
-                { id: 'other', label: i18n.language === 'ar' ? 'سبب آخر' : 'Other' }
+                { id: 'harassment', label: t('harassment') },
+                { id: 'impersonation', label: t('impersonation') },
+                { id: 'inappropriate', label: t('inappropriate_content') },
+                { id: 'spam', label: t('spam_account') },
+                { id: 'other', label: t('other') }
             ],
             restaurant: [
-                { id: 'wrong_info', label: i18n.language === 'ar' ? 'معلومات خاطئة' : 'Wrong Information' },
-                { id: 'closed', label: i18n.language === 'ar' ? 'المطعم مغلق' : 'Restaurant Closed' },
-                { id: 'poor_quality', label: i18n.language === 'ar' ? 'جودة سيئة' : 'Poor Quality' },
-                { id: 'other', label: i18n.language === 'ar' ? 'سبب آخر' : 'Other' }
+                { id: 'wrong_info', label: t('wrong_information') },
+                { id: 'closed', label: t('restaurant_closed') },
+                { id: 'poor_quality', label: t('poor_quality') },
+                { id: 'other', label: t('other') }
             ]
         };
 
@@ -39,7 +39,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedReason) {
-            alert(i18n.language === 'ar' ? 'الرجاء اختيار سبب التبليغ' : 'Please select a reason');
+            alert(t('please_select_reason'));
             return;
         }
 
@@ -180,7 +180,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                 <div style={styles.header}>
                     <div style={styles.title}>
                         <FaFlag style={{ color: '#f43f5e' }} />
-                        <h3>{i18n.language === 'ar' ? 'إبلاغ عن مخالفة' : 'Report Violation'}</h3>
+                        <h3>{t('report_violation')}</h3>
                     </div>
                     <button
                         onClick={onClose}
@@ -197,7 +197,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                     {/* Reasons */}
                     <div>
                         <label style={styles.label}>
-                            {i18n.language === 'ar' ? 'سبب التبليغ' : 'Reason for Report'} <span style={{ color: '#f43f5e' }}>*</span>
+                            {t('reason_for_report')} <span style={{ color: '#f43f5e' }}>*</span>
                         </label>
                         <div style={styles.reasonsGrid}>
                             {reasons.map(reason => (
@@ -216,13 +216,13 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                     {/* Details */}
                     <div>
                         <label style={styles.label}>
-                            {i18n.language === 'ar' ? 'تفاصيل إضافية (اختياري)' : 'Additional Details (Optional)'}
+                            {t('additional_details_optional')}
                         </label>
                         <textarea
                             value={details}
                             onChange={(e) => setDetails(e.target.value)}
                             placeholder={i18n.language === 'ar'
-                                ? 'أضف أي معلومات إضافية...'
+                                ? t('add_additional_info')
                                 : 'Add any additional information...'}
                             rows={4}
                             style={styles.textarea}
@@ -234,7 +234,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                     <div style={styles.warning}>
                         <span>⚠️</span>
                         <span>{i18n.language === 'ar'
-                            ? 'التبليغات الكاذبة قد تؤدي إلى تعليق حسابك.'
+                            ? t('false_reports_warning')
                             : 'False reports may result in account suspension.'}</span>
                     </div>
 
@@ -245,7 +245,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                             onClick={onClose}
                             className="nrm-btn nrm-btn-cancel"
                         >
-                            {i18n.language === 'ar' ? 'إلغاء' : 'Cancel'}
+                            {t('cancel')}
                         </button>
                         <button
                             type="submit"
@@ -253,8 +253,8 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                             className="nrm-btn nrm-btn-submit"
                         >
                             {isSubmitting
-                                ? (i18n.language === 'ar' ? 'جاري الإرسال...' : 'Submitting...')
-                                : (i18n.language === 'ar' ? 'إرسال التبليغ' : 'Submit Report')}
+                                ? t('submitting')
+                                : t('submit_report')}
                         </button>
                     </div>
                 </form>

@@ -15,29 +15,85 @@ const RestaurantDirectory = () => {
     const restaurants = context?.restaurants || [];
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [cityFilter, setCityFilter] = useState('All');
+    const [locationFilter, setLocationFilter] = useState('All');
     const [viewMode, setViewMode] = useState('list');
+    const [userLocation, setUserLocation] = useState(null);
 
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
 
-    const cities = [
-        { id: 'All', label: i18n.language === 'ar' ? 'الكل' : 'All' },
-        { id: 'الرياض', label: i18n.language === 'ar' ? 'الرياض' : 'Riyadh' },
-        { id: 'جدة', label: i18n.language === 'ar' ? 'جدة' : 'Jeddah' },
-        { id: 'الخبر', label: i18n.language === 'ar' ? 'الخبر' : 'Khobar' },
+    // Get user's location
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                },
+                (error) => {
+                    console.log('Location access denied:', error);
+                }
+            );
+        }
+    }, []);
+
+    // Calculate distance between two points (Haversine formula)
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // Earth's radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; // Distance in km
+    };
+
+    const locationFilters = [
+        { id: 'All', label: t('all'), icon: '🌍' },
+        { id: 'nearby', label: t('near_me'), icon: '📍' },
+        { id: 'city', label: t('in_my_city'), icon: '🏙️' },
+        { id: 'country', label: t('in_my_country'), icon: '🗺️' }
     ];
 
     const filteredRestaurants = useMemo(() => {
-        return restaurants.filter(res => {
+        let filtered = restaurants.filter(res => {
             if (!res) return false;
             const matchesSearch = !searchQuery ||
                 (res.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (res.type?.toLowerCase().includes(searchQuery.toLowerCase()));
-            const matchesCity = cityFilter === 'All' || (res.location && res.location.includes(cityFilter));
-            return matchesSearch && matchesCity;
+            return matchesSearch;
         });
-    }, [restaurants, searchQuery, cityFilter]);
+
+        // Apply location filter
+        if (locationFilter !== 'All' && userLocation) {
+            filtered = filtered.filter(res => {
+                if (!res.lat || !res.lng) return false;
+
+                const distance = calculateDistance(
+                    userLocation.lat,
+                    userLocation.lng,
+                    res.lat,
+                    res.lng
+                );
+
+                switch (locationFilter) {
+                    case 'nearby':
+                        return distance < 10; // Within 10km
+                    case 'city':
+                        return distance < 50; // Within 50km (approximate city range)
+                    case 'country':
+                        return distance < 500; // Within 500km (approximate country range)
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        return filtered;
+    }, [restaurants, searchQuery, locationFilter, userLocation]);
 
     const resetMapView = () => {
         const L = window.L;
@@ -93,7 +149,7 @@ const RestaurantDirectory = () => {
                             <h4 style="margin:0 0 5px 0; color:#1e293b; font-size:1rem; font-weight:900;">${res.name}</h4>
                             <p style="margin:0 0 15px 0; color:#64748b; font-size:0.8rem;">${res.location}</p>
                             <button id="res-popup-btn-${res.id}" style="width:100%; padding:12px; background:var(--luxury-gold); color:black; border:none; border-radius:10px; cursor:pointer; font-weight:900; font-size:0.85rem;">
-                                ${i18n.language === 'ar' ? 'فتح الملف التجاري' : 'Open Profile'}
+                                ${t('open_profile')}
                             </button>
                         </div>
                     `;
@@ -144,7 +200,7 @@ const RestaurantDirectory = () => {
                 } catch (err) { console.error('Share failed:', err); }
             } else {
                 navigator.clipboard.writeText(shareUrl);
-                alert(i18n.language === 'ar' ? 'تم نسخ الرابط!' : 'Link copied!');
+                alert(t('link_copied'));
             }
         };
 
@@ -246,7 +302,7 @@ const RestaurantDirectory = () => {
                             }}
                         >
                             <FaStore />
-                            {i18n.language === 'ar' ? 'أنشئ دعوة هنا' : 'Host Invitation Here'}
+                            {t('host_invitation_here')}
                         </button>
                     )}
 
@@ -263,7 +319,7 @@ const RestaurantDirectory = () => {
                                     />
                                 ))}
                             </div>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>+200 {i18n.language === 'ar' ? 'عضو' : 'members'}</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>+200 {t('members')}</span>
                         </div>
 
                         {isOwner ? (
@@ -275,7 +331,7 @@ const RestaurantDirectory = () => {
                                 fontSize: '0.75rem',
                                 fontWeight: 'bold'
                             }}>
-                                {i18n.language === 'ar' ? 'المالك' : 'Owner'}
+                                {t('owner')}
                             </span>
                         ) : (
                             <button
@@ -291,7 +347,7 @@ const RestaurantDirectory = () => {
                                     cursor: 'pointer'
                                 }}
                             >
-                                {isJoined ? (i18n.language === 'ar' ? 'انضممت' : 'Joined') : (i18n.language === 'ar' ? 'انضمام' : 'Join')}
+                                {isJoined ? t('joined') : t('join')}
                             </button>
                         )}
                     </div>
@@ -305,28 +361,32 @@ const RestaurantDirectory = () => {
         <div className="directory-page" style={{ paddingBottom: '100px', minHeight: '100vh' }}>
             <div style={{ padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h1 style={{ fontSize: '1.6rem', fontWeight: '900' }}>{i18n.language === 'ar' ? 'دليل الشركاء' : 'Partner Directory'}</h1>
+                    <h1 style={{ fontSize: '1.6rem', fontWeight: '900' }}>{t('partner_directory')}</h1>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
-                        <button onClick={() => setViewMode('list')} style={{ padding: '6px 16px', borderRadius: '50px', background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent', color: viewMode === 'list' ? 'black' : 'white', border: 'none' }}>قائمة</button>
-                        <button onClick={() => setViewMode('map')} style={{ padding: '6px 16px', borderRadius: '50px', background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent', color: viewMode === 'map' ? 'black' : 'white', border: 'none' }}>خريطة</button>
+                        <button onClick={() => setViewMode('list')} style={{ padding: '6px 16px', borderRadius: '50px', background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent', color: viewMode === 'list' ? 'black' : 'white', border: 'none' }}>{t('list')}</button>
+                        <button onClick={() => setViewMode('map')} style={{ padding: '6px 16px', borderRadius: '50px', background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent', color: viewMode === 'map' ? 'black' : 'white', border: 'none' }}>{t('map')}</button>
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
                     <input
                         type="text"
-                        placeholder={i18n.language === 'ar' ? 'بحث عن مطعم..' : 'Search venues..'}
+                        placeholder={t('search_venues')}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="input-field"
                         style={{ flex: 1, borderRadius: '12px' }}
                     />
                     <select
-                        value={cityFilter}
-                        onChange={(e) => setCityFilter(e.target.value)}
-                        style={{ background: 'var(--bg-card)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '0 10px' }}
+                        value={locationFilter}
+                        onChange={(e) => setLocationFilter(e.target.value)}
+                        style={{ background: 'var(--bg-card)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '0 10px', minWidth: '140px' }}
                     >
-                        {cities.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        {locationFilters.map(f => (
+                            <option key={f.id} value={f.id}>
+                                {f.icon} {f.label}
+                            </option>
+                        ))}
                     </select>
                 </div>
             </div>
@@ -340,7 +400,7 @@ const RestaurantDirectory = () => {
                 ) : (
                     <div className="restaurant-list">
                         {filteredRestaurants.map(res => <RestaurantCard key={res.id} res={res} />)}
-                        {filteredRestaurants.length === 0 && <p style={{ textAlign: 'center', opacity: 0.5 }}>{i18n.language === 'ar' ? 'لا يوجد نتائج' : 'No results'}</p>}
+                        {filteredRestaurants.length === 0 && <p style={{ textAlign: 'center', opacity: 0.5 }}>{t('no_results')}</p>}
                     </div>
                 )}
             </div>

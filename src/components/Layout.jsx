@@ -128,7 +128,7 @@ const Layout = ({ children }) => {
                         <div className="friend-nav-icon-container">
                             <FaUsers className="nav-icon" />
                         </div>
-                        <span>{i18n.language === 'ar' ? 'مجتمعاتي' : 'Communities'}</span>
+                        <span>{t('communities')}</span>
                     </Link>
                 )}
 
@@ -138,7 +138,7 @@ const Layout = ({ children }) => {
                         <div className="friend-nav-icon-container">
                             <FaNewspaper className="nav-icon" />
                         </div>
-                        <span>{i18n.language === 'ar' ? 'المنشورات' : 'Feed'}</span>
+                        <span>{t('feed')}</span>
                     </Link>
                 )}
 
@@ -148,7 +148,7 @@ const Layout = ({ children }) => {
                         <div className="friend-nav-icon-container">
                             <FaUsers className="nav-icon" />
                         </div>
-                        <span>{i18n.language === 'ar' ? 'مجتمعي' : 'My Community'}</span>
+                        <span>{t('my_community')}</span>
                     </Link>
                 )}
             </nav>

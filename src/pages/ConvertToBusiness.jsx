@@ -167,30 +167,30 @@ const ConvertToBusiness = () => {
 
         try {
             await convertToBusiness(formData);
-            // التوجيه لصفحة البروفايل
+            // Redirect to profile page
             navigate('/business-profile');
         } catch (err) {
             console.error('Error converting to business:', err);
-            setError('حدث خطأ أثناء التحويل. الرجاء المحاولة مرة أخرى.');
+            setError(t('conversion_error'));
             setLoading(false);
         }
     };
 
-    // إذا كان حساب بيزنس بالفعل
+    // If already a business account
     if (currentUser?.accountType === 'business') {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
                 <HiBuildingStorefront style={{ fontSize: '4rem', color: 'var(--primary)', marginBottom: '1rem' }} />
-                <h2>حسابك منشأة بالفعل! 🎉</h2>
+                <h2>{t('already_business')}</h2>
                 <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    يمكنك إدارة منشأتك من صفحة الملف الشخصي
+                    {t('manage_business')}
                 </p>
                 <button
                     onClick={() => navigate('/profile')}
                     className="btn btn-primary"
                     style={{ marginTop: '1.5rem' }}
                 >
-                    الذهاب للملف الشخصي
+                    {t('go_to_profile')}
                 </button>
             </div>
         );

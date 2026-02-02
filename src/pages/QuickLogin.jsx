@@ -84,7 +84,7 @@ const QuickLogin = () => {
                     {isSignUp && (
                         <input
                             type="text"
-                            placeholder="الاسم"
+                            placeholder={t('name_placeholder')}
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             required
@@ -103,7 +103,7 @@ const QuickLogin = () => {
 
                     <input
                         type="email"
-                        placeholder="البريد الإلكتروني"
+                        placeholder={t('email_placeholder')}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
@@ -121,7 +121,7 @@ const QuickLogin = () => {
 
                     <input
                         type="password"
-                        placeholder="كلمة المرور"
+                        placeholder={t('password_placeholder')}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
@@ -154,7 +154,7 @@ const QuickLogin = () => {
                             opacity: loading ? 0.6 : 1
                         }}
                     >
-                        {loading ? '⏳ جاري...' : (isSignUp ? 'إنشاء حساب' : 'تسجيل الدخول')}
+                        {loading ? t('loading_dots') : (isSignUp ? t('create_account') : t('login'))}
                     </button>
                 </form>
 
@@ -163,7 +163,7 @@ const QuickLogin = () => {
                     margin: '1rem 0',
                     color: 'rgba(255, 255, 255, 0.5)'
                 }}>
-                    أو
+                    {t('or')}
                 </div>
 
                 <button
@@ -186,7 +186,7 @@ const QuickLogin = () => {
                     }}
                 >
                     <span style={{ fontSize: '1.5rem' }}>🔍</span>
-                    تسجيل باستخدام Google
+                    {t('sign_in_google')}
                 </button>
 
                 <div style={{ textAlign: 'center' }}>
@@ -200,7 +200,7 @@ const QuickLogin = () => {
                             fontSize: '1rem'
                         }}
                     >
-                        {isSignUp ? 'لديك حساب؟ سجل دخول' : 'ليس لديك حساب؟ أنشئ واحداً'}
+                        {isSignUp ? t('have_account_login') : t('no_account_create')}
                     </button>
                 </div>
             </div>

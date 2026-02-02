@@ -98,7 +98,7 @@ const Notifications = () => {
                 <button onClick={() => navigate(-1)} className="back-btn">
                     <FaChevronLeft style={{ transform: i18n.language === 'ar' ? 'rotate(180deg)' : 'none' }} />
                 </button>
-                <h1>{i18n.language === 'ar' ? 'التنبيهات' : 'Notifications'}</h1>
+                <h1>{t('notifications')}</h1>
                 <div className="header-actions">
                     {/* Test button - for development */}
                     <button onClick={createTestNotification} className="test-btn" title="Create test notification">
@@ -124,8 +124,8 @@ const Notifications = () => {
                 {notifications.length === 0 ? (
                     <div className="empty-state">
                         <FaBell className="empty-icon" />
-                        <h3>{i18n.language === 'ar' ? 'لا توجد تنبيهات' : 'No notifications yet'}</h3>
-                        <p>{i18n.language === 'ar' ? 'سيتم عرض التنبيهات هنا' : 'Your notifications will appear here'}</p>
+                        <h3>{t('no_notifications')}</h3>
+                        <p>{t('notifications_appear_here')}</p>
                     </div>
                 ) : (
                     notifications.map(notif => (

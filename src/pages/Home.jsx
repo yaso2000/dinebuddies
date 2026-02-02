@@ -4,7 +4,6 @@ import InvitationCard from '../components/InvitationCard';
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar } from 'react-icons/fa';
-import AdvancedFilters from '../components/AdvancedFilters';
 
 const Home = () => {
     const { t, i18n } = useTranslation();
@@ -19,15 +18,8 @@ const Home = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState('All');
+    const [locationFilter, setLocationFilter] = useState('All');
     const [viewMode, setViewMode] = useState('list');
-    const [advancedFilters, setAdvancedFilters] = useState({
-        paymentType: 'all',
-        dateRange: 'all',
-        distance: 'all',
-        guestsMin: '',
-        ageRange: 'all',
-        genderPreference: 'all'
-    });
 
     // User location state
     const [userLocation, setUserLocation] = useState(null);
@@ -74,13 +66,20 @@ const Home = () => {
         }
     }, []);
 
+    const locationFilters = [
+        { id: 'All', label: t('all'), icon: '🌍' },
+        { id: 'nearby', label: t('near_me'), icon: '📍' },
+        { id: 'city', label: t('in_my_city'), icon: '🏙️' },
+        { id: 'country', label: t('in_my_country'), icon: '🗺️' }
+    ];
+
     const categories = [
         { id: 'All', label: t('filter_all'), icon: null },
         { id: 'Restaurant', label: t('type_restaurant'), icon: '🍴' },
         { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
         { id: 'Cinema', label: t('type_cinema'), icon: '🎬' },
         { id: 'Sports', label: t('type_sports'), icon: '⚽' },
-        { id: 'Directory', label: i18n.language === 'ar' ? 'دليل الشركاء' : 'Directory', icon: '📖' },
+        { id: 'Directory', label: t('directory'), icon: '📖' },
     ];
 
     const safeInvitations = useMemo(() => Array.isArray(invitations) ? invitations : [], [invitations]);
@@ -109,6 +108,7 @@ const Home = () => {
             const canView = !inv.isFollowersOnly || isFollowing;
             if (!canView) return false;
 
+
             // 4. ENHANCED SEARCH (title + location + description)
             const matchesSearch = !searchQuery ||
                 (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -116,52 +116,10 @@ const Home = () => {
                 (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
             const matchesFilter = activeFilter === 'All' || inv.type === activeFilter;
 
-            if (!matchesSearch || !matchesFilter) return false;
-
-            // 5. ADVANCED FILTERS
-            // Payment Type
-            const matchesPayment = advancedFilters.paymentType === 'all' ||
-                inv.paymentType === advancedFilters.paymentType;
-
-            // Date Range
-            let matchesDate = true;
-            if (advancedFilters.dateRange !== 'all' && inv.date) {
-                const invDate = new Date(inv.date);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                if (advancedFilters.dateRange === 'today') {
-                    matchesDate = invDate.toDateString() === today.toDateString();
-                } else if (advancedFilters.dateRange === 'week') {
-                    const weekFromNow = new Date(today);
-                    weekFromNow.setDate(today.getDate() + 7);
-                    matchesDate = invDate >= today && invDate <= weekFromNow;
-                } else if (advancedFilters.dateRange === 'month') {
-                    const monthFromNow = new Date(today);
-                    monthFromNow.setMonth(today.getMonth() + 1);
-                    matchesDate = invDate >= today && invDate <= monthFromNow;
-                }
-            }
-
-            // Gender Preference
-            const matchesGender = advancedFilters.genderPreference === 'all' ||
-                !inv.genderPreference ||
-                inv.genderPreference === advancedFilters.genderPreference;
-
-            // Distance Filter (if user location available)
-            let matchesDistance = true;
-            if (userLocation && inv.lat && inv.lng && advancedFilters.distance !== 'all') {
-                const distance = calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng);
-                const maxDistance = parseInt(advancedFilters.distance); // e.g., "10km" -> 10
-                if (!isNaN(maxDistance)) {
-                    matchesDistance = distance <= maxDistance;
-                }
-            }
-
-            return matchesPayment && matchesDate && matchesGender && matchesDistance;
+            return matchesSearch && matchesFilter;
         });
 
-        // Calculate distance for each invitation and add it to the object
+        // Calculate distance for each invitation FIRST (before filtering)
         if (userLocation) {
             filtered = filtered.map(inv => ({
                 ...inv,
@@ -169,8 +127,28 @@ const Home = () => {
                     ? calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng)
                     : null
             }));
+        }
 
-            // Sort by distance (closest first)
+        // Apply quick location filter AFTER distance calculation
+        if (locationFilter !== 'All' && userLocation) {
+            filtered = filtered.filter(inv => {
+                if (!inv.lat || !inv.lng || inv.distance === null) return false;
+
+                switch (locationFilter) {
+                    case 'nearby':
+                        return inv.distance < 10; // Within 10km
+                    case 'city':
+                        return inv.distance < 50; // Within 50km
+                    case 'country':
+                        return inv.distance < 500; // Within 500km
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        // Sort by distance (closest first) if location available
+        if (userLocation) {
             filtered.sort((a, b) => {
                 if (a.distance === null) return 1;
                 if (b.distance === null) return -1;
@@ -179,7 +157,7 @@ const Home = () => {
         }
 
         return filtered;
-    }, [safeInvitations, searchQuery, activeFilter, currentUser, advancedFilters, userLocation]);
+    }, [safeInvitations, searchQuery, activeFilter, currentUser, userLocation, locationFilter]);
 
     const premiumAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 3), [safeRestaurants]);
     const inFeedAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 2), [safeRestaurants]);
@@ -212,6 +190,34 @@ const Home = () => {
 
             if (markersLayer.current) {
                 markersLayer.current.clearLayers();
+
+                // Add user location marker with pulse animation
+                if (userLocation) {
+                    const userIcon = L.divIcon({
+                        className: 'leaflet-user-location-icon',
+                        html: `
+                            <div class="user-location-marker" style="position: relative;">
+                                <div class="user-location-pulse"></div>
+                                <div class="user-location-pulse" style="animation-delay: 0.5s;"></div>
+                                <div class="user-location-avatar">
+                                    <img src="${currentUser?.avatar || currentUser?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}" 
+                                         style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+                                </div>
+                            </div>
+                        `,
+                        iconSize: [50, 50],
+                        iconAnchor: [25, 25]
+                    });
+
+                    L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
+                        .addTo(markersLayer.current)
+                        .bindPopup(`
+                            <div style="text-align: center; font-family: 'Tajawal', sans-serif; padding: 5px;">
+                                <strong style="color: var(--primary);">📍 ${t('your_location')}</strong>
+                            </div>
+                        `, { className: 'premium-popup' });
+                }
+
                 invitationsWithCoords.forEach(inv => {
                     const avatarIcon = L.divIcon({
                         className: 'leaflet-avatar-icon',
@@ -227,13 +233,34 @@ const Home = () => {
                         iconAnchor: [22, 22]
                     });
 
+                    // Calculate distance and time if user location is available
+                    let distanceInfo = '';
+                    if (userLocation && inv.lat && inv.lng) {
+                        const distance = calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng);
+                        const travelTime = Math.round((distance / 40) * 60); // Assuming 40 km/h average speed, result in minutes
+
+                        distanceInfo = `
+                            <div style="background: rgba(16, 185, 129, 0.1); padding: 8px; border-radius: 8px; margin: 10px 0; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="color: #10b981; font-size: 0.85rem; font-weight: 700;">📏 ${t('distance')}:</span>
+                                    <span style="color: white; font-weight: 900;">${distance.toFixed(1)} km</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #10b981; font-size: 0.85rem; font-weight: 700;">⏱️ ${t('travel_time')}:</span>
+                                    <span style="color: white; font-weight: 900;">~${travelTime} ${t('minutes')}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     const popupContent = `
-                        <div style="min-width:180px; font-family: 'Tajawal', sans-serif; text-align: ${i18n.language === 'ar' ? 'right' : 'left'}; background-color: #1e293b; color: white; padding: 5px; border-radius: 8px;">
+                        <div style="min-width:200px; font-family: 'Tajawal', sans-serif; text-align: ${i18n.language === 'ar' ? 'right' : 'left'}; background-color: #1e293b; color: white; padding: 5px; border-radius: 8px;">
                             <img src="${inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}" style="width:100%; height:90px; object-fit:cover; border-radius:12px; margin-bottom:12px;" />
                             <h4 style="margin:0 0 5px 0; color:#f8fafc; font-size:1rem; font-weight:900;">${inv.title}</h4>
                             <p style="margin:0 0 5px 0; color:#cbd5e1; font-size:0.8rem; font-weight:700;">${inv.author?.name}</p>
+                            ${distanceInfo}
                             <button id="inv-popup-btn-${inv.id}" style="width:100%; padding:10px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:900; font-size:0.85rem; margin-top: 10px">
-                                ${i18n.language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
+                                ${t('view_details')}
                             </button>
                         </div>
                     `;
@@ -296,8 +323,8 @@ const Home = () => {
                 <div className="top-row">
                     <h1 className="header-title">{t('feed_header')}</h1>
                     <div className="view-mode-toggle">
-                        <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{i18n.language === 'ar' ? 'قائمة' : 'List'}</button>
-                        <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{i18n.language === 'ar' ? 'خريطة' : 'Map'}</button>
+                        <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{t('list_view')}</button>
+                        <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{t('map_view')}</button>
                     </div>
                 </div>
 
@@ -306,7 +333,26 @@ const Home = () => {
                         <input type="text" placeholder={t('search_placeholder')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" />
                         <FaSearch className="search-icon" />
                     </div>
-                    <AdvancedFilters onApplyFilters={setAdvancedFilters} />
+                    <select
+                        value={locationFilter}
+                        onChange={(e) => setLocationFilter(e.target.value)}
+                        style={{
+                            background: 'var(--bg-card)',
+                            color: 'white',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '12px',
+                            padding: '10px',
+                            minWidth: '120px',
+                            fontSize: '0.9rem',
+                            fontWeight: '600'
+                        }}
+                    >
+                        {locationFilters.map(f => (
+                            <option key={f.id} value={f.id}>
+                                {f.icon} {f.label}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
@@ -330,7 +376,7 @@ const Home = () => {
 
                         <div className="map-discovery-badge">
                             <div className="pulse-dot"></div>
-                            <span>{invitationsWithCoords.length} {i18n.language === 'ar' ? 'دعوات نشطة' : 'Active events'}</span>
+                            <span>{invitationsWithCoords.length} {t('active_events')}</span>
                         </div>
                     </div>
                 </div>
@@ -365,7 +411,7 @@ const Home = () => {
                             </>
                         ) : (
                             <div className="empty-state">
-                                <p>{i18n.language === 'ar' ? 'لا توجد دعوات متاحة حالياً' : 'No invitations available'}</p>
+                                <p>{t('no_invitations')}</p>
                             </div>
                         )}
                     </div>

@@ -619,6 +619,17 @@ body {
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
 /* Forms - Elegance & Precision */
 .create-form {
   display: flex;
@@ -1124,6 +1135,50 @@ select.input-field {
 
   100% {
     transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* User Location Marker with Pulse */
+.user-location-marker {
+  width: 50px;
+  height: 50px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-location-pulse {
+  position: absolute;
+  inset: -15px;
+  background: rgba(16, 185, 129, 0.5);
+  border-radius: 50%;
+  animation: user-location-pulse 2s infinite ease-out;
+  z-index: 1;
+}
+
+.user-location-avatar {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: 4px solid #10b981;
+  background: var(--bg-card);
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.6), 0 4px 15px rgba(0, 0, 0, 0.5);
+  display: flex;
+}
+
+@keyframes user-location-pulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: scale(1.6);
     opacity: 0;
   }
 }

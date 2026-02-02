@@ -966,7 +966,7 @@ export const InvitationProvider = ({ children }) => {
 
     return (
         <InvitationContext.Provider value={{
-            invitations, restaurants, currentUser, addInvitation, requestToJoin, cancelRequest,
+            invitations, restaurants, currentUser, loadingInvitations, addInvitation, requestToJoin, cancelRequest,
             approveUser, rejectUser, sendChatMessage, updateMeetingStatus,
             updateInvitationTime, approveNewTime, rejectNewTime,
             notifications, updateProfile, updateRestaurant, markAllAsRead, addNotification,

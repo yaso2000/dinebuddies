@@ -122,7 +122,7 @@ const FollowersList = () => {
                     <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
                 </button>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: '800' }}>
-                    {i18n.language === 'ar' ? 'المتابعون' : 'Followers'}
+                    {t('followers')}
                 </h3>
                 <div style={{ width: '40px' }}></div>
             </header>
@@ -158,7 +158,7 @@ const FollowersList = () => {
                         }}
                     >
                         <FaHeart />
-                        {i18n.language === 'ar' ? 'متبادلة' : 'Mutual'}
+                        {t('mutual')}
                     </button>
                     <button
                         onClick={() => setActiveTab('followers')}
@@ -180,7 +180,7 @@ const FollowersList = () => {
                         }}
                     >
                         <FaUsers />
-                        {i18n.language === 'ar' ? 'متابعون' : 'Followers'}
+                        {t('followers')}
                     </button>
                     <button
                         onClick={() => setActiveTab('following')}
@@ -202,7 +202,7 @@ const FollowersList = () => {
                         }}
                     >
                         <FaUserCheck />
-                        {i18n.language === 'ar' ? 'أتابع' : 'Following'}
+                        {t('following')}
                     </button>
                 </div>
 
@@ -221,7 +221,7 @@ const FollowersList = () => {
                                     {mutualFollowers.length}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
-                                    {i18n.language === 'ar' ? 'متابعة متبادلة' : 'Mutual'}
+                                    {t('mutual')}
                                 </div>
                             </div>
                             <div style={{ borderLeft: '1px solid var(--border-color)' }}></div>
@@ -230,7 +230,7 @@ const FollowersList = () => {
                                     {followers.length}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
-                                    {i18n.language === 'ar' ? 'متابعون' : 'Followers'}
+                                    {t('followers')}
                                 </div>
                             </div>
                             <div style={{ borderLeft: '1px solid var(--border-color)' }}></div>
@@ -239,7 +239,7 @@ const FollowersList = () => {
                                     {following.length}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
-                                    {i18n.language === 'ar' ? 'أتابع' : 'Following'}
+                                    {t('following')}
                                 </div>
                             </div>
                         </div>
@@ -263,7 +263,7 @@ const FollowersList = () => {
                             margin: '0 auto 1rem'
                         }} />
                         <p style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-                            {i18n.language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                            {t('loading')}
                         </p>
                     </div>
                 ) : (
@@ -277,7 +277,7 @@ const FollowersList = () => {
                             }}>
                                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>👥</div>
                                 <p style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-                                    {i18n.language === 'ar' ? 'لا يوجد مستخدمون في هذه القائمة' : 'No users in this list'}
+                                    {t('no_users_in_list')}
                                 </p>
                             </div>
                         ) : (
@@ -354,7 +354,7 @@ const FollowersList = () => {
                                                     fontWeight: '800',
                                                     border: '1px solid rgba(139, 92, 246, 0.3)'
                                                 }}>
-                                                    <FaHeart style={{ fontSize: '0.6rem' }} /> {i18n.language === 'ar' ? 'متبادلة' : 'Mutual'}
+                                                    <FaHeart style={{ fontSize: '0.6rem' }} /> {t('mutual')}
                                                 </span>
                                             )}
                                         </div>
@@ -370,7 +370,7 @@ const FollowersList = () => {
                                             color: 'var(--text-muted)',
                                             fontWeight: '600'
                                         }}>
-                                            {user.mutualFollowersCount || 0} {i18n.language === 'ar' ? 'متابع مشترك' : 'mutual followers'}
+                                            {user.mutualFollowersCount || 0} {t('mutual_followers')}
                                         </div>
                                     </div>
 
@@ -408,7 +408,7 @@ const FollowersList = () => {
                                                 }}
                                             >
                                                 <FaComments />
-                                                {i18n.language === 'ar' ? 'دردشة' : 'Chat'}
+                                                {t('chat')}
                                             </button>
                                         )}
 
@@ -435,13 +435,13 @@ const FollowersList = () => {
                                                 }}
                                             >
                                                 <FaUserPlus style={{ fontSize: '0.7rem' }} />
-                                                {i18n.language === 'ar' ? 'متابعة' : 'Follow'}
+                                                {t('follow')}
                                             </button>
                                         ) : (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (window.confirm(i18n.language === 'ar' ? 'إلغاء المتابعة؟' : 'Unfollow?')) {
+                                                    if (window.confirm(t('unfollow_confirm'))) {
                                                         toggleFollow(user.id);
                                                     }
                                                 }}
@@ -461,7 +461,7 @@ const FollowersList = () => {
                                                 }}
                                             >
                                                 <FaUserCheck style={{ fontSize: '0.7rem' }} />
-                                                {i18n.language === 'ar' ? 'نتابع' : 'Following'}
+                                                {t('following')}
                                             </button>
                                         )}
                                     </div>

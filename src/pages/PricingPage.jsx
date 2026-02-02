@@ -5,6 +5,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCheck, FaStar, FaCrown, FaFire } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 
 const PricingPage = () => {
     const navigate = useNavigate();
@@ -13,6 +14,7 @@ const PricingPage = () => {
     const [selectedPlanType, setSelectedPlanType] = useState('user'); // user or partner
     const [loading, setLoading] = useState(null);
     const [fetchingPlans, setFetchingPlans] = useState(true);
+    const { t } = useTranslation();
 
     // Fetch plans from Firestore
     useEffect(() => {
@@ -45,26 +47,26 @@ const PricingPage = () => {
     const filteredPlans = subscriptionPlans.filter(plan => plan.type === selectedPlanType);
 
     const getDurationText = (duration) => {
-        const typeMap = { month: 'شهر', year: 'سنة', day: 'يوم' };
+        const typeMap = { month: t('month'), year: t('year'), day: t('day') };
         return `${duration.value > 1 ? duration.value + ' ' : ''}${typeMap[duration.type]}`;
     };
 
     const handleSubscribe = async (plan) => {
         if (!currentUser) {
-            alert('يرجى تسجيل الدخول أولاً');
+            alert(t('please_login_first'));
             navigate('/login');
             return;
         }
 
-        // الباقة المجانية
+        // Free plan
         if (plan.price === 0) {
-            alert('أنت بالفعل في الباقة المجانية!');
+            alert(t('already_free_plan'));
             return;
         }
 
-        // تحقق من وجود stripePriceId
+        // Check for stripePriceId
         if (!plan.stripePriceId || plan.stripePriceId.includes('REPLACE')) {
-            alert('⚠️ يرجى إضافة Stripe Price ID في الكود أولاً.\n\nللحصول على Price ID:\n1. اذهب إلى Stripe Dashboard → Products\n2. أنشئ منتج جديد أو اختر موجود\n3. انسخ Price ID\n4. أضفه في InvitationContext.jsx');
+            alert('⚠️ Please add Stripe Price ID in the code first.\n\nTo get Price ID:\n1. Go to Stripe Dashboard → Products\n2. Create a new product or choose existing\n3. Copy Price ID\n4. Add it in InvitationContext.jsx');
             return;
         }
 
@@ -82,11 +84,11 @@ const PricingPage = () => {
                 cancelUrl: `${window.location.origin}/pricing`
             });
 
-            // التوجيه لصفحة الدفع
+            // Redirect to payment page
             window.location.href = result.data.url;
         } catch (error) {
             console.error('Payment Error:', error);
-            alert('حدث خطأ في الدفع: ' + error.message + '\n\nتأكد من:\n1. Cloud Functions منشورة\n2. Stripe Keys صحيحة في .env');
+            alert(t('payment_error') + ': ' + error.message + '\n\nMake sure:\n1. Cloud Functions are deployed\n2. Stripe Keys are correct in .env');
         } finally {
             setLoading(null);
         }
@@ -128,10 +130,10 @@ const PricingPage = () => {
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '3rem', color: 'white' }}>
                     <h1 style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '1rem' }}>
-                        اختر الباقة المناسبة لك
+                        {t('choose_plan')}
                     </h1>
                     <p style={{ fontSize: '1.25rem', opacity: 0.9 }}>
-                        خطط مرنة بأسعار تنافسية لجميع الاحتياجات
+                        {t('flexible_plans')}
                     </p>
                 </div>
 
@@ -157,7 +159,7 @@ const PricingPage = () => {
                             boxShadow: selectedPlanType === 'user' ? '0 4px 15px rgba(0,0,0,0.2)' : 'none'
                         }}
                     >
-                        للأفراد
+                        {t('for_individuals')}
                     </button>
                     <button
                         onClick={() => setSelectedPlanType('partner')}
@@ -174,7 +176,7 @@ const PricingPage = () => {
                             boxShadow: selectedPlanType === 'partner' ? '0 4px 15px rgba(0,0,0,0.2)' : 'none'
                         }}
                     >
-                        للمطاعم
+                        {t('for_restaurants')}
                     </button>
                 </div>
 
@@ -263,7 +265,7 @@ const PricingPage = () => {
                                             color: '#a0aec0',
                                             fontSize: '1.25rem'
                                         }}>
-                                            {plan.originalPrice} ر.س
+                                            {plan.originalPrice} {t('sar')}
                                         </span>
                                         <span style={{
                                             background: '#48bb78',
@@ -273,7 +275,7 @@ const PricingPage = () => {
                                             fontSize: '0.875rem',
                                             fontWeight: 'bold'
                                         }}>
-                                            خصم {plan.discount}%
+                                            {t('discount_percent', { percent: plan.discount })}
                                         </span>
                                     </div>
                                 )}
@@ -288,7 +290,7 @@ const PricingPage = () => {
                                         {plan.price}
                                     </span>
                                     <span style={{ color: '#718096', fontSize: '1.125rem' }}>
-                                        ر.س / {getDurationText(plan.duration)}
+                                        {t('per_duration', { duration: getDurationText(plan.duration) })}
                                     </span>
                                 </div>
                             </div>
@@ -303,7 +305,7 @@ const PricingPage = () => {
                                     border: '2px dashed #f5576c'
                                 }}>
                                     <div style={{ fontWeight: 'bold', color: '#1a202c', marginBottom: '0.5rem' }}>
-                                        {plan.invitationCredits === -1 ? '🔥 دعوات غير محدودة' : `📋 ${plan.invitationCredits} دعوة شهرياً`}
+                                        {plan.invitationCredits === -1 ? t('unlimited_invitations') : t('invitations_monthly', { count: plan.invitationCredits })}
                                     </div>
                                     {plan.invitationOffers && (
                                         <div style={{ fontSize: '0.875rem', color: '#e53e3e', fontWeight: 'bold' }}>
@@ -363,7 +365,7 @@ const PricingPage = () => {
                                 onMouseEnter={(e) => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
                                 onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                             >
-                                {loading === plan.id ? '⏳ جاري التحميل...' : plan.price === 0 ? 'ابدأ مجاناً' : '🚀 اشترك الآن'}
+                                {loading === plan.id ? t('loading_dots') : plan.price === 0 ? t('start_free') : t('subscribe_now')}
                             </button>
                         </div>
                     ))}
@@ -377,8 +379,8 @@ const PricingPage = () => {
                     fontSize: '0.95rem',
                     opacity: 0.9
                 }}>
-                    <p>💳 جميع الباقات تشمل ضمان استرجاع المبلغ خلال 14 يوم</p>
-                    <p>🔒 دفع آمن ومشفر بالكامل</p>
+                    <p>{t('money_back_guarantee')}</p>
+                    <p>{t('secure_payment')}</p>
                 </div>
             </div>
         </div>

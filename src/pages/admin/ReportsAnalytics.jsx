@@ -69,8 +69,8 @@ const ReportsAnalytics = () => {
             setAnalytics({
                 users: {
                     total: totalUsers,
-                    growth: 0, // يمكن حسابه لاحقاً
-                    newThisWeek: 0 // يمكن حسابه لاحقاً
+                    growth: 0, // Can be calculated later
+                    newThisWeek: 0 // Can be calculated later
                 },
                 invitations: {
                     total: totalInvitations,
@@ -97,11 +97,11 @@ const ReportsAnalytics = () => {
 
     const fetchReports = async () => {
         try {
-            // يمكنك إضافة collection للتقارير لاحقاً
+            // You can add reports collection later
             // const reportsSnapshot = await getDocs(collection(db, 'reports'));
             // setReports(reportsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-            // حالياً لا توجد تقارير
+            // Currently no reports
             setReports([]);
         } catch (error) {
             console.error('Error fetching reports:', error);

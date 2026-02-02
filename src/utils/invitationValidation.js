@@ -41,8 +41,8 @@ export const canEditInvitation = (invitation) => {
         canEdit: !hasBeenEdited,
         editCount,
         message: hasBeenEdited
-            ? 'لا يمكن تعديل الدعوة أكثر من مرة واحدة'
-            : 'يمكنك تعديل الدعوة مرة واحدة فقط'
+            ? 'Cannot edit invitation more than once'
+            : 'You can edit the invitation only once'
     };
 };
 
@@ -98,8 +98,8 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
         for (const userId of joinedUsers) {
             await sendNotification(userId, {
                 type: 'invitation_updated',
-                title: 'تم تعديل موعد الدعوة',
-                message: `تم تغيير موعد "${invitation.title}" من ${oldDate} ${oldTime} إلى ${newDate} ${newTime}. يرجى تأكيد حضورك مرة أخرى.`,
+                title: 'Invitation time updated',
+                message: `The time for "${invitation.title}" has been changed from ${oldDate} ${oldTime} to ${newDate} ${newTime}. Please confirm your attendance again.`,
                 actionUrl: `/invitation/${invitationId}`,
                 invitationId,
                 fromUserId: currentUser.uid,
@@ -110,7 +110,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
 
         return {
             success: true,
-            message: 'تم تعديل الدعوة وإرسال إشعارات للمشاركين',
+            message: 'Invitation updated and notifications sent to participants',
             affectedUsers: joinedUsers.length
         };
     } catch (error) {
@@ -131,7 +131,7 @@ export const validateInvitationCreation = async (userId) => {
     if (dailyCheck.hasInvitationToday) {
         return {
             valid: false,
-            error: 'لديك دعوة بالفعل اليوم. يمكنك إنشاء دعوة واحدة فقط في اليوم.',
+            error: 'You already have an invitation today. You can only create one invitation per day.',
             existingInvitation: dailyCheck.existingInvitation
         };
     }
@@ -150,7 +150,7 @@ export const getInvitationEditStatus = (invitation) => {
         return {
             canEdit: true,
             status: 'can_edit',
-            message: 'يمكنك تعديل الوقت والتاريخ مرة واحدة',
+            message: 'You can edit time and date once',
             icon: '✏️'
         };
     }
@@ -159,7 +159,7 @@ export const getInvitationEditStatus = (invitation) => {
     return {
         canEdit: false,
         status: 'already_edited',
-        message: 'تم تعديل هذه الدعوة مسبقاً',
+        message: 'This invitation has been edited before',
         lastEdit,
         icon: '🔒'
     };
