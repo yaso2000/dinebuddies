@@ -93,21 +93,39 @@ export const ChatProvider = ({ children }) => {
     const loadMessages = (conversationId) => {
         if (!conversationId) return;
 
+        console.log('📨 Loading messages for conversation:', conversationId);
+
         const messagesRef = collection(db, 'conversations', conversationId, 'messages');
         const q = query(messagesRef, orderBy('createdAt', 'asc'));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate() || new Date()
-            }));
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                console.log('📬 Messages snapshot received:', {
+                    conversationId,
+                    messageCount: snapshot.docs.length,
+                    messages: snapshot.docs.map(d => ({
+                        id: d.id,
+                        senderId: d.data().senderId,
+                        text: d.data().text?.substring(0, 30)
+                    }))
+                });
 
-            setMessages(prev => ({
-                ...prev,
-                [conversationId]: msgs
-            }));
-        });
+                const msgs = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    createdAt: doc.data().createdAt?.toDate() || new Date()
+                }));
+
+                setMessages(prev => ({
+                    ...prev,
+                    [conversationId]: msgs
+                }));
+            },
+            (error) => {
+                console.error('❌ Error loading messages:', error);
+            }
+        );
 
         return unsubscribe;
     };
