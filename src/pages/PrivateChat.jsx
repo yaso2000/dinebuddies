@@ -53,7 +53,7 @@ const PrivateChat = () => {
                     setRecipient({
                         id: userId,
                         name: userData.name || userData.displayName || 'User',
-                        avatar: userData.avatar || userData.photoURL || 'https://via.placeholder.com/150'
+                        avatar: userData.avatar || userData.photoURL || userData.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`
                     });
                 }
             } catch (error) {
@@ -243,7 +243,12 @@ const PrivateChat = () => {
 
                 <div className="chat-header-info" onClick={() => navigate(`/profile/${userId}`)}>
                     <div style={{ position: 'relative' }}>
-                        <img src={recipient.avatar} alt={recipient.name} className="recipient-avatar" />
+                        <img
+                            src={recipient.avatar}
+                            alt={recipient.name}
+                            className="recipient-avatar"
+                            onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`; }}
+                        />
                         {isOnline && (
                             <div style={{
                                 position: 'absolute', bottom: '2px', right: '2px',
@@ -272,7 +277,11 @@ const PrivateChat = () => {
             <div className="messages-container">
                 {conversationMessages.length === 0 ? (
                     <div className="empty-chat">
-                        <img src={recipient.avatar} alt={recipient.name} />
+                        <img
+                            src={recipient.avatar}
+                            alt={recipient.name}
+                            onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`; }}
+                        />
                         <h3>Start a conversation with {recipient.name}</h3>
                         <p>Say hi and introduce yourself!</p>
                     </div>
@@ -288,7 +297,12 @@ const PrivateChat = () => {
                                     className={`message-wrapper ${isOwn ? 'own' : 'other'}`}
                                 >
                                     {!isOwn && showAvatar && (
-                                        <img src={msg.senderAvatar || recipient.avatar} alt="" className="message-avatar" />
+                                        <img
+                                            src={msg.senderAvatar || recipient.avatar}
+                                            alt=""
+                                            className="message-avatar"
+                                            onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderId}`; }}
+                                        />
                                     )}
                                     {!isOwn && !showAvatar && <div className="message-avatar-spacer" />}
 

@@ -228,6 +228,17 @@ body {
   letter-spacing: -1px;
 }
 
+.app-name {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #a04000 !important;
+  /* Burnt Orange matching logo */
+  background: none !important;
+  -webkit-text-fill-color: #a04000 !important;
+  letter-spacing: -1px;
+  margin-left: 0.5rem;
+}
+
 /* RTL Support for Arabic */
 [dir="rtl"] {
   font-family: 'Tajawal', 'Inter', sans-serif;
@@ -239,7 +250,8 @@ body {
   border-radius: 0;
   overflow: hidden;
   position: relative;
-  min-height: 580px;
+  height: calc(100vh - 150px);
+  min-height: 600px;
   box-shadow: var(--shadow-premium);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -639,6 +651,23 @@ body {
   }
 }
 
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 
 /* Forms - Elegance & Precision */
 .create-form {
@@ -786,13 +815,17 @@ select.input-field {
   font-size: 0.75rem;
   font-weight: 800;
   background: transparent;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.7);
+  /* Inactive text light gray */
   transition: 0.3s;
+  border: none;
+  cursor: pointer;
 }
 
 .view-mode-toggle button.active {
   background: var(--primary);
-  color: white;
+  color: white !important;
+  /* Active text white */
 }
 
 .search-container {
@@ -805,7 +838,7 @@ select.input-field {
   padding: 0.9rem 1.25rem 0.9rem 3.5rem;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
+  border-radius: 16px;
   color: white;
   outline: none;
   font-size: 0.95rem;

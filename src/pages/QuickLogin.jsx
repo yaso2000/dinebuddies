@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 const QuickLogin = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+    const { signInWithEmail, signUpWithEmail, signInWithGoogle, continueAsGuest } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
@@ -46,6 +46,11 @@ const QuickLogin = () => {
         }
     };
 
+    const handleGuestMode = () => {
+        continueAsGuest();
+        navigate('/');
+    };
+
     return (
         <div style={{
             display: 'flex',
@@ -63,12 +68,21 @@ const QuickLogin = () => {
                 maxWidth: '400px',
                 width: '100%'
             }}>
-                <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem', textAlign: 'center' }}>
-                    🍽️
-                </h1>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '2rem', textAlign: 'center' }}>
-                    DineBuddies
-                </h2>
+                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                    <img
+                        src="/logo.png"
+                        alt="DineBuddies"
+                        style={{
+                            width: '80px',
+                            height: '80px',
+                            objectFit: 'contain',
+                            marginBottom: '1rem'
+                        }}
+                    />
+                    <h2 style={{ fontSize: '1.5rem', margin: 0, color: '#a04000', fontWeight: '900' }}>
+                        DineBuddies
+                    </h2>
+                </div>
 
                 {error && (
                     <div style={{
@@ -204,6 +218,41 @@ const QuickLogin = () => {
                     >
                         {isSignUp ? t('have_account_login') : t('no_account_create')}
                     </button>
+                </div>
+
+                <div style={{
+                    textAlign: 'center',
+                    marginTop: '1.5rem',
+                    paddingTop: '1.5rem',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                    <button
+                        onClick={handleGuestMode}
+                        style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            padding: '0.75rem 1.5rem',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            margin: '0 auto'
+                        }}
+                    >
+                        <span style={{ fontSize: '1.2rem' }}>👤</span>
+                        {t('continue_as_guest')}
+                    </button>
+                    <p style={{
+                        fontSize: '0.75rem',
+                        color: 'rgba(255, 255, 255, 0.4)',
+                        marginTop: '0.5rem'
+                    }}>
+                        {t('browse_without_account')}
+                    </p>
                 </div>
             </div>
         </div>

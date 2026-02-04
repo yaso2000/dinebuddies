@@ -6,6 +6,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
+import PrivateInvitationModal from './PrivateInvitationModal';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -14,7 +15,7 @@ const Layout = ({ children }) => {
     const { getFollowingInvitations, currentUser } = useInvitations();
     const { unreadCount: chatUnreadCount } = useChat();
     const { unreadCount } = useNotifications();
-    const { userProfile } = useAuth();
+    const { userProfile, isGuest } = useAuth();
 
     const isActive = (path) => location.pathname === path;
 
@@ -32,49 +33,46 @@ const Layout = ({ children }) => {
     // Users will be redirected by Firebase if not authenticated
 
     // Show loading state while checking authentication
-    if (!currentUser) {
-        return (
-            <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '100vh',
-                background: 'var(--background)'
-            }}>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🍽️</div>
-                    <div>Loading DineBuddies...</div>
-                </div>
-            </div>
-        );
-    }
+
 
     return (
         <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
             {/* Header */}
             <header className="app-header">
                 <div className="logo-wrapper" onClick={() => navigate('/')}>
-                    <span className="app-logo">🍽️</span>
-                    <span className="app-name">DineBuddies</span>
+                    <img
+                        src="/logo.png"
+                        alt="DineBuddies"
+                        style={{
+                            width: '40px',
+                            height: '40px',
+                            objectFit: 'contain'
+                        }}
+                    />
+                    <span className="app-name" style={{ color: '#a04000', fontWeight: '900', fontSize: '1.5rem', marginLeft: '0.5rem' }}>DineBuddies</span>
                 </div>
                 <div className="header-actions">
-                    <Link to="/messages" className="notification-bell">
-                        <FaComments />
-                        {chatUnreadCount > 0 && <span className="badge">{chatUnreadCount}</span>}
-                    </Link>
-                    <Link to="/notifications" className="notification-bell">
-                        <FaBell />
-                        {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
-                    </Link>
+                    {!isGuest && (
+                        <>
+                            <Link to="/messages" className="notification-bell">
+                                <FaComments />
+                                {chatUnreadCount > 0 && <span className="badge">{chatUnreadCount}</span>}
+                            </Link>
+                            <Link to="/notifications" className="notification-bell">
+                                <FaBell />
+                                {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+                            </Link>
+                        </>
+                    )}
                     <div
                         className="header-profile-pic"
-                        onClick={() => navigate('/profile')}
+                        onClick={() => navigate(isGuest ? '/login' : '/profile')}
                         style={{
                             width: '40px',
                             height: '40px',
                             borderRadius: '50%',
                             overflow: 'hidden',
-                            border: '2px solid rgba(255, 255, 255, 0.2)',
+                            border: isGuest ? '2px solid rgba(148, 163, 184, 0.5)' : '2px solid rgba(255, 255, 255, 0.2)',
                             cursor: 'pointer',
                         }}
                     >
@@ -109,8 +107,8 @@ const Layout = ({ children }) => {
                     <span>{t('nav_partners')}</span>
                 </Link>
 
-                {/* Only show Create for regular users, not business accounts */}
-                {!isBusinessAccount && (
+                {/* Only show Create for regular users, not business accounts or guests */}
+                {!isBusinessAccount && !isGuest && (
                     <Link
                         to="/create"
                         className={`nav-item fab-nav-item ${isActive('/create') ? 'active' : ''}`}
@@ -122,8 +120,8 @@ const Layout = ({ children }) => {
                     </Link>
                 )}
 
-                {/* Show Communities for regular users */}
-                {!isBusinessAccount && (
+                {/* Show Communities for regular users, not guests */}
+                {!isBusinessAccount && !isGuest && (
                     <Link to="/communities" className={`nav-item ${isActive('/communities') ? 'active' : ''}`}>
                         <div className="friend-nav-icon-container">
                             <FaUsers className="nav-icon" />
@@ -132,8 +130,8 @@ const Layout = ({ children }) => {
                     </Link>
                 )}
 
-                {/* Show Posts Feed for regular users */}
-                {!isBusinessAccount && (
+                {/* Show Posts Feed for regular users, not guests */}
+                {!isBusinessAccount && !isGuest && (
                     <Link to="/posts-feed" className={`nav-item ${isActive('/posts-feed') ? 'active' : ''}`}>
                         <div className="friend-nav-icon-container">
                             <FaNewspaper className="nav-icon" />
@@ -152,6 +150,9 @@ const Layout = ({ children }) => {
                     </Link>
                 )}
             </nav>
+
+            {/* Private Invitation Modal */}
+            {!isGuest && <PrivateInvitationModal />}
         </div>
     );
 };

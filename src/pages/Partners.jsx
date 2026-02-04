@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 const Partners = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
+    const [viewMode, setViewMode] = useState('list');
     const [businesses, setBusinesses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -96,217 +97,68 @@ const Partners = () => {
     });
 
     return (
-        <div className="page-container" style={{ paddingBottom: '100px' }}>
-            {/* Header */}
-            <header className="app-header sticky-header-glass">
-                <button className="back-btn" onClick={() => navigate(-1)}>
-                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                </button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>Partners</h3>
+        <div className="home-page" style={{ minHeight: '100vh', paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out' }}>
+            {/* Header Area matching Home.jsx */}
+            <div className="home-header">
+                <div className="top-row">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                        <button
+                            className="back-btn"
+                            onClick={() => navigate(-1)}
+                            style={{ width: '40px', height: '40px' }}
+                        >
+                            <FaArrowLeft />
+                        </button>
+                        <h1 className="header-title">Partners</h1>
+                    </div>
+                    {/* View Mode Toggle */}
+                    <div className="view-mode-toggle">
+                        <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>List</button>
+                        <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>Map</button>
+                    </div>
                 </div>
-                <button
-                    className="back-btn"
-                    onClick={fetchBusinesses}
-                    title="Refresh"
-                >
-                    🔄
-                </button>
-            </header>
 
-            {/* Hero Banner */}
-            <div style={{
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2))',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '0 0 32px 32px',
-                padding: '2rem 1.5rem',
-                marginTop: '-1rem',
-                textAlign: 'center',
-                marginBottom: '2rem'
-            }}>
-                <HiBuildingStorefront style={{
-                    fontSize: '3rem',
-                    color: 'var(--primary)',
-                    marginBottom: '0.75rem'
-                }} />
-                <h1 style={{
-                    fontSize: '1.8rem',
-                    fontWeight: '900',
-                    marginBottom: '0.5rem',
-                    color: 'white'
-                }}>
-                    Our Partners
-                </h1>
-                <p style={{
-                    fontSize: '0.95rem',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '0'
-                }}>
-                    Discover amazing restaurants, cafes, and activities
-                </p>
-                <div style={{
-                    display: 'inline-block',
-                    marginTop: '1rem',
-                    padding: '8px 20px',
-                    background: 'rgba(139, 92, 246, 0.2)',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    borderRadius: '20px',
-                    fontSize: '0.85rem',
-                    fontWeight: '600',
-                    color: 'var(--primary)'
-                }}>
-                    {businesses.length} Partners
+                {/* Unified Search & Filter Row */}
+                <div className="search-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                        <input
+                            type="text"
+                            placeholder="Search partners..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="search-input"
+                        />
+                        <FaSearch className="search-icon" />
+                    </div>
+                    <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        style={{
+                            background: 'var(--bg-card)',
+                            color: 'white',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '16px',
+                            height: '50px',
+                            padding: '0 16px',
+                            minWidth: '90px',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            outline: 'none',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        {businessTypes.map(type => (
+                            <option key={type} value={type}>
+                                {type}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
-            {/* DEBUG INFO - Remove this after testing */}
-            {showDebug && (
-                <div style={{
-                    margin: '0 1.5rem 2rem',
-                    padding: '1.5rem',
-                    background: 'linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(255, 193, 7, 0.1))',
-                    border: '2px solid rgba(255, 193, 7, 0.5)',
-                    borderRadius: '16px'
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>🔍 Debug Info</h3>
-                        <button
-                            onClick={() => setShowDebug(false)}
-                            style={{
-                                background: 'transparent',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '8px',
-                                color: 'white',
-                                padding: '6px 12px',
-                                cursor: 'pointer',
-                                fontSize: '0.8rem'
-                            }}
-                        >
-                            Hide
-                        </button>
-                    </div>
-
-                    <div style={{ fontSize: '0.9rem', lineHeight: '1.8' }}>
-                        <p><strong>Your UID:</strong> {currentUser?.uid || '❌ Not logged in'}</p>
-                        <p><strong>Your Email:</strong> {currentUser?.email || 'N/A'}</p>
-                        <p><strong>Account Type:</strong> <span style={{
-                            padding: '4px 12px',
-                            background: userProfile?.accountType === 'business' ? 'rgba(81, 207, 102, 0.2)' : 'rgba(255, 107, 107, 0.2)',
-                            border: `1px solid ${userProfile?.accountType === 'business' ? '#51cf66' : '#ff6b6b'}`,
-                            borderRadius: '8px',
-                            fontWeight: '700'
-                        }}>
-                            {userProfile?.accountType || 'undefined'}
-                        </span></p>
-                        <p><strong>Business Name:</strong> {userProfile?.businessInfo?.businessName || 'N/A'}</p>
-                        <p><strong>Businesses Found:</strong> {businesses.length}</p>
-
-                        {userProfile?.accountType !== 'business' && (
-                            <div style={{
-                                marginTop: '1rem',
-                                padding: '1rem',
-                                background: 'rgba(255, 107, 107, 0.2)',
-                                border: '1px solid #ff6b6b',
-                                borderRadius: '8px'
-                            }}>
-                                ❌ <strong>Your account is NOT a business account!</strong>
-                                <br />
-                                <button
-                                    onClick={() => navigate('/convert-to-business')}
-                                    style={{
-                                        marginTop: '0.75rem',
-                                        padding: '10px 20px',
-                                        background: 'var(--primary)',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        color: 'white',
-                                        cursor: 'pointer',
-                                        fontWeight: '600'
-                                    }}
-                                >
-                                    Convert Now
-                                </button>
-                            </div>
-                        )}
-
-                        {businesses.length === 0 && (
-                            <div style={{
-                                marginTop: '1rem',
-                                padding: '1rem',
-                                background: 'rgba(255, 193, 7, 0.2)',
-                                border: '1px solid #ffc107',
-                                borderRadius: '8px'
-                            }}>
-                                ⚠️ <strong>No business accounts found in database!</strong>
-                                <br />
-                                <small>Check console (F12) for query results</small>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            <div style={{ padding: '0 1.5rem' }}>
-                {/* Search Bar */}
-                <div style={{
-                    position: 'relative',
-                    marginBottom: '1.5rem'
-                }}>
-                    <FaSearch style={{
-                        position: 'absolute',
-                        left: '16px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: 'var(--text-muted)',
-                        fontSize: '1rem'
-                    }} />
-                    <input
-                        type="text"
-                        placeholder="Search partners..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '14px 16px 14px 48px',
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '16px',
-                            color: 'white',
-                            fontSize: '0.95rem',
-                            outline: 'none'
-                        }}
-                    />
-                </div>
-
-                {/* Filter Tabs */}
-                <div style={{
-                    display: 'flex',
-                    gap: '8px',
-                    overflowX: 'auto',
-                    marginBottom: '2rem',
-                    paddingBottom: '4px'
-                }}>
-                    {businessTypes.map(type => (
-                        <button
-                            key={type}
-                            onClick={() => setFilterType(type)}
-                            style={{
-                                padding: '10px 20px',
-                                background: filterType === type ? 'var(--primary)' : 'transparent',
-                                border: filterType === type ? 'none' : '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '0.85rem',
-                                whiteSpace: 'nowrap',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {type}
-                        </button>
-                    ))}
-                </div>
+            {/* Content Area */}
+            <div style={{ padding: '0 1.25rem' }}>
+                {/* Debug Info */}
 
                 {/* Loading State */}
                 {loading && (
@@ -347,18 +199,38 @@ const Partners = () => {
                     </div>
                 )}
 
-                {/* Business Cards Grid */}
+                {/* Business Cards Grid or Map */}
                 {!loading && filteredBusinesses.length > 0 && (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                        gap: '1.5rem',
-                        marginBottom: '2rem'
-                    }}>
-                        {filteredBusinesses.map(business => (
-                            <BusinessCard key={business.uid} business={business} />
-                        ))}
-                    </div>
+                    <>
+                        {viewMode === 'map' ? (
+                            <div style={{
+                                height: '600px',
+                                background: 'var(--bg-card)',
+                                borderRadius: '24px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '1px solid var(--border-color)',
+                                flexDirection: 'column',
+                                gap: '1rem'
+                            }}>
+                                <div style={{ fontSize: '3rem' }}>🗺️</div>
+                                <h3 style={{ color: 'var(--text-muted)' }}>Map View Available Soon</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>We are populating business locations.</p>
+                            </div>
+                        ) : (
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                                gap: '1.5rem',
+                                marginBottom: '2rem'
+                            }}>
+                                {filteredBusinesses.map(business => (
+                                    <BusinessCard key={business.uid} business={business} />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

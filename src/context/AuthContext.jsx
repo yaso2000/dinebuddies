@@ -38,6 +38,22 @@ export const AuthProvider = ({ children }) => {
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
+    const [isGuest, setIsGuest] = useState(false);
+
+    // Guest profile template
+    const guestProfile = {
+        uid: 'guest',
+        display_name: 'Guest', // Will be translated in components
+        email: '',
+        photo_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest&backgroundColor=b6e3f4',
+        role: 'guest',
+        accountType: 'guest',
+        following: [],
+        followersCount: 0,
+        reputation: 0,
+        shortDescription: '',
+        isGuest: true
+    };
 
     // Listen to auth state changes
     useEffect(() => {
@@ -47,8 +63,17 @@ export const AuthProvider = ({ children }) => {
             if (user) {
                 // Fetch user profile from Firestore
                 await fetchUserProfile(user.uid);
+                setIsGuest(false);
             } else {
-                setUserProfile(null);
+                // Check if guest mode is active
+                const guestMode = localStorage.getItem('guestMode') === 'true';
+                if (guestMode) {
+                    setUserProfile(guestProfile);
+                    setIsGuest(true);
+                } else {
+                    setUserProfile(null);
+                    setIsGuest(false);
+                }
             }
 
             setLoading(false);
@@ -56,6 +81,7 @@ export const AuthProvider = ({ children }) => {
 
         return unsubscribe;
     }, []);
+
 
     // Fetch user profile from Firestore
     const fetchUserProfile = async (userId) => {
@@ -338,10 +364,27 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Continue as Guest
+    const continueAsGuest = () => {
+        localStorage.setItem('guestMode', 'true');
+        setUserProfile(guestProfile);
+        setIsGuest(true);
+        console.log('✅ Guest mode activated');
+    };
+
+    // Exit Guest Mode
+    const exitGuestMode = () => {
+        localStorage.removeItem('guestMode');
+        setUserProfile(null);
+        setIsGuest(false);
+        console.log('✅ Guest mode deactivated');
+    };
+
     const value = {
         currentUser,
         userProfile,
         loading,
+        isGuest,
         sendPhoneOTP,
         verifyPhoneOTP,
         signUpWithEmail,
@@ -353,26 +396,40 @@ export const AuthProvider = ({ children }) => {
         updateUserProfile,
         deleteUserAccount,
         setupRecaptcha,
-        convertToBusiness
+        convertToBusiness,
+        updateProfile: updateUserProfile,
+        continueAsGuest,
+        exitGuestMode
     };
 
     return (
         <AuthContext.Provider value={value}>
-            {loading ? (
+            {children}
+            {loading && (
                 <div style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
                     height: '100vh',
-                    background: '#0a0e27'
+                    zIndex: 9999,
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                 }}>
-                    <div style={{ textAlign: 'center', color: '#fff' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍽️</div>
-                        <div style={{ fontSize: '1.2rem' }}>Loading DineBuddies...</div>
-                    </div>
+                    <img
+                        src="/logo.png"
+                        alt="Loading..."
+                        style={{
+                            width: '120px',
+                            height: '120px',
+                            objectFit: 'contain',
+                            animation: 'pulse 1.5s ease-in-out infinite',
+                            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
+                        }}
+                    />
                 </div>
-            ) : (
-                children
             )}
         </AuthContext.Provider>
     );

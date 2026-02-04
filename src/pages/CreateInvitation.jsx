@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaBirthdayCake, FaMoneyBillWave } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaBirthdayCake, FaMoneyBillWave, FaLock, FaGlobe, FaPlus } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale, IoPeople } from 'react-icons/io5';
 import { HiUserGroup, HiUser } from 'react-icons/hi2';
 import { useInvitations } from '../context/InvitationContext';
@@ -16,8 +16,8 @@ const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
-    const { addInvitation } = useInvitations();
-    const { currentUser } = useAuth();
+    const { addInvitation, allUsers, currentUser } = useInvitations(); // Get currentUser from InvitationContext
+    const { currentUser: authUser } = useAuth(); // Rename to authUser to avoid conflict
 
     // UI State
     const [locationLoading, setLocationLoading] = useState(false);
@@ -25,6 +25,7 @@ const CreateInvitation = () => {
     const [imageFile, setImageFile] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showFriendSelector, setShowFriendSelector] = useState(false); // To toggle modal
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
     const prefilledData = location.state?.prefilledData; // From PartnerProfile
@@ -39,7 +40,7 @@ const CreateInvitation = () => {
         restaurantId: restaurantData?.id || null,
         restaurantName: restaurantData?.name || prefilledData?.restaurantName || '',
         type: restaurantData?.type || 'Restaurant',
-        country: 'GB',
+        country: 'AU',
         state: '',
         city: prefilledData?.city || '',
         date: '',
@@ -53,8 +54,156 @@ const CreateInvitation = () => {
         image: restaurantData?.image || prefilledData?.restaurantImage || null,
         lat: restaurantData?.lat || prefilledData?.lat,
         lng: restaurantData?.lng || prefilledData?.lng,
-        isFollowersOnly: false
+        privacy: 'public', // public, followers, private
+        invitedUserIds: []
     });
+
+    // Derived Friends List (Mutual Friends - المتابعة المتبادلة)
+    // Only show people where: I follow them AND they follow me
+    const friendsList = React.useMemo(() => {
+        console.log('═══════════════════════════════════════');
+        console.log('🔍 BUILDING FRIENDS LIST');
+        console.log('═══════════════════════════════════════');
+        console.log('Current User ID:', currentUser?.id);
+        console.log('Current User Following:', currentUser?.following);
+        console.log('Following Count:', currentUser?.following?.length || 0);
+        console.log('All Users Count:', allUsers?.length || 0);
+        console.log('All Users Sample:', allUsers?.slice(0, 2).map(u => ({
+            id: u.id,
+            name: u.display_name || u.name,
+            following: u.following
+        })));
+        console.log('═══════════════════════════════════════');
+
+        // Check if user is logged in properly
+        if (!currentUser || !currentUser.id || currentUser.id === 'guest') {
+            console.error('❌ USER NOT LOGGED IN OR GUEST:', {
+                currentUser,
+                id: currentUser?.id
+            });
+            return [];
+        }
+
+        if (!currentUser?.following || !allUsers || !currentUser?.id) {
+            console.error('❌ MISSING DATA:', {
+                hasFollowing: !!currentUser?.following,
+                followingValue: currentUser?.following,
+                hasAllUsers: !!allUsers,
+                allUsersCount: allUsers?.length,
+                hasCurrentUserId: !!currentUser?.id,
+                currentUserId: currentUser?.id
+            });
+            return [];
+        }
+
+        // Filter for MUTUAL friends only
+        const mutualFriends = allUsers.filter(u => {
+            // Skip self
+            if (u.id === currentUser.id) return false;
+
+            // I must be following them
+            const iFollowThem = currentUser.following && currentUser.following.includes(u.id);
+
+            if (!iFollowThem) return false; // Skip if I don't follow them
+
+            // They must be following me back
+            // Check if they have a following field and it's an array
+            const theirFollowing = u.following;
+            const hasFollowingField = theirFollowing !== undefined && theirFollowing !== null;
+            const isArray = Array.isArray(theirFollowing);
+            const theyFollowMe = hasFollowingField && isArray && theirFollowing.includes(currentUser.id);
+
+            const isMutual = theyFollowMe;
+
+            // Detailed logging for debugging
+            console.log(`👤 User ${u.display_name || u.name || u.id}:`, {
+                userId: u.id,
+                display_name: u.display_name,
+                name: u.name,
+                iFollowThem: true, // We already checked this above
+                hasFollowingField,
+                isFollowingArray: isArray,
+                theirFollowing,
+                theirFollowingLength: isArray ? theirFollowing.length : 'N/A',
+                currentUserId: currentUser.id,
+                doesIncludeMe: isArray ? theirFollowing.includes(currentUser.id) : false,
+                theyFollowMe,
+                isMutual,
+                '⚠️ ISSUE': !hasFollowingField ? 'NO FOLLOWING FIELD IN FIRESTORE' : (!isArray ? 'FOLLOWING IS NOT AN ARRAY' : (!theyFollowMe ? `THEY DO NOT FOLLOW YOU BACK (looking for: ${currentUser.id})` : null)),
+                'DEBUG_IDs': {
+                    myId: currentUser.id,
+                    theirFollowingArray: theirFollowing,
+                    exactMatch: isArray && theirFollowing.map(id => ({
+                        id,
+                        matches: id === currentUser.id,
+                        idType: typeof id,
+                        myIdType: typeof currentUser.id
+                    }))
+                }
+            });
+
+            return isMutual;
+        });
+
+        console.log('✅ Mutual friends list built:', {
+            count: mutualFriends.length,
+            totalFollowing: currentUser.following?.length || 0,
+            totalUsers: allUsers.length,
+            friends: mutualFriends.map(f => ({
+                id: f.id,
+                name: f.display_name || f.name,
+                following: f.following
+            }))
+        });
+
+        if (mutualFriends.length === 0 && currentUser.following?.length > 0) {
+            console.warn('⚠️ WARNING: You are following people but none of them follow you back, OR their following data is missing in Firestore');
+        }
+
+        return mutualFriends;
+    }, [currentUser?.following, allUsers, currentUser?.id]);
+
+    // Handle friend selection
+    const handleFriendToggle = (userId) => {
+        setFormData(prev => {
+            const currentSelected = prev.invitedUserIds || [];
+            if (currentSelected.includes(userId)) {
+                return { ...prev, invitedUserIds: currentSelected.filter(id => id !== userId) };
+            } else {
+                return { ...prev, invitedUserIds: [...currentSelected, userId] };
+            }
+        });
+    };
+
+    // Debug: Log when friend selector opens
+    useEffect(() => {
+        if (showFriendSelector) {
+            const debugInfo = {
+                friendsListCount: friendsList.length,
+                currentUserFollowingCount: currentUser?.following?.length || 0,
+                allUsersCount: allUsers?.length || 0
+            };
+
+            console.log('🔍 Friend Selector Opened - Current State:', {
+                ...debugInfo,
+                friendsList: friendsList,
+                currentUserFollowing: currentUser?.following,
+                allUsersCount: allUsers?.length
+            });
+
+            // Visual alert for debugging
+            if (friendsList.length === 0 && currentUser?.following?.length > 0) {
+                console.error(`
+                    ⚠️ PROBLEM DETECTED:
+                    - You are following: ${currentUser.following.length} people
+                    - Mutual friends found: 0
+                    - Total users in database: ${allUsers?.length || 0}
+                    
+                    Check the console logs above (👤 User ...) to see why each person is not showing.
+                `);
+            }
+        }
+    }, [showFriendSelector, friendsList, currentUser, allUsers]);
 
     // Update title when language changes if from restaurant
     useEffect(() => {
@@ -108,6 +257,11 @@ const CreateInvitation = () => {
             return;
         }
 
+        if (formData.privacy === 'private' && (!formData.invitedUserIds || formData.invitedUserIds.length === 0)) {
+            alert(t('please_select_friends') || 'Please select at least one friend for private invitation.');
+            return;
+        }
+
         // Check daily invitation limit
         const validation = await validateInvitationCreation(currentUser.uid);
         if (!validation.valid) {
@@ -139,7 +293,14 @@ const CreateInvitation = () => {
                 finalImageUrl = url;
             }
 
-            const cleanData = { ...formData, image: finalImageUrl };
+            const cleanData = {
+                ...formData,
+                image: finalImageUrl,
+                isFollowersOnly: formData.privacy === 'followers' // Backward compatibility
+                // privacy: formData.privacy, // Already getting spread from formData
+                // invitedUserIds: formData.invitedUserIds // Already getting spread
+            };
+
             const newId = await addInvitation(cleanData);
 
             if (newId) {
@@ -169,7 +330,7 @@ const CreateInvitation = () => {
         }));
     };
 
-    // Strict Auto-detect: Country is Mandatory
+    // Auto-detect user location and set city + coordinates
     useEffect(() => {
         if (!restaurantData && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(async (position) => {
@@ -180,25 +341,30 @@ const CreateInvitation = () => {
                     if (data && data.address) {
                         const addr = data.address;
 
-                        // 1. Force Detect Country Code
-                        const detectedCountryCode = (addr.country_code).toUpperCase();
+                        // Get city name
+                        const detectedCity = addr.city || addr.town || addr.village || addr.suburb || '';
+
+                        // Get country code
+                        const detectedCountryCode = (addr.country_code || 'au').toUpperCase();
 
                         // Check if valid code in library
                         const countryData = Country.getCountryByCode(detectedCountryCode);
-                        const validCountry = countryData ? detectedCountryCode : 'GB';
+                        const validCountry = countryData ? detectedCountryCode : 'AU';
 
-                        // 2. Default to first State/City
-                        const states = State.getStatesOfCountry(validCountry);
-                        const defaultState = states.length > 0 ? states[0].isoCode : ''; // Use ISO Code for state
-
-                        const cities = defaultState ? City.getCitiesOfState(validCountry, defaultState) : [];
-                        // Default city is empty to encourage manual search
+                        console.log('📍 Auto-detected location:', {
+                            city: detectedCity,
+                            country: validCountry,
+                            lat: latitude,
+                            lng: longitude
+                        });
 
                         setFormData(prev => ({
                             ...prev,
                             country: validCountry,
-                            state: defaultState,
-                            city: '',
+                            city: detectedCity,
+                            // Store user's current coordinates for location bias
+                            userLat: latitude,
+                            userLng: longitude
                         }));
                     }
                 } catch (e) {
@@ -208,21 +374,8 @@ const CreateInvitation = () => {
         }
     }, [restaurantData]);
 
-    const handleStateChange = (e) => {
-        const newStateCode = e.target.value;
-
-        setFormData(prev => ({
-            ...prev,
-            state: newStateCode,
-            city: '', // Reset to empty
-            location: '', lat: null, lng: null
-        }));
-    };
-
     // Derived Data for UI
     const currentCountry = Country.getCountryByCode(formData.country);
-    const availableStates = State.getStatesOfCountry(formData.country);
-    const availableCities = City.getCitiesOfState(formData.country, formData.state);
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -279,7 +432,7 @@ const CreateInvitation = () => {
 
             <form onSubmit={handleSubmit} className="create-form">
 
-                {/* 1. Location Selection (State & City) - Moved Inside Form */}
+                {/* Location Search - Simplified */}
                 <div style={{
                     background: 'var(--card-bg)',
                     padding: '1.25rem',
@@ -288,125 +441,48 @@ const CreateInvitation = () => {
                     marginBottom: '1.5rem'
                 }}>
                     <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🌍 {t('select_region_city')}
+                        📍 {t('search_venue') || 'Search for a Venue'}
                     </h3>
 
-                    {/* Country Badge */}
-                    <div style={{
-                        marginBottom: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)',
-                        display: 'flex', alignItems: 'center', gap: '6px'
-                    }}>
-                        <span>🔐 {t('current_region')}</span>
-                        <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{currentCountry?.name}</span>
-                        <span>{currentCountry?.flag}</span>
-                    </div>
-
-                    <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        {/* State Selection */}
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontSize: '0.8rem' }}>{t('state_province')}</label>
-                            <select
-                                name="state"
-                                value={formData.state}
-                                onChange={handleStateChange}
-                                className="input-field"
-                                style={{ padding: '10px' }}
-                            >
-                                <option value="">{t('select_state')}</option>
-                                {availableStates.map(st => (
-                                    <option key={st.isoCode} value={st.isoCode}>{st.name}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* City Selection - Searchable */}
-                        <div className="form-group" style={{ marginBottom: 0, position: 'relative' }}>
-                            <label style={{ fontSize: '0.8rem' }}>{t('city_search')}</label>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    type="text"
-                                    value={formData.city}
-                                    onChange={(e) => {
-                                        setFormData(prev => ({ ...prev, city: e.target.value, location: '', lat: null, lng: null }));
-                                        setCitySearchOpen(true);
-                                    }}
-                                    onFocus={() => setCitySearchOpen(true)}
-                                    onClick={() => setCitySearchOpen(true)}
-                                    // Removed onBlur with timeout to rely on click handlers for better UX
-                                    onBlur={() => setTimeout(() => setCitySearchOpen(false), 200)}
-                                    className="input-field"
-                                    style={{ padding: '10px', height: '48px', width: '100%' }}
-                                    placeholder={t('type_to_search')}
-                                />
-                                <div style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }}>
-                                    ▼
-                                </div>
-                            </div>
-
-                            {/* Searchable Dropdown Results */}
-                            {citySearchOpen && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '100%',
-                                    left: 0,
-                                    right: 0,
-                                    maxHeight: '250px',
-                                    overflowY: 'auto',
-                                    backgroundColor: '#ffffff',
-                                    borderRadius: '0 0 12px 12px',
-                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
-                                    zIndex: 100,
-                                    border: '1px solid #e5e7eb'
-                                }}>
-                                    {availableCities
-                                        .filter(c => c.name.toLowerCase().includes(formData.city.toLowerCase()))
-                                        .slice(0, 100)
-                                        .map(ct => (
-                                            <div
-                                                key={ct.name}
-                                                onMouseDown={() => {
-                                                    setFormData(prev => ({ ...prev, city: ct.name, location: '', lat: null, lng: null }));
-                                                    setCitySearchOpen(false);
-                                                }}
-                                                style={{
-                                                    padding: '12px 15px',
-                                                    cursor: 'pointer',
-                                                    color: '#111827',
-                                                    borderBottom: '1px solid #f3f4f6',
-                                                    fontSize: '0.9rem',
-                                                    transition: 'background 0.2s'
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-                                            >
-                                                {ct.name}
-                                            </div>
-                                        ))}
-                                    {availableCities.filter(c => c.name.toLowerCase().includes(formData.city.toLowerCase())).length === 0 && (
-                                        <div style={{ padding: '15px', color: '#6b7280', fontSize: '0.9rem', textAlign: 'center' }}>
-                                            {t('no_matching_cities')}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* 3. Specific Location (Search) - Moved Here */}
-                    <div className="form-group" style={{ marginTop: '1rem', marginBottom: 0 }}>
-                        <label style={{ fontSize: '0.8rem' }}>{t('form_location_label')}</label>
-                        <div style={{ display: 'flex' }}>
+                    {/* Current Location Badge */}
+                    {formData.city && (
+                        <div style={{
+                            marginBottom: '1rem',
+                            padding: '0.75rem',
+                            background: 'rgba(139, 92, 246, 0.1)',
+                            borderRadius: '12px',
+                            border: '1px solid rgba(139, 92, 246, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '0.9rem'
+                        }}>
+                            <span style={{ fontSize: '1.2rem' }}>📍</span>
                             <div style={{ flex: 1 }}>
-                                <LocationAutocomplete
-                                    value={formData.location}
-                                    onChange={handleChange}
-                                    onSelect={handleLocationSelect}
-                                    city={formData.city}
-                                />
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                                    {t('your_location') || 'Your Location'}
+                                </div>
+                                <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
+                                    {formData.city}, {currentCountry?.name} {currentCountry?.flag}
+                                </div>
                             </div>
                         </div>
+                    )}
+
+                    {/* Venue Search */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '0.8rem' }}>{t('form_location_label')}</label>
+                        <LocationAutocomplete
+                            value={formData.location}
+                            onChange={handleChange}
+                            onSelect={handleLocationSelect}
+                            city={formData.city}
+                            countryCode={formData.country}
+                            userLat={formData.userLat}
+                            userLng={formData.userLng}
+                        />
                         <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
-                            {t('location_helper_text') || 'Tip: Search for the venue name (e.g. Starbucks).'}
+                            {t('location_helper_text') || 'Search for restaurants, cafes, or venues near you'}
                         </small>
                     </div>
                 </div>
@@ -635,24 +711,189 @@ const CreateInvitation = () => {
                     </div>
                 </div>
 
-                <div style={{ background: 'rgba(139, 92, 246, 0.1)', padding: '1.25rem', borderRadius: '15px', border: '1px solid rgba(139, 92, 246, 0.2)', marginBottom: '1rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', margin: 0 }}>
-                        <input
-                            type="checkbox"
-                            name="isFollowersOnly"
-                            checked={formData.isFollowersOnly || false}
-                            onChange={(e) => setFormData({ ...formData, isFollowersOnly: e.target.checked })}
-                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary)' }}
-                        />
-                        <div>
-                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>
-                                {t('followers_only')}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {t('followers_only_desc')}
-                            </div>
-                        </div>
+                {/* Privacy Settings */}
+                <div className="form-group" style={{ marginTop: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1.25rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <label className="elegant-label" style={{ marginBottom: '1rem' }}>
+                        <span className="label-icon"><FaLock /></span>
+                        {t('privacy_settings') || 'Privacy Settings'}
                     </label>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                        {['public', 'followers', 'private'].map(mode => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, privacy: mode })}
+                                style={{
+                                    padding: '12px 8px',
+                                    borderRadius: '12px',
+                                    border: formData.privacy === mode ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                                    background: formData.privacy === mode ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {/* Icons */}
+                                {mode === 'public' && <FaGlobe style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
+                                {mode === 'followers' && <FaUserFriends style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
+                                {mode === 'private' && <FaLock style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
+
+                                <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
+                                    {mode === 'public' ? (t('public') || 'Public') :
+                                        mode === 'followers' ? (t('followers_only') || 'Followers') :
+                                            (t('private') || 'Private')}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Private Mode: Select Friends */}
+                    {formData.privacy === 'private' && (
+                        <div style={{ marginTop: '1rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                {t('select_specific_friends') || 'Select Friends to Invite'}
+                            </label>
+
+                            {/* Friends List - Inline */}
+                            <div style={{
+                                background: 'var(--bg-card)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                padding: '1rem',
+                                maxHeight: '300px',
+                                overflowY: 'auto'
+                            }}>
+                                {(() => {
+                                    console.log('🎯 RENDERING FRIENDS LIST:', {
+                                        friendsListLength: friendsList.length,
+                                        friendsList: friendsList,
+                                        currentUserId: currentUser?.id,
+                                        currentUserFollowing: currentUser?.following,
+                                        allUsersCount: allUsers?.length
+                                    });
+                                    return null;
+                                })()}
+
+                                {friendsList.length === 0 ? (
+                                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                                        <FaUserFriends style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }} />
+                                        <p style={{ margin: 0, marginBottom: '1rem' }}>
+                                            {t('no_friends_found_desc') || 'You need mutual friends to invite them privately.'}
+                                        </p>
+                                        <small style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                            (People who follow you AND you follow them)
+                                        </small>
+
+                                        {/* Debug Info */}
+                                        <div style={{
+                                            marginTop: '1.5rem',
+                                            padding: '1rem',
+                                            background: 'rgba(255,0,0,0.1)',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            textAlign: 'left'
+                                        }}>
+                                            <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#ef4444' }}>
+                                                🔍 Debug Info:
+                                            </div>
+                                            <div>Your ID: {currentUser?.id || 'N/A'}</div>
+                                            <div>You follow: {currentUser?.following?.length || 0} people</div>
+                                            <div>Following IDs: {JSON.stringify(currentUser?.following || [])}</div>
+                                            <div>Total users in DB: {allUsers?.length || 0}</div>
+                                            <div>Mutual friends found: {friendsList.length}</div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div style={{ marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                            {friendsList.length} {friendsList.length === 1 ? 'friend' : 'friends'} available
+                                        </div>
+                                        {friendsList.map(friend => {
+                                            const friendName = friend.display_name || friend.name || 'User';
+                                            const friendAvatar = friend.photo_url || friend.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default&backgroundColor=b6e3f4';
+                                            const friendUsername = friendName.replace(/\s/g, '').toLowerCase();
+                                            const isSelected = formData.invitedUserIds.includes(friend.id);
+
+                                            return (
+                                                <div
+                                                    key={friend.id}
+                                                    onClick={() => handleFriendToggle(friend.id)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '12px',
+                                                        padding: '10px',
+                                                        borderRadius: '12px',
+                                                        background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+                                                        cursor: 'pointer',
+                                                        marginBottom: '8px',
+                                                        border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={friendAvatar}
+                                                        alt={friendName}
+                                                        style={{
+                                                            width: '40px',
+                                                            height: '40px',
+                                                            borderRadius: '50%',
+                                                            objectFit: 'cover'
+                                                        }}
+                                                    />
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ color: 'white', fontWeight: 'bold', fontSize: '0.95rem' }}>
+                                                            {friendName}
+                                                        </div>
+                                                        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                                            @{friendUsername}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        borderRadius: '50%',
+                                                        border: isSelected ? 'none' : '2px solid var(--text-muted)',
+                                                        background: isSelected ? 'var(--primary)' : 'transparent',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}>
+                                                        {isSelected && <FaCheckCircle style={{ color: 'white', fontSize: '1rem' }} />}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {formData.invitedUserIds.length > 0 && (
+                                <div style={{
+                                    marginTop: '0.5rem',
+                                    padding: '0.5rem',
+                                    background: 'rgba(139, 92, 246, 0.1)',
+                                    borderRadius: '8px',
+                                    color: 'var(--primary)',
+                                    fontSize: '0.85rem',
+                                    textAlign: 'center'
+                                }}>
+                                    ✓ {formData.invitedUserIds.length} {formData.invitedUserIds.length === 1 ? 'friend' : 'friends'} selected
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <div className="form-group">

@@ -19,7 +19,8 @@ export const getFollowers = async (userId) => {
             ...doc.data()
         }));
     } catch (error) {
-        console.error('Error getting followers:', error);
+        console.error('Error getting followers for user:', userId, error);
+        console.log('Ensure "following" field exists and is an array in users collection');
         return [];
     }
 };
@@ -30,6 +31,7 @@ export const getFollowers = async (userId) => {
 export const getFollowing = async (userId, followingIds = []) => {
     try {
         if (!followingIds || followingIds.length === 0) {
+            console.log('User is not following anyone (list is empty)');
             return [];
         }
 

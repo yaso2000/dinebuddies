@@ -30,11 +30,11 @@ const RestaurantDetails = () => {
                 mapInstance.current = L.map(mapRef.current, {
                     zoomControl: false,
                     attributionControl: false
-                }).setView([restaurant.lat || 24.7136, restaurant.lng || 46.6753], 15);
+                }).setView([restaurant.lat || -33.8688, restaurant.lng || 151.2093], 15);
 
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstance.current);
 
-                L.marker([restaurant.lat || 24.7136, restaurant.lng || 46.6753]).addTo(mapInstance.current);
+                L.marker([restaurant.lat || -33.8688, restaurant.lng || 151.2093]).addTo(mapInstance.current);
             } catch (err) {
                 console.warn("Map initialization error", err);
             }

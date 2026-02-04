@@ -12,27 +12,37 @@ import {
 const Settings = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, updateProfile } = useInvitations();
+    const { currentUser, updateProfile } = useAuth(); // Ensure updateProfile is available from AuthContext
     const { signOut, currentUser: firebaseUser, deleteUserAccount } = useAuth();
 
     const [darkMode, setDarkMode] = useState(
         localStorage.getItem('darkMode') === 'true'
     );
+
+    // Initialize notifications from user profile or defaults
     const [notifications, setNotifications] = useState({
         invitations: true,
         messages: true,
         updates: true,
-        marketing: false
+        marketing: false,
+        ...currentUser?.notificationPreferences
     });
+
+    useEffect(() => {
+        if (currentUser?.notificationPreferences) {
+            setNotifications(prev => ({
+                ...prev,
+                ...currentUser.notificationPreferences
+            }));
+        }
+    }, [currentUser]);
+
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [passwordData, setPasswordData] = useState({
         current: '',
         new: '',
         confirm: ''
     });
-
-
-
 
     useEffect(() => {
         // Sync with localStorage on mount
@@ -57,11 +67,31 @@ const Settings = () => {
         }
     };
 
-    const handleNotificationChange = (key) => {
+    const handleNotificationChange = async (key) => {
+        const newValue = !notifications[key];
+
+        // Optimistic update
         setNotifications(prev => ({
             ...prev,
-            [key]: !prev[key]
+            [key]: newValue
         }));
+
+        // Persist to Firestore
+        try {
+            await updateProfile({
+                notificationPreferences: {
+                    ...notifications,
+                    [key]: newValue
+                }
+            });
+        } catch (error) {
+            console.error("Failed to update notification settings:", error);
+            // Revert on error
+            setNotifications(prev => ({
+                ...prev,
+                [key]: !newValue
+            }));
+        }
     };
 
     const handlePasswordChange = async (e) => {

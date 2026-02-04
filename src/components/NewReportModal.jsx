@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FaTimes, FaFlag } from 'react-icons/fa';
 
 const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onSubmit }) => {
-    const { i18n } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [selectedReason, setSelectedReason] = useState('');
     const [details, setDetails] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
