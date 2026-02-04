@@ -92,7 +92,8 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
             if (autocompleteService.current) {
                 const request = {
                     input: val,
-                    types: ['establishment'], // Focus on businesses
+                    // Removed types restriction to allow both establishments AND addresses
+                    // This enables searching for: restaurants, cafes, stores, streets, buildings, landmarks
                     componentRestrictions: countryCode ? { country: countryCode.toLowerCase() } : undefined,
                     language: searchLanguage
                 };
