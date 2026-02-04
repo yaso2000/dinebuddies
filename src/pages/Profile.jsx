@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { FaCamera, FaChevronRight, FaPlus, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog } from 'react-icons/fa';
 import { uploadProfilePicture } from '../utils/imageUpload';
 import ImageUpload from '../components/ImageUpload';
+import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const Profile = () => {
     const { t, i18n } = useTranslation();
@@ -25,6 +27,85 @@ const Profile = () => {
             navigate('/business-profile');
         }
     }, [userProfile, navigate]);
+
+    // Real-time listener for user profile updates (stats, etc.)
+    const [realtimeUser, setRealtimeUser] = useState(currentUser);
+
+    useEffect(() => {
+        if (!currentUser?.id) return;
+
+        const getSafeAvatar = (data) => data?.avatar || data?.photoURL || data?.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data?.id}`;
+
+        // Initial setup
+        setRealtimeUser(prev => ({ ...currentUser, avatar: getSafeAvatar(currentUser) }));
+        setFormData(prev => ({
+            ...prev,
+            avatar: getSafeAvatar(currentUser),
+            name: currentUser.name || currentUser.displayName || '',
+            bio: currentUser.bio || '',
+            gender: currentUser.gender || 'male',
+            age: currentUser.age || 25,
+            phone: currentUser.phone || ''
+        }));
+
+        // Fetch actual followers count to ensure accuracy
+        const fetchRealFollowersCount = async () => {
+            try {
+                const usersRef = collection(db, 'users');
+                const q = query(usersRef, where('following', 'array-contains', currentUser.id));
+                const snapshot = await getDocs(q);
+                const count = snapshot.size;
+
+                setRealtimeUser(prev => ({
+                    ...prev,
+                    followersCount: count
+                }));
+            } catch (error) {
+                console.error("Error fetching followers count:", error);
+            }
+        };
+
+        fetchRealFollowersCount();
+
+        const unsub = onSnapshot(doc(db, 'users', currentUser.id), (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = { id: docSnapshot.id, ...docSnapshot.data() };
+
+                // We use function update to access latest state, preventing race conditions or overwrites
+                setRealtimeUser(prev => {
+                    // Prefer the live field if it looks valid/updated, otherwise keep our calculated count if field is 0/undefined
+                    // Actually, 'fetchRealFollowersCount' is one-off. If 'followersCount' updates in DB, we should respect it.
+                    // But if DB has 0 and we calculated 2, we should keep 2 until DB catches up?
+                    // Let's just trust our calculated count + local increments if we were tracking them, 
+                    // OR just use the field if it aligns.
+                    // Simple approach: Use data from doc, but maybe override avatar.
+                    // If data.followersCount is 0/undefined, we might lose our calculated count if we just overwrite.
+
+                    const validCount = (data.followersCount !== undefined && data.followersCount !== 0) ? data.followersCount : prev.followersCount;
+
+                    return {
+                        ...data,
+                        followersCount: validCount,
+                        avatar: getSafeAvatar(data)
+                    };
+                });
+
+                if (!isEditing) {
+                    setFormData(prev => ({
+                        ...prev,
+                        avatar: getSafeAvatar(data),
+                        name: data.name || data.displayName || '',
+                        bio: data.bio || '',
+                        gender: data.gender || 'male',
+                        age: data.age || 25,
+                        phone: data.phone || ''
+                    }));
+                }
+            }
+        });
+
+        return () => unsub();
+    }, [currentUser?.id, isEditing]);
 
     // Logout handler
     const handleLogout = async () => {
@@ -53,6 +134,24 @@ const Profile = () => {
         const urlPattern = /(https?:\/\/|www\.|@[a-zA-Z0-9_]+|instagram\.com|facebook\.com|twitter\.com|tiktok\.com|snapchat\.com)/gi;
         return urlPattern.test(text);
     };
+
+    const myPrivateInvitations = invitations.filter(inv =>
+        inv.privacy === 'private' &&
+        inv.invitedUserIds?.includes(currentUser.id) &&
+        !inv.joined?.includes(currentUser.id) &&
+        inv.author?.id !== currentUser.id
+    );
+
+    const getActiveList = () => {
+        switch (activeTab) {
+            case 'posted': return myPostedInvitations;
+            case 'joined': return myJoinedInvitations;
+            case 'private': return myPrivateInvitations;
+            default: return [];
+        }
+    };
+
+    const activeList = getActiveList();
 
     const handleSave = async () => {
         // Validate mandatory fields
@@ -321,8 +420,8 @@ const Profile = () => {
                             </div>
                         ) : (
                             <>
-                                <h1 style={{ fontSize: '2rem', fontWeight: '900', marginTop: '1rem', marginBottom: '0.25rem' }}>{currentUser.name}</h1>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{currentUser.bio || t('active_member')}</p>
+                                <h1 style={{ fontSize: '2rem', fontWeight: '900', marginTop: '1rem', marginBottom: '0.25rem' }}>{realtimeUser.name}</h1>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{realtimeUser.bio || t('active_member')}</p>
                                 {/* Display Gender and Age */}
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '1.5rem' }}>
                                     <div style={{
@@ -336,8 +435,8 @@ const Profile = () => {
                                         alignItems: 'center',
                                         gap: '6px'
                                     }}>
-                                        <span>{currentUser.gender === 'male' ? '👨' : '👩'}</span>
-                                        <span>{currentUser.gender === 'male' ? t('male') : t('female')}</span>
+                                        <span>{realtimeUser.gender === 'male' ? '👨' : '👩'}</span>
+                                        <span>{realtimeUser.gender === 'male' ? t('male') : t('female')}</span>
                                     </div>
                                     <div style={{
                                         background: 'rgba(251, 191, 36, 0.15)',
@@ -352,20 +451,20 @@ const Profile = () => {
                                         gap: '6px'
                                     }}>
                                         <span>🎂</span>
-                                        <span>{currentUser.age} {t('years')}</span>
+                                        <span>{realtimeUser.age} {t('years')}</span>
                                     </div>
                                 </div>
                             </>
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '2rem', marginTop: '1.5rem' }}>
-                            <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers')}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{currentUser.followersCount || 0}</div>
+                            <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers', { state: { activeTab: 'followers' } })}>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.followersCount || 0}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('followers')}</div>
                             </div>
                             <div style={{ borderRight: '1px solid var(--border-color)' }}></div>
-                            <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers')}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{currentUser.following?.length || 0}</div>
+                            <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers', { state: { activeTab: 'following' } })}>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.following?.length || 0}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('following')}</div>
                             </div>
                         </div>
@@ -420,11 +519,14 @@ const Profile = () => {
                             <button onClick={() => setActiveTab('joined')} style={{ flex: 1, padding: '15px', border: 'none', background: 'transparent', color: activeTab === 'joined' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'joined' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap' }}>
                                 {t('stats_joined')} ({myJoinedInvitations.length})
                             </button>
+                            <button onClick={() => setActiveTab('private')} style={{ flex: 1, padding: '15px', border: 'none', background: 'transparent', color: activeTab === 'private' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'private' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                                {t('stats_private')} ({myPrivateInvitations.length})
+                                {myPrivateInvitations.length > 0 && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary)' }}></span>}
+                            </button>
                         </div>
 
                         <div style={{ minHeight: '100px' }}>
-                            {/* Posted/Joined Invitations */}
-                            {(activeTab === 'posted' || activeTab === 'joined') && (activeTab === 'posted' ? myPostedInvitations : myJoinedInvitations).map(inv => (
+                            {activeList.map(inv => (
                                 <div key={inv.id} onClick={() => navigate(`/invitation/${inv.id}`)} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '15px', marginBottom: '10px', cursor: 'pointer', transition: 'all 0.2s', ':hover': { background: 'rgba(139, 92, 246, 0.1)' } }}>
                                     <img
                                         src={inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}
@@ -440,59 +542,13 @@ const Profile = () => {
                                 </div>
                             ))}
 
-                            {(activeTab === 'posted' ? myPostedInvitations : myJoinedInvitations).length === 0 && (activeTab === 'posted' || activeTab === 'joined') && (
+                            {activeList.length === 0 && (
                                 <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                                     {t('nothing_to_show')}
                                 </p>
                             )}
                         </div>
                     </div>
-
-                    {/* Language Selector */}
-                    <div style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginTop: '2rem' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontSize: '1.3rem' }}>🌍</span>
-                            {t('language_selector')}
-                        </h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                            {[
-                                { code: 'ar', name: 'العربية', flag: '🇸🇦', dir: 'rtl' },
-                                { code: 'en', name: 'English', flag: '🇬🇧', dir: 'ltr' },
-                                { code: 'fr', name: 'Français', flag: '🇫🇷', dir: 'ltr' },
-                                { code: 'es', name: 'Español', flag: '🇪🇸', dir: 'ltr' },
-                                { code: 'ur', name: 'اردو', flag: '🇵🇰', dir: 'rtl' },
-                                { code: 'hi', name: 'हिन्दी', flag: '🇮🇳', dir: 'ltr' }
-                            ].map(lang => (
-                                <button
-                                    key={lang.code}
-                                    onClick={() => i18n.changeLanguage(lang.code)}
-                                    style={{
-                                        padding: '12px',
-                                        background: i18n.language === lang.code ? 'var(--primary)' : 'transparent',
-                                        border: `2px solid ${i18n.language === lang.code ? 'var(--primary)' : 'var(--border-color)'}`,
-                                        borderRadius: '12px',
-                                        color: i18n.language === lang.code ? 'white' : 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        fontWeight: '700',
-                                        fontSize: '0.9rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        justifyContent: 'center'
-                                    }}
-                                >
-                                    <span style={{ fontSize: '1.2rem' }}>{lang.flag}</span>
-                                    <span>{lang.name}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-
-
-                    {/* Demo Account Switcher - For Testing Only (Hidden if real user logged in) */}
-
                 </div>
 
             </div>

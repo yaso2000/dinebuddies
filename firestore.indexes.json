@@ -71,12 +71,16 @@
             ]
         },
         {
-            "collectionGroup": "users",
+            "collectionGroup": "invitations",
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "following",
-                    "arrayConfig": "CONTAINS"
+                    "fieldPath": "author.id",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "date",
+                    "order": "ASCENDING"
                 }
             ]
         }

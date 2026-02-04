@@ -106,13 +106,18 @@ const UserProfile = () => {
                                 position: 'relative'
                             }}
                         >
-                            <img src={user.avatar} alt={user.name} className="host-avatar" />
+                            <img
+                                src={user.avatar || user.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+                                alt={user.name || user.display_name || 'User'}
+                                className="host-avatar"
+                                onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`; }}
+                            />
                             <div className="host-status-online"></div>
                         </div>
                     </div>
 
                     <h1 style={{ fontSize: '2rem', fontWeight: '900', marginTop: '1rem', marginBottom: '0.5rem' }}>
-                        {user.name}
+                        {user.name || user.display_name || t('dinebuddy_member') || 'DineBuddy Member'}
                     </h1>
 
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
@@ -241,7 +246,7 @@ const UserProfile = () => {
                 <div style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <span>📋</span>
-                        {t('user_invitations', { name: user.name })}
+                        {t('user_invitations', { name: user.name || t('this_member') || 'Member' })}
                         <span style={{
                             background: 'var(--primary)',
                             color: 'white',

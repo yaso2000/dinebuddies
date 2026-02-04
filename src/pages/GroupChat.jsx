@@ -51,7 +51,7 @@ const GroupChat = () => {
 
         const unsubscribe = subscribeToTyping(conversationId, (users) => {
             // Filter out current user
-            const otherUsers = users.filter(u => u.userId !== firebaseUser.uid && u.isTyping);
+            const otherUsers = (users || []).filter(u => u.userId !== firebaseUser.uid && u.isTyping);
             setTypingUsers(otherUsers);
         });
 
@@ -208,7 +208,7 @@ const GroupChat = () => {
         <div className="group-chat-page">
             {/* Header */}
             <div className="chat-header">
-                <button className="back-button" onClick={() => navigate('/chats')}>
+                <button className="back-button" onClick={() => navigate(-1)}>
                     <FaArrowLeft />
                 </button>
 
@@ -269,7 +269,11 @@ const GroupChat = () => {
                                     className={`message-wrapper ${isOwn ? 'own' : 'other'}`}
                                 >
                                     {!isOwn && showAvatar && (
-                                        <img src={msg.senderAvatar || 'https://via.placeholder.com/150'} alt="" className="message-avatar" />
+                                        <img
+                                            src={msg.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderId}`}
+                                            alt=""
+                                            className="message-avatar"
+                                        />
                                     )}
                                     {!isOwn && !showAvatar && <div className="message-avatar-spacer" />}
 

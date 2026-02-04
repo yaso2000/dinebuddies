@@ -35,12 +35,19 @@ export const useInvitations = () => {
 
 export const InvitationProvider = ({ children }) => {
     // --- 1. Current User (Integrated with Firebase) ---
-    const { currentUser: firebaseUser, userProfile: firebaseProfile, updateUserProfile } = useAuth();
+    const { currentUser: firebaseUser, userProfile: firebaseProfile, updateUserProfile, isGuest } = useAuth();
 
 
 
     // Derived state source of truth
     const currentUser = React.useMemo(() => {
+        console.log('🔍 InvitationContext - Building currentUser:', {
+            hasFirebaseUser: !!firebaseUser,
+            hasFirebaseProfile: !!firebaseProfile,
+            firebaseProfileFollowing: firebaseProfile?.following,
+            firebaseProfileData: firebaseProfile
+        });
+
         if (firebaseUser) {
             const baseProfile = firebaseProfile || {};
             const email = baseProfile.email || firebaseUser.email || '';
@@ -48,7 +55,7 @@ export const InvitationProvider = ({ children }) => {
             // Hardcoded Super Admin Logic
             const isSuperAdmin = ['admin@dinebuddies.com', 'yaser@dinebuddies.com'].includes(email.toLowerCase());
 
-            return {
+            const user = {
                 id: firebaseUser.uid,
                 name: baseProfile.display_name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
                 avatar: baseProfile.photo_url || firebaseUser.photoURL || 'https://via.placeholder.com/150',
@@ -66,16 +73,28 @@ export const InvitationProvider = ({ children }) => {
                 gender: baseProfile.gender || 'male',
                 isNewUser: !firebaseProfile // Flag to indicate this is a new user without Firestore profile yet
             };
+
+            console.log('✅ InvitationContext - currentUser built:', {
+                id: user.id,
+                name: user.name,
+                followingCount: user.following?.length || 0,
+                following: user.following,
+                baseProfileFollowing: baseProfile.following,
+                firebaseProfileFollowing: firebaseProfile?.following
+            });
+
+            return user;
         }
 
-        // Guest user fallback
+
+        // Guest user fallback - NO personal data
         return {
             id: 'guest',
             name: 'Guest',
-            avatar: 'https://via.placeholder.com/150',
+            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest&backgroundColor=b6e3f4',
             email: '',
-            accountType: 'user',
-            userRole: 'user',
+            accountType: 'guest',
+            userRole: 'guest',
             ownedRestaurants: [],
             bio: '',
             interests: [],
@@ -83,8 +102,9 @@ export const InvitationProvider = ({ children }) => {
             followersCount: 0,
             reputation: 0,
             joinedCommunities: [],
-            age: 25,
-            gender: 'male'
+            // NO age or gender for guests
+            age: null,
+            gender: null
         };
     }, [firebaseUser, firebaseProfile]);
 
@@ -148,7 +168,7 @@ export const InvitationProvider = ({ children }) => {
                             // Map coverImage to 'image' for Directory compatibility
                             image: info.coverImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
                             avatar: info.logoImage || '', // For map markers
-                            location: info.city || info.address || 'Riyadh',
+                            location: info.city || info.address || 'Sydney',
                             description: info.description || '',
                             phone: info.phone || '',
                             rating: data.reputation ? Math.min(5, data.reputation / 20) : 5.0, // Mock rating based on reputation
@@ -185,6 +205,10 @@ export const InvitationProvider = ({ children }) => {
                 ...doc.data(),
                 joinDate: doc.data().createdAt || new Date().toISOString()
             }));
+            console.log('🔍 InvitationContext - allUsers loaded from Firestore:', {
+                count: usersData.length,
+                users: usersData.map(u => ({ id: u.id, name: u.display_name || u.name, following: u.following }))
+            });
             setAllUsers(usersData);
         }, (error) => console.error("Error syncing users:", error));
         return () => unsubscribe();
@@ -387,6 +411,12 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const addInvitation = async (newInvite) => {
+        // Prevent guests from creating invitations
+        if (isGuest) {
+            console.log('❌ Guests cannot create invitations');
+            return false;
+        }
+
         try {
             if (!newInvite.title) return false;
 
@@ -401,13 +431,43 @@ export const InvitationProvider = ({ children }) => {
                 requests: [], joined: [], chat: [], meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
                 time: newInvite.time || '20:30',
-                lat: newInvite.lat || (24.7136 + (Math.random() - 0.5) * 0.1),
-                lng: newInvite.lng || (46.6753 + (Math.random() - 0.5) * 0.1),
+                lat: newInvite.lat || (-33.8688 + (Math.random() - 0.5) * 0.1),
+                lng: newInvite.lng || (151.2093 + (Math.random() - 0.5) * 0.1),
+                invitedUserIds: newInvite.invitedUserIds || [],
+                privacy: newInvite.privacy || 'public',
                 createdAt: serverTimestamp()
             };
 
             const docRef = await addDoc(collection(db, 'invitations'), inviteData);
             addNotification('تم النشر!', 'دعوتك متاحة الآن للجميع.', 'success');
+
+            // Send notifications to invited users (for private invitations)
+            if (inviteData.privacy === 'private' && inviteData.invitedUserIds && inviteData.invitedUserIds.length > 0) {
+                console.log('📧 Sending private invitation notifications to:', inviteData.invitedUserIds);
+
+                for (const userId of inviteData.invitedUserIds) {
+                    try {
+                        await addDoc(collection(db, 'notifications'), {
+                            userId: userId,
+                            type: 'private_invitation',
+                            title: '🎁 دعوة خاصة!',
+                            message: `${currentUser.name} دعاك لحضور ${inviteData.title}`,
+                            invitationId: docRef.id,
+                            invitationTitle: inviteData.title,
+                            invitationDate: inviteData.date,
+                            invitationTime: inviteData.time,
+                            invitationLocation: inviteData.location,
+                            senderName: currentUser.name,
+                            senderAvatar: currentUser.avatar,
+                            read: false,
+                            createdAt: serverTimestamp()
+                        });
+                        console.log(`✅ Notification sent to user: ${userId}`);
+                    } catch (notifError) {
+                        console.error(`❌ Failed to send notification to ${userId}:`, notifError);
+                    }
+                }
+            }
 
             // Send notification to partner if invitation is at their restaurant
             if (newInvite.restaurantId) {
@@ -466,6 +526,12 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const requestToJoin = async (invId) => {
+        // Prevent guests from joining
+        if (isGuest) {
+            console.log('❌ Guests cannot join invitations');
+            return;
+        }
+
         try {
             const invRef = doc(db, 'invitations', invId);
             const invDoc = await getDoc(invRef);
@@ -668,6 +734,12 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const toggleFollow = async (userId) => {
+        // Prevent guests from following
+        if (isGuest) {
+            console.log('❌ Guests cannot follow users');
+            return;
+        }
+
         if (!userId || userId === currentUser.id) return;
 
         // Store original state for rollback
@@ -827,16 +899,16 @@ export const InvitationProvider = ({ children }) => {
 
             const userRef = doc(db, 'users', userId);
 
-            // Map field names to match Firestore schema
+            // Ensure we keep 'name' and 'avatar' as they are used throughout the app
             const firestoreData = {
                 ...data,
-                display_name: data.name,  // Map 'name' to 'display_name'
-                photo_url: data.avatar,   // Map 'avatar' to 'photo_url'
+                updatedAt: serverTimestamp()
             };
 
-            // Remove old field names
-            delete firestoreData.name;
-            delete firestoreData.avatar;
+            // Should we also support old field names for compatibility? 
+            // Better to stick to one convention. The app uses 'name' and 'avatar'.
+            if (data.name) firestoreData.display_name = data.name; // Keep for legacy compatibility if needed
+            if (data.avatar) firestoreData.photo_url = data.avatar; // Keep for legacy compatibility if needed
 
             // Clean data for Firestore
             const cleanData = JSON.parse(JSON.stringify(firestoreData));

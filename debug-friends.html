@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Debug Friends Data</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        .user {
+            background: #16213e;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #8b5cf6;
+        }
+
+        .mutual {
+            border-left-color: #10b981;
+        }
+
+        .not-mutual {
+            border-left-color: #ef4444;
+        }
+
+        h1 {
+            color: #8b5cf6;
+        }
+
+        h2 {
+            color: #10b981;
+        }
+
+        .info {
+            color: #94a3b8;
+        }
+
+        .error {
+            color: #ef4444;
+        }
+
+        .success {
+            color: #10b981;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Debug Friends Data</h1>
+    <div id="output">Loading...</div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+        // Your Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAK3IC3LrrbBBcDahT3hGlhVQ6oHhf289g",
+            authDomain: "dinebuddies.firebaseapp.com",
+            projectId: "dinebuddies",
+            storageBucket: "dinebuddies.firebasestorage.app",
+            messagingSenderId: "686703042572",
+            appId: "1:686703042572:web:065789445262a44642ce29"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                document.getElementById('output').innerHTML = '<p class="error">❌ Not logged in. Please login first.</p>';
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.innerHTML = '<h2>Loading users data...</h2>';
+
+            try {
+                // Get all users
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const allUsers = [];
+                usersSnapshot.forEach(doc => {
+                    allUsers.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Get current user data
+                const currentUser = allUsers.find(u => u.id === user.uid);
+
+                if (!currentUser) {
+                    output.innerHTML = '<p class="error">❌ Current user not found in database</p>';
+                    return;
+                }
+
+                let html = `
+                    <h2>📊 Your Data:</h2>
+                    <div class="user">
+                        <strong>ID:</strong> ${currentUser.id}<br>
+                        <strong>Name:</strong> ${currentUser.display_name || currentUser.name || 'N/A'}<br>
+                        <strong>Following:</strong> ${currentUser.following?.length || 0} people<br>
+                        <strong>Following IDs:</strong> ${JSON.stringify(currentUser.following || [])}<br>
+                    </div>
+
+                    <h2>👥 People You Follow:</h2>
+                `;
+
+                if (!currentUser.following || currentUser.following.length === 0) {
+                    html += '<p class="info">You are not following anyone.</p>';
+                } else {
+                    currentUser.following.forEach(followingId => {
+                        const followedUser = allUsers.find(u => u.id === followingId);
+
+                        if (!followedUser) {
+                            html += `
+                                <div class="user error">
+                                    <strong>⚠️ User ID: ${followingId}</strong><br>
+                                    <span class="error">NOT FOUND IN DATABASE</span>
+                                </div>
+                            `;
+                            return;
+                        }
+
+                        const theyFollowYou = followedUser.following && Array.isArray(followedUser.following) && followedUser.following.includes(currentUser.id);
+                        const isMutual = theyFollowYou;
+
+                        html += `
+                            <div class="user ${isMutual ? 'mutual' : 'not-mutual'}">
+                                <strong>${isMutual ? '✅' : '❌'} ${followedUser.display_name || followedUser.name || followedUser.id}</strong><br>
+                                <strong>ID:</strong> ${followedUser.id}<br>
+                                <strong>Has 'following' field:</strong> ${followedUser.following !== undefined ? 'Yes' : 'No'}<br>
+                                <strong>Is array:</strong> ${Array.isArray(followedUser.following) ? 'Yes' : 'No'}<br>
+                                <strong>Their following:</strong> ${JSON.stringify(followedUser.following || 'N/A')}<br>
+                                <strong>They follow you:</strong> <span class="${theyFollowYou ? 'success' : 'error'}">${theyFollowYou ? 'YES ✅' : 'NO ❌'}</span><br>
+                                <strong>Mutual:</strong> <span class="${isMutual ? 'success' : 'error'}">${isMutual ? 'YES ✅' : 'NO ❌'}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                const mutualCount = currentUser.following?.filter(followingId => {
+                    const u = allUsers.find(user => user.id === followingId);
+                    return u && u.following && Array.isArray(u.following) && u.following.includes(currentUser.id);
+                }).length || 0;
+
+                html += `
+                    <h2>📈 Summary:</h2>
+                    <div class="user">
+                        <strong>Total following:</strong> ${currentUser.following?.length || 0}<br>
+                        <strong>Mutual friends:</strong> <span class="${mutualCount > 0 ? 'success' : 'error'}">${mutualCount}</span><br>
+                        <strong>Total users in DB:</strong> ${allUsers.length}
+                    </div>
+                `;
+
+                output.innerHTML = html;
+
+            } catch (error) {
+                output.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+
+</html>

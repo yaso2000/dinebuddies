@@ -4,6 +4,7 @@ import InvitationCard from '../components/InvitationCard';
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar } from 'react-icons/fa';
+import PrivateInvitationGift from '../components/PrivateInvitationGift';
 
 const Home = () => {
     const { t, i18n } = useTranslation();
@@ -113,9 +114,15 @@ const Home = () => {
             }
 
             // 3. SOCIAL PRIVACY
-            const isFollowing = currentUser?.following?.includes(inv.author.id);
-            const canView = !inv.isFollowersOnly || isFollowing;
-            if (!canView) return false;
+            if (inv.privacy === 'private') {
+                // Only author or invited guests can see private invitations
+                if (!isOwn && !inv.invitedUserIds?.includes(currentUser.id)) return false;
+            } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
+                // Followers only
+                const isFollowing = currentUser?.following?.includes(inv.author.id);
+                if (!isOwn && !isFollowing) return false;
+            }
+            // Public invitations are visible to everyone
 
 
             // 4. ENHANCED SEARCH (title + location + description)
@@ -402,11 +409,14 @@ const Home = () => {
                             background: 'var(--bg-card)',
                             color: 'white',
                             border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            padding: '8px 10px',
+                            borderRadius: '16px',
+                            height: '50px',
+                            padding: '0 16px',
                             minWidth: '90px',
                             fontSize: '0.75rem',
-                            fontWeight: '600'
+                            fontWeight: '600',
+                            outline: 'none',
+                            cursor: 'pointer'
                         }}
                     >
                         {locationFilters.map(f => (
@@ -469,6 +479,18 @@ const Home = () => {
                     </div>
                 </div>
             )}
+
+            {/* Private Invitation Gift Box */}
+            <PrivateInvitationGift
+                invitations={invitations.filter(inv =>
+                    inv.privacy === 'private' &&
+                    inv.invitedUserIds?.includes(currentUser.id) &&
+                    !inv.joined?.includes(currentUser.id) &&
+                    !inv.rejected?.includes(currentUser.id) &&
+                    inv.author?.id !== currentUser.id
+                )}
+                onClose={() => { }}
+            />
         </div>
     );
 };
