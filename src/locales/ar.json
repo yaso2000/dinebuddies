@@ -161,5 +161,14 @@
     "view": "عرض",
     "sign_in_google": "تسجيل الدخول بجوجل",
     "continue_as_guest": "المتابعة كضيف",
-    "browse_without_account": "تصفح بدون حساب"
+    "browse_without_account": "تصفح بدون حساب",
+    "name_placeholder": "اسمك",
+    "email_placeholder": "البريد الإلكتروني",
+    "password_placeholder": "كلمة المرور",
+    "loading_dots": "جاري التحميل...",
+    "create_account": "إنشاء حساب",
+    "login": "تسجيل الدخول",
+    "or": "أو",
+    "have_account_login": "لديك حساب؟ سجل دخول",
+    "no_account_create": "ليس لديك حساب؟ أنشئ واحداً"
 }

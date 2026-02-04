@@ -470,5 +470,14 @@
     "view": "View",
     "sign_in_google": "Sign in with Google",
     "continue_as_guest": "Continue as Guest",
-    "browse_without_account": "Browse without account"
+    "browse_without_account": "Browse without account",
+    "name_placeholder": "Your Name",
+    "email_placeholder": "Email Address",
+    "password_placeholder": "Password",
+    "loading_dots": "Loading...",
+    "create_account": "Create Account",
+    "login": "Login",
+    "or": "or",
+    "have_account_login": "Already have an account? Login",
+    "no_account_create": "Don't have an account? Create one"
 }
