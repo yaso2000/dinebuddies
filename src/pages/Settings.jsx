@@ -1,716 +1,594 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
-import {
-    FaArrowLeft, FaArrowRight, FaUser, FaLock, FaMoon, FaSun,
-    FaBell, FaShieldAlt, FaSignOutAlt, FaTrash, FaChevronRight,
-    FaEnvelope, FaPhone, FaPalette
-} from 'react-icons/fa';
+
+import { signOut } from 'firebase/auth';
+import { auth, db } from '../firebase/config';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight } from 'react-icons/fa';
 
 const Settings = () => {
-    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, updateProfile } = useAuth(); // Ensure updateProfile is available from AuthContext
-    const { signOut, currentUser: firebaseUser, deleteUserAccount } = useAuth();
+    const { currentUser, userProfile } = useAuth();
 
-    const [darkMode, setDarkMode] = useState(
-        localStorage.getItem('darkMode') === 'true'
-    );
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
-    // Initialize notifications from user profile or defaults
-    const [notifications, setNotifications] = useState({
-        invitations: true,
-        messages: true,
-        updates: true,
-        marketing: false,
-        ...currentUser?.notificationPreferences
-    });
-
-    useEffect(() => {
-        if (currentUser?.notificationPreferences) {
-            setNotifications(prev => ({
-                ...prev,
-                ...currentUser.notificationPreferences
-            }));
-        }
-    }, [currentUser]);
-
-    const [showPasswordModal, setShowPasswordModal] = useState(false);
-    const [passwordData, setPasswordData] = useState({
-        current: '',
-        new: '',
-        confirm: ''
-    });
-
-    useEffect(() => {
-        // Sync with localStorage on mount
-        const isDark = localStorage.getItem('darkMode') === 'true';
-        setDarkMode(isDark);
-        if (!isDark) {
-            document.body.classList.add('light-mode');
-        } else {
-            document.body.classList.remove('light-mode');
-        }
-    }, []);
-
-    const toggleDarkMode = () => {
-        const newMode = !darkMode;
-        setDarkMode(newMode);
-        localStorage.setItem('darkMode', newMode);
-
-        if (!newMode) {
-            document.body.classList.add('light-mode');
-        } else {
-            document.body.classList.remove('light-mode');
-        }
-    };
-
-    const handleNotificationChange = async (key) => {
-        const newValue = !notifications[key];
-
-        // Optimistic update
-        setNotifications(prev => ({
-            ...prev,
-            [key]: newValue
-        }));
-
-        // Persist to Firestore
-        try {
-            await updateProfile({
-                notificationPreferences: {
-                    ...notifications,
-                    [key]: newValue
-                }
-            });
-        } catch (error) {
-            console.error("Failed to update notification settings:", error);
-            // Revert on error
-            setNotifications(prev => ({
-                ...prev,
-                [key]: !newValue
-            }));
-        }
-    };
-
-    const handlePasswordChange = async (e) => {
-        e.preventDefault();
-        if (passwordData.new !== passwordData.confirm) {
-            alert(t('passwords_not_match'));
-            return;
-        }
-        if (passwordData.new.length < 6) {
-            alert(t('password_min_6_chars'));
-            return;
-        }
-
-        // TODO: Implement password change with Firebase
-        alert(t('password_changed_success'));
-        setShowPasswordModal(false);
-        setPasswordData({ current: '', new: '', confirm: '' });
-    };
+    const isBusiness = userProfile?.accountType === 'business';
 
     const handleLogout = async () => {
-        const confirmMsg = t('confirm_logout');
-
-        if (window.confirm(confirmMsg)) {
-            try {
-                await signOut();
-                navigate('/login');
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
+        try {
+            await signOut(auth);
+            navigate('/login');
+        } catch (error) {
+            console.error('Error logging out:', error);
+            alert('Failed to logout. Please try again.');
         }
     };
 
     const handleDeleteAccount = async () => {
-        const confirmMsg = t('delete_account_warning');
+        if (!showDeleteConfirm) {
+            setShowDeleteConfirm(true);
+            return;
+        }
 
-        if (window.confirm(confirmMsg)) {
-            const doubleCheck = t('confirm_delete_type');
+        try {
+            setDeleting(true);
 
-            const userInput = prompt(doubleCheck);
-            if (userInput === 'حذف' || userInput === 'DELETE') {
-                try {
-                    await deleteUserAccount();
-                    alert(t('account_deleted'));
-                    navigate('/login');
-                } catch (error) {
-                    console.error('Delete account error:', error);
-                    alert(t('delete_account_error'));
-                }
-            }
+            // Delete user document from Firestore
+            await deleteDoc(doc(db, 'users', currentUser.uid));
+
+            // Delete Firebase Auth account
+            await currentUser.delete();
+
+            navigate('/login');
+        } catch (error) {
+            console.error('Error deleting account:', error);
+            alert('Failed to delete account. Please try again or contact support.');
+            setDeleting(false);
         }
     };
 
-    const SettingItem = ({ icon: Icon, title, subtitle, action, danger, badge }) => (
-        <div
-            onClick={action}
-            style={{
-                background: 'var(--bg-card)',
-                padding: '1rem 1.25rem',
-                borderRadius: '16px',
-                border: '1px solid var(--border-color)',
-                marginBottom: '0.75rem',
-                cursor: action ? 'pointer' : 'default',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem'
-            }}
-            onMouseEnter={(e) => {
-                if (action) {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                    e.currentTarget.style.transform = 'translateX(-4px)';
+    const settingsSections = [
+        {
+            title: 'Account',
+            items: [
+                {
+                    icon: <FaEnvelope />,
+                    label: 'Email',
+                    value: currentUser?.email || 'Not set',
+                    onClick: () => navigate('/settings/email'),
+                    color: '#3b82f6'
+                },
+                {
+                    icon: <FaLock />,
+                    label: 'Password',
+                    value: '••••••••',
+                    onClick: () => navigate('/settings/password'),
+                    color: '#8b5cf6'
                 }
-            }}
-            onMouseLeave={(e) => {
-                if (action) {
-                    e.currentTarget.style.background = 'var(--bg-card)';
-                    e.currentTarget.style.transform = 'translateX(0)';
+            ]
+        },
+        {
+            title: 'Preferences',
+            items: [
+                {
+                    icon: <FaBell />,
+                    label: 'Notifications',
+                    value: 'Enabled',
+                    onClick: () => navigate('/settings/notifications'),
+                    color: '#f59e0b'
+                },
+                {
+                    icon: <FaGlobe />,
+                    label: 'Language',
+                    value: 'English',
+                    onClick: () => navigate('/settings/language'),
+                    color: '#10b981'
                 }
-            }}
-        >
-            <div style={{
-                width: '45px',
-                height: '45px',
-                borderRadius: '12px',
-                background: danger
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(244, 63, 94, 0.2) 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.1rem',
-                color: danger ? '#ef4444' : 'var(--primary)'
-            }}>
-                <Icon />
-            </div>
-            <div style={{ flex: 1 }}>
-                <div style={{
-                    fontWeight: '700',
-                    marginBottom: '0.25rem',
-                    color: danger ? '#ef4444' : 'white'
-                }}>
-                    {title}
-                </div>
-                {subtitle && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {subtitle}
-                    </div>
-                )}
-            </div>
-            {badge && (
-                <div style={{
-                    background: 'var(--accent)',
-                    color: 'white',
-                    padding: '4px 10px',
-                    borderRadius: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: '700'
-                }}>
-                    {badge}
-                </div>
-            )}
-            {action && (
-                <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }} />
-            )}
-        </div>
-    );
+            ]
+        },
+        {
+            title: 'Privacy & Security',
+            items: [
+                {
+                    icon: <FaShieldAlt />,
+                    label: 'Privacy Settings',
+                    value: 'Public',
+                    onClick: () => navigate('/settings/privacy'),
+                    color: '#06b6d4'
+                }
+            ]
+        }
+    ];
 
-    const ToggleItem = ({ icon: Icon, title, subtitle, value, onChange }) => (
-        <div style={{
-            background: 'var(--bg-card)',
-            padding: '1rem 1.25rem',
-            borderRadius: '16px',
-            border: '1px solid var(--border-color)',
-            marginBottom: '0.75rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem'
-        }}>
-            <div style={{
-                width: '45px',
-                height: '45px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(244, 63, 94, 0.2) 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.1rem',
-                color: 'var(--primary)'
-            }}>
-                <Icon />
-            </div>
-            <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', marginBottom: '0.25rem' }}>
-                    {title}
-                </div>
-                {subtitle && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {subtitle}
-                    </div>
-                )}
-            </div>
-            <label style={{ position: 'relative', width: '50px', height: '28px', cursor: 'pointer' }}>
-                <input
-                    type="checkbox"
-                    checked={value}
-                    onChange={onChange}
-                    style={{ display: 'none' }}
-                />
-                <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: value ? 'var(--accent)' : '#444',
-                    borderRadius: '14px',
-                    transition: 'all 0.3s'
-                }} />
-                <div style={{
-                    position: 'absolute',
-                    top: '3px',
-                    [i18n.language === 'ar' ? 'right' : 'left']: value ? '25px' : '3px',
-                    width: '22px',
-                    height: '22px',
-                    background: 'white',
-                    borderRadius: '50%',
-                    transition: 'all 0.3s',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }} />
-            </label>
-        </div>
-    );
+    // Add Business Profile link for business accounts
+    if (isBusiness) {
+        settingsSections.unshift({
+            title: 'Business',
+            items: [
+                {
+                    icon: <FaStore />,
+                    label: 'Edit Business Profile',
+                    value: '',
+                    onClick: () => navigate('/edit-business-profile'),
+                    color: '#f97316'
+                }
+            ]
+        });
+    }
 
-    return (
-        <div className="page-container" style={{ paddingBottom: '100px', minHeight: '100vh' }}>
-            {/* Header */}
-            <div style={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 10,
-                background: 'var(--bg-body)',
-                padding: '1rem 1.5rem',
-                borderBottom: '1px solid var(--border-color)',
-                marginBottom: '1.5rem'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <button
-                        onClick={() => navigate(-1)}
-                        style={{
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border-color)',
-                            color: 'white',
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        {i18n.language === 'ar' ? <FaArrowRight /> : <FaArrowLeft />}
+    // Add Subscription section for business accounts
+    if (isBusiness) {
+        const subscriptionTier = userProfile?.subscriptionTier || 'free';
+        const isPremium = subscriptionTier === 'premium';
+
+        settingsSections.unshift({
+            title: 'Subscription & Billing',
+            items: [
+                {
+                    icon: isPremium ? '💎' : '📦',
+                    label: 'Current Plan',
+                    value: isPremium ? 'Premium' : 'Free',
+                    onClick: () => navigate('/settings/subscription'),
+                    color: isPremium ? '#fbbf24' : '#6b7280',
+                    badge: isPremium ? null : 'Upgrade Available'
+                },
+                ...(isPremium ? [{
+                    icon: '💳',
+                    label: 'Payment Method',
+                    value: userProfile?.paymentMethod || 'Not set',
+                    onClick: () => navigate('/settings/payment'),
+                    color: '#8b5cf6'
+                }] : []),
+                ...(isPremium ? [{
+                    icon: '📄',
+                    label: 'Billing History',
+                    value: '',
+                    onClick: () => navigate('/settings/billing'),
+                    color: '#10b981'
+                }] : [])
+            ]
+        });
+    }
+
+    // Check if user is guest
+    const isGuest = userProfile?.accountType === 'guest' || userProfile?.role === 'guest';
+
+    // Guest View - Prompt to Sign In
+    if (isGuest) {
+        return (
+            <div className="page-container" style={{ paddingBottom: '100px' }}>
+                {/* Header */}
+                <header className="app-header sticky-header-glass">
+                    <button className="back-btn" onClick={() => navigate(-1)}>
+                        <FaArrowLeft />
                     </button>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: '900' }}>
-                        {t('settings')}
-                    </h1>
-                </div>
-            </div>
-
-            <div style={{ padding: '0 1.5rem' }}>
-
-
-                {/* Account Section */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: '700',
-                        color: 'var(--text-muted)',
-                        marginBottom: '1rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                    }}>
-                        {t('account')}
+                    <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
+                        ⚙️ Settings
                     </h3>
+                    <div style={{ width: '40px' }}></div>
+                </header>
 
-                    <SettingItem
-                        icon={FaUser}
-                        title={t('edit_profile')}
-                        subtitle={currentUser?.name}
-                        action={() => navigate('/profile')}
-                    />
-
-                    {firebaseUser?.email && (
-                        <SettingItem
-                            icon={FaLock}
-                            title={t('change_password')}
-                            subtitle={t('last_updated_month')}
-                            action={() => setShowPasswordModal(true)}
-                        />
-                    )}
-                </div>
-
-                {/* Appearance Section */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: '700',
-                        color: 'var(--text-muted)',
-                        marginBottom: '1rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
+                {/* Guest Message Card */}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '60vh',
+                    padding: '2rem'
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        borderRadius: '20px',
+                        padding: '2.5rem',
+                        textAlign: 'center',
+                        maxWidth: '400px',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
                     }}>
-                        {t('appearance')}
-                    </h3>
-
-
-
-                    <ToggleItem
-                        icon={darkMode ? FaMoon : FaSun}
-                        title={t('dark_mode')}
-                        subtitle={darkMode ? t('enabled') : t('disabled')}
-                        value={darkMode}
-                        onChange={toggleDarkMode}
-                    />
-                </div>
-
-                {/* Notifications Section */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: '700',
-                        color: 'var(--text-muted)',
-                        marginBottom: '1rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                    }}>
-                        {t('notifications')}
-                    </h3>
-
-                    <ToggleItem
-                        icon={FaBell}
-                        title={t('invitation_notifications')}
-                        subtitle={t('when_receive_invitation')}
-                        value={notifications.invitations}
-                        onChange={() => handleNotificationChange('invitations')}
-                    />
-
-                    <ToggleItem
-                        icon={FaEnvelope}
-                        title={t('message_notifications')}
-                        subtitle={t('when_receive_message')}
-                        value={notifications.messages}
-                        onChange={() => handleNotificationChange('messages')}
-                    />
-
-                    <ToggleItem
-                        icon={FaPhone}
-                        title={t('update_notifications')}
-                        subtitle={t('new_features_updates')}
-                        value={notifications.updates}
-                        onChange={() => handleNotificationChange('updates')}
-                    />
-
-                    <ToggleItem
-                        icon={FaPalette}
-                        title={t('marketing_offers')}
-                        subtitle={t('exclusive_offers')}
-                        value={notifications.marketing}
-                        onChange={() => handleNotificationChange('marketing')}
-                    />
-                </div>
-
-                {/* Business Account Section - Only show if not already a business */}
-                {currentUser?.accountType !== 'business' && (
-                    <div style={{ marginBottom: '2rem' }}>
-                        <h3 style={{
-                            fontSize: '0.85rem',
-                            fontWeight: '700',
-                            color: 'var(--text-muted)',
-                            marginBottom: '1rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px'
+                        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>👤</div>
+                        <h2 style={{
+                            color: 'white',
+                            fontSize: '1.5rem',
+                            fontWeight: '800',
+                            marginBottom: '0.75rem'
                         }}>
-                            {t('business_account')}
-                        </h3>
-
-                        <div style={{
-                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1))',
-                            border: '2px solid rgba(139, 92, 246, 0.3)',
-                            borderRadius: '16px',
-                            padding: '1.5rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s'
-                        }}
-                            onClick={() => navigate('/convert-to-business')}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.02)';
-                                e.currentTarget.style.borderColor = 'var(--primary)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.3)';
+                            Guest Mode
+                        </h2>
+                        <p style={{
+                            color: 'rgba(255,255,255,0.9)',
+                            fontSize: '1rem',
+                            lineHeight: '1.6',
+                            marginBottom: '2rem'
+                        }}>
+                            You're browsing as a guest. Sign in to access all settings and personalize your experience!
+                        </p>
+                        <button
+                            onClick={() => navigate('/login')}
+                            style={{
+                                background: 'white',
+                                color: '#667eea',
+                                border: 'none',
+                                padding: '14px 32px',
+                                borderRadius: '12px',
+                                fontWeight: '700',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                width: '100%',
+                                marginBottom: '0.75rem'
                             }}
                         >
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                            Sign In / Sign Up
+                        </button>
+                        <button
+                            onClick={() => navigate('/')}
+                            style={{
+                                background: 'transparent',
+                                color: 'white',
+                                border: '2px solid white',
+                                padding: '12px 32px',
+                                borderRadius: '12px',
+                                fontWeight: '600',
+                                fontSize: '0.95rem',
+                                cursor: 'pointer',
+                                width: '100%'
+                            }}
+                        >
+                            Continue Browsing
+                        </button>
+                    </div>
+
+                    {/*Guest-only Language Setting */}
+                    <div style={{
+                        marginTop: '2rem',
+                        width: '100%',
+                        maxWidth: '400px'
+                    }}>
+                        <div style={{
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '16px',
+                            overflow: 'hidden'
+                        }}>
+                            <div
+                                onClick={() => navigate('/settings/language')}
+                                style={{
+                                    padding: '1rem 1.25rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '1rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
                                 <div style={{
-                                    fontSize: '2.5rem',
-                                    flexShrink: 0
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(16, 185, 129, 0.15)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.1rem',
+                                    color: '#10b981'
                                 }}>
-                                    🏪
+                                    <FaGlobe />
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'white' }}>
-                                        {t('convert_to_business')}
-                                    </h4>
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '0.75rem' }}>
-                                        {t('business_description')}
-                                    </p>
-                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        <span style={{
-                                            padding: '4px 10px',
-                                            background: 'rgba(139, 92, 246, 0.2)',
-                                            borderRadius: '8px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: '600',
-                                            color: 'var(--primary)'
-                                        }}>
-                                            ✨ {t('free')}
-                                        </span>
-                                        <span style={{
-                                            padding: '4px 10px',
-                                            background: 'rgba(236, 72, 153, 0.2)',
-                                            borderRadius: '8px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: '600',
-                                            color: '#ec4899'
-                                        }}>
-                                            🚀 {t('quick_setup')}
-                                        </span>
-                                    </div>
+                                    <div style={{ fontWeight: '700', marginBottom: '2px' }}>Language</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>English</div>
                                 </div>
+                                <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }} />
                             </div>
                         </div>
                     </div>
-                )}
-
-                {/* Privacy & Security */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: '700',
-                        color: 'var(--text-muted)',
-                        marginBottom: '1rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                    }}>
-                        {t('privacy_security')}
-                    </h3>
-
-                    <SettingItem
-                        icon={FaShieldAlt}
-                        title={t('privacy_policy')}
-                        action={() => navigate('/privacy')}
-                    />
-
-                    <SettingItem
-                        icon={FaShieldAlt}
-                        title={t('terms_conditions')}
-                        action={() => navigate('/terms')}
-                    />
                 </div>
+            </div>
+        );
+    }
 
-                {/* Actions Section */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: '700',
-                        color: 'var(--text-muted)',
-                        marginBottom: '1rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                    }}>
-                        {t('actions')}
-                    </h3>
+    return (
+        <div className="page-container" style={{ paddingBottom: '100px' }}>
+            {/* Header */}
+            <header className="app-header sticky-header-glass">
+                <button className="back-btn" onClick={() => navigate(-1)}>
+                    <FaArrowLeft />
+                </button>
+                <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
+                    ⚙️ Settings
+                </h3>
+                <div style={{ width: '40px' }}></div>
+            </header>
 
-                    <SettingItem
-                        icon={FaSignOutAlt}
-                        title={t('logout')}
-                        subtitle={t('sign_out_account')}
-                        action={handleLogout}
-                    />
-
-                    <SettingItem
-                        icon={FaTrash}
-                        title={t('delete_account')}
-                        subtitle={t('permanent_deletion')}
-                        action={handleDeleteAccount}
-                        danger={true}
-                    />
-                </div>
-
-                {/* App Info */}
+            {/* User Info Card */}
+            <div style={{
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1))',
+                border: '2px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: '20px',
+                padding: '1.5rem',
+                margin: '1rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem'
+            }}>
                 <div style={{
-                    textAlign: 'center',
-                    padding: '2rem 0',
-                    color: 'var(--text-muted)',
-                    fontSize: '0.8rem'
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: userProfile?.profilePicture || userProfile?.photo_url
+                        ? `url(${userProfile?.profilePicture || userProfile?.photo_url})`
+                        : 'linear-gradient(135deg, var(--primary), #f97316)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    border: '3px solid var(--primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.5rem',
+                    color: 'white',
+                    fontWeight: '800'
                 }}>
-                    <div style={{ marginBottom: '0.5rem' }}>
-                        DineBuddies v1.0.0
-                    </div>
-                    <div>
-                        {t('all_rights_reserved')}
+                    {!userProfile?.profilePicture && !userProfile?.photo_url && (
+                        (userProfile?.displayName || userProfile?.display_name || 'U')[0].toUpperCase()
+                    )}
+                </div>
+                <div style={{ flex: 1 }}>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '0.25rem' }}>
+                        {userProfile?.displayName || userProfile?.display_name || 'User'}
+                    </h2>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+                        {currentUser?.email}
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                        {isBusiness && (
+                            <div style={{
+                                display: 'inline-block',
+                                padding: '4px 10px',
+                                background: 'rgba(139, 92, 246, 0.2)',
+                                border: '1px solid rgba(139, 92, 246, 0.4)',
+                                borderRadius: '12px',
+                                fontSize: '0.7rem',
+                                fontWeight: '700',
+                                color: 'var(--primary)'
+                            }}>
+                                Business Account
+                            </div>
+                        )}
+                        {isBusiness && userProfile?.subscriptionTier === 'premium' && (
+                            <div style={{
+                                display: 'inline-block',
+                                padding: '4px 10px',
+                                background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(249, 115, 22, 0.2))',
+                                border: '1px solid rgba(251, 191, 36, 0.4)',
+                                borderRadius: '12px',
+                                fontSize: '0.7rem',
+                                fontWeight: '700',
+                                color: '#fbbf24'
+                            }}>
+                                💎 Premium
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Password Change Modal */}
-            {showPasswordModal && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: 'rgba(0,0,0,0.8)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000,
-                    padding: '1rem'
-                }}>
+            {/* Settings Sections */}
+            {settingsSections.map((section, sectionIndex) => (
+                <div key={sectionIndex} style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{
+                        fontSize: '0.85rem',
+                        fontWeight: '700',
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        padding: '0 1.5rem',
+                        marginBottom: '0.75rem'
+                    }}>
+                        {section.title}
+                    </h3>
                     <div style={{
                         background: 'var(--bg-card)',
-                        borderRadius: '24px',
-                        padding: '2rem',
-                        maxWidth: '400px',
-                        width: '100%',
-                        border: '1px solid var(--border-color)'
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '16px',
+                        margin: '0 1.5rem',
+                        overflow: 'hidden'
                     }}>
-                        <h3 style={{ fontSize: '1.3rem', fontWeight: '900', marginBottom: '1.5rem' }}>
-                            {t('change_password')}
-                        </h3>
-
-                        <form onSubmit={handlePasswordChange}>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{
-                                    display: 'block',
-                                    marginBottom: '0.5rem',
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-muted)'
+                        {section.items.map((item, itemIndex) => (
+                            <div
+                                key={itemIndex}
+                                onClick={item.onClick}
+                                style={{
+                                    padding: '1rem 1.25rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '1rem',
+                                    cursor: 'pointer',
+                                    borderBottom: itemIndex < section.items.length - 1 ? '1px solid var(--border-color)' : 'none',
+                                    transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(139, 92, 246, 0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'transparent';
+                                }}
+                            >
+                                <div style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '10px',
+                                    background: `${item.color}15`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.1rem',
+                                    color: item.color
                                 }}>
-                                    {t('current_password')}
-                                </label>
-                                <input
-                                    type="password"
-                                    value={passwordData.current}
-                                    onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
-                                    required
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px',
-                                        background: 'rgba(255,255,255,0.05)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'white',
-                                        fontSize: '1rem'
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{
-                                    display: 'block',
-                                    marginBottom: '0.5rem',
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-muted)'
-                                }}>
-                                    {t('new_password')}
-                                </label>
-                                <input
-                                    type="password"
-                                    value={passwordData.new}
-                                    onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
-                                    required
-                                    minLength={6}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px',
-                                        background: 'rgba(255,255,255,0.05)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'white',
-                                        fontSize: '1rem'
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{
-                                    display: 'block',
-                                    marginBottom: '0.5rem',
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-muted)'
-                                }}>
-                                    {t('confirm_password')}
-                                </label>
-                                <input
-                                    type="password"
-                                    value={passwordData.confirm}
-                                    onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
-                                    required
-                                    minLength={6}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px',
-                                        background: 'rgba(255,255,255,0.05)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'white',
-                                        fontSize: '1rem'
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowPasswordModal(false);
-                                        setPasswordData({ current: '', new: '', confirm: '' });
-                                    }}
-                                    style={{
-                                        flex: 1,
-                                        padding: '14px',
-                                        background: 'transparent',
-                                        border: '1px solid var(--border-color)',
-                                        color: 'white',
-                                        borderRadius: '12px',
+                                    {item.icon}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{
                                         fontWeight: '700',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {t('cancel')}
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        flex: 1,
-                                        padding: '14px',
-                                        background: 'linear-gradient(135deg, var(--accent) 0%, var(--luxury-gold) 100%)',
-                                        border: 'none',
-                                        color: 'white',
-                                        borderRadius: '12px',
-                                        fontWeight: '900',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {t('update')}
-                                </button>
+                                        marginBottom: '2px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        {item.label}
+                                        {item.badge && (
+                                            <span style={{
+                                                padding: '2px 8px',
+                                                background: 'linear-gradient(135deg, #fbbf24, #f97316)',
+                                                borderRadius: '8px',
+                                                fontSize: '0.65rem',
+                                                fontWeight: '800',
+                                                color: 'white',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.3px'
+                                            }}>
+                                                {item.badge}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {item.value && (
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                            {item.value}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }} />
                             </div>
-                        </form>
+                        ))}
                     </div>
                 </div>
-            )}
+            ))}
+
+            {/* Danger Zone */}
+            <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{
+                    fontSize: '0.85rem',
+                    fontWeight: '700',
+                    color: '#ef4444',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    padding: '0 1.5rem',
+                    marginBottom: '0.75rem'
+                }}>
+                    Danger Zone
+                </h3>
+                <div style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '16px',
+                    margin: '0 1.5rem',
+                    overflow: 'hidden'
+                }}>
+                    {/* Logout */}
+                    <div
+                        onClick={handleLogout}
+                        style={{
+                            padding: '1rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid var(--border-color)',
+                            transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                        }}
+                    >
+                        <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1.1rem',
+                            color: '#ef4444'
+                        }}>
+                            <FaSignOutAlt />
+                        </div>
+                        <div style={{ flex: 1, fontWeight: '700', color: '#ef4444' }}>
+                            Logout
+                        </div>
+                        <FaChevronRight style={{ color: '#ef4444', fontSize: '0.9rem' }} />
+                    </div>
+
+                    {/* Delete Account */}
+                    <div
+                        onClick={handleDeleteAccount}
+                        style={{
+                            padding: '1rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                        }}
+                    >
+                        <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1.1rem',
+                            color: '#ef4444'
+                        }}>
+                            <FaTrash />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: '700', color: '#ef4444', marginBottom: '2px' }}>
+                                {showDeleteConfirm ? 'Tap again to confirm' : 'Delete Account'}
+                            </div>
+                            {showDeleteConfirm && (
+                                <div style={{ fontSize: '0.85rem', color: '#ef4444' }}>
+                                    This action cannot be undone
+                                </div>
+                            )}
+                        </div>
+                        {deleting ? (
+                            <div style={{
+                                width: '20px',
+                                height: '20px',
+                                border: '2px solid #ef4444',
+                                borderTop: '2px solid transparent',
+                                borderRadius: '50%',
+                                animation: 'spin 1s linear infinite'
+                            }} />
+                        ) : (
+                            <FaChevronRight style={{ color: '#ef4444', fontSize: '0.9rem' }} />
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* App Version */}
+            <div style={{
+                textAlign: 'center',
+                padding: '1rem',
+                color: 'var(--text-muted)',
+                fontSize: '0.85rem'
+            }}>
+                DineBuddies v1.0.0
+            </div>
         </div>
     );
 };

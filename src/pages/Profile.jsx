@@ -8,6 +8,9 @@ import { uploadProfilePicture } from '../utils/imageUpload';
 import ImageUpload from '../components/ImageUpload';
 import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+// Profile Enhancements
+import { StatisticsCards, Achievements } from '../components/ProfileEnhancements';
+import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
 
 const Profile = () => {
     const { t, i18n } = useTranslation();
@@ -21,10 +24,17 @@ const Profile = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Redirect guests to login - DISABLED this redirect because we want to show a guest-specific profile view
+    // useEffect(() => {
+    //     if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest') {
+    //         navigate('/login');
+    //     }
+    // }, [userProfile, navigate]);
+
     // Redirect business accounts to business profile
     useEffect(() => {
         if (userProfile?.accountType === 'business') {
-            navigate('/business-profile');
+            navigate(`/partner/${currentUser.uid}`);
         }
     }, [userProfile, navigate]);
 
@@ -211,44 +221,7 @@ const Profile = () => {
 
     return (
         <div className="profile-page" style={{ paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out' }}>
-            {/* Settings Button */}
-            <div style={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 100,
-                background: 'var(--bg-body)',
-                padding: '1rem 1.5rem',
-                display: 'flex',
-                justifyContent: 'flex-end'
-            }}>
-                <button
-                    onClick={() => navigate('/settings')}
-                    style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        color: 'white',
-                        width: '45px',
-                        height: '45px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        fontSize: '1.2rem',
-                        transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.2)';
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--bg-card)';
-                        e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                >
-                    <FaCog />
-                </button>
-            </div>
+
 
             <div style={{ padding: '0 1.5rem 2rem' }}>
 
@@ -277,26 +250,30 @@ const Profile = () => {
                                     >
                                         <img src={formData.avatar} alt={formData.name} className="host-avatar" />
                                     </div>
-                                    <button
-                                        onClick={() => setIsEditing(true)}
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: '0',
-                                            right: '0',
-                                            background: 'var(--primary)',
-                                            color: 'white',
-                                            width: '35px',
-                                            height: '35px',
-                                            borderRadius: '50%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            border: '3px solid var(--bg-body)',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <FaEdit size={14} style={{ margin: 'auto' }} />
-                                    </button>
+                                    {userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
+                                        <button
+                                            onClick={() => navigate('/create-story')}
+                                            style={{
+                                                position: 'absolute',
+                                                bottom: '5px',
+                                                right: '5px',
+                                                background: '#ef4444',
+                                                color: 'white',
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                border: '3px solid var(--bg-body)',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                                            }}
+                                            title="Add Story"
+                                        >
+                                            <FaPlus size={12} />
+                                        </button>
+                                    )}
                                 </div>
                             )}
 
@@ -350,7 +327,7 @@ const Profile = () => {
                                                 borderRadius: '12px',
                                                 border: formData.gender === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                 background: formData.gender === 'male' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                                color: 'white',
+                                                color: 'var(--text-main)',
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -371,7 +348,7 @@ const Profile = () => {
                                                 borderRadius: '12px',
                                                 border: formData.gender === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                 background: formData.gender === 'female' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                                color: 'white',
+                                                color: 'var(--text-main)',
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -457,7 +434,7 @@ const Profile = () => {
                             </>
                         )}
 
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '2rem', marginTop: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem', marginTop: '1rem' }}>
                             <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers', { state: { activeTab: 'followers' } })}>
                                 <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.followersCount || 0}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('followers')}</div>
@@ -468,6 +445,73 @@ const Profile = () => {
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('following')}</div>
                             </div>
                         </div>
+
+                        {/* Profile Actions: Edit & Create Invitation - Hide for Guests */}
+                        {!isEditing && userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
+                            <div style={{ display: 'flex', gap: '12px', marginBottom: '1rem' }}>
+                                <button
+                                    onClick={() => setIsEditing(true)}
+                                    className="btn"
+                                    style={{
+                                        flex: 1,
+                                        background: 'var(--bg-card)',
+                                        border: '1px solid var(--border-color)',
+                                        color: 'var(--text-main)',
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        fontWeight: '700',
+                                        fontSize: '0.9rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {t('edit_profile') || 'Edit Profile'}
+                                </button>
+                                <button
+                                    onClick={() => navigate('/create')}
+                                    className="btn"
+                                    style={{
+                                        flex: 1,
+                                        background: 'linear-gradient(135deg, var(--primary), #eab308)', // Gold
+                                        border: 'none',
+                                        color: 'white',
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        fontWeight: '700',
+                                        fontSize: '0.9rem',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <FaPlus /> {t('create_invitation', 'Create Invitation')}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Guest Mode Login Prompt */}
+                        {(userProfile?.accountType === 'guest' || userProfile?.isGuest) && (
+                            <div style={{
+                                padding: '1.5rem',
+                                background: 'rgba(139, 92, 246, 0.1)',
+                                borderRadius: '16px',
+                                border: '1px dashed var(--primary)',
+                                textAlign: 'center',
+                                marginBottom: '1.5rem'
+                            }}>
+                                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--text-white)' }}>
+                                    {t('guest_welcome_title', { defaultValue: 'Join DineBuddies' })}
+                                </h3>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                                    {t('guest_profile_desc', { defaultValue: 'Create an account to customize your profile and join events.' })}
+                                </p>
+                                <button
+                                    onClick={() => navigate('/login')}
+                                    className="btn btn-primary"
+                                    style={{ width: '100%', padding: '12px' }}
+                                >
+                                    {t('login_signup')}
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Plan & Subscription Card - Only show if user has active subscription */}
@@ -511,15 +555,26 @@ const Profile = () => {
                         </div>
                     )}
 
+                    {/* 📊 STATISTICS CARDS */}
+                    <StatisticsCards userId={currentUser?.uid || currentUser?.id} />
+
+                    {/* 🏆 ACHIEVEMENTS */}
+                    <Achievements userId={currentUser?.uid || currentUser?.id} />
+
+                    {/* 📍 FAVORITE PLACES */}
+                    <FavoritePlaces userId={currentUser?.uid || currentUser?.id} />
+
+
+
                     <div style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
-                        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', overflowX: 'auto' }}>
-                            <button onClick={() => setActiveTab('posted')} style={{ flex: 1, padding: '15px', border: 'none', background: 'transparent', color: activeTab === 'posted' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'posted' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                            <button onClick={() => setActiveTab('posted')} style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', color: activeTab === 'posted' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'posted' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                                 {t('stats_posted')} ({myPostedInvitations.length})
                             </button>
-                            <button onClick={() => setActiveTab('joined')} style={{ flex: 1, padding: '15px', border: 'none', background: 'transparent', color: activeTab === 'joined' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'joined' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap' }}>
+                            <button onClick={() => setActiveTab('joined')} style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', color: activeTab === 'joined' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'joined' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                                 {t('stats_joined')} ({myJoinedInvitations.length})
                             </button>
-                            <button onClick={() => setActiveTab('private')} style={{ flex: 1, padding: '15px', border: 'none', background: 'transparent', color: activeTab === 'private' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'private' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                            <button onClick={() => setActiveTab('private')} style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', color: activeTab === 'private' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'private' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem' }}>
                                 {t('stats_private')} ({myPrivateInvitations.length})
                                 {myPrivateInvitations.length > 0 && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary)' }}></span>}
                             </button>

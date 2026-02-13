@@ -1,27 +1,22 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useInvitations } from '../context/InvitationContext';
 import { useTranslation } from 'react-i18next';
 import PostCard from '../components/PostCard';
 import { FaGlobe, FaBuilding } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import StoriesBar from '../components/StoriesBar';
+import StoryViewer from '../components/StoryViewer';
 
 const FriendsFeed = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { partnerPosts, restaurants } = useInvitations();
+    const { restaurants } = useInvitations();
+    const [viewingStory, setViewingStory] = useState(null);
 
     // All City Posts (Public Feed)
     const cityPosts = useMemo(() => {
-        if (!partnerPosts) return [];
-        // Filter: Must be explicitly public, OR legacy posts (undefined) are treated as public for now to avoid empty feed
-        // But the user specifically wants separation.
-        // Let's filter: display if isPublic is true.
-        // Legacy posts without flags were "Community" by default in the code logic (only spread in IF block).
-        // So legacy posts are effectively private/community.
-        return partnerPosts
-            .filter(post => post.isPublic !== false)
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }, [partnerPosts]);
+        return [];
+    }, []);
 
     return (
         <div className="page-container" style={{ paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out' }}>
@@ -34,6 +29,9 @@ const FriendsFeed = () => {
                     {t('discover_offers')}
                 </p>
             </div>
+
+            {/* Stories Bar */}
+            <StoriesBar onStoryClick={setViewingStory} />
 
             <div style={{ padding: '0 1.25rem' }}>
                 {cityPosts.length === 0 ? (
@@ -72,6 +70,14 @@ const FriendsFeed = () => {
                     </div>
                 )}
             </div>
+
+            {/* Story Viewer */}
+            {viewingStory && (
+                <StoryViewer
+                    partnerStories={viewingStory}
+                    onClose={() => setViewingStory(null)}
+                />
+            )}
         </div>
     );
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArrowLeft } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import RestaurantRating from '../components/RestaurantRating';
 
@@ -10,6 +11,8 @@ const RestaurantDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const context = useInvitations();
+    const { userProfile } = useAuth();
+    const isBusinessAccount = userProfile?.accountType === 'business';
 
     // Safety check for context data
     const restaurants = context?.restaurants || [];
@@ -102,33 +105,41 @@ const RestaurantDetails = () => {
                                 {t('members_count', { count: '1,234' })}
                             </p>
                         </div>
-                        <button
-                            onClick={() => toggleCommunity(id)}
-                            style={{
-                                background: (currentUser.joinedCommunities || []).includes(id)
-                                    ? 'transparent'
-                                    : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                                color: 'white',
-                                border: (currentUser.joinedCommunities || []).includes(id)
-                                    ? '1px solid var(--primary)'
-                                    : 'none',
-                                padding: '10px 20px',
-                                borderRadius: '12px',
-                                fontSize: '0.85rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                boxShadow: (currentUser.joinedCommunities || []).includes(id)
-                                    ? 'none'
-                                    : '0 4px 12px rgba(139, 92, 246, 0.3)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
-                        >
-                            {(currentUser.joinedCommunities || []).includes(id)
-                                ? t('member_joined')
-                                : t('join_plus')}
-                        </button>
+                        {!isBusinessAccount && (
+                            <button
+                                onClick={() => {
+                                    if (currentUser?.isGuest) {
+                                        navigate('/login');
+                                        return;
+                                    }
+                                    toggleCommunity(id);
+                                }}
+                                style={{
+                                    background: (currentUser.joinedCommunities || []).includes(id)
+                                        ? 'transparent'
+                                        : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+                                    color: 'white',
+                                    border: (currentUser.joinedCommunities || []).includes(id)
+                                        ? '1px solid var(--primary)'
+                                        : 'none',
+                                    padding: '10px 20px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    boxShadow: (currentUser.joinedCommunities || []).includes(id)
+                                        ? 'none'
+                                        : '0 4px 12px rgba(139, 92, 246, 0.3)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                {(currentUser.joinedCommunities || []).includes(id)
+                                    ? t('member_joined')
+                                    : t('join_plus')}
+                            </button>
+                        )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -183,26 +194,34 @@ const RestaurantDetails = () => {
                 />
 
                 <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button
-                        onClick={() => navigate('/create', {
-                            state: {
-                                fromRestaurant: true,
-                                restaurantData: {
-                                    name: restaurant.name,
-                                    location: restaurant.location,
-                                    image: restaurant.image,
-                                    lat: restaurant.lat,
-                                    lng: restaurant.lng,
-                                    type: restaurant.type
+                    {!isBusinessAccount && (
+                        <button
+                            onClick={() => {
+                                if (currentUser?.isGuest) {
+                                    navigate('/login');
+                                    return;
                                 }
-                            }
-                        })}
-                        className="btn btn-primary"
-                        style={{ flex: 3, height: '55px', fontSize: '1.1rem' }}
-                    >
-                        {t('book_venue_btn')}
-                    </button>
-                    <button style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'white', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                navigate('/create', {
+                                    state: {
+                                        fromRestaurant: true,
+                                        restaurantData: {
+                                            name: restaurant.name,
+                                            location: restaurant.location,
+                                            image: restaurant.image,
+                                            lat: restaurant.lat,
+                                            lng: restaurant.lng,
+                                            type: restaurant.type
+                                        }
+                                    }
+                                });
+                            }}
+                            className="btn btn-primary"
+                            style={{ flex: 3, height: '55px', fontSize: '1.1rem' }}
+                        >
+                            {t('book_venue_btn')}
+                        </button>
+                    )}
+                    <button style={{ flex: isBusinessAccount ? 1 : undefined, background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'white', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <FaPhone />
                     </button>
                 </div>

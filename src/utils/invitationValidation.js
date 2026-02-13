@@ -7,6 +7,12 @@ import { sendNotification } from './notificationHelpers';
  */
 export const checkDailyInvitationLimit = async (userId) => {
     try {
+        // Validate userId
+        if (!userId) {
+            console.warn('checkDailyInvitationLimit: userId is undefined');
+            return { hasInvitationToday: false, count: 0 };
+        }
+
         const today = new Date().toISOString().split('T')[0];
         const invitationsRef = collection(db, 'invitations');
         const q = query(
@@ -31,18 +37,18 @@ export const checkDailyInvitationLimit = async (userId) => {
 };
 
 /**
- * Check if invitation has been edited before
+ * Check if invitation can be edited
+ * Note: Edit restriction removed - hosts can now edit invitations multiple times
  */
 export const canEditInvitation = (invitation) => {
     const editCount = invitation.editHistory?.length || 0;
-    const hasBeenEdited = editCount > 0;
 
     return {
-        canEdit: !hasBeenEdited,
+        canEdit: true, // Always allow editing
         editCount,
-        message: hasBeenEdited
-            ? 'Cannot edit invitation more than once'
-            : 'You can edit the invitation only once'
+        message: editCount > 0
+            ? `Invitation has been edited ${editCount} time(s)`
+            : 'You can edit the invitation'
     };
 };
 
@@ -144,23 +150,24 @@ export const validateInvitationCreation = async (userId) => {
  */
 export const getInvitationEditStatus = (invitation) => {
     const editHistory = invitation.editHistory || [];
-    const hasBeenEdited = editHistory.length > 0;
+    const editCount = editHistory.length;
 
-    if (!hasBeenEdited) {
+    if (editCount === 0) {
         return {
             canEdit: true,
             status: 'can_edit',
-            message: 'You can edit time and date once',
+            message: 'You can edit time and date',
             icon: '✏️'
         };
     }
 
     const lastEdit = editHistory[editHistory.length - 1];
     return {
-        canEdit: false,
-        status: 'already_edited',
-        message: 'This invitation has been edited before',
+        canEdit: true, // Always allow editing
+        status: 'can_edit',
+        message: `Edited ${editCount} time(s). You can edit again`,
         lastEdit,
-        icon: '🔒'
+        editCount,
+        icon: '✏️'
     };
 };

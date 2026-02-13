@@ -1,69 +1,31 @@
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase/config';
+import imageCompression from 'browser-image-compression';
 
 /**
  * Compress and resize image before upload
  * @param {File} file - Image file to compress
- * @param {number} maxWidth - Maximum width (default: 1200)
- * @param {number} maxHeight - Maximum height (default: 1200)
- * @param {number} quality - Image quality 0-1 (default: 0.8)
+ * @param {Object} options - Compression options (maxSizeMB, maxWidthOrHeight, etc.)
  * @returns {Promise<Blob>} Compressed image blob
  */
-export const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
+export const compressImage = async (file, options = {}) => {
+    const defaultOptions = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: file.type || 'image/jpeg',
+        initialQuality: 0.8
+    };
 
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
+    const compressionOptions = { ...defaultOptions, ...options };
 
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-
-                // Calculate new dimensions
-                if (width > height) {
-                    if (width > maxWidth) {
-                        height = height * (maxWidth / width);
-                        width = maxWidth;
-                    }
-                } else {
-                    if (height > maxHeight) {
-                        width = width * (maxHeight / height);
-                        height = maxHeight;
-                    }
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                canvas.toBlob(
-                    (blob) => {
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Canvas to Blob conversion failed'));
-                        }
-                    },
-                    'image/jpeg',
-                    quality
-                );
-            };
-
-            img.onerror = (error) => {
-                reject(error);
-            };
-        };
-
-        reader.onerror = (error) => {
-            reject(error);
-        };
-    });
+    try {
+        const compressedFile = await imageCompression(file, compressionOptions);
+        return compressedFile;
+    } catch (error) {
+        console.error('Error compressing image:', error);
+        throw error;
+    }
 };
 
 /**
@@ -71,15 +33,16 @@ export const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality =
  * @param {File|Blob} file - Image file to upload
  * @param {string} path - Storage path (e.g., 'avatars/userId.jpg')
  * @param {Function} onProgress - Progress callback (percentage)
+ * @param {Object} compressionOptions - Options for image compression
  * @returns {Promise<string>} Download URL
  */
-export const uploadImage = (file, path, onProgress = null) => {
+export const uploadImage = (file, path, onProgress = null, compressionOptions = {}) => {
     return new Promise(async (resolve, reject) => {
         try {
             // Compress image before upload
             let uploadFile = file;
             if (file.type.startsWith('image/')) {
-                uploadFile = await compressImage(file);
+                uploadFile = await compressImage(file, compressionOptions);
             }
 
             const storageRef = ref(storage, path);

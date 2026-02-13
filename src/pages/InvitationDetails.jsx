@@ -1,27 +1,95 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaEdit, FaCheckCircle, FaStar } from 'react-icons/fa';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaCheckCircle, FaStar, FaEdit, FaImage, FaUserFriends, FaTrash } from 'react-icons/fa';
+import VideoPlayer from '../components/Shared/VideoPlayer';
 
 import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
-import { updateInvitationDateTime, getInvitationEditStatus } from '../utils/invitationValidation';
+import CancellationModal from '../components/CancellationModal';
+import GroupChat from '../components/GroupChat'; // Added Import
+import { updateGuestCount, updateInvitationImage } from '../utils/invitationEditHelpers';
+import { cancelInvitation } from '../utils/invitationCancellation';
+import { completeInvitation, canCompleteInvitation } from '../utils/invitationCompletion';
+import { updateSocialMetaTags, generateInvitationMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import MembersList from '../components/Invitation/MembersList';
+import InvitationHeader from '../components/Invitation/InvitationHeader';
+import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
+import InvitationTimeline from '../components/Invitation/InvitationTimeline';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
     const { id } = useParams();
     const navigate = useNavigate();
+    const routerLocation = useLocation();
+    const joinRequestsRef = useRef(null);
 
-    const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, sendChatMessage, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
-    const [message, setMessage] = useState('');
-    const [groupChatMessages, setGroupChatMessages] = useState([]);
+    const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
+    const { userProfile } = useAuth(); // Get userProfile for accountType check
     const [userLocation, setUserLocation] = useState(null);
     const [requestersData, setRequestersData] = useState({});
+    const [showCancellationModal, setShowCancellationModal] = useState(false);
+    const [isCompleting, setIsCompleting] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [fetchedInvitation, setFetchedInvitation] = useState(null);
+    const [locationStatus, setLocationStatus] = useState('');
+    const [showShare, setShowShare] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
     const chatEndRef = useRef(null);
 
-    const invitation = invitations.find(inv => inv.id === id);
+    // ... existing code ...
+
+    const handleUpdateStatus = async (newStatus) => {
+        if (isUpdatingStatus) return;
+        setIsUpdatingStatus(true);
+        try {
+            await updateMeetingStatus(id, newStatus);
+            // If using fetchedInvitation (not in context), update local state manually
+            if (!invitations.find(inv => inv.id === id) && fetchedInvitation) {
+                setFetchedInvitation(prev => ({
+                    ...prev,
+                    participantStatus: {
+                        ...(prev.participantStatus || {}),
+                        [currentUser.id]: newStatus
+                    },
+                    meetingStatus: newStatus === 'completed' ? 'completed' : prev.meetingStatus,
+                    completedAt: newStatus === 'completed' ? new Date() : prev.completedAt
+                }));
+            }
+        } catch (error) {
+            console.error("Failed to update status:", error);
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
+
+    // Check eligibility based on gender and age
+
+    // Try to find invitation in context first, fallback to fetched
+    let invitation = invitations.find(inv => inv.id === id);
+    if (!invitation && fetchedInvitation) {
+        invitation = fetchedInvitation;
+    }
+
+    // Fetch invitation from Firestore if not in context (for private invitations)
+    useEffect(() => {
+        const fetchInvitation = async () => {
+            if (!invitation && id && !loadingInvitations) {
+                try {
+                    const invDoc = await getDoc(doc(db, 'invitations', id));
+                    if (invDoc.exists()) {
+                        setFetchedInvitation({ id: invDoc.id, ...invDoc.data() });
+                    }
+                } catch (error) {
+                    console.error('Error fetching invitation:', error);
+                }
+            }
+        };
+        fetchInvitation();
+    }, [id, invitation, loadingInvitations]);
 
     // Calculate distance between two points (Haversine formula)
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -58,13 +126,21 @@ const InvitationDetails = () => {
         : null;
     const travelTime = distance ? Math.round((distance / 40) * 60) : null;
 
-    const scrollToBottom = () => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
+    // Scroll to section based on query parameter
     useEffect(() => {
-        scrollToBottom();
-    }, [invitation?.chat]);
+        const params = new URLSearchParams(routerLocation.search);
+        const section = params.get('section');
+
+        if (section === 'join-requests' && joinRequestsRef.current) {
+            setTimeout(() => {
+                joinRequestsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 500);
+        } else if (section === 'chat' && chatEndRef.current) {
+            setTimeout(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+        }
+    }, [routerLocation.search, invitation]);
 
     // Fetch requesters data
     useEffect(() => {
@@ -126,81 +202,186 @@ const InvitationDetails = () => {
         fetchJoinedMembersData();
     }, [invitation?.joined]);
 
-    // Real-time listener for group chat messages
+    // Update social meta tags when invitation loads
     useEffect(() => {
-        if (!id) return;
+        if (invitation) {
+            const metaData = generateInvitationMetaTags(invitation);
+            updateSocialMetaTags(metaData);
+        }
 
-        const messagesRef = collection(db, 'invitations', id, 'messages');
-        const q = query(messagesRef, orderBy('createdAt', 'asc'));
+        // Reset meta tags when component unmounts
+        return () => {
+            resetSocialMetaTags();
+        };
+    }, [invitation]);
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const messages = [];
-            snapshot.forEach((doc) => {
-                messages.push({
-                    id: doc.id,
-                    ...doc.data()
+    const [showCopiedToast, setShowCopiedToast] = useState(false);
+
+    const handleShare = async () => {
+        const shareUrl = window.location.href;
+        const shareTitle = invitation?.title || 'DineBuddies Invitation';
+        const shareText = invitation?.description || 'Join me for a meal!';
+
+        // Try native share API first (mobile)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: shareTitle,
+                    text: shareText,
+                    url: shareUrl,
                 });
-            });
-            setGroupChatMessages(messages);
-        }, (error) => {
-            console.error('Error listening to messages:', error);
-        });
-
-        return () => unsubscribe();
-    }, [id]);
-
-    // Scroll to bottom when messages change
-    useEffect(() => {
-        scrollToBottom();
-    }, [groupChatMessages]);
-
-    // Handle sending group chat message
-    const handleSendGroupMessage = async (e) => {
-        e.preventDefault();
-
-        console.log('Sending message...', { message, currentUser });
-
-        if (!message.trim()) {
-            console.log('Message is empty');
-            return;
+                return;
+            } catch (error) {
+                // User cancelled or error - fall through to clipboard
+                if (error.name !== 'AbortError') {
+                    console.error('Share failed:', error);
+                }
+            }
         }
 
-        if (!currentUser?.id) {
-            console.log('No current user');
-            return;
-        }
-
+        // Fallback: Copy to clipboard
         try {
-            const messagesRef = collection(db, 'invitations', id, 'messages');
-            const newMessage = {
-                text: message.trim(),
-                senderId: currentUser.id,
-                senderName: currentUser.display_name || currentUser.name || 'User',
-                senderAvatar: currentUser.photo_url || currentUser.avatar || '',
-                createdAt: serverTimestamp()
-            };
-
-            console.log('Adding message to Firestore:', newMessage);
-            await addDoc(messagesRef, newMessage);
-            console.log('Message sent successfully!');
-            setMessage('');
+            await navigator.clipboard.writeText(shareUrl);
+            setShowCopiedToast(true);
+            setTimeout(() => setShowCopiedToast(false), 3000);
         } catch (error) {
-            console.error('Error sending message:', error);
-            alert('Failed to send message: ' + error.message);
+            console.error('Copy failed:', error);
+            // Final fallback: select and copy
+            const textArea = document.createElement('textarea');
+            textArea.value = shareUrl;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setShowCopiedToast(true);
+            setTimeout(() => setShowCopiedToast(false), 3000);
         }
     };
 
-    const handleShare = () => {
-        if (navigator.share) {
-            navigator.share({
-                title: invitation?.title || '',
-                text: invitation?.description || '',
-                url: window.location.href,
-            }).catch(console.error);
-        } else {
-            // Fallback: Copy to clipboard
-            navigator.clipboard.writeText(window.location.href);
-            alert(t('link_copied'));
+    const handleCancelInvitation = async (reason, customReason) => {
+        try {
+            const result = await cancelInvitation(id, reason, customReason, currentUser);
+
+            if (result.success) {
+                setShowCancellationModal(false);
+
+                // Build success message with penalty information
+                let message = t('invitation_cancelled_success', { count: result.notifiedUsers });
+
+                if (result.penalty) {
+                    const penalty = result.penalty;
+                    message += '\n\n';
+
+                    if (penalty.level === 0 && result.isExempt) {
+                        // Exempted - no penalty
+                        message += `${penalty.icon} ${t('cancellation_exempt')}\n${t('no_participants_affected')}`;
+                    } else if (penalty.level === 1) {
+                        // Warning
+                        message += `${penalty.icon} ${t('cancellation_warning')}\n${t('cancellation_count', { count: result.cancellationCount })}`;
+                    } else if (penalty.level === 2) {
+                        // 2 weeks restriction
+                        message += `${penalty.icon} ${t('account_restricted')}\n${t('restriction_duration', { days: penalty.duration })}\n${t('cancellation_count', { count: result.cancellationCount })}`;
+                    } else if (penalty.level === 3) {
+                        // 1 month ban
+                        message += `${penalty.icon} ${t('account_banned')}\n${t('ban_duration', { days: penalty.duration })}\n${t('cancellation_count', { count: result.cancellationCount })}`;
+                    } else if (penalty.level >= 4) {
+                        // 3 months long ban
+                        message += `${penalty.icon} ${t('account_long_banned')}\n${t('ban_duration', { days: penalty.duration })}\n${t('cancellation_count', { count: result.cancellationCount })}`;
+                    }
+                }
+
+                alert(message);
+                navigate('/');
+            } else {
+                alert(result.error);
+            }
+        } catch (error) {
+            console.error('Error cancelling invitation:', error);
+            alert('Failed to cancel invitation');
+        }
+    };
+
+    // Handle completing invitation with location verification
+    const handleCompleteInvitation = async () => {
+        if (!invitation || !currentUser) return;
+
+        // Check if can complete
+        const check = canCompleteInvitation(invitation, currentUser);
+        if (!check.canComplete) {
+            const friendlyMessage = i18n.language === 'ar'
+                ? check.reason === 'Only the host can complete the invitation'
+                    ? 'فقط صاحب الدعوة يمكنه إتمامها'
+                    : check.reason === 'No one has joined yet'
+                        ? 'لا يوجد مشاركين بعد'
+                        : check.reason === 'Already completed'
+                            ? 'تم إتمام هذه الدعوة مسبقاً'
+                            : check.reason
+                : check.reason;
+
+            alert(friendlyMessage);
+            return;
+        }
+
+        // Confirm with user - simple and friendly
+        const confirmMessage = i18n.language === 'ar'
+            ? 'هل أنت متأكد من إتمام الدعوة؟'
+            : 'Are you sure you want to complete this invitation?';
+
+        if (!window.confirm(confirmMessage)) {
+            return;
+        }
+
+        setIsCompleting(true);
+        setLocationStatus(t('verifying_location') || 'Verifying...');
+
+        try {
+            // Complete invitation (with location verification)
+            const result = await completeInvitation(id, invitation, currentUser);
+
+            if (result.success) {
+                // Success - simple and friendly
+                const successMessage = i18n.language === 'ar'
+                    ? '🎉 تم إتمام الدعوة بنجاح!\n\nشكراً لك، نتمنى أن تكون قد استمتعت بوقتك!'
+                    : '🎉 Invitation completed successfully!\n\nThank you! Hope you had a great time!';
+
+                alert(successMessage);
+                setLocationStatus('');
+
+                // Refresh page or navigate
+                window.location.reload();
+            } else {
+                // Failed - friendly message without technical details
+                let errorMessage;
+
+                if (result.requiresLocation) {
+                    // Location verification failed - simple message
+                    errorMessage = i18n.language === 'ar'
+                        ? '😊 يبدو أنك لست في مكان الدعوة حالياً\n\nيمكنك إتمام الدعوة عندما تصل إلى المطعم'
+                        : '😊 It looks like you\'re not at the venue yet\n\nYou can complete the invitation once you arrive at the restaurant';
+                } else if (result.requiresPermission) {
+                    // Permission denied - friendly request
+                    errorMessage = i18n.language === 'ar'
+                        ? '📍 نحتاج إلى معرفة موقعك للتأكد من وصولك\n\nيرجى السماح بالوصول إلى الموقع في إعدادات المتصفح'
+                        : '📍 We need to verify you\'re at the venue\n\nPlease allow location access in your browser settings';
+                } else {
+                    // Generic error
+                    errorMessage = i18n.language === 'ar'
+                        ? 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى'
+                        : 'Sorry, something went wrong. Please try again';
+                }
+
+                alert(errorMessage);
+                setLocationStatus('');
+            }
+        } catch (error) {
+            console.error('Error completing invitation:', error);
+            const errorMsg = i18n.language === 'ar'
+                ? 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى'
+                : 'Sorry, something went wrong. Please try again';
+            alert(errorMsg);
+            setLocationStatus('');
+        } finally {
+            setIsCompleting(false);
         }
     };
 
@@ -241,14 +422,34 @@ const InvitationDetails = () => {
         );
     }
 
-    const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange } = invitation;
+    const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange, privacy, invitedUserIds = [], mediaType, customVideo, videoThumbnail, customImage, restaurantImage, restaurantName } = invitation;
+
+    // Determine media to display
+    const isVideo = mediaType === 'video' && customVideo;
+    const mediaUrl = isVideo
+        ? customVideo
+        : customImage || restaurantImage || image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
+    const thumbnailUrl = isVideo ? videoThumbnail : mediaUrl;
     const isHost = author?.id === currentUser?.id;
     const isAccepted = joined.includes(currentUser.id);
     const isPending = requests.includes(currentUser.id);
     const spotsLeft = guestsNeeded - joined.length;
 
+    // Check if user is invited to private invitation
+    const isInvited = privacy === 'private' && invitedUserIds.includes(currentUser?.id);
+
+    // Determine current user's specific status for the timeline
+    // If global meeting is completed, everyone sees completed.
+    // Otherwise, see personal status (on_way/arrived) or default to 'planning'.
+    const myStatus = invitation?.participantStatus?.[currentUser?.id] || (meetingStatus === 'completed' ? 'completed' : 'planning');
+
     // Check eligibility based on gender and age
     const checkEligibility = () => {
+        // Business accounts cannot join invitations
+        if (userProfile?.accountType === 'business') {
+            return { eligible: false, reason: t('business_cannot_join', { defaultValue: 'Business accounts cannot join invitations' }) };
+        }
+
         // Check gender preference
         if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
             return { eligible: false, reason: t('gender_mismatch') };
@@ -267,649 +468,314 @@ const InvitationDetails = () => {
     };
     const eligibility = checkEligibility();
 
-    const handleSendMessage = (e) => {
-        e.preventDefault();
-        if (!message.trim()) return;
-        sendChatMessage(id, message);
-        setMessage('');
-    };
-
 
     return (
         <div className="page-container details-page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
-            {/* Elegant Header */}
-            <header className="app-header sticky-header-glass" style={{ position: 'sticky', top: 0, zIndex: 100, padding: '0 1rem', flexShrink: 0 }}>
-                <button className="back-btn" onClick={() => navigate('/')} aria-label="Go back">
-                    <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
+            {/* Header Actions - Absolute on top of Hero */}
+            <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 50 }}>
+                <button
+                    onClick={() => navigate('/')}
+                    style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer' }}
+                >
+                    <FaArrowRight style={{ transform: i18n.language === 'ar' ? 'rotate(0deg)' : 'rotate(180deg)' }} />
                 </button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: '800', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px', margin: '0 auto' }}>{title}</h3>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: '700' }}>
-                        {isHost ? t('manage_invitation') : (isAccepted ? t('comments_title') : t('invitation_details'))}
-                    </span>
-                </div>
-                <button className="back-btn" onClick={handleShare} aria-label="Share" style={{ background: 'transparent', border: 'none' }}>
-                    <FaShareAlt style={{ color: 'var(--text-white)', opacity: 0.8 }} />
-                </button>
-            </header>
+            </div>
 
             <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '100px' }} className="details-scroll-area">
-                {/* Invitation Summary Section - PUBLIC */}
-                <div style={{ padding: '1.25rem' }}>
-                    <div style={{
-                        background: 'var(--bg-card)',
-                        borderRadius: 'var(--radius-lg)',
-                        overflow: 'hidden',
-                        border: '1px solid var(--border-color)',
-                        boxShadow: 'var(--shadow-premium)'
-                    }}>
-                        <div style={{ height: '180px', position: 'relative' }}>
-                            <img src={image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800'} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, var(--bg-card))' }}></div>
+                <InvitationHeader
+                    invitation={invitation}
+                    isHost={isHost}
+                    onImageUpdate={() => document.getElementById('imageUpload')?.click()}
+                    onEdit={() => setIsEditing(true)}
+                    onDelete={() => setShowCancellationModal(true)}
+                    showShare={showShare}
+                    setShowShare={setShowShare}
+                />
+
+                {/* Hidden Input for Image Upload (kept for compatibility with onImageUpdate) */}
+                {isHost && (
+                    <input
+                        type="file"
+                        id="imageUpload"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = async (event) => {
+                                const imageUrl = event.target.result;
+                                const result = await updateInvitationImage(id, imageUrl);
+                                if (result.success) {
+                                    alert(t('image_updated'));
+                                    window.location.reload();
+                                }
+                            };
+                            reader.readAsDataURL(file);
+                        }}
+                    />
+                )}
+
+                <div style={{ padding: '1.5rem' }}>
+
+                    {/* Host Info - Small Compact */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '12px' }}>
+                        <img
+                            src={author.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author.id}`}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+                            alt={author.name}
+                        />
+                        <div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{author.name}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('host')}</div>
                         </div>
-                        <div style={{ padding: '1.25rem', marginTop: '-50px', position: 'relative' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                <h2 style={{ fontSize: '1.5rem', fontWeight: '900' }}>{title}</h2>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                    <div style={{ background: 'var(--primary)', color: 'white', padding: '4px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.7rem', fontWeight: '800' }}>
-                                        {t(`type_${invitation.type?.toLowerCase().replace(/ /g, '_')}`, { defaultValue: invitation.type || 'Other' })}
-                                    </div>
-                                    {!isHost && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); toggleFollow(author.id); }}
-                                            style={{
-                                                background: currentUser.following.includes(author.id) ? 'transparent' : 'rgba(255,255,255,0.1)',
-                                                border: `1px solid ${currentUser.following.includes(author.id) ? 'var(--primary)' : 'rgba(255,255,255,0.3)'}`,
-                                                color: 'white',
-                                                padding: '4px 10px',
-                                                borderRadius: '8px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: '800',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {currentUser.following.includes(author.id)
-                                                ? t('following_user')
-                                                : t('follow_user')}
-                                        </button>
-                                    )}
-                                </div>
+                        <div style={{ marginLeft: 'auto' }}>
+                            {currentUser.id !== author.id && (
+                                <button
+                                    onClick={() => toggleFollow(author.id)}
+                                    style={{
+                                        background: currentUser.following?.includes(author.id) ? 'var(--primary)' : 'transparent',
+                                        border: '1px solid var(--primary)',
+                                        color: currentUser.following?.includes(author.id) ? 'white' : 'var(--primary)',
+                                        padding: '4px 12px',
+                                        borderRadius: '20px',
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {currentUser.following?.includes(author.id) ? t('following') : t('follow')}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <InvitationInfoGrid
+                        invitation={invitation}
+                        distance={invitation.distance}
+                        restaurantName={restaurantName}
+                        t={t}
+                    />
+
+                    <InvitationTimeline
+                        myStatus={myStatus}
+                        isAccepted={isAccepted}
+                        isHost={isHost}
+                        onUpdateStatus={handleUpdateStatus}
+                        onComplete={handleCompleteInvitation}
+                        isUpdatingStatus={isUpdatingStatus || isCompleting}
+                    />
+
+                    {/* Description */}
+                    <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '0.5rem' }}>{t('about_event')}</h4>
+                    <p style={{ lineHeight: '1.6', color: 'var(--text-muted)', marginBottom: '2rem' }}>
+                        {description || t('no_description')}
+                    </p>
+                    {/* NEW: Time Change Approval Bar */}
+                    {invitation.pendingChangeApproval && invitation.pendingChangeApproval.includes(currentUser.id) && (
+                        <div style={{ background: 'var(--primary)', padding: '12px', borderRadius: '12px', marginBottom: '1rem', animation: 'pulse 2s infinite' }}>
+                            <p style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '8px' }}>{t('time_change_warning')}</p>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => approveNewTime(id)} style={{ flex: 1, padding: '6px', background: 'white', color: 'var(--primary)', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>{t('approve_time')}</button>
+                                <button onClick={() => rejectNewTime(id)} style={{ flex: 1, padding: '6px', background: 'rgba(0,0,0,0.2)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>{t('withdraw')}</button>
                             </div>
+                        </div>
+                    )}
 
-                            {/* Meeting Journey Timeline */}
-                            {(isHost || isAccepted || (invitation.pendingChangeApproval && invitation.pendingChangeApproval.includes(currentUser.id))) && (
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '1rem', flexWrap: 'wrap' }}>
+                        {((isAccepted || isHost) && myStatus === 'planning') && (
+                            <button
+                                onClick={() => handleUpdateStatus('on_way')}
+                                disabled={isUpdatingStatus}
+                                className="btn btn-primary"
+                                style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', opacity: isUpdatingStatus ? 0.7 : 1, cursor: isUpdatingStatus ? 'not-allowed' : 'pointer' }}
+                            >
+                                {isUpdatingStatus ? '...' : t('im_on_way')}
+                            </button>
+                        )}
+                        {((isAccepted || isHost) && myStatus === 'on_way') && (
+                            <button
+                                onClick={() => handleUpdateStatus('arrived')}
+                                disabled={isUpdatingStatus}
+                                className="btn btn-secondary"
+                                style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', opacity: isUpdatingStatus ? 0.7 : 1, cursor: isUpdatingStatus ? 'not-allowed' : 'pointer' }}
+                            >
+                                {isUpdatingStatus ? '...' : t('ive_arrived')}
+                            </button>
+                        )}
+                        {isHost && (
+                            <>
+                                {/* Complete Meeting Button with Location Verification */}
+                                {myStatus !== 'completed' && (
+                                    <button
+                                        onClick={handleCompleteInvitation}
+                                        disabled={isCompleting}
+                                        className="btn btn-primary"
+                                        style={{
+                                            flex: 1,
+                                            padding: '8px',
+                                            fontSize: '0.75rem',
+                                            borderRadius: '8px',
+                                            background: isCompleting ? 'var(--bg-secondary)' : 'var(--luxury-gold)',
+                                            border: 'none',
+                                            color: 'black',
+                                            opacity: isCompleting ? 0.6 : 1,
+                                            cursor: isCompleting ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        <FaCheckCircle /> {isCompleting ? locationStatus : t('complete_meeting')}
+                                    </button>
+                                )}
+
+                            </>
+                        )}
+                        {!isHost && !isAccepted && (
+                            <div style={{ marginTop: '1.5rem' }}>
+                                <button
+                                    className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
+                                    onClick={async () => {
+                                        if (currentUser?.isGuest) {
+                                            navigate('/login');
+                                            return;
+                                        }
+                                        if (!eligibility.eligible) return;
+                                        if (isPending) {
+                                            console.log('🔴 Canceling request for invitation:', id);
+                                            cancelRequest(id);
+                                        } else {
+                                            console.log('🟢 Requesting to join invitation:', id);
+                                            console.log('Current user:', currentUser);
+                                            await requestToJoin(id);
+                                            console.log('✅ Request sent successfully');
+                                            alert(t('join_request_sent'));
+                                            // Force a full page reload to ensure the home page renders correctly
+                                            window.location.href = '/';
+                                        }
+                                    }}
+                                    disabled={!eligibility.eligible && !currentUser?.isGuest}
+                                    style={{
+                                        height: '60px',
+                                        fontSize: '1.1rem',
+                                        background: !eligibility.eligible && !currentUser?.isGuest ? 'rgba(55, 65, 81, 0.8)' : undefined,
+                                        color: !eligibility.eligible && !currentUser?.isGuest ? '#d1d5db' : undefined,
+                                        cursor: !eligibility.eligible && !currentUser?.isGuest ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    {currentUser?.isGuest ? t('login_to_join', { defaultValue: 'Login to Join' }) : (!eligibility.eligible ? (eligibility.reason || t('invite_unavailable')) : (isPending ? t('joined_btn') : t('join_btn')))}
+                                </button>
+                                <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
+                                    {!eligibility.eligible ? eligibility.reason : (isPending ? t('request_sent_waiting') : t('join_to_chat'))}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* PRIVATE SECTION: Management & Chat */}
+                    {(isHost || isAccepted) ? (
+                        <>
+                            {/* Who's Coming - Social Trust Feature */}
+                            <MembersList
+                                joined={joined}
+                                author={author}
+                                joinedMembersData={joinedMembersData}
+                                spotsLeft={spotsLeft}
+                            />
+
+
+                            {/* Embedded Group Chat */}
+                            {(isAccepted || isHost) && (
                                 <div style={{
-                                    background: 'rgba(30, 41, 59, 0.4)',
-                                    borderRadius: 'var(--radius-md)',
-                                    padding: '1rem',
-                                    border: '1px solid rgba(255,255,255,0.05)',
+                                    padding: '0 1.25rem',
                                     marginBottom: '1.5rem',
-                                    position: 'relative'
+                                    opacity: meetingStatus === 'completed' ? 0.6 : 1,
+                                    pointerEvents: meetingStatus === 'completed' ? 'none' : 'auto'
                                 }}>
-                                    {/* NEW: Time Change Approval Bar */}
-                                    {invitation.pendingChangeApproval && invitation.pendingChangeApproval.includes(currentUser.id) && (
-                                        <div style={{ background: 'var(--primary)', padding: '12px', borderRadius: '12px', marginBottom: '1rem', animation: 'pulse 2s infinite' }}>
-                                            <p style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '8px' }}>{t('time_change_warning')}</p>
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button onClick={() => approveNewTime(id)} style={{ flex: 1, padding: '6px', background: 'white', color: 'var(--primary)', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>{t('approve_time')}</button>
-                                                <button onClick={() => rejectNewTime(id)} style={{ flex: 1, padding: '6px', background: 'rgba(0,0,0,0.2)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem' }}>{t('withdraw')}</button>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-white)', fontWeight: '800' }}>
+                                        {t('group_chat_title', { defaultValue: 'Group Chat' })}
+                                    </h4>
+                                    <GroupChat collectionPath={`invitations/${id}/messages`} />
+                                </div>
+                            )}
 
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', paddingBottom: '5px' }}>
-                                        {/* Horizontal Background Line */}
-                                        <div style={{ position: 'absolute', top: '15px', left: '10%', right: '10%', height: '2px', background: 'rgba(255,255,255,0.1)', zIndex: 1 }}></div>
-                                        {/* Active Progress Line */}
-                                        <div style={{
-                                            position: 'absolute', top: '15px', left: '10%',
-                                            width: meetingStatus === 'planning' ? '0%' : (meetingStatus === 'on_way' ? '40%' : '80%'),
-                                            height: '2px', background: 'var(--primary)', boxShadow: '0 0 8px var(--primary)', zIndex: 2, transition: 'width 0.8s ease'
-                                        }}></div>
-
-                                        <div style={{ textAlign: 'center', zIndex: 5, flex: 1 }}>
-                                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto 5px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🖊️</div>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: 'white' }}>{t('status_planning')}</span>
-                                        </div>
-                                        <div style={{ textAlign: 'center', zIndex: 5, flex: 1 }}>
-                                            <div style={{
-                                                width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto 5px',
-                                                background: meetingStatus === 'on_way' || meetingStatus === 'arrived' || meetingStatus === 'completed' ? 'var(--primary)' : 'var(--bg-card)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', fontSize: '1rem'
-                                            }}>🚗</div>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: meetingStatus === 'on_way' ? 'var(--primary)' : 'var(--text-muted)' }}>{t('status_on_way')}</span>
-                                        </div>
-                                        <div style={{ textAlign: 'center', zIndex: 5, flex: 1 }}>
-                                            <div style={{
-                                                width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto 5px',
-                                                background: meetingStatus === 'arrived' || meetingStatus === 'completed' ? 'var(--primary)' : 'var(--bg-card)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', fontSize: '1rem'
-                                            }}>📍</div>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: meetingStatus === 'arrived' ? 'var(--primary)' : 'var(--text-muted)' }}>{t('status_arrived')}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Action Buttons */}
-                                    <div style={{ display: 'flex', gap: '8px', marginTop: '1rem', flexWrap: 'wrap' }}>
-                                        {isAccepted && meetingStatus === 'planning' && (
-                                            <button onClick={() => updateMeetingStatus(id, 'on_way')} className="btn btn-primary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px' }}>
-                                                {t('im_on_way')}
-                                            </button>
-                                        )}
-                                        {isAccepted && meetingStatus === 'on_way' && (
-                                            <button onClick={() => updateMeetingStatus(id, 'arrived')} className="btn btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px' }}>
-                                                {t('ive_arrived')}
-                                            </button>
-                                        )}
-                                        {isHost && (
-                                            <>
-                                                {(!invitation.editHistory || invitation.editHistory.length === 0) && (
-                                                    <button
-                                                        onClick={async () => {
-                                                            const editStatus = getInvitationEditStatus(invitation);
-
-                                                            if (!editStatus.canEdit) {
-                                                                alert(editStatus.message);
-                                                                return;
-                                                            }
-
-                                                            const newDate = prompt(
-                                                                t('enter_new_date'),
-                                                                date.split('T')[0]
-                                                            );
-
-                                                            if (!newDate) return;
-
-                                                            const newTime = prompt(
-                                                                t('enter_new_time'),
-                                                                time
-                                                            );
-
-                                                            if (!newTime) return;
-
-                                                            const confirmMessage = t('time_change_confirm', {
-                                                                oldDate: date,
-                                                                oldTime: time,
-                                                                newDate: newDate,
-                                                                newTime: newTime,
-                                                                count: joined.length
-                                                            });
-
-                                                            if (!window.confirm(confirmMessage)) return;
-
-                                                            const result = await updateInvitationDateTime(
-                                                                id,
-                                                                newDate,
-                                                                newTime,
-                                                                currentUser
-                                                            );
-
-                                                            if (result.success) {
-                                                                alert(
-                                                                    t('time_change_success', { count: result.affectedUsers })
-                                                                );
-                                                                window.location.reload();
-                                                            } else {
-                                                                alert(
-                                                                    t('time_change_error', { error: result.error })
-                                                                );
-                                                            }
-                                                        }}
-                                                        className="btn btn-outline"
-                                                        style={{
-                                                            flex: 1,
-                                                            padding: '8px',
-                                                            fontSize: '0.75rem',
-                                                            borderRadius: '8px',
-                                                            borderColor: 'var(--primary)',
-                                                            color: 'white'
-                                                        }}
-                                                    >
-                                                        <FaEdit /> {t('change_time_once')}
-                                                    </button>
-                                                )}
-                                                {invitation.editHistory && invitation.editHistory.length > 0 && (
-                                                    <div style={{
-                                                        flex: 1,
-                                                        padding: '8px',
-                                                        fontSize: '0.7rem',
-                                                        borderRadius: '8px',
-                                                        background: 'rgba(255,255,255,0.05)',
-                                                        color: 'var(--text-muted)',
-                                                        textAlign: 'center',
-                                                        border: '1px solid var(--border-color)'
-                                                    }}>
-                                                        🔒 {t('already_edited')}
+                            {/* Host Management */}
+                            {isHost && requests.length > 0 && (
+                                <div ref={joinRequestsRef} style={{ padding: '0 1.25rem', marginBottom: '2rem' }}>
+                                    <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800' }}>
+                                        <FaUsers /> {t('pending_requests', { count: requests.length })}
+                                    </h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        {requests.map(userId => {
+                                            const requester = requestersData[userId] || { name: t('loading'), avatar: '' };
+                                            return (
+                                                <div key={userId} style={{ padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                        <img
+                                                            src={requester.avatar}
+                                                            alt={requester.name}
+                                                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                                                        />
+                                                        <span style={{ fontWeight: '700' }}>{requester.name}</span>
                                                     </div>
-                                                )}
-                                                {meetingStatus !== 'completed' && (
-                                                    <button onClick={() => updateMeetingStatus(id, 'completed')} className="btn btn-primary" style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', background: 'var(--luxury-gold)', border: 'none', color: 'black' }}>
-                                                        <FaCheckCircle /> {t('complete_meeting')}
-                                                    </button>
-                                                )}
-                                            </>
-                                        )}
-                                        {meetingStatus === 'completed' && !invitation.rating && (
-                                            <div style={{
-                                                width: '100%',
-                                                background: 'rgba(255,255,255,0.03)',
-                                                padding: '1.5rem',
-                                                borderRadius: '15px',
-                                                border: '1px solid var(--luxury-gold)',
-                                                marginTop: '1rem'
-                                            }}>
-                                                <h4 style={{ color: 'var(--luxury-gold)', fontSize: '0.9rem', marginBottom: '1rem', textAlign: 'center' }}>
-                                                    {t('rate_experience')}
-                                                </h4>
-                                                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '1.5rem' }}>
-                                                    {[1, 2, 3, 4, 5].map(star => (
-                                                        <button
-                                                            key={star}
-                                                            onClick={() => submitRating(id, { stars: star })}
-                                                            style={{ background: 'transparent', border: 'none', fontSize: '1.8rem', cursor: 'pointer', color: 'rgba(255,255,255,0.2)' }}
-                                                            onMouseEnter={(e) => e.target.style.color = 'var(--luxury-gold)'}
-                                                            onMouseLeave={(e) => e.target.style.color = 'rgba(255,255,255,0.2)'}
-                                                        >
-                                                            <FaStar />
-                                                        </button>
-                                                    ))}
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">{t('accept')}</button>
+                                                        <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">{t('reject')}</button>
+                                                    </div>
                                                 </div>
-                                                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                                                    {t('earn_rep_points')}
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {meetingStatus === 'completed' && invitation.rating && (
-                                            <div style={{ flex: 1, textAlign: 'center', color: 'var(--luxury-gold)', fontWeight: '800', fontSize: '0.8rem', padding: '15px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '12px', width: '100%' }}>
-                                                {t('meeting_completed')}
-                                            </div>
-                                        )}
-                                        {meetingStatus === 'completed' && !invitation.rating && isHost && (
-                                            <div style={{ flex: 1, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', padding: '10px' }}>
-                                                {t('waiting_ratings')}
-                                            </div>
-                                        )}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
 
-                            <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-                                {description || t('no_description')}
-                            </p>
-
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                    <FaMapMarkerAlt style={{ color: 'var(--luxury-gold)' }} />
-                                    <span>{location}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                    <FaCalendarAlt style={{ color: 'var(--primary)' }} />
-                                    <span>{date ? new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US') : t('soon')}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                    <FaClock style={{ color: 'var(--accent)' }} />
-                                    <span>{time || '20:30'}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                    <FaUsers style={{ color: 'var(--secondary)' }} />
-                                    <span>{t('guests_needed', { count: guestsNeeded })}</span>
-                                </div>
-                                {distance !== null && (
-                                    <>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#10b981' }}>
-                                            <span>📏</span>
-                                            <span style={{ fontWeight: '700' }}>{distance.toFixed(1)} km</span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#10b981' }}>
-                                            <span>⏱️</span>
-                                            <span style={{ fontWeight: '700' }}>~{travelTime} {t('minutes')}</span>
-                                        </div>
-                                    </>
-                                )}
+                        </>
+                    ) : (
+                        /* Locked Chat Message for non-members */
+                        <div style={{ padding: '2rem 1.25rem', textAlign: 'center' }}>
+                            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '2rem', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border-color)' }}>
+                                <FaPaperPlane style={{ fontSize: '2rem', color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.2 }} />
+                                <h4 style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{t('chat_closed')}</h4>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('members_only_chat')}</p>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Share Buttons - at bottom of card */}
-                    <ShareButtons
-                        title={title}
-                        description={description}
-                        url={window.location.href}
-                        type="invitation"
-                    />
-
-                    {/* Join Button if NOT member */}
-                    {!isHost && !isAccepted && (
-                        <div style={{ marginTop: '1.5rem' }}>
-                            <button
-                                className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
-                                onClick={async () => {
-                                    if (!eligibility.eligible) return;
-                                    if (isPending) {
-                                        console.log('🔴 Canceling request for invitation:', id);
-                                        cancelRequest(id);
-                                    } else {
-                                        console.log('🟢 Requesting to join invitation:', id);
-                                        console.log('Current user:', currentUser);
-                                        await requestToJoin(id);
-                                        console.log('✅ Request sent successfully');
-                                        alert(t('join_request_sent'));
-                                        // Force a full page reload to ensure the home page renders correctly
-                                        window.location.href = '/';
-                                    }
-                                }}
-                                disabled={!eligibility.eligible}
-                                style={{
-                                    height: '60px',
-                                    fontSize: '1.1rem',
-                                    background: !eligibility.eligible ? 'rgba(55, 65, 81, 0.8)' : undefined,
-                                    color: !eligibility.eligible ? '#d1d5db' : undefined,
-                                    cursor: !eligibility.eligible ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {!eligibility.eligible ? (eligibility.reason || t('invite_unavailable')) : (isPending ? t('joined_btn') : t('join_btn'))}
-                            </button>
-                            <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
-                                {!eligibility.eligible ? eligibility.reason : (isPending ? t('request_sent_waiting') : t('join_to_chat'))}
-                            </p>
                         </div>
                     )}
                 </div>
 
-                {/* PRIVATE SECTION: Management & Chat */}
-                {(isHost || isAccepted) ? (
-                    <>
-                        {/* Who's Coming - Social Trust Feature */}
-                        <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
-                            <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-white)', fontWeight: '800' }}>
-                                {t('members_list_title')} ({joined.length + 1})
-                            </h4>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                {/* Host First */}
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid var(--luxury-gold)', padding: '2px', position: 'relative' }}>
-                                        <img src={author?.avatar} alt={author?.name} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
-                                        <div style={{ position: 'absolute', bottom: '-4px', right: '0', background: 'var(--luxury-gold)', color: 'black', fontSize: '0.6rem', fontWeight: '900', padding: '1px 5px', borderRadius: '4px' }}>HOST</div>
-                                    </div>
-                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px', maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{author?.name}</span>
-                                </div>
-                                {/* Joined Members */}
-                                {joined.map(userId => {
-                                    const member = joinedMembersData[userId] || { name: 'Loading...', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
-                                    return (
-                                        <div key={userId} style={{ textAlign: 'center' }}>
-                                            <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid var(--primary)', padding: '2px' }}>
-                                                <img src={member.avatar} alt={member.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                                            </div>
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px', maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name}</span>
-                                        </div>
-                                    );
-                                })}
-                                {/* Empty Spots */}
-                                {[...Array(Math.max(0, spotsLeft))].map((_, i) => (
-                                    <div key={i} style={{
-                                        width: '50px',
-                                        height: '50px',
-                                        borderRadius: '50%',
-                                        border: '1px dashed var(--border-color)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: 'var(--border-color)',
-                                        fontSize: '1rem',
-                                        opacity: 0.5
-                                    }}>
-                                        ?
-                                    </div>
-                                ))}
-                            </div>
+                {/* Cancellation Modal */}
+                <CancellationModal
+                    isOpen={showCancellationModal}
+                    onClose={() => setShowCancellationModal(false)}
+                    onConfirm={handleCancelInvitation}
+                    invitationTitle={title}
+                />
+
+                {/* Copied Toast Notification */}
+                {
+                    showCopiedToast && (
+                        <div style={{
+                            position: 'fixed',
+                            bottom: '100px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: 'white',
+                            padding: '12px 24px',
+                            borderRadius: '50px',
+                            boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            fontSize: '0.9rem',
+                            fontWeight: '700',
+                            zIndex: 10000,
+                            animation: 'slideUp 0.3s ease-out',
+                            backdropFilter: 'blur(10px)'
+                        }}>
+                            <FaCheck style={{ fontSize: '1rem' }} />
+                            <span>{t('link_copied', { defaultValue: 'Link copied!' })}</span>
                         </div>
+                    )
+                }
 
-                        {/* Group Chat Button - For Approved Members */}
-                        {invitation.groupChatId && (
-                            <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
-                                <button
-                                    onClick={() => navigate(`/group-chat/${invitation.groupChatId}`)}
-                                    className="btn btn-primary btn-block"
-                                    style={{
-                                        height: '60px',
-                                        fontSize: '1.1rem',
-                                        fontWeight: '800',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '12px',
-                                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                                        boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
-                                        border: 'none',
-                                        borderRadius: 'var(--radius-lg)',
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}
-                                >
-                                    <span style={{ fontSize: '1.5rem' }}>💬</span>
-                                    <span>{t('open_group_chat', { defaultValue: 'Open Group Chat' })}</span>
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        right: 0,
-                                        bottom: 0,
-                                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
-                                        animation: 'shimmer 2s infinite'
-                                    }}></div>
-                                </button>
-                                <p style={{
-                                    textAlign: 'center',
-                                    fontSize: '0.75rem',
-                                    color: 'var(--text-muted)',
-                                    marginTop: '0.5rem'
-                                }}>
-                                    {t('group_chat_description', { defaultValue: 'Chat with all members in real-time' })}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Host Management */}
-                        {isHost && requests.length > 0 && (
-                            <div style={{ padding: '0 1.25rem', marginBottom: '2rem' }}>
-                                <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800' }}>
-                                    <FaUsers /> {t('pending_requests', { count: requests.length })}
-                                </h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    {requests.map(userId => {
-                                        const requester = requestersData[userId] || { name: t('loading'), avatar: '' };
-                                        return (
-                                            <div key={userId} style={{ padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                    <img
-                                                        src={requester.avatar}
-                                                        alt={requester.name}
-                                                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
-                                                    />
-                                                    <span style={{ fontWeight: '700' }}>{requester.name}</span>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                    <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">{t('accept')}</button>
-                                                    <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">{t('reject')}</button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Group Chat - For Host and Accepted Members */}
-                        {(isHost || isAccepted) && (
-                            <div style={{ padding: '0 1.25rem', marginBottom: '2rem' }}>
-                                <h4 style={{
-                                    fontSize: '0.9rem',
-                                    marginBottom: '1rem',
-                                    color: 'var(--primary)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    fontWeight: '800'
-                                }}>
-                                    💬 {t('group_chat', { defaultValue: 'Group Chat' })}
-                                </h4>
-
-                                <div style={{
-                                    background: 'var(--bg-card)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    border: '1px solid var(--border-color)',
-                                    minHeight: '300px',
-                                    maxHeight: '500px',
-                                    overflow: 'hidden',
-                                    display: 'flex',
-                                    flexDirection: 'column'
-                                }}>
-                                    <div style={{
-                                        flex: 1,
-                                        overflowY: 'auto',
-                                        padding: '1rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '1rem'
-                                    }}>
-                                        {groupChatMessages.length === 0 ? (
-                                            <div style={{
-                                                textAlign: 'center',
-                                                padding: '3rem 1rem',
-                                                color: 'var(--text-muted)'
-                                            }}>
-                                                <div style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.3 }}>💬</div>
-                                                <p style={{ fontSize: '0.9rem' }}>
-                                                    {t('no_messages_yet', { defaultValue: 'No messages yet. Start the conversation!' })}
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            groupChatMessages.map((msg) => {
-                                                const isOwnMessage = msg.senderId === currentUser?.id;
-                                                return (
-                                                    <div
-                                                        key={msg.id}
-                                                        style={{
-                                                            alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
-                                                            maxWidth: '75%',
-                                                            display: 'flex',
-                                                            flexDirection: 'column',
-                                                            gap: '0.25rem'
-                                                        }}
-                                                    >
-                                                        {!isOwnMessage && (
-                                                            <div style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '0.5rem',
-                                                                marginBottom: '0.25rem'
-                                                            }}>
-                                                                <img
-                                                                    src={msg.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderId}`}
-                                                                    alt={msg.senderName}
-                                                                    style={{
-                                                                        width: '24px',
-                                                                        height: '24px',
-                                                                        borderRadius: '50%',
-                                                                        objectFit: 'cover'
-                                                                    }}
-                                                                />
-                                                                <span style={{
-                                                                    fontSize: '0.75rem',
-                                                                    fontWeight: '600',
-                                                                    color: 'var(--text-muted)'
-                                                                }}>
-                                                                    {msg.senderName}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                        <div style={{
-                                                            background: isOwnMessage
-                                                                ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)'
-                                                                : 'var(--bg-input)',
-                                                            padding: '0.75rem 1rem',
-                                                            borderRadius: isOwnMessage
-                                                                ? '18px 18px 4px 18px'
-                                                                : '18px 18px 18px 4px',
-                                                            color: 'white',
-                                                            fontSize: '0.95rem',
-                                                            wordWrap: 'break-word'
-                                                        }}>
-                                                            {msg.text}
-                                                        </div>
-                                                        <span style={{
-                                                            fontSize: '0.7rem',
-                                                            color: 'var(--text-muted)',
-                                                            alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
-                                                            paddingLeft: isOwnMessage ? '0' : '0.5rem',
-                                                            paddingRight: isOwnMessage ? '0.5rem' : '0'
-                                                        }}>
-                                                            {msg.createdAt?.toDate ?
-                                                                new Date(msg.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                                : 'Sending...'
-                                                            }
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                        <div ref={chatEndRef} />
-                                    </div>
-
-                                    <div style={{
-                                        padding: '1rem',
-                                        borderTop: '1px solid var(--border-color)',
-                                        background: 'var(--bg-body)'
-                                    }}>
-                                        <form onSubmit={handleSendGroupMessage} style={{ display: 'flex', gap: '0.75rem' }}>
-                                            <input
-                                                type="text"
-                                                value={message}
-                                                onChange={(e) => setMessage(e.target.value)}
-                                                placeholder={t('type_message', { defaultValue: 'Type a message...' })}
-                                                className="input-field"
-                                                style={{
-                                                    borderRadius: 'var(--radius-full)',
-                                                    background: 'var(--bg-input)',
-                                                    flex: 1,
-                                                    border: '1px solid var(--border-color)'
-                                                }}
-                                            />
-                                            <button
-                                                type="submit"
-                                                disabled={!message.trim()}
-                                                className="btn btn-primary"
-                                                style={{
-                                                    width: '50px',
-                                                    height: '50px',
-                                                    minWidth: '50px',
-                                                    padding: 0,
-                                                    borderRadius: '50%',
-                                                    opacity: message.trim() ? 1 : 0.5
-                                                }}
-                                            >
-                                                <FaPaperPlane />
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                    </>
-                ) : (
-                    /* Locked Chat Message for non-members */
-                    <div style={{ padding: '2rem 1.25rem', textAlign: 'center' }}>
-                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: '2rem', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border-color)' }}>
-                            <FaPaperPlane style={{ fontSize: '2rem', color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.2 }} />
-                            <h4 style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{t('chat_closed')}</h4>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('members_only_chat')}</p>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

@@ -397,17 +397,18 @@ const FollowersList = () => {
                                                     toggleFollow(user.id);
                                                 }}
                                                 style={{
-                                                    background: 'transparent',
-                                                    color: 'var(--text-muted)',
-                                                    border: '1px solid var(--border-color)',
+                                                    background: 'rgba(139, 92, 246, 0.15)',
+                                                    color: 'var(--primary)',
+                                                    border: '2px solid var(--primary)',
                                                     borderRadius: '12px',
                                                     padding: '8px 12px',
                                                     fontSize: '0.75rem',
-                                                    fontWeight: '800',
+                                                    fontWeight: '900',
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '4px'
+                                                    gap: '4px',
+                                                    transition: 'all 0.2s'
                                                 }}
                                             >
                                                 <FaUserCheck /> {t('following')}

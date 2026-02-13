@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaUser, FaGlobe, FaBell, FaStore, FaUsers, FaBuilding, FaSearch, FaComments, FaNewspaper } from 'react-icons/fa';
+import { FaHome, FaPlusCircle, FaUser, FaGlobe, FaBell, FaStore, FaUsers, FaBuilding, FaSearch, FaComments, FaNewspaper, FaCrown, FaCog, FaEnvelope } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import PrivateInvitationModal from './PrivateInvitationModal';
 
 const Layout = ({ children }) => {
+    const [imgLoaded, setImgLoaded] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const { t, i18n } = useTranslation();
@@ -37,119 +38,194 @@ const Layout = ({ children }) => {
 
     return (
         <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
-            {/* Header */}
-            <header className="app-header">
-                <div className="logo-wrapper" onClick={() => navigate('/')}>
-                    <img
-                        src="/logo.png"
-                        alt="DineBuddies"
-                        style={{
-                            width: '40px',
-                            height: '40px',
-                            objectFit: 'contain'
-                        }}
-                    />
-                    <span className="app-name" style={{ color: '#a04000', fontWeight: '900', fontSize: '1.5rem', marginLeft: '0.5rem' }}>DineBuddies</span>
-                </div>
-                <div className="header-actions">
-                    {!isGuest && (
-                        <>
-                            <Link to="/messages" className="notification-bell">
-                                <FaComments />
-                                {chatUnreadCount > 0 && <span className="badge">{chatUnreadCount}</span>}
-                            </Link>
-                            <Link to="/notifications" className="notification-bell">
-                                <FaBell />
-                                {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
-                            </Link>
-                        </>
-                    )}
-                    <div
-                        className="header-profile-pic"
-                        onClick={() => navigate(isGuest ? '/login' : '/profile')}
-                        style={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            overflow: 'hidden',
-                            border: isGuest ? '2px solid rgba(148, 163, 184, 0.5)' : '2px solid rgba(255, 255, 255, 0.2)',
-                            cursor: 'pointer',
-                        }}
-                    >
+            {/* Header - Hidden on Chat Screens */}
+            {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && (
+                <header className="app-header">
+                    <div className="logo-wrapper" onClick={() => navigate('/')}>
                         <img
-                            src={currentUser?.avatar || 'https://via.placeholder.com/150'}
-                            alt="Profile"
+                            src="/logo.png"
+                            alt="DineBuddies"
                             style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover'
+                                width: '40px',
+                                height: '40px',
+                                objectFit: 'contain'
                             }}
                         />
+                        <span className="app-name" style={{
+                            color: '#a04000',
+                            marginLeft: '-4px',
+                            transform: 'translateY(3px)',
+                            fontSize: '1.2rem'
+                        }}>DineBuddies</span>
                     </div>
-                </div>
-            </header>
+                    <div className="header-actions">
+                        {!isGuest && userProfile?.accountType !== 'guest' ? (
+                            <>
+                                <Link to="/messages" className="notification-bell">
+                                    <FaComments />
+                                    {chatUnreadCount > 0 && <span className="badge">{chatUnreadCount}</span>}
+                                </Link>
+                                <Link to="/notifications" className="notification-bell">
+                                    <FaBell />
+                                    {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+                                </Link>
+                                <Link to="/settings" className="notification-bell" title={t('settings', 'Settings')}>
+                                    <FaCog />
+                                </Link>
+                                {/* Profile Icon - Only show for logged in users */}
+                                <div
+                                    className="header-profile-pic"
+                                    onClick={() => {
+                                        if (isBusinessAccount) {
+                                            navigate('/business-dashboard');
+                                        } else {
+                                            navigate('/profile');
+                                        }
+                                    }}
+                                    style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '50%',
+                                        overflow: 'hidden',
+                                        border: '2px solid rgba(255, 255, 255, 0.2)',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        background: '#f0f0f0'
+                                    }}
+                                >
+                                    {!imgLoaded && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                                            backgroundSize: '200% 100%',
+                                            animation: 'shimmer 1.5s infinite',
+                                        }} />
+                                    )}
+                                    <img
+                                        src={currentUser?.avatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
+                                        alt="Profile"
+                                        onLoad={() => setImgLoaded(true)}
+                                        onError={() => setImgLoaded(true)} // Avoid stuck loading
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            opacity: imgLoaded ? 1 : 0,
+                                            transition: 'opacity 0.3s ease-in-out'
+                                        }}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <button
+                                onClick={() => navigate('/login')}
+                                style={{
+                                    background: 'white',
+                                    color: 'var(--primary)',
+                                    border: 'none',
+                                    padding: '8px 16px',
+                                    borderRadius: '20px',
+                                    fontWeight: '700',
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                }}
+                            >
+                                {t('login_signup', 'Login / Sign Up')}
+                            </button>
+                        )}
+                    </div>
+                </header>
+            )}
 
             {/* Main Content */}
-            <main className="app-main">
+            <main className="app-main" style={{
+                paddingBottom: (location.pathname.startsWith('/chat/') || location.pathname.startsWith('/community/')) ? '0' : undefined
+            }}>
                 {children}
                 <Outlet />
             </main>
 
-            {/* Bottom Navigation - User Only */}
-            <nav className="bottom-nav user-nav">
-                <Link to="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
-                    <FaHome className="nav-icon" />
-                    <span>{t('nav_home')}</span>
-                </Link>
 
-                <Link to="/restaurants" className={`nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
-                    <FaStore className="nav-icon" />
-                    <span>{t('nav_partners')}</span>
-                </Link>
 
-                {/* Only show Create for regular users, not business accounts or guests */}
-                {!isBusinessAccount && !isGuest && (
-                    <Link
-                        to="/create"
-                        className={`nav-item fab-nav-item ${isActive('/create') ? 'active' : ''}`}
-                    >
-                        <div className="fab-container">
-                            <FaPlusCircle className="nav-icon fab" />
-                        </div>
-                        <span className="fab-label">{t('nav_create')}</span>
+            {/* Bottom Navigation - User Only - Hidden on Chat Screens */}
+            {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && (
+                <nav className="bottom-nav user-nav">
+                    <Link to="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
+                        <FaHome className="nav-icon" />
+                        <span>{t('nav_home')}</span>
                     </Link>
-                )}
 
-                {/* Show Communities for regular users, not guests */}
-                {!isBusinessAccount && !isGuest && (
-                    <Link to="/communities" className={`nav-item ${isActive('/communities') ? 'active' : ''}`}>
-                        <div className="friend-nav-icon-container">
-                            <FaUsers className="nav-icon" />
-                        </div>
-                        <span>{t('communities')}</span>
+                    {/* Invitations - Visible to Everyone (Guest, Regular, Business) */}
+                    <Link to="/invitations" className={`nav-item ${isActive('/invitations') ? 'active' : ''}`}>
+                        <FaEnvelope className="nav-icon" />
+                        <span>{t('nav_invitations', 'Invitations')}</span>
                     </Link>
-                )}
 
-                {/* Show Posts Feed for regular users, not guests */}
-                {!isBusinessAccount && !isGuest && (
-                    <Link to="/posts-feed" className={`nav-item ${isActive('/posts-feed') ? 'active' : ''}`}>
-                        <div className="friend-nav-icon-container">
-                            <FaNewspaper className="nav-icon" />
-                        </div>
-                        <span>{t('feed')}</span>
-                    </Link>
-                )}
+                    {/* Create Post (Center FAB) - For Regular Users Only */}
+                    {!isBusinessAccount && !isGuest && (
+                        <Link
+                            to="/create-post"
+                            className={`nav-item fab-nav-item ${isActive('/create-post') ? 'active' : ''}`}
+                        >
+                            <div className="fab-container">
+                                <FaPlusCircle className="nav-icon fab" />
+                            </div>
+                            <span className="fab-label">{t('nav_create')}</span>
+                        </Link>
+                    )}
 
-                {/* Show My Community for business accounts only */}
-                {isBusinessAccount && (
-                    <Link to="/my-community" className={`nav-item ${isActive('/my-community') ? 'active' : ''}`}>
-                        <div className="friend-nav-icon-container">
-                            <FaUsers className="nav-icon" />
-                        </div>
-                        <span>{t('my_community')}</span>
+                    {/* Create Post - For Business Accounts */}
+                    {isBusinessAccount && (
+                        <Link
+                            to="/create-post"
+                            className={`nav-item fab-nav-item ${isActive('/create-post') ? 'active' : ''}`}
+                        >
+                            <div className="fab-container">
+                                <FaPlusCircle className="nav-icon fab" />
+                            </div>
+                            <span className="fab-label">Post</span>
+                        </Link>
+                    )}
+
+                    {/* Partners - Show for everyone (Business Directory) */}
+                    <Link to="/restaurants" className={`nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
+                        <FaStore className="nav-icon" />
+                        <span>{t('nav_partners', 'Partners')}</span>
                     </Link>
-                )}
-            </nav>
+
+                    {/* Show Communities for regular users, not guests */}
+                    {!isBusinessAccount && !isGuest && userProfile?.accountType !== 'guest' && (
+                        <Link to="/communities" className={`nav-item ${isActive('/communities') ? 'active' : ''}`}>
+                            <div className="friend-nav-icon-container">
+                                <FaUsers className="nav-icon" />
+                            </div>
+                            <span>{t('communities')}</span>
+                        </Link>
+                    )}
+
+
+
+                    {/* Show My Community for business accounts only */}
+                    {isBusinessAccount && (
+                        <Link to="/my-community" className={`nav-item ${isActive('/my-community') ? 'active' : ''}`}>
+                            <div className="friend-nav-icon-container">
+                                <FaUsers className="nav-icon" />
+                            </div>
+                            <span>{t('my_community')}</span>
+                        </Link>
+                    )}
+
+                    {/* Show Admin Dashboard for admin accounts only */}
+                    {(userProfile?.role === 'admin' || userProfile?.accountType === 'admin') && (
+                        <Link to="/admin/dashboard" className={`nav-item ${isActive('/admin/dashboard') ? 'active' : ''}`}>
+                            <FaCrown className="nav-icon" />
+                            <span>Admin</span>
+                        </Link>
+                    )}
+                </nav>
+            )}
 
             {/* Private Invitation Modal */}
             {!isGuest && <PrivateInvitationModal />}

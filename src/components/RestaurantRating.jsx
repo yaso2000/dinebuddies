@@ -110,7 +110,7 @@ const RestaurantRating = ({ restaurant, currentUser, submitRestaurantRating }) =
                 </div>
 
                 {/* Add Review Button */}
-                {!userHasReviewed && (
+                {!userHasReviewed && !currentUser?.isGuest && (
                     <button
                         onClick={() => setShowRatingForm(!showRatingForm)}
                         style={{

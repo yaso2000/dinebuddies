@@ -129,17 +129,3 @@
 .size-large .upload-text {
     font-size: 0.95rem;
 }
-
-/* Light Mode */
-.light-mode .image-upload-wrapper {
-    background: #f8f9fa;
-    border-color: #dee2e6;
-}
-
-.light-mode .image-upload-wrapper:hover {
-    border-color: var(--primary);
-}
-
-.light-mode .upload-placeholder {
-    color: #6c757d;
-}

@@ -37,15 +37,15 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
 
             const membersList = snapshot.docs.map(doc => {
                 const data = doc.data();
-                console.log('👤 Member:', {
-                    id: doc.id,
-                    name: data.name,
-                    email: data.email,
-                    joinedCommunities: data.joinedCommunities
-                });
+                // Normalize data fields
+                const displayName = data.display_name || data.displayName || data.name || data.email?.split('@')[0] || 'Member';
+                const photoUrl = data.photo_url || data.photoURL || data.avatar || data.image || null;
+
                 return {
                     id: doc.id,
-                    ...data
+                    ...data,
+                    name: displayName,
+                    avatar: photoUrl
                 };
             });
 
@@ -167,20 +167,16 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
             marginTop: '1rem'
         }}>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div>
-                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <FaUserShield />
-                        Community Management
-                    </h3>
-                    <p style={{ margin: '0.5rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                        {members.length} member(s) • {selectedMembers.length} selected
-                    </p>
-                </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+                {/* 1. Title */}
+                <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <FaUserShield />
+                    Community Management
+                </h3>
 
-                {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {selectedMembers.length > 0 && (
+                {/* 2. Action Buttons */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {selectedMembers.length > 0 ? (
                         <>
                             <button
                                 onClick={() => setShowMessageModal(true)}
@@ -193,7 +189,10 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.5rem'
+                                    gap: '0.5rem',
+                                    flex: '1',
+                                    justifyContent: 'center',
+                                    fontWeight: '600'
                                 }}
                             >
                                 <FaEnvelope />
@@ -207,29 +206,38 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                                     color: 'white',
                                     border: '1px solid var(--border-color)',
                                     borderRadius: '8px',
-                                    cursor: 'pointer'
+                                    cursor: 'pointer',
+                                    fontWeight: '500'
                                 }}
                             >
                                 Deselect All
                             </button>
                         </>
-                    )}
-                    {selectedMembers.length === 0 && members.length > 0 && (
-                        <button
-                            onClick={selectAll}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                background: 'var(--bg-body)',
-                                color: 'white',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '8px',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Select All
-                        </button>
+                    ) : (
+                        members.length > 0 && (
+                            <button
+                                onClick={selectAll}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    background: 'var(--bg-body)',
+                                    color: 'white',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    width: '100%',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                Select All (Broadcasting)
+                            </button>
+                        )
                     )}
                 </div>
+
+                {/* 3. Stats */}
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                    {members.length} member(s) • <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{selectedMembers.length} selected</span>
+                </p>
             </div>
 
             {/* Members List */}
@@ -273,7 +281,7 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
 
                             {/* Avatar */}
                             <img
-                                src={member.avatar || 'https://via.placeholder.com/150'}
+                                src={member.avatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
                                 alt={member.name}
                                 style={{
                                     width: '48px',
@@ -285,9 +293,24 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                             />
 
                             {/* Member Info */}
-                            <div style={{ flex: 1 }}>
-                                <h4 style={{ margin: 0, fontSize: '1rem' }}>{member.name}</h4>
-                                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <h4 style={{
+                                    margin: 0,
+                                    fontSize: '1rem',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                }}>
+                                    {member.name}
+                                </h4>
+                                <p style={{
+                                    margin: '0.25rem 0 0 0',
+                                    fontSize: '0.85rem',
+                                    color: 'var(--text-muted)',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                }}>
                                     {member.email}
                                 </p>
                             </div>

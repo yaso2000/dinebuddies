@@ -67,7 +67,9 @@ const SimpleMap = ({ lat, lng, businessName, address }) => {
             style={{
                 height: '100%',
                 width: '100%',
-                borderRadius: '16px'
+                borderRadius: '16px',
+                position: 'relative',
+                zIndex: 1
             }}
         />
     );

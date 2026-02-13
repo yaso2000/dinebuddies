@@ -3,18 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { FaUsers, FaSearch, FaArrowLeft } from 'react-icons/fa';
+import { useInvitations } from '../context/InvitationContext';
+import { FaUsers, FaSearch, FaArrowLeft, FaTrash } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
+import EmptyState from '../components/EmptyState';
 
 const MyCommunities = () => {
     const navigate = useNavigate();
-    const { currentUser } = useAuth();
+    const { currentUser, userProfile } = useAuth();
+    const { leaveCommunity } = useInvitations();
     const [communities, setCommunities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Redirect guests to login & business accounts to their dashboard
     useEffect(() => {
-        if (currentUser) {
+        if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest') {
+            navigate('/login');
+        } else if (userProfile?.accountType === 'business') {
+            navigate('/business-dashboard'); // Or '/my-community' if that's their dedicated page
+        }
+    }, [userProfile, navigate]);
+
+    useEffect(() => {
+        if (currentUser && currentUser.uid) {
             fetchMyCommunities();
         }
     }, [currentUser]);
@@ -26,6 +38,7 @@ const MyCommunities = () => {
             // Get user's joined communities
             const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
             const joinedCommunities = userDoc.data()?.joinedCommunities || [];
+            const lastReadTimestamps = userDoc.data()?.communityLastRead || {};
 
             if (joinedCommunities.length === 0) {
                 setCommunities([]);
@@ -41,17 +54,56 @@ const MyCommunities = () => {
                         const data = partnerDoc.data();
                         const businessInfo = data.businessInfo || {};
 
+                        // Fetch unread messages count
+                        const messagesRef = collection(db, 'communities', partnerId, 'messages');
+                        let lastReadTime = new Date(0);
+                        const rawLastRead = lastReadTimestamps[partnerId];
+
+                        if (rawLastRead) {
+                            if (typeof rawLastRead.toDate === 'function') {
+                                lastReadTime = rawLastRead.toDate();
+                            } else if (rawLastRead instanceof Date) {
+                                lastReadTime = rawLastRead;
+                            } else {
+                                const d = new Date(rawLastRead);
+                                if (!isNaN(d.getTime())) {
+                                    lastReadTime = d;
+                                }
+                            }
+                        }
+
+                        // Get all messages after last read
+                        const messagesSnapshot = await getDocs(messagesRef);
+                        let unreadCount = 0;
+                        let lastMessage = null;
+                        let lastMessageTime = null;
+
+                        messagesSnapshot.forEach((msgDoc) => {
+                            const msgData = msgDoc.data();
+                            const msgTime = msgData.createdAt?.toDate() || new Date(0);
+
+                            // Count unread messages (not from current user)
+                            if (msgTime > lastReadTime && msgData.senderId !== currentUser.uid) {
+                                unreadCount++;
+                            }
+
+                            // Track last message
+                            if (!lastMessageTime || msgTime > lastMessageTime) {
+                                lastMessageTime = msgTime;
+                                lastMessage = msgData.text || msgData.message || '';
+                            }
+                        });
+
                         return {
                             id: partnerId,
-                            name: businessInfo.businessName || 'Business',
-                            logo: businessInfo.logoImage,
-                            cover: businessInfo.coverImage,
-                            type: businessInfo.businessType || 'Restaurant',
-                            location: businessInfo.city || businessInfo.address,
+                            name: businessInfo.businessName || data.display_name || data.name || 'Business',
+                            logo: businessInfo.logoImage || data.photo_url || data.photoURL,
+                            cover: businessInfo.coverImage || data.cover_url || data.coverImage,
+                            type: businessInfo.businessType || data.business_type || 'Restaurant',
+                            location: businessInfo.city || businessInfo.address || data.city || data.address || '',
                             memberCount: data.communityMembers?.length || 0,
-                            // TODO: Add unread count and last message
-                            unreadCount: 0,
-                            lastMessage: null
+                            unreadCount: unreadCount,
+                            lastMessage: lastMessage ? (lastMessage.length > 40 ? lastMessage.substring(0, 40) + '...' : lastMessage) : null
                         };
                     }
                     return null;
@@ -66,9 +118,29 @@ const MyCommunities = () => {
         }
     };
 
+    const handleLeaveCommunity = async (partnerId, communityName) => {
+        if (window.confirm(`Are you sure you want to leave ${communityName}?`)) {
+            try {
+                const success = await leaveCommunity(partnerId);
+                if (success) {
+                    // Update list locally
+                    setCommunities(prev => prev.filter(c => c.id !== partnerId));
+                }
+            } catch (error) {
+                console.error("Error leaving community:", error);
+            }
+        }
+    };
+
     const filteredCommunities = communities.filter(community =>
         community.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    // Guest check - Don't render anything for guests
+    const isGuest = userProfile?.accountType === 'guest' || userProfile?.role === 'guest';
+    if (isGuest) {
+        return null; // Redirect will happen via useEffect
+    }
 
     if (loading) {
         return (
@@ -139,36 +211,14 @@ const MyCommunities = () => {
             {/* Communities List */}
             <div style={{ padding: '0 1.5rem' }}>
                 {filteredCommunities.length === 0 ? (
-                    <div style={{
-                        textAlign: 'center',
-                        padding: '3rem 1rem',
-                        color: 'var(--text-muted)'
-                    }}>
-                        <FaUsers style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.3 }} />
-                        <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>
-                            {searchQuery ? 'No communities found' : 'No communities yet'}
-                        </h3>
-                        <p style={{ fontSize: '0.9rem' }}>
-                            {searchQuery ? 'Try a different search' : 'Join communities from partner profiles'}
-                        </p>
-                        {!searchQuery && (
-                            <button
-                                onClick={() => navigate('/partners')}
-                                style={{
-                                    marginTop: '1.5rem',
-                                    padding: '12px 24px',
-                                    background: 'linear-gradient(135deg, var(--primary), #f97316)',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    color: 'white',
-                                    fontWeight: '700',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Explore Partners
-                            </button>
-                        )}
-                    </div>
+                    <EmptyState
+                        icon={FaUsers}
+                        title={searchQuery ? 'No communities found' : 'No communities yet'}
+                        message={searchQuery ? 'Try a different search' : 'Join communities from partner profiles'}
+                        actionText={!searchQuery ? 'Explore Partners' : null}
+                        onAction={!searchQuery ? () => navigate('/restaurants') : null}
+                        variant="primary"
+                    />
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {filteredCommunities.map(community => (
@@ -209,9 +259,11 @@ const MyCommunities = () => {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     fontSize: '1.5rem',
+                                    color: 'white',
+                                    fontWeight: 'bold',
                                     flexShrink: 0
                                 }}>
-                                    {!community.logo && '🏪'}
+                                    {community.logo ? '' : (community.name ? community.name.charAt(0).toUpperCase() : '🏪')}
                                 </div>
 
                                 {/* Info */}
@@ -246,24 +298,52 @@ const MyCommunities = () => {
                                     )}
                                 </div>
 
-                                {/* Unread Badge */}
-                                {community.unreadCount > 0 && (
-                                    <div style={{
-                                        minWidth: '24px',
-                                        height: '24px',
-                                        borderRadius: '12px',
-                                        background: 'var(--primary)',
-                                        color: 'white',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '700',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '0 6px'
-                                    }}>
-                                        {community.unreadCount > 99 ? '99+' : community.unreadCount}
-                                    </div>
-                                )}
+                                {/* Actions Row */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {/* Unread Badge */}
+                                    {community.unreadCount > 0 && (
+                                        <div style={{
+                                            minWidth: '24px',
+                                            height: '24px',
+                                            borderRadius: '12px',
+                                            background: 'var(--primary)',
+                                            color: 'white',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '0 6px'
+                                        }}>
+                                            {community.unreadCount > 99 ? '99+' : community.unreadCount}
+                                        </div>
+                                    )}
+
+                                    {/* Delete/Leave Button */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleLeaveCommunity(community.id, community.name);
+                                        }}
+                                        style={{
+                                            background: 'rgba(239, 68, 68, 0.1)',
+                                            color: '#ef4444',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            width: '32px',
+                                            height: '32px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            zIndex: 10
+                                        }}
+                                        title="Leave Community"
+                                    >
+                                        <FaTrash size={14} />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>

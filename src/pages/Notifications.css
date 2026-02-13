@@ -48,6 +48,27 @@
     gap: 0.5rem;
 }
 
+.settings-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.settings-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.05);
+    transform: rotate(90deg);
+}
+
 .mark-all-btn {
     padding: 0.5rem 1rem;
     background: var(--primary);

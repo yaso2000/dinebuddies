@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { FaUsers, FaStore, FaCreditCard, FaDollarSign, FaEnvelope, FaExclamationTriangle, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { FaUsers, FaStore, FaCreditCard, FaDollarSign, FaEnvelope, FaExclamationTriangle, FaArrowUp, FaArrowDown, FaPlus, FaUserPlus } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import CreateUserAccount from '../../components/CreateUserAccount';
+import CreateBusinessAccount from '../../components/CreateBusinessAccount';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -15,8 +17,11 @@ const AdminDashboard = () => {
         pendingReports: 0
     });
     const [loading, setLoading] = useState(true);
+    const [showCreateUser, setShowCreateUser] = useState(false);
+    const [showCreateBusiness, setShowCreateBusiness] = useState(false);
 
     useEffect(() => {
+        console.log('🎯 Admin Dashboard loaded with Create buttons');
         fetchStats();
     }, []);
 
@@ -224,11 +229,47 @@ const AdminDashboard = () => {
                         onClick={() => navigate('/admin/plans')}
                     />
                     <QuickAction
+                        icon={FaStore}
+                        label="Business Limits"
+                        description="Manage business subscription limits"
+                        color="#22c55e"
+                        onClick={() => navigate('/admin/business-limits')}
+                    />
+                    <QuickAction
                         icon={FaExclamationTriangle}
                         label="Review Reports"
                         description={`${stats.pendingReports} pending reports`}
                         color="#ef4444"
                         onClick={() => navigate('/admin/reports')}
+                    />
+                </div>
+            </div>
+
+            {/* Create New */}
+            <div className="admin-mb-4">
+                <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: '700',
+                    color: '#ffffff',
+                    marginBottom: '1rem',
+                    letterSpacing: '-0.025em'
+                }}>
+                    Create New
+                </h2>
+                <div className="admin-grid admin-grid-2">
+                    <QuickAction
+                        icon={FaUserPlus}
+                        label="Create User Account"
+                        description="Add a new regular user"
+                        color="#6366f1"
+                        onClick={() => setShowCreateUser(true)}
+                    />
+                    <QuickAction
+                        icon={FaStore}
+                        label="Create Business Account"
+                        description="Add a new business partner"
+                        color="#22c55e"
+                        onClick={() => setShowCreateBusiness(true)}
                     />
                 </div>
             </div>
@@ -254,6 +295,28 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Create User Modal */}
+            {showCreateUser && (
+                <CreateUserAccount
+                    onClose={() => setShowCreateUser(false)}
+                    onSuccess={() => {
+                        setShowCreateUser(false);
+                        fetchStats(); // Refresh stats
+                    }}
+                />
+            )}
+
+            {/* Create Business Modal */}
+            {showCreateBusiness && (
+                <CreateBusinessAccount
+                    onClose={() => setShowCreateBusiness(false)}
+                    onSuccess={() => {
+                        setShowCreateBusiness(false);
+                        fetchStats(); // Refresh stats
+                    }}
+                />
+            )}
         </div>
     );
 };

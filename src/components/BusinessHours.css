@@ -1,0 +1,292 @@
+/* ================================
+   BUSINESS HOURS COMPONENT
+   ================================ */
+
+.business-hours-section {
+    margin: 2rem 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+}
+
+.business-hours-section .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.business-hours-section .section-header h3 {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-main);
+}
+
+.edit-hours-btn {
+    background: var(--bg-secondary);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.edit-hours-btn:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* Status Badge */
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.status-badge.open {
+    background: rgba(16, 185, 129, 0.1);
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+}
+
+.status-badge.open svg {
+    color: #10b981;
+    font-size: 1.5rem;
+}
+
+.status-badge.closed {
+    background: rgba(239, 68, 68, 0.1);
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.status-badge.closed svg {
+    color: #ef4444;
+    font-size: 1.5rem;
+}
+
+.status-badge.closing-soon {
+    background: rgba(245, 158, 11, 0.1);
+    border: 2px solid rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.status-badge.closing-soon svg {
+    color: #f59e0b;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.status-text {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.status-message {
+    margin-left: auto;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.next-open-info {
+    background: var(--bg-secondary);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* Hours Display */
+.hours-display {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.day-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.day-row:hover {
+    background: var(--border-color);
+}
+
+.day-name {
+    font-weight: 600;
+    color: var(--text-main);
+    min-width: 100px;
+}
+
+.day-hours {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.closed-text {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Edit Form */
+.hours-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.hours-edit-form .day-row {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.day-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.closed-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.closed-checkbox input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.time-input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-body);
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.time-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.edit-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.edit-actions button {
+    flex: 1;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.save-btn {
+    background: var(--primary);
+    color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+.save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.cancel-btn {
+    background: var(--bg-secondary);
+    color: var(--text-main);
+}
+
+.cancel-btn:hover:not(:disabled) {
+    background: var(--border-color);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .status-badge {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .status-message {
+        margin-left: 0;
+    }
+
+    .day-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .day-controls {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .time-input {
+        flex: 1;
+        min-width: 80px;
+    }
+
+    .edit-actions {
+        flex-direction: column;
+    }
+}
