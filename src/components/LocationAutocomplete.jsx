@@ -185,17 +185,21 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                 placesService.current.getDetails(
                     {
                         placeId: place.place_id,
-                        fields: ['name', 'formatted_address', 'geometry', 'place_id', 'types']
+                        fields: ['name', 'formatted_address', 'geometry', 'place_id', 'types', 'photos']
                     },
                     (placeDetails, status) => {
                         if (status === window.google.maps.places.PlacesServiceStatus.OK && placeDetails) {
+                            // Extract photos if available
+                            const photos = placeDetails.photos ? placeDetails.photos.slice(0, 5).map(photo => photo.getUrl({ maxWidth: 800 })) : [];
+
                             onSelect({
                                 name: placeDetails.name,
                                 fullAddress: placeDetails.formatted_address,
                                 lat: placeDetails.geometry.location.lat(),
                                 lng: placeDetails.geometry.location.lng(),
                                 placeId: placeDetails.place_id,
-                                types: placeDetails.types
+                                types: placeDetails.types,
+                                photos: photos
                             });
                         }
                     }

@@ -1,0 +1,163 @@
+/* Import Chat CSS as base */
+@import '../pages/Chat.css';
+
+/* Group Chat Specific Styles */
+.group-chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 400px;
+    background: var(--bg-main);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* Messages Area */
+.group-messages-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    position: relative;
+}
+
+/* WhatsApp Pattern Background */
+.group-messages-area::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: repeating-linear-gradient(45deg,
+            transparent,
+            transparent 10px,
+            rgba(255, 255, 255, 0.03) 10px,
+            rgba(255, 255, 255, 0.03) 20px);
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* Message Wrapper */
+.group-message-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    position: relative;
+    z-index: 1;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.group-message-wrapper.own {
+    flex-direction: row-reverse;
+}
+
+.group-message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(139, 92, 246, 0.2);
+    flex-shrink: 0;
+    align-self: flex-end;
+}
+
+.group-message-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 70%;
+    position: relative;
+}
+
+/* Sender Name */
+.sender-name {
+    font-size: 0.75rem;
+    color: var(--primary);
+    margin: 0 0.25rem 0.25rem;
+    font-weight: 600;
+}
+
+/* Message Bubble */
+.group-message-bubble {
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    position: relative;
+    word-wrap: break-word;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.group-message-wrapper.own .group-message-bubble {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.group-message-wrapper.other .group-message-bubble {
+    background: var(--card-bg);
+    color: var(--text-main);
+    border-bottom-left-radius: 4px;
+}
+
+/* Input Area */
+.group-chat-input-area {
+    background: var(--card-bg);
+    border-top: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+}
+
+/* Scrollbar */
+.group-messages-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.group-messages-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.group-messages-area::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.group-messages-area::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .group-chat-container {
+        height: 400px;
+    }
+
+    .group-message-content-wrapper {
+        max-width: 80%;
+    }
+}
+
+@media (max-width: 480px) {
+    .group-chat-container {
+        height: 350px;
+        border-radius: 12px;
+    }
+
+    .group-message-content-wrapper {
+        max-width: 85%;
+    }
+
+    .sender-name {
+        font-size: 0.7rem;
+    }
+}

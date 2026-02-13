@@ -17,8 +17,8 @@
   --text-white: #ffffff;
 
   /* Typography */
-  --font-heading: 'Outfit', 'Tajawal', sans-serif;
-  --font-body: 'Inter', 'Tajawal', sans-serif;
+  --font-heading: 'Outfit', 'Cairo', 'Tajawal', sans-serif;
+  --font-body: 'Inter', 'Cairo', 'Tajawal', sans-serif;
 
   /* Borders & Effects */
   --border-color: rgba(255, 255, 255, 0.1);

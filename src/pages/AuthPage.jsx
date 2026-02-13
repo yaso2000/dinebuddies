@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaMobileAlt, FaEnvelope, FaApple, FaCheck, FaArrowRight } from 'react-icons/fa';
+import { FaMobileAlt, FaFacebook, FaTwitter, FaApple, FaCheck, FaArrowRight } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../context/AuthContext';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updateProfile, signOut as fbSignOut } from 'firebase/auth';
-import { auth, db } from '../firebase/config';
 import { useTranslation } from 'react-i18next';
 
 const AuthPage = () => {
@@ -15,22 +12,18 @@ const AuthPage = () => {
         verifyPhoneOTP,
         signInWithGoogle,
         signInWithApple,
-        signUpWithEmail,
-        signInWithEmail,
+        signInWithFacebook,
+        signInWithTwitter,
         setupRecaptcha,
-        currentUser
+        currentUser,
+        continueAsGuest
     } = useAuth();
     const { t } = useTranslation();
 
-    const [authMode, setAuthMode] = useState('login');
-    const [loginMethod, setLoginMethod] = useState('phone');
     const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [otpSent, setOtpSent] = useState(false);
     const [confirmationResult, setConfirmationResult] = useState(null);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -87,44 +80,13 @@ const AuthPage = () => {
         if (code.length === 6) {
             try {
                 await verifyPhoneOTP(confirmationResult, code);
-                // Navigate to account type selection for new users
-                navigate('/select-account-type');
+                navigate('/');
             } catch (error) {
                 console.error('Error verifying OTP:', error);
                 setError(t('invalid_verification_code'));
             } finally {
                 setLoading(false);
             }
-        }
-    };
-
-    const handleEmailAuth = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-
-        try {
-            if (authMode === 'signup') {
-                await signUpWithEmail(email, password, name);
-            } else {
-                await signInWithEmail(email, password);
-            }
-            navigate('/select-account-type');
-        } catch (error) {
-            console.error('Error with email auth:', error);
-            if (error.code === 'auth/email-already-in-use') {
-                setError(t('email_already_in_use'));
-            } else if (error.code === 'auth/wrong-password') {
-                setError(t('wrong_password'));
-            } else if (error.code === 'auth/user-not-found') {
-                setError(t('user_not_found'));
-            } else if (error.code === 'auth/weak-password') {
-                setError(t('weak_password'));
-            } else {
-                setError(t('error_occurred'));
-            }
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -138,11 +100,13 @@ const AuthPage = () => {
                 result = await signInWithGoogle();
             } else if (provider === 'apple') {
                 result = await signInWithApple();
+            } else if (provider === 'facebook') {
+                result = await signInWithFacebook();
+            } else if (provider === 'twitter') {
+                result = await signInWithTwitter();
             }
 
-            if (result && result.isNewUser) {
-                navigate('/select-account-type');
-            } else {
+            if (result) {
                 navigate('/');
             }
         } catch (error) {
@@ -216,10 +180,10 @@ const AuthPage = () => {
                         WebkitTextFillColor: 'transparent',
                         marginBottom: '0.5rem'
                     }}>
-                        {authMode === 'login' ? t('welcome_back') : t('join_us')}
+                        DineBuddies
                     </h1>
                     <p style={{ color: '#718096', fontSize: '0.95rem' }}>
-                        {authMode === 'login' ? t('login_to_continue') : t('create_new_account')}
+                        {t('join_us')}
                     </p>
                 </div>
 
@@ -238,158 +202,37 @@ const AuthPage = () => {
                     </div>
                 )}
 
-                {/* Auth Mode Toggle */}
-                <div style={{
-                    display: 'flex',
-                    background: '#f7fafc',
-                    borderRadius: '12px',
-                    padding: '4px',
-                    marginBottom: '2rem'
-                }}>
-                    <button
-                        onClick={() => {
-                            setAuthMode('login');
-                            setError('');
-                        }}
-                        style={{
-                            flex: 1,
-                            padding: '0.75rem',
-                            background: authMode === 'login' ? 'white' : 'transparent',
-                            border: 'none',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            color: authMode === 'login' ? '#667eea' : '#718096',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s',
-                            boxShadow: authMode === 'login' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
-                        }}
-                    >
-                        {t('login')}
-                    </button>
-                    <button
-                        onClick={() => {
-                            setAuthMode('signup');
-                            setError('');
-                        }}
-                        style={{
-                            flex: 1,
-                            padding: '0.75rem',
-                            background: authMode === 'signup' ? 'white' : 'transparent',
-                            border: 'none',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            color: authMode === 'signup' ? '#667eea' : '#718096',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s',
-                            boxShadow: authMode === 'signup' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
-                        }}
-                    >
-                        {t('new_account')}
-                    </button>
-                </div>
-
-                {/* Login Method Toggle (Phone vs Email) */}
-                <div style={{
-                    display: 'flex',
-                    gap: '0.5rem',
-                    marginBottom: '1.5rem'
-                }}>
-                    <button
-                        onClick={() => {
-                            setLoginMethod('phone');
-                            setError('');
-                        }}
-                        style={{
-                            flex: 1,
-                            padding: '0.75rem',
-                            background: loginMethod === 'phone' ? '#667eea' : '#e2e8f0',
-                            border: 'none',
-                            borderRadius: '10px',
-                            color: loginMethod === 'phone' ? 'white' : '#4a5568',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.5rem',
-                            transition: 'all 0.3s'
-                        }}
-                    >
-                        <FaMobileAlt /> {t('phone_number')}
-                    </button>
-                    <button
-                        onClick={() => {
-                            setLoginMethod('email');
-                            setError('');
-                        }}
-                        style={{
-                            flex: 1,
-                            padding: '0.75rem',
-                            background: loginMethod === 'email' ? '#667eea' : '#e2e8f0',
-                            border: 'none',
-                            borderRadius: '10px',
-                            color: loginMethod === 'email' ? 'white' : '#4a5568',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.5rem',
-                            transition: 'all 0.3s'
-                        }}
-                    >
-                        <FaEnvelope /> {t('email')}
-                    </button>
-                </div>
-
-                {/* Phone Login */}
-                {loginMethod === 'phone' && !otpSent && (
+                {/* Phone Login Form */}
+                {!otpSent ? (
                     <form onSubmit={handleSendOTP}>
-                        {authMode === 'signup' && (
-                            <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#4a5568' }}>
+                                {t('phone_number')}
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <FaMobileAlt style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#a0aec0' }} />
                                 <input
-                                    type="text"
-                                    placeholder={t('full_name')}
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
+                                    type="tel"
+                                    placeholder={t('phone_placeholder')} // "5xxxxxxxx"
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
                                     required
                                     style={{
                                         width: '100%',
-                                        padding: '1rem',
+                                        padding: '1rem 1rem 1rem 2.5rem',
                                         border: '2px solid #e2e8f0',
                                         borderRadius: '12px',
                                         fontSize: '1rem',
                                         fontFamily: 'inherit',
                                         transition: 'border 0.3s',
-                                        outline: 'none'
+                                        outline: 'none',
+                                        direction: 'ltr',
+                                        textAlign: 'left' // English LTR for phone numbers usually better
                                     }}
                                     onFocus={(e) => e.target.style.borderColor = '#667eea'}
                                     onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                                 />
                             </div>
-                        )}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <input
-                                type="tel"
-                                placeholder={t('phone_placeholder')}
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                required
-                                style={{
-                                    width: '100%',
-                                    padding: '1rem',
-                                    border: '2px solid #e2e8f0',
-                                    borderRadius: '12px',
-                                    fontSize: '1rem',
-                                    fontFamily: 'inherit',
-                                    transition: 'border 0.3s',
-                                    outline: 'none',
-                                    direction: 'ltr',
-                                    textAlign: 'right'
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                            />
                             <p style={{ fontSize: '0.75rem', color: '#718096', marginTop: '0.5rem', textAlign: 'right' }}>
                                 {t('phone_example')}
                             </p>
@@ -421,10 +264,7 @@ const AuthPage = () => {
                             )}
                         </button>
                     </form>
-                )}
-
-                {/* OTP Verification */}
-                {loginMethod === 'phone' && otpSent && (
+                ) : (
                     <form onSubmit={handleVerifyOTP}>
                         <p style={{ textAlign: 'center', color: '#4a5568', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
                             {t('code_sent_to')} <strong>+966{phone}</strong>
@@ -433,7 +273,8 @@ const AuthPage = () => {
                             display: 'flex',
                             gap: '0.5rem',
                             justifyContent: 'center',
-                            marginBottom: '1.5rem'
+                            marginBottom: '1.5rem',
+                            direction: 'ltr'
                         }}>
                             {otp.map((digit, index) => (
                                 <input
@@ -444,7 +285,7 @@ const AuthPage = () => {
                                     value={digit}
                                     onChange={(e) => handleOTPChange(index, e.target.value)}
                                     style={{
-                                        width: '50px',
+                                        width: '45px',
                                         height: '55px',
                                         textAlign: 'center',
                                         fontSize: '1.5rem',
@@ -507,95 +348,6 @@ const AuthPage = () => {
                     </form>
                 )}
 
-                {/* Email Login */}
-                {loginMethod === 'email' && (
-                    <form onSubmit={handleEmailAuth}>
-                        {authMode === 'signup' && (
-                            <div style={{ marginBottom: '1rem' }}>
-                                <input
-                                    type="text"
-                                    placeholder={t('full_name')}
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    required
-                                    style={{
-                                        width: '100%',
-                                        padding: '1rem',
-                                        border: '2px solid #e2e8f0',
-                                        borderRadius: '12px',
-                                        fontSize: '1rem',
-                                        outline: 'none',
-                                        fontFamily: 'inherit',
-                                        transition: 'border 0.3s'
-                                    }}
-                                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                                />
-                            </div>
-                        )}
-                        <div style={{ marginBottom: '1rem' }}>
-                            <input
-                                type="email"
-                                placeholder="example@email.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                style={{
-                                    width: '100%',
-                                    padding: '1rem',
-                                    border: '2px solid #e2e8f0',
-                                    borderRadius: '12px',
-                                    fontSize: '1rem',
-                                    outline: 'none',
-                                    fontFamily: 'inherit',
-                                    transition: 'border 0.3s'
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                            />
-                        </div>
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <input
-                                type="password"
-                                placeholder={t('password_placeholder')}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                minLength="6"
-                                style={{
-                                    width: '100%',
-                                    padding: '1rem',
-                                    border: '2px solid #e2e8f0',
-                                    borderRadius: '12px',
-                                    fontSize: '1rem',
-                                    outline: 'none',
-                                    fontFamily: 'inherit',
-                                    transition: 'border 0.3s'
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            style={{
-                                width: '100%',
-                                padding: '1rem',
-                                background: loading ? '#cbd5e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                border: 'none',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '1.05rem',
-                                cursor: loading ? 'not-allowed' : 'pointer'
-                            }}
-                        >
-                            {loading ? t('loading') : (authMode === 'login' ? t('login') : t('create_account'))}
-                        </button>
-                    </form>
-                )}
-
                 {/* Divider */}
                 <div style={{
                     display: 'flex',
@@ -608,16 +360,15 @@ const AuthPage = () => {
                     <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
                 </div>
 
-                {/* Social Login Buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {/* Social Login Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <button
                         onClick={() => handleSocialLogin('google')}
                         disabled={loading}
                         style={{
-                            width: '100%',
-                            padding: '1rem',
+                            padding: '0.75rem',
                             background: 'white',
-                            border: '2px solid #e2e8f0',
+                            border: '1px solid #e2e8f0',
                             borderRadius: '12px',
                             fontWeight: '600',
                             color: '#4a5568',
@@ -625,32 +376,20 @@ const AuthPage = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.75rem',
-                            transition: 'all 0.3s',
-                            opacity: loading ? 0.6 : 1
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!loading) {
-                                e.currentTarget.style.background = '#f7fafc';
-                                e.currentTarget.style.borderColor = '#cbd5e0';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'white';
-                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            gap: '0.5rem',
+                            transition: 'all 0.2s'
                         }}
                     >
-                        <FcGoogle size={24} /> {t('continue_with_google')}
+                        <FcGoogle size={20} /> <span style={{ fontSize: '0.9rem' }}>Google</span>
                     </button>
 
-                    <button
+                    {/* <button
                         onClick={() => handleSocialLogin('apple')}
                         disabled={loading}
                         style={{
-                            width: '100%',
-                            padding: '1rem',
+                            padding: '0.75rem',
                             background: '#000',
-                            border: 'none',
+                            border: '1px solid #000',
                             borderRadius: '12px',
                             fontWeight: '600',
                             color: 'white',
@@ -658,14 +397,75 @@ const AuthPage = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.75rem',
-                            transition: 'all 0.3s',
-                            opacity: loading ? 0.6 : 1
+                            gap: '0.5rem',
+                            transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => !loading && (e.currentTarget.style.background = '#1a1a1a')}
-                        onMouseLeave={(e) => e.currentTarget.style.background = '#000'}
                     >
-                        <FaApple size={24} /> {t('continue_with_apple')}
+                        <FaApple size={20} /> <span style={{ fontSize: '0.9rem' }}>Apple</span>
+                    </button> */}
+
+                    <button
+                        onClick={() => handleSocialLogin('facebook')}
+                        disabled={loading}
+                        style={{
+                            padding: '0.75rem',
+                            background: '#1877F2',
+                            border: '1px solid #1877F2',
+                            borderRadius: '12px',
+                            fontWeight: '600',
+                            color: 'white',
+                            cursor: loading ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <FaFacebook size={20} /> <span style={{ fontSize: '0.9rem' }}>Facebook</span>
+                    </button>
+
+                    {/* <button
+                        onClick={() => handleSocialLogin('twitter')}
+                        disabled={loading}
+                        style={{
+                            padding: '0.75rem',
+                            background: '#14171a',
+                            border: '1px solid #14171a',
+                            borderRadius: '12px',
+                            fontWeight: '600',
+                            color: 'white',
+                            cursor: loading ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <FaTwitter size={20} /> <span style={{ fontSize: '0.9rem' }}>Twitter</span>
+                    </button> */}
+                </div>
+
+                {/* Continue as Guest */}
+                <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+                    <button
+                        onClick={() => {
+                            continueAsGuest();
+                            navigate('/');
+                        }}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            fontWeight: '600',
+                            color: '#718096',
+                            cursor: 'pointer',
+                            transition: 'color 0.3s',
+                            fontSize: '0.9rem',
+                            textDecoration: 'underline'
+                        }}
+                    >
+                        {t('continue_as_guest', { defaultValue: '👤 Continue as Guest' })}
                     </button>
                 </div>
 
@@ -674,7 +474,7 @@ const AuthPage = () => {
                     textAlign: 'center',
                     fontSize: '0.75rem',
                     color: '#a0aec0',
-                    marginTop: '2rem',
+                    marginTop: '1.5rem',
                     lineHeight: '1.6'
                 }}>
                     {t('terms_agreement')}

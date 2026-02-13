@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { FaArrowLeft, FaUsers, FaChartLine, FaImage, FaTrash, FaEdit, FaComments, FaHeart } from 'react-icons/fa';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase/config';
+import { FaArrowLeft, FaUsers, FaChartLine, FaTrash, FaEdit, FaComments, FaHeart, FaPlus } from 'react-icons/fa';
+
 
 const MyCommunity = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showCreatePost, setShowCreatePost] = useState(false);
-    const [newPost, setNewPost] = useState({ content: '', image: null });
-    const [uploading, setUploading] = useState(false);
     const [stats, setStats] = useState({
         members: 0,
         posts: 0
@@ -28,22 +24,60 @@ const MyCommunity = () => {
             navigate('/');
             return;
         }
-        fetchCommunityStats();
-        const unsubscribe = subscribeToPosts();
-        return () => unsubscribe && unsubscribe();
+
+        const unsubscribePosts = subscribeToPosts();
+        const unsubscribeMembers = subscribeToMembers();
+
+        return () => {
+            if (unsubscribePosts) unsubscribePosts();
+            if (unsubscribeMembers) unsubscribeMembers();
+        };
     }, [currentUser, isBusinessAccount]);
 
-    const fetchCommunityStats = async () => {
+    const subscribeToMembers = () => {
         try {
-            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-            const userData = userDoc.data();
-            setStats({
-                members: userData?.communityMembers?.length || 0,
-                posts: 0,       // Will be updated from posts subscription
-                engagement: 0   // Will be updated from posts subscription (likes + comments)
+            // Source of Truth: Users who have this partner in their joinedCommunities
+            const q = query(
+                collection(db, 'users'),
+                where('joinedCommunities', 'array-contains', currentUser.uid)
+            );
+
+            return onSnapshot(q, async (snapshot) => {
+                const realCount = snapshot.size;
+                const memberIds = snapshot.docs.map(doc => doc.id);
+
+                setStats(prev => ({
+                    ...prev,
+                    members: realCount
+                }));
+
+                // Self-healing: Ensure partner's communityMembers array matches reality
+                if (currentUser.uid) {
+                    try {
+                        const partnerRef = doc(db, 'users', currentUser.uid);
+                        const partnerSnap = await getDoc(partnerRef);
+                        const currentMembers = partnerSnap.data()?.communityMembers || [];
+
+                        // Check if we need to update
+                        const missingMembers = memberIds.filter(id => !currentMembers.includes(id));
+
+                        if (missingMembers.length > 0) {
+                            console.log('🔄 Syncing community members...', missingMembers);
+                            const { updateDoc, arrayUnion } = await import('firebase/firestore');
+                            await updateDoc(partnerRef, {
+                                communityMembers: arrayUnion(...missingMembers)
+                            });
+                        }
+                    } catch (err) {
+                        console.error("Auto-sync error:", err);
+                    }
+                }
+            }, (error) => {
+                console.error("Error fetching members:", error);
             });
         } catch (error) {
-            console.error('Error fetching stats:', error);
+            console.error("Error in subscribeToMembers:", error);
+            return () => { };
         }
     };
 
@@ -52,7 +86,7 @@ const MyCommunity = () => {
             const q = query(
                 collection(db, 'communityPosts'),
                 where('partnerId', '==', currentUser.uid),
-                orderBy('createdAt', 'asc') // Changed to asc to match index
+                orderBy('createdAt', 'asc')
             );
 
             return onSnapshot(
@@ -95,52 +129,7 @@ const MyCommunity = () => {
         }
     };
 
-    const handleImageUpload = async (file) => {
-        if (!file) return null;
 
-        const storageRef = ref(storage, `community-posts/${currentUser.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
-    };
-
-    const handleCreatePost = async (e) => {
-        e.preventDefault();
-
-        if (!newPost.content.trim() && !newPost.image) {
-            alert('Please add content or an image');
-            return;
-        }
-
-        setUploading(true);
-        try {
-            let imageUrl = null;
-            if (newPost.image) {
-                imageUrl = await handleImageUpload(newPost.image);
-            }
-
-            const businessInfo = userProfile?.businessInfo || {};
-
-            await addDoc(collection(db, 'communityPosts'), {
-                partnerId: currentUser.uid,
-                partnerName: businessInfo.businessName || 'Business',
-                partnerLogo: businessInfo.logoImage || null,
-                content: newPost.content.trim(),
-                image: imageUrl,
-                createdAt: serverTimestamp(),
-                likes: [],
-                comments: []
-            });
-
-            setNewPost({ content: '', image: null });
-            setShowCreatePost(false);
-            alert('Post created successfully!');
-        } catch (error) {
-            console.error('Error creating post:', error);
-            alert('Failed to create post. Please try again.');
-        } finally {
-            setUploading(false);
-        }
-    };
 
     const handleDeletePost = async (postId) => {
         if (!window.confirm('Are you sure you want to delete this post?')) return;
@@ -200,7 +189,7 @@ const MyCommunity = () => {
                 </div>
                 <button
                     className="back-btn"
-                    onClick={() => navigate('/business-profile')}
+                    onClick={() => navigate(`/partner/${currentUser.uid}`)}
                 >
                     <FaUsers />
                 </button>
@@ -244,124 +233,81 @@ const MyCommunity = () => {
             </div>
 
             {/* Action Buttons */}
-            <div style={{ padding: '0 1.5rem 1rem', display: 'flex', gap: '12px' }}>
+            <div style={{ padding: '0 1.5rem 1rem', display: 'flex', gap: '10px' }}>
                 <button
-                    onClick={() => setShowCreatePost(!showCreatePost)}
+                    onClick={() => navigate('/create-story')}
                     style={{
                         flex: 1,
-                        padding: '14px',
-                        background: 'linear-gradient(135deg, var(--primary), #f97316)',
+                        padding: '10px 12px',
+                        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
                         border: 'none',
-                        borderRadius: '16px',
+                        borderRadius: '14px',
                         color: 'white',
                         fontWeight: '700',
-                        fontSize: '1rem',
+                        fontSize: '0.85rem',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'all 0.2s'
+                        gap: '6px',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
                     }}
                 >
-                    <FaEdit />
-                    {showCreatePost ? 'Cancel' : 'Create Post'}
+                    <FaPlus style={{ fontSize: '0.8rem' }} />
+                    Story
+                </button>
+
+                <button
+                    onClick={() => navigate('/create-post')}
+                    style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        background: 'linear-gradient(135deg, var(--primary), #f97316)',
+                        border: 'none',
+                        borderRadius: '14px',
+                        color: 'white',
+                        fontWeight: '700',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
+                    }}
+                >
+                    <FaEdit style={{ fontSize: '0.8rem' }} />
+                    Post
                 </button>
 
                 <button
                     onClick={() => navigate(`/community/${currentUser.uid}`)}
                     style={{
                         flex: 1,
-                        padding: '14px',
+                        padding: '10px 12px',
                         background: 'linear-gradient(135deg, #10b981, #059669)',
                         border: 'none',
-                        borderRadius: '16px',
+                        borderRadius: '14px',
                         color: 'white',
                         fontWeight: '700',
-                        fontSize: '1rem',
+                        fontSize: '0.85rem',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'all 0.2s'
+                        gap: '6px',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
                     }}
                 >
-                    <FaComments />
-                    Open Chat
+                    <FaComments style={{ fontSize: '0.8rem' }} />
+                    Chat
                 </button>
             </div>
 
-            {/* Create Post Form */}
-            {showCreatePost && (
-                <div style={{
-                    margin: '0 1.5rem 1.5rem',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '16px',
-                    padding: '1.5rem'
-                }}>
-                    <form onSubmit={handleCreatePost}>
-                        <textarea
-                            value={newPost.content}
-                            onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-                            placeholder="What's new in your business?"
-                            style={{
-                                width: '100%',
-                                minHeight: '120px',
-                                padding: '12px',
-                                background: 'var(--bg-body)',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontSize: '0.95rem',
-                                resize: 'vertical',
-                                marginBottom: '12px'
-                            }}
-                        />
 
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => setNewPost({ ...newPost, image: e.target.files[0] })}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                background: 'var(--bg-body)',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontSize: '0.9rem',
-                                marginBottom: '12px'
-                            }}
-                        />
-
-                        {newPost.image && (
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                                📷 {newPost.image.name}
-                            </p>
-                        )}
-
-                        <button
-                            type="submit"
-                            disabled={uploading}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                background: uploading ? 'var(--bg-body)' : 'linear-gradient(135deg, var(--primary), #f97316)',
-                                border: 'none',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontWeight: '700',
-                                cursor: uploading ? 'not-allowed' : 'pointer',
-                                opacity: uploading ? 0.6 : 1
-                            }}
-                        >
-                            {uploading ? 'Posting...' : 'Post'}
-                        </button>
-                    </form>
-                </div>
-            )}
 
             {/* Posts List */}
             <div style={{ padding: '0 1.5rem' }}>
@@ -453,6 +399,8 @@ const MyCommunity = () => {
                     </div>
                 )}
             </div>
+
+
         </div>
     );
 };

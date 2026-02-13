@@ -157,22 +157,29 @@ const UserProfile = () => {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '500px', margin: '0 auto' }}>
                         <button
-                            onClick={() => toggleFollow(userId)}
+                            onClick={() => {
+                                if (currentUser?.isGuest) {
+                                    navigate('/login');
+                                    return;
+                                }
+                                toggleFollow(userId);
+                            }}
                             className="btn"
                             style={{
                                 flex: 1,
                                 height: '55px',
                                 background: isFollowing
-                                    ? 'transparent'
+                                    ? 'rgba(139, 92, 246, 0.15)'
                                     : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
                                 border: isFollowing ? '2px solid var(--primary)' : 'none',
-                                color: 'white',
+                                color: isFollowing ? 'var(--primary)' : 'white',
                                 fontSize: '1rem',
                                 fontWeight: '900',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '10px'
+                                gap: '10px',
+                                transition: 'all 0.2s'
                             }}
                         >
                             {isFollowing ? (
@@ -189,7 +196,13 @@ const UserProfile = () => {
                         </button>
 
                         <button
-                            onClick={() => navigate(`/chat/${userId}`)}
+                            onClick={() => {
+                                if (currentUser?.isGuest) {
+                                    navigate('/login');
+                                    return;
+                                }
+                                navigate(`/chat/${userId}`);
+                            }}
                             className="btn"
                             style={{
                                 flex: 1,
@@ -210,7 +223,13 @@ const UserProfile = () => {
                         </button>
 
                         <button
-                            onClick={() => setIsReportModalOpen(true)}
+                            onClick={() => {
+                                if (currentUser?.isGuest) {
+                                    navigate('/login');
+                                    return;
+                                }
+                                setIsReportModalOpen(true);
+                            }}
                             className="btn"
                             style={{
                                 width: '55px',

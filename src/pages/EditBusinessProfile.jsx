@@ -8,6 +8,8 @@ import { storage } from '../firebase/config';
 import { serverTimestamp } from 'firebase/firestore';
 import LocationPicker from '../components/LocationPicker';
 import ServiceMediaPicker from '../components/ServiceMediaPicker';
+import LocationAutocomplete from '../components/LocationAutocomplete';
+import './EditBusinessProfile.css';
 
 const EditBusinessProfile = () => {
     const navigate = useNavigate();
@@ -28,11 +30,15 @@ const EditBusinessProfile = () => {
         website: '',
         address: '',
         city: '',
+        country: 'AU', // Default to Australia for English results
         lat: null,
         lng: null,
+        userLat: null, // User's current location for search bias
+        userLng: null,
         instagram: '',
         twitter: '',
-        facebook: ''
+        facebook: '',
+        servicesLabel: 'Menu' // 'Menu' or 'Services'
     });
 
     // Images
@@ -46,6 +52,12 @@ const EditBusinessProfile = () => {
     const [showServiceModal, setShowServiceModal] = useState(false);
     const [editingService, setEditingService] = useState(null);
     const [showLocationModal, setShowLocationModal] = useState(false);
+
+    // Location input for autocomplete
+    const [locationInput, setLocationInput] = useState('');
+
+    // Tabs scroll ref
+    const tabsRef = React.useRef(null);
 
     // Working Hours
     const [workingHours, setWorkingHours] = useState({
@@ -69,8 +81,8 @@ const EditBusinessProfile = () => {
     ];
 
     const businessTypes = [
-        'Restaurant', 'Cafe', 'Hotel', 'Activity Center',
-        'Salon', 'Gym', 'Event Hall', 'Other'
+        'Restaurant', 'Cafe', 'Bar', 'Night Club',
+        'BBQ Parties', 'Food Truck', 'Lounge', 'Other'
     ];
 
     // Load existing data
@@ -78,7 +90,7 @@ const EditBusinessProfile = () => {
         const info = userProfile?.businessInfo || userProfile?.businessInfoDraft;
         if (info) {
             setFormData({
-                businessName: info.businessName || '',
+                businessName: userProfile?.display_name || '', // من display_name
                 tagline: info.tagline || '',
                 businessType: info.businessType || 'Restaurant',
                 description: info.description || '',
@@ -91,15 +103,155 @@ const EditBusinessProfile = () => {
                 lng: info.lng || null,
                 instagram: info.socialMedia?.instagram || '',
                 twitter: info.socialMedia?.twitter || '',
-                facebook: info.socialMedia?.facebook || ''
+                facebook: info.socialMedia?.facebook || '',
+                servicesLabel: info.servicesLabel || 'Menu'
             });
 
             setCoverPreviewUrl(info.coverImage || '');
-            setLogoPreviewUrl(info.logoImage || '');
+            setLogoPreviewUrl(userProfile?.photo_url || ''); // من photo_url
             setServices(info.services || []);
             setWorkingHours(info.workingHours || workingHours);
+
+            // Set location input if address exists
+            if (info.address) {
+                setLocationInput(info.address);
+            }
         }
     }, [userProfile]);
+
+    // Helper function to get currency by country code
+    const getCurrencyByCountry = (countryCode) => {
+        const currencyMap = {
+            'AU': 'AUD',
+            'US': 'USD',
+            'GB': 'GBP',
+            'SA': 'SAR',
+            'AE': 'AED',
+            'KW': 'KWD',
+            'QA': 'QAR',
+            'BH': 'BHD',
+            'OM': 'OMR',
+            'EG': 'EGP',
+            'JO': 'JOD',
+            'LB': 'LBP',
+            'EU': 'EUR',
+            'DE': 'EUR',
+            'FR': 'EUR',
+            'IT': 'EUR',
+            'ES': 'EUR',
+            'CA': 'CAD',
+            'IN': 'INR',
+            'CN': 'CNY',
+            'JP': 'JPY',
+            'KR': 'KRW'
+        };
+        return currencyMap[countryCode] || 'USD';
+    };
+
+    // Auto-detect city on component mount - ALWAYS run once
+    useEffect(() => {
+        if (navigator.geolocation) {
+            console.log('🔍 Requesting geolocation for city detection...');
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    try {
+                        // Use BigDataCloud API - Free and CORS friendly for client-side
+                        const response = await fetch(
+                            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+                        );
+
+                        if (!response.ok) throw new Error('Geocoding failed');
+
+                        const data = await response.json();
+
+                        if (data) {
+                            // Priority order for city/locality
+                            const detectedCity = data.city || data.locality || data.principalSubdivision || '';
+                            const detectedCountryCode = (data.countryCode || 'AU').toUpperCase();
+
+                            // Get currency for this country
+                            const detectedCurrency = getCurrencyByCountry(detectedCountryCode);
+
+                            console.log('✅ Auto-detected location (BigDataCloud):', {
+                                city: detectedCity,
+                                country: detectedCountryCode,
+                                currency: detectedCurrency,
+                                lat: latitude,
+                                lng: longitude
+                            });
+
+                            if (detectedCity) {
+                                setFormData(prev => ({
+                                    ...prev,
+                                    city: detectedCity,
+                                    country: detectedCountryCode,
+                                    currency: detectedCurrency, // Assuming currency field exists or is used
+                                    userLat: latitude,
+                                    userLng: longitude,
+                                    // If address is empty, maybe set city as address? No, keep it separate.
+                                }));
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ Error detecting city:', error);
+                    }
+                },
+                (error) => {
+                    console.error('❌ Geolocation error:', error);
+                    alert('Please allow location access to detect your city automatically.');
+                }
+            );
+        }
+    }, []); // Run only once on mount
+
+    // Enable drag scrolling for tabs
+    React.useEffect(() => {
+        const slider = tabsRef.current;
+        if (!slider) return;
+
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+
+        const handleMouseDown = (e) => {
+            isDown = true;
+            slider.style.cursor = 'grabbing';
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        };
+
+        const handleMouseLeave = () => {
+            isDown = false;
+            slider.style.cursor = 'grab';
+        };
+
+        const handleMouseUp = () => {
+            isDown = false;
+            slider.style.cursor = 'grab';
+        };
+
+        const handleMouseMove = (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - slider.offsetLeft;
+            const walk = (x - startX) * 2; // Scroll speed
+            slider.scrollLeft = scrollLeft - walk;
+        };
+
+        slider.style.cursor = 'grab';
+        slider.addEventListener('mousedown', handleMouseDown);
+        slider.addEventListener('mouseleave', handleMouseLeave);
+        slider.addEventListener('mouseup', handleMouseUp);
+        slider.addEventListener('mousemove', handleMouseMove);
+
+        return () => {
+            slider.removeEventListener('mousedown', handleMouseDown);
+            slider.removeEventListener('mouseleave', handleMouseLeave);
+            slider.removeEventListener('mouseup', handleMouseUp);
+            slider.removeEventListener('mousemove', handleMouseMove);
+        };
+    }, []);
 
     const handleImageChange = (e, type) => {
         const file = e.target.files[0];
@@ -126,6 +278,58 @@ const EditBusinessProfile = () => {
         }
     };
 
+    const geocodeAddress = async (address) => {
+        try {
+            if (!address) return { lat: null, lng: null };
+
+            // Use Google Geocoding API if available
+            if (window.google && window.google.maps && window.google.maps.Geocoder) {
+                const geocoder = new window.google.maps.Geocoder();
+
+                return new Promise((resolve) => {
+                    geocoder.geocode({ address }, (results, status) => {
+                        if (status === 'OK' && results[0]) {
+                            const location = results[0].geometry.location;
+                            console.log('✅ Geocoded address:', address, '→', {
+                                lat: location.lat(),
+                                lng: location.lng()
+                            });
+                            resolve({
+                                lat: location.lat(),
+                                lng: location.lng()
+                            });
+                        } else {
+                            console.warn('⚠️ Geocoding failed:', status);
+                            resolve({ lat: null, lng: null });
+                        }
+                    });
+                });
+            }
+
+            // Fallback to OpenStreetMap Nominatim
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
+            );
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+                console.log('✅ Geocoded address (OSM):', address, '→', {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon)
+                });
+                return {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon)
+                };
+            }
+
+            return { lat: null, lng: null };
+        } catch (error) {
+            console.error('❌ Geocoding error:', error);
+            return { lat: null, lng: null };
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -134,7 +338,7 @@ const EditBusinessProfile = () => {
         try {
             const currentInfo = userProfile?.businessInfo || {};
             let coverImageUrl = currentInfo.coverImage || '';
-            let logoImageUrl = currentInfo.logoImage || '';
+            let logoImageUrl = userProfile?.photo_url || ''; // من photo_url
 
             if (coverImage) {
                 setUploading(true);
@@ -146,12 +350,64 @@ const EditBusinessProfile = () => {
                 logoImageUrl = await uploadImage(logoImage, `logo_${Date.now()}.jpg`);
             }
 
+            // Upload service images to Firebase
+            console.log('📤 Processing service images...');
+            const processedServices = await Promise.all(
+                services.map(async (service) => {
+                    if (service.image && service.image.startsWith('data:image')) {
+                        console.log(`📤 Uploading image for "${service.name}"...`);
+                        try {
+                            // Convert base64 to blob
+                            const response = await fetch(service.image);
+                            const blob = await response.blob();
+
+                            // Create a file from blob
+                            const filename = `service_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+                            const file = new File([blob], filename, { type: 'image/jpeg' });
+
+                            // Upload to Firebase
+                            const imageUrl = await uploadImage(file, `services/${filename}`);
+                            console.log(`✅ Image uploaded for "${service.name}":`, imageUrl);
+
+                            return { ...service, image: imageUrl };
+                        } catch (error) {
+                            console.error(`❌ Failed to upload image for "${service.name}":`, error);
+                            return service; // Keep original if upload fails
+                        }
+                    }
+                    return service;
+                })
+            );
+
             setUploading(false);
 
+            // Geocode address if lat/lng are missing or invalid
+            let finalLat = formData.lat;
+            let finalLng = formData.lng;
+
+            if (!finalLat || !finalLng || isNaN(finalLat) || isNaN(finalLng)) {
+                console.log('🔍 Coordinates missing or invalid, geocoding address...');
+                const fullAddress = `${formData.address}${formData.city ? ', ' + formData.city : ''}`;
+                const geocoded = await geocodeAddress(fullAddress);
+
+                if (geocoded.lat && geocoded.lng) {
+                    finalLat = geocoded.lat;
+                    finalLng = geocoded.lng;
+                    console.log('✅ Address geocoded successfully!');
+                } else {
+                    console.warn('⚠️ Could not geocode address. Map will not be displayed.');
+                }
+            }
+
             const updates = {
+                // تحديث البيانات الأساسية للمطعم
+                display_name: formData.businessName, // اسم المطعم
+                photo_url: logoImageUrl, // لوجو المطعم
+
                 businessInfo: {
                     ...currentInfo,
-                    businessName: formData.businessName,
+                    // NO businessName - موجود في display_name
+                    // NO logoImage - موجود في photo_url
                     tagline: formData.tagline,
                     businessType: formData.businessType,
                     description: formData.description,
@@ -160,16 +416,22 @@ const EditBusinessProfile = () => {
                     website: formData.website,
                     address: formData.address,
                     city: formData.city,
-                    lat: parseFloat(formData.lat),
-                    lng: parseFloat(formData.lng),
+                    lat: finalLat ? parseFloat(finalLat) : null,
+                    lng: finalLng ? parseFloat(finalLng) : null,
+                    // Also save coordinates in a nested object for consistency
+                    coordinates: {
+                        lat: finalLat ? parseFloat(finalLat) : null,
+                        lng: finalLng ? parseFloat(finalLng) : null
+                    },
                     coverImage: coverImageUrl,
-                    logoImage: logoImageUrl,
+                    // NO logoImage - استخدم photo_url
                     socialMedia: {
                         instagram: formData.instagram,
                         twitter: formData.twitter,
                         facebook: formData.facebook
                     },
-                    services: services,
+                    services: processedServices, // Use processed services with Firebase URLs
+                    servicesLabel: formData.servicesLabel, // Save the chosen label
                     workingHours: workingHours,
                     updatedAt: serverTimestamp(),
                     isPublished: true
@@ -178,7 +440,7 @@ const EditBusinessProfile = () => {
             };
 
             await updateUserProfile(updates);
-            navigate('/business-profile');
+            navigate(`/partner/${currentUser.uid}`);
         } catch (err) {
             console.error('Error updating profile:', err);
             setError(`Failed to update profile: ${err.message}`);
@@ -188,60 +450,151 @@ const EditBusinessProfile = () => {
         }
     };
 
-    const addService = (service) => {
-        if (editingService !== null) {
-            const updated = [...services];
-            updated[editingService] = service;
-            setServices(updated);
-        } else {
-            setServices([...services, { ...service, id: Date.now().toString() }]);
+    const addService = async (service) => {
+        console.log('💾 Saving service:', service);
+
+        try {
+            let processedService = { ...service };
+
+            // If service has a base64 image, upload it to Firebase
+            if (service.image && service.image.startsWith('data:image')) {
+                console.log('📤 Uploading service image to Firebase...');
+
+                // Convert base64 to blob
+                const response = await fetch(service.image);
+                const blob = await response.blob();
+
+                // Create a file from blob
+                const filename = `service_${Date.now()}.jpg`;
+                const file = new File([blob], filename, { type: 'image/jpeg' });
+
+                // Upload to Firebase
+                const imageUrl = await uploadImage(file, `services/${filename}`);
+                processedService.image = imageUrl;
+
+                console.log('✅ Service image uploaded:', imageUrl);
+            }
+
+            if (editingService !== null) {
+                const updated = [...services];
+                updated[editingService] = processedService;
+                setServices(updated);
+            } else {
+                setServices([...services, { ...processedService, id: Date.now().toString() }]);
+            }
+
+            setShowServiceModal(false);
+            setEditingService(null);
+        } catch (error) {
+            console.error('❌ Error saving service:', error);
+            alert('Failed to upload service image. Please try again.');
         }
-        setShowServiceModal(false);
-        setEditingService(null);
     };
 
     const sections = [
         { id: 'basic', label: 'Basic Info', icon: '📝' },
         { id: 'contact', label: 'Contact & Location', icon: '📍' },
         { id: 'hours', label: 'Working Hours', icon: '🕐' },
-        { id: 'services', label: 'Services & Menu', icon: '🍽️' }
+        { id: 'services', label: 'Menu', icon: '🍽️' }
     ];
 
     return (
         <div className="page-container" style={{ paddingBottom: '150px', background: 'var(--bg-body)' }}>
-            {/* Header */}
-            <header className="app-header sticky-header-glass">
-                <button className="back-btn" onClick={() => navigate(-1)}>
+            {/* Enhanced Header */}
+            <header style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 1000,
+                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
+                backdropFilter: 'blur(20px)',
+                borderBottom: '1px solid rgba(139, 92, 246, 0.2)',
+                padding: '1rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 4px 20px rgba(139, 92, 246, 0.1)'
+            }}>
+                <button
+                    onClick={() => navigate(-1)}
+                    style={{
+                        background: 'rgba(139, 92, 246, 0.1)',
+                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                        borderRadius: '12px',
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--primary)';
+                        e.currentTarget.style.color = 'white';
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
+                        e.currentTarget.style.color = 'var(--primary)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                >
                     <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                 </button>
-                <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                    Edit Business Profile
-                </h3>
+
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                    <h3 style={{
+                        fontSize: '1.1rem',
+                        fontWeight: '800',
+                        margin: 0,
+                        background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text'
+                    }}>
+                        ✨ Edit Business Profile
+                    </h3>
+                    <p style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        margin: '4px 0 0 0'
+                    }}>
+                        Make your business shine
+                    </p>
+                </div>
+
                 <div style={{ width: '40px' }}></div>
             </header>
 
             {error && (
                 <div style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1))',
                     border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: '12px',
-                    padding: '1rem',
+                    borderRadius: '16px',
+                    padding: '1rem 1.25rem',
                     margin: '1rem',
-                    color: '#ef4444'
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    fontSize: '0.9rem',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)'
                 }}>
+                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                     {error}
                 </div>
             )}
 
             <form onSubmit={handleSubmit}>
-                {/* Cover & Logo Images */}
-                <div style={{ position: 'relative', marginBottom: '4rem' }}>
-                    {/* Cover Image */}
+                {/* Enhanced Cover & Logo Images */}
+                <div style={{ position: 'relative', marginBottom: '5rem' }}>
+                    {/* Cover Image with Gradient Overlay */}
                     <div style={{
                         position: 'relative',
-                        height: '200px',
+                        height: '220px',
                         overflow: 'hidden',
-                        background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3))'
+                        background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(236, 72, 153, 0.4), rgba(249, 115, 22, 0.4))'
                     }}>
                         {coverPreviewUrl && (
                             <img
@@ -255,31 +608,41 @@ const EditBusinessProfile = () => {
                                 }}
                             />
                         )}
+
+                        {/* Gradient Overlay */}
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 100%)'
+                        }} />
+
+                        {/* Enhanced Change Cover Button */}
                         <label style={{
                             position: 'absolute',
-                            bottom: '1rem',
-                            right: '1rem',
-                            background: 'rgba(0,0,0,0.8)',
+                            bottom: '1.5rem',
+                            right: '1.5rem',
+                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(124, 58, 237, 0.95))',
                             backdropFilter: 'blur(10px)',
-                            padding: '8px 14px',
-                            borderRadius: '10px',
+                            padding: '12px 20px',
+                            borderRadius: '12px',
                             color: 'white',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.8rem',
-                            fontWeight: '600',
+                            gap: '8px',
+                            fontSize: '0.85rem',
+                            fontWeight: '700',
                             border: '1px solid rgba(255,255,255,0.2)',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.3s',
+                            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)'
                         }}
                             onMouseEnter={(e) => {
-                                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.9)';
-                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 8px 20px rgba(139, 92, 246, 0.6)';
                             }}
                             onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(0,0,0,0.8)';
-                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)';
                             }}
                         >
                             <FaCamera /> Change Cover
@@ -292,18 +655,19 @@ const EditBusinessProfile = () => {
                         </label>
                     </div>
 
-                    {/* Logo Image */}
+                    {/* Enhanced Logo Image */}
                     <div style={{
                         position: 'absolute',
-                        bottom: '-40px',
+                        bottom: '-50px',
                         left: '1.5rem',
-                        width: '100px',
-                        height: '100px',
-                        borderRadius: '20px',
-                        border: '4px solid var(--bg-body)',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                        width: '120px',
+                        height: '120px',
+                        borderRadius: '24px',
+                        border: '5px solid var(--bg-body)',
+                        boxShadow: '0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(139, 92, 246, 0.3)',
                         overflow: 'hidden',
-                        background: 'linear-gradient(135deg, var(--primary), #f97316)'
+                        background: 'linear-gradient(135deg, var(--primary), #f97316)',
+                        transition: 'all 0.3s'
                     }}>
                         {logoPreviewUrl ? (
                             <img
@@ -323,7 +687,7 @@ const EditBusinessProfile = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '2.5rem'
+                                fontSize: '3rem'
                             }}>
                                 🏪
                             </div>
@@ -331,18 +695,21 @@ const EditBusinessProfile = () => {
                         <label style={{
                             position: 'absolute',
                             inset: 0,
-                            background: 'rgba(0,0,0,0.6)',
+                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(124, 58, 237, 0.9))',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             opacity: 0,
                             cursor: 'pointer',
-                            transition: 'opacity 0.2s'
+                            transition: 'opacity 0.3s',
+                            flexDirection: 'column',
+                            gap: '4px'
                         }}
                             onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
                             onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
                         >
-                            <FaCamera style={{ color: 'white', fontSize: '1.5rem' }} />
+                            <FaCamera style={{ color: 'white', fontSize: '1.8rem' }} />
+                            <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: '600' }}>Change</span>
                             <input
                                 type="file"
                                 accept="image/*"
@@ -353,65 +720,90 @@ const EditBusinessProfile = () => {
                     </div>
                 </div>
 
-                {/* Section Tabs */}
-                <div style={{
-                    display: 'flex',
-                    gap: '6px',
-                    padding: '0 1rem',
-                    marginBottom: '1.5rem',
-                    overflowX: 'auto',
-                    WebkitOverflowScrolling: 'touch'
-                }}>
-                    {sections.map(section => (
-                        <button
-                            key={section.id}
-                            type="button"
-                            onClick={() => setActiveSection(section.id)}
-                            style={{
-                                padding: '10px 16px',
-                                background: activeSection === section.id
-                                    ? 'linear-gradient(135deg, var(--primary), #f97316)'
-                                    : 'var(--bg-card)',
-                                border: activeSection === section.id
-                                    ? '1px solid var(--primary)'
-                                    : '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontWeight: activeSection === section.id ? '700' : '600',
-                                fontSize: '0.8rem',
-                                whiteSpace: 'nowrap',
-                                transition: 'all 0.3s ease',
-                                boxShadow: activeSection === section.id
-                                    ? '0 4px 12px rgba(139, 92, 246, 0.3)'
-                                    : 'none',
-                                transform: activeSection === section.id ? 'translateY(-2px)' : 'none'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (activeSection !== section.id) {
-                                    e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
-                                    e.currentTarget.style.borderColor = 'var(--primary)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (activeSection !== section.id) {
-                                    e.currentTarget.style.background = 'var(--bg-card)';
-                                    e.currentTarget.style.borderColor = 'var(--border-color)';
-                                }
-                            }}
-                        >
-                            {section.icon} {section.label}
-                        </button>
-                    ))}
+                {/* Section Tabs - Simple & Functional */}
+                <div
+                    ref={tabsRef}
+                    style={{
+                        display: 'flex',
+                        gap: '6px',
+                        padding: '0 1.5rem 0 1.5rem',
+                        marginBottom: '1rem',
+                        overflowX: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        userSelect: 'none' // Prevent text selection while dragging
+                    }}>
+                    <div style={{
+                        display: 'flex',
+                        gap: '6px',
+                        paddingRight: '3rem' // Extra padding to show last button
+                    }}>
+                        {sections.map(section => (
+                            <button
+                                key={section.id}
+                                type="button"
+                                onClick={() => setActiveSection(section.id)}
+                                style={{
+                                    padding: '8px 12px',
+                                    background: activeSection === section.id
+                                        ? 'var(--primary)'
+                                        : 'var(--bg-card)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '8px',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontWeight: activeSection === section.id ? '700' : '500',
+                                    fontSize: '0.8rem',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.2s',
+                                    opacity: activeSection === section.id ? 1 : 0.7
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.opacity = '1';
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (activeSection !== section.id) {
+                                        e.currentTarget.style.opacity = '0.7';
+                                    }
+                                }}
+                            >
+                                {section.icon} {section.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Section Content */}
-                <div style={{ padding: '0 1rem' }}>
+                {/* Enhanced Section Content */}
+                <div style={{ padding: '0 1.5rem 2rem 1.5rem' }}>
                     {/* Basic Info Section */}
                     {activeSection === 'basic' && (
-                        <div className="form-section">
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem' }}>
-                                📝 Basic Information
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.6))',
+                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                            borderRadius: '20px',
+                            padding: '2rem',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
+                        }}>
+                            <h3 style={{
+                                fontSize: '1.3rem',
+                                fontWeight: '800',
+                                marginBottom: '1.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text'
+                            }}>
+                                <span style={{
+                                    background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    fontSize: '1.5rem'
+                                }}>📝</span>
+                                Basic Information
                             </h3>
 
                             <div className="form-group">
@@ -462,9 +854,27 @@ const EditBusinessProfile = () => {
 
                     {/* Contact & Location Section */}
                     {activeSection === 'contact' && (
-                        <div className="form-section">
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem' }}>
-                                📍 Contact & Location
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.6))',
+                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                            borderRadius: '20px',
+                            padding: '2rem',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
+                        }}>
+                            <h3 style={{
+                                fontSize: '1.3rem',
+                                fontWeight: '800',
+                                marginBottom: '1.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text'
+                            }}>
+                                <span style={{ fontSize: '1.5rem' }}>📍</span>
+                                Contact & Location
                             </h3>
 
                             <div className="form-group">
@@ -497,34 +907,84 @@ const EditBusinessProfile = () => {
                                 />
                             </div>
 
-                            <div className="form-group">
-                                <label>Address</label>
-                                <input
-                                    type="text"
-                                    value={formData.address}
-                                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                    placeholder="Street address"
-                                />
-                            </div>
 
-                            <div className="form-group">
-                                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>City</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowLocationModal(true)}
-                                        className="btn btn-outline"
-                                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                                    >
-                                        <FaMapMarkerAlt /> Set Location on Map
-                                    </button>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.city}
-                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                    placeholder="City name"
-                                />
+                            {/* Location Search - Same as CreateInvitation */}
+                            <div style={{
+                                background: 'var(--card-bg)',
+                                padding: '1.25rem',
+                                borderRadius: '16px',
+                                border: '1px solid var(--border-color)',
+                                marginBottom: '1.5rem'
+                            }}>
+                                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    📍 Business Location
+                                </h3>
+
+                                {/* Current Location Badge */}
+                                {formData.city && (
+                                    <div style={{
+                                        marginBottom: '1rem',
+                                        padding: '0.75rem',
+                                        background: 'rgba(139, 92, 246, 0.1)',
+                                        borderRadius: '12px',
+                                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <span style={{ fontSize: '1.2rem' }}>📍</span>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                                                Your Location
+                                            </div>
+                                            <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
+                                                {formData.city}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Venue Search */}
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '0.8rem' }}>Search for your business location</label>
+                                    <LocationAutocomplete
+                                        value={locationInput}
+                                        onChange={(e) => setLocationInput(e.target.value)}
+                                        onSelect={(location) => {
+                                            console.log('📍 Location selected:', location);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                address: location.fullAddress || location.name,
+                                                lat: location.lat,
+                                                lng: location.lng
+                                            }));
+                                            setLocationInput(location.name || location.fullAddress);
+                                        }}
+                                        city={formData.city}
+                                        countryCode={formData.country}
+                                        userLat={formData.userLat}
+                                        userLng={formData.userLng}
+                                    />
+                                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
+                                        Search for restaurants, cafes, or venues near you
+                                    </small>
+                                </div>
+
+                                {formData.address && (
+                                    <div style={{
+                                        marginTop: '1rem',
+                                        padding: '8px 12px',
+                                        background: 'rgba(139, 92, 246, 0.1)',
+                                        border: '1px solid rgba(139, 92, 246, 0.2)',
+                                        borderRadius: '8px',
+                                        fontSize: '0.85rem',
+                                        color: 'var(--text-secondary)'
+                                    }}>
+                                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Selected Address:</div>
+                                        <div>{formData.address}</div>
+                                    </div>
+                                )}
                             </div>
 
                             <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
@@ -565,9 +1025,27 @@ const EditBusinessProfile = () => {
 
                     {/* Working Hours Section */}
                     {activeSection === 'hours' && (
-                        <div className="form-section">
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem' }}>
-                                🕐 Working Hours
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.6))',
+                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                            borderRadius: '20px',
+                            padding: '2rem',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
+                        }}>
+                            <h3 style={{
+                                fontSize: '1.3rem',
+                                fontWeight: '800',
+                                marginBottom: '1.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text'
+                            }}>
+                                <span style={{ fontSize: '1.5rem' }}>🕐</span>
+                                Working Hours
                             </h3>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -629,10 +1107,95 @@ const EditBusinessProfile = () => {
 
                     {/* Services Section */}
                     {activeSection === 'services' && (
-                        <div className="form-section">
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.6))',
+                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                            borderRadius: '20px',
+                            padding: '2rem',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
+                        }}>
+                            {/* Services Label Choice */}
+                            <div className="form-group" style={{ marginBottom: '2rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
+                                    🏷️ Display Label for Your Offerings
+                                </label>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: '12px'
+                                }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, servicesLabel: 'Menu' })}
+                                        style={{
+                                            padding: '1rem',
+                                            background: formData.servicesLabel === 'Menu'
+                                                ? 'linear-gradient(135deg, var(--primary), #f97316)'
+                                                : 'var(--bg-card)',
+                                            border: formData.servicesLabel === 'Menu'
+                                                ? '2px solid var(--primary)'
+                                                : '1px solid var(--border-color)',
+                                            borderRadius: '12px',
+                                            color: 'white',
+                                            cursor: 'pointer',
+                                            fontWeight: formData.servicesLabel === 'Menu' ? '800' : '600',
+                                            fontSize: '0.95rem',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '1.5rem' }}>🍽️</span>
+                                        <span>Menu</span>
+                                        <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>For restaurants & cafes</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, servicesLabel: 'Services' })}
+                                        style={{
+                                            padding: '1rem',
+                                            background: formData.servicesLabel === 'Services'
+                                                ? 'linear-gradient(135deg, var(--primary), #f97316)'
+                                                : 'var(--bg-card)',
+                                            border: formData.servicesLabel === 'Services'
+                                                ? '2px solid var(--primary)'
+                                                : '1px solid var(--border-color)',
+                                            borderRadius: '12px',
+                                            color: 'white',
+                                            cursor: 'pointer',
+                                            fontWeight: formData.servicesLabel === 'Services' ? '800' : '600',
+                                            fontSize: '0.95rem',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '1.5rem' }}>⚙️</span>
+                                        <span>Services</span>
+                                        <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>For service businesses</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>
-                                    🍽️ Services & Menu
+                                <h3 style={{
+                                    fontSize: '1.3rem',
+                                    fontWeight: '800',
+                                    margin: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    backgroundClip: 'text'
+                                }}>
+                                    <span style={{ fontSize: '1.5rem' }}>🍽️</span>
+                                    {formData.servicesLabel || 'Menu'}
                                 </h3>
                                 <button
                                     type="button"
@@ -643,7 +1206,7 @@ const EditBusinessProfile = () => {
                                     className="btn btn-primary"
                                     style={{ padding: '8px 16px', fontSize: '0.85rem' }}
                                 >
-                                    <FaPlus /> Add Service
+                                    <FaPlus /> Add Menu Item
                                 </button>
                             </div>
 
@@ -657,8 +1220,43 @@ const EditBusinessProfile = () => {
                                             padding: '1rem',
                                             display: 'flex',
                                             justifyContent: 'space-between',
-                                            alignItems: 'start'
+                                            alignItems: 'start',
+                                            gap: '1rem'
                                         }}>
+                                            {/* Service Icon/Image - Always show */}
+                                            <div style={{
+                                                width: '60px',
+                                                height: '60px',
+                                                borderRadius: '12px',
+                                                background: service.image ? 'transparent' : 'rgba(139, 92, 246, 0.1)',
+                                                border: '1px solid var(--border-color)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0,
+                                                overflow: 'hidden'
+                                            }}>
+                                                {service.image ? (
+                                                    <img
+                                                        src={service.image}
+                                                        alt={service.name}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover'
+                                                        }}
+                                                        onError={(e) => {
+                                                            console.log('❌ Image failed to load:', service.image);
+                                                            e.target.style.display = 'none';
+                                                        }}
+                                                    />
+                                                ) : service.icon ? (
+                                                    <span style={{ fontSize: '2rem' }}>{service.icon}</span>
+                                                ) : (
+                                                    <span style={{ fontSize: '2rem', opacity: 0.5 }}>🍽️</span>
+                                                )}
+                                            </div>
+
                                             <div style={{ flex: 1 }}>
                                                 <h4 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
                                                     {service.name}
@@ -731,47 +1329,43 @@ const EditBusinessProfile = () => {
                                     textAlign: 'center',
                                     color: 'var(--text-muted)'
                                 }}>
-                                    <p>No services added yet</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowServiceModal(true)}
-                                        className="btn btn-primary"
-                                        style={{ marginTop: '1rem' }}
-                                    >
-                                        <FaPlus /> Add Your First Service
-                                    </button>
+                                    <p>No menu items added yet. Click "Add Menu Item" button above to get started.</p>
                                 </div>
                             )}
                         </div>
                     )}
                 </div>
 
-                {/* Submit Buttons - Fixed at bottom */}
+                {/* Submit Buttons - Sticky at bottom */}
                 <div style={{
-                    position: 'fixed',
-                    bottom: '70px', // Above navigation bar
-                    left: 0,
-                    right: 0,
-                    background: 'var(--bg-card)',
-                    borderTop: '1px solid var(--border-color)',
-                    padding: '12px 16px',
+                    position: 'sticky',
+                    bottom: '70px',
+                    marginTop: '2rem',
+                    marginLeft: '-1.5rem',
+                    marginRight: '-1.5rem',
+                    background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98))',
+                    backdropFilter: 'blur(20px)',
+                    borderTop: '1px solid rgba(139, 92, 246, 0.3)',
+                    padding: '10px 1.5rem',
                     display: 'flex',
-                    gap: '12px',
-                    zIndex: 1001, // Above navigation bar
-                    boxShadow: '0 -4px 12px rgba(0,0,0,0.2)'
+                    gap: '10px',
+                    zIndex: 1001,
+                    boxShadow: '0 -4px 20px rgba(139, 92, 246, 0.2)',
+                    borderRadius: '16px 16px 0 0'
                 }}>
                     <button
                         type="button"
-                        onClick={() => navigate('/business-profile')}
-                        className="btn btn-outline"
+                        onClick={() => navigate(`/partner/${currentUser.uid}`)}
                         style={{
                             flex: 1,
-                            padding: '12px',
-                            fontSize: '0.9rem',
+                            padding: '10px 16px',
+                            fontSize: '0.85rem',
                             fontWeight: '700',
                             borderRadius: '12px',
-                            border: '1px solid var(--border-color)',
+                            border: '2px solid rgba(139, 92, 246, 0.3)',
                             background: 'transparent',
+                            color: 'var(--primary)',
+                            cursor: 'pointer',
                             transition: 'all 0.2s'
                         }}
                         disabled={loading}
@@ -781,28 +1375,29 @@ const EditBusinessProfile = () => {
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.borderColor = 'var(--border-color)';
+                            e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.3)';
                         }}
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
-                        className="btn btn-primary"
                         style={{
                             flex: 1,
-                            padding: '12px',
-                            fontSize: '0.9rem',
+                            padding: '10px 16px',
+                            fontSize: '0.85rem',
                             fontWeight: '700',
                             borderRadius: '12px',
                             background: 'linear-gradient(135deg, var(--primary), #f97316)',
                             border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
                             boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '8px'
+                            gap: '6px'
                         }}
                         disabled={loading || uploading}
                         onMouseEnter={(e) => {
@@ -816,68 +1411,72 @@ const EditBusinessProfile = () => {
                             e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)';
                         }}
                     >
-                        {uploading ? '⏳ Uploading...' : loading ? '💾 Saving...' : <><FaSave /> Save Changes</>}
+                        {uploading ? '⏳ Uploading...' : loading ? '💾 Saving...' : <><FaSave /> Save</>}
                     </button>
                 </div>
-            </form>
+            </form >
 
             {/* Location Picker Modal */}
-            {showLocationModal && (
-                <div style={{
-                    position: 'fixed', inset: 0, zIndex: 2000,
-                    background: 'rgba(0,0,0,0.8)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
-                }}>
+            {
+                showLocationModal && (
                     <div style={{
-                        background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem',
-                        width: '90%', maxWidth: '700px', border: '1px solid var(--border-color)',
-                        maxHeight: '90vh', overflowY: 'auto'
+                        position: 'fixed', inset: 0, zIndex: 2000,
+                        background: 'rgba(0,0,0,0.8)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                            <h3 style={{ margin: 0 }}>Set Business Location</h3>
-                            <button onClick={() => setShowLocationModal(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}><FaTimes /></button>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Click or tap on the map to pin your exact location. You can also search for an address using the search box.</p>
+                        <div style={{
+                            background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem',
+                            width: '90%', maxWidth: '700px', border: '1px solid var(--border-color)',
+                            maxHeight: '90vh', overflowY: 'auto'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                <h3 style={{ margin: 0 }}>Set Business Location</h3>
+                                <button onClick={() => setShowLocationModal(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}><FaTimes /></button>
+                            </div>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Click or tap on the map to pin your exact location. You can also search for an address using the search box.</p>
 
-                        <LocationPicker
-                            initialLat={formData.lat}
-                            initialLng={formData.lng}
-                            onLocationSelect={(pos) => {
-                                setFormData(prev => ({ ...prev, lat: pos.lat, lng: pos.lng }));
-                            }}
-                            onAddressChange={(addressData) => {
-                                setFormData(prev => ({
-                                    ...prev,
-                                    address: addressData.address || prev.address,
-                                    city: addressData.city || prev.city
-                                }));
-                            }}
-                        />
+                            <LocationPicker
+                                initialLat={formData.lat}
+                                initialLng={formData.lng}
+                                onLocationSelect={(pos) => {
+                                    setFormData(prev => ({ ...prev, lat: pos.lat, lng: pos.lng }));
+                                }}
+                                onAddressChange={(addressData) => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        address: addressData.address || prev.address,
+                                        city: addressData.city || prev.city
+                                    }));
+                                }}
+                            />
 
-                        <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-                            <button
-                                onClick={() => setShowLocationModal(false)}
-                                className="btn btn-primary"
-                            >
-                                Confirm Location
-                            </button>
+                            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                                <button
+                                    onClick={() => setShowLocationModal(false)}
+                                    className="btn btn-primary"
+                                >
+                                    Confirm Location
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Service Modal */}
-            {showServiceModal && (
-                <ServiceModal
-                    service={editingService !== null ? services[editingService] : null}
-                    onSave={addService}
-                    onClose={() => {
-                        setShowServiceModal(false);
-                        setEditingService(null);
-                    }}
-                />
-            )}
-        </div>
+            {
+                showServiceModal && (
+                    <ServiceModal
+                        service={editingService !== null ? services[editingService] : null}
+                        onSave={addService}
+                        onClose={() => {
+                            setShowServiceModal(false);
+                            setEditingService(null);
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 };
 
@@ -889,6 +1488,7 @@ const ServiceModal = ({ service, onSave, onClose }) => {
         price: service?.price || '',
         currency: service?.currency || 'SAR',
         category: service?.category || '',
+        customCategory: service?.customCategory || '',
         available: service?.available !== false,
         icon: service?.icon || null,
         image: service?.image || null
@@ -897,39 +1497,51 @@ const ServiceModal = ({ service, onSave, onClose }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSave(formData);
+        // If "Other" is selected, save the customCategory instead
+        const dataToSave = {
+            ...formData,
+            category: formData.category === 'Other' ? formData.customCategory : formData.category
+        };
+        onSave(dataToSave);
     };
 
     const handleMediaChange = (media) => {
+        console.log('🖼️ Media selected:', media);
         if (media) {
             if (media.type === 'icon') {
                 setFormData({ ...formData, icon: media.iconId, image: null });
             } else if (media.type === 'image') {
+                // Store base64 image temporarily (will be uploaded to Firebase on save)
                 setFormData({ ...formData, image: media.imageUrl, icon: null });
             }
         } else {
             setFormData({ ...formData, icon: null, image: null });
         }
+        setShowMediaPicker(false);
     };
 
     return (
         <div style={{
             position: 'fixed', inset: 0, zIndex: 2000,
             background: 'rgba(0,0,0,0.8)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+            overflowY: 'auto'
         }}>
             <div style={{
                 background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem',
-                width: '90%', maxWidth: '500px', border: '1px solid var(--border-color)'
+                width: '90%', maxWidth: '500px', border: '1px solid var(--border-color)',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                margin: 'auto'
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0 }}>{service ? 'Edit Service' : 'Add Service'}</h3>
+                    <h3 style={{ margin: 0 }}>{service ? 'Edit Menu Item' : 'Add Menu Item'}</h3>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}><FaTimes /></button>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>Service Name *</label>
+                        <label>Item Name *</label>
                         <input
                             type="text"
                             value={formData.name}
@@ -968,21 +1580,78 @@ const ServiceModal = ({ service, onSave, onClose }) => {
                                 value={formData.currency}
                                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                             >
-                                <option value="SAR">SAR</option>
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
+                                <option value="AUD">AUD - Australian Dollar</option>
+                                <option value="USD">USD - US Dollar</option>
+                                <option value="EUR">EUR - Euro</option>
+                                <option value="GBP">GBP - British Pound</option>
+                                <option value="SAR">SAR - Saudi Riyal</option>
+                                <option value="AED">AED - UAE Dirham</option>
+                                <option value="KWD">KWD - Kuwaiti Dinar</option>
+                                <option value="QAR">QAR - Qatari Riyal</option>
+                                <option value="BHD">BHD - Bahraini Dinar</option>
+                                <option value="OMR">OMR - Omani Rial</option>
+                                <option value="EGP">EGP - Egyptian Pound</option>
+                                <option value="JOD">JOD - Jordanian Dinar</option>
+                                <option value="CAD">CAD - Canadian Dollar</option>
+                                <option value="INR">INR - Indian Rupee</option>
+                                <option value="CNY">CNY - Chinese Yuan</option>
+                                <option value="JPY">JPY - Japanese Yen</option>
+                                <option value="KRW">KRW - Korean Won</option>
                             </select>
                         </div>
                     </div>
 
                     <div className="form-group">
                         <label>Category</label>
-                        <input
-                            type="text"
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                            placeholder="e.g., Main Course, Dessert"
-                        />
+                        <select
+                            value={formData.category === '' ||
+                                ['Pizza', 'Burgers', 'Pasta', 'Salads', 'Grilled', 'Seafood',
+                                    'Soups', 'Sandwiches', 'Desserts', 'Hot Drinks', 'Cold Drinks',
+                                    'Cocktails', 'Alcohol', 'BBQ', 'Mexican', 'Asian', 'Traditional',
+                                    'Sides'].includes(formData.category)
+                                ? formData.category
+                                : 'Other'}
+                            onChange={(e) => {
+                                if (e.target.value === 'Other') {
+                                    setFormData({ ...formData, category: 'Other', customCategory: '' });
+                                } else {
+                                    setFormData({ ...formData, category: e.target.value, customCategory: '' });
+                                }
+                            }}
+                        >
+                            <option value="">Select a category...</option>
+                            <option value="Pizza">🍕 Pizza</option>
+                            <option value="Burgers">🍔 Burgers</option>
+                            <option value="Pasta">🍝 Pasta</option>
+                            <option value="Salads">🥗 Salads</option>
+                            <option value="Grilled">🍗 Grilled</option>
+                            <option value="Seafood">🍤 Seafood</option>
+                            <option value="Soups">🍜 Soups</option>
+                            <option value="Sandwiches">🥙 Sandwiches</option>
+                            <option value="Desserts">🍰 Desserts</option>
+                            <option value="Hot Drinks">☕ Hot Drinks</option>
+                            <option value="Cold Drinks">🥤 Cold Drinks</option>
+                            <option value="Cocktails">🍹 Cocktails</option>
+                            <option value="Alcohol">🍺 Alcohol</option>
+                            <option value="BBQ">🔥 BBQ</option>
+                            <option value="Mexican">🌮 Mexican</option>
+                            <option value="Asian">🍱 Asian</option>
+                            <option value="Traditional">🥘 Traditional</option>
+                            <option value="Sides">🍟 Sides</option>
+                            <option value="Other">📦 Other (Custom)</option>
+                        </select>
+
+                        {/* Custom Category Input - Shows ONLY when "Other" is selected */}
+                        {formData.category === 'Other' && (
+                            <input
+                                type="text"
+                                value={formData.customCategory}
+                                onChange={(e) => setFormData({ ...formData, customCategory: e.target.value })}
+                                placeholder="Enter custom category..."
+                                style={{ marginTop: '0.75rem' }}
+                                required
+                            />
+                        )}
                     </div>
 
                     {/* Icon/Image Picker */}
@@ -1022,12 +1691,12 @@ const ServiceModal = ({ service, onSave, onClose }) => {
                         </label>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', paddingBottom: '2rem' }}>
                         <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1 }}>
                             Cancel
                         </button>
                         <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                            {service ? 'Update' : 'Add'} Service
+                            {service ? 'Update' : 'Add'} Item
                         </button>
                     </div>
                 </form>

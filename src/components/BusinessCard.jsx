@@ -100,47 +100,39 @@ const BusinessCard = ({ business }) => {
                     onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
                 />
 
-                {/* Overlay Caption/Tagline */}
-                <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    padding: '20px 15px 10px',
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
-                    color: 'white',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'flex-end'
-                }}>
-                    <span style={{
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        opacity: 0.9,
-                        marginBottom: '2px'
-                    }}>
-                        {info.businessType || 'Venue'}
-                    </span>
-                    <span style={{
-                        fontSize: '1.2rem',
-                        fontWeight: '800',
-                        textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                    }}>
-                        {info.businessName}
-                    </span>
-                </div>
             </div>
 
             {/* Details Section */}
             <div style={{
-                padding: '1rem',
+                padding: '1.25rem',
                 display: 'flex',
                 flexDirection: 'column',
                 flex: 1,
                 gap: '12px'
             }}>
+                {/* Title & Type Header */}
+                <div style={{ marginBottom: '2px' }}>
+                    <span style={{
+                        display: 'block',
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        color: 'var(--primary)',
+                        letterSpacing: '0.5px',
+                        marginBottom: '4px'
+                    }}>
+                        {info.businessType || 'Venue'}
+                    </span>
+                    <h3 style={{
+                        fontSize: '1.3rem',
+                        fontWeight: '800',
+                        color: 'var(--text-main)',
+                        margin: 0,
+                        lineHeight: 1.2
+                    }}>
+                        {info.businessName}
+                    </h3>
+                </div>
                 {/* Location */}
                 <div style={{
                     display: 'flex',
@@ -169,7 +161,7 @@ const BusinessCard = ({ business }) => {
                         fontSize: '0.8rem',
                         color: 'var(--text-muted)'
                     }}>
-                        <FaStar style={{ color: '#f59e0b', fontSize: '0.9rem' }} />
+                        <FaStar style={{ color: 'var(--luxury-gold)', fontSize: '0.9rem' }} />
                         <span>{info.services.length} Menu Items Available</span>
                     </div>
                 )}
@@ -184,7 +176,7 @@ const BusinessCard = ({ business }) => {
                         style={{
                             width: '100%',
                             padding: '12px',
-                            background: 'linear-gradient(135deg, var(--primary), #f97316)',
+                            background: 'var(--primary)',
                             border: 'none',
                             borderRadius: '16px',
                             color: 'white',
@@ -196,15 +188,17 @@ const BusinessCard = ({ business }) => {
                             justifyContent: 'center',
                             gap: '8px',
                             transition: 'all 0.2s',
-                            boxShadow: '0 4px 12px rgba(249, 115, 22, 0.3)'
+                            boxShadow: 'var(--shadow-glow)'
                         }}
                         onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'scale(1.02)';
-                            e.currentTarget.style.boxShadow = '0 6px 15px rgba(249, 115, 22, 0.4)';
+                            e.currentTarget.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.5)';
+                            e.currentTarget.style.background = 'var(--primary-hover)';
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(249, 115, 22, 0.3)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-glow)';
+                            e.currentTarget.style.background = 'var(--primary)';
                         }}
                     >
                         <FaCalendarPlus />

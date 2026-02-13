@@ -7,92 +7,117 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import ImageUpload from '../components/ImageUpload';
+import MediaSelector from '../components/Invitations/MediaSelector';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { Country, State, City } from 'country-state-city';
 import { uploadInvitationPhoto } from '../utils/imageUpload';
+import { processInvitationMedia } from '../services/mediaService';
 import { validateInvitationCreation } from '../utils/invitationValidation';
+import { canCreateInvitation } from '../utils/cancellationPolicy';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const { addInvitation, allUsers, currentUser } = useInvitations(); // Get currentUser from InvitationContext
-    const { currentUser: authUser } = useAuth(); // Rename to authUser to avoid conflict
+    const { currentUser: authUser, userProfile } = useAuth(); // Get userProfile for guest check
+
+    // Redirect guests to login immediately
+    useEffect(() => {
+        if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
+            navigate('/login');
+        }
+    }, [userProfile, currentUser, navigate]);
 
     // UI State
     const [locationLoading, setLocationLoading] = useState(false);
     const [citySearchOpen, setCitySearchOpen] = useState(false);
     const [imageFile, setImageFile] = useState(null);
+    const [mediaData, setMediaData] = useState(null); // NEW: For MediaSelector
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showFriendSelector, setShowFriendSelector] = useState(false); // To toggle modal
+    const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
+    const [suggestedImages, setSuggestedImages] = useState([]); // Suggested venue images
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
     const prefilledData = location.state?.prefilledData; // From PartnerProfile
+    const offerData = location.state?.offerData; // From Special Offer
     const fromRestaurant = location.state?.fromRestaurant || !!restaurantData;
+    const editingDraft = location.state?.editingDraft; // Editing draft from preview
+    const draftId = location.state?.draftId; // Draft ID to load
 
     const [formData, setFormData] = useState({
-        title: restaurantData
-            ? `${t('dinner_at')} ${restaurantData.name}`
-            : prefilledData?.restaurantName
-                ? `${t('dinner_at')} ${prefilledData.restaurantName}`
-                : '',
-        restaurantId: restaurantData?.id || null,
-        restaurantName: restaurantData?.name || prefilledData?.restaurantName || '',
+        title: offerData?.title
+            ? offerData.title
+            : restaurantData
+                ? `${t('dinner_at')} ${restaurantData.name}`
+                : prefilledData?.restaurantName
+                    ? `${t('dinner_at')} ${prefilledData.restaurantName}`
+                    : '',
+        restaurantId: restaurantData?.id || offerData?.partnerId || null,
+        restaurantName: restaurantData?.name || prefilledData?.restaurantName || offerData?.location || '',
         type: restaurantData?.type || 'Restaurant',
         country: 'AU',
         state: '',
-        city: prefilledData?.city || '',
+        city: prefilledData?.city || restaurantData?.city || offerData?.city || '',
         date: '',
         time: '',
-        location: restaurantData?.location || prefilledData?.location || '',
+        // Get location from multiple possible sources
+        location: offerData?.locationDetails || offerData?.location || restaurantData?.address || restaurantData?.location || prefilledData?.location || '',
         guestsNeeded: 3,
         genderPreference: 'any',
         ageRange: 'any',
         paymentType: 'Split',
-        description: '',
-        image: restaurantData?.image || prefilledData?.restaurantImage || null,
-        lat: restaurantData?.lat || prefilledData?.lat,
-        lng: restaurantData?.lng || prefilledData?.lng,
-        privacy: 'public', // public, followers, private
-        invitedUserIds: []
+        description: offerData?.description || '',
+        image: offerData?.image || restaurantData?.image || prefilledData?.restaurantImage || null,
+        // Get coordinates from multiple possible sources
+        lat: offerData?.lat || restaurantData?.lat || restaurantData?.coordinates?.lat || prefilledData?.lat,
+        lng: offerData?.lng || restaurantData?.lng || restaurantData?.coordinates?.lng || prefilledData?.lng,
+        privacy: 'public',
+        invitedUserIds: [],
+        // Special Offer constraints
+        minDate: offerData?.startDate || null,
+        maxDate: offerData?.endDate || null,
+        offerId: offerData?.offerId || null
     });
+
+    // Load draft if editing
+    useEffect(() => {
+        const loadDraft = async () => {
+            if (editingDraft && draftId) {
+                try {
+                    const invitationRef = doc(db, 'invitations', draftId);
+                    const invitationDoc = await getDoc(invitationRef);
+
+                    if (invitationDoc.exists()) {
+                        const draft = invitationDoc.data();
+                        setFormData({
+                            ...draft,
+                            invitedUserIds: draft.invitedUserIds || []
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading draft:', error);
+                }
+            }
+        };
+
+        loadDraft();
+    }, [editingDraft, draftId]);
 
     // Derived Friends List (Mutual Friends - المتابعة المتبادلة)
     // Only show people where: I follow them AND they follow me
     const friendsList = React.useMemo(() => {
-        console.log('═══════════════════════════════════════');
-        console.log('🔍 BUILDING FRIENDS LIST');
-        console.log('═══════════════════════════════════════');
-        console.log('Current User ID:', currentUser?.id);
-        console.log('Current User Following:', currentUser?.following);
-        console.log('Following Count:', currentUser?.following?.length || 0);
-        console.log('All Users Count:', allUsers?.length || 0);
-        console.log('All Users Sample:', allUsers?.slice(0, 2).map(u => ({
-            id: u.id,
-            name: u.display_name || u.name,
-            following: u.following
-        })));
-        console.log('═══════════════════════════════════════');
 
         // Check if user is logged in properly
         if (!currentUser || !currentUser.id || currentUser.id === 'guest') {
-            console.error('❌ USER NOT LOGGED IN OR GUEST:', {
-                currentUser,
-                id: currentUser?.id
-            });
             return [];
         }
 
         if (!currentUser?.following || !allUsers || !currentUser?.id) {
-            console.error('❌ MISSING DATA:', {
-                hasFollowing: !!currentUser?.following,
-                followingValue: currentUser?.following,
-                hasAllUsers: !!allUsers,
-                allUsersCount: allUsers?.length,
-                hasCurrentUserId: !!currentUser?.id,
-                currentUserId: currentUser?.id
-            });
             return [];
         }
 
@@ -115,50 +140,8 @@ const CreateInvitation = () => {
 
             const isMutual = theyFollowMe;
 
-            // Detailed logging for debugging
-            console.log(`👤 User ${u.display_name || u.name || u.id}:`, {
-                userId: u.id,
-                display_name: u.display_name,
-                name: u.name,
-                iFollowThem: true, // We already checked this above
-                hasFollowingField,
-                isFollowingArray: isArray,
-                theirFollowing,
-                theirFollowingLength: isArray ? theirFollowing.length : 'N/A',
-                currentUserId: currentUser.id,
-                doesIncludeMe: isArray ? theirFollowing.includes(currentUser.id) : false,
-                theyFollowMe,
-                isMutual,
-                '⚠️ ISSUE': !hasFollowingField ? 'NO FOLLOWING FIELD IN FIRESTORE' : (!isArray ? 'FOLLOWING IS NOT AN ARRAY' : (!theyFollowMe ? `THEY DO NOT FOLLOW YOU BACK (looking for: ${currentUser.id})` : null)),
-                'DEBUG_IDs': {
-                    myId: currentUser.id,
-                    theirFollowingArray: theirFollowing,
-                    exactMatch: isArray && theirFollowing.map(id => ({
-                        id,
-                        matches: id === currentUser.id,
-                        idType: typeof id,
-                        myIdType: typeof currentUser.id
-                    }))
-                }
-            });
-
             return isMutual;
         });
-
-        console.log('✅ Mutual friends list built:', {
-            count: mutualFriends.length,
-            totalFollowing: currentUser.following?.length || 0,
-            totalUsers: allUsers.length,
-            friends: mutualFriends.map(f => ({
-                id: f.id,
-                name: f.display_name || f.name,
-                following: f.following
-            }))
-        });
-
-        if (mutualFriends.length === 0 && currentUser.following?.length > 0) {
-            console.warn('⚠️ WARNING: You are following people but none of them follow you back, OR their following data is missing in Firestore');
-        }
 
         return mutualFriends;
     }, [currentUser?.following, allUsers, currentUser?.id]);
@@ -174,36 +157,6 @@ const CreateInvitation = () => {
             }
         });
     };
-
-    // Debug: Log when friend selector opens
-    useEffect(() => {
-        if (showFriendSelector) {
-            const debugInfo = {
-                friendsListCount: friendsList.length,
-                currentUserFollowingCount: currentUser?.following?.length || 0,
-                allUsersCount: allUsers?.length || 0
-            };
-
-            console.log('🔍 Friend Selector Opened - Current State:', {
-                ...debugInfo,
-                friendsList: friendsList,
-                currentUserFollowing: currentUser?.following,
-                allUsersCount: allUsers?.length
-            });
-
-            // Visual alert for debugging
-            if (friendsList.length === 0 && currentUser?.following?.length > 0) {
-                console.error(`
-                    ⚠️ PROBLEM DETECTED:
-                    - You are following: ${currentUser.following.length} people
-                    - Mutual friends found: 0
-                    - Total users in database: ${allUsers?.length || 0}
-                    
-                    Check the console logs above (👤 User ...) to see why each person is not showing.
-                `);
-            }
-        }
-    }, [showFriendSelector, friendsList, currentUser, allUsers]);
 
     // Update title when language changes if from restaurant
     useEffect(() => {
@@ -237,11 +190,172 @@ const CreateInvitation = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = async (e) => {
+    const handlePreview = async (e) => {
         e.preventDefault();
-        if (isSubmitting) return;
+        console.log('🔍 handlePreview called');
+
+        // Check if user is guest
+        if (!currentUser || currentUser.id === 'guest' || !authUser) {
+            console.error('❌ Guest user cannot create invitations');
+            alert(t('login_to_create') || 'Please login to create an invitation');
+            navigate('/login');
+            return;
+        }
+
+        if (isSubmitting) {
+            console.log('⚠️ Already submitting, returning');
+            return;
+        }
 
         // Validation
+        if (!formData.title.trim()) {
+            console.log('❌ Title validation failed');
+            alert(t('please_enter_title'));
+            return;
+        }
+
+        if (!formData.date || !formData.time) {
+            console.log('❌ Date/Time validation failed');
+            alert(t('please_set_datetime'));
+            return;
+        }
+
+        if (!formData.location.trim()) {
+            console.log('❌ Location validation failed');
+            alert(t('please_enter_location'));
+            return;
+        }
+
+        if (formData.privacy === 'private' && (!formData.invitedUserIds || formData.invitedUserIds.length === 0)) {
+            console.log('❌ Private invitation validation failed');
+            alert(t('please_select_friends') || 'Please select at least one friend for private invitation.');
+            return;
+        }
+
+        // Check for cancellation restrictions
+        if (restrictionInfo && !restrictionInfo.canCreate) {
+            console.log('❌ Restriction check failed');
+            alert(t('cannot_create_restricted', {
+                date: restrictionInfo.until?.toLocaleDateString()
+            }));
+            return;
+        }
+
+        // Check daily invitation limit
+        console.log('✅ Starting validation check...');
+        const validation = await validateInvitationCreation(currentUser.uid);
+        if (!validation.valid) {
+            console.log('❌ Daily limit validation failed:', validation.error);
+            const confirmMessage = i18n.language === 'ar'
+                ? `${validation.error}\n\n${t('go_to_current_invitation')}`
+                : `${validation.error}\n\nDo you want to go to your current invitation?`;
+
+            if (window.confirm(confirmMessage)) {
+                navigate(`/invitation/${validation.existingInvitation.id}`);
+            }
+            return;
+        }
+
+        console.log('✅ All validations passed, starting submission...');
+        setIsSubmitting(true);
+        setUploadProgress(0);
+
+        try {
+            let mediaFields = {};
+
+            // Process media (image or video)
+            if (mediaData) {
+                console.log('📤 Processing media...');
+                setUploadProgress(20);
+
+                try {
+                    // Use the correct userId
+                    const userId = currentUser?.id || authUser?.uid;
+
+                    if (!userId) {
+                        throw new Error('User not authenticated');
+                    }
+
+                    console.log('👤 Using User ID:', userId);
+                    mediaFields = await processInvitationMedia(mediaData, userId);
+                    console.log('✅ Media processed:', mediaFields);
+                } catch (mediaError) {
+                    console.error('❌ Media processing failed:', mediaError);
+                    throw new Error(t('media_upload_failed') || 'Failed to upload media');
+                }
+
+                setUploadProgress(60);
+            } else if (formData.image) {
+                // Fallback: existing image URL
+                mediaFields = {
+                    mediaSource: 'restaurant',
+                    restaurantImage: formData.image,
+                    mediaType: 'image'
+                };
+            }
+
+            const draftData = {
+                ...formData,
+                ...mediaFields, // Merge media fields
+                isFollowersOnly: formData.privacy === 'followers',
+                status: 'draft' // Mark as draft
+            };
+
+            // Remove old image field if exists
+            if (draftData.image) {
+                delete draftData.image;
+            }
+
+            console.log('📝 Creating draft with data:', draftData);
+
+            let finalDraftId;
+
+            if (editingDraft && draftId) {
+                // Update existing draft
+                console.log('🔄 Updating existing draft:', draftId);
+                const { updateDoc } = await import('firebase/firestore');
+                const invitationRef = doc(db, 'invitations', draftId);
+                await updateDoc(invitationRef, draftData);
+                finalDraftId = draftId;
+            } else {
+                // Create new draft
+                console.log('➕ Creating new draft...');
+                finalDraftId = await addInvitation(draftData);
+                console.log('✅ Draft created with ID:', finalDraftId);
+            }
+
+            if (finalDraftId) {
+                // Navigate to preview with draft ID
+                console.log('🚀 Navigating to preview:', `/invitation/preview/${finalDraftId}`);
+                navigate(`/invitation/preview/${finalDraftId}`);
+            } else {
+                console.error('❌ No draft ID returned!');
+            }
+        } catch (error) {
+            console.error('❌ Error creating draft:', error);
+            alert(error.message || t('failed_create_invitation'));
+        } finally {
+            setIsSubmitting(false);
+            setUploadProgress(0);
+        }
+    };
+
+    // Keep original handleSubmit for backward compatibility (if needed)
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        console.log('🚀 Publishing invitation directly...');
+
+        if (isSubmitting) return;
+
+        // Check if user is guest
+        if (!currentUser || currentUser.id === 'guest' || !authUser) {
+            console.error('❌ Guest user cannot create invitations');
+            alert(t('login_to_create') || 'Please login to create an invitation');
+            navigate('/login');
+            return;
+        }
+
+        // Validation (This part is now handled by handlePreview, but keeping it here for direct submission if needed)
         if (!formData.title.trim()) {
             alert(t('please_enter_title'));
             return;
@@ -259,6 +373,14 @@ const CreateInvitation = () => {
 
         if (formData.privacy === 'private' && (!formData.invitedUserIds || formData.invitedUserIds.length === 0)) {
             alert(t('please_select_friends') || 'Please select at least one friend for private invitation.');
+            return;
+        }
+
+        // Check for cancellation restrictions
+        if (restrictionInfo && !restrictionInfo.canCreate) {
+            alert(t('cannot_create_restricted', {
+                date: restrictionInfo.until?.toLocaleDateString()
+            }));
             return;
         }
 
@@ -283,6 +405,7 @@ const CreateInvitation = () => {
 
             // Upload new image if selected
             if (imageFile) {
+                console.log('📤 Uploading image...');
                 const invitationId = `temp_${Date.now()}`; // Temporary ID for upload path
                 const url = await uploadInvitationPhoto(
                     imageFile,
@@ -291,6 +414,7 @@ const CreateInvitation = () => {
                     (progress) => setUploadProgress(progress)
                 );
                 finalImageUrl = url;
+                console.log('✅ Image uploaded:', url);
             }
 
             const cleanData = {
@@ -301,13 +425,18 @@ const CreateInvitation = () => {
                 // invitedUserIds: formData.invitedUserIds // Already getting spread
             };
 
+            console.log('📝 Creating invitation with data:', cleanData);
             const newId = await addInvitation(cleanData);
+            console.log('✅ Invitation created with ID:', newId);
 
             if (newId) {
+                console.log('🔄 Navigating to invitation:', `/invitation/${newId}`);
                 navigate(`/invitation/${newId}`);
+            } else {
+                console.error('❌ No invitation ID returned!');
             }
         } catch (error) {
-            console.error('Error creating invitation:', error);
+            console.error('❌ Error creating invitation:', error);
             alert(t('failed_create_invitation'));
         } finally {
             setIsSubmitting(false);
@@ -328,51 +457,81 @@ const CreateInvitation = () => {
             lng: placeData.lng,
             title: generateTitle(placeData.name) // Auto-generate title
         }));
+
+        // Handle Suggested Images
+        if (placeData.photos && placeData.photos.length > 0) {
+            setSuggestedImages(placeData.photos);
+        } else {
+            // Fallback Stock Images for manual or photo-less places
+            setSuggestedImages([
+                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500',
+                'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=500',
+                'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=500',
+                'https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?w=500'
+            ]);
+        }
     };
 
-    // Auto-detect user location and set city + coordinates
+    // Auto-detect user location
     useEffect(() => {
         if (!restaurantData && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(async (position) => {
                 const { latitude, longitude } = position.coords;
+
+                // Set coordinates immediately
+                setFormData(prev => ({
+                    ...prev,
+                    userLat: latitude,
+                    userLng: longitude,
+                    // country: 'AU' // Don't default hard here, wait for API or keep existing
+                }));
+
                 try {
-                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
+                    // Use BigDataCloud API - Free and CORS friendly for client-side
+                    const response = await fetch(
+                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+                    );
+
+                    if (!response.ok) throw new Error('Geocoding failed');
+
                     const data = await response.json();
-                    if (data && data.address) {
-                        const addr = data.address;
 
-                        // Get city name
-                        const detectedCity = addr.city || addr.town || addr.village || addr.suburb || '';
+                    if (data) {
+                        // Priority order for city/locality
+                        const detectedCity = data.city || data.locality || data.principalSubdivision || '';
+                        const detectedCountryCode = (data.countryCode || 'AU').toUpperCase();
 
-                        // Get country code
-                        const detectedCountryCode = (addr.country_code || 'au').toUpperCase();
-
-                        // Check if valid code in library
-                        const countryData = Country.getCountryByCode(detectedCountryCode);
-                        const validCountry = countryData ? detectedCountryCode : 'AU';
-
-                        console.log('📍 Auto-detected location:', {
-                            city: detectedCity,
-                            country: validCountry,
-                            lat: latitude,
-                            lng: longitude
-                        });
-
-                        setFormData(prev => ({
-                            ...prev,
-                            country: validCountry,
-                            city: detectedCity,
-                            // Store user's current coordinates for location bias
-                            userLat: latitude,
-                            userLng: longitude
-                        }));
+                        if (detectedCity) {
+                            setFormData(prev => ({
+                                ...prev,
+                                country: detectedCountryCode,
+                                city: detectedCity
+                            }));
+                            console.log('📍 Location detected (Auto):', detectedCity, detectedCountryCode);
+                        }
                     }
                 } catch (e) {
-                    console.error("Auto-detect location failed", e);
+                    console.warn("Auto-detect city failed:", e.message);
                 }
+            }, (err) => {
+                console.log("Location detection denied/failed", err);
             });
         }
     }, [restaurantData]);
+
+    // Check for cancellation restrictions
+    useEffect(() => {
+        const checkRestrictions = async () => {
+            if (currentUser && currentUser.id && currentUser.id !== 'guest') {
+                const permission = await canCreateInvitation(currentUser.id);
+                if (!permission.canCreate) {
+                    setRestrictionInfo(permission);
+                }
+            }
+        };
+
+        checkRestrictions();
+    }, [currentUser]);
 
     // Derived Data for UI
     const currentCountry = Country.getCountryByCode(formData.country);
@@ -381,7 +540,35 @@ const CreateInvitation = () => {
 
     return (
         <div className="page-container">
-            <h2 style={{ marginBottom: '2rem', fontSize: '1.8rem', fontWeight: '900' }}>{t('create_invitation_title')}</h2>
+            <h2 style={{ marginBottom: '1rem', fontSize: '1.5rem', fontWeight: '900' }}>{t('create_invitation_title')}</h2>
+
+            {/* Restriction Warning Banner */}
+            {restrictionInfo && !restrictionInfo.canCreate && (
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2))',
+                    border: '2px solid #ef4444',
+                    borderRadius: '16px',
+                    padding: '1.5rem',
+                    marginBottom: '2rem',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '1rem'
+                }}>
+                    <div style={{ fontSize: '2rem' }}>⛔</div>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#ef4444', marginBottom: '0.5rem' }}>
+                            {t('account_restricted')}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                            {restrictionInfo.reason}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>⏰</span>
+                            <span>{t('restriction_info', { days: restrictionInfo.daysLeft })}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {fromRestaurant && restaurantData && (
                 <div style={{
@@ -399,7 +586,7 @@ const CreateInvitation = () => {
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
                             {t('venue_selected')}
                         </div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)' }}>
                             {restaurantData.name}
                         </div>
                     </div>
@@ -423,22 +610,22 @@ const CreateInvitation = () => {
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
                             {t('venue_selected')}
                         </div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)' }}>
                             {prefilledData.restaurantName}
                         </div>
                     </div>
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="create-form">
+            <form onSubmit={handlePreview} className="create-form">
 
-                {/* Location Search - Simplified */}
+                {/* 1. Location Search - FIRST STEP */}
                 <div style={{
                     background: 'var(--card-bg)',
-                    padding: '1.25rem',
+                    padding: '1rem', // Condensed padding
                     borderRadius: '16px',
                     border: '1px solid var(--border-color)',
-                    marginBottom: '1.5rem'
+                    marginBottom: '1rem' // Condensed margin
                 }}>
                     <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         📍 {t('search_venue') || 'Search for a Venue'}
@@ -447,8 +634,8 @@ const CreateInvitation = () => {
                     {/* Current Location Badge */}
                     {formData.city && (
                         <div style={{
-                            marginBottom: '1rem',
-                            padding: '0.75rem',
+                            marginBottom: '0.75rem',
+                            padding: '0.5rem',
                             background: 'rgba(139, 92, 246, 0.1)',
                             borderRadius: '12px',
                             border: '1px solid rgba(139, 92, 246, 0.3)',
@@ -487,7 +674,63 @@ const CreateInvitation = () => {
                     </div>
                 </div>
 
-                {/* 2. Invitation Title (New) */}
+                {/* 2. Media Selection - SECOND STEP */}
+                <div style={{
+                    background: 'var(--card-bg)',
+                    padding: '1rem', // Condensed padding
+                    borderRadius: '16px',
+                    border: '1px solid var(--border-color)',
+                    marginBottom: '1rem' // Condensed margin
+                }}>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🎬 {t('form_media_label') || t('form_image_label')}
+                    </h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                        {t('media_helper_text') || 'Choose a photo or video for your invitation'}
+                    </p>
+                    <MediaSelector
+                        restaurant={restaurantData || prefilledData}
+                        suggestedImages={suggestedImages}
+                        onMediaSelect={setMediaData}
+                    />
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                        <div style={{
+                            marginTop: '12px',
+                            background: 'var(--bg-card)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid var(--border-color)'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginBottom: '8px',
+                                fontSize: '0.85rem',
+                                color: 'var(--text-secondary)'
+                            }}>
+                                <span>{t('processing')}</span>
+                                <span>{uploadProgress}%</span>
+                            </div>
+                            <div style={{
+                                width: '100%',
+                                height: '6px',
+                                background: 'var(--border-color)',
+                                borderRadius: '3px',
+                                overflow: 'hidden'
+                            }}>
+                                <div style={{
+                                    width: `${uploadProgress}%`,
+                                    height: '100%',
+                                    background: 'linear-gradient(90deg, var(--primary), var(--accent))',
+                                    transition: 'width 0.3s ease',
+                                    borderRadius: '3px'
+                                }} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. Invitation Title */}
                 <div className="form-group">
                     <label>{t('form_title_label')}</label>
                     <input
@@ -507,9 +750,9 @@ const CreateInvitation = () => {
                         <select name="type" value={formData.type} onChange={handleChange} className="input-field">
                             <option value="Restaurant">{t('type_restaurant')}</option>
                             <option value="Cafe">{t('type_cafe')}</option>
-                            <option value="Cinema">{t('type_cinema')}</option>
-                            <option value="Sports">{t('type_sports')}</option>
-                            <option value="Entertainment">{t('type_entertainment')}</option>
+                            <option value="Bar">Bar</option>
+                            <option value="Night Club">Night Club</option>
+                            <option value="BBQ">BBQ</option>
                             <option value="Other">{t('type_other')}</option>
                         </select>
                     </div>
@@ -535,13 +778,15 @@ const CreateInvitation = () => {
                         <input
                             type="date"
                             name="date"
-                            min={today}
+                            min={formData.minDate ? new Date(formData.minDate.seconds ? formData.minDate.toDate() : formData.minDate).toISOString().split('T')[0] : today}
+                            max={formData.maxDate ? new Date(formData.maxDate.seconds ? formData.maxDate.toDate() : formData.maxDate).toISOString().split('T')[0] : undefined}
                             value={formData.date}
                             onChange={handleChange}
                             required
                             className="input-field"
                         />
                     </div>
+
                     <div className="form-group">
                         <label className="elegant-label">
                             <span className="label-icon">
@@ -559,8 +804,6 @@ const CreateInvitation = () => {
                         />
                     </div>
                 </div>
-
-
 
                 <div className="form-group">
                     <label className="elegant-label">
@@ -598,7 +841,7 @@ const CreateInvitation = () => {
                                 borderRadius: '12px',
                                 border: formData.genderPreference === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                 background: formData.genderPreference === 'male' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                color: 'white',
+                                color: 'var(--text-main)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -621,7 +864,7 @@ const CreateInvitation = () => {
                                 borderRadius: '12px',
                                 border: formData.genderPreference === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                 background: formData.genderPreference === 'female' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                color: 'white',
+                                color: 'var(--text-main)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -644,7 +887,7 @@ const CreateInvitation = () => {
                                 borderRadius: '12px',
                                 border: formData.genderPreference === 'any' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                 background: formData.genderPreference === 'any' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                color: 'white',
+                                color: 'var(--text-main)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -686,7 +929,7 @@ const CreateInvitation = () => {
                                     borderRadius: '12px',
                                     border: formData.ageRange === option.value ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                     background: formData.ageRange === option.value ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                    color: 'white',
+                                    color: 'var(--text-main)',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -729,7 +972,7 @@ const CreateInvitation = () => {
                                     borderRadius: '12px',
                                     border: formData.privacy === mode ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                     background: formData.privacy === mode ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                    color: 'white',
+                                    color: 'var(--text-main)',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -897,57 +1140,6 @@ const CreateInvitation = () => {
                 </div>
 
                 <div className="form-group">
-                    <label className="elegant-label">
-                        <span className="label-icon">
-                            <FaImage />
-                        </span>
-                        {t('form_image_label')}
-                    </label>
-                    <ImageUpload
-                        currentImage={formData.image}
-                        onImageSelect={handleImageSelect}
-                        onImageRemove={handleRemoveImage}
-                        shape="square"
-                        size="large"
-                    />
-                    {uploadProgress > 0 && uploadProgress < 100 && (
-                        <div style={{
-                            marginTop: '12px',
-                            background: 'var(--bg-card)',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            border: '1px solid var(--border-color)'
-                        }}>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                marginBottom: '8px',
-                                fontSize: '0.85rem',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                <span>{t('uploading')}</span>
-                                <span>{uploadProgress}%</span>
-                            </div>
-                            <div style={{
-                                width: '100%',
-                                height: '6px',
-                                background: 'var(--border-color)',
-                                borderRadius: '3px',
-                                overflow: 'hidden'
-                            }}>
-                                <div style={{
-                                    width: `${uploadProgress}%`,
-                                    height: '100%',
-                                    background: 'linear-gradient(90deg, var(--primary), var(--accent))',
-                                    transition: 'width 0.3s ease',
-                                    borderRadius: '3px'
-                                }} />
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="form-group">
                     <label>{t('form_details_label')}</label>
                     <textarea
                         name="description"
@@ -960,7 +1152,7 @@ const CreateInvitation = () => {
                 </div>
 
                 <button type="submit" className="btn btn-primary btn-block" style={{ height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
-                    {isSubmitting ? t('publishing') : t('submit_btn')}
+                    {isSubmitting ? t('loading') : (t('preview_invitation') || '📋 Preview Invitation')}
                 </button>
             </form >
         </div >

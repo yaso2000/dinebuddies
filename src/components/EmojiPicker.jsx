@@ -34,6 +34,7 @@ const EmojiPicker = ({ onEmojiSelect, onClose }) => {
                     {categories.map(cat => (
                         <button
                             key={cat.id}
+                            type="button"
                             className={`emoji-category-btn ${activeCategory === cat.id ? 'active' : ''}`}
                             onClick={() => setActiveCategory(cat.id)}
                             title={cat.name}
@@ -42,13 +43,14 @@ const EmojiPicker = ({ onEmojiSelect, onClose }) => {
                         </button>
                     ))}
                 </div>
-                <button className="emoji-close-btn" onClick={onClose}>✕</button>
+                <button type="button" className="emoji-close-btn" onClick={onClose}>✕</button>
             </div>
 
             <div className="emoji-grid">
                 {EMOJI_CATEGORIES[activeCategory].map((emoji, index) => (
                     <button
                         key={index}
+                        type="button"
                         className="emoji-btn"
                         onClick={() => handleEmojiClick(emoji)}
                     >

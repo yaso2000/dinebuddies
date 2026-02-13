@@ -287,18 +287,41 @@ const UserManagement = () => {
 
                                     {/* Subscription */}
                                     <td>
-                                        {user.subscription?.active ? (
-                                            <div>
-                                                <div style={{ color: '#22c55e', fontWeight: '600' }}>
-                                                    {user.subscription.planId || 'Active'}
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                                    {user.subscription.status || 'active'}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <span style={{ color: '#64748b' }}>Free</span>
-                                        )}
+                                        <select
+                                            value={user.subscriptionTier || 'free'}
+                                            onChange={async (e) => {
+                                                const newTier = e.target.value;
+                                                try {
+                                                    await updateDoc(doc(db, 'users', user.id), {
+                                                        subscriptionTier: newTier
+                                                    });
+                                                    setUsers(users.map(u =>
+                                                        u.id === user.id
+                                                            ? { ...u, subscriptionTier: newTier }
+                                                            : u
+                                                    ));
+                                                    alert(`Subscription updated to ${newTier}!`);
+                                                } catch (error) {
+                                                    console.error('Error updating subscription:', error);
+                                                    alert('Failed to update subscription');
+                                                }
+                                            }}
+                                            style={{
+                                                background: '#1e293b',
+                                                border: '1px solid #334155',
+                                                borderRadius: '6px',
+                                                color: user.subscriptionTier === 'premium' ? '#22c55e' :
+                                                    user.subscriptionTier === 'vip' ? '#f59e0b' : '#64748b',
+                                                padding: '6px 10px',
+                                                fontSize: '0.875rem',
+                                                fontWeight: '600',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <option value="free">Free</option>
+                                            <option value="premium">Premium</option>
+                                            <option value="vip">VIP</option>
+                                        </select>
                                     </td>
 
                                     {/* Status */}

@@ -2,365 +2,295 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
     
-    // Helper: Check if user is admin (checks custom claim OR document role OR email)
-    function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.admin == true || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        request.auth.token.email == 'y.abohamed@gmail.com' ||
-        request.auth.token.email == 'admin@dinebuddies.com'
-      );
-    }
-    
-    // Helper: Check if user is authenticated
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
     
-    // Helper: Check if user owns the document
     function isOwner(userId) {
-      return request.auth != null && 
-             request.auth.uid == userId;
-    }
-
-    // Helper: Check if user is a Partner
-    function isPartner() {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner';
+      return isSignedIn() && request.auth.uid == userId;
     }
     
-    // ========================================
+    function isAdmin() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // ============================================
     // USERS COLLECTION
-    // ========================================
-    match /users/{userId} {
-      // Anyone can read user profiles (TEMPORARY FIX)
-      allow read: if true;
-      
-      // Users can create and update their own profile, but we should restrict switching to admin
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && 
-                       // Prevent users from making themselves admin or partner via standard update
-                       // This requires Backend or Admin Action usually, but for now we trust the app flows OR
-                       // strictly we should prevent changing 'role' if not admin.
-                       // For this playground app, we allow it but checking role is key for other collections.
-                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType']) || isAdmin());
-      
-      // Allow the specific case where a user CONVERTS to business/partner (handled by app logic, but rules must allow it if client-side)
-      // IF we want to allow client-side role switch to partner:
-      // allow update: if isOwner(userId) && request.resource.data.role == 'partner'; 
-      // Ideally, secure apps use Cloud Functions for role promotion. 
-      // For this implementation, we will allow isOwner to update for now to not break the `convertToBusiness` flow,
-      // but the `isPartner` check in OTHER rules protects the system.
-      allow update: if isOwner(userId); 
-
-      // Only admins can delete users
-      allow delete: if isAdmin();
-    }
+    // ============================================
     
-    // ========================================
-    // INVITATIONS COLLECTION
-    // ========================================
-    match /invitations/{invitationId} {
-      // Anyone can read invitations (TEMPORARY FIX)
-      allow read: if true;
+    match /users/{userId} {
+      allow get: if true; // Allow reading individual user documents (public profiles)
+      allow list: if true; // Allow querying/listing users collection (for partner directory)
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner(userId) && 
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['role', 'accountType']);
+      allow update: if isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
       
-      // Users can create their own invitations
-      allow create: if isAuthenticated();
-      
-      // Users can add/remove themselves from requests array
-      allow update: if isAuthenticated() && 
-                       (
-                         // Allow adding/removing from requests array
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) ||
-                         // Or if they're the author
-                         resource.data.author.id == request.auth.uid
-                       );
-      
-      // Only invitation author can delete
-      allow delete: if isAuthenticated() && 
-                       resource.data.author.id == request.auth.uid;
-      
-      // Admins can modify any invitation
-      allow update, delete: if isAdmin();
-      
-      // ========================================
-      // INVITATION MESSAGES SUBCOLLECTION (Group Chat)
-      // ========================================
-      match /messages/{messageId} {
-        // If you can see the invitation and you're a member, you can read and write messages
-        allow read, create: if isAuthenticated() && (
-          get(/databases/$(database)/documents/invitations/$(invitationId)).data.author.id == request.auth.uid ||
-          request.auth.uid in get(/databases/$(database)/documents/invitations/$(invitationId)).data.joined
-        );
+      // USER REVIEWS SUBCOLLECTION
+      match /reviews/{reviewId} {
+        // Anyone can read reviews
+        allow read: if true;
         
-        // Admins can do anything
-        allow read, write, delete: if isAdmin();
+        // Only signed-in users can create reviews
+        allow create: if isSignedIn() && 
+                         request.resource.data.fromUserId == request.auth.uid;
+        
+        // Only review author can update/delete their review
+        allow update, delete: if isSignedIn() && 
+                                 resource.data.fromUserId == request.auth.uid;
+      }
+      
+      // USER PREFERENCES SUBCOLLECTION
+      match /preferences/{docId} {
+        // User can read their own preferences
+        allow read: if isOwner(userId);
+        
+        // User can create/update their own preferences
+        allow create, update: if isOwner(userId);
+        
+        // User can delete their own preferences
+        allow delete: if isOwner(userId);
       }
     }
     
-    // ========================================
-    // RESTAURANTS COLLECTION
-    // ========================================
-    match /restaurants/{restaurantId} {
-      // Anyone can read restaurant data
-      allow read: if true;
+    // ============================================
+    // INVITATIONS COLLECTION
+    // ============================================
+    
+    match /invitations/{invitationId} {
+      allow read: if true; // Allow public read
       
-      // Only restaurant owners (who are partners) can update their restaurant
-      allow update: if (isPartner() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() && 
+                       request.resource.data.author.id == request.auth.uid;
       
-      // Admins can create/update/delete any restaurant
-      allow create, update, delete: if isAdmin();
+      // Host can update
+      allow update: if isSignedIn() && 
+                       resource.data.author.id == request.auth.uid;
+      
+      // Users can add themselves to requests (JOIN REQUEST)
+      allow update: if isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
+                       request.resource.data.requests.hasAll(resource.data.requests) &&
+                       request.resource.data.requests.hasOnly([request.auth.uid].concat(resource.data.requests));
+      
+      // Users can remove themselves from requests
+      allow update: if isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
+                       resource.data.requests.hasAll(request.resource.data.requests);
+      
+      allow update: if isAdmin();
+      
+      allow delete: if isSignedIn() && 
+                       (resource.data.author.id == request.auth.uid || isAdmin());
+      
+      // MESSAGES SUBCOLLECTION (Community Chat)
+      match /messages/{messageId} {
+        // Anyone signed in can read messages
+        allow read: if isSignedIn();
+        
+        // Anyone signed in can create messages
+        allow create: if isSignedIn() && 
+                         request.resource.data.senderId == request.auth.uid;
+        
+        // Sender can update their own message
+        allow update: if isSignedIn() && 
+                         resource.data.senderId == request.auth.uid;
+        
+        // Sender or admin can delete message
+        allow delete: if isSignedIn() && 
+                         (resource.data.senderId == request.auth.uid || isAdmin());
+      }
     }
     
-    // ========================================
-    // PARTNER POSTS COLLECTION
-    // ========================================
-    match /partner_posts/{postId} {
-      // Anyone can read posts
-      allow read: if true;
+    // ============================================
+    // CHATS COLLECTION (Group Chats)
+    // ============================================
+    
+    match /chats/{chatId} {
+      // Anyone signed in can read (we'll filter in app)
+      allow read: if isSignedIn();
       
-      // Only PARTNERS can create posts
-      allow create: if isPartner();
+      // Anyone can create chat
+      allow create: if isSignedIn();
       
-      // Only post author (partner) can delete their post
-      allow delete: if (isAuthenticated() && resource.data.authorId == request.auth.uid) || isAdmin();
+      // Anyone can update chat
+      allow update: if isSignedIn();
       
-      // Admins can delete any post
+      // Only admin can delete
       allow delete: if isAdmin();
+      
+      // MESSAGES SUBCOLLECTION
+      match /messages/{messageId} {
+        // Anyone signed in can read messages
+        allow read: if isSignedIn();
+        
+        // Anyone can create messages
+        allow create: if isSignedIn() && 
+                         request.resource.data.senderId == request.auth.uid;
+        
+        // Sender can update their own message
+        allow update: if isSignedIn() && 
+                         isOwner(resource.data.senderId);
+        
+        // Sender or admin can delete message
+        allow delete: if isSignedIn() && 
+                         (isOwner(resource.data.senderId) || isAdmin());
+      }
     }
     
-    // ========================================
-    // PARTNER NOTIFICATIONS COLLECTION
-    // ========================================
-    match /partner_notifications/{notificationId} {
-      // Restaurant owners can read their notifications
-      allow read: if isAuthenticated();
-      
-      // System can create notifications
-      allow create: if isAuthenticated();
-      
-      // Owners can update (mark as read)
-      allow update: if isAuthenticated();
-      
-      // Admins can do anything
-      allow read, write: if isAdmin();
-    }
+    // ============================================
+    // CONVERSATIONS COLLECTION (1-on-1 Chats)
+    // ============================================
     
-    // ========================================
-    // REPORTS COLLECTION
-    // ========================================
-    match /reports/{reportId} {
-      // Only admins can read all reports
-      allow read: if isAdmin();
-      
-      // Users can read their own reports
-      allow read: if isAuthenticated() && 
-                     resource.data.reporterId == request.auth.uid;
-      
-      // Anyone authenticated can create a report
-      allow create: if isAuthenticated();
-      
-      // Only admins can update/delete reports (resolve, etc.)
-      allow update, delete: if isAdmin();
-    }
-    
-    // ========================================
-    // SYSTEM MESSAGES COLLECTION
-    // ========================================
-    match /system_messages/{messageId} {
-      // Users can read their own messages
-      allow read: if isAuthenticated() && 
-                     resource.data.userId == request.auth.uid;
-      
-      // Users can update their own messages (mark as read)
-      allow update: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid;
-      
-      // Only admins can create/delete system messages
-      allow create, delete: if isAdmin();
-    }
-    
-    // ========================================
-    // SUBSCRIPTION PLANS COLLECTION
-    // ========================================
-    match /subscription_plans/{planId} {
-      // Anyone can read subscription plans
-      allow read: if true;
-      
-      // Only admins can modify plans
-      allow write: if isAdmin();
-    }
-    
-    // ========================================
-    // SUBSCRIPTION PLANS COLLECTION (camelCase)
-    // ========================================
-    match /subscriptionPlans/{planId} {
-      // Anyone can read subscription plans
-      allow read: if true;
-      
-      // Only admins can modify plans
-      allow write: if isAdmin();
-    }
-    
-    // ========================================
-    // USER SUBSCRIPTIONS COLLECTION
-    // ========================================
-    match /user_subscriptions/{subscriptionId} {
-      // Users can read their own subscriptions
-      allow read: if isAuthenticated() && 
-                     resource.data.userId == request.auth.uid;
-      
-      // System/Payment handlers can create subscriptions
-      allow create: if isAuthenticated();
-      
-      // Admins can read/modify all subscriptions
-      allow read, write: if isAdmin();
-    }
-    
-    
-    // ========================================
-    // COMMUNITY MESSAGES COLLECTION
-    // ========================================
-    match /communityMessages/{messageId} {
-      // Any authenticated user can read community messages
-      allow read: if isAuthenticated();
-      
-      // Any authenticated user can create messages
-      allow create: if isAuthenticated() && 
-                       request.resource.data.userId == request.auth.uid;
-      
-      // Users can delete their own messages
-      allow delete: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid;
-      
-      // Admins can moderate all messages
-      allow read, write, delete: if isAdmin();
-    }
-    
-    // ========================================
-    // CONVERSATIONS COLLECTION
-    // ========================================
     match /conversations/{conversationId} {
-      // Any authenticated user can read conversations
-      allow read: if isAuthenticated();
+      // Anyone signed in can read
+      allow read: if isSignedIn();
       
-      // Any authenticated user can create conversations
-      allow create: if isAuthenticated();
+      // Anyone can create conversation
+      allow create: if isSignedIn();
       
-      // Any authenticated user can update conversations
-      allow update: if isAuthenticated();
+      // Anyone can update conversation
+      allow update: if isSignedIn();
       
-      // Users can delete conversations they're part of
-      allow delete: if isAuthenticated();
+      // Participants can delete
+      allow delete: if isSignedIn();
       
-      // Admins can access all conversations
-      allow read, write, delete: if isAdmin();
+      // MESSAGES SUBCOLLECTION
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && 
+                         request.resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() && 
+                         isOwner(resource.data.senderId);
+        allow delete: if isSignedIn() && 
+                         (isOwner(resource.data.senderId) || isAdmin());
+      }
+    }
+    
+    // ============================================
+    // NOTIFICATIONS COLLECTION
+    // ============================================
+    
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      
+      // Anyone can create notifications (for system notifications)
+      allow create: if isSignedIn();
+      
+      // Users can update their own notifications
+      allow update: if isSignedIn() && isOwner(resource.data.userId);
+      
+      // Users can delete their own notifications
+      allow delete: if isSignedIn() && isOwner(resource.data.userId);
+      
+      // Admin can do anything
+      allow read, write: if isAdmin();
+    }
+    
+    // ============================================
+    // PARTNERS/POSTS COLLECTION
+    // ============================================
+    
+    match /partners/{partnerId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+      
+      // MESSAGES SUBCOLLECTION (Community Chat)
+      match /messages/{messageId} {
+        // Anyone signed in can read messages
+        allow read: if isSignedIn();
+        
+        // Anyone signed in can create messages
+        allow create: if isSignedIn() && 
+                         request.resource.data.senderId == request.auth.uid;
+        
+        // Sender can update their own message
+        allow update: if isSignedIn() && 
+                         resource.data.senderId == request.auth.uid;
+        
+        // Sender or admin can delete message
+        allow delete: if isSignedIn() && 
+                         (resource.data.senderId == request.auth.uid || isAdmin());
+      }
+    }
+    
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // ============================================
+    // COMMUNITIES CHAT
+    // ============================================
+    
+    match /communities/{partnerId} {
+      // Anyone can read community info
+      allow read: if true;
       
       // Messages subcollection
       match /messages/{messageId} {
-        // Any authenticated user can read messages
-        allow read: if isAuthenticated();
+        // Helper: Check if user is a member of this community
+        function isMember() {
+          let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+          return request.auth.uid == partnerId || 
+                 partnerId in userDoc.data.joinedCommunities;
+        }
         
-        // Any authenticated user can create messages
-        allow create: if isAuthenticated();
+        // Only members can read messages
+        allow read: if isSignedIn() && isMember();
         
-        // Users can update their own messages
-        allow update: if isAuthenticated();
+        // Only members can create messages
+        allow create: if isSignedIn() && isMember() &&
+                        request.resource.data.senderId == request.auth.uid;
         
-        // Users can delete their own messages
-        allow delete: if isAuthenticated();
+        // Only sender can update their own message
+        allow update: if isSignedIn() && 
+                        resource.data.senderId == request.auth.uid;
         
-        // Admins can access all messages
-        allow read, write, delete: if isAdmin();
+        // Sender or partner owner can delete
+        allow delete: if isSignedIn() && 
+                        (resource.data.senderId == request.auth.uid || 
+                         request.auth.uid == partnerId);
       }
     }
     
-    // ========================================
-    // NOTIFICATIONS COLLECTION
-    // ========================================
-    match /notifications/{notificationId} {
-      // Users can read their own notifications
-      allow read: if isAuthenticated() && 
-                     resource.data.userId == request.auth.uid;
-      
-      // Anyone authenticated can create notifications (for sending to others)
-      allow create: if isAuthenticated();
-      
-      // Users can update their own notifications (mark as read)
-      allow update: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid;
-      
-      // Users can delete their own notifications
-      allow delete: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid;
-      
-      // Admins can access all notifications
-      allow read, write, delete: if isAdmin();
-    }
+    // ============================================
+    // COMMUNITY MESSAGES (OLD - Keep for compatibility)
+    // ============================================
     
-    // ========================================
-    // CHAT MESSAGES (Future)
-    // ========================================
-    match /chat_messages/{messageId} {
-      // Participants can read their conversation
-      allow read: if isAuthenticated() && 
-                     (resource.data.senderId == request.auth.uid ||
-                      resource.data.receiverId == request.auth.uid);
-      
-      // Users can send messages
-      allow create: if isAuthenticated();
-      
-      // Admins can moderate all messages
-      allow read, delete: if isAdmin();
+    match /communityMessages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.uid == resource.data.communityId);
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.uid == resource.data.communityId);
     }
+
+    // ============================================
+    // ALLOW ALL OTHER COLLECTIONS (TEMPORARY)
+    // ============================================
     
-    // ========================================
-    // COMMUNITY POSTS COLLECTION
-    // ========================================
-    match /communityPosts/{postId} {
-      // Anyone can read community posts
-      allow read: if true;
-      
-      // Only business partners can create posts
-      allow create: if isAuthenticated() && 
-                       isPartner() &&
-                       request.resource.data.partnerId == request.auth.uid;
-      
-      // Any authenticated user can update posts (for likes and comments)
-      // But only the owner can change content/image
-      allow update: if isAuthenticated() && (
-        // Anyone can add likes/comments
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'comments', 'views'])) ||
-        // Only owner can change content/image
-        (resource.data.partnerId == request.auth.uid)
-      );
-      
-      // Only partners can delete their own posts
-      allow delete: if isAuthenticated() && 
-                       resource.data.partnerId == request.auth.uid;
-      
-      // Admins can moderate all posts
-      allow read, write, delete: if isAdmin();
-    }
-    
-    // ========================================
-    // TYPING STATUS COLLECTION
-    // ========================================
-    match /typing/{conversationId} {
-      // Any authenticated user can read/write typing status
-      allow read, write: if isAuthenticated();
-    }
-    
-    // ========================================
-    // PRESENCE COLLECTION
-    // ========================================
-    match /presence/{userId} {
-      // Any authenticated user can read presence
-      allow read: if isAuthenticated();
-      
-      // Users can update their own presence
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+    // Allow access to any other collection for now
+    match /{document=**} {
+      allow read: if true; // Allow all read access
+      allow write: if isSignedIn(); // Write requires authentication
     }
   }
 }

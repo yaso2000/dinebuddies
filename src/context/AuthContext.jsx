@@ -12,7 +12,9 @@ import {
     RecaptchaVerifier,
     signInWithPhoneNumber,
     signInWithEmailAndPassword,
-    createUserWithEmailAndPassword
+    createUserWithEmailAndPassword,
+    FacebookAuthProvider,
+    TwitterAuthProvider
 } from 'firebase/auth';
 import {
     doc,
@@ -81,6 +83,29 @@ export const AuthProvider = ({ children }) => {
 
         return unsubscribe;
     }, []);
+
+    // Update lastSeen every 2 minutes for logged-in users
+    useEffect(() => {
+        if (!currentUser || isGuest) return;
+
+        const updateLastSeen = async () => {
+            try {
+                await updateDoc(doc(db, 'users', currentUser.uid), {
+                    lastSeen: serverTimestamp()
+                });
+            } catch (error) {
+                console.error('Error updating lastSeen:', error);
+            }
+        };
+
+        // Update immediately on mount
+        updateLastSeen();
+
+        // Then update every 2 minutes
+        const interval = setInterval(updateLastSeen, 2 * 60 * 1000);
+
+        return () => clearInterval(interval);
+    }, [currentUser, isGuest]);
 
 
     // Fetch user profile from Firestore
@@ -227,14 +252,69 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Create user profile in Firestore (متوافق مع بنية FlutterFlow)
+    // Facebook Sign In
+    const signInWithFacebook = async () => {
+        try {
+            const provider = new FacebookAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+
+            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+            let isNewUser = false;
+
+            if (!userDoc.exists()) {
+                isNewUser = true;
+                await createUserProfile(result.user.uid, {
+                    display_name: result.user.displayName,
+                    email: result.user.email,
+                    photo_url: result.user.photoURL,
+                    authProvider: 'facebook'
+                });
+            }
+
+            return { user: result.user, isNewUser };
+        } catch (error) {
+            console.error('Error signing in with Facebook:', error);
+            throw error;
+        }
+    };
+
+    // Twitter (X) Sign In
+    const signInWithTwitter = async () => {
+        try {
+            const provider = new TwitterAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+
+            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+            let isNewUser = false;
+
+            if (!userDoc.exists()) {
+                isNewUser = true;
+                await createUserProfile(result.user.uid, {
+                    display_name: result.user.displayName,
+                    email: result.user.email,
+                    photo_url: result.user.photoURL,
+                    authProvider: 'twitter'
+                });
+            }
+
+            return { user: result.user, isNewUser };
+        } catch (error) {
+            console.error('Error signing in with Twitter:', error);
+            throw error;
+        }
+    };
+
+    // Create user profile in Firestore
     const createUserProfile = async (userId, userData) => {
+        // Generate a deterministic avatar based on User ID (Dummy Image, NOT Dummy Account)
+        const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
+
         try {
             await setDoc(doc(db, 'users', userId), {
                 uid: userId,
                 display_name: userData.display_name || 'User',
-                email: userData.email || '',
-                photo_url: userData.photo_url || '',
+                email: userData.email || '', // Email is required
+                photo_url: userData.photo_url || defaultAvatar, // Ensure DB has an image (Dummy Image if needed)
                 role: 'user', // Default role
                 accountType: 'individual', // default
                 following: [],
@@ -242,7 +322,8 @@ export const AuthProvider = ({ children }) => {
                 reputation: 100,
                 shortDescription: '',
                 created_time: serverTimestamp(),
-                last_active_time: serverTimestamp()
+                last_active_time: serverTimestamp(),
+                lastSeen: serverTimestamp() // Add lastSeen
             });
 
             // Refresh user profile
@@ -253,34 +334,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Update user account type (individual or partner)
-    const updateAccountType = async (accountType) => {
-        if (!currentUser) return;
 
-        try {
-            // Mapping accountType to role
-            let newRole = 'user';
-            if (accountType === 'partner' || accountType === 'business') {
-                newRole = 'partner';
-            } else if (accountType === 'admin') {
-                newRole = 'admin';
-            }
-
-            // Using setDoc with merge: true protects against "Document not found" errors
-            // if the user profile wasn't fully created during signup.
-            await setDoc(doc(db, 'users', currentUser.uid), {
-                accountType,
-                role: newRole,
-                last_active_time: serverTimestamp()
-            }, { merge: true });
-
-            // Refresh user profile
-            await fetchUserProfile(currentUser.uid);
-        } catch (error) {
-            console.error('Error updating account type:', error);
-            throw error;
-        }
-    };
 
     // Update user profile
     const updateUserProfile = async (updates) => {
@@ -367,8 +421,10 @@ export const AuthProvider = ({ children }) => {
     // Continue as Guest
     const continueAsGuest = () => {
         localStorage.setItem('guestMode', 'true');
+        setCurrentUser(null); // Important: clear Firebase user
         setUserProfile(guestProfile);
         setIsGuest(true);
+        setLoading(false); // Ensure loading is false
         console.log('✅ Guest mode activated');
     };
 
@@ -391,8 +447,10 @@ export const AuthProvider = ({ children }) => {
         signInWithEmail,
         signInWithGoogle,
         signInWithApple,
+        signInWithFacebook,
+        signInWithTwitter,
         signOut,
-        updateAccountType,
+
         updateUserProfile,
         deleteUserAccount,
         setupRecaptcha,
@@ -413,20 +471,20 @@ export const AuthProvider = ({ children }) => {
                     width: '100vw',
                     height: '100vh',
                     zIndex: 9999,
-                    pointerEvents: 'none',
+                    backgroundColor: 'transparent',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    flexDirection: 'column'
                 }}>
                     <img
                         src="/logo.png"
                         alt="Loading..."
                         style={{
-                            width: '120px',
-                            height: '120px',
+                            width: '80px', // Slightly smaller
+                            height: '80px',
                             objectFit: 'contain',
-                            animation: 'pulse 1.5s ease-in-out infinite',
-                            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
+                            animation: 'spin 1s linear infinite'
                         }}
                     />
                 </div>

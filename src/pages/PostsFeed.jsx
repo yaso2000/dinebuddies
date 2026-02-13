@@ -5,12 +5,15 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowLeft } from 'react-icons/fa';
 import PostCard from '../components/PostCard';
+import StoriesBar from '../components/StoriesBar';
+import StoryViewer from '../components/StoryViewer';
 
 const PostsFeed = () => {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [viewingStory, setViewingStory] = useState(null);
 
     useEffect(() => {
         const unsubscribe = subscribeToPosts();
@@ -96,18 +99,10 @@ const PostsFeed = () => {
 
     return (
         <div className="page-container" style={{ paddingBottom: '100px' }}>
-            {/* Header */}
-            <header className="app-header sticky-header-glass">
-                <button className="back-btn" onClick={() => navigate('/')}>
-                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                </button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                        Partners Feed
-                    </h3>
-                </div>
-                <div style={{ width: '40px' }} />
-            </header>
+
+
+            {/* Stories Bar */}
+            <StoriesBar onStoryClick={setViewingStory} />
 
             {/* Posts List */}
             <div style={{ padding: '1rem' }}>
@@ -130,6 +125,14 @@ const PostsFeed = () => {
                     </div>
                 )}
             </div>
+
+            {/* Story Viewer */}
+            {viewingStory && (
+                <StoryViewer
+                    partnerStories={viewingStory}
+                    onClose={() => setViewingStory(null)}
+                />
+            )}
         </div>
     );
 };

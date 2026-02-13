@@ -9,7 +9,7 @@
                     "arrayConfig": "CONTAINS"
                 },
                 {
-                    "fieldPath": "lastMessageAt",
+                    "fieldPath": "lastMessageTime",
                     "order": "DESCENDING"
                 }
             ]
@@ -81,6 +81,38 @@
                 {
                     "fieldPath": "date",
                     "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "reviews",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "partnerId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "partnerStories",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "expiresAt",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "isActive",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
                 }
             ]
         }

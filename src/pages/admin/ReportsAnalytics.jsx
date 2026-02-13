@@ -57,14 +57,19 @@ const ReportsAnalytics = () => {
             const totalPartners = partnersSnapshot.size;
 
             // Fetch Subscriptions for revenue
-            const subscriptionsSnapshot = await getDocs(collection(db, 'subscriptions'));
             let totalRevenue = 0;
-            subscriptionsSnapshot.forEach(doc => {
-                const sub = doc.data();
-                if (sub.amount) {
-                    totalRevenue += sub.amount;
-                }
-            });
+            try {
+                const subscriptionsSnapshot = await getDocs(collection(db, 'subscriptions'));
+                subscriptionsSnapshot.forEach(doc => {
+                    const sub = doc.data();
+                    if (sub.amount) {
+                        totalRevenue += sub.amount;
+                    }
+                });
+            } catch (err) {
+                // Subscriptions collection may not exist yet
+                console.log('Subscriptions collection not accessible');
+            }
 
             setAnalytics({
                 users: {

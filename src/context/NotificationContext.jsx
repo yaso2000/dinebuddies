@@ -12,7 +12,8 @@ import {
     deleteDoc,
     doc,
     serverTimestamp,
-    writeBatch
+    writeBatch,
+    getDoc
 } from 'firebase/firestore';
 
 const NotificationContext = createContext();
@@ -76,6 +77,55 @@ export const NotificationProvider = ({ children }) => {
         return () => unsubscribe();
     }, [currentUser?.uid]);
 
+    // Helper: Check if current time is in Do Not Disturb period
+    const isInDNDPeriod = (dndSettings) => {
+        if (!dndSettings || !dndSettings.enabled) return false;
+
+        const now = new Date();
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        const { startTime, endTime } = dndSettings;
+
+        // Check if current time is in range
+        if (startTime <= endTime) {
+            // Normal range (e.g., 22:00 to 23:00)
+            return currentTime >= startTime && currentTime <= endTime;
+        } else {
+            // Overnight range (e.g., 22:00 to 08:00)
+            return currentTime >= startTime || currentTime <= endTime;
+        }
+    };
+
+    // Helper: Get user notification settings
+    const getUserSettings = async (userId) => {
+        try {
+            const settingsRef = doc(db, 'users', userId, 'preferences', 'notifications');
+            const settingsDoc = await getDoc(settingsRef);
+
+            if (settingsDoc.exists()) {
+                return settingsDoc.data();
+            }
+
+            // Return default settings if none exist
+            return {
+                pushEnabled: true,
+                pushTypes: {
+                    follow: true,
+                    invitation_accepted: true,
+                    invitation_rejected: true,
+                    message: true,
+                    like: true,
+                    comment: true,
+                    reminder: true
+                }
+            };
+        } catch (error) {
+            console.error('Error loading user settings:', error);
+            // Default to allowing notifications on error
+            return { pushEnabled: true, pushTypes: {} };
+        }
+    };
+
     // Create a notification
     const createNotification = async ({
         userId,
@@ -91,6 +141,30 @@ export const NotificationProvider = ({ children }) => {
         if (!userId) return;
 
         try {
+            // 🔍 Check user notification settings
+            const settings = await getUserSettings(userId);
+
+            // ❌ Check if push notifications are globally disabled
+            if (settings.pushEnabled === false) {
+                console.log('🔕 Push notifications disabled for user:', userId);
+                return;
+            }
+
+            // ❌ Check if this specific notification type is disabled
+            if (settings.pushTypes && settings.pushTypes[type] === false) {
+                console.log(`🔕 Notification type "${type}" disabled for user:`, userId);
+                return;
+            }
+
+            // 🌙 Check Do Not Disturb
+            if (settings.doNotDisturb && isInDNDPeriod(settings.doNotDisturb)) {
+                console.log('🌙 Do Not Disturb active - notification skipped for user:', userId);
+                return;
+            }
+
+            // ✅ All checks passed - create notification
+            console.log(`✅ Creating notification (${type}) for user:`, userId);
+
             const notificationsRef = collection(db, 'notifications');
             await addDoc(notificationsRef, {
                 userId,

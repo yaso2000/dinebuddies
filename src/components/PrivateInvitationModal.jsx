@@ -9,30 +9,41 @@ const PrivateInvitationModal = () => {
     const navigate = useNavigate();
     const { notifications, markAsRead } = useNotifications();
     const [showModal, setShowModal] = useState(false);
-    const [currentInvitation, setCurrentInvitation] = useState(null);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
 
-    useEffect(() => {
-        // Check for unread private invitation notifications
-        const privateInvitations = notifications.filter(
-            n => n.type === 'private_invitation' && !n.read
-        );
+    // Touch handlers for swipe
+    const [touchStart, setTouchStart] = useState(0);
+    const [touchEnd, setTouchEnd] = useState(0);
 
+    // Get all unread private invitations
+    const privateInvitations = notifications.filter(
+        n => n.type === 'private_invitation' && !n.read
+    );
+
+    const currentInvitation = privateInvitations[currentIndex];
+
+    useEffect(() => {
         if (privateInvitations.length > 0) {
-            // Show the first unread private invitation
-            setCurrentInvitation(privateInvitations[0]);
+            // Reset to first invitation if current index is out of bounds
+            if (currentIndex >= privateInvitations.length) {
+                setCurrentIndex(0);
+            }
             setShowModal(true);
             // Auto-open after 1 second
             setTimeout(() => setIsOpen(true), 1000);
+        } else {
+            setShowModal(false);
+            setCurrentIndex(0);
         }
-    }, [notifications]);
+    }, [privateInvitations.length, currentIndex]);
 
     const handleClose = async () => {
         if (currentInvitation) {
             await markAsRead(currentInvitation.id);
         }
         setShowModal(false);
-        setCurrentInvitation(null);
+        setCurrentIndex(0);
         setIsOpen(false);
     };
 
@@ -41,7 +52,32 @@ const PrivateInvitationModal = () => {
             await markAsRead(currentInvitation.id);
             navigate(`/invitation/${currentInvitation.invitationId}`);
             setShowModal(false);
-            setCurrentInvitation(null);
+            setCurrentIndex(0);
+        }
+    };
+
+
+    const handleTouchStart = (e) => {
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const handleTouchMove = (e) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const handleTouchEnd = () => {
+        if (touchStart - touchEnd > 75) {
+            // Swipe left - next
+            if (currentIndex < privateInvitations.length - 1) {
+                setCurrentIndex(currentIndex + 1);
+            }
+        }
+
+        if (touchStart - touchEnd < -75) {
+            // Swipe right - previous
+            if (currentIndex > 0) {
+                setCurrentIndex(currentIndex - 1);
+            }
         }
     };
 
@@ -49,28 +85,38 @@ const PrivateInvitationModal = () => {
 
     return (
         <>
-            {/* Full Screen Overlay */}
-            <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                backdropFilter: 'blur(10px)',
-                zIndex: 999999,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                animation: 'fadeIn 0.3s ease-in-out'
-            }}>
-                {/* Envelope Card */}
-                <div style={{
-                    position: 'relative',
-                    width: '90%',
-                    maxWidth: '500px',
-                    animation: 'slideUp 0.5s ease-out'
-                }}>
+            {/* Semi-transparent Overlay */}
+            <div
+                onClick={handleClose}
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 999999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    animation: 'fadeIn 0.3s ease-in-out',
+                    padding: '20px'
+                }}
+            >
+                {/* Card Container - Click inside won't close */}
+                <div
+                    onClick={(e) => e.stopPropagation()}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    style={{
+                        position: 'relative',
+                        width: '100%',
+                        maxWidth: '420px',
+                        animation: 'slideUp 0.5s ease-out'
+                    }}
+                >
                     {/* Close Button */}
                     <button
                         onClick={handleClose}
@@ -100,24 +146,39 @@ const PrivateInvitationModal = () => {
 
                     {/* Envelope */}
                     <div style={{
-                        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                         borderRadius: '16px',
                         padding: '3rem 2rem 2rem 2rem',
                         boxShadow: '0 30px 90px rgba(0, 0, 0, 0.7)',
                         position: 'relative',
                         overflow: 'hidden'
                     }}>
-                        {/* Decorative Pattern */}
+                        {/* Floating Food Icons */}
                         <div style={{
                             position: 'absolute',
                             top: 0,
                             left: 0,
                             right: 0,
-                            height: '100%',
-                            background: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-                            opacity: 0.3,
-                            pointerEvents: 'none'
-                        }}></div>
+                            bottom: 0,
+                            pointerEvents: 'none',
+                            zIndex: 0
+                        }}>
+                            {['🍕', '🍔', '🍣', '🍰', '🍷', '☕', '🍜', '🥗'].map((emoji, i) => (
+                                <div
+                                    key={i}
+                                    style={{
+                                        position: 'absolute',
+                                        fontSize: '3rem',
+                                        opacity: 0.3,
+                                        animation: `float${i % 3} ${4 + i}s ease-in-out infinite`,
+                                        left: `${(i * 12) % 90}%`,
+                                        top: `${(i * 15) % 80}%`
+                                    }}
+                                >
+                                    {emoji}
+                                </div>
+                            ))}
+                        </div>
 
                         {/* Envelope Icon */}
                         <div style={{
@@ -164,6 +225,21 @@ const PrivateInvitationModal = () => {
                             💌 {t('private_invitation') || 'Private Invitation'}
                         </h2>
 
+                        {/* Counter - Show if multiple invitations */}
+                        {privateInvitations.length > 1 && (
+                            <div style={{
+                                textAlign: 'center',
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                marginBottom: '0.5rem',
+                                position: 'relative',
+                                zIndex: 1
+                            }}>
+                                {currentIndex + 1} {t('of', { defaultValue: 'of' })} {privateInvitations.length}
+                            </div>
+                        )}
+
                         <p style={{
                             color: 'rgba(255, 255, 255, 0.9)',
                             fontSize: '0.95rem',
@@ -172,7 +248,9 @@ const PrivateInvitationModal = () => {
                             position: 'relative',
                             zIndex: 1
                         }}>
-                            {t('you_received_special_invitation') || 'You received a special invitation!'}
+                            {privateInvitations.length > 1
+                                ? t('you_received_multiple_invitations', { defaultValue: 'You received special invitations!' })
+                                : t('you_received_special_invitation') || 'You received a special invitation!'}
                         </p>
 
                         {/* Card Content */}
@@ -263,6 +341,56 @@ const PrivateInvitationModal = () => {
                             </div>
                         </div>
 
+                        {/* Navigation Buttons - Show if multiple invitations */}
+                        {privateInvitations.length > 1 && (
+                            <div style={{
+                                display: 'flex',
+                                gap: '8px',
+                                marginBottom: '1rem',
+                                position: 'relative',
+                                zIndex: 1
+                            }}>
+                                <button
+                                    onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                                    disabled={currentIndex === 0}
+                                    style={{
+                                        flex: 1,
+                                        padding: '10px',
+                                        borderRadius: '10px',
+                                        border: '2px solid white',
+                                        background: currentIndex === 0 ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+                                        color: 'white',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 'bold',
+                                        cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+                                        opacity: currentIndex === 0 ? 0.5 : 1,
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    ← {t('previous', { defaultValue: 'Previous' })}
+                                </button>
+                                <button
+                                    onClick={() => setCurrentIndex(prev => Math.min(privateInvitations.length - 1, prev + 1))}
+                                    disabled={currentIndex === privateInvitations.length - 1}
+                                    style={{
+                                        flex: 1,
+                                        padding: '10px',
+                                        borderRadius: '10px',
+                                        border: '2px solid white',
+                                        background: currentIndex === privateInvitations.length - 1 ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+                                        color: 'white',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 'bold',
+                                        cursor: currentIndex === privateInvitations.length - 1 ? 'not-allowed' : 'pointer',
+                                        opacity: currentIndex === privateInvitations.length - 1 ? 0.5 : 1,
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {t('next', { defaultValue: 'Next' })} →
+                                </button>
+                            </div>
+                        )}
+
                         {/* Action Buttons */}
                         <div style={{
                             display: 'flex',
@@ -317,6 +445,38 @@ const PrivateInvitationModal = () => {
                             </button>
                         </div>
                     </div>
+
+                    {/* Dots Indicator - Show if multiple invitations */}
+                    {privateInvitations.length > 1 && (
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            marginTop: '16px',
+                            position: 'relative',
+                            zIndex: 1
+                        }}>
+                            {privateInvitations.map((_, index) => (
+                                <div
+                                    key={index}
+                                    onClick={() => setCurrentIndex(index)}
+                                    style={{
+                                        width: index === currentIndex ? '24px' : '8px',
+                                        height: '8px',
+                                        borderRadius: '4px',
+                                        background: index === currentIndex
+                                            ? 'white'
+                                            : 'rgba(255, 255, 255, 0.4)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease',
+                                        boxShadow: index === currentIndex
+                                            ? '0 2px 8px rgba(255, 255, 255, 0.3)'
+                                            : 'none'
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -344,6 +504,36 @@ const PrivateInvitationModal = () => {
                 @keyframes pulse {
                     0%, 100% { transform: scale(1); }
                     50% { transform: scale(1.05); }
+                }
+                @keyframes float0 {
+                    0%, 100% { 
+                        transform: translateY(0) rotate(0deg);
+                        opacity: 0.3;
+                    }
+                    50% { 
+                        transform: translateY(-20px) rotate(10deg);
+                        opacity: 0.5;
+                    }
+                }
+                @keyframes float1 {
+                    0%, 100% { 
+                        transform: translateY(0) rotate(0deg);
+                        opacity: 0.25;
+                    }
+                    50% { 
+                        transform: translateY(-30px) rotate(-10deg);
+                        opacity: 0.45;
+                    }
+                }
+                @keyframes float2 {
+                    0%, 100% { 
+                        transform: translateY(0) rotate(0deg);
+                        opacity: 0.28;
+                    }
+                    50% { 
+                        transform: translateY(-25px) rotate(15deg);
+                        opacity: 0.48;
+                    }
                 }
             `}</style>
         </>
