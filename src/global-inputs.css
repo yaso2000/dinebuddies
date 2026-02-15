@@ -1,0 +1,26 @@
+/* =========================================
+   LIGHT MODE INPUT STYLES
+   ========================================= */
+body.light-mode input[type="text"],
+body.light-mode input[type="email"],
+body.light-mode input[type="password"],
+body.light-mode input[type="search"],
+body.light-mode input[type="number"],
+body.light-mode input[type="tel"],
+body.light-mode input[type="url"],
+body.light-mode textarea,
+body.light-mode select {
+    border: 1px solid #cbd5e1 !important;
+    /* Slate-300: Visible but subtle */
+    background-color: #ffffff;
+    transition: all 0.2s ease-in-out;
+}
+
+body.light-mode input:focus,
+body.light-mode textarea:focus,
+body.light-mode select:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(216, 67, 21, 0.1) !important;
+    /* Orange glow */
+    outline: none;
+}
