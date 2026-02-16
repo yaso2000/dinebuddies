@@ -219,8 +219,8 @@ const PostCard = ({ post, showInChat = false }) => {
     }
 
     // Fallbacks
-    if (!authorAvatar) {
-        authorAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${authorId}`;
+    if (!authorAvatar || authorAvatar.includes('dicebear')) {
+        authorAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'User')}&background=random`;
     }
 
     if (!authorHandle) {
@@ -247,8 +247,8 @@ const PostCard = ({ post, showInChat = false }) => {
         displayAuthorAvatar = userProfile.businessInfo?.logo || userProfile.photoURL || userProfile.photo_url || userProfile.avatar || displayAuthorAvatar;
     }
 
-    if (!displayAuthorAvatar) {
-        displayAuthorAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayAuthorId || 'default'}`;
+    if (!displayAuthorAvatar || displayAuthorAvatar.includes('dicebear')) {
+        displayAuthorAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayAuthorName || 'User')}&background=random`;
     }
 
     let displayAuthorHandle = displayPost.author?.username || displayPost.author?.handle || null;
@@ -265,297 +265,354 @@ const PostCard = ({ post, showInChat = false }) => {
                     // navigate(/post/${post.id}); 
                 }
             }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '0' }}
         >
             {/* Repost Header */}
             {isRepost && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', paddingLeft: '40px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', paddingLeft: '12px' }}>
                     <BiRepost size={16} />
                     <span style={{ fontWeight: 'bold' }}>{authorName} reposted</span>
                 </div>
             )}
 
-            <div style={{ display: 'flex', gap: '12px' }}>
-                {/* Left: Avatar (Of the Original Author) */}
-                <div className="post-avatar-col">
-                    <img
-                        src={displayAuthorAvatar}
-                        className="post-avatar"
-                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (displayPost.partnerId) navigate(`/partner/${displayPost.partnerId}`);
-                            else if (displayAuthorId) navigate(`/profile/${displayAuthorId}`);
-                        }}
-                    />
+            {/* HEADER ROW: Avatar + User Info + Options */}
+            <div className="post-header-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', padding: '0 4px' }}>
+                <img
+                    src={displayAuthorAvatar}
+                    className="post-avatar"
+                    alt={displayAuthorName}
+                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (displayPost.partnerId) navigate(`/partner/${displayPost.partnerId}`);
+                        else if (displayAuthorId) navigate(`/profile/${displayAuthorId}`);
+                    }}
+                />
+
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span className="post-user-name" style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>
+                            {displayAuthorName}
+                        </span>
+                        {/* Optional Verified Badge here if needed */}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.80rem', color: 'var(--text-muted)' }}>
+                        <span className="post-user-handle">
+                            {displayAuthorHandle}
+                        </span>
+                        <span>·</span>
+                        <span className="post-time">
+                            {formatDate(displayPost.createdAt)}
+                        </span>
+                    </div>
                 </div>
 
-                {/* Right: Content */}
-                <div className="post-content-col" style={{ flex: 1 }}>
-                    {/* Header: Original Author Info */}
-                    <div className="post-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span className="post-user-name" style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>
-                                {displayAuthorName}
-                            </span>
-                            <span className="post-user-handle" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                {displayAuthorHandle}
-                            </span>
-                            <span className="post-dot-separator" style={{ color: 'var(--text-muted)' }}>·</span>
-                            <span className="post-time" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                {formatDate(displayPost.createdAt)}
-                            </span>
-                        </div>
-                        <div style={{ marginLeft: 'auto', position: 'relative' }}>
-                            <button
-                                className="icon-btn-small"
-                                onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                            >
-                                <FaEllipsisH size={16} />
-                            </button>
+                <div style={{ marginLeft: 'auto', position: 'relative' }}>
+                    <button
+                        className="icon-btn-small"
+                        onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px' }}
+                    >
+                        <FaEllipsisH size={16} />
+                    </button>
 
-                            {/* Dropdown Menu */}
-                            {showMenu && (
-                                <div style={{
-                                    position: 'absolute', top: '100%', right: 0,
-                                    background: 'var(--bg-card)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-                                    zIndex: 10, minWidth: '120px', overflow: 'hidden'
-                                }}>
-                                    {(currentUser?.uid === authorId) ? (
-                                        <button
-                                            onClick={handleDelete}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '8px',
-                                                padding: '10px 16px', width: '100%', border: 'none',
-                                                background: 'transparent', color: 'red', cursor: 'pointer',
-                                                fontSize: '0.9rem', textAlign: 'left'
-                                            }}
-                                        >
-                                            <FaTrash size={14} /> Delete
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); alert("Reported."); setShowMenu(false); }}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '8px',
-                                                padding: '10px 16px', width: '100%', border: 'none',
-                                                background: 'transparent', color: 'var(--text-main)', cursor: 'pointer',
-                                                fontSize: '0.9rem', textAlign: 'left'
-                                            }}
-                                        >
-                                            Report Post
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Content Wrapper with Custom Styles (Using Display Post) */}
-                    <div style={{
-                        backgroundColor: displayPost.textStyle?.backgroundColor || 'transparent',
-                        color: displayPost.textStyle?.color || 'inherit',
-                        fontFamily: displayPost.textStyle?.fontFamily || 'inherit',
-                        borderRadius: displayPost.textStyle?.backgroundColor && displayPost.textStyle.backgroundColor !== 'transparent' ? '12px' : '0',
-                        padding: displayPost.textStyle?.backgroundColor && displayPost.textStyle.backgroundColor !== 'transparent' ? '12px' : '0',
-                        marginBottom: '12px'
-                    }}>
-                        {/* Text Content */}
-                        {(displayPost.content || (!displayPost.overlayText && displayPost.caption)) && (
-                            <div className="post-text" style={{
-                                whiteSpace: 'pre-wrap',
-                                marginBottom: (displayPost.mediaUrl || displayPost.image) ? '12px' : '0',
-                                fontSize: displayPost.textStyle?.fontSize ? `${displayPost.textStyle.fontSize}px` : 'inherit',
-                                textAlign: displayPost.textStyle?.textAlign || 'left',
-                                fontWeight: displayPost.textStyle?.fontWeight || 'normal',
-                                fontStyle: displayPost.textStyle?.fontStyle || 'normal',
-                            }}>
-                                {displayPost.content || displayPost.caption}
-                            </div>
-                        )}
-
-                        {/* Media */}
-                        {(displayPost.mediaUrl || displayPost.image) && (
-                            <div className="post-media-container" style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', marginTop: '8px' }}>
-                                {displayPost.mediaType === 'video' ? (
-                                    <video
-                                        src={displayPost.mediaUrl || displayPost.image}
-                                        controls
-                                        className="post-media-content"
-                                        onClick={(e) => e.stopPropagation()}
-                                        style={{ width: '100%', display: 'block' }}
-                                    />
-                                ) : (
-                                    <img
-                                        src={displayPost.mediaUrl || displayPost.image}
-                                        alt="Post media"
-                                        className="post-media-content"
-                                        style={{ width: '100%', display: 'block' }}
-                                    />
-                                )}
-
-                                {/* Overlay Text Support */}
-                                {displayPost.overlayText && (
-                                    <div style={{
-                                        position: 'absolute', inset: 0,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        pointerEvents: 'none', padding: '20px',
-                                        zIndex: 5
-                                    }}>
-                                        <span style={{
-                                            color: displayPost.overlayStyle?.color || 'white',
-                                            fontFamily: displayPost.overlayStyle?.fontFamily || 'inherit',
-                                            fontSize: '1.5rem', fontWeight: 'bold',
-                                            textAlign: 'center',
-                                            textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-                                            WebkitTextStroke: displayPost.overlayStyle?.hasStroke ? '1px black' : 'none',
-                                            whiteSpace: 'pre-wrap'
-                                        }}>
-                                            {displayPost.overlayText}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Actions Bar */}
-                    <div className="post-actions">
-                        {/* Like */}
-                        <button
-                            className={`action-item like ${hasLiked ? 'liked' : ''}`}
-                            onClick={handleLike}
-                        >
-                            {hasLiked ? <AiFillHeart size={20} /> : <AiOutlineHeart size={20} />}
-                            {(post.likes?.length || 0) > 0 && <span className="action-count">{post.likes.length}</span>}
-                        </button>
-
-                        {/* Reply */}
-                        <button
-                            className="action-item reply"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setShowComments(!showComments);
-                            }}
-                        >
-                            <FaRegCommentDots size={19} />
-                            {post.comments?.length > 0 && <span className="action-count">{post.comments.length}</span>}
-                        </button>
-
-                        {/* Repost */}
-                        <button
-                            className={`action-item repost ${hasReposted ? 'reposted' : ''}`}
-                            onClick={handleRepost}
-                            style={{ color: hasReposted ? '#00ba7c' : '' }}
-                        >
-                            <BiRepost size={22} />
-                            {post.reposts?.length > 0 && <span className="action-count">{post.reposts.length}</span>}
-                        </button>
-
-                        {/* Share */}
-                        <button
-                            className="action-item share"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setShowShare(true);
-                            }}
-                        >
-                            <IoShareSocialOutline size={20} />
-                        </button>
-                    </div>
-
-                    {/* Comments Section (Inline) */}
-                    {showComments && (
-                        <div className="comments-section" onClick={(e) => e.stopPropagation()}>
-                            {/* Input */}
-                            <form onSubmit={handleAddComment} className="comment-input-row">
-                                <input
-                                    type="text"
-                                    className="comment-input"
-                                    placeholder="Post your reply"
-                                    value={newComment}
-                                    onChange={(e) => setNewComment(e.target.value)}
-                                    autoFocus
-                                />
+                    {/* Dropdown Menu */}
+                    {showMenu && (
+                        <div style={{
+                            position: 'absolute', top: '100%', right: 0,
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                            zIndex: 10, minWidth: '120px', overflow: 'hidden'
+                        }}>
+                            {(currentUser?.uid === authorId) ? (
                                 <button
-                                    type="submit"
-                                    disabled={!newComment.trim() || submitting}
+                                    onClick={handleDelete}
                                     style={{
-                                        background: '#1d9bf0',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '9999px',
-                                        padding: '0 16px',
-                                        fontWeight: 'bold',
-                                        cursor: 'pointer',
-                                        opacity: !newComment.trim() ? 0.5 : 1
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        padding: '10px 16px', width: '100%', border: 'none',
+                                        background: 'transparent', color: 'red', cursor: 'pointer',
+                                        fontSize: '0.9rem', textAlign: 'left'
                                     }}
                                 >
-                                    Reply
+                                    <FaTrash size={14} /> Delete
                                 </button>
-                            </form>
-
-                            {/* Recent Comments */}
-                            {post.comments?.length > 0 && (
-                                <div className="recent-comments">
-                                    {post.comments.slice(-3).reverse().map((comment, idx) => (
-                                        <div key={idx} style={{
-                                            padding: '8px 0',
-                                            borderTop: '1px solid var(--border-color)',
-                                            fontSize: '0.9rem'
-                                        }}>
-                                            <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
-                                                {comment.userName}
-                                                <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                                                    {formatDate(comment.createdAt)}
-                                                </span>
-                                            </div>
-                                            <div style={{ color: 'var(--text-main)' }}>{comment.text}</div>
-                                        </div>
-                                    ))}
-                                </div>
+                            ) : (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); alert("Reported."); setShowMenu(false); }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        padding: '10px 16px', width: '100%', border: 'none',
+                                        background: 'transparent', color: 'var(--text-main)', cursor: 'pointer',
+                                        fontSize: '0.9rem', textAlign: 'left'
+                                    }}
+                                >
+                                    Report Post
+                                </button>
                             )}
                         </div>
                     )}
                 </div>
+            </div>
 
-                {/* Share Modal */}
-                {showShare && (
-                    <div
-                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        onClick={(e) => { e.stopPropagation(); setShowShare(false); }}
-                    >
+            {/* CONTENT BODY (Full Width) */}
+            <div className="post-content-body" style={{ width: '100%' }}>
+                {/* Text Content Container */}
+                <div style={{
+                    backgroundColor: displayPost.textStyle?.backgroundColor || 'transparent',
+                    color: displayPost.textStyle?.color || 'inherit',
+                    fontFamily: displayPost.textStyle?.fontFamily || 'inherit',
+                    borderRadius: displayPost.textStyle?.backgroundColor && displayPost.textStyle.backgroundColor !== 'transparent' ? '12px' : '0',
+                    padding: displayPost.textStyle?.backgroundColor && displayPost.textStyle.backgroundColor !== 'transparent' ? '12px' : '0',
+                    marginBottom: '8px'
+                }}>
+                    {(displayPost.content || (!displayPost.overlayText && displayPost.caption)) && (
+                        <div className="post-text" style={{
+                            whiteSpace: 'pre-wrap',
+                            fontSize: displayPost.textStyle?.fontSize ? `${displayPost.textStyle.fontSize}px` : '0.95rem',
+                            textAlign: displayPost.textStyle?.textAlign || 'left',
+                            fontWeight: displayPost.textStyle?.fontWeight || 'normal',
+                            fontStyle: displayPost.textStyle?.fontStyle || 'normal',
+                            lineHeight: '1.5',
+                            color: 'var(--text-main)',
+                            padding: '0 4px'
+                        }}>
+                            {displayPost.content || displayPost.caption}
+                        </div>
+                    )}
+
+                    {/* Media */}
+                    {(displayPost.mediaUrl || displayPost.image) && (
+                        <div className="post-media-container" style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', marginTop: '10px', width: '100%' }}>
+                            {displayPost.mediaType === 'video' ? (
+                                <video
+                                    src={displayPost.mediaUrl || displayPost.image}
+                                    controls
+                                    className="post-media-content"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ width: '100%', display: 'block', maxHeight: '500px', objectFit: 'contain', backgroundColor: 'black' }}
+                                />
+                            ) : (
+                                <img
+                                    src={displayPost.mediaUrl || displayPost.image}
+                                    alt="Post media"
+                                    className="post-media-content"
+                                    style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: '500px' }}
+                                />
+                            )}
+
+                            {/* Overlay Text Support */}
+                            {displayPost.overlayText && (
+                                <div style={{
+                                    position: 'absolute', inset: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    pointerEvents: 'none', padding: '20px',
+                                    zIndex: 5
+                                }}>
+                                    <span style={{
+                                        color: displayPost.overlayStyle?.color || 'white',
+                                        fontFamily: displayPost.overlayStyle?.fontFamily || 'inherit',
+                                        fontSize: '1.5rem', fontWeight: 'bold',
+                                        textAlign: 'center',
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                        WebkitTextStroke: displayPost.overlayStyle?.hasStroke ? '1px black' : 'none',
+                                        whiteSpace: 'pre-wrap'
+                                    }}>
+                                        {displayPost.overlayText}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ATTACHED INVITATION CARD */}
+                    {displayPost.attachedInvitation && (
                         <div
-                            style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
-                            onClick={e => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/invitation/${displayPost.attachedInvitation.id}`);
+                            }}
+                            style={{
+                                marginTop: '12px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                backgroundColor: 'var(--bg-card)',
+                                transition: 'transform 0.2s',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}
                         >
-                            <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_post')}</h3>
-                            <ShareButtons
-                                url={window.location.href}
-                                title={`Post by ${authorName}`}
-                                description={post.caption || post.content || 'Check out this post on DineBuddies!'}
-                                type="post"
-                                storyData={{
-                                    title: `Post by ${authorName}`,
-                                    image: post.mediaUrl || post.image,
-                                    description: post.caption || post.content,
-                                    hostName: authorName,
-                                    hostImage: authorAvatar
-                                }}
+                            {/* Header Image - Simplified/Corrected structure for invitation preview */}
+                            <div style={{ height: '140px', width: '100%', position: 'relative' }}>
+                                <img
+                                    src={displayPost.attachedInvitation.image || displayPost.attachedInvitation.restaurantImage || displayPost.attachedInvitation.customImage || 'https://via.placeholder.com/300x150'}
+                                    alt="Invitation"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                                <div style={{
+                                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                                    background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
+                                    padding: '10px', display: 'flex', alignItems: 'center', gap: '8px'
+                                }}>
+                                    <span style={{
+                                        background: '#f59e0b', color: 'black', fontWeight: 'bold',
+                                        fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px'
+                                    }}>INVITATION</span>
+                                    <h4 style={{ color: 'white', margin: 0, fontSize: '0.95rem', textShadow: '0 1px 2px black' }}>
+                                        {displayPost.attachedInvitation.title}
+                                    </h4>
+                                </div>
+                            </div>
+
+                            {/* Invitation Details Body */}
+                            <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    <span>📅 {displayPost.attachedInvitation.date} • {displayPost.attachedInvitation.time}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                                    <span>📍 {displayPost.attachedInvitation.location || 'Selected Venue'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Actions Bar */}
+                <div className="post-actions" style={{ padding: '4px 4px 0 4px', justifyContent: 'space-between' }}>
+                    {/* Like */}
+                    <button
+                        className={`action-item like ${hasLiked ? 'liked' : ''}`}
+                        onClick={handleLike}
+                    >
+                        {hasLiked ? <AiFillHeart size={20} /> : <AiOutlineHeart size={20} />}
+                        {(post.likes?.length || 0) > 0 && <span className="action-count">{post.likes.length}</span>}
+                    </button>
+
+                    {/* Reply */}
+                    <button
+                        className="action-item reply"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowComments(!showComments);
+                        }}
+                    >
+                        <FaRegCommentDots size={19} />
+                        {post.comments?.length > 0 && <span className="action-count">{post.comments.length}</span>}
+                    </button>
+
+                    {/* Repost */}
+                    <button
+                        className={`action-item repost ${hasReposted ? 'reposted' : ''}`}
+                        onClick={handleRepost}
+                        style={{ color: hasReposted ? '#00ba7c' : '' }}
+                    >
+                        <BiRepost size={22} />
+                        {post.reposts?.length > 0 && <span className="action-count">{post.reposts.length}</span>}
+                    </button>
+
+                    {/* Share */}
+                    <button
+                        className="action-item share"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowShare(true);
+                        }}
+                    >
+                        <IoShareSocialOutline size={20} />
+                    </button>
+                </div>
+
+                {/* Comments Section (Inline) */}
+                {showComments && (
+                    <div className="comments-section" onClick={(e) => e.stopPropagation()} style={{ marginTop: '12px' }}>
+                        {/* Input */}
+                        <form onSubmit={handleAddComment} className="comment-input-row">
+                            <input
+                                type="text"
+                                className="comment-input"
+                                placeholder="Post your reply"
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                autoFocus
                             />
                             <button
-                                onClick={(e) => { e.stopPropagation(); setShowShare(false); }}
-                                style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}
+                                type="submit"
+                                disabled={!newComment.trim() || submitting}
+                                style={{
+                                    background: '#1d9bf0',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '9999px',
+                                    padding: '0 16px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    opacity: !newComment.trim() ? 0.5 : 1
+                                }}
                             >
-                                {t('close')}
+                                Reply
                             </button>
-                        </div>
+                        </form>
+
+                        {/* Recent Comments */}
+                        {post.comments?.length > 0 && (
+                            <div className="recent-comments">
+                                {post.comments.slice(-3).reverse().map((comment, idx) => (
+                                    <div key={idx} style={{
+                                        padding: '8px 0',
+                                        borderTop: '1px solid var(--border-color)',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
+                                            {comment.userName}
+                                            <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '6px' }}>
+                                                {formatDate(comment.createdAt)}
+                                            </span>
+                                        </div>
+                                        <div style={{ color: 'var(--text-main)' }}>{comment.text}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
+
+            {/* Share Modal */}
+            {showShare && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => { e.stopPropagation(); setShowShare(false); }}
+                >
+                    <div
+                        style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_post')}</h3>
+                        <ShareButtons
+                            url={window.location.href}
+                            title={`Post by ${authorName}`}
+                            description={post.caption || post.content || 'Check out this post on DineBuddies!'}
+                            type="post"
+                            storyData={{
+                                title: `Post by ${authorName}`,
+                                image: post.mediaUrl || post.image,
+                                description: post.caption || post.content,
+                                hostName: authorName,
+                                hostImage: authorAvatar
+                            }}
+                        />
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowShare(false); }}
+                            style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}
+                        >
+                            {t('close')}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

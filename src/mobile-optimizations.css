@@ -1,0 +1,27 @@
+/* Mobile Optimizations for Full Width */
+@media screen and (max-width: 768px) {
+    .page-container {
+        padding: 0 !important;
+        overflow-x: hidden;
+    }
+
+    .feed-list {
+        padding: 10px 4px !important;
+        /* Minimum side padding for feed items */
+        gap: 0.75rem !important;
+    }
+
+    /* Force full width on PostsFeed cards if needed */
+    .post-card,
+    .smart-invitation-card {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        border-radius: 0 !important;
+        /* Or small radius like 12px if margin > 0 */
+        border-right: none !important;
+        border-left: none !important;
+    }
+
+    /* Adjustment for PostsFeed specific container style */
+    /* Since PostsFeed.jsx uses inline definition for stories container, we might override global helpers */
+}

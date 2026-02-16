@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -27,12 +27,15 @@ const CUSTOM_EMOJIS = [
 
 const CreatePost = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
 
     // State
     const [text, setText] = useState('');
     const [media, setMedia] = useState(null);
+    const [attachedInvitation, setAttachedInvitation] = useState(location.state?.attachedInvitation || null);
+
     const [overlayText, setOverlayText] = useState('');
     const [fontIndex, setFontIndex] = useState(0);
     const [hasStroke, setHasStroke] = useState(true);
@@ -215,7 +218,7 @@ const CreatePost = () => {
     };
 
     const handleSubmit = async () => {
-        if ((!text.trim() && !media) || loading) return;
+        if ((!text.trim() && !media && !attachedInvitation) || loading) return;
         setLoading(true);
 
         try {
@@ -237,6 +240,15 @@ const CreatePost = () => {
                 content: text.trim(),
                 mediaUrl: mediaUrl,
                 mediaType: mediaType,
+                attachedInvitation: attachedInvitation ? {
+                    id: attachedInvitation.id,
+                    title: attachedInvitation.title,
+                    date: attachedInvitation.date,
+                    time: attachedInvitation.time,
+                    location: attachedInvitation.location,
+                    image: attachedInvitation.videoThumbnail || attachedInvitation.image || attachedInvitation.restaurantImage || attachedInvitation.customImage || null,
+                    author: attachedInvitation.author
+                } : null,
                 textStyle: {
                     fontSize: fontSize,
                     textAlign: textAlign,
@@ -255,7 +267,14 @@ const CreatePost = () => {
                 createdAt: serverTimestamp(),
                 likes: [],
                 comments: [],
-                reposts: []
+                reposts: [],
+                // Attach User Location (City/Country) automatically
+                location: userProfile?.location || null,
+                city: userProfile?.city || null,
+                country: userProfile?.country || null,
+                coordinates: userProfile?.coordinates || null,
+                // Fallback: If attached invitation has location, we might want to mirror it here or prioritize user location? 
+                // User said "reference is user location", so we stick to userProfile.
             };
 
             await addDoc(collection(db, 'communityPosts'), postData);
@@ -297,11 +316,11 @@ const CreatePost = () => {
 
                 <button
                     onClick={handleSubmit}
-                    disabled={(!text.trim() && !media) || loading}
+                    disabled={(!text.trim() && !media && !attachedInvitation) || loading}
                     style={{
                         background: 'var(--primary)', color: 'white', border: 'none',
                         padding: '8px 20px', borderRadius: '20px', fontWeight: 'bold',
-                        opacity: (!text.trim() && !media) || loading ? 0.5 : 1
+                        opacity: (!text.trim() && !media && !attachedInvitation) || loading ? 0.5 : 1
                     }}
                 >
                     {loading ? 'Posting...' : 'Post'}
@@ -412,6 +431,42 @@ const CreatePost = () => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* ATTACHED INVITATION PREVIEW */}
+                    {attachedInvitation && (
+                        <div style={{
+                            marginTop: '12px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            position: 'relative',
+                            background: 'var(--bg-main)'
+                        }}>
+                            <button
+                                onClick={() => setAttachedInvitation(null)}
+                                style={{
+                                    position: 'absolute', top: '8px', right: '8px', zIndex: 20,
+                                    background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
+                                    borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <FaTimes />
+                            </button>
+
+                            {/* Simple Preview */}
+                            <div style={{ display: 'flex', gap: '12px', padding: '12px', alignItems: 'center' }}>
+                                <img
+                                    src={attachedInvitation.videoThumbnail || attachedInvitation.image || attachedInvitation.restaurantImage || attachedInvitation.customImage || 'https://via.placeholder.com/150'}
+                                    style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }}
+                                />
+                                <div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{attachedInvitation.title}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>📅 {attachedInvitation.date} • ⏰ {attachedInvitation.time}</div>
+                                </div>
+                            </div>
                         </div>
                     )}
 

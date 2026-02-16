@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
 import { FaHome, FaPlusCircle, FaUser, FaGlobe, FaBell, FaStore, FaUsers, FaBuilding, FaSearch, FaComments, FaNewspaper, FaCrown, FaCog, FaEnvelope } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +20,11 @@ const Layout = ({ children }) => {
 
     const isActive = (path) => location.pathname === path;
 
+    // Reset image loading state when avatar changes
+    useEffect(() => {
+        setImgLoaded(false);
+    }, [currentUser?.avatar]);
+
     // Check if current user is a business account
     const isBusinessAccount = userProfile?.accountType === 'business';
 
@@ -39,7 +44,7 @@ const Layout = ({ children }) => {
     return (
         <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
             {/* Header - Hidden on Chat Screens */}
-            {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && (
+            {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && !(location.pathname.startsWith('/invitation/') && location.pathname.endsWith('/chat')) && (
                 <header className="app-header">
                     <div className="logo-wrapper" onClick={() => navigate('/')}>
                         <img
@@ -143,7 +148,7 @@ const Layout = ({ children }) => {
 
             {/* Main Content */}
             <main className="app-main" style={{
-                paddingBottom: (location.pathname.startsWith('/chat/') || location.pathname.startsWith('/community/')) ? '0' : undefined
+                paddingBottom: (location.pathname.startsWith('/chat/') || location.pathname.startsWith('/community/') || (location.pathname.startsWith('/invitation/') && location.pathname.endsWith('/chat'))) ? '0' : undefined
             }}>
                 {children}
                 <Outlet />
@@ -152,7 +157,7 @@ const Layout = ({ children }) => {
 
 
             {/* Bottom Navigation - User Only - Hidden on Chat Screens */}
-            {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && (
+            {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && !(location.pathname.startsWith('/invitation/') && location.pathname.endsWith('/chat')) && (
                 <nav className="bottom-nav user-nav">
                     <Link to="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
                         <FaHome className="nav-icon" />

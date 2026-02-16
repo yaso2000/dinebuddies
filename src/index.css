@@ -1616,11 +1616,35 @@ body.light-mode .smart-invitation-card .invitation-action-btn:disabled {
 }
 
 /* Light mode adjustments */
-body.light-mode .label-icon {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(249, 115, 22, 0.08));
-  border-color: rgba(239, 68, 68, 0.15);
+/* Mobile Optimizations for Full Width */
+@media screen and (max-width: 768px) {
+  .page-container {
+    padding: 0 !important;
+    overflow-x: hidden;
+  }
+
+  .feed-list {
+    padding: 10px 4px !important;
+    /* Minimum side padding for feed items */
+    gap: 0.75rem !important;
+  }
+
+  /* Force full width on PostsFeed cards if needed */
+  .post-card,
+  .smart-invitation-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    border-radius: 12px !important;
+    border-right: none !important;
+    border-left: none !important;
+  }
+
+  /* Adjustment for PostsFeed specific container style */
+  /* Since PostsFeed.jsx uses inline definition for stories container, we might override global helpers */
+  /* Existing content up to the end */
 }
 
-body.light-mode .elegant-label:hover .label-icon {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(249, 115, 22, 0.12));
+/* Modern Solution: Hide bottom nav automatically when chat input is focused */
+body:has(.group-chat-container .message-input:focus) .bottom-nav {
+  display: none !important;
 }

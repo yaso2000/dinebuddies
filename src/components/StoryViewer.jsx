@@ -288,7 +288,7 @@ const StoryViewer = ({ partnerStories, onClose }) => {
                     width: '40px',
                     height: '40px',
                     borderRadius: '50%',
-                    background: `url(${partnerStories.partnerLogo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${partnerStories.partnerId || partnerStories.userId || 'default'}`})`,
+                    background: `url(${partnerStories.partnerLogo || `https://ui-avatars.com/api/?name=${encodeURIComponent(partnerStories.partnerName || 'User')}&background=random`})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     border: '2px solid white'

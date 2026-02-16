@@ -738,12 +738,39 @@ const RestaurantDirectory = () => {
             if (!L) return;
 
             if (!mapInstance.current) {
+                // Smart Initialization: User > Content > World
+                let initialLat = 0;
+                let initialLng = 0;
+                let initialZoom = 2;
+
+                if (userLocation) {
+                    initialLat = userLocation.lat;
+                    initialLng = userLocation.lng;
+                    initialZoom = 13;
+                } else if (restaurantsWithCoords.length > 0) {
+                    // Center on restaurants
+                    const lats = restaurantsWithCoords.map(r => r.lat);
+                    const lngs = restaurantsWithCoords.map(r => r.lng);
+                    initialLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+                    initialLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+                    initialZoom = 10;
+                }
+
                 mapInstance.current = L.map(mapRef.current, {
                     zoomControl: false,
                     attributionControl: false,
                     tap: false
-                }).setView([24.7136, 46.6753], 6);
+                }).setView([initialLat, initialLng], initialZoom);
+
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstance.current);
+
+                // Auto-fit bounds perfectly if content exists and no user location
+                if (!userLocation && restaurantsWithCoords.length > 0) {
+                    const bounds = restaurantsWithCoords.map(r => [r.lat, r.lng]);
+                    try {
+                        mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                    } catch (e) { }
+                }
             }
 
             // Cleanup previous markers

@@ -61,8 +61,8 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
             <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border-color)' }}>
                 <FaCreditCard style={{ color: 'var(--text-muted)' }} />
                 <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('budget')}</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.budget || '$$'}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('payment_label', { defaultValue: 'Payment' })}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.paymentType || t('payment_split')}</div>
                 </div>
             </div>
 
@@ -80,7 +80,11 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
                 <FaChild style={{ color: 'var(--text-muted)' }} />
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('age')}</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.ageRange || '18+'}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>
+                        {invitation.ageGroups?.length > 0
+                            ? (invitation.ageGroups.includes('any') ? t('age_any') : invitation.ageGroups.join(', '))
+                            : (invitation.ageRange || '18+')}
+                    </div>
                 </div>
             </div>
         </div>

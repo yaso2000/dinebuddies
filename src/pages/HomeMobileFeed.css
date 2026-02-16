@@ -22,12 +22,12 @@
         min-height: 450px !important;
 
         /* Slightly rounded, max width safe */
-        margin: 0 4px 12px 4px !important;
+        margin: 0 2px 12px 2px !important;
         width: auto !important;
         max-width: 100% !important;
 
         background: var(--bg-card) !important;
-        border-radius: 20px !important;
+        border-radius: 16px !important;
         /* Rounded corners */
         /* Edge to edge */
         border: none !important;

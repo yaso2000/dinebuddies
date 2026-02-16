@@ -2,61 +2,41 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { FaPaperPlane, FaSmile, FaCamera, FaPaperclip, FaMicrophone, FaStop, FaFile, FaDownload, FaReply, FaTimes, FaTrash, FaPlus, FaStar } from 'react-icons/fa';
-import EmojiPicker from 'emoji-picker-react';
-import { uploadImage, uploadFile, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
-import './GroupChat.css';
-
-// Quick Reactions list
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '😡', '✨', '👋', '😇'];
-
-const isSingleEmoji = (text) => {
-    if (!text) return false;
-    // Regex to match a string that contains only 1-3 emojis and whitespace
-    const emojiRegex = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component}){1,3}$/u;
-    return emojiRegex.test(text.trim());
-};
-
-const getEmojiAnimation = (emoji) => {
-    switch (emoji.trim()) {
-        case '🔥': return 'anim-glow';
-        case '❤️': return 'anim-heartbeat';
-        case '😂': return 'anim-bounce';
-        case '😮': return 'anim-shake';
-        case '😢': return 'anim-shake';
-        case '😡': return 'anim-shake';
-        case '✨': return 'anim-spin';
-        case '👋': return 'anim-wobble';
-        case '👍': return 'anim-bounce';
-        default: return '';
-    }
-};
+import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown, FaPause, FaPlay, FaArrowLeft } from 'react-icons/fa';
+import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
+import '../pages/CommunityChatRoom.css'; // Use the shared CSS for consistent look
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
     const { currentUser, userProfile } = useAuth();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [showScrollBottom, setShowScrollBottom] = useState(false);
+    const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // Media states
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [showFullPicker, setShowFullPicker] = useState(false);
-    const [uploading, setUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
+    // Audio Playback State
+    const [playingAudioId, setPlayingAudioId] = useState(null);
+    const audioRef = useRef(new Audio());
+
+    // Recording State
     const [isRecording, setIsRecording] = useState(false);
     const [recordingDuration, setRecordingDuration] = useState(0);
-    const [mediaRecorder, setMediaRecorder] = useState(null);
-    const [replyTo, setReplyTo] = useState(null);
+    const recordingRef = useRef(null);
+    const timerRef = useRef(null);
 
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
-    const imageInputRef = useRef(null);
-    const fileInputRef = useRef(null);
-    const audioChunksRef = useRef([]);
-    const recordingIntervalRef = useRef(null);
 
     // Initial scroll state
     const [initialScrollDone, setInitialScrollDone] = useState(false);
+
+    // Cleanup Audio on Unmount
+    useEffect(() => {
+        return () => {
+            audioRef.current.pause();
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, []);
 
     // Subscribe to messages
     useEffect(() => {
@@ -83,542 +63,392 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
     // Auto-scroll
     useEffect(() => {
         if (messages.length > 0) {
-            if (!initialScrollDone) {
+            if (!initialScrollDone || isFullScreen) {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
                 setInitialScrollDone(true);
             } else {
+                // Only smooth scroll if we are already near bottom or it's a new message
+                // strict check to avoid annoying jumps
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
         }
-    }, [messages, initialScrollDone]);
+    }, [messages, initialScrollDone, isFullScreen]);
 
-    // Click outside to close emoji picker
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (showEmojiPicker && !e.target.closest('.emoji-popup') && !e.target.closest('.emoji-btn')) {
-                setShowEmojiPicker(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showEmojiPicker]);
-
-    const handleEmojiClick = (emojiObject) => {
-        handleSendMessage(emojiObject.emoji);
-        setShowEmojiPicker(false);
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+        setShowScrollBottom(!isNearBottom);
     };
 
-    const handleQuickReaction = (emoji) => {
-        handleSendMessage(emoji);
-        setShowEmojiPicker(false);
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const handleSendMessage = async (content = null) => {
-        // Check if content is a string (direct emoji) or event/null (from input)
-        const isDirectContent = typeof content === 'string';
-        const textToSend = isDirectContent ? content : newMessage;
-
-        if (typeof textToSend !== 'string' || !textToSend.trim()) return;
-
+    // --- Audio Handlers ---
+    const handleStartRecording = async () => {
         try {
-            const messagesRef = collection(db, collectionPath);
-            const messageData = {
-                type: 'text',
-                text: textToSend.trim(),
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
-                createdAt: serverTimestamp()
-            };
-
-            if (replyTo) {
-                messageData.replyTo = {
-                    id: replyTo.id,
-                    text: replyTo.text || '', // Ensure text is not undefined
-                    senderName: replyTo.senderName || 'User',
-                    type: replyTo.type
-                };
-            }
-
-            await addDoc(messagesRef, messageData);
-
-            // Clear input only if we sent via input box (not direct emoji)
-            if (!isDirectContent) {
-                setNewMessage('');
-            }
-
-            setReplyTo(null);
-            inputRef.current?.focus();
-        } catch (error) {
-            console.error('Error sending message:', error);
-        }
-    };
-
-    const handleDeleteMessage = async (messageId) => {
-        if (!window.confirm('Delete this message?')) return;
-        try {
-            await deleteDoc(doc(db, collectionPath, messageId));
-        } catch (error) {
-            console.error('Error deleting message:', error);
-        }
-    };
-
-    const handleImageSelect = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        try {
-            setUploading(true);
-            setUploadProgress(30);
-            const imageUrl = await uploadImage(file, currentUser.uid);
-            setUploadProgress(80);
-
-            const messagesRef = collection(db, collectionPath);
-            const messageData = {
-                type: 'image',
-                text: imageUrl,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
-                createdAt: serverTimestamp()
-            };
-
-            if (replyTo) {
-                messageData.replyTo = {
-                    id: replyTo.id,
-                    text: replyTo.text,
-                    senderName: replyTo.senderName,
-                    type: replyTo.type
-                };
-            }
-
-            await addDoc(messagesRef, messageData);
-            setUploadProgress(100);
-            setTimeout(() => {
-                setUploading(false);
-                setUploadProgress(0);
-            }, 500);
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            setUploading(false);
-            setUploadProgress(0);
-        }
-    };
-
-    const handleFileSelect = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        try {
-            setUploading(true);
-            setUploadProgress(30);
-            const fileData = await uploadFile(file, currentUser.uid);
-            setUploadProgress(80);
-
-            const messagesRef = collection(db, collectionPath);
-            await addDoc(messagesRef, {
-                type: 'file',
-                text: fileData.url,
-                fileName: fileData.name,
-                fileSize: fileData.size,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
-                createdAt: serverTimestamp()
-            });
-
-            setUploadProgress(100);
-            setTimeout(() => {
-                setUploading(false);
-                setUploadProgress(0);
-            }, 500);
-        } catch (error) {
-            console.error('Error uploading file:', error);
-            setUploading(false);
-            setUploadProgress(0);
-        }
-    };
-
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
-            audioChunksRef.current = [];
-
-            recorder.ondataavailable = (e) => {
-                audioChunksRef.current.push(e.data);
-            };
-
-            recorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                stream.getTracks().forEach(track => track.stop());
-
-                try {
-                    setUploading(true);
-                    const audioUrl = await uploadVoiceMessage(audioBlob, currentUser.uid);
-
-                    const messagesRef = collection(db, collectionPath);
-                    await addDoc(messagesRef, {
-                        type: 'voice',
-                        text: audioUrl,
-                        duration: recordingDuration,
-                        senderId: currentUser.uid,
-                        senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                        senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
-                        createdAt: serverTimestamp()
-                    });
-
-                    setUploading(false);
-                } catch (error) {
-                    console.error('Error sending voice message:', error);
-                    setUploading(false);
-                }
-            };
-
-            recorder.start();
-            setMediaRecorder(recorder);
+            const { stop } = await startRecording();
+            recordingRef.current = stop;
             setIsRecording(true);
             setRecordingDuration(0);
 
-            recordingIntervalRef.current = setInterval(() => {
+            timerRef.current = setInterval(() => {
                 setRecordingDuration(prev => prev + 1);
             }, 1000);
         } catch (error) {
-            console.error('Error starting recording:', error);
-            alert('Please allow microphone access to record voice messages.');
+            console.error("Failed to start recording:", error);
+            alert("Could not access microphone.");
         }
     };
 
-    const stopRecording = () => {
-        if (mediaRecorder) {
-            mediaRecorder.stop();
-            setIsRecording(false);
-            if (recordingIntervalRef.current) {
-                clearInterval(recordingIntervalRef.current);
+    const handleStopRecording = async (shouldSend = true) => {
+        if (!recordingRef.current) return;
+
+        clearInterval(timerRef.current);
+        const audioBlob = await recordingRef.current();
+        setIsRecording(false);
+        setRecordingDuration(0);
+        recordingRef.current = null;
+
+        if (shouldSend && audioBlob) {
+            await sendVoiceMessage(audioBlob);
+        }
+    };
+
+    const sendVoiceMessage = async (audioBlob) => {
+        try {
+            const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
+            await addDoc(collection(db, collectionPath), {
+                text: '',
+                audioUrl: url,
+                senderId: currentUser.uid,
+                senderName: userProfile?.display_name || currentUser.displayName || 'User',
+                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                createdAt: serverTimestamp(),
+                type: 'audio',
+                duration: recordingDuration
+            });
+        } catch (error) {
+            console.error("Error sending voice:", error);
+        }
+    };
+
+    const handlePlayAudio = (url, msgId) => {
+        if (playingAudioId === msgId) {
+            audioRef.current.pause();
+            setPlayingAudioId(null);
+        } else {
+            audioRef.current.src = url;
+            audioRef.current.play();
+            setPlayingAudioId(msgId);
+            audioRef.current.onended = () => setPlayingAudioId(null);
+        }
+    };
+
+    const handleSendMessage = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (!newMessage.trim()) return;
+
+        const messageToSend = newMessage.trim(); // Capture before clearing
+        setNewMessage(''); // Clear immediately for better UX
+
+        // Refocus immediately to keep keyboard open on mobile
+        setTimeout(() => {
+            if (inputRef.current) {
+                inputRef.current.focus();
             }
+        }, 10);
+
+        try {
+            await addDoc(collection(db, collectionPath), {
+                text: messageToSend,
+                senderId: currentUser.uid,
+                senderName: userProfile?.display_name || currentUser.displayName || 'User',
+                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                createdAt: serverTimestamp(),
+                type: 'text'
+            });
+            scrollToBottom();
+        } catch (error) {
+            console.error("Error sending message:", error);
+            setNewMessage(messageToSend); // Restore if failed
+        } finally {
+            // Ensure focus is kept/restored to keep keyboard open
+            setTimeout(() => inputRef.current?.focus(), 10);
         }
     };
 
+    // --- Render Helpers ---
     const formatTime = (timestamp) => {
         if (!timestamp) return '';
-        try {
-            const date = timestamp.toDate();
-            return date.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            });
-        } catch {
-            return '';
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const renderBubbleContent = (msg) => {
+        // Detect Links
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+        switch (msg.type) {
+            case 'audio':
+                const isPlaying = playingAudioId === msg.id;
+                const circumference = 339.292; // Circle math for ring
+
+                return (
+                    <div className="voice-widget">
+                        <div className="voice-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <button className="voice-play-btn" onClick={() => handlePlayAudio(msg.audioUrl, msg.id)}>
+                                {isPlaying ? (
+                                    <FaPause color="var(--play-green)" size={14} />
+                                ) : (
+                                    <FaPlay color="var(--text-main)" size={14} />
+                                )}
+                            </button>
+                            <div className="voice-time">{formatDuration(msg.duration || 0)}</div>
+                        </div>
+                    </div>
+                );
+            default:
+                // Text with Link detection
+                if (!msg.text) return null;
+                const parts = msg.text.split(urlRegex);
+                return (
+                    <span>
+                        {parts.map((part, i) =>
+                            urlRegex.test(part) ? (
+                                <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>{part}</a>
+                            ) : (
+                                <span key={i}>{part}</span>
+                            )
+                        )}
+                    </span>
+                );
         }
     };
 
-    const renderMessage = (msg) => {
-        const isOwn = msg.senderId === currentUser?.uid;
-        const isSticker = msg.type === 'text' && isSingleEmoji(msg.text);
 
-        return (
-            <div key={msg.id} className={`message ${isOwn ? 'own' : 'other'}`}>
-                {!isOwn && (
-                    <img
-                        src={msg.senderAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.senderName || 'U')}&background=8b5cf6&color=fff&size=128`}
-                        alt=""
-                        className="message-avatar"
-                        onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.senderName || 'U')}&background=random`; }}
-                    />
-                )}
+    if (!currentUser) return <div style={{ padding: '20px', textAlign: 'center' }}>Please login to view chat</div>;
 
-                <div className="message-content">
-                    {!isOwn && <div className="message-sender">{msg.senderName}</div>}
-
-                    {msg.replyTo && (
-                        <div className="reply-preview">
-                            <div className="reply-line"></div>
-                            <div>
-                                <div className="reply-sender">{msg.replyTo.senderName}</div>
-                                <div className="reply-text">
-                                    {msg.replyTo.type === 'image' ? '📷 Image' :
-                                        msg.replyTo.type === 'file' ? '📎 File' :
-                                            msg.replyTo.type === 'voice' ? '🎤 Voice' :
-                                                msg.replyTo.text}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className={`message-bubble ${isOwn ? 'own' : ''} ${isSticker ? 'sticker-bubble' : ''}`}>
-                        {isSticker ? (
-                            <div style={{ position: 'relative' }}>
-                                <div className={`sticker-message ${getEmojiAnimation(msg.text)}`}>
-                                    {msg.text}
-                                </div>
-                                <span style={{
-                                    float: 'right',
-                                    marginLeft: '8px',
-                                    marginTop: '2px',
-                                    opacity: 0.6,
-                                    fontSize: '12px',
-                                    verticalAlign: 'text-bottom'
-                                }}>
-                                    {!isOwn && (
-                                        <button
-                                            title="Reply"
-                                            onClick={() => setReplyTo(msg)}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', color: 'inherit' }}
-                                        >
-                                            <FaReply size={12} />
-                                        </button>
-                                    )}
-                                </span>
-                            </div>
-                        ) : (
-                            msg.type === 'text' && <p>{msg.text}</p>
-                        )}
-
-                        {msg.type === 'image' && (
-                            <div className="message-image-wrapper">
-                                <img src={msg.text} alt="Shared" className="message-image" />
-                                <div className="image-time-overlay">
-                                    {formatTime(msg.createdAt)}
-                                </div>
-                            </div>
-                        )}
-
-                        {msg.type === 'file' && (
-                            <div className="message-file">
-                                <FaFile />
-                                <div>
-                                    <div className="file-name">{msg.fileName}</div>
-                                    <div className="file-size">{formatFileSize(msg.fileSize)}</div>
-                                </div>
-                                <a href={msg.text} download target="_blank" rel="noopener noreferrer">
-                                    <FaDownload />
-                                </a>
-                            </div>
-                        )}
-
-                        {msg.type === 'voice' && (
-                            <div className="message-voice">
-                                <audio controls src={msg.text} />
-                                <span>{formatDuration(msg.duration)}</span>
-                            </div>
-                        )}
-
-                        {/* Footer for non-sticker text messages */}
-                        {!isSticker && msg.type !== 'image' && (
-                            <div className="message-footer">
-                                <span className="message-time">{formatTime(msg.createdAt)}</span>
-
-                                {!isOwn && (
-                                    <button
-                                        className="reply-btn"
-                                        onClick={() => setReplyTo(msg)}
-                                        title="Reply"
-                                    >
-                                        <FaReply />
-                                    </button>
-                                )}
-
-                                {isOwn && (
-                                    <button
-                                        className="delete-btn"
-                                        onClick={() => handleDeleteMessage(msg.id)}
-                                        title="Delete"
-                                    >
-                                        <FaTrash />
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
+    // Styles for Full Screen vs Embedded
+    const containerStyle = isFullScreen ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100dvh', // Force dynamic viewport height
+        zIndex: 9999999, // Max z-index
+        background: '#0b1220', // Solid background
+        display: 'flex',
+        flexDirection: 'column',
+        margin: 0,
+        padding: 0
+    } : {
+        height: height,
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        background: 'rgba(0,0,0,0.2)',
+        borderRadius: '16px',
+        overflow: 'hidden'
     };
 
-    if (!currentUser) {
-        return (
-            <div className="group-chat-container" style={{ height }}>
-                <div className="empty-state">
-                    <p>Please login to view messages</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="group-chat-container" style={{ height }}>
-            {/* Messages Area */}
-            <div className="messages-area">
+        <div className="group-chat-container" style={containerStyle}>
+            {/* Header Control */}
+            <div style={{
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: isFullScreen ? 'rgba(20, 20, 30, 0.95)' : 'rgba(255,255,255,0.05)',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                backdropFilter: 'blur(10px)'
+            }}>
+                {isFullScreen ? (
+                    <>
+                        <button
+                            onClick={() => setIsFullScreen(false)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'white',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: '1rem',
+                                fontWeight: '600'
+                            }}
+                        >
+                            <FaArrowLeft /> Back
+                        </button>
+                        <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'white' }}>Group Chat</span>
+                        <div style={{ width: '60px' }}></div> {/* Spacer for visual centering */}
+                    </>
+                ) : (
+                    <>
+                        <span style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: '600' }}>Recent Messages</span>
+                        <button
+                            onClick={() => setIsFullScreen(true)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '0.8rem'
+                            }}
+                            title="Full Screen"
+                        >
+                            <FaExpand /> Full Screen
+                        </button>
+                    </>
+                )}
+            </div>
+
+            {/* Messages Area - Using classes from CommunityChatRoom.css */}
+            <div className="message-list" onScroll={handleScroll} style={{ flex: 1, padding: '15px' }}>
                 {messages.length === 0 ? (
-                    <div className="empty-state">
-                        <div className="empty-icon">💬</div>
-                        <h3>No messages yet</h3>
-                        <p>Be the first to start the conversation!</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
+                        <div style={{ fontSize: '2rem' }}>💬</div>
+                        <p>Start the conversation!</p>
                     </div>
                 ) : (
-                    messages.map(renderMessage)
+                    messages.map((msg, index) => {
+                        const isMe = msg.senderId === currentUser.uid;
+                        const prevMsg = messages[index - 1];
+                        const isFirstOfGroup = !prevMsg || prevMsg.senderId !== msg.senderId;
+
+                        return (
+                            <div
+                                key={msg.id}
+                                className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isFirstOfGroup ? 'first-of-group' : ''}`}
+                                style={{ marginTop: isFirstOfGroup ? '12px' : '2px' }}
+                            >
+                                {/* Avatar for Incoming */}
+                                {!isMe && (
+                                    <img
+                                        src={msg.senderAvatar || `https://ui-avatars.com/api/?name=${msg.senderName}`}
+                                        alt=""
+                                        className="sender-avatar"
+                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden' }}
+                                    />
+                                )}
+
+                                {/* Bubble */}
+                                <div className={`bubble ${msg.type === 'audio' ? 'audio-bubble' : ''}`}>
+                                    {/* Sender Name for incoming (first of group) */}
+                                    {!isMe && isFirstOfGroup && (
+                                        <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginBottom: '2px', fontWeight: 'bold' }}>
+                                            {msg.senderName}
+                                        </div>
+                                    )}
+
+                                    {renderBubbleContent(msg)}
+
+                                    {/* Timestamp */}
+                                    <span className="timestamp" style={{
+                                        fontSize: '0.65rem',
+                                        opacity: 0.7,
+                                        marginLeft: '8px',
+                                        float: 'right',
+                                        marginTop: '4px'
+                                    }}>
+                                        {formatTime(msg.createdAt)}
+                                    </span>
+                                </div>
+                            </div>
+                        );
+                    })
                 )}
                 <div ref={messagesEndRef} />
+
+                {showScrollBottom && (
+                    <button
+                        onClick={scrollToBottom}
+                        style={{
+                            position: 'absolute', bottom: '80px', right: '20px',
+                            background: 'var(--primary)', color: 'white', border: 'none',
+                            borderRadius: '50%', width: '35px', height: '35px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                        }}
+                    >
+                        <FaArrowDown />
+                    </button>
+                )}
             </div>
 
-            {/* Upload Progress */}
-            {uploading && (
-                <div className="upload-progress">
-                    <div className="progress-bar" style={{ width: `${uploadProgress}%` }}></div>
-                </div>
-            )}
-
-            {/* Reply Preview */}
-            {replyTo && (
-                <div className="reply-bar">
-                    <div>
-                        <div className="replying-to">Replying to {replyTo.senderName}</div>
-                        <div className="reply-content">
-                            {replyTo.type === 'image' ? '📷 Image' :
-                                replyTo.type === 'file' ? '📎 File' :
-                                    replyTo.type === 'voice' ? '🎤 Voice' :
-                                        replyTo.text}
+            {/* Input Area - Clean & Simple */}
+            <div className="input-area" style={{ padding: '10px', background: 'var(--bg-secondary)' }}>
+                <div className="input-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', borderRadius: '25px', padding: '5px 15px', border: '1px solid var(--border-color)', flex: 1 }}>
+                    {isRecording ? (
+                        <div className="recording-ui" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#ef4444' }}>
+                                <FaMicrophone className="recording-pulse" />
+                                <span>{formatDuration(recordingDuration)}</span>
+                            </div>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Recording...</span>
+                            <button
+                                onClick={() => handleStopRecording(false)} // Cancel
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                            >
+                                <FaTrash />
+                            </button>
                         </div>
-                    </div>
-                    <button onClick={() => setReplyTo(null)}>
-                        <FaTimes />
-                    </button>
-                </div>
-            )}
-
-            {/* Input Area */}
-            <div className="input-area">
-                <input
-                    type="file"
-                    ref={imageInputRef}
-                    onChange={handleImageSelect}
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                />
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                />
-
-                <button
-                    className="media-btn"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={uploading || isRecording}
-                    title="Send Image"
-                >
-                    <FaCamera />
-                </button>
-
-                <button
-                    className="media-btn"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || isRecording}
-                    title="Send File"
-                >
-                    <FaPaperclip />
-                </button>
-
-                <div style={{ position: 'relative' }}>
-                    <button
-                        className="media-btn emoji-btn"
-                        onClick={() => {
-                            setShowEmojiPicker(!showEmojiPicker);
-                            setShowFullPicker(false); // Reset to quick view first
-                        }}
-                        disabled={isRecording}
-                        title="Emoji"
-                    >
-                        <FaStar />
-                    </button>
-
-                    {showEmojiPicker && (
-                        <div className="emoji-popup">
-                            {!showFullPicker ? (
-                                <div className="quick-reactions">
-                                    {QUICK_REACTIONS.map(emoji => (
-                                        <button
-                                            key={emoji}
-                                            onClick={() => handleQuickReaction(emoji)}
-                                            className="quick-emoji-btn"
-                                            title="Send Sticker"
-                                        >
-                                            {emoji}
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={() => setShowFullPicker(true)}
-                                        className="quick-emoji-btn more-btn"
-                                        title="More Emojis"
-                                    >
-                                        <FaPlus />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="full-picker-container">
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-                                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Emojis</span>
-                                        <button
-                                            onClick={() => setShowFullPicker(false)}
-                                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)' }}
-                                        >
-                                            <FaTimes />
-                                        </button>
-                                    </div>
-                                    <EmojiPicker
-                                        onEmojiClick={handleEmojiClick}
-                                        theme="dark"
-                                        emojiStyle="native" // USES SYSTEM EMOJIS (Standard)
-                                        height={300}
-                                        width="100%"
-                                        searchDisabled={false}
-                                        skinTonesDisabled
-                                        previewConfig={{ showPreview: false }}
-                                    />
-                                </div>
-                            )}
-                        </div>
+                    ) : (
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            className="message-input"
+                            placeholder="Type a message..."
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                            autoComplete="off"
+                            style={{ flex: 1, background: 'transparent', border: 'none', color: 'white', outline: 'none', padding: '10px 0' }}
+                        />
                     )}
                 </div>
 
-                {isRecording ? (
-                    <div className="recording-indicator">
-                        <span className="recording-dot"></span>
-                        <span style={{ marginLeft: 'auto', marginRight: 'auto' }}>{formatDuration(recordingDuration)}</span>
-                    </div>
-                ) : (
-                    <textarea
-                        ref={inputRef}
-                        className="message-input"
-                        placeholder="Type a message..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSendMessage();
-                            }
-                        }}
-                        rows={1}
-                        disabled={isRecording}
-                    />
-                )}
-
-                {newMessage.trim() ? (
-                    <button className="send-btn" onClick={handleSendMessage}>
+                <button
+                    type="button"
+                    className="send-btn-circle"
+                    // KEY FIX: Use onMouseDown instead of onClick to prevent button from stealing focus
+                    // preventDefault() in onMouseDown stops the 'blur' event on the input
+                    onMouseDown={(e) => {
+                        e.preventDefault(); // This is the magic line that keeps keyboard open
+                        if (isRecording) {
+                            handleStopRecording(true);
+                        } else {
+                            handleSendMessage(e);
+                        }
+                    }}
+                    style={{
+                        width: '45px', height: '45px', borderRadius: '50%',
+                        background: isRecording ? '#ef4444' : 'var(--primary)',
+                        border: 'none', color: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', marginLeft: '8px'
+                    }}
+                >
+                    {isRecording ? (
                         <FaPaperPlane />
-                    </button>
-                ) : (
-                    <button
-                        className={`voice-btn ${isRecording ? 'recording' : ''}`}
-                        onClick={isRecording ? stopRecording : startRecording}
-                        title={isRecording ? "Stop Recording" : "Record Voice"}
-                    >
-                        {isRecording ? <FaStop /> : <FaMicrophone />}
-                    </button>
-                )}
+                    ) : (
+                        newMessage.trim() ? (
+                            <FaPaperPlane style={{ marginLeft: '-2px' }} />
+                        ) : (
+                            <FaMicrophone onMouseDown={(e) => {
+                                e.preventDefault(); // Also prevent blur on mic click
+                                e.stopPropagation();
+                                handleStartRecording();
+                            }} />
+                        )
+                    )}
+                </button>
             </div>
         </div>
     );
