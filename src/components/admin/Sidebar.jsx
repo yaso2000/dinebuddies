@@ -45,9 +45,12 @@ const Sidebar = ({ isOpen, onClose }) => {
             <div className={`admin-sidebar ${!isOpen ? 'mobile-hidden' : ''}`}>
                 {/* Header */}
                 <div className="admin-sidebar-header">
-                    <h1 className="admin-sidebar-logo">
-                        DineBuddies <span>Admin</span>
-                    </h1>
+                    <div className="admin-sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <img src="/logo.png" alt="Logo" style={{ width: '40px', height: '40px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+                        <div style={{ fontSize: '1.075rem', fontWeight: '800', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            DineBuddies <span style={{ fontSize: '0.8em', color: '#94a3b8', fontWeight: '400' }}>Admin</span>
+                        </div>
+                    </div>
                     <button
                         onClick={onClose}
                         className="lg:hidden"

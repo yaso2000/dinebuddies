@@ -477,16 +477,7 @@ export const AuthProvider = ({ children }) => {
                     justifyContent: 'center',
                     flexDirection: 'column'
                 }}>
-                    <img
-                        src="/logo.png"
-                        alt="Loading..."
-                        style={{
-                            width: '80px', // Slightly smaller
-                            height: '80px',
-                            objectFit: 'contain',
-                            animation: 'spin 1s linear infinite'
-                        }}
-                    />
+                    {/* Loading indicator removed as per request to avoid duplication */}
                 </div>
             )}
         </AuthContext.Provider>
