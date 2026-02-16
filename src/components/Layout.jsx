@@ -48,14 +48,16 @@ const Layout = ({ children }) => {
                             style={{
                                 width: '40px',
                                 height: '40px',
-                                objectFit: 'contain'
+                                objectFit: 'contain',
+                                filter: 'brightness(0) invert(1)'
                             }}
                         />
                         <span className="app-name" style={{
-                            color: '#a04000',
-                            marginLeft: '-4px',
-                            transform: 'translateY(3px)',
-                            fontSize: '1.2rem'
+                            color: '#FFFFFF',
+                            marginLeft: '-6px',
+                            transform: 'translateY(7px)',
+                            fontSize: '1.125rem',
+                            fontWeight: '800'
                         }}>DineBuddies</span>
                     </div>
                     <div className="header-actions">
@@ -172,7 +174,6 @@ const Layout = ({ children }) => {
                             <div className="fab-container">
                                 <FaPlusCircle className="nav-icon fab" />
                             </div>
-                            <span className="fab-label">{t('nav_create')}</span>
                         </Link>
                     )}
 
@@ -185,7 +186,6 @@ const Layout = ({ children }) => {
                             <div className="fab-container">
                                 <FaPlusCircle className="nav-icon fab" />
                             </div>
-                            <span className="fab-label">Post</span>
                         </Link>
                     )}
 

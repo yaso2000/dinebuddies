@@ -73,13 +73,14 @@ const QuickLogin = () => {
                         src="/logo.png"
                         alt="DineBuddies"
                         style={{
-                            width: '80px',
-                            height: '80px',
+                            width: '120px',
+                            height: '120px',
                             objectFit: 'contain',
-                            marginBottom: '1rem'
+                            marginBottom: '1rem',
+                            filter: 'brightness(0) invert(1)'
                         }}
                     />
-                    <h2 style={{ fontSize: '1.5rem', margin: 0, color: '#a04000', fontWeight: '900' }}>
+                    <h2 style={{ fontSize: '2.375rem', margin: 0, color: '#FFFFFF', fontWeight: '900' }}>
                         DineBuddies
                     </h2>
                 </div>

@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
-import { FaArrowLeft, FaSmile, FaPaperclip, FaCamera, FaMicrophone, FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile, FaDownload, FaStop } from 'react-icons/fa';
+import {
+    FaArrowLeft, FaSmile, FaPaperclip, FaCamera, FaMicrophone,
+    FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile,
+    FaDownload, FaStop, FaPlus, FaArrowDown
+} from 'react-icons/fa';
 import EmojiPicker from 'emoji-picker-react';
 import { uploadImage, uploadVoiceMessage, uploadFile, formatFileSize, formatDuration } from '../utils/mediaUtils';
 import './Chat.css';
@@ -22,10 +26,22 @@ const Chat = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [otherUserTyping, setOtherUserTyping] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [showQuickReactions, setShowQuickReactions] = useState(false);
     const [activeReactionMenu, setActiveReactionMenu] = useState(null);
+    const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
     const [replyTo, setReplyTo] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showScrollBottom, setShowScrollBottom] = useState(false);
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        // Show button if user is more than 150px away from bottom
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+        setShowScrollBottom(!isNearBottom);
+    };
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
 
     // Media states
     const [isRecording, setIsRecording] = useState(false);
@@ -41,6 +57,7 @@ const Chat = () => {
     const imageInputRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingIntervalRef = useRef(null);
+    const emojiPickerRef = useRef(null);
 
     useEffect(() => {
         const initConversation = async () => {
@@ -112,20 +129,27 @@ const Chat = () => {
     }, [messages, initialScrollDone]);
 
     useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (!e.target.closest('.emoji-container')) {
-                setShowQuickReactions(false);
-                setShowEmojiPicker(false);
+        function handleClickOutside(event) {
+            if (showEmojiPicker && emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+                if (!event.target.closest('.emoji-btn')) {
+                    setShowEmojiPicker(false);
+                }
             }
-            if (!e.target.closest('.message-reaction-container')) {
+            if (activeReactionMenu && !event.target.closest('.reaction-popup-container')) {
                 setActiveReactionMenu(null);
             }
+            if (extendedReactionPicker && !event.target.closest('.extended-reaction-picker')) {
+                setExtendedReactionPicker(null);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [showEmojiPicker, activeReactionMenu, extendedReactionPicker]);
 
-    const handleSendMessage = async () => {
+    const handleSendMessage = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
         if (!newMessage.trim()) return;
         if (!conversationId) return;
 
@@ -139,7 +163,7 @@ const Chat = () => {
         setNewMessage('');
         setReplyTo(null);
         setTypingStatus(conversationId, false);
-        inputRef.current?.focus();
+        setTimeout(() => inputRef.current?.focus(), 100);
     };
 
     const handleTyping = (value) => {
@@ -328,15 +352,22 @@ const Chat = () => {
             </div>
 
             {/* Messages */}
-            <div className="messages-area">
+            <div className="messages-area" onScroll={handleScroll}>
                 {messages.map((msg, index) => {
                     const isOwn = msg.senderId === currentUser?.uid;
-                    const showAvatar = index === 0 || messages[index - 1].senderId !== msg.senderId;
+                    const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
 
                     return (
-                        <div key={msg.id} className={`message-wrapper ${isOwn ? 'own' : 'other'}`}>
-                            {!isOwn && showAvatar && <img src={otherUser?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherUser?.displayName || 'U')}&background=8b5cf6&color=fff&size=128`} alt="" className="message-avatar" />}
-                            {!isOwn && !showAvatar && <div className="message-avatar-spacer" />}
+                        <div
+                            key={msg.id}
+                            className={`message-wrapper ${isOwn ? 'own' : 'other'} ${!isFirstInGroup ? 'consecutive' : ''}`}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                if (!isOwn) {
+                                    setActiveReactionMenu(msg.id);
+                                }
+                            }}
+                        >
 
                             <div className="message-content-wrapper">
                                 {msg.replyTo && (
@@ -346,7 +377,7 @@ const Chat = () => {
                                     </div>
                                 )}
 
-                                <div className="message-bubble">
+                                <div className="message-bubble" style={{ position: 'relative' }}>
                                     {msg.type === 'image' && <img src={msg.text} alt="Shared" className="message-image" />}
                                     {msg.type === 'text' && <p className="message-text">{msg.text}</p>}
                                     {msg.type === 'voice' && (
@@ -369,22 +400,62 @@ const Chat = () => {
                                         <span className="message-time">{formatTime(msg.createdAt)}</span>
                                         {isOwn && <span className="message-status">{msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}</span>}
                                     </div>
-                                </div>
 
-                                {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                                    <div className="message-reactions">
-                                        {Object.entries(msg.reactions).map(([emoji, users]) => users.length > 0 && <div key={emoji} className="reaction-item">{emoji} {users.length}</div>)}
-                                    </div>
-                                )}
-
-                                <div className="message-reaction-container">
-                                    <button className="reaction-btn" onClick={() => setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id)}><FaSmile size={12} /></button>
-                                    {activeReactionMenu === msg.id && (
-                                        <div className="reaction-menu">
-                                            {['❤️', '😊', '😂', '😮', '👍', '👎'].map((emoji) => <button key={emoji} onClick={() => handleReaction(msg.id, emoji)} className="reaction-emoji-btn">{emoji}</button>)}
+                                    {/* Reaction Badge */}
+                                    {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                                        <div className="message-reaction-badge">
+                                            {Object.entries(msg.reactions)
+                                                .filter(([_, users]) => users && users.length > 0)
+                                                .slice(0, 3)
+                                                .map(([emoji, users]) => (
+                                                    <span key={emoji}>{emoji} {users.length > 1 && <span style={{ fontSize: '9px', marginLeft: '1px' }}>{users.length}</span>}</span>
+                                                ))
+                                            }
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Reaction Popup Menu */}
+                                {activeReactionMenu === msg.id && (
+                                    <div className="reaction-popup-container" onClick={(e) => e.stopPropagation()}>
+                                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                                            <span
+                                                key={emoji}
+                                                className="reaction-popup-item"
+                                                onClick={() => handleReaction(msg.id, emoji)}
+                                            >
+                                                {emoji}
+                                            </span>
+                                        ))}
+                                        <div
+                                            className="reaction-popup-item"
+                                            style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px' }}
+                                            onClick={() => {
+                                                setExtendedReactionPicker(msg.id);
+                                                setActiveReactionMenu(null);
+                                            }}
+                                        >
+                                            <FaPlus style={{ color: '#9CA3AF' }} />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Extended Emoji Picker for Reactions */}
+                                {extendedReactionPicker === msg.id && (
+                                    <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', left: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
+                                        <EmojiPicker
+                                            onEmojiClick={(emojiObject) => {
+                                                handleReaction(msg.id, emojiObject.emoji);
+                                                setExtendedReactionPicker(null);
+                                            }}
+                                            width="300px"
+                                            height="350px"
+                                            theme="dark"
+                                            searchPlaceholder="Search reaction..."
+                                            previewConfig={{ showPreview: false }}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
@@ -397,52 +468,88 @@ const Chat = () => {
                 )}
 
                 <div ref={messagesEndRef} />
+
+                {showScrollBottom && (
+                    <button
+                        onClick={scrollToBottom}
+                        style={{
+                            position: 'fixed',
+                            bottom: '80px', // Above input area
+                            right: '20px',
+                            background: 'var(--accent-color)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '40px',
+                            height: '40px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+                            zIndex: 1001,
+                            transition: 'all 0.3s ease'
+                        }}
+                    >
+                        <FaArrowDown />
+                    </button>
+                )}
             </div>
 
-            {replyTo && (
-                <div className="reply-bar">
-                    <div className="reply-bar-content">
-                        <div className="reply-line" />
-                        <div className="reply-info">
-                            <p className="reply-label">Replying to</p>
-                            <p className="reply-message">{replyTo.text}</p>
+            {
+                replyTo && (
+                    <div className="reply-bar">
+                        <div className="reply-bar-content">
+                            <div className="reply-line" />
+                            <div className="reply-info">
+                                <p className="reply-label">Replying to</p>
+                                <p className="reply-message">{replyTo.text}</p>
+                            </div>
                         </div>
+                        <button onClick={() => setReplyTo(null)} className="reply-close">×</button>
                     </div>
-                    <button onClick={() => setReplyTo(null)} className="reply-close">×</button>
-                </div>
-            )}
+                )
+            }
 
-            {uploading && (
-                <div className="upload-progress-bar">
-                    <div className="progress-fill" style={{ width: `${uploadProgress}%` }}></div>
-                    <span>Uploading... {uploadProgress}%</span>
-                </div>
-            )}
+            {
+                uploading && (
+                    <div className="upload-progress-bar">
+                        <div className="progress-fill" style={{ width: `${uploadProgress}%` }}></div>
+                        <span>Uploading... {uploadProgress}%</span>
+                    </div>
+                )
+            }
 
             {/* Input */}
             <div className="chat-input-area">
+                {showEmojiPicker && (
+                    <div className="emoji-picker-container" ref={emojiPickerRef} style={{ position: 'absolute', bottom: '70px', left: '10px', zIndex: 1000 }}>
+                        <EmojiPicker
+                            onEmojiClick={(emojiObject) => { setNewMessage(prev => prev + emojiObject.emoji); inputRef.current?.focus(); }}
+                            width="300px"
+                            height="350px"
+                            theme="dark"
+                        />
+                    </div>
+                )}
+
                 <div className="input-wrapper">
                     {!isRecording ? (
                         <>
-                            <div className="emoji-container" style={{ position: 'relative' }}>
-                                <button className="input-btn emoji-btn" onClick={() => { setShowQuickReactions(!showQuickReactions); setShowEmojiPicker(false); }}><FaSmile /></button>
-                                {showQuickReactions && (
-                                    <div className="quick-reactions-popup">
-                                        {['😊', '😂', '❤️', '👍', '😮'].map((emoji) => <button key={emoji} onClick={() => { setNewMessage(prev => prev + emoji); setShowQuickReactions(false); inputRef.current?.focus(); }} className="quick-emoji">{emoji}</button>)}
-                                        <button onClick={() => { setShowQuickReactions(false); setShowEmojiPicker(true); }} className="quick-emoji-more">+</button>
-                                    </div>
-                                )}
-                                {showEmojiPicker && (
-                                    <div className="emoji-picker-popup">
-                                        <EmojiPicker onEmojiClick={(emojiObject) => { setNewMessage(prev => prev + emojiObject.emoji); setShowEmojiPicker(false); inputRef.current?.focus(); }} width="320px" height="400px" theme="dark" searchPlaceholder="Search emoji..." previewConfig={{ showPreview: false }} />
-                                    </div>
-                                )}
-                            </div>
+                            <button className="input-btn emoji-btn" onClick={() => setShowEmojiPicker(!showEmojiPicker)}><FaSmile /></button>
                             <button className="input-btn" onClick={() => fileInputRef.current?.click()}><FaPaperclip /></button>
                             <button className="input-btn" onClick={() => imageInputRef.current?.click()}><FaCamera /></button>
-                            <input ref={inputRef} type="text" placeholder="Type a message..." value={newMessage} onChange={(e) => handleTyping(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} className="message-input" />
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                placeholder="Type a message..."
+                                value={newMessage}
+                                onChange={(e) => handleTyping(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                                className="message-input"
+                            />
                             {newMessage.trim() ? (
-                                <button className="send-btn" onClick={handleSendMessage}><FaPaperPlane /></button>
+                                <button type="button" className="send-btn" onClick={handleSendMessage} onPointerDown={(e) => e.preventDefault()}><FaPaperPlane /></button>
                             ) : (
                                 <button className="input-btn voice-btn" onClick={startRecording}><FaMicrophone /></button>
                             )}
@@ -458,7 +565,7 @@ const Chat = () => {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

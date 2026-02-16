@@ -1,0 +1,160 @@
+/* Mobile Feed Styling - Standard Full Width Feed */
+@media screen and (max-width: 768px) {
+
+    /* 1. Page & Scroll Container */
+    .home-page {
+        height: auto !important;
+        overflow-y: auto !important;
+        background: transparent !important;
+        padding: 0 !important;
+        padding-bottom: 80px !important;
+    }
+
+    /* 2. Map Container */
+    .map-view-container {
+        height: calc(100vh - 120px) !important;
+    }
+
+    /* 3. Card Styling - Edge to Edge */
+    .smart-invitation-card,
+    .business-ad-card {
+        height: auto !important;
+        min-height: 450px !important;
+
+        /* Slightly rounded, max width safe */
+        margin: 0 4px 12px 4px !important;
+        width: auto !important;
+        max-width: 100% !important;
+
+        background: var(--bg-card) !important;
+        border-radius: 20px !important;
+        /* Rounded corners */
+        /* Edge to edge */
+        border: none !important;
+        border-bottom: 1px solid var(--border-color) !important;
+
+        box-shadow: none !important;
+        /* Simplify */
+
+        display: flex !important;
+        flex-direction: column !important;
+        position: relative !important;
+    }
+
+    .business-ad-card {
+        border: 2px solid #f59e0b !important;
+        margin-bottom: 12px !important;
+    }
+
+    /* --- HEADER --- */
+    .card-header {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, transparent 100%) !important;
+        padding: 16px !important;
+        z-index: 20 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: flex-start !important;
+        border: none !important;
+    }
+
+    /* Host Info - Reset to row */
+    .header-host-info {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
+    }
+
+    .header-host-info img {
+        width: 45px !important;
+        height: 45px !important;
+        border: 2px solid #fff !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .header-host-info div[style*="font-weight: 700"] {
+        color: #fff !important;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+        font-size: 1rem !important;
+        background: transparent !important;
+        /* Remove bubble background */
+        padding: 0 !important;
+        backdrop-filter: none !important;
+    }
+
+    /* Show the type/time info again */
+    .header-host-info div:last-child {
+        display: block !important;
+    }
+
+    /* Actions */
+    .header-actions {
+        gap: 8px !important;
+    }
+
+    /* --- MEDIA (Full Coverage) --- */
+    .card-media {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 1 !important;
+        background: #202020;
+    }
+
+    .card-media video,
+    .card-media img {
+        object-fit: cover !important;
+    }
+
+    /* Overlay */
+    .media-overlay {
+        display: block !important;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%) !important;
+    }
+
+    /* --- FOOTER --- */
+    .card-footer {
+        position: absolute !important;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: transparent !important;
+        padding: 16px !important;
+        z-index: 20 !important;
+        gap: 12px !important;
+    }
+
+    .footer-info h3 {
+        color: #fff !important;
+        font-size: 1.4rem !important;
+        font-weight: 900 !important;
+        margin-bottom: 6px !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .footer-info>div {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    .footer-info svg {
+        color: #fff !important;
+    }
+
+    /* Action Button */
+    .footer-actions button {
+        width: 100% !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        background: #fff !important;
+        color: #000 !important;
+        font-weight: 800 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    }
+}

@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Allow access to all files for authenticated users (Temporary fix)
+    match /{allPaths=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // Specific rules for chat images
+    match /chat-images/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 5 * 1024 * 1024; // Max 5MB
+    }
+    
+    // User avatars
+    match /avatars/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId && isImage();
+    }
+  }
+}

@@ -231,10 +231,10 @@ body {
 .app-name {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #a04000 !important;
-  /* Burnt Orange matching logo */
+  color: #FFFFFF !important;
+  /* White */
   background: none !important;
-  -webkit-text-fill-color: #a04000 !important;
+  -webkit-text-fill-color: #FFFFFF !important;
   letter-spacing: -1px;
   margin-left: 0.5rem;
 }
@@ -506,7 +506,7 @@ body {
 
 .fab-nav-item {
   overflow: visible;
-  margin-top: -8px;
+  margin-top: 0;
   /* Adjusted for smaller nav */
 }
 
@@ -522,7 +522,7 @@ body {
   box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   position: relative;
-  top: -15px;
+  top: 0;
   /* Reduced from higher */
 }
 
