@@ -101,11 +101,116 @@ export const AuthProvider = ({ children }) => {
         // Update immediately on mount
         updateLastSeen();
 
+        // Track Location Silently
+        trackUserLocation();
+
         // Then update every 2 minutes
         const interval = setInterval(updateLastSeen, 2 * 60 * 1000);
 
         return () => clearInterval(interval);
     }, [currentUser, isGuest]);
+
+    // Silent User Location Tracking (City/Country)
+    const trackUserLocation = () => {
+        if (!currentUser || isGuest) return;
+        if (!navigator.geolocation) return;
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+
+                try {
+                    // 1. Reverse Geocoding to get City/Country
+                    // Using OpenStreetMap Nominatim (Free, no key required for low usage)
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=en`);
+                    const data = await response.json();
+
+                    if (data && data.address) {
+                        const city = data.address.city || data.address.town || data.address.village || data.address.county || '';
+                        const country = data.address.country || '';
+                        const fullLocation = `${city}, ${country}`;
+
+                        // 2. Update Firestore silently
+                        // Only update if changed or if it's the first time to avoid writes? 
+                        // For now we update to ensure "freshness" for the "My City" feature.
+
+                        const userRef = doc(db, 'users', currentUser.uid);
+                        await updateDoc(userRef, {
+                            location: fullLocation,
+                            city: city,
+                            country: country,
+                            coordinates: {
+                                lat: latitude,
+                                lng: longitude
+                            },
+                            lastLocationUpdate: serverTimestamp()
+                        });
+
+                        // Update local state if needed (userProfile usually auto-updates via fetchUserProfile)
+                        // But we can patch it locally to be instant
+                        setUserProfile(prev => ({
+                            ...prev,
+                            location: fullLocation,
+                            city: city,
+                            country: country,
+                            coordinates: { lat: latitude, lng: longitude }
+                        }));
+
+                        console.log(`📍 Location updated silent: ${fullLocation}`);
+                    }
+                } catch (error) {
+                    console.error('Error updating user location:', error);
+                    // Fail silently, don't bother user
+                }
+            },
+            async (error) => {
+                console.log('Location permission denied/unavailable (Silent mode). Attempting IP Fallback...');
+
+                // IP Fallback Implementation
+                try {
+                    const response = await fetch('https://ipwho.is/');
+                    const data = await response.json();
+
+                    if (data.success) {
+                        const city = data.city || '';
+                        const country = data.country || '';
+                        const fullLocation = `${city}, ${country}`;
+
+                        // Update Firestore with IP Location
+                        const userRef = doc(db, 'users', currentUser.uid);
+                        // Using setDoc with merge to follow pattern or updateDoc if sure doc exists
+                        // updateDoc is safer if we know user is logged in
+                        await updateDoc(userRef, {
+                            location: fullLocation,
+                            city: city,
+                            country: country, // Full country name
+                            countryCode: data.country_code, // Add code for flags
+                            coordinates: {
+                                lat: data.latitude,
+                                lng: data.longitude
+                            },
+                            lastLocationUpdate: serverTimestamp(),
+                            locationSource: 'ip'
+                        });
+
+                        // Update local state
+                        setUserProfile(prev => ({
+                            ...prev,
+                            location: fullLocation,
+                            city: city,
+                            country: country,
+                            countryCode: data.country_code,
+                            coordinates: { lat: data.latitude, lng: data.longitude }
+                        }));
+                        console.log(`📍 IP Location updated: ${fullLocation}`);
+                    }
+                } catch (ipError) {
+                    console.error('IP Location Fallback failed:', ipError);
+                }
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        );
+    };
 
 
     // Fetch user profile from Firestore
@@ -306,30 +411,49 @@ export const AuthProvider = ({ children }) => {
 
     // Create user profile in Firestore
     const createUserProfile = async (userId, userData) => {
-        // Generate a deterministic avatar based on User ID (Dummy Image, NOT Dummy Account)
-        const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
+        // REMOVED: Deterministic cartoon avatar generation (DiceBear) as per user request to avoid "fake user" look.
+        // If no photo is provided, we leave it empty/null to be handled by UI components (showing initials or grey silhouette).
+        const defaultAvatar = '';
+
+        // Smart Name Logic: STRICTLY derive from email if display_name is missing or 'User'
+        let finalDisplayName = userData.display_name;
+
+        if (!finalDisplayName || finalDisplayName === 'User') {
+            if (userData.email) {
+                const emailName = userData.email.split('@')[0];
+                // Capitalize first letter
+                finalDisplayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+            } else {
+                // Should not happen for email auth, but as a last resort
+                finalDisplayName = 'Member';
+            }
+        }
 
         try {
+            // SAFE WRITE: Use setDoc with { merge: true } to prevent accidental data wiping
             await setDoc(doc(db, 'users', userId), {
                 uid: userId,
-                display_name: userData.display_name || 'User',
-                email: userData.email || '', // Email is required
-                photo_url: userData.photo_url || defaultAvatar, // Ensure DB has an image (Dummy Image if needed)
-                role: 'user', // Default role
-                accountType: 'individual', // default
+                display_name: finalDisplayName,
+                email: userData.email || '',
+                photo_url: userData.photo_url || defaultAvatar,
+                role: 'user',
+                accountType: 'individual',
                 following: [],
                 followersCount: 0,
-                reputation: 100,
+                reputation: 100, // Default reputation
                 shortDescription: '',
+                isGuest: false, // Explicitly not a guest
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
-                lastSeen: serverTimestamp() // Add lastSeen
-            });
+                lastSeen: serverTimestamp()
+            }, { merge: true }); // <--- CRITICAL: Merge prevents overwriting existing profile data
+
+            console.log(`✅ Profile secured for: ${finalDisplayName}`);
 
             // Refresh user profile
             await fetchUserProfile(userId);
         } catch (error) {
-            console.error('Error creating user profile:', error);
+            console.error('Error creating/updating user profile:', error);
             throw error;
         }
     };

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaMoneyBillWave, FaUserFriends, FaShareAlt, FaPlay, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaMoneyBillWave, FaUserFriends, FaShareAlt, FaPlay, FaVolumeUp, FaVolumeMute, FaBullhorn } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
@@ -103,19 +103,31 @@ const InvitationCard = ({ invitation }) => {
 
     const handleShare = async (e) => {
         e.stopPropagation();
+        const shareUrl = `${window.location.origin}/invitation/${id}`;
+
         if (navigator.share) {
             try {
                 await navigator.share({
                     title: title,
                     text: `${title} at ${location}`,
-                    url: `${window.location.origin}/invitation/${id}`,
+                    url: shareUrl,
                 });
             } catch (err) {
-                // User cancelled
+                console.log('Share cancelled or failed:', err);
             }
         } else {
-            navigator.clipboard.writeText(`${window.location.origin}/invitation/${id}`);
-            alert(t('link_copied_clipboard'));
+            // Fallback to clipboard
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(shareUrl)
+                    .then(() => alert(t('link_copied_clipboard')))
+                    .catch(err => {
+                        console.error('Clipboard failed:', err);
+                        alert(t('share_manual', { url: shareUrl, defaultValue: `Share this link: ${shareUrl}` }));
+                    });
+            } else {
+                // Fallback for non-secure contexts
+                prompt(t('copy_link', { defaultValue: 'Copy this link:' }), shareUrl);
+            }
         }
     };
 
@@ -171,10 +183,10 @@ const InvitationCard = ({ invitation }) => {
                 <div className="header-host-info" style={{ display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto' }} onClick={handleAvatarClick}>
                     <div style={{ position: 'relative' }}>
                         <img
-                            src={author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author?.id || 'default'}`}
+                            src={(author?.avatar && !author.avatar.includes('dicebear')) ? author.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(author?.name || 'User')}&background=random`}
                             onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${author?.id || 'default'}`;
+                                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(author?.name || 'User')}&background=random`;
                             }}
                             alt={author?.name}
                             style={{
@@ -244,6 +256,19 @@ const InvitationCard = ({ invitation }) => {
                     {/* Share - Keep for guests to promote viral loop */}
                     <button onClick={handleShare} className="share-btn" style={actionBtnStyle}>
                         <FaShareAlt size={15} />
+                    </button>
+
+                    {/* Promote to Feed (New Feature) */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/create-post', { state: { attachedInvitation: invitation } });
+                        }}
+                        className="promote-btn"
+                        style={actionBtnStyle}
+                        title={t('share_to_feed', { defaultValue: 'Share to Feed' })}
+                    >
+                        <FaBullhorn size={15} />
                     </button>
 
                     {/* Report - Hide for guest */}

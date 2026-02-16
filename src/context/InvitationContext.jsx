@@ -65,10 +65,25 @@ export const InvitationProvider = ({ children }) => {
             // Hardcoded Super Admin Logic
             const isSuperAdmin = ['admin@dinebuddies.com', 'yaser@dinebuddies.com'].includes(email.toLowerCase());
 
+            // Avatar Selection Logic
+            let finalAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
+
+            const dbPhoto = baseProfile.photo_url;
+            const authPhoto = firebaseUser.photoURL;
+
+            if (dbPhoto && typeof dbPhoto === 'string' && dbPhoto.trim().length > 0) {
+                finalAvatar = dbPhoto;
+            } else if (authPhoto && typeof authPhoto === 'string' && authPhoto.trim().length > 0) {
+                // Only use auth photo if not a cartoon (DiceBear/Avataaars)
+                if (!authPhoto.includes('dicebear') && !authPhoto.includes('avataaars')) {
+                    finalAvatar = authPhoto;
+                }
+            }
+
             const user = {
                 id: firebaseUser.uid,
                 name: baseProfile.display_name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-                avatar: baseProfile.photo_url || firebaseUser.photoURL || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E',
+                avatar: finalAvatar,
                 email: email,
                 accountType: isSuperAdmin ? 'admin' : (baseProfile.accountType || 'user'), // Changed from 'individual' to 'user'
                 userRole: isSuperAdmin ? 'admin' : (baseProfile.role || 'user'),

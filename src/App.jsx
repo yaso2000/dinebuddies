@@ -9,6 +9,7 @@ import CreatePost from './pages/CreatePost';
 import CreateStory from './pages/CreateStory';
 import InvitationDetails from './pages/InvitationDetails';
 import InvitationPreview from './pages/InvitationPreview';
+import InvitationChatRoom from './pages/InvitationChatRoom';
 import Profile from './pages/Profile';
 import UserProfile from './pages/UserProfile';
 import Notifications from './pages/Notifications';
@@ -121,6 +122,7 @@ function App() {
 
                                             <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
                                             <Route path="/invitation/:id" element={<InvitationDetails />} />
+                                            <Route path="/invitation/:id/chat" element={<InvitationChatRoom />} />
                                             <Route path="/restaurants" element={<RestaurantDirectory />} />
                                             <Route path="/restaurant/:id" element={<RestaurantDetails />} />
 

@@ -7,11 +7,13 @@ import './MediaSelector.css';
 const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, className = '' }) => {
     const [source, setSource] = useState(null); // 'venue' | 'custom_image' | 'custom_video'
     const [videoMode, setVideoMode] = useState(null); // 'upload' | 'record'
+    const [photoMode, setPhotoMode] = useState(null); // 'upload' | 'capture'
     const [selectedMedia, setSelectedMedia] = useState(null);
 
     const handleSourceChange = (newSource) => {
         setSource(newSource);
         setVideoMode(null);
+        setPhotoMode(null);
         setSelectedMedia(null);
 
         if (newSource === 'venue') {
@@ -73,6 +75,18 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, classN
         onMediaSelect(mediaData);
     };
 
+    const handlePhotoCapture = (file) => {
+        const previewUrl = URL.createObjectURL(file);
+        const mediaData = {
+            source: 'custom_image',
+            file: file,
+            preview: previewUrl,
+            type: 'image'
+        };
+        setSelectedMedia(mediaData);
+        onMediaSelect(mediaData);
+    };
+
     // Auto-select 'venue' source when images are available (e.g. after location select)
     useEffect(() => {
         const hasRestaurantImage = restaurant && (restaurant.image || restaurant.restaurantImage);
@@ -109,6 +123,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, classN
     const resetSelection = () => {
         setSource(null);
         setVideoMode(null);
+        setPhotoMode(null);
         setSelectedMedia(null);
         onMediaSelect(null);
     };
@@ -278,13 +293,97 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, classN
                         </div>
                     )}
 
-                    {/* Custom Image Upload */}
-                    {source === 'custom_image' && !selectedMedia && (
-                        <MediaUpload
-                            type="image"
-                            maxSize={10}
-                            onMediaSelect={handleCustomMedia}
-                        />
+                    {/* Custom Image - Choose Mode */}
+                    {source === 'custom_image' && !selectedMedia && !photoMode && (
+                        <div className="video-mode-selection">
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Choose how to add your photo:</p>
+                            <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    className="mode-btn"
+                                    onClick={() => setPhotoMode('capture')}
+                                    style={{
+                                        padding: '1rem',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: '12px',
+                                        color: 'var(--text-main)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <div className="icon-circle" style={{ background: 'rgba(139, 92, 246, 0.1)', padding: '10px', borderRadius: '50%' }}>
+                                        <FaCamera size={20} style={{ color: 'var(--primary)' }} />
+                                    </div>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Take Photo</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="mode-btn"
+                                    onClick={() => setPhotoMode('upload')}
+                                    style={{
+                                        padding: '1rem',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: '12px',
+                                        color: 'var(--text-main)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <div className="icon-circle" style={{ background: 'rgba(236, 72, 153, 0.1)', padding: '10px', borderRadius: '50%' }}>
+                                        <FaUpload size={20} style={{ color: 'var(--secondary)' }} />
+                                    </div>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Upload</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Photo Capture Mode */}
+                    {source === 'custom_image' && photoMode === 'capture' && !selectedMedia && (
+                        <div className="capture-wrapper">
+                            <VideoRecorder
+                                mode="photo"
+                                onRecordingComplete={handlePhotoCapture}
+                                onCancel={() => setPhotoMode(null)}
+                            />
+                        </div>
+                    )}
+
+                    {/* Image Upload Mode */}
+                    {source === 'custom_image' && photoMode === 'upload' && !selectedMedia && (
+                        <div className="upload-wrapper" style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setPhotoMode(null)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '-40px',
+                                    right: '0',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                }}
+                            >
+                                <FaTimes /> Cancel
+                            </button>
+                            <MediaUpload
+                                type="image"
+                                maxSize={10}
+                                onMediaSelect={handleCustomMedia}
+                            />
+                        </div>
                     )}
 
                     {/* Custom Image Preview */}

@@ -27,6 +27,7 @@ const Home = () => {
     }, [currentUser]);
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [geoFilter, setGeoFilter] = useState('global'); // 'city', 'country', 'global'
     const [activeFilter, setActiveFilter] = useState('All');
     const [locationFilter, setLocationFilter] = useState('All');
     const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'today', 'week', 'soon'
@@ -75,13 +76,13 @@ const Home = () => {
                 (error) => {
                     console.log('Location access denied or unavailable:', error);
                     setLocationError(error.message);
-                    // Default to Riyadh if location denied
-                    setUserLocation({ lat: 24.7136, lng: 46.6753 });
+                    // Default to null (world view) if location denied
+                    setUserLocation(null);
                 }
             );
         } else {
             setLocationError('Geolocation not supported');
-            setUserLocation({ lat: 24.7136, lng: 46.6753 });
+            setUserLocation(null);
         }
     }, []);
 
@@ -154,141 +155,278 @@ const Home = () => {
     const safeInvitations = useMemo(() => Array.isArray(invitations) ? invitations : [], [invitations]);
     const safeRestaurants = useMemo(() => Array.isArray(restaurants) ? restaurants : [], [restaurants]);
 
+    // Memoized filtered invitations
+    // NEW CLEAN LOGIC - REPLACING BROKEN LEGACY LOGIC
     const filteredInvitations = useMemo(() => {
         const now = new Date();
+
+        // 1. First Pass: Apply all non-location filters (Search, Category, Privacy, Time, etc.)
         let filtered = safeInvitations.filter(inv => {
             if (!inv || !inv.author) return false;
 
-            // 0. HIDE DRAFTS (Don't show drafts on home page)
+            // 0. HOME SPECIFIC: HIDE DRAFTS
             if (inv.status === 'draft') return false;
 
-            // 1. OWNERSHIP (Always show mine)
+            // 1. HOME SPECIFIC: OWNERSHIP (Always show mine)
             const isOwn = inv.author.id === currentUser.id;
-            if (isOwn) return true;
 
-            // 2. AUTO-CLOSE LOGIC
-            // Priority 1: If manually completed, hide after 1 hour from completion
+            // 2. HOME SPECIFIC: EXPIRY LOGIC
+            // Priority 1: If manually completed, hide after 1 hour
             if (inv.meetingStatus === 'completed' && inv.completedAt) {
                 const completedTime = inv.completedAt.toDate ? inv.completedAt.toDate() : new Date(inv.completedAt);
-                const oneHourAfterCompletion = new Date(completedTime.getTime() + 60 * 60 * 1000); // +1 hour
+                const oneHourAfterCompletion = new Date(completedTime.getTime() + 60 * 60 * 1000);
                 if (now > oneHourAfterCompletion) return false;
-                // If completed but within 1 hour, show it (with special styling)
-                return true; // ← CRITICAL: Stop here, don't check scheduled time!
+            } else {
+                // Priority 2: For non-completed, hide 1 hour after scheduled time
+                const inviteDate = new Date(inv.date || now);
+                if (!isNaN(inviteDate.getTime())) {
+                    const [hours, minutes] = (inv.time || "20:30").split(':');
+                    inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
+                    const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
+                    if (now > expiry) return false;
+                }
             }
 
-            // Priority 2: For non-completed invitations, hide 1 hour after scheduled time
-            const inviteDate = new Date(inv.date || now);
-            if (!isNaN(inviteDate.getTime())) {
-                const [hours, minutes] = (inv.time || "20:30").split(':');
-                inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
-                const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
-                if (now > expiry) return false;
-            }
-
-            // 3. SOCIAL PRIVACY
+            // 3. HOME SPECIFIC: SOCIAL PRIVACY
             if (inv.privacy === 'private') {
-                // Only author or invited guests can see private invitations
                 if (!isOwn && !inv.invitedUserIds?.includes(currentUser.id)) return false;
             } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
-                // Followers only
                 const isFollowing = currentUser?.following?.includes(inv.author.id);
                 if (!isOwn && !isFollowing) return false;
             }
-            // Public invitations are visible to everyone
 
-
-            // 4. ENHANCED SEARCH (title + location + description)
+            // 4. SEARCH FILTER (Matching RestaurantDirectory logic)
             const matchesSearch = !searchQuery ||
                 (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
-            const matchesFilter = activeFilter === 'All' || inv.type === activeFilter;
 
-            // Debug logging
-            if (searchQuery || activeFilter !== 'All') {
-                console.log('🔍 Filtering:', {
-                    title: inv.title,
-                    type: inv.type,
-                    activeFilter,
-                    matchesFilter,
-                    matchesSearch
-                });
-            }
+            // 5. CATEGORY FILTER (Matching RestaurantDirectory logic)
+            const matchesCategory = activeFilter === 'All' || inv.type === activeFilter;
 
-            return matchesSearch && matchesFilter;
+            return matchesSearch && matchesCategory;
         });
 
-        // Calculate distance for each invitation FIRST (before filtering)
+        // 6. LOCATION FILTER (EXACT COPY FROM RESTAURANT DIRECTORY)
+        if (geoFilter !== 'global' && geoFilter !== 'All' && userLocation) {
+            filtered = filtered.filter(inv => {
+                let distance = null;
+                if (inv.lat && inv.lng) {
+                    distance = calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng);
+                }
+
+                if (distance === null) return false;
+
+                switch (geoFilter) {
+                    case 'nearby': return distance < 10;
+                    case 'city': return distance < 50;
+                    case 'country': return distance < 500;
+                    default: return true;
+                }
+            });
+        }
+
+        // Add distance property
         if (userLocation) {
             filtered = filtered.map(inv => ({
                 ...inv,
-                distance: inv.lat && inv.lng
+                distance: (inv.lat && inv.lng)
                     ? calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng)
                     : null
             }));
         }
 
-        // Apply quick location filter AFTER distance calculation
-        if (locationFilter !== 'All' && userLocation) {
-            filtered = filtered.filter(inv => {
-                if (!inv.lat || !inv.lng || inv.distance === null) return false;
-
-                switch (locationFilter) {
-                    case 'nearby':
-                        return inv.distance < 10; // Within 10km
-                    case 'city':
-                        return inv.distance < 50; // Within 50km
-                    case 'country':
-                        return inv.distance < 500; // Within 500km
-                    default:
-                        return true;
-                }
-            });
-        }
-
-        // Apply time filter
-        if (timeFilter !== 'all') {
-            filtered = filtered.filter(inv => {
-                if (!inv.date || !inv.time) return false;
-
-                const invDate = new Date(inv.date);
-                const [hours, minutes] = (inv.time || "20:30").split(':');
-                invDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
-
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const invDateOnly = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-
-                switch (timeFilter) {
-                    case 'today':
-                        // Same day
-                        return invDateOnly.getTime() === today.getTime();
-                    case 'week':
-                        // Within 7 days
-                        const weekFromNow = new Date(today);
-                        weekFromNow.setDate(weekFromNow.getDate() + 7);
-                        return invDateOnly >= today && invDateOnly <= weekFromNow;
-                    case 'soon':
-                        // Within 3 hours
-                        const threeHoursFromNow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-                        return invDate >= now && invDate <= threeHoursFromNow;
-                    default:
-                        return true;
-                }
-            });
-        }
-
-        // Sort by distance (closest first) if location available
-        if (userLocation) {
-            filtered.sort((a, b) => {
-                if (a.distance === null) return 1;
-                if (b.distance === null) return -1;
-                return a.distance - b.distance;
-            });
-        }
-
         return filtered;
-    }, [safeInvitations, searchQuery, activeFilter, currentUser, userLocation, locationFilter, timeFilter]);
+    }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser]);
+
+    // OLD BROKEN LOGIC (Disabled by renaming)
+    const legacy_filteredInvitations = useMemo(() => {
+        return []; /*
+        let filtered = safeInvitations;
+        const now = new Date();
+
+        // 1. Smart Location Filtering (Auto-Expand Logic)
+        // Hierarchy: City (100km) -> Region (500km) -> Broad Country (2000km) -> Global Fallback
+        const coords = userProfile?.coordinates || userLocation;
+
+        if (coords && !searchQuery) {
+            const { lat: userLat, lng: userLng } = coords;
+
+            // Calculate distances for all invitations first
+            const invitationsWithDist = filtered.map(inv => {
+                let dist = null;
+                if (inv.lat && inv.lng) {
+                    dist = calculateDistance(userLat, userLng, inv.lat, inv.lng);
+                }
+                return { ...inv, dist };
+            });
+
+            // 1. Filter Logic: Manual Override vs Smart Default
+
+            // Standard Location Filter (Matching Partner Directory)
+            // If Global/All, we do nothing (show all).
+            if (geoFilter !== 'global' && geoFilter !== 'All') {
+                filtered = invitationsWithDist.filter(inv => {
+                    if (inv.dist === null) return false;
+
+                    switch (geoFilter) {
+                        case 'nearby':
+                            return inv.dist < 10;
+                        case 'city':
+                            return inv.dist < 50;
+                        case 'country':
+                            return inv.dist < 500;
+                        default:
+                            return true;
+                    }
+                });
+            }
+
+
+            // Logic: Level 1 (City) -> Level 2 (Region) -> Level 3 (Country) -> Level 4 (Global)
+
+            // Level 1: City (Strict ~100km)
+            const cityMatch = invitationsWithDist.filter(inv => {
+                if (inv.dist !== null) return inv.dist < 100;
+                if (userProfile?.city && inv.location) return inv.location.toLowerCase().includes(userProfile.city.toLowerCase());
+                return false;
+            });
+
+            if (cityMatch.length > 0) {
+                filtered = cityMatch;
+            } else {
+                // Level 2: Region (Expanded ~500km)
+                const regionMatch = invitationsWithDist.filter(inv => inv.dist !== null && inv.dist < 500);
+
+                if (regionMatch.length > 0) {
+                    filtered = regionMatch;
+                } else {
+                    // Level 3: Country / Broad Region (~2000km)
+                    const countryMatch = invitationsWithDist.filter(inv => inv.dist !== null && inv.dist < 2000);
+
+                    if (countryMatch.length > 0) {
+                        filtered = countryMatch;
+                    }
+                    // Level 4: Global Fallback (Show everything naturally)
+                }
+            }
+        }
+    }
+
+        filtered = filtered.filter(inv => {
+        if (!inv || !inv.author) return false;
+
+        // 0. HIDE DRAFTS (Don't show drafts on home page)
+        if (inv.status === 'draft') return false;
+
+        // 1. OWNERSHIP (Always show mine)
+        const isOwn = inv.author.id === currentUser.id;
+        if (isOwn) return true;
+
+        // 2. AUTO-CLOSE LOGIC
+        // Priority 1: If manually completed, hide after 1 hour from completion
+        if (inv.meetingStatus === 'completed' && inv.completedAt) {
+            const completedTime = inv.completedAt.toDate ? inv.completedAt.toDate() : new Date(inv.completedAt);
+            const oneHourAfterCompletion = new Date(completedTime.getTime() + 60 * 60 * 1000); // +1 hour
+            if (now > oneHourAfterCompletion) return false;
+            // If completed but within 1 hour, show it (with special styling)
+            return true; // ← CRITICAL: Stop here, don't check scheduled time!
+        }
+
+        // Priority 2: For non-completed invitations, hide 1 hour after scheduled time
+        const inviteDate = new Date(inv.date || now);
+        if (!isNaN(inviteDate.getTime())) {
+            const [hours, minutes] = (inv.time || "20:30").split(':');
+            inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
+            const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
+            if (now > expiry) return false;
+        }
+
+        // 3. SOCIAL PRIVACY
+        if (inv.privacy === 'private') {
+            // Only author or invited guests can see private invitations
+            if (!isOwn && !inv.invitedUserIds?.includes(currentUser.id)) return false;
+        } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
+            // Followers only
+            const isFollowing = currentUser?.following?.includes(inv.author.id);
+            if (!isOwn && !isFollowing) return false;
+        }
+        // Public invitations are visible to everyone
+
+
+        // 4. ENHANCED SEARCH (title + location + description)
+        const matchesSearch = !searchQuery ||
+            (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesFilter = activeFilter === 'All' || inv.type === activeFilter;
+
+        // Debug logging
+        if (searchQuery || activeFilter !== 'All') {
+            console.log('🔍 Filtering:', {
+                title: inv.title,
+                type: inv.type,
+                activeFilter,
+                matchesFilter,
+                matchesSearch
+            });
+        }
+
+        return matchesSearch && matchesFilter;
+    });
+
+    // Calculate distance for each invitation FIRST (before filtering)
+    if (userLocation) {
+        filtered = filtered.map(inv => ({
+            ...inv,
+            distance: inv.lat && inv.lng
+                ? calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng)
+                : null
+        }));
+    }
+
+
+    // Apply time filter
+    if (timeFilter !== 'all') {
+        filtered = filtered.filter(inv => {
+            if (!inv.date || !inv.time) return false;
+
+            if (!inv.date || !inv.time) return true;
+            const invDate = new Date(`${inv.date}T${inv.time}`);
+
+            if (timeFilter === 'today') {
+                return invDate.toDateString() === now.toDateString();
+            } else if (timeFilter === 'tomorrow') {
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                return invDate.toDateString() === tomorrow.toDateString();
+            } else if (timeFilter === 'week') {
+                const nextWeek = new Date(now);
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                return invDate >= now && invDate <= nextWeek;
+            }
+            return true;
+        });
+    }
+
+    // Apply category filter
+    if (activeFilter !== 'All') {
+        filtered = filtered.filter(inv => inv.category === activeFilter);
+    }
+
+    // Apply search query
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(inv =>
+            inv.title?.toLowerCase().includes(query) ||
+            inv.restaurantName?.toLowerCase().includes(query) ||
+            inv.description?.toLowerCase().includes(query) ||
+            inv.location?.toLowerCase().includes(query) // Allow searching by location name too
+        );
+    }
+
+    return filtered;
+*/ }, []);
 
     const premiumAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 3), [safeRestaurants]);
     const inFeedAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 2), [safeRestaurants]);
@@ -331,12 +469,48 @@ const Home = () => {
             if (!L) return;
 
             if (!mapInstance.current) {
+                // Smart Initialization Logic:
+                // 1. User Location (Most relevant)
+                // 2. Center of visible invitations (Content relevant)
+                // 3. World view (Neutral fallback)
+
+                let initialLat = 0;
+                let initialLng = 0;
+                let initialZoom = 2; // World view
+
+                if (userLocation) {
+                    initialLat = userLocation.lat;
+                    initialLng = userLocation.lng;
+                    initialZoom = 13;
+                } else if (invitationsWithCoords.length > 0) {
+                    // Calculate center of invitations
+                    const lats = invitationsWithCoords.map(i => i.lat);
+                    const lngs = invitationsWithCoords.map(i => i.lng);
+                    const minLat = Math.min(...lats);
+                    const maxLat = Math.max(...lats);
+                    const minLng = Math.min(...lngs);
+                    const maxLng = Math.max(...lngs);
+
+                    initialLat = (minLat + maxLat) / 2;
+                    initialLng = (minLng + maxLng) / 2;
+                    initialZoom = 10; // City/Region level view
+                }
+
                 mapInstance.current = L.map(mapRef.current, {
                     zoomControl: false,
                     attributionControl: false,
                     tap: false
-                }).setView([24.7136, 46.6753], 6);
+                }).setView([initialLat, initialLng], initialZoom);
+
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstance.current);
+
+                // If we used invitations to center, try to fit bounds perfectly
+                if (!userLocation && invitationsWithCoords.length > 0) {
+                    const bounds = invitationsWithCoords.map(inv => [inv.lat, inv.lng]);
+                    try {
+                        mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                    } catch (e) { console.warn("Could not fit bounds on init", e); }
+                }
             }
 
             // Cleanup previous markers
@@ -612,7 +786,7 @@ const Home = () => {
                 </div>
 
                 {/* --- 2. MEDIA (Full Background) --- */}
-                <div className="card-media" style={{
+                < div className="card-media" style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 1
                 }}>
@@ -625,10 +799,10 @@ const Home = () => {
                         position: 'absolute', inset: 0,
                         background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 30%, transparent 100%)'
                     }} />
-                </div>
+                </div >
 
                 {/* --- 3. FOOTER (Actions) --- */}
-                <div className="card-footer" style={{
+                < div className="card-footer" style={{
                     position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
                     padding: '20px',
                     display: 'flex', flexDirection: 'column', gap: '10px',
@@ -661,8 +835,8 @@ const Home = () => {
                             {t('view_profile', { defaultValue: 'View Profile' })}
                         </button>
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
         );
     };
 
@@ -736,22 +910,47 @@ const Home = () => {
                     </div>
                 </div>
 
+                {/* Location Filter Tabs (City / Country / Global) */}
+
+
                 {/* Filter Bar - Responsive Layout */}
                 <div className="filter-bar" style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '10px',
+                    gap: '8px',
                     background: 'var(--bg-card)',
-                    padding: '8px 12px',
+                    padding: '6px 12px',
                     borderRadius: '16px',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                     position: 'relative',
                     zIndex: 50
                 }}>
+                    <style>{`
+                        .filter-select {
+                            appearance: none !important;
+                            -webkit-appearance: none !important;
+                            background-color: var(--bg-card, #ffffff) !important;
+                            border: 1px solid var(--border-color, #e2e8f0) !important;
+                            color: var(--text-main, #333333) !important;
+                            padding: 0 24px 0 10px !important;
+                            border-radius: 10px !important;
+                            font-size: 12px !important;
+                            font-weight: 500 !important;
+                            height: 36px !important;
+                            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+                            background-repeat: no-repeat !important;
+                            background-position: right 8px center !important;
+                            background-size: 14px !important;
+                            max-width: 140px !important;
+                            min-width: 110px !important;
+                        }
+                    `}</style>
+
                     {/* Row 1: Search + Location Filter */}
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {/* Search Input - Narrower */}
-                        <div style={{ position: 'relative', flex: '1 1 auto', minWidth: '150px' }}>
+
+                        {/* Search Input - Always Visible */}
+                        <div style={{ position: 'relative', flex: '1 1 auto' }}>
                             <FaSearch className="search-icon" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
                             <input
                                 type="text"
@@ -762,7 +961,7 @@ const Home = () => {
                                 className="search-input"
                                 style={{
                                     width: '100%',
-                                    padding: '10px 10px 10px 36px',
+                                    padding: '8px 10px 8px 36px',
                                     border: '1px solid var(--border-color)',
                                     borderRadius: '12px',
                                     fontSize: '0.85rem',
@@ -771,22 +970,17 @@ const Home = () => {
                             />
                         </div>
 
-                        {/* Location Filter - Next to Search */}
+                        {/* Location Filter Dropdown - Restore Control */}
                         <div style={{ flex: '0 0 auto' }}>
                             <select
-                                value={locationFilter}
-                                onChange={(e) => setLocationFilter(e.target.value)}
+                                value={geoFilter}
+                                onChange={(e) => setGeoFilter(e.target.value)}
                                 className="filter-select"
-                                style={{
-                                    width: 'auto',
-                                    minWidth: '110px',
-                                    padding: '10px 28px 10px 10px',
-                                    height: '38px'
-                                }}
                             >
-                                {locationFilters.map(f => (
-                                    <option key={f.id} value={f.id}>{f.icon} {f.label}</option>
-                                ))}
+                                <option value="All">🌍 {t('all') || 'All'}</option>
+                                <option value="nearby">📍 {t('near_me') || 'Near me'}</option>
+                                <option value="city">🏙️ {t('in_my_city') || 'In my city'}</option>
+                                <option value="country">🗺️ {t('in_my_country') || 'In my country'}</option>
                             </select>
                         </div>
                     </div>

@@ -6,13 +6,17 @@ import './VideoRecorder.css';
  * A robust, simplified video recorder component.
  * Focuses on stability and standard HTML5 MediaRecorder API usage.
  */
-const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
+const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel, mode = 'video' }) => {
     // State
     const [status, setStatus] = useState('idle'); // idle, recording, review
     const [recordingTime, setRecordingTime] = useState(0);
     const [error, setError] = useState(null);
     const [videoBlob, setVideoBlob] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
+
+    // Camera Config
+    const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
+    const [orientation, setOrientation] = useState('portrait'); // 'portrait' | 'landscape'
 
     // Refs
     const streamRef = useRef(null);
@@ -30,14 +34,29 @@ const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
         };
     }, []);
 
+    // Restart Camera when config changes
+    useEffect(() => {
+        stopStream();
+        startCamera();
+    }, [facingMode]);
+
     // Initialize Camera
     const startCamera = async () => {
         try {
             setError(null);
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+
+            // Constraints based on orientation and facing mode
+            const constraints = {
+                video: {
+                    facingMode: facingMode,
+                    width: { ideal: orientation === 'landscape' ? 1280 : 720 },
+                    height: { ideal: orientation === 'landscape' ? 720 : 1280 }
+                },
                 audio: true
-            });
+            };
+
+            console.log('📷 Starting camera with constraints:', constraints);
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             streamRef.current = stream;
 
@@ -49,6 +68,41 @@ const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
             console.error("Camera access error:", err);
             setError("Cannot access camera. Please allow permissions.");
         }
+    };
+
+    const toggleCamera = () => {
+        setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+    };
+
+    const toggleOrientation = () => {
+        setOrientation(prev => prev === 'portrait' ? 'landscape' : 'portrait');
+    };
+
+    // Capture Photo Logic
+    const takePhoto = () => {
+        if (!videoPreviewRef.current) return;
+
+        const video = videoPreviewRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const ctx = canvas.getContext('2d');
+        // Mirror if front camera
+        if (facingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((blob) => {
+            const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            if (onRecordingComplete) {
+                onRecordingComplete(file);
+            }
+            // Optional: Don't stop stream immediately if we want to confirm, but for now simplify
+            stopStream();
+        }, 'image/jpeg', 0.9);
     };
 
     // Stop Camera Stream
@@ -130,11 +184,6 @@ const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
         }
     };
 
-    // Initial camera start on mount
-    useEffect(() => {
-        startCamera();
-    }, []);
-
     // Format time helper
     const formatTime = (s) => {
         const min = Math.floor(s / 60);
@@ -146,13 +195,18 @@ const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
         <div className="video-recorder-wrapper">
             {error && <div className="error-banner">{error}</div>}
 
-            <div className="video-viewport">
+            <div className="video-viewport" style={{
+                aspectRatio: orientation === 'landscape' ? '16/9' : '9/16',
+                maxHeight: orientation === 'landscape' ? '400px' : '600px',
+                transition: 'all 0.3s ease'
+            }}>
                 <video
                     ref={videoPreviewRef}
                     autoPlay
                     muted
                     playsInline
                     className="live-feed"
+                    style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
                 />
 
                 {status === 'recording' && (
@@ -166,17 +220,45 @@ const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
             <div className="controls-bar">
                 {status === 'idle' && (
                     <>
-                        <button className="btn-record" onClick={handleStartRecording}>
-                            <div className="record-icon-inner"></div>
-                        </button>
-                        <button className="btn-cancel" onClick={onCancel}>
-                            Cancel
+                        <div className="camera-toggles" style={{ display: 'flex', gap: '15px', marginRight: '20px' }}>
+                            <button
+                                type="button"
+                                className="toggle-btn"
+                                onClick={toggleCamera}
+                                title="Flip Camera"
+                                style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                            >
+                                <FaRedo />
+                            </button>
+                            <button
+                                type="button"
+                                className="toggle-btn"
+                                onClick={toggleOrientation}
+                                title={orientation === 'portrait' ? 'Switch to Landscape' : 'Switch to Portrait'}
+                                style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                            >
+                                {orientation === 'portrait' ? '📱' : '💻'}
+                            </button>
+                        </div>
+
+                        {mode === 'photo' ? (
+                            <button type="button" className="btn-record" onClick={takePhoto} style={{ border: '4px solid white', background: 'white' }}>
+                                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'white' }}></div>
+                            </button>
+                        ) : (
+                            <button type="button" className="btn-record" onClick={handleStartRecording}>
+                                <div className="record-icon-inner"></div>
+                            </button>
+                        )}
+
+                        <button type="button" className="btn-cancel" onClick={onCancel}>
+                            <FaTimes />
                         </button>
                     </>
                 )}
 
                 {status === 'recording' && (
-                    <button className="btn-stop" onClick={handleStopRecording}>
+                    <button type="button" className="btn-stop" onClick={handleStopRecording}>
                         <div className="stop-icon-inner"></div>
                     </button>
                 )}

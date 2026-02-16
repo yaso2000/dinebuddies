@@ -60,7 +60,7 @@ const CreateInvitation = () => {
         restaurantId: restaurantData?.id || offerData?.partnerId || null,
         restaurantName: restaurantData?.name || prefilledData?.restaurantName || offerData?.location || '',
         type: restaurantData?.type || 'Restaurant',
-        country: 'AU',
+        country: '',
         state: '',
         city: prefilledData?.city || restaurantData?.city || offerData?.city || '',
         date: '',
@@ -472,52 +472,65 @@ const CreateInvitation = () => {
         }
     };
 
-    // Auto-detect user location
+    // Auto-detect user location - REPLACED WITH IMPLICIT PROFILE LOCATION
+    /*
     useEffect(() => {
         if (!restaurantData && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const { latitude, longitude } = position.coords;
-
-                // Set coordinates immediately
-                setFormData(prev => ({
-                    ...prev,
-                    userLat: latitude,
-                    userLng: longitude,
-                    // country: 'AU' // Don't default hard here, wait for API or keep existing
-                }));
-
-                try {
-                    // Use BigDataCloud API - Free and CORS friendly for client-side
-                    const response = await fetch(
-                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-                    );
-
-                    if (!response.ok) throw new Error('Geocoding failed');
-
-                    const data = await response.json();
-
-                    if (data) {
-                        // Priority order for city/locality
-                        const detectedCity = data.city || data.locality || data.principalSubdivision || '';
-                        const detectedCountryCode = (data.countryCode || 'AU').toUpperCase();
-
-                        if (detectedCity) {
-                            setFormData(prev => ({
-                                ...prev,
-                                country: detectedCountryCode,
-                                city: detectedCity
-                            }));
-                            console.log('📍 Location detected (Auto):', detectedCity, detectedCountryCode);
-                        }
-                    }
-                } catch (e) {
-                    console.warn("Auto-detect city failed:", e.message);
-                }
-            }, (err) => {
-                console.log("Location detection denied/failed", err);
-            });
+           // ... (Browser Geolocation Logic Disabled) ...
         }
     }, [restaurantData]);
+    */
+
+    // Use Implicit User Location from Profile OR IP Fallback
+    useEffect(() => {
+        const setLocationFromProfile = () => {
+            if (userProfile?.city && userProfile?.coordinates) {
+                console.log('📍 Using Implicit Profile Location:', userProfile.city);
+                setFormData(prev => ({
+                    ...prev,
+                    city: userProfile.city || prev.city,
+                    country: userProfile.countryCode || prev.country || '',
+                    userLat: userProfile.coordinates.lat,
+                    userLng: userProfile.coordinates.lng,
+                }));
+                return true;
+            }
+            return false;
+        };
+
+        const fetchIpLocation = async () => {
+            try {
+                console.log('🌐 Fetching IP-based location (Hidden Fallback)...');
+                const response = await fetch('https://ipwho.is/');
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('✅ IP Location found:', data.city, data.country_code);
+                    setFormData(prev => ({
+                        ...prev,
+                        city: data.city,
+                        country: data.country_code,
+                        userLat: data.latitude,
+                        userLng: data.longitude
+                    }));
+                } else {
+                    console.warn('❌ IP Location failed:', data.message);
+                }
+            } catch (error) {
+                console.error('❌ IP Location Error:', error);
+            }
+        };
+
+        if (!restaurantData) {
+            // 1. Try Profile First
+            const profileFound = setLocationFromProfile();
+
+            // 2. If no profile location, use IP Fallback
+            if (!profileFound) {
+                fetchIpLocation();
+            }
+        }
+    }, [userProfile, restaurantData]);
 
     // Check for cancellation restrictions
     useEffect(() => {
@@ -631,34 +644,24 @@ const CreateInvitation = () => {
                         📍 {t('search_venue') || 'Search for a Venue'}
                     </h3>
 
-                    {/* Current Location Badge */}
-                    {formData.city && (
-                        <div style={{
-                            marginBottom: '0.75rem',
-                            padding: '0.5rem',
-                            background: 'rgba(139, 92, 246, 0.1)',
-                            borderRadius: '12px',
-                            border: '1px solid rgba(139, 92, 246, 0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '0.9rem'
-                        }}>
-                            <span style={{ fontSize: '1.2rem' }}>📍</span>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                                    {t('your_location') || 'Your Location'}
-                                </div>
-                                <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-                                    {formData.city}, {currentCountry?.name} {currentCountry?.flag}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* Venue Search */}
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '0.8rem' }}>{t('form_location_label')}</label>
+                        <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
+                            {t('form_location_label')}
+                            {formData.city && (
+                                <span style={{
+                                    color: 'var(--primary)',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.95rem',
+                                    marginLeft: '8px',
+                                    marginRight: '8px'
+                                }}>
+                                    ({t('in_my_city') || 'In'} {formData.city} 📍)
+                                </span>
+                            )}
+                        </label>
                         <LocationAutocomplete
                             value={formData.location}
                             onChange={handleChange}
@@ -905,6 +908,7 @@ const CreateInvitation = () => {
                 </div>
 
                 {/* Age Range Preference */}
+                {/* Age Groups Preference (Multi-Select) */}
                 <div className="form-group">
                     <label className="elegant-label">
                         <span className="label-icon">
@@ -914,43 +918,83 @@ const CreateInvitation = () => {
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                         {[
-                            { value: '18-25', label: '18-25' },
-                            { value: '26-35', label: '26-35' },
-                            { value: '36-45', label: '36-45' },
-                            { value: '46+', label: '46+' },
+                            { value: '18-24', label: '18-24' },
+                            { value: '25-34', label: '25-34' },
+                            { value: '35-44', label: '35-44' },
+                            { value: '45-54', label: '45-54' },
+                            { value: '55+', label: '55+' },
                             { value: 'any', label: t('any') }
-                        ].map((option) => (
-                            <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setFormData({ ...formData, ageRange: option.value })}
-                                style={{
-                                    padding: '14px 12px',
-                                    borderRadius: '12px',
-                                    border: formData.ageRange === option.value ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                    background: formData.ageRange === option.value ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                    color: 'var(--text-main)',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s',
-                                    gridColumn: option.value === 'any' ? 'span 3' : 'span 1',
-                                    minHeight: '70px'
-                                }}
-                            >
-                                <HiUser style={{
-                                    fontSize: '1.6rem',
-                                    color: formData.ageRange === option.value ? 'var(--primary)' : 'var(--text-secondary)',
-                                    marginBottom: '4px'
-                                }} />
-                                <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                    {option.label}
-                                </span>
-                            </button>
-                        ))}
+                        ].map((option) => {
+                            // Check if selected
+                            const isAny = formData.ageGroups?.includes('any') || !formData.ageGroups || formData.ageGroups.length === 0;
+                            const isSelected = option.value === 'any' ? isAny : formData.ageGroups?.includes(option.value);
+
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => {
+                                        let newGroups = formData.ageGroups || [];
+
+                                        if (option.value === 'any') {
+                                            // Ensure 'any' is exclusive or just clears others?
+                                            // Ideally, if 'any' is clicked, clear specific groups and set 'any'
+                                            newGroups = ['any'];
+                                        } else {
+                                            // If a specific group is clicked
+                                            // Remove 'any' first
+                                            if (newGroups.includes('any')) newGroups = [];
+
+                                            if (newGroups.includes(option.value)) {
+                                                // Deselect
+                                                newGroups = newGroups.filter(g => g !== option.value);
+                                            } else {
+                                                // Select
+                                                newGroups = [...newGroups, option.value];
+                                            }
+
+                                            // If nothing selected, default back to 'any'
+                                            if (newGroups.length === 0) newGroups = ['any'];
+                                        }
+
+                                        setFormData({ ...formData, ageGroups: newGroups });
+                                    }}
+                                    style={{
+                                        padding: '14px 12px',
+                                        borderRadius: '12px',
+                                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                                        background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
+                                        color: 'var(--text-main)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '4px',
+                                        transition: 'all 0.2s',
+                                        gridColumn: option.value === 'any' ? 'span 3' : 'span 1',
+                                        // Make '55+' span 2 to fit nicely in 3-column grid? No, 5 items + any = 6 items. 
+                                        // 18-24, 25-34, 35-44 (Row 1)
+                                        // 45-54, 55+, Any (Row 2)? "Any" spanning 1? Or make "Any" span 3 at bottom?
+                                        // Let's standard grid:
+                                        // Row 1: 18-24, 25-34, 35-44
+                                        // Row 2: 45-54, 55+, (Empty)
+                                        // Row 3: Any (Span 3)
+                                        // Let's force Any to span 3.
+                                        minHeight: '70px'
+                                    }}
+                                >
+                                    <HiUser style={{
+                                        fontSize: '1.6rem',
+                                        color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
+                                        marginBottom: '4px'
+                                    }} />
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
+                                        {option.label}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -996,148 +1040,150 @@ const CreateInvitation = () => {
                     </div>
 
                     {/* Private Mode: Select Friends */}
-                    {formData.privacy === 'private' && (
-                        <div style={{ marginTop: '1rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                {t('select_specific_friends') || 'Select Friends to Invite'}
-                            </label>
+                    {
+                        formData.privacy === 'private' && (
+                            <div style={{ marginTop: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                    {t('select_specific_friends') || 'Select Friends to Invite'}
+                                </label>
 
-                            {/* Friends List - Inline */}
-                            <div style={{
-                                background: 'var(--bg-card)',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                padding: '1rem',
-                                maxHeight: '300px',
-                                overflowY: 'auto'
-                            }}>
-                                {(() => {
-                                    console.log('🎯 RENDERING FRIENDS LIST:', {
-                                        friendsListLength: friendsList.length,
-                                        friendsList: friendsList,
-                                        currentUserId: currentUser?.id,
-                                        currentUserFollowing: currentUser?.following,
-                                        allUsersCount: allUsers?.length
-                                    });
-                                    return null;
-                                })()}
+                                {/* Friends List - Inline */}
+                                <div style={{
+                                    background: 'var(--bg-card)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '12px',
+                                    padding: '1rem',
+                                    maxHeight: '300px',
+                                    overflowY: 'auto'
+                                }}>
+                                    {(() => {
+                                        console.log('🎯 RENDERING FRIENDS LIST:', {
+                                            friendsListLength: friendsList.length,
+                                            friendsList: friendsList,
+                                            currentUserId: currentUser?.id,
+                                            currentUserFollowing: currentUser?.following,
+                                            allUsersCount: allUsers?.length
+                                        });
+                                        return null;
+                                    })()}
 
-                                {friendsList.length === 0 ? (
-                                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
-                                        <FaUserFriends style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }} />
-                                        <p style={{ margin: 0, marginBottom: '1rem' }}>
-                                            {t('no_friends_found_desc') || 'You need mutual friends to invite them privately.'}
-                                        </p>
-                                        <small style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                                            (People who follow you AND you follow them)
-                                        </small>
+                                    {friendsList.length === 0 ? (
+                                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                                            <FaUserFriends style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }} />
+                                            <p style={{ margin: 0, marginBottom: '1rem' }}>
+                                                {t('no_friends_found_desc') || 'You need mutual friends to invite them privately.'}
+                                            </p>
+                                            <small style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                                (People who follow you AND you follow them)
+                                            </small>
 
-                                        {/* Debug Info */}
-                                        <div style={{
-                                            marginTop: '1.5rem',
-                                            padding: '1rem',
-                                            background: 'rgba(255,0,0,0.1)',
-                                            borderRadius: '8px',
-                                            fontSize: '0.75rem',
-                                            textAlign: 'left'
-                                        }}>
-                                            <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#ef4444' }}>
-                                                🔍 Debug Info:
-                                            </div>
-                                            <div>Your ID: {currentUser?.id || 'N/A'}</div>
-                                            <div>You follow: {currentUser?.following?.length || 0} people</div>
-                                            <div>Following IDs: {JSON.stringify(currentUser?.following || [])}</div>
-                                            <div>Total users in DB: {allUsers?.length || 0}</div>
-                                            <div>Mutual friends found: {friendsList.length}</div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <div style={{ marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                            {friendsList.length} {friendsList.length === 1 ? 'friend' : 'friends'} available
-                                        </div>
-                                        {friendsList.map(friend => {
-                                            const friendName = friend.display_name || friend.name || 'User';
-                                            const friendAvatar = friend.photo_url || friend.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default&backgroundColor=b6e3f4';
-                                            const friendUsername = friendName.replace(/\s/g, '').toLowerCase();
-                                            const isSelected = formData.invitedUserIds.includes(friend.id);
-
-                                            return (
-                                                <div
-                                                    key={friend.id}
-                                                    onClick={() => handleFriendToggle(friend.id)}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '12px',
-                                                        padding: '10px',
-                                                        borderRadius: '12px',
-                                                        background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
-                                                        cursor: 'pointer',
-                                                        marginBottom: '8px',
-                                                        border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                    onMouseEnter={e => {
-                                                        if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                                                    }}
-                                                    onMouseLeave={e => {
-                                                        if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                                    }}
-                                                >
-                                                    <img
-                                                        src={friendAvatar}
-                                                        alt={friendName}
-                                                        style={{
-                                                            width: '40px',
-                                                            height: '40px',
-                                                            borderRadius: '50%',
-                                                            objectFit: 'cover'
-                                                        }}
-                                                    />
-                                                    <div style={{ flex: 1 }}>
-                                                        <div style={{ color: 'white', fontWeight: 'bold', fontSize: '0.95rem' }}>
-                                                            {friendName}
-                                                        </div>
-                                                        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                                            @{friendUsername}
-                                                        </div>
-                                                    </div>
-                                                    <div style={{
-                                                        width: '24px',
-                                                        height: '24px',
-                                                        borderRadius: '50%',
-                                                        border: isSelected ? 'none' : '2px solid var(--text-muted)',
-                                                        background: isSelected ? 'var(--primary)' : 'transparent',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center'
-                                                    }}>
-                                                        {isSelected && <FaCheckCircle style={{ color: 'white', fontSize: '1rem' }} />}
-                                                    </div>
+                                            {/* Debug Info */}
+                                            <div style={{
+                                                marginTop: '1.5rem',
+                                                padding: '1rem',
+                                                background: 'rgba(255,0,0,0.1)',
+                                                borderRadius: '8px',
+                                                fontSize: '0.75rem',
+                                                textAlign: 'left'
+                                            }}>
+                                                <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#ef4444' }}>
+                                                    🔍 Debug Info:
                                                 </div>
-                                            );
-                                        })}
+                                                <div>Your ID: {currentUser?.id || 'N/A'}</div>
+                                                <div>You follow: {currentUser?.following?.length || 0} people</div>
+                                                <div>Following IDs: {JSON.stringify(currentUser?.following || [])}</div>
+                                                <div>Total users in DB: {allUsers?.length || 0}</div>
+                                                <div>Mutual friends found: {friendsList.length}</div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div style={{ marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                                {friendsList.length} {friendsList.length === 1 ? 'friend' : 'friends'} available
+                                            </div>
+                                            {friendsList.map(friend => {
+                                                const friendName = friend.display_name || friend.name || 'User';
+                                                const friendAvatar = friend.photo_url || friend.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default&backgroundColor=b6e3f4';
+                                                const friendUsername = friendName.replace(/\s/g, '').toLowerCase();
+                                                const isSelected = formData.invitedUserIds.includes(friend.id);
+
+                                                return (
+                                                    <div
+                                                        key={friend.id}
+                                                        onClick={() => handleFriendToggle(friend.id)}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '12px',
+                                                            padding: '10px',
+                                                            borderRadius: '12px',
+                                                            background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+                                                            cursor: 'pointer',
+                                                            marginBottom: '8px',
+                                                            border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={friendAvatar}
+                                                            alt={friendName}
+                                                            style={{
+                                                                width: '40px',
+                                                                height: '40px',
+                                                                borderRadius: '50%',
+                                                                objectFit: 'cover'
+                                                            }}
+                                                        />
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ color: 'white', fontWeight: 'bold', fontSize: '0.95rem' }}>
+                                                                {friendName}
+                                                            </div>
+                                                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                                                @{friendUsername}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            borderRadius: '50%',
+                                                            border: isSelected ? 'none' : '2px solid var(--text-muted)',
+                                                            background: isSelected ? 'var(--primary)' : 'transparent',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}>
+                                                            {isSelected && <FaCheckCircle style={{ color: 'white', fontSize: '1rem' }} />}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {formData.invitedUserIds.length > 0 && (
+                                    <div style={{
+                                        marginTop: '0.5rem',
+                                        padding: '0.5rem',
+                                        background: 'rgba(139, 92, 246, 0.1)',
+                                        borderRadius: '8px',
+                                        color: 'var(--primary)',
+                                        fontSize: '0.85rem',
+                                        textAlign: 'center'
+                                    }}>
+                                        ✓ {formData.invitedUserIds.length} {formData.invitedUserIds.length === 1 ? 'friend' : 'friends'} selected
                                     </div>
                                 )}
                             </div>
-
-                            {formData.invitedUserIds.length > 0 && (
-                                <div style={{
-                                    marginTop: '0.5rem',
-                                    padding: '0.5rem',
-                                    background: 'rgba(139, 92, 246, 0.1)',
-                                    borderRadius: '8px',
-                                    color: 'var(--primary)',
-                                    fontSize: '0.85rem',
-                                    textAlign: 'center'
-                                }}>
-                                    ✓ {formData.invitedUserIds.length} {formData.invitedUserIds.length === 1 ? 'friend' : 'friends'} selected
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
+                        )
+                    }
+                </div >
 
                 <div className="form-group">
                     <label>{t('form_details_label')}</label>

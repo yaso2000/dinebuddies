@@ -236,7 +236,7 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
             <input
                 type="text"
                 name="location"
-                placeholder={city ? `${t('form_location_placeholder')} in ${city}` : t('form_location_placeholder')}
+                placeholder={city ? t('form_location_placeholder_with_city', { city }) : t('form_location_placeholder')}
                 value={value}
                 onChange={handleInput}
                 required

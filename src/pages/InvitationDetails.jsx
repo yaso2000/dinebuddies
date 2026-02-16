@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaCheckCircle, FaStar, FaEdit, FaImage, FaUserFriends, FaTrash } from 'react-icons/fa';
+import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaCheckCircle, FaStar, FaEdit, FaImage, FaUserFriends, FaTrash, FaComments } from 'react-icons/fa';
 import VideoPlayer from '../components/Shared/VideoPlayer';
 
 import { useInvitations } from '../context/InvitationContext';
@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
 import CancellationModal from '../components/CancellationModal';
-import GroupChat from '../components/GroupChat'; // Added Import
+// Added Import
 import { updateGuestCount, updateInvitationImage } from '../utils/invitationEditHelpers';
 import { cancelInvitation } from '../utils/invitationCancellation';
 import { completeInvitation, canCompleteInvitation } from '../utils/invitationCompletion';
@@ -39,6 +39,11 @@ const InvitationDetails = () => {
     const [showShare, setShowShare] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const chatEndRef = useRef(null);
+
+    const [showAgeModal, setShowAgeModal] = useState(false);
+    const [pendingJoin, setPendingJoin] = useState(false);
+    const { updateProfile } = useAuth(); // Assuming updateProfile exists, or we use direct firestore update
+
 
     // ... existing code ...
 
@@ -443,8 +448,46 @@ const InvitationDetails = () => {
     // Otherwise, see personal status (on_way/arrived) or default to 'planning'.
     const myStatus = invitation?.participantStatus?.[currentUser?.id] || (meetingStatus === 'completed' ? 'completed' : 'planning');
 
+    // Save Age Category Logic
+    const handleSaveAgeCategory = async (selectedCategory) => {
+        if (!currentUser?.id) return;
+        setIsUpdatingStatus(true);
+        try {
+            // Update in Firestore
+            const userRef = doc(db, 'users', currentUser.id);
+            await import('firebase/firestore').then(({ updateDoc }) => {
+                updateDoc(userRef, { ageCategory: selectedCategory });
+            });
+
+            // Optimistically update local state if needed (though AuthContext should catch it)
+            // But for immediate UI feedback:
+            currentUser.ageCategory = selectedCategory;
+
+            // Close modal
+            setShowAgeModal(false);
+
+            // If we had a pending join action, retry it automatically
+            if (pendingJoin) {
+                // Re-check eligibility now that we have age
+                const check = checkEligibility(selectedCategory); // Pass manually to ensure latest
+                if (check.eligible) {
+                    await handleRequestToJoin();
+                } else {
+                    alert(check.reason);
+                }
+                setPendingJoin(false);
+            }
+
+        } catch (error) {
+            console.error("Error updating age category:", error);
+            alert("Failed to update profile. Please try again.");
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
+
     // Check eligibility based on gender and age
-    const checkEligibility = () => {
+    const checkEligibility = (manualAgeCategory) => {
         // Business accounts cannot join invitations
         if (userProfile?.accountType === 'business') {
             return { eligible: false, reason: t('business_cannot_join', { defaultValue: 'Business accounts cannot join invitations' }) };
@@ -455,18 +498,69 @@ const InvitationDetails = () => {
             return { eligible: false, reason: t('gender_mismatch') };
         }
 
-        // Check age range preference
-        if (ageRange && currentUser.age) {
-            const [minAge, maxAge] = ageRange.split('-').map(Number);
-            const userAge = currentUser.age;
-            if (userAge < minAge || userAge > maxAge) {
-                return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+        const userAgeCategory = manualAgeCategory || currentUser.ageCategory || userProfile?.ageCategory;
+
+        // Check NEW age groups preference (Multi-Select)
+        if (invitation.ageGroups && invitation.ageGroups.length > 0 && !invitation.ageGroups.includes('any')) {
+            if (!userAgeCategory) {
+                // User has no age category set. We consider them "eligible" to click the button,
+                // but the button click will trigger the modal.
+                return { eligible: true, needsAgeSetup: true };
+            }
+
+            if (!invitation.ageGroups.includes(userAgeCategory)) {
+                const allowed = invitation.ageGroups.join(', ');
+                return {
+                    eligible: false, reason: i18n.language === 'ar'
+                        ? `عذراً، هذه الدعوة مخصصة للفئات العمرية: ${allowed}`
+                        : `Sorry, this invitation is for age groups: ${allowed}`
+                };
+            }
+        }
+
+        // Check LEGACY age range preference
+        if (ageRange && ageRange !== 'any' && !invitation.ageGroups) { // Only check if new system not used
+            // If we have categories, try to map/guess or just skip
+            // For legacy '18-25' string matching
+            if (currentUser.age) {
+                const [minAge, maxAge] = ageRange.split('-').map(Number);
+                if (currentUser.age < minAge || currentUser.age > maxAge) {
+                    return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+                }
             }
         }
 
         return { eligible: true };
     };
     const eligibility = checkEligibility();
+
+    const handleRequestToJoin = async () => {
+        if (currentUser?.isGuest) {
+            navigate('/login');
+            return;
+        }
+
+        // Lazy Registration Check
+        if (eligibility.needsAgeSetup) {
+            setPendingJoin(true);
+            setShowAgeModal(true);
+            return;
+        }
+
+        if (!eligibility.eligible) return;
+
+        if (isPending) {
+            console.log('🔴 Canceling request for invitation:', id);
+            cancelRequest(id);
+        } else {
+            console.log('🟢 Requesting to join invitation:', id);
+            await requestToJoin(id);
+            console.log('✅ Request sent successfully');
+            alert(t('join_request_sent'));
+            // Force a full page reload to ensure the home page renders correctly
+            window.location.href = '/';
+        }
+    };
 
 
     return (
@@ -633,25 +727,7 @@ const InvitationDetails = () => {
                             <div style={{ marginTop: '1.5rem' }}>
                                 <button
                                     className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
-                                    onClick={async () => {
-                                        if (currentUser?.isGuest) {
-                                            navigate('/login');
-                                            return;
-                                        }
-                                        if (!eligibility.eligible) return;
-                                        if (isPending) {
-                                            console.log('🔴 Canceling request for invitation:', id);
-                                            cancelRequest(id);
-                                        } else {
-                                            console.log('🟢 Requesting to join invitation:', id);
-                                            console.log('Current user:', currentUser);
-                                            await requestToJoin(id);
-                                            console.log('✅ Request sent successfully');
-                                            alert(t('join_request_sent'));
-                                            // Force a full page reload to ensure the home page renders correctly
-                                            window.location.href = '/';
-                                        }
-                                    }}
+                                    onClick={handleRequestToJoin}
                                     disabled={!eligibility.eligible && !currentUser?.isGuest}
                                     style={{
                                         height: '60px',
@@ -682,18 +758,36 @@ const InvitationDetails = () => {
                             />
 
 
-                            {/* Embedded Group Chat */}
+                            {/* Group Chat Access Button - Replaces Embedded Chat */}
                             {(isAccepted || isHost) && (
-                                <div style={{
-                                    padding: '0 1.25rem',
-                                    marginBottom: '1.5rem',
-                                    opacity: meetingStatus === 'completed' ? 0.6 : 1,
-                                    pointerEvents: meetingStatus === 'completed' ? 'none' : 'auto'
-                                }}>
-                                    <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-white)', fontWeight: '800' }}>
-                                        {t('group_chat_title', { defaultValue: 'Group Chat' })}
-                                    </h4>
-                                    <GroupChat collectionPath={`invitations/${id}/messages`} />
+                                <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', opacity: meetingStatus === 'completed' ? 0.6 : 1, pointerEvents: meetingStatus === 'completed' ? 'none' : 'auto' }}>
+                                    <button
+                                        onClick={() => navigate(`/invitation/${id}/chat`)}
+                                        className="btn btn-block glass-card"
+                                        style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+                                            padding: '1rem', background: 'rgba(30, 41, 59, 0.4)',
+                                            border: '1px solid var(--border-color)', textAlign: 'left'
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '45px', height: '45px', borderRadius: '50%',
+                                            background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            boxShadow: '0 4px 10px rgba(139, 92, 246, 0.3)'
+                                        }}>
+                                            <FaComments color="white" size={20} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ color: 'white', fontWeight: '800', fontSize: '1rem' }}>
+                                                {t('group_chat_title', { defaultValue: 'Group Chat' })}
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                Check updates & details
+                                            </div>
+                                        </div>
+                                        <FaArrowRight color="var(--text-muted)" />
+                                    </button>
                                 </div>
                             )}
 
@@ -776,6 +870,54 @@ const InvitationDetails = () => {
                     )
                 }
 
+                {/* Age Verification Modal (Lazy Registration) */}
+                {showAgeModal && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', pading: '20px'
+                    }}>
+                        <div style={{
+                            background: 'var(--bg-card)', padding: '24px', borderRadius: '16px',
+                            border: '1px solid var(--border-color)', width: '90%', maxWidth: '350px',
+                            textAlign: 'center'
+                        }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎭</div>
+                            <h3 style={{ marginBottom: '8px' }}>
+                                {i18n.language === 'ar' ? 'أهلاً بالعضو الجديد!' : 'Welcome, New Member!'}
+                            </h3>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                                {i18n.language === 'ar'
+                                    ? 'عشان نضمن لك جو يناسبك (وبدون ما نسألك كل مرة)، بس علمنا بأي فئة عمرية نورت الدنيا؟ ✨'
+                                    : 'To ensure the best vibe for you (without asking every time), just let us know which age group you belong to! ✨'}
+                            </p>
+
+                            <div style={{ display: 'grid', gap: '8px', marginBottom: '20px' }}>
+                                {['18-24', '25-34', '35-44', '45-54', '55+'].map(age => (
+                                    <button
+                                        key={age}
+                                        onClick={() => handleSaveAgeCategory(age)}
+                                        disabled={isUpdatingStatus}
+                                        style={{
+                                            padding: '12px', background: 'rgba(255,255,255,0.05)',
+                                            border: '1px solid var(--border-color)', borderRadius: '12px',
+                                            color: 'var(--text-main)', cursor: 'pointer', fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {age}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => setShowAgeModal(false)}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                                {t('cancel')}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

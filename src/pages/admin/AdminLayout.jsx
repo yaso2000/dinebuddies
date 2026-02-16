@@ -7,11 +7,11 @@ import '../../styles/admin.css';
 
 const AdminLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { currentUser, logout } = useAuth();
+    const { currentUser, signOut } = useAuth();
 
     const handleLogout = async () => {
         if (window.confirm('Are you sure you want to logout?')) {
-            await logout();
+            await signOut();
         }
     };
 
