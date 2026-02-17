@@ -1,0 +1,175 @@
+/* PostCard.css - Twitter-like Feed Style */
+.post-card {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.post-card:not(.in-chat):hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.post-card.in-chat {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.post-avatar-col {
+    flex-shrink: 0;
+}
+
+.post-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-color: #333;
+}
+
+.post-content-col {
+    flex: 1;
+    min-width: 0;
+    /* Enable truncation in children */
+}
+
+/* Header */
+.post-header-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    /* overflow: hidden; Removed to allow dropdown menu */
+    /* text-overflow: ellipsis; */
+}
+
+.post-user-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-main);
+}
+
+.post-user-handle,
+.post-time {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.post-dot-separator {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: 0 2px;
+}
+
+/* Body */
+.post-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: var(--text-main);
+    margin-bottom: 10px;
+    word-wrap: break-word;
+}
+
+/* Media */
+.post-media-container {
+    margin-top: 10px;
+    margin-bottom: 4px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    max-height: 500px;
+    background: #000;
+}
+
+.post-media-content {
+    width: 100%;
+    max-height: 500px;
+    object-fit: cover;
+    /* Twitter usually crops to cover, but contain is safer for varying sizes. Let's start with cover but maintain aspect ratio via max-height container */
+    display: block;
+}
+
+/* Actions Bar */
+.post-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    max-width: 400px;
+    /* Limit width to keep icons closer */
+}
+
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    padding: 8px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    /* Create a larger hit area visually via padding/margin if needed */
+}
+
+.action-count {
+    font-size: 0.8rem;
+    /* font-weight: 600; */
+}
+
+/* Hover Effects */
+.action-item.reply:hover {
+    color: #1d9bf0;
+    background: rgba(29, 155, 240, 0.1);
+}
+
+.action-item.repost:hover {
+    color: #00ba7c;
+    background: rgba(0, 186, 124, 0.1);
+}
+
+.action-item.like:hover {
+    color: #f91880;
+    background: rgba(249, 24, 128, 0.1);
+}
+
+.action-item.like.liked {
+    color: #f91880;
+}
+
+.action-item.share:hover {
+    color: #1d9bf0;
+    background: rgba(29, 155, 240, 0.1);
+}
+
+/* Comments Dropdown (Simple implementation) */
+.comments-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.comment-input-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.comment-input {
+    flex: 1;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 8px 16px;
+    color: var(--text-main);
+}
