@@ -1,0 +1,131 @@
+/* Image Upload Container */
+.image-upload-container {
+    display: inline-block;
+}
+
+/* Wrapper */
+.image-upload-wrapper {
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    background: var(--card-bg);
+    border: 2px dashed var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.image-upload-wrapper:hover {
+    border-color: var(--primary);
+    transform: scale(1.02);
+}
+
+.image-upload-wrapper.dragging {
+    border-color: var(--primary);
+    background: rgba(var(--primary-rgb), 0.1);
+    transform: scale(1.05);
+}
+
+.image-upload-wrapper.has-image {
+    border-style: solid;
+}
+
+/* Shapes */
+.image-upload-wrapper.circle {
+    border-radius: 50%;
+}
+
+.image-upload-wrapper.square {
+    border-radius: 12px;
+}
+
+/* Sizes */
+.size-small .image-upload-wrapper {
+    width: 80px;
+    height: 80px;
+}
+
+.size-medium .image-upload-wrapper {
+    width: 150px;
+    height: 150px;
+}
+
+.size-large .image-upload-wrapper {
+    width: 200px;
+    height: 200px;
+}
+
+/* Preview */
+.image-preview {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.image-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Remove Button */
+.remove-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.9);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 10;
+}
+
+.remove-btn:hover {
+    background: #dc2626;
+    transform: scale(1.1);
+}
+
+/* Placeholder */
+.upload-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-secondary);
+}
+
+.camera-icon {
+    font-size: 2rem;
+    opacity: 0.6;
+}
+
+.upload-text {
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 0 10px;
+}
+
+/* Size-specific icons */
+.size-small .camera-icon {
+    font-size: 1.5rem;
+}
+
+.size-small .upload-text {
+    font-size: 0.7rem;
+}
+
+.size-large .camera-icon {
+    font-size: 2.5rem;
+}
+
+.size-large .upload-text {
+    font-size: 0.95rem;
+}
