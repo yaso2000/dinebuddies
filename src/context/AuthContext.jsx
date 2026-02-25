@@ -16,13 +16,20 @@ import {
     FacebookAuthProvider,
     TwitterAuthProvider
 } from 'firebase/auth';
+import { fetchIpLocation } from '../utils/locationUtils';
 import {
     doc,
     setDoc,
     getDoc,
     updateDoc,
     deleteDoc,
-    serverTimestamp
+    addDoc,
+    serverTimestamp,
+    onSnapshot,
+    collection,
+    query,
+    where,
+    getDocs
 } from 'firebase/firestore';
 
 const AuthContext = createContext();
@@ -47,7 +54,8 @@ export const AuthProvider = ({ children }) => {
         uid: 'guest',
         display_name: 'Guest', // Will be translated in components
         email: '',
-        photo_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest&backgroundColor=b6e3f4',
+        photo_url: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E',
+        photoURL: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E',
         role: 'guest',
         accountType: 'guest',
         following: [],
@@ -57,17 +65,19 @@ export const AuthProvider = ({ children }) => {
         isGuest: true
     };
 
+
+
     // Listen to auth state changes
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user);
 
             if (user) {
-                // Fetch user profile from Firestore
-                await fetchUserProfile(user.uid);
                 setIsGuest(false);
+                // Profile listener will handle setLoading(false)
+                // Fail-safe: if profile doesn't load in 5s, release the UI
+                setTimeout(() => setLoading(false), 5000);
             } else {
-                // Check if guest mode is active
                 const guestMode = localStorage.getItem('guestMode') === 'true';
                 if (guestMode) {
                     setUserProfile(guestProfile);
@@ -76,41 +86,48 @@ export const AuthProvider = ({ children }) => {
                     setUserProfile(null);
                     setIsGuest(false);
                 }
+                setLoading(false);
             }
-
-            setLoading(false);
         });
 
         return unsubscribe;
     }, []);
 
-    // Update lastSeen every 2 minutes for logged-in users
+
+    // Real-time Profile Listener
+    useEffect(() => {
+        if (!currentUser) return;
+        const userRef = doc(db, 'users', currentUser.uid);
+        const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setUserProfile(docSnap.data());
+            } else {
+                setUserProfile(null);
+            }
+            setLoading(false);
+        }, (error) => {
+            console.error("Profile Error:", error);
+            setLoading(false);
+        });
+        return () => unsubscribeSnapshot();
+    }, [currentUser]);
+
+    // Update lastSeen and location
     useEffect(() => {
         if (!currentUser || isGuest) return;
-
-        const updateLastSeen = async () => {
+        const syncMeta = async () => {
             try {
                 await updateDoc(doc(db, 'users', currentUser.uid), {
                     lastSeen: serverTimestamp()
                 });
-            } catch (error) {
-                console.error('Error updating lastSeen:', error);
-            }
+                trackUserLocation();
+            } catch (e) { }
         };
-
-        // Update immediately on mount
-        updateLastSeen();
-
-        // Track Location Silently
-        trackUserLocation();
-
-        // Then update every 2 minutes
-        const interval = setInterval(updateLastSeen, 2 * 60 * 1000);
-
+        syncMeta();
+        const interval = setInterval(syncMeta, 5 * 60 * 1000); // 5 min
         return () => clearInterval(interval);
     }, [currentUser, isGuest]);
 
-    // Silent User Location Tracking (City/Country)
     const trackUserLocation = () => {
         if (!currentUser || isGuest) return;
         if (!navigator.geolocation) return;
@@ -118,95 +135,68 @@ export const AuthProvider = ({ children }) => {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
-
                 try {
-                    // 1. Reverse Geocoding to get City/Country
-                    // Using OpenStreetMap Nominatim (Free, no key required for low usage)
                     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=en`);
                     const data = await response.json();
 
                     if (data && data.address) {
-                        const city = data.address.city || data.address.town || data.address.village || data.address.county || '';
+                        const city = data.address.city || data.address.town || data.address.village || '';
                         const country = data.address.country || '';
                         const fullLocation = `${city}, ${country}`;
 
-                        // 2. Update Firestore silently
-                        // Only update if changed or if it's the first time to avoid writes? 
-                        // For now we update to ensure "freshness" for the "My City" feature.
+                        if (userProfile?.location === fullLocation &&
+                            Math.abs((userProfile?.coordinates?.lat || 0) - latitude) < 0.001) {
+                            return;
+                        }
 
                         const userRef = doc(db, 'users', currentUser.uid);
                         await updateDoc(userRef, {
                             location: fullLocation,
-                            city: city,
-                            country: country,
-                            coordinates: {
-                                lat: latitude,
-                                lng: longitude
-                            },
+                            city,
+                            country,
+                            coordinates: { lat: latitude, lng: longitude },
                             lastLocationUpdate: serverTimestamp()
                         });
 
-                        // Update local state if needed (userProfile usually auto-updates via fetchUserProfile)
-                        // But we can patch it locally to be instant
                         setUserProfile(prev => ({
                             ...prev,
                             location: fullLocation,
-                            city: city,
-                            country: country,
+                            city,
+                            country,
                             coordinates: { lat: latitude, lng: longitude }
                         }));
-
-                        console.log(`📍 Location updated silent: ${fullLocation}`);
                     }
-                } catch (error) {
-                    console.error('Error updating user location:', error);
-                    // Fail silently, don't bother user
-                }
+                } catch (error) { }
             },
             async (error) => {
-                console.log('Location permission denied/unavailable (Silent mode). Attempting IP Fallback...');
-
-                // IP Fallback Implementation
                 try {
-                    const response = await fetch('https://ipwho.is/');
-                    const data = await response.json();
-
+                    const data = await fetchIpLocation();
                     if (data.success) {
                         const city = data.city || '';
                         const country = data.country || '';
                         const fullLocation = `${city}, ${country}`;
 
-                        // Update Firestore with IP Location
                         const userRef = doc(db, 'users', currentUser.uid);
-                        // Using setDoc with merge to follow pattern or updateDoc if sure doc exists
-                        // updateDoc is safer if we know user is logged in
                         await updateDoc(userRef, {
                             location: fullLocation,
-                            city: city,
-                            country: country, // Full country name
-                            countryCode: data.country_code, // Add code for flags
-                            coordinates: {
-                                lat: data.latitude,
-                                lng: data.longitude
-                            },
+                            city,
+                            country,
+                            countryCode: data.country_code,
+                            coordinates: { lat: data.latitude, lng: data.longitude },
                             lastLocationUpdate: serverTimestamp(),
                             locationSource: 'ip'
                         });
 
-                        // Update local state
                         setUserProfile(prev => ({
                             ...prev,
                             location: fullLocation,
-                            city: city,
-                            country: country,
+                            city,
+                            country,
                             countryCode: data.country_code,
                             coordinates: { lat: data.latitude, lng: data.longitude }
                         }));
-                        console.log(`📍 IP Location updated: ${fullLocation}`);
                     }
-                } catch (ipError) {
-                    console.error('IP Location Fallback failed:', ipError);
-                }
+                } catch (ipError) { }
             },
             { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
         );
@@ -216,9 +206,27 @@ export const AuthProvider = ({ children }) => {
     // Fetch user profile from Firestore
     const fetchUserProfile = async (userId) => {
         try {
-            const userDoc = await getDoc(doc(db, 'users', userId));
+            const userRef = doc(db, 'users', userId);
+            const userDoc = await getDoc(userRef);
             if (userDoc.exists()) {
-                setUserProfile(userDoc.data());
+                const data = userDoc.data();
+
+                // --- 🔄 WEEKLY QUOTA RESET LOGIC (LAZY RESET) ---
+                const lastReset = data.lastQuotaResetDate?.toDate() || data.created_time?.toDate() || new Date();
+                const now = new Date();
+                const diffMs = now - lastReset;
+                const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+                if (diffMs >= sevenDaysMs) {
+                    console.log('📅 Resetting weekly quota for user:', userId);
+                    await updateDoc(userRef, {
+                        usedPrivateCreditsThisWeek: 0,
+                        lastQuotaResetDate: serverTimestamp()
+                    });
+                    data.usedPrivateCreditsThisWeek = 0; // Update local data before setting state
+                }
+
+                setUserProfile(data);
             }
         } catch (error) {
             console.error('Error fetching user profile:', error);
@@ -298,6 +306,35 @@ export const AuthProvider = ({ children }) => {
             const result = await signInWithEmailAndPassword(auth, email, password);
             return result.user;
         } catch (error) {
+            // DEMO LOGIN BYPASS: If email ends with @d.c and user not found, 
+            // check Firestore for a demo account and auto-register it.
+            if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && email.endsWith('@d.c')) {
+                try {
+                    const q = query(collection(db, 'users'), where('email', '==', email), where('isDemo', '==', true));
+                    const snapshot = await getDocs(q);
+
+                    if (!snapshot.empty) {
+                        const demoData = snapshot.docs[0].data();
+                        console.log('🧪 Demo user detected in Firestore. Auto-registering in Auth...');
+
+                        // Attempt to register with the provided password
+                        const signupResult = await createUserWithEmailAndPassword(auth, email, password);
+
+                        // Sync UID if needed
+                        const oldDocRef = snapshot.docs[0].ref;
+                        const newDocRef = doc(db, 'users', signupResult.user.uid);
+
+                        if (oldDocRef.id !== signupResult.user.uid) {
+                            await setDoc(newDocRef, { ...demoData, uid: signupResult.user.uid });
+                            await deleteDoc(oldDocRef);
+                        }
+
+                        return signupResult.user;
+                    }
+                } catch (bypassError) {
+                    console.error('Demo auto-reg failed:', bypassError);
+                }
+            }
             console.error('Error signing in with email:', error);
             throw error;
         }
@@ -307,9 +344,9 @@ export const AuthProvider = ({ children }) => {
     const signInWithGoogle = async () => {
         try {
             const provider = new GoogleAuthProvider();
+            provider.addScope('email');
+            provider.addScope('profile');
             const result = await signInWithPopup(auth, provider);
-
-            // Check if user exists in Firestore, if not create profile
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -321,11 +358,18 @@ export const AuthProvider = ({ children }) => {
                     photo_url: result.user.photoURL,
                     authProvider: 'google'
                 });
+            } else {
+                // Keep photo in sync
+                await updateDoc(doc(db, 'users', result.user.uid), {
+                    photo_url: result.user.photoURL || userDoc.data().photo_url,
+                    last_active_time: serverTimestamp()
+                });
             }
-
             return { user: result.user, isNewUser };
         } catch (error) {
-            console.error('Error signing in with Google:', error);
+            if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+                console.error('Google Sign-in Error:', error.code, error.message);
+            }
             throw error;
         }
     };
@@ -348,6 +392,17 @@ export const AuthProvider = ({ children }) => {
                     photo_url: result.user.photoURL,
                     authProvider: 'apple'
                 });
+            } else if (result.user.photoURL) {
+                // Sync photo if missing or default
+                const data = userDoc.data();
+                const currentPhoto = data.photoURL || data.photo_url;
+                if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
+                    await updateDoc(doc(db, 'users', result.user.uid), {
+                        photoURL: result.user.photoURL,
+                        photo_url: result.user.photoURL,
+                        updatedAt: serverTimestamp()
+                    });
+                }
             }
 
             return { user: result.user, isNewUser };
@@ -374,6 +429,17 @@ export const AuthProvider = ({ children }) => {
                     photo_url: result.user.photoURL,
                     authProvider: 'facebook'
                 });
+            } else if (result.user.photoURL) {
+                // Sync photo if missing or default
+                const data = userDoc.data();
+                const currentPhoto = data.photoURL || data.photo_url;
+                if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
+                    await updateDoc(doc(db, 'users', result.user.uid), {
+                        photoURL: result.user.photoURL,
+                        photo_url: result.user.photoURL,
+                        updatedAt: serverTimestamp()
+                    });
+                }
             }
 
             return { user: result.user, isNewUser };
@@ -400,6 +466,17 @@ export const AuthProvider = ({ children }) => {
                     photo_url: result.user.photoURL,
                     authProvider: 'twitter'
                 });
+            } else if (result.user.photoURL) {
+                // Sync photo if missing or default
+                const data = userDoc.data();
+                const currentPhoto = data.photoURL || data.photo_url;
+                if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
+                    await updateDoc(doc(db, 'users', result.user.uid), {
+                        photoURL: result.user.photoURL,
+                        photo_url: result.user.photoURL,
+                        updatedAt: serverTimestamp()
+                    });
+                }
             }
 
             return { user: result.user, isNewUser };
@@ -430,30 +507,38 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            // SAFE WRITE: Use setDoc with { merge: true } to prevent accidental data wiping
             await setDoc(doc(db, 'users', userId), {
                 uid: userId,
                 display_name: finalDisplayName,
                 email: userData.email || '',
-                photo_url: userData.photo_url || defaultAvatar,
+                photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
                 role: 'user',
                 accountType: 'individual',
-                following: [],
-                followersCount: 0,
-                reputation: 100, // Default reputation
-                shortDescription: '',
-                isGuest: false, // Explicitly not a guest
+                reputation: 100,
+                purchasedPrivateCredits: 5,
+                usedPrivateCreditsThisWeek: 0,
+                trialExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                lastQuotaResetDate: serverTimestamp(),
+                isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
-                lastSeen: serverTimestamp()
-            }, { merge: true }); // <--- CRITICAL: Merge prevents overwriting existing profile data
+                lastSeen: serverTimestamp(),
+                isProfileComplete: false
+            }, { merge: true });
 
-            console.log(`✅ Profile secured for: ${finalDisplayName}`);
+            await addDoc(collection(db, 'notifications'), {
+                userId: userId,
+                type: 'system_announcement',
+                title: '🎁 Welcome Gift!',
+                message: `Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!`,
+                style: 'success',
+                createdAt: serverTimestamp(),
+                read: false
+            });
 
-            // Refresh user profile
             await fetchUserProfile(userId);
         } catch (error) {
-            console.error('Error creating/updating user profile:', error);
+            console.error('Profile Creation Failed:', error);
             throw error;
         }
     };
@@ -481,19 +566,31 @@ export const AuthProvider = ({ children }) => {
     // Delete User Account
     const deleteUserAccount = async () => {
         if (!currentUser) return;
+
         try {
-            // Delete from Firestore first
-            await deleteDoc(doc(db, 'users', currentUser.uid));
-            // Delete from Auth
-            await currentUser.delete();
+            const uid = currentUser.uid;
+
+            // 1. Delete from Firestore first
+            await deleteDoc(doc(db, 'users', uid));
+
+            // 2. Clear Guest Mode and Profile
+            localStorage.removeItem('guestMode');
             setUserProfile(null);
+
+            // 3. Delete from Auth
+            const user = auth.currentUser;
+            if (user) {
+                await user.delete();
+            }
+
+            return true;
         } catch (error) {
             console.error('Error deleting account:', error);
+            // Re-authentication might be needed: auth/requires-recent-login
             throw error;
         }
     };
 
-    // Sign Out
     const signOut = async () => {
         try {
             await firebaseSignOut(auth);
@@ -565,6 +662,9 @@ export const AuthProvider = ({ children }) => {
         userProfile,
         loading,
         isGuest,
+        isAdmin: userProfile?.role === 'admin' || userProfile?.accountType === 'admin',
+        isBusiness: userProfile?.accountType === 'business' || userProfile?.role === 'partner',
+        isStaff: userProfile?.role === 'staff' || userProfile?.role === 'support' || userProfile?.role === 'admin',
         sendPhoneOTP,
         verifyPhoneOTP,
         signUpWithEmail,
@@ -587,23 +687,7 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={value}>
             {children}
-            {loading && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100vw',
-                    height: '100vh',
-                    zIndex: 9999,
-                    backgroundColor: 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'column'
-                }}>
-                    {/* Loading indicator removed as per request to avoid duplication */}
-                </div>
-            )}
+            {/* Loading blocker removed to prevent UI freeze */}
         </AuthContext.Provider>
     );
 };
