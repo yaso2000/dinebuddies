@@ -344,6 +344,10 @@ export const AuthProvider = ({ children }) => {
     const signInWithGoogle = async () => {
         try {
             const provider = new GoogleAuthProvider();
+            // Force Firebase to use the correct Google Cloud Client ID
+            provider.setCustomParameters({
+                client_id: '596978732537-vfum3vmph4gjak0ctnhftlj8u0ms35oj.apps.googleusercontent.com'
+            });
             provider.addScope('email');
             provider.addScope('profile');
             const result = await signInWithPopup(auth, provider);
