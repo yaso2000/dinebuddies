@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaStore, FaEnvelope, FaLock, FaPhone, FaMapMarkerAlt, FaArrowRight, FaArrowLeft, FaCheck } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { useTranslation } from 'react-i18next';
@@ -194,6 +194,9 @@ const BusinessSignup = () => {
                 ownedCommunities: []
             });
 
+            // Send Verification Email
+            await sendEmailVerification(user);
+
             // Success!
             setStep(3);
         } catch (error) {
@@ -211,48 +214,47 @@ const BusinessSignup = () => {
 
     return (
         <div style={{
-            minHeight: '100vh',
+            height: '100dvh',
             background: 'var(--bg-body)',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            flexDirection: 'column',
+            overflowY: 'auto',
             padding: '2rem 1rem'
         }}>
             <div style={{
                 width: '100%',
-                maxWidth: '500px',
-                background: 'var(--bg-card)',
-                borderRadius: '24px',
-                padding: '2.5rem',
-                border: '1px solid var(--border-color)',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                maxWidth: '400px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '16px',
+                padding: '1.5rem',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                margin: 'auto',
+                flexShrink: 0
             }}>
                 {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                     <div style={{
-                        width: '80px',
-                        height: '80px',
-                        background: 'linear-gradient(135deg, var(--primary), #f97316)',
-                        borderRadius: '20px',
+                        width: '50px',
+                        height: '50px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        borderRadius: '14px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        margin: '0 auto 1.5rem',
-                        fontSize: '2.5rem'
+                        margin: '0 auto 0.8rem',
+                        fontSize: '1.6rem'
                     }}>
                         <HiBuildingStorefront style={{ color: 'white' }} />
                     </div>
                     <h1 style={{
-                        fontSize: '1.8rem',
-                        fontWeight: '900',
-                        marginBottom: '0.5rem',
-                        background: 'linear-gradient(135deg, var(--primary), #f97316)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent'
+                        fontSize: '1.3rem',
+                        fontWeight: '800',
+                        marginBottom: '0.3rem',
+                        color: '#FFFFFF'
                     }}>
                         Create Business Account
                     </h1>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                    <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem' }}>
                         Join DineBuddies as a partner
                     </p>
                 </div>
@@ -261,20 +263,21 @@ const BusinessSignup = () => {
                 {step !== 3 && (
                     <div style={{
                         display: 'flex',
-                        gap: '1rem',
-                        marginBottom: '2rem'
+                        gap: '0.5rem',
+                        marginBottom: '1.5rem',
+                        justifyContent: 'center'
                     }}>
                         <div style={{
-                            flex: 1,
-                            height: '4px',
-                            background: step >= 1 ? 'var(--primary)' : 'var(--border-color)',
+                            width: '30%',
+                            height: '3px',
+                            background: step >= 1 ? '#a78bfa' : 'rgba(255, 255, 255, 0.2)',
                             borderRadius: '2px',
                             transition: 'all 0.3s'
                         }} />
                         <div style={{
-                            flex: 1,
-                            height: '4px',
-                            background: step >= 2 ? 'var(--primary)' : 'var(--border-color)',
+                            width: '30%',
+                            height: '3px',
+                            background: step >= 2 ? '#a78bfa' : 'rgba(255, 255, 255, 0.2)',
                             borderRadius: '2px',
                             transition: 'all 0.3s'
                         }} />
@@ -284,13 +287,14 @@ const BusinessSignup = () => {
                 {/* Error Message */}
                 {error && (
                     <div style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: '12px',
-                        padding: '1rem',
-                        marginBottom: '1.5rem',
-                        color: '#ef4444',
-                        fontSize: '0.9rem'
+                        background: 'rgba(255, 68, 68, 0.1)',
+                        border: '1px solid rgba(255, 68, 68, 0.3)',
+                        borderRadius: '10px',
+                        padding: '0.8rem',
+                        marginBottom: '1rem',
+                        color: '#ff6b6b',
+                        fontSize: '0.85rem',
+                        textAlign: 'center'
                     }}>
                         {error}
                     </div>
@@ -300,123 +304,97 @@ const BusinessSignup = () => {
                 {step === 1 && (
                     <div>
                         <h3 style={{
-                            fontSize: '1.1rem',
+                            fontSize: '1rem',
                             fontWeight: '700',
-                            marginBottom: '1.5rem',
-                            color: 'var(--text-primary)'
+                            marginBottom: '1rem',
+                            color: '#fff',
+                            textAlign: 'center'
                         }}>
                             Account Information
                         </h3>
 
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Email Address
-                            </label>
+                        <div style={{ marginBottom: '0.8rem' }}>
                             <div style={{ position: 'relative' }}>
                                 <FaEnvelope style={{
                                     position: 'absolute',
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '1rem'
+                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    fontSize: '0.9rem'
                                 }} />
                                 <input
                                     type="email"
                                     name="email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    placeholder="business@example.com"
+                                    placeholder="Business Email"
                                     style={{
                                         width: '100%',
-                                        padding: '0.9rem 1rem 0.9rem 3rem',
-                                        background: 'var(--bg-body)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '1rem'
+                                        padding: '0.8rem 1rem 0.8rem 2.8rem',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '10px',
+                                        color: '#fff',
+                                        fontSize: '0.95rem'
                                     }}
                                 />
                             </div>
                         </div>
 
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Password
-                            </label>
+                        <div style={{ marginBottom: '0.8rem' }}>
                             <div style={{ position: 'relative' }}>
                                 <FaLock style={{
                                     position: 'absolute',
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '1rem'
+                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    fontSize: '0.9rem'
                                 }} />
                                 <input
                                     type="password"
                                     name="password"
                                     value={formData.password}
                                     onChange={handleChange}
-                                    placeholder="••••••••"
+                                    placeholder="Password"
                                     style={{
                                         width: '100%',
-                                        padding: '0.9rem 1rem 0.9rem 3rem',
-                                        background: 'var(--bg-body)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '1rem'
+                                        padding: '0.8rem 1rem 0.8rem 2.8rem',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '10px',
+                                        color: '#fff',
+                                        fontSize: '0.95rem'
                                     }}
                                 />
                             </div>
                         </div>
 
-                        <div style={{ marginBottom: '2rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Confirm Password
-                            </label>
+                        <div style={{ marginBottom: '1.5rem' }}>
                             <div style={{ position: 'relative' }}>
                                 <FaLock style={{
                                     position: 'absolute',
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '1rem'
+                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    fontSize: '0.9rem'
                                 }} />
                                 <input
                                     type="password"
                                     name="confirmPassword"
                                     value={formData.confirmPassword}
                                     onChange={handleChange}
-                                    placeholder="••••••••"
+                                    placeholder="Confirm Password"
                                     style={{
                                         width: '100%',
-                                        padding: '0.9rem 1rem 0.9rem 3rem',
-                                        background: 'var(--bg-body)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '1rem'
+                                        padding: '0.8rem 1rem 0.8rem 2.8rem',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '10px',
+                                        color: '#fff',
+                                        fontSize: '0.95rem'
                                     }}
                                 />
                             </div>
@@ -426,10 +404,10 @@ const BusinessSignup = () => {
                             onClick={handleNext}
                             style={{
                                 width: '100%',
-                                padding: '1rem',
-                                background: 'linear-gradient(135deg, var(--primary), #f97316)',
+                                padding: '0.8rem',
+                                background: 'linear-gradient(135deg, #a78bfa, #ec4899)',
                                 border: 'none',
-                                borderRadius: '12px',
+                                borderRadius: '10px',
                                 color: 'white',
                                 fontSize: '1rem',
                                 fontWeight: '700',
@@ -438,10 +416,8 @@ const BusinessSignup = () => {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '0.5rem',
-                                transition: 'transform 0.2s'
+                                boxShadow: '0 4px 15px rgba(236, 72, 153, 0.3)'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                         >
                             Next Step
                             <FaArrowRight />
@@ -453,182 +429,131 @@ const BusinessSignup = () => {
                 {step === 2 && (
                     <div>
                         <h3 style={{
-                            fontSize: '1.1rem',
+                            fontSize: '1rem',
                             fontWeight: '700',
-                            marginBottom: '1.5rem',
-                            color: 'var(--text-primary)'
+                            marginBottom: '1rem',
+                            color: '#fff',
+                            textAlign: 'center'
                         }}>
                             Business Information
                         </h3>
 
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Business Name *
-                            </label>
+                        <div style={{ marginBottom: '0.8rem' }}>
                             <div style={{ position: 'relative' }}>
                                 <FaStore style={{
                                     position: 'absolute',
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '1rem'
+                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    fontSize: '0.9rem'
                                 }} />
                                 <input
                                     type="text"
                                     name="businessName"
                                     value={formData.businessName}
                                     onChange={handleChange}
-                                    placeholder="Your Business Name"
+                                    placeholder="Business Name"
                                     style={{
                                         width: '100%',
-                                        padding: '0.9rem 1rem 0.9rem 3rem',
-                                        background: 'var(--bg-body)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '1rem'
+                                        padding: '0.8rem 1rem 0.8rem 2.8rem',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '10px',
+                                        color: '#fff',
+                                        fontSize: '0.95rem'
                                     }}
                                 />
                             </div>
                         </div>
 
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Business Type *
-                            </label>
+                        <div style={{ marginBottom: '0.8rem' }}>
                             <select
                                 name="businessType"
                                 value={formData.businessType}
                                 onChange={handleChange}
                                 style={{
                                     width: '100%',
-                                    padding: '0.9rem 1rem',
-                                    background: 'var(--bg-body)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    color: 'var(--text-primary)',
-                                    fontSize: '1rem'
+                                    padding: '0.8rem 1rem',
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    borderRadius: '10px',
+                                    color: '#fff',
+                                    fontSize: '0.95rem',
+                                    appearance: 'none' // Remove default arrow for custom look if desired, but keeping simple for now
                                 }}
                             >
                                 {businessTypes.map(type => (
-                                    <option key={type} value={type}>{type}</option>
+                                    <option key={type} value={type} style={{ color: '#000' }}>{type}</option>
                                 ))}
                             </select>
                         </div>
 
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Phone Number *
-                            </label>
+                        <div style={{ marginBottom: '0.8rem' }}>
                             <div style={{ position: 'relative' }}>
                                 <FaPhone style={{
                                     position: 'absolute',
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '1rem'
+                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    fontSize: '0.9rem'
                                 }} />
                                 <input
                                     type="tel"
                                     name="phone"
                                     value={formData.phone}
                                     onChange={handleChange}
-                                    placeholder="+1 234 567 8900"
+                                    placeholder="Phone Number"
                                     style={{
                                         width: '100%',
-                                        padding: '0.9rem 1rem 0.9rem 3rem',
-                                        background: 'var(--bg-body)',
-                                        border: '1px solid var(--border-color)',
-                                        borderRadius: '12px',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '1rem'
+                                        padding: '0.8rem 1rem 0.8rem 2.8rem',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '10px',
+                                        color: '#fff',
+                                        fontSize: '0.95rem'
                                     }}
                                 />
                             </div>
                         </div>
 
-                        {/* Current Location Display */}
-                        <div style={{ marginBottom: '2rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Your Location
-                            </label>
-
+                        {/* Current Location Display - Simplified */}
+                        <div style={{ marginBottom: '1rem' }}>
                             {formData.city ? (
                                 <div style={{
-                                    padding: '0.75rem 1rem',
-                                    background: 'rgba(139, 92, 246, 0.1)',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                                    padding: '0.6rem 0.8rem',
+                                    background: 'rgba(167, 139, 250, 0.1)',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(167, 139, 250, 0.3)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.8rem',
+                                    color: '#d8b4fe'
                                 }}>
-                                    <span style={{ fontSize: '1.2rem' }}>📍</span>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                                            Detected City
-                                        </div>
-                                        <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-                                            {formData.city}, {Country.getCountryByCode(formData.country)?.name} {Country.getCountryByCode(formData.country)?.flag}
-                                        </div>
-                                    </div>
+                                    <span>📍</span>
+                                    <span>{formData.city}, {Country.getCountryByCode(formData.country)?.name}</span>
                                 </div>
                             ) : (
                                 <div style={{
-                                    padding: '0.75rem 1rem',
-                                    background: 'var(--bg-body)',
-                                    borderRadius: '12px',
-                                    border: '1px solid var(--border-color)',
+                                    padding: '0.6rem 0.8rem',
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    borderRadius: '10px',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-muted)'
+                                    fontSize: '0.8rem',
+                                    color: 'rgba(255, 255, 255, 0.5)'
                                 }}>
                                     <span>⏳</span>
-                                    <span>Detecting your location...</span>
+                                    <span>Detecting location...</span>
                                 </div>
                             )}
                         </div>
 
                         {/* Business Address Search */}
-                        <div style={{ marginBottom: '2rem' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '0.5rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '600',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                Search for Your Business Address *
-                            </label>
+                        <div style={{ marginBottom: '1.5rem' }}>
                             <LocationAutocomplete
                                 value={formData.location}
                                 onChange={handleChange}
@@ -637,24 +562,22 @@ const BusinessSignup = () => {
                                 countryCode={formData.country}
                                 userLat={formData.userLat}
                                 userLng={formData.userLng}
+                                placeholder="Search Business Address"
                             />
-                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
-                                Search for your exact business location (restaurant, cafe, etc.)
-                            </small>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.8rem' }}>
                             <button
                                 onClick={handleBack}
                                 style={{
                                     flex: 1,
-                                    padding: '1rem',
-                                    background: 'var(--bg-body)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    color: 'var(--text-primary)',
-                                    fontSize: '1rem',
-                                    fontWeight: '700',
+                                    padding: '0.8rem',
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    borderRadius: '10px',
+                                    color: '#fff',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -670,22 +593,23 @@ const BusinessSignup = () => {
                                 disabled={loading}
                                 style={{
                                     flex: 2,
-                                    padding: '1rem',
-                                    background: loading ? 'var(--bg-body)' : 'linear-gradient(135deg, var(--primary), #f97316)',
+                                    padding: '0.8rem',
+                                    background: loading ? 'rgba(255, 255, 255, 0.1)' : 'linear-gradient(135deg, #a78bfa, #ec4899)',
                                     border: 'none',
-                                    borderRadius: '12px',
+                                    borderRadius: '10px',
                                     color: 'white',
-                                    fontSize: '1rem',
+                                    fontSize: '0.9rem',
                                     fontWeight: '700',
                                     cursor: loading ? 'not-allowed' : 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: '0.5rem',
-                                    opacity: loading ? 0.6 : 1
+                                    opacity: loading ? 0.6 : 1,
+                                    boxShadow: '0 4px 15px rgba(236, 72, 153, 0.3)'
                                 }}
                             >
-                                {loading ? 'Creating Account...' : 'Create Account'}
+                                {loading ? 'Creating...' : 'Create Account'}
                                 {!loading && <FaCheck />}
                             </button>
                         </div>
@@ -696,66 +620,67 @@ const BusinessSignup = () => {
                 {step === 3 && (
                     <div style={{ textAlign: 'center' }}>
                         <div style={{
-                            width: '100px',
-                            height: '100px',
-                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            width: '80px',
+                            height: '80px',
+                            background: 'rgba(16, 185, 129, 0.2)',
                             borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            margin: '0 auto 2rem',
-                            fontSize: '3rem'
-                        }}>
-                            <FaCheck style={{ color: 'white' }} />
+                            margin: '0 auto 1.5rem',
+                            fontSize: '2.5rem',
+                            border: '2px solid #10b981'
+                        }} >
+                            <FaCheck style={{ color: '#10b981' }} />
                         </div>
                         <h2 style={{
-                            fontSize: '1.8rem',
-                            fontWeight: '900',
-                            marginBottom: '1rem',
-                            color: 'var(--text-primary)'
+                            fontSize: '1.5rem',
+                            fontWeight: '800',
+                            marginBottom: '0.8rem',
+                            color: '#fff'
                         }}>
                             Account Created!
                         </h2>
                         <p style={{
-                            color: 'var(--text-secondary)',
+                            color: 'rgba(255, 255, 255, 0.7)',
                             marginBottom: '2rem',
-                            lineHeight: '1.6'
+                            lineHeight: '1.5',
+                            fontSize: '0.9rem'
                         }}>
-                            Your business account has been created successfully.
-                            Complete your profile to start connecting with customers!
+                            Your business account is ready.
                         </p>
                         <button
                             onClick={() => navigate('/edit-business-profile')}
                             style={{
                                 width: '100%',
-                                padding: '1rem',
-                                background: 'linear-gradient(135deg, var(--primary), #f97316)',
+                                padding: '0.8rem',
+                                background: 'linear-gradient(135deg, #a78bfa, #ec4899)',
                                 border: 'none',
-                                borderRadius: '12px',
+                                borderRadius: '10px',
                                 color: 'white',
                                 fontSize: '1rem',
                                 fontWeight: '700',
                                 cursor: 'pointer',
-                                marginBottom: '1rem'
+                                marginBottom: '0.8rem'
                             }}
                         >
-                            Complete Your Profile
+                            Complete Profile
                         </button>
                         <button
                             onClick={() => navigate('/')}
                             style={{
                                 width: '100%',
-                                padding: '1rem',
+                                padding: '0.8rem',
                                 background: 'transparent',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                color: 'var(--text-secondary)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: '10px',
+                                color: 'rgba(255, 255, 255, 0.7)',
                                 fontSize: '0.9rem',
                                 fontWeight: '600',
                                 cursor: 'pointer'
                             }}
                         >
-                            Go to Dashboard
+                            Dashboard
                         </button>
                     </div>
                 )}
@@ -763,17 +688,17 @@ const BusinessSignup = () => {
                 {/* Footer */}
                 {step !== 3 && (
                     <div style={{
-                        marginTop: '2rem',
-                        paddingTop: '1.5rem',
-                        borderTop: '1px solid var(--border-color)',
+                        marginTop: '1.5rem',
+                        paddingTop: '1rem',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
                         textAlign: 'center'
                     }}>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.85rem' }}>
                             Already have an account?{' '}
                             <span
                                 onClick={() => navigate('/login')}
                                 style={{
-                                    color: 'var(--primary)',
+                                    color: '#a78bfa',
                                     fontWeight: '600',
                                     cursor: 'pointer'
                                 }}

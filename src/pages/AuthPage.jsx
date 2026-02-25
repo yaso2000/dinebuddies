@@ -123,15 +123,14 @@ const AuthPage = () => {
 
     return (
         <div style={{
-            minHeight: '100vh',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            height: '100dvh',
+            background: 'var(--bg-body)',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem 1rem',
-            fontFamily: 'Inter, sans-serif',
+            flexDirection: 'column',
+            fontFamily: 'var(--font-body)',
             position: 'relative',
-            overflow: 'hidden'
+            overflowY: 'auto',
+            padding: '2rem 1rem'
         }}>
             {/* reCAPTCHA Container */}
             <div id="recaptcha-container"></div>
@@ -159,30 +158,32 @@ const AuthPage = () => {
             }}></div>
 
             {/* Main Auth Card */}
-            <div style={{
-                background: 'white',
-                borderRadius: '24px',
+            <div className="glass-card" style={{
+                margin: 'auto',
                 maxWidth: '450px',
                 width: '100%',
                 padding: '3rem 2.5rem',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
                 position: 'relative',
-                zIndex: 1
+                zIndex: 1,
+                border: '1px solid var(--border-color)',
+                flexShrink: 0
             }}>
                 {/* Logo & Title */}
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍽️</div>
+                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.8rem' }}>🍽️</div>
                     <h1 style={{
-                        fontSize: '2rem',
-                        fontWeight: '800',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        fontSize: '1.8rem',
+                        fontWeight: '900',
+                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--luxury-gold) 100%)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
-                        marginBottom: '0.5rem'
+                        marginBottom: '0.2rem',
+                        textAlign: 'center',
+                        letterSpacing: '-1px'
                     }}>
                         DineBuddies
                     </h1>
-                    <p style={{ color: '#718096', fontSize: '0.95rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                         {t('join_us')}
                     </p>
                 </div>
@@ -206,7 +207,7 @@ const AuthPage = () => {
                 {!otpSent ? (
                     <form onSubmit={handleSendOTP}>
                         <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#4a5568' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-main)' }}>
                                 {t('phone_number')}
                             </label>
                             <div style={{ position: 'relative' }}>
@@ -220,20 +221,28 @@ const AuthPage = () => {
                                     style={{
                                         width: '100%',
                                         padding: '1rem 1rem 1rem 2.5rem',
-                                        border: '2px solid #e2e8f0',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '12px',
                                         fontSize: '1rem',
                                         fontFamily: 'inherit',
-                                        transition: 'border 0.3s',
+                                        transition: 'all 0.3s',
                                         outline: 'none',
                                         direction: 'ltr',
-                                        textAlign: 'left' // English LTR for phone numbers usually better
+                                        textAlign: 'left',
+                                        background: 'var(--bg-input)',
+                                        color: 'var(--text-main)'
                                     }}
-                                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = 'var(--primary)';
+                                        e.target.style.boxShadow = '0 0 0 2px rgba(139, 92, 246, 0.2)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = 'var(--border-color)';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
                                 />
                             </div>
-                            <p style={{ fontSize: '0.75rem', color: '#718096', marginTop: '0.5rem', textAlign: 'right' }}>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'right' }}>
                                 {t('phone_example')}
                             </p>
                         </div>
@@ -355,9 +364,9 @@ const AuthPage = () => {
                     margin: '2rem 0',
                     gap: '1rem'
                 }}>
-                    <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
-                    <span style={{ color: '#718096', fontSize: '0.875rem' }}>{t('or')}</span>
-                    <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }}></div>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{t('or')}</span>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }}></div>
                 </div>
 
                 {/* Social Login Grid */}
@@ -365,13 +374,12 @@ const AuthPage = () => {
                     <button
                         onClick={() => handleSocialLogin('google')}
                         disabled={loading}
+                        className="glass-card"
                         style={{
                             padding: '0.75rem',
-                            background: 'white',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '12px',
+                            border: '1px solid var(--border-color)',
                             fontWeight: '600',
-                            color: '#4a5568',
+                            color: 'var(--text-main)',
                             cursor: loading ? 'not-allowed' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -458,7 +466,7 @@ const AuthPage = () => {
                             background: 'transparent',
                             border: 'none',
                             fontWeight: '600',
-                            color: '#718096',
+                            color: 'var(--text-muted)',
                             cursor: 'pointer',
                             transition: 'color 0.3s',
                             fontSize: '0.9rem',
