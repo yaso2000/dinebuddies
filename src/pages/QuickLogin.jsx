@@ -152,13 +152,20 @@ const QuickLogin = () => {
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                        <img
-                            src={isDark ? "/logo-w.png" : "/logo.png"}
-                            alt="DineBuddies Logo"
+                        <div
+                            aria-label="DineBuddies Logo"
                             style={{
                                 width: '80px',
                                 height: '80px',
-                                objectFit: 'contain',
+                                WebkitMaskImage: `url(${isDark ? "/logo-w.png" : "/logo.png"})`,
+                                WebkitMaskSize: 'contain',
+                                WebkitMaskPosition: 'center',
+                                WebkitMaskRepeat: 'no-repeat',
+                                maskImage: `url(${isDark ? "/logo-w.png" : "/logo.png"})`,
+                                maskSize: 'contain',
+                                maskPosition: 'center',
+                                maskRepeat: 'no-repeat',
+                                backgroundColor: isDark ? '#ffffff' : '#f97316',
                                 filter: isDark ? 'drop-shadow(0 0 10px rgba(139, 92, 246, 0.3))' : 'none',
                                 transition: 'all 0.3s ease'
                             }}
