@@ -16,7 +16,14 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+             (request.auth.token.admin == true || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    function isPartner() {
+      return isSignedIn() && 
+             (request.auth.token.partner == true || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
     
     // ============================================
@@ -31,7 +38,24 @@ service cloud.firestore {
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       allow update: if isAdmin();
-      allow delete: if isOwner(userId) || isAdmin();
+      
+      // SUPER OWNER PROTECTION:
+      // 1. Only Super Owner can delete Admins.
+      // 2. Admins cannot delete themselves.
+      // 3. Admins can delete regular users.
+      // 4. Regular users can delete themselves.
+      
+      allow delete: if 
+        // Case 1: Super Owner can delete ANYONE (including other admins)
+        (request.auth.token.email.matches('.*y.abohamed@gmail.com') || 
+         request.auth.token.email == 'admin@dinebuddies.com' ||
+         request.auth.uid == 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') ||
+         
+        // Case 2: Admin deleting a non-admin user
+        (isAdmin() && resource.data.role != 'admin' && resource.data.accountType != 'admin') ||
+        
+        // Case 3: Regular user deleting themselves (if not admin)
+        (isOwner(userId) && resource.data.role != 'admin' && resource.data.accountType != 'admin');
       
       // USER REVIEWS SUBCOLLECTION
       match /reviews/{reviewId} {
@@ -150,147 +174,171 @@ service cloud.firestore {
     // ============================================
     
     match /conversations/{conversationId} {
-      // Anyone signed in can read
-      allow read: if isSignedIn();
+      // Only participants can read the conversation document
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
       
-      // Anyone can create conversation
+      // Anyone signed in can create a conversation (initial creation)
       allow create: if isSignedIn();
       
-      // Anyone can update conversation
-      allow update: if isSignedIn();
+      // Only participants can update (lastMessage, unreadBy, typing)
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
       
-      // Participants can delete
-      allow delete: if isSignedIn();
+      // Participants or Admin can delete
+      allow delete: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
       
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow create: if isSignedIn() && 
-                         request.resource.data.senderId == request.auth.uid;
-        allow update: if isSignedIn() && 
-                         isOwner(resource.data.senderId);
-        allow delete: if isSignedIn() && 
-                         (isOwner(resource.data.senderId) || isAdmin());
-      }
-    }
-    
-    // ============================================
-    // NOTIFICATIONS COLLECTION
-    // ============================================
-    
-    match /notifications/{notificationId} {
-      // Users can read their own notifications
-      allow read: if isSignedIn() && isOwner(resource.data.userId);
-      
-      // Anyone can create notifications (for system notifications)
-      allow create: if isSignedIn();
-      
-      // Users can update their own notifications
-      allow update: if isSignedIn() && isOwner(resource.data.userId);
-      
-      // Users can delete their own notifications
-      allow delete: if isSignedIn() && isOwner(resource.data.userId);
-      
-      // Admin can do anything
-      allow read, write: if isAdmin();
-    }
-    
-    // ============================================
-    // PARTNERS/POSTS COLLECTION
-    // ============================================
-    
-    match /partners/{partnerId} {
-      allow read: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
-      
-      // MESSAGES SUBCOLLECTION (Community Chat)
-      match /messages/{messageId} {
-        // Anyone signed in can read messages
-        allow read: if isSignedIn();
-        
-        // Anyone signed in can create messages
-        allow create: if isSignedIn() && 
-                         request.resource.data.senderId == request.auth.uid;
-        
-        // Sender can update their own message
+                         request.resource.data.senderId == request.auth.uid &&
+                         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow update: if isSignedIn() && 
                          resource.data.senderId == request.auth.uid;
-        
-        // Sender or admin can delete message
         allow delete: if isSignedIn() && 
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
+
+    // ============================================
+    // REVIEWS COLLECTION (Top-Level)
+    // ============================================
     
-    match /posts/{postId} {
+    match /reviews/{reviewId} {
       allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.fromUserId == request.auth.uid || isAdmin());
+    }
+
+    // ============================================
+    // REPORTS & SYSTEM MESSAGES
+    // ============================================
+
+    match /reports/{reportId} {
+      allow read: if isAdmin();
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /system_messages/{messageId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /partner_notifications/{notifId} {
+      allow read: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
+    }
+    
+    // ============================================
+    // POSTS & FEED
+    // ============================================
+
+    match /communityPosts/{postId} {
+      // Anyone can read posts
+      allow read: if true;
+      // Any signed in user can create a post
+      allow create: if isSignedIn();
+      // Only the author or an admin can update/delete their post
+      allow update, delete: if isSignedIn() && (
+        resource.data.authorId == request.auth.uid || 
+        resource.data.userId == request.auth.uid ||
+        resource.data.partnerId == request.auth.uid ||
+        (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
+        isAdmin()
+      );
     }
 
     match /stories/{storyId} {
+      // Anyone can read stories
       allow read: if true;
+      // Any signed in user can create a story
       allow create: if isSignedIn();
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // Only the author or an admin can update/delete their story
+      allow update, delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.authorId == request.auth.uid ||
+        resource.data.partnerId == request.auth.uid ||
+        (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
+        isAdmin()
+      );
     }
-    
-    // ============================================
-    // COMMUNITIES CHAT
-    // ============================================
-    
-    match /communities/{partnerId} {
-      // Anyone can read community info
+
+    match /likes/{likeId} {
       allow read: if true;
-      
-      // Messages subcollection
-      match /messages/{messageId} {
-        // Helper: Check if user is a member of this community
-        function isMember() {
-          let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-          return request.auth.uid == partnerId || 
-                 partnerId in userDoc.data.joinedCommunities;
-        }
-        
-        // Only members can read messages
-        allow read: if isSignedIn() && isMember();
-        
-        // Only members can create messages
-        allow create: if isSignedIn() && isMember() &&
-                        request.resource.data.senderId == request.auth.uid;
-        
-        // Only sender can update their own message
-        allow update: if isSignedIn() && 
-                        resource.data.senderId == request.auth.uid;
-        
-        // Sender or partner owner can delete
-        allow delete: if isSignedIn() && 
-                        (resource.data.senderId == request.auth.uid || 
-                         request.auth.uid == partnerId);
-      }
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
-    
-    // ============================================
-    // COMMUNITY MESSAGES (OLD - Keep for compatibility)
-    // ============================================
-    
-    match /communityMessages/{messageId} {
-      allow read: if isSignedIn();
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && resource.data.recipientId == request.auth.uid;
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.uid == resource.data.communityId);
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.uid == resource.data.communityId);
+      allow update: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.recipientId == request.auth.uid || isAdmin());
     }
 
     // ============================================
-    // ALLOW ALL OTHER COLLECTIONS (TEMPORARY)
+    // APP CONFIGURATION & SETTINGS
     // ============================================
     
-    // Allow access to any other collection for now
+    match /app_settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /global_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // PREMIUM OFFERS (PARTNERS ONLY)
+    // ============================================
+    
+    match /offers/{offerId} {
+      allow read: if true;
+      
+      // Create: Must be partner, and partnerId must match their UID
+      allow create: if isPartner() && 
+                       request.resource.data.partnerId == request.auth.uid;
+      
+      // Update: Must be partner, own the offer, and cannot modify protected fields
+      allow update: if isPartner() && 
+                       resource.data.partnerId == request.auth.uid &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['platform_commission', 'global_status']);
+      
+      // Delete: Partners can delete their own offers, and admins can delete any offer
+      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+    }
+
+    match /active_offers/{offerId} {
+      allow read: if true;
+      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
+      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
+      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+    }
+
+    match /special_offers/{offerId} {
+      allow read: if true;
+      allow create: if isPartner();
+      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
+      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+    }
+    
+    // ============================================
+    // FINAL SECURITY: DENY ALL OTHER COLLECTIONS
+    // ============================================
+    
     match /{document=**} {
-      allow read: if true; // Allow all read access
-      allow write: if isSignedIn(); // Write requires authentication
+      allow read, write: if isAdmin(); // Only admins can access undefined collections
     }
   }
 }
