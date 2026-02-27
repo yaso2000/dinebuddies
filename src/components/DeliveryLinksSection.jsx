@@ -221,38 +221,10 @@ const DeliveryLinksSection = ({
                         const link = deliveryLinks[platform.key];
                         if (!link) return null;
 
-                        return (
-                            <a
-                                key={platform.key}
-                                href={link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                    background: platform.gradient,
-                                    color: 'white',
-                                    padding: '16px 20px',
-                                    borderRadius: '12px',
-                                    textDecoration: 'none',
-                                    fontWeight: '600',
-                                    fontSize: '0.95rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '12px',
-                                    boxShadow: `0 4px 12px ${platform.color}40`,
-                                    transition: 'all 0.3s ease',
-                                    textAlign: 'center',
-                                    minHeight: '60px'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = `0 6px 20px ${platform.color}60`;
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = `0 4px 12px ${platform.color}40`;
-                                }}
-                            >
+                        const isPaid = partner?.subscriptionTier === 'professional' || partner?.subscriptionTier === 'elite' || partner?.subscriptionTier === 'premium';
+
+                        const content = (
+                            <>
                                 <img
                                     src={platform.logo}
                                     alt={platform.name}
@@ -276,8 +248,75 @@ const DeliveryLinksSection = ({
                                         {platform.name}
                                     </span>
                                 )}
-                            </a>
+                                {!isPaid && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '4px',
+                                        right: '8px',
+                                        fontSize: '0.7rem',
+                                        background: 'rgba(0,0,0,0.3)',
+                                        padding: '2px 6px',
+                                        borderRadius: '6px',
+                                        backdropFilter: 'blur(4px)'
+                                    }}>
+                                        👑 Paid
+                                    </div>
+                                )}
+                            </>
                         );
+
+                        const commonStyles = {
+                            background: platform.gradient,
+                            color: 'white',
+                            padding: '16px 20px',
+                            borderRadius: '12px',
+                            textDecoration: 'none',
+                            fontWeight: '600',
+                            fontSize: '0.95rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '12px',
+                            boxShadow: `0 4px 12px ${platform.color}40`,
+                            transition: 'all 0.3s ease',
+                            textAlign: 'center',
+                            minHeight: '60px',
+                            position: 'relative',
+                            cursor: isPaid ? 'pointer' : 'not-allowed',
+                            opacity: isPaid ? 1 : 0.8
+                        };
+
+                        if (isPaid) {
+                            return (
+                                <a
+                                    key={platform.key}
+                                    href={link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={commonStyles}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = `0 6px 20px ${platform.color}60`;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = `0 4px 12px ${platform.color}40`;
+                                    }}
+                                >
+                                    {content}
+                                </a>
+                            );
+                        } else {
+                            return (
+                                <div
+                                    key={platform.key}
+                                    title="Upgrade to Paid Plan to access delivery links"
+                                    style={commonStyles}
+                                >
+                                    {content}
+                                </div>
+                            );
+                        }
                     })}
                 </div>
             )}

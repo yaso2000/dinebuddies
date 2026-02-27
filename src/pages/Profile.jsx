@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
-import { FaCamera, FaChevronRight, FaPlus, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog } from 'react-icons/fa';
+import { FaCamera, FaChevronRight, FaPlus, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog, FaBirthdayCake } from 'react-icons/fa';
+import { HiUser } from 'react-icons/hi2';
 import { uploadProfilePicture } from '../utils/imageUpload';
 import ImageUpload from '../components/ImageUpload';
 import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
@@ -11,18 +12,68 @@ import { db } from '../firebase/config';
 // Profile Enhancements
 import { StatisticsCards, Achievements } from '../components/ProfileEnhancements';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
+import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import { useNotifications } from '../context/NotificationContext';
+import { useTheme } from '../context/ThemeContext';
+import { FaSun, FaMoon } from 'react-icons/fa';
+import { getSafeAvatar } from '../utils/avatarUtils';
+
+const InvitationListItem = ({ inv, navigate, t }) => (
+    <div
+        onClick={() => navigate(inv.privacy === 'private' ? `/invitation/private/${inv.id}` : `/invitation/${inv.id}`)}
+        style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '8px 10px',
+            border: '1px solid var(--border-color)',
+            borderRadius: '12px',
+            marginBottom: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            background: 'rgba(255, 255, 255, 0.02)'
+        }}
+    >
+        <img
+            src={inv.customImage || inv.restaurantImage || inv.videoThumbnail || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}
+            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'; }}
+            style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
+            alt={inv.title}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{inv.title}</h4>
+                {inv.privacy === 'private' ? (
+                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(251, 191, 36, 0.2)', color: 'var(--luxury-gold)', border: '1px solid rgba(251, 191, 36, 0.3)', fontWeight: '900' }}>
+                        {t('type_private')}
+                    </span>
+                ) : (
+                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(139, 92, 246, 0.2)', color: 'var(--primary)', border: '1px solid rgba(139, 92, 246, 0.3)', fontWeight: '900' }}>
+                        {t('type_public', 'Public')}
+                    </span>
+                )}
+            </div>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{inv.date ? inv.date.split('T')[0] : 'Today'}</span>
+        </div>
+        <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />
+    </div>
+);
 
 const Profile = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, updateProfile, invitations, restaurants, updateRestaurant, toggleFollow } = useInvitations();
-    const { signOut, currentUser: firebaseUser, userProfile } = useAuth();
+    const { currentUser, updateProfile, invitations, restaurants, updateRestaurant, toggleFollow, deleteInvitation } = useInvitations();
+    const { signOut, currentUser: firebaseUser, userProfile, loading } = useAuth();
+    const { setActivePrivateInvitation } = useNotifications();
+    const { isDark, toggleTheme } = useTheme();
     const [isEditing, setIsEditing] = useState(false);
-    const [activeTab, setActiveTab] = useState('posted');
+
+    const [activeTab, setActiveTab] = useState('public');
     const [newInterest, setNewInterest] = useState('');
     const [avatarFile, setAvatarFile] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
+    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
     // Redirect guests to login - DISABLED this redirect because we want to show a guest-specific profile view
     // useEffect(() => {
@@ -39,37 +90,36 @@ const Profile = () => {
     }, [userProfile, navigate]);
 
     // Real-time listener for user profile updates (stats, etc.)
-    const [realtimeUser, setRealtimeUser] = useState(currentUser);
+    const [realtimeUser, setRealtimeUser] = useState(userProfile || currentUser);
 
     useEffect(() => {
-        if (!currentUser?.id) return;
+        if (!currentUser?.uid) return;
 
-        const getSafeAvatar = (data) => data?.avatar || data?.photoURL || data?.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data?.id}`;
+        // Use userProfile (from AuthContext) which is already normalized
+        const currentData = userProfile || currentUser;
 
-        // Initial setup
-        setRealtimeUser(prev => ({ ...currentUser, avatar: getSafeAvatar(currentUser) }));
-        setFormData(prev => ({
-            ...prev,
-            avatar: getSafeAvatar(currentUser),
-            name: currentUser.name || currentUser.displayName || '',
-            bio: currentUser.bio || '',
-            gender: currentUser.gender || 'male',
-            age: currentUser.age || 25,
-            phone: currentUser.phone || ''
-        }));
+        setRealtimeUser(currentData);
 
-        // Fetch actual followers count to ensure accuracy
+        // Only update formData if not currently editing (to avoid losing unsaved changes)
+        if (!isEditing) {
+            setFormData({
+                name: currentData.display_name || currentData.displayName || currentData.name || '',
+                bio: currentData.bio || '',
+                avatar: getSafeAvatar(currentData),
+                interests: currentData.interests || [],
+                gender: currentData.gender || 'male',
+                age: currentData.age || 25,
+                ageCategory: currentData.ageCategory || '',
+                phone: currentData.phone || ''
+            });
+        }
+
+        // Fetch actual followers count
         const fetchRealFollowersCount = async () => {
             try {
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where('following', 'array-contains', currentUser.id));
+                const q = query(collection(db, 'users'), where('following', 'array-contains', currentUser.uid));
                 const snapshot = await getDocs(q);
-                const count = snapshot.size;
-
-                setRealtimeUser(prev => ({
-                    ...prev,
-                    followersCount: count
-                }));
+                setRealtimeUser(prev => ({ ...prev, followersCount: snapshot.size }));
             } catch (error) {
                 console.error("Error fetching followers count:", error);
             }
@@ -77,37 +127,28 @@ const Profile = () => {
 
         fetchRealFollowersCount();
 
-        const unsub = onSnapshot(doc(db, 'users', currentUser.id), (docSnapshot) => {
+        // The real-time updates are now handled by AuthContext, 
+        // but we still listen here if we want immediate UI feedback beyond the context
+        const unsub = onSnapshot(doc(db, 'users', currentUser.uid), (docSnapshot) => {
             if (docSnapshot.exists()) {
                 const data = { id: docSnapshot.id, ...docSnapshot.data() };
 
-                // We use function update to access latest state, preventing race conditions or overwrites
-                setRealtimeUser(prev => {
-                    // Prefer the live field if it looks valid/updated, otherwise keep our calculated count if field is 0/undefined
-                    // Actually, 'fetchRealFollowersCount' is one-off. If 'followersCount' updates in DB, we should respect it.
-                    // But if DB has 0 and we calculated 2, we should keep 2 until DB catches up?
-                    // Let's just trust our calculated count + local increments if we were tracking them, 
-                    // OR just use the field if it aligns.
-                    // Simple approach: Use data from doc, but maybe override avatar.
-                    // If data.followersCount is 0/undefined, we might lose our calculated count if we just overwrite.
-
-                    const validCount = (data.followersCount !== undefined && data.followersCount !== 0) ? data.followersCount : prev.followersCount;
-
-                    return {
-                        ...data,
-                        followersCount: validCount,
-                        avatar: getSafeAvatar(data)
-                    };
-                });
+                setRealtimeUser(prev => ({
+                    ...prev,
+                    ...data,
+                    followersCount: prev.followersCount, // Keep our calculated count
+                    avatar: getSafeAvatar(data)
+                }));
 
                 if (!isEditing) {
                     setFormData(prev => ({
                         ...prev,
                         avatar: getSafeAvatar(data),
-                        name: data.name || data.displayName || '',
+                        name: data.display_name || data.displayName || data.name || '',
                         bio: data.bio || '',
                         gender: data.gender || 'male',
                         age: data.age || 25,
+                        ageCategory: data.ageCategory || '',
                         phone: data.phone || ''
                     }));
                 }
@@ -115,7 +156,7 @@ const Profile = () => {
         });
 
         return () => unsub();
-    }, [currentUser?.id, isEditing]);
+    }, [currentUser?.uid, isEditing, userProfile]);
 
     // Logout handler
     const handleLogout = async () => {
@@ -128,16 +169,48 @@ const Profile = () => {
     };
 
     const [formData, setFormData] = useState({
-        name: currentUser.name,
-        bio: currentUser.bio || '',
-        avatar: currentUser.avatar,
-        interests: currentUser.interests || [],
-        gender: currentUser.gender || 'male', // Required: 'male' or 'female'
-        age: currentUser.age || 18 // Required: minimum 18
+        name: userProfile?.display_name || userProfile?.displayName || currentUser?.name || currentUser?.displayName || '',
+        bio: userProfile?.bio || '',
+        avatar: getSafeAvatar(userProfile || currentUser),
+        interests: userProfile?.interests || [],
+        gender: userProfile?.gender || 'male',
+        age: userProfile?.age || 18,
+        ageCategory: userProfile?.ageCategory || '',
     });
 
-    const myPostedInvitations = invitations.filter(inv => inv.author?.id === currentUser.id);
-    const myJoinedInvitations = invitations.filter(inv => inv.joined?.includes(currentUser.id));
+    const myPostedInvitations = invitations.filter(inv => inv.author?.id === currentUser.uid);
+    const publicPosted = myPostedInvitations.filter(inv => inv.privacy !== 'private');
+    const privatePosted = myPostedInvitations.filter(inv => inv.privacy === 'private');
+
+    const receivedPrivate = invitations.filter(inv =>
+        inv.privacy === 'private' &&
+        inv.invitedFriends?.includes(currentUser.uid) &&
+        inv.author?.id !== currentUser.uid
+    );
+
+    const myJoinedInvitations = invitations.filter(inv => inv.joined?.includes(currentUser.uid));
+
+    // Loading State
+    if (loading || !userProfile || !realtimeUser) {
+        return (
+            <div className="page-container" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100vh',
+                background: 'var(--bg-body)',
+                padding: '2rem',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}>
+                <div className="loader-ring"></div>
+                <p style={{ marginTop: '20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    {t('loading_profile', 'Loading Profile...')}
+                </p>
+            </div>
+        );
+    }
+
+    const currentProfileView = realtimeUser || userProfile;
 
     // Validate for external links
     const containsExternalLinks = (text) => {
@@ -145,18 +218,13 @@ const Profile = () => {
         return urlPattern.test(text);
     };
 
-    const myPrivateInvitations = invitations.filter(inv =>
-        inv.privacy === 'private' &&
-        inv.invitedUserIds?.includes(currentUser.id) &&
-        !inv.joined?.includes(currentUser.id) &&
-        inv.author?.id !== currentUser.id
-    );
+
 
     const getActiveList = () => {
         switch (activeTab) {
-            case 'posted': return myPostedInvitations;
+            case 'public': return publicPosted;
+            case 'private': return [...privatePosted, ...receivedPrivate];
             case 'joined': return myJoinedInvitations;
-            case 'private': return myPrivateInvitations;
             default: return [];
         }
     };
@@ -172,10 +240,10 @@ const Profile = () => {
             return;
         }
 
-        if (!formData.age || formData.age < 18) {
+        if (!formData.ageCategory && !formData.age) {
             alert(i18n.language === 'ar'
                 ? t('please_enter_age')
-                : '⚠️ Please enter your age (minimum 18 years)');
+                : '⚠️ Please select your age category');
             return;
         }
 
@@ -220,17 +288,49 @@ const Profile = () => {
     };
 
     return (
-        <div className="profile-page" style={{ paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out' }}>
+        <div className="profile-page" style={{ paddingBottom: '100px' }}>
 
 
-            <div style={{ padding: '0 1.5rem 2rem' }}>
+            <div style={{ padding: '0 1rem 1rem' }}>
 
                 <div className="personal-view">
-                    <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+                    {/* Theme Toggle Button */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.5rem 0' }}>
+                        <button
+                            onClick={toggleTheme}
+                            style={{
+                                background: 'var(--bg-card)',
+                                border: '1px solid var(--border-color)',
+                                color: isDark ? 'var(--luxury-gold)' : 'var(--primary)',
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.2rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s ease',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.1)';
+                                e.currentTarget.style.borderColor = 'var(--primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.borderColor = 'var(--border-color)';
+                            }}
+                        >
+                            {isDark ? <FaSun /> : <FaMoon />}
+                        </button>
+                    </div>
+
+                    <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                         <div style={{ display: 'inline-block', position: 'relative' }}>
                             {isEditing ? (
                                 <ImageUpload
-                                    currentImage={formData.avatar}
+                                    currentImage={getSafeAvatar(formData)}
                                     onImageSelect={setAvatarFile}
                                     shape="circle"
                                     size="large"
@@ -241,14 +341,24 @@ const Profile = () => {
                                     <div
                                         className="host-avatar-container"
                                         style={{
-                                            width: '130px',
-                                            height: '130px',
+                                            width: '100px',
+                                            height: '100px',
                                             margin: '0 auto',
-                                            border: `4px solid var(--primary)`,
-                                            position: 'relative'
+                                            border: `3px solid var(--primary)`,
+                                            position: 'relative',
+                                            background: 'var(--hover-overlay)'
                                         }}
                                     >
-                                        <img src={formData.avatar} alt={formData.name} className="host-avatar" />
+                                        <img
+                                            src={getSafeAvatar(realtimeUser)}
+                                            alt={formData.name}
+                                            className="host-avatar"
+                                            onError={(e) => {
+                                                if (!e.target.src.includes('ui-avatars.com')) {
+                                                    e.target.src = getSafeAvatar(null);
+                                                }
+                                            }}
+                                        />
                                     </div>
                                     {userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
                                         <button
@@ -364,23 +474,61 @@ const Profile = () => {
                                     </div>
                                 </div>
 
-                                {/* Age Input - Required */}
+                                {/* Age Category Selection - Standardized */}
                                 <div className="form-group">
-                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textAlign: 'center' }}>
-                                        {t('age')} <span style={{ color: 'var(--secondary)' }}>*</span>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>
+                                        {t('age_category', { defaultValue: 'Age Category' })} <span style={{ color: 'var(--secondary)' }}>*</span>
                                     </label>
-                                    <input
-                                        type="number"
-                                        className="input-field"
-                                        value={formData.age}
-                                        onChange={e => setFormData({ ...formData, age: parseInt(e.target.value) || 18 })}
-                                        min="18"
-                                        max="100"
-                                        style={{ textAlign: 'center', fontSize: '1.1rem', fontWeight: '700' }}
-                                        placeholder="18"
-                                    />
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '5px' }}>
-                                        {t('minimum_age_18')}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                                        {[
+                                            { value: '18-24', label: '18-24' },
+                                            { value: '25-34', label: '25-34' },
+                                            { value: '35-44', label: '35-44' },
+                                            { value: '45-54', label: '45-54' },
+                                            { value: '55+', label: '55+' }
+                                        ].map((option) => {
+                                            const isSelected = formData.ageCategory === option.value;
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, ageCategory: option.value })}
+                                                    style={{
+                                                        position: 'relative',
+                                                        padding: '12px 8px',
+                                                        borderRadius: '12px',
+                                                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                                                        background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
+                                                        color: isSelected ? 'white' : 'var(--text-secondary)',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                        transform: isSelected ? 'translateY(-2px)' : 'none',
+                                                        boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none',
+                                                        minHeight: '60px'
+                                                    }}
+                                                >
+                                                    {isSelected && (
+                                                        <div style={{ position: 'absolute', top: '5px', right: '5px', color: 'var(--primary)', fontSize: '0.6rem' }}>
+                                                            <FaCheckCircle />
+                                                        </div>
+                                                    )}
+                                                    <HiUser style={{
+                                                        fontSize: '1.2rem',
+                                                        color: isSelected ? 'var(--primary)' : 'inherit',
+                                                        marginBottom: '2px',
+                                                        filter: isSelected ? 'drop-shadow(0 0 5px rgba(139, 92, 246, 0.5))' : 'none'
+                                                    }} />
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: isSelected ? '800' : '600' }}>
+                                                        {option.label}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
@@ -397,10 +545,10 @@ const Profile = () => {
                             </div>
                         ) : (
                             <>
-                                <h1 style={{ fontSize: '2rem', fontWeight: '900', marginTop: '1rem', marginBottom: '0.25rem' }}>{realtimeUser.name}</h1>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{realtimeUser.bio || t('active_member')}</p>
+                                <h1 style={{ fontSize: '1.6rem', fontWeight: '900', marginTop: '0.75rem', marginBottom: '0.15rem' }}>{realtimeUser.name}</h1>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '0.4rem', fontSize: '0.85rem' }}>{realtimeUser.bio || t('active_member')}</p>
                                 {/* Display Gender and Age */}
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '1.5rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '1rem' }}>
                                     <div style={{
                                         background: 'rgba(139, 92, 246, 0.15)',
                                         padding: '6px 12px',
@@ -412,8 +560,12 @@ const Profile = () => {
                                         alignItems: 'center',
                                         gap: '6px'
                                     }}>
-                                        <span>{realtimeUser.gender === 'male' ? '👨' : '👩'}</span>
-                                        <span>{realtimeUser.gender === 'male' ? t('male') : t('female')}</span>
+                                        <span>{realtimeUser.gender === 'male' ? '👨' : (realtimeUser.gender === 'female' ? '👩' : '👤')}</span>
+                                        <span>{
+                                            realtimeUser.gender === 'male' ? t('male') :
+                                                realtimeUser.gender === 'female' ? t('female') :
+                                                    t('non_binary', { defaultValue: 'Other' })
+                                        }</span>
                                     </div>
                                     <div style={{
                                         background: 'rgba(251, 191, 36, 0.15)',
@@ -428,23 +580,153 @@ const Profile = () => {
                                         gap: '6px'
                                     }}>
                                         <span>🎂</span>
-                                        <span>{realtimeUser.age} {t('years')}</span>
+                                        <span>{realtimeUser.ageCategory || (realtimeUser.age ? `${realtimeUser.age} ${t('years')}` : '')}</span>
                                     </div>
                                 </div>
                             </>
                         )}
 
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem', marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.25rem', marginBottom: '1rem', marginTop: '0.5rem' }}>
                             <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers', { state: { activeTab: 'followers' } })}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.followersCount || 0}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('followers')}</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.followersCount || 0}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('followers')}</div>
                             </div>
                             <div style={{ borderRight: '1px solid var(--border-color)' }}></div>
                             <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/followers', { state: { activeTab: 'following' } })}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.following?.length || 0}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('following')}</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>{realtimeUser.following?.length || 0}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('following')}</div>
                             </div>
                         </div>
+
+                        {/* Subscription & Credits Section */}
+                        {userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(251, 191, 36, 0.04))',
+                                borderRadius: '14px',
+                                padding: '12px',
+                                marginBottom: '1rem',
+                                border: '1px solid rgba(139, 92, 246, 0.15)',
+                                textAlign: 'right'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <div style={{
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        padding: '4px 12px',
+                                        borderRadius: '20px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800'
+                                    }}>
+                                        {userProfile?.accountType === 'admin' ? 'ADMIN' : (userProfile?.subscriptionPlan?.toUpperCase() || 'FREE')}
+                                    </div>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                                        Subscription Plan
+                                    </span>
+                                </div>
+
+                                {/* Hide Invitation Quotas for Business Accounts */}
+                                {userProfile?.accountType !== 'business' && (
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <div style={{
+                                            flex: 1,
+                                            background: 'rgba(255, 255, 255, 0.05)',
+                                            padding: '10px',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                                        }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                                                Private Invites Left
+                                            </div>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--luxury-gold)' }}>
+                                                {userProfile?.weeklyPrivateQuota === -1 ? '∞' :
+                                                    (userProfile?.weeklyPrivateQuota || 0) - (userProfile?.usedPrivateCreditsThisWeek || 0)}
+                                            </div>
+                                            {userProfile?.lastQuotaResetDate && (
+                                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                                    Resets on: {(() => {
+                                                        const timestamp = userProfile.lastQuotaResetDate;
+                                                        const lastReset = timestamp?.toDate ? timestamp.toDate() : (timestamp instanceof Date ? timestamp : new Date());
+                                                        const nextReset = new Date(lastReset.getTime() + 7 * 24 * 60 * 60 * 1000);
+                                                        return nextReset.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' });
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={{
+                                            flex: 1,
+                                            background: 'rgba(255, 255, 255, 0.05)',
+                                            padding: '10px',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                                        }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                                                Extra Credits
+                                            </div>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {userProfile?.purchasedPrivateCredits || 0}
+                                                {userProfile?.purchasedPrivateCredits === 5 && (
+                                                    <span style={{ fontSize: '0.65rem', background: '#48bb78', color: 'white', padding: '1px 6px', borderRadius: '8px', verticalAlign: 'middle' }}>
+                                                        GIFT 🎁
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => navigate('/pricing')}
+                                                style={{
+                                                    marginTop: '8px',
+                                                    background: 'transparent',
+                                                    border: '1px solid var(--primary)',
+                                                    color: 'var(--primary)',
+                                                    fontSize: '0.65rem',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                + Top Up
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {userProfile?.trialExpiry && new Date(userProfile.trialExpiry.seconds * 1000) > new Date() && (
+                                    <div style={{
+                                        marginTop: '12px',
+                                        background: 'rgba(72, 187, 120, 0.1)',
+                                        borderRadius: '10px',
+                                        padding: '8px 12px',
+                                        fontSize: '0.8rem',
+                                        color: '#48bb78',
+                                        fontWeight: '700',
+                                        textAlign: 'center',
+                                        border: '1px dashed #48bb78'
+                                    }}>
+                                        ✨ Trial Pro Plan Active - Ends: {new Date(userProfile.trialExpiry.seconds * 1000).toLocaleDateString(i18n.language, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                    </div>
+                                )}
+
+                                {(!userProfile?.subscriptionPlan || userProfile?.subscriptionPlan === 'free') && (
+                                    <button
+                                        onClick={() => navigate('/pricing')}
+                                        style={{
+                                            width: '100%',
+                                            marginTop: '12px',
+                                            padding: '10px',
+                                            borderRadius: '12px',
+                                            background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                                            border: 'none',
+                                            color: 'white',
+                                            fontSize: '0.85rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+                                        }}
+                                    >
+                                        Upgrade Plan
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         {/* Profile Actions: Edit & Create Invitation - Hide for Guests */}
                         {!isEditing && userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
@@ -457,33 +739,35 @@ const Profile = () => {
                                         background: 'var(--bg-card)',
                                         border: '1px solid var(--border-color)',
                                         color: 'var(--text-main)',
-                                        padding: '12px',
-                                        borderRadius: '12px',
+                                        padding: '10px',
+                                        borderRadius: '10px',
                                         fontWeight: '700',
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.85rem',
                                         cursor: 'pointer'
                                     }}
                                 >
                                     {t('edit_profile') || 'Edit Profile'}
                                 </button>
-                                <button
-                                    onClick={() => navigate('/create')}
-                                    className="btn"
-                                    style={{
-                                        flex: 1,
-                                        background: 'linear-gradient(135deg, var(--primary), #eab308)', // Gold
-                                        border: 'none',
-                                        color: 'white',
-                                        padding: '12px',
-                                        borderRadius: '12px',
-                                        fontWeight: '700',
-                                        fontSize: '0.9rem',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <FaPlus /> {t('create_invitation', 'Create Invitation')}
-                                </button>
+                                {userProfile?.accountType !== 'business' && (
+                                    <button
+                                        onClick={() => setIsSelectorOpen(true)}
+                                        className="btn"
+                                        style={{
+                                            flex: 1,
+                                            background: 'linear-gradient(135deg, var(--primary), #eab308)', // Gold
+                                            border: 'none',
+                                            color: 'white',
+                                            padding: '10px',
+                                            borderRadius: '10px',
+                                            fontWeight: '700',
+                                            fontSize: '0.85rem',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <FaPlus /> {t('create_invitation', 'Create Invitation')}
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -513,6 +797,7 @@ const Profile = () => {
                             </div>
                         )}
                     </div>
+
 
                     {/* Plan & Subscription Card - Only show if user has active subscription */}
                     {userProfile?.subscription?.status === 'active' && (
@@ -566,48 +851,137 @@ const Profile = () => {
 
 
 
-                    <div style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
-                        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-                            <button onClick={() => setActiveTab('posted')} style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', color: activeTab === 'posted' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'posted' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                                {t('stats_posted')} ({myPostedInvitations.length})
+                    <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                            <style>{`
+                                .profile-tab-btn {
+                                    flex: 1;
+                                    padding: 12px 8px;
+                                    border: none;
+                                    background: transparent;
+                                    color: var(--text-muted);
+                                    font-weight: 800;
+                                    font-size: 0.85rem;
+                                    transition: all 0.2s;
+                                    border-bottom: 3px solid transparent;
+                                    white-space: nowrap;
+                                }
+                                .profile-tab-btn.active {
+                                    color: var(--primary);
+                                    border-bottom-color: var(--primary);
+                                }
+                            `}</style>
+                            <button
+                                onClick={() => setActiveTab('public')}
+                                className={`profile-tab-btn ${activeTab === 'public' ? 'active' : ''}`}
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span>{t('stats_public')}</span>
+                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({publicPosted.length})</span>
+                                </div>
                             </button>
-                            <button onClick={() => setActiveTab('joined')} style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', color: activeTab === 'joined' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'joined' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                                {t('stats_joined')} ({myJoinedInvitations.length})
+                            <button
+                                onClick={() => setActiveTab('private')}
+                                className={`profile-tab-btn ${activeTab === 'private' ? 'active' : ''}`}
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span>{t('stats_private')}</span>
+                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({privatePosted.length + receivedPrivate.length})</span>
+                                </div>
                             </button>
-                            <button onClick={() => setActiveTab('private')} style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', color: activeTab === 'private' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'private' ? '3px solid var(--primary)' : 'none', fontWeight: '800', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem' }}>
-                                {t('stats_private')} ({myPrivateInvitations.length})
-                                {myPrivateInvitations.length > 0 && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary)' }}></span>}
+                            <button
+                                onClick={() => setActiveTab('joined')}
+                                className={`profile-tab-btn ${activeTab === 'joined' ? 'active' : ''}`}
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span>{t('stats_joined')}</span>
+                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({myJoinedInvitations.length})</span>
+                                </div>
                             </button>
                         </div>
 
                         <div style={{ minHeight: '100px' }}>
-                            {activeList.map(inv => (
-                                <div key={inv.id} onClick={() => navigate(`/invitation/${inv.id}`)} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '15px', marginBottom: '10px', cursor: 'pointer', transition: 'all 0.2s', ':hover': { background: 'rgba(139, 92, 246, 0.1)' } }}>
-                                    <img
-                                        src={inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'; }}
-                                        style={{ width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
-                                        alt={inv.title}
-                                    />
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.title}</h4>
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{inv.date ? inv.date.split('T')[0] : 'Today'}</span>
-                                    </div>
-                                    <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />
-                                </div>
-                            ))}
+                            {activeTab === 'private' && (
+                                <>
+                                    {/* My Private Posts */}
+                                    {privatePosted.length > 0 && (
+                                        <div style={{ marginBottom: '1.5rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 5px' }}>
+                                                <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+                                                    {t('my_private_posts', 'My Private Posts')}
+                                                </h4>
+                                                <button
+                                                    onClick={async () => {
+                                                        if (window.confirm(t('confirm_delete_all_private', 'Are you sure you want to delete all your private invitations?'))) {
+                                                            for (const inv of privatePosted) {
+                                                                await deleteInvitation(inv.id);
+                                                            }
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        background: 'rgba(239, 68, 68, 0.1)',
+                                                        color: '#ef4444',
+                                                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                        borderRadius: '8px',
+                                                        padding: '4px 10px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {t('clear_all', 'Clear All')}
+                                                </button>
+                                            </div>
+                                            {privatePosted.map(inv => (
+                                                <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
+                                            ))}
+                                        </div>
+                                    )}
 
-                            {activeList.length === 0 && (
-                                <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                    {t('nothing_to_show')}
-                                </p>
+                                    {/* Received Private Invitations */}
+                                    {receivedPrivate.length > 0 && (
+                                        <div style={{ marginBottom: '1rem' }}>
+                                            <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '10px', marginLeft: '5px' }}>
+                                                {t('received_invitations')}
+                                            </h4>
+                                            {receivedPrivate.map(inv => (
+                                                <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {privatePosted.length === 0 && receivedPrivate.length === 0 && (
+                                        <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                            {t('nothing_to_show')}
+                                        </p>
+                                    )}
+                                </>
+                            )}
+
+                            {activeTab !== 'private' && (
+                                <>
+                                    {activeList.map(inv => (
+                                        <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
+                                    ))}
+
+                                    {activeList.length === 0 && (
+                                        <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                            {t('nothing_to_show')}
+                                        </p>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
                 </div>
-
             </div>
-        </div >
+
+            {/* Invitation Type Selector Modal */}
+            <CreateInvitationSelector
+                isOpen={isSelectorOpen}
+                onClose={() => setIsSelectorOpen(false)}
+            />
+        </div>
     );
 };
 

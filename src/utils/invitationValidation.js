@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { sendNotification } from './notificationHelpers';
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Check if user has already created an invitation today
@@ -110,7 +111,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
                 invitationId,
                 fromUserId: currentUser.uid,
                 fromUserName: currentUser.name || currentUser.displayName,
-                fromUserAvatar: currentUser.avatar || currentUser.photoURL
+                fromUserAvatar: getSafeAvatar(currentUser)
             });
         }
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import {
     FaTachometerAlt,
     FaUsers,
@@ -9,21 +10,31 @@ import {
     FaChartLine,
     FaCog,
     FaTimes,
-    FaDatabase
+    FaDatabase,
+    FaBoxOpen
 } from 'react-icons/fa';
 
 const Sidebar = ({ isOpen, onClose }) => {
+    const { userProfile } = useAuth();
+    const userRole = userProfile?.role || userProfile?.accountType;
+    const isSuperAdmin = userRole === 'admin';
+
     const navItems = [
-        { path: '/admin/dashboard', icon: FaTachometerAlt, label: 'Dashboard' },
-        { path: '/admin/users', icon: FaUsers, label: 'Users' },
-        { path: '/admin/plans', icon: FaCreditCard, label: 'Plans' },
-        { path: '/admin/subscriptions', icon: FaStore, label: 'Subscriptions' },
-        { path: '/admin/partners', icon: FaStore, label: 'Partners' },
-        { path: '/admin/invitations', icon: FaEnvelope, label: 'Invitations' },
-        { path: '/admin/reports', icon: FaChartLine, label: 'Reports & Analytics' },
-        { path: '/admin/migration', icon: FaDatabase, label: 'Migration' },
-        { path: '/admin/settings', icon: FaCog, label: 'Settings' }
+        { path: '/admin/dashboard', icon: FaTachometerAlt, label: 'Dashboard', roles: ['admin', 'moderator', 'support'] },
+        { path: '/admin/users', icon: FaUsers, label: 'Users', roles: ['admin', 'moderator', 'support'] },
+        { path: '/admin/plans', icon: FaCreditCard, label: 'Plans', roles: ['admin'] },
+        { path: '/admin/subscriptions', icon: FaStore, label: 'Subscriptions', roles: ['admin', 'support'] },
+        { path: '/admin/partners', icon: FaStore, label: 'Partners', roles: ['admin', 'moderator'] },
+        { path: '/admin/invitations', icon: FaEnvelope, label: 'Invitations', roles: ['admin', 'moderator'] },
+        { path: '/admin/reports', icon: FaChartLine, label: 'Reports & Analytics', roles: ['admin', 'moderator', 'support'] },
+        { path: '/admin/migration', icon: FaDatabase, label: 'Migration', roles: ['admin'] },
+        { path: '/admin/backups', icon: FaBoxOpen, label: 'Code Snapshots', roles: ['admin'] },
+        { path: '/admin/settings', icon: FaCog, label: 'Settings', roles: ['admin'] }
     ];
+
+    const filteredNavItems = navItems.filter(item =>
+        isSuperAdmin || item.roles.includes(userRole)
+    );
 
     return (
         <>
@@ -69,7 +80,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
                 {/* Navigation */}
                 <nav className="admin-nav">
-                    {navItems.map((item) => (
+                    {filteredNavItems.map((item) => (
                         <NavLink
                             key={item.path}
                             to={item.path}

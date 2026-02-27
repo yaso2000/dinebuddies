@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { FaSearch, FaMapMarkerAlt, FaStore, FaGoogle } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishment', cityBias = null }) => {
     const { t } = useTranslation();
@@ -106,7 +107,7 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                         id: doc.id,
                         name: data.display_name,
                         address: data.businessInfo?.address || data.businessInfo?.city || '',
-                        image: data.photo_url || data.businessInfo?.coverImage,
+                        image: getSafeAvatar(data),
                         source: 'partner',
                         businessId: doc.id
                     };

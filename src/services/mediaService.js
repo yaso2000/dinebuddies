@@ -102,6 +102,78 @@ export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invi
 };
 
 /**
+ * Upload Google/External image via Proxy
+ * @param {string} url - External URL
+ * @param {string} userId - User ID
+ * @returns {Promise<string>} - Firebase Storage URL
+ */
+export const uploadGoogleImage = async (url, userId) => {
+    // Optimization: if already Firebase URL, just return it
+    if (!url) return null;
+    if (url.includes('firebasestorage')) {
+        return url;
+    }
+
+    console.log('🔄 Fetching image via proxy to bypass CORS:', url);
+
+    // In dev: uses vite middleware. In prod: uses Vercel function
+    const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
+    const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
+
+    try {
+        const response = await fetch(proxyUrl);
+
+        if (!response.ok) {
+            throw new Error(`Proxy fetch failed with status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        console.log(`📦 Proxy Blob: Size=${blob.size}, Type=${blob.type}`);
+
+        if (blob.size < 1000) {
+            console.warn('⚠️ Blob too small, likely an error page.');
+            // Optional: read text to debug, but proceed with caution
+            const text = await blob.text();
+            console.error('Proxy Response:', text);
+        }
+
+        // Generate unique filename
+        const filename = `google_place_${Date.now()}.jpg`;
+        const file = new File([blob], filename, { type: 'image/jpeg' });
+
+        console.log('📤 Uploading proxied image to storage...');
+        const uploadedUrl = await uploadMedia(file, userId, 'image', 'invitations');
+        console.log('✅ Image permanently stored:', uploadedUrl);
+
+        return uploadedUrl;
+    } catch (error) {
+        console.error("Failed to upload Google image:", error);
+        // Silently fail or track error without intrusive alert
+        throw error;
+    }
+};
+
+/**
+ * Get video duration helper
+ */
+const getVideoDuration = (file) => {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(file);
+
+        video.onloadedmetadata = () => {
+            resolve(video.duration);
+            URL.revokeObjectURL(video.src);
+        };
+
+        video.onerror = () => {
+            reject(new Error('Failed to load video'));
+            URL.revokeObjectURL(video.src);
+        };
+    });
+};
+
+/**
  * Process and upload invitation media based on source
  * @param {Object} mediaData - Media data from MediaSelector
  * @param {string} userId - User ID
@@ -125,8 +197,13 @@ export const processInvitationMedia = async (mediaData, userId) => {
                 };
 
             case 'custom_image':
-                // Upload custom image
-                const imageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                // Upload custom image if file present, otherwise assume preview is url
+                let imageUrl;
+                if (file) {
+                    imageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                } else {
+                    imageUrl = mediaData.preview;
+                }
                 return {
                     mediaSource: 'custom_image',
                     customImage: imageUrl,
@@ -134,63 +211,45 @@ export const processInvitationMedia = async (mediaData, userId) => {
                 };
 
             case 'custom_video':
-                // Upload video with thumbnail
-                const { videoUrl, thumbnailUrl } = await uploadVideoWithThumbnail(
-                    file,
-                    userId,
-                    'invitations'
-                );
-
-                // Get video duration
-                const duration = await getVideoDuration(file);
+                let customVideo, videoThumbnail, videoDuration;
+                if (file) {
+                    const result = await uploadVideoWithThumbnail(file, userId, 'invitations');
+                    customVideo = result.videoUrl;
+                    videoThumbnail = result.thumbnailUrl;
+                    try {
+                        videoDuration = Math.round(await getVideoDuration(file));
+                    } catch (e) {
+                        videoDuration = 0;
+                    }
+                } else {
+                    customVideo = mediaData.preview;
+                    videoThumbnail = mediaData.videoThumbnail;
+                    videoDuration = mediaData.videoDuration;
+                }
 
                 return {
                     mediaSource: 'custom_video',
-                    customVideo: videoUrl,
-                    videoThumbnail: thumbnailUrl,
-                    videoDuration: Math.round(duration),
+                    customVideo,
+                    videoThumbnail,
+                    videoDuration,
                     mediaType: 'video'
                 };
 
             case 'venue':
             case 'google_place':
-                // Try to upload to storage to make it permanent
+                let restaurantImage;
                 try {
-                    if (!url) throw new Error("No URL provided");
-
-                    // Optimization: if already Firebase URL, just use it
-                    if (url.includes('firebasestorage')) {
-                        return {
-                            mediaSource: 'restaurant',
-                            restaurantImage: url,
-                            mediaType: 'image'
-                        };
-                    }
-
-                    // Attempt to fetch and upload (might fail due to CORS for some URLs)
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error('Failed to fetch image');
-
-                    const blob = await response.blob();
-                    const file = new File([blob], `venue_${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-                    // Upload using existing utility
-                    const uploadedUrl = await uploadMedia(file, userId, 'image', 'invitations');
-
-                    return {
-                        mediaSource: 'google_place',
-                        restaurantImage: uploadedUrl, // Map to restaurantImage for UI compatibility
-                        mediaType: 'image'
-                    };
-                } catch (uploadError) {
-                    console.warn('⚠️ Failed to upload venue image (CORS?), using original URL:', uploadError);
-                    // Fallback to original URL
-                    return {
-                        mediaSource: 'google_place',
-                        restaurantImage: url,
-                        mediaType: 'image'
-                    };
+                    // Use the new reusable function
+                    restaurantImage = await uploadGoogleImage(url, userId);
+                } catch (e) {
+                    console.warn("Fallback to original URL due to error:", e);
+                    restaurantImage = url;
                 }
+                return {
+                    mediaSource: 'google_place',
+                    restaurantImage: restaurantImage,
+                    mediaType: 'image'
+                };
 
             default:
                 console.warn(`Unknown media source: ${source}, falling back to restaurant image`);
@@ -204,24 +263,4 @@ export const processInvitationMedia = async (mediaData, userId) => {
         console.error('Error processing invitation media:', error);
         throw error;
     }
-};
-
-/**
- * Get video duration helper
- */
-const getVideoDuration = (file) => {
-    return new Promise((resolve, reject) => {
-        const video = document.createElement('video');
-        video.src = URL.createObjectURL(file);
-
-        video.onloadedmetadata = () => {
-            resolve(video.duration);
-            URL.revokeObjectURL(video.src);
-        };
-
-        video.onerror = () => {
-            reject(new Error('Failed to load video'));
-            URL.revokeObjectURL(video.src);
-        };
-    });
 };

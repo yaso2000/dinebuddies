@@ -4,8 +4,10 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments } from 'react-icons/fa';
+import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import '../components/MapStyles.css';
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
@@ -90,7 +92,7 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                     }}>
                                         <div style={{ position: 'relative' }}>
                                             <img
-                                                src={member.photo_url || member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.display_name || 'U')}`}
+                                                src={getSafeAvatar(member)}
                                                 alt={member.display_name}
                                                 style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
                                             />
@@ -164,14 +166,15 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const { t } = useTranslation();
     const { userProfile, updateUserProfile } = useAuth();
     const context = useInvitations();
+    const { isDark } = useTheme();
     const currentUser = context?.currentUser || {};
     const toggleCommunity = context?.toggleCommunity || (() => { });
 
     if (!res) return null;
 
-    const isJoined = (currentUser.joinedCommunities || []).includes(res.id);
-    const isOwner = currentUser.id === res.ownerId || (currentUser.ownedRestaurants || []).includes(res.id);
-    const isBusinessAccount = userProfile?.accountType === 'business';
+    const isJoined = (currentUser.joinedCommunities || []).some(id => id === res.id || id === res.ownerId);
+    const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
+    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
 
     const isFavorite = userProfile?.favoritePlaces?.some(p => p.businessId === res.id);
 
@@ -212,9 +215,9 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     // This allows the current user to see themselves immediately after joining
     const communityMembers = useMemo(() => {
         const users = context?.allUsers || [];
-        // Filter users who have joined this community
-        return users.filter(u => u.joinedCommunities && u.joinedCommunities.includes(res.id));
-    }, [context?.allUsers, res.id]);
+        // Filter users who have joined this community by checking both restaurant ID and owner ID
+        return users.filter(u => u.joinedCommunities && u.joinedCommunities.some(id => id === res.id || id === res.ownerId));
+    }, [context?.allUsers, res.id, res.ownerId]);
 
     useEffect(() => {
         // Priority 1: Use direct props if available (from optimized context)
@@ -261,13 +264,14 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
             }
         } else {
             navigator.clipboard.writeText(shareData.url);
-            alert('Link copied to clipboard!');
+            alert(t('link_copied_clipboard'));
         }
     };
 
     const handleCreateInvite = (e) => {
         e.stopPropagation();
-        navigate('/create-invitation', { state: { preSelectedRestaurant: res } });
+        // Corrected route to /create and state structure to match CreateInvitation.jsx
+        navigate('/create', { state: { restaurantData: res } });
     };
 
     return (
@@ -275,12 +279,12 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
             className="restaurant-card"
             onClick={() => navigate(`/partner/${res.id}`)}
             style={{
-                background: 'var(--bg-card)',
+                background: '#0f172a', // Constant Dark Card BG
                 borderRadius: '24px',
                 overflow: 'hidden',
                 marginBottom: '20px',
-                boxShadow: 'var(--shadow-card)',
-                border: '1px solid var(--border-color)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
                 position: 'relative',
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
@@ -482,15 +486,17 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
             {/* Bottom Section: Footer (Community) */}
             <div style={{
-                padding: '12px 20px',
-                background: 'var(--bg-card)',
-                borderTop: '1px solid var(--border-color)',
+                padding: '14px 20px',
+                background: 'var(--premium-orange)',
+                borderTop: 'none',
+                position: 'relative',
                 zIndex: 20
             }}>
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    color: 'white'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                         {/* Avatars */}
@@ -502,7 +508,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                 {communityMembers.slice(0, 5).map((member, index) => (
                                     <img
                                         key={member.uid || index}
-                                        src={member.photo_url || member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.display_name || 'U')}&background=random`}
+                                        src={getSafeAvatar(member)}
                                         alt=""
                                         style={{
                                             width: '28px',
@@ -515,12 +521,12 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                         }}
                                     />
                                 ))}
-                                <span style={{ marginLeft: '10px', fontSize: '0.8rem', color: 'var(--text-main)', fontWeight: '600' }}>
+                                <span style={{ marginLeft: '10px', fontSize: '0.85rem', color: 'white', fontWeight: '700' }}>
                                     {communityMembers.length} {t('members')}
                                 </span>
                             </div>
                         ) : (
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>
                                 {t('restaurant_community')}
                             </span>
                         )}
@@ -540,28 +546,30 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                         </span>
                     ) : !isBusinessAccount && (
                         <button
+                            className="community-join-btn"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                if (!currentUser?.id || currentUser?.isGuest) {
+                                e.preventDefault();
+                                if (!currentUser?.uid && !currentUser?.id && !currentUser?.isGuest) {
                                     navigate('/login');
                                 } else {
-                                    toggleCommunity(res.id);
+                                    toggleCommunity(res.ownerId || res.id);
                                 }
                             }}
                             style={{
-                                background: isJoined ? 'transparent' : 'var(--primary)',
-                                color: isJoined ? 'var(--text-muted)' : 'white',
-                                border: isJoined ? '1px solid var(--border-color)' : 'none',
-                                padding: '8px 16px',
-                                borderRadius: '12px',
-                                fontWeight: '700',
+                                background: isJoined ? 'rgba(255,255,255,0.25)' : '#ffffff',
+                                color: isJoined ? '#ffffff' : '#f97316', // Use hardcoded orange for text to ensure visibility
+                                border: isJoined ? '1px solid rgba(255,255,255,0.4)' : 'none',
+                                padding: '8px 20px',
+                                borderRadius: '14px',
+                                fontWeight: '900',
                                 fontSize: '0.85rem',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.2s',
-                                boxShadow: isJoined ? 'none' : 'var(--shadow-glow)'
+                                boxShadow: isJoined ? 'none' : '0 6px 15px rgba(0,0,0,0.15)'
                             }}
                         >
                             {isJoined ? t('member_joined') : t('join_plus')}
@@ -588,7 +596,9 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const RestaurantDirectory = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const { currentUser, userProfile, isGuest } = useAuth();
     const context = useInvitations();
+    const { isDark } = useTheme();
 
     // Get restaurants from context
     const restaurants = context?.restaurants || [];
@@ -672,7 +682,10 @@ const RestaurantDirectory = () => {
         });
 
         // Apply location filter
-        if (locationFilter !== 'All' && userLocation) {
+        const userRole = userProfile?.role || userProfile?.accountType;
+        const isStaff = ['admin', 'moderator', 'support'].includes(userRole);
+
+        if (locationFilter !== 'All' && userLocation && !isStaff) {
             filtered = filtered.filter(res => {
                 if (!res.lat || !res.lng) return false;
 
@@ -762,8 +775,6 @@ const RestaurantDirectory = () => {
                     tap: false
                 }).setView([initialLat, initialLng], initialZoom);
 
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstance.current);
-
                 // Auto-fit bounds perfectly if content exists and no user location
                 if (!userLocation && restaurantsWithCoords.length > 0) {
                     const bounds = restaurantsWithCoords.map(r => [r.lat, r.lng]);
@@ -772,6 +783,17 @@ const RestaurantDirectory = () => {
                     } catch (e) { }
                 }
             }
+
+            // Always ensure tiles match current theme
+            mapInstance.current.eachLayer((layer) => {
+                if (layer instanceof L.TileLayer) mapInstance.current.removeLayer(layer);
+            });
+
+            const tileUrl = isDark
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+            L.tileLayer(tileUrl).addTo(mapInstance.current);
 
             // Cleanup previous markers
             mapInstance.current.eachLayer((layer) => {
@@ -943,7 +965,7 @@ const RestaurantDirectory = () => {
                 }
             }, 100);
         }
-    }, [viewMode, restaurantsWithCoords, userLocation]);
+    }, [viewMode, restaurantsWithCoords, userLocation, isDark]);
 
     // Handle Escape key to exit fullscreen
     useEffect(() => {

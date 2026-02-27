@@ -1,0 +1,189 @@
+.video-recorder-wrapper {
+    width: 100%;
+    max-width: 500px;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.video-viewport {
+    width: 100%;
+    height: 350px;
+    /* Reduced height for better fit */
+    background: #111;
+    position: relative;
+}
+
+.live-feed,
+.recorded-playback {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Ensure recorded video fits nicely */
+.recorded-playback {
+    object-fit: contain;
+    background: #000;
+}
+
+.error-banner {
+    background: #ef4444;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.recording-badge {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: rgba(255, 0, 0, 0.8);
+    color: white;
+    padding: 5px 12px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.pulsing-dot {
+    width: 10px;
+    height: 10px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.7;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.controls-bar {
+    background: #1a1a1a;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+
+/* Control Buttons */
+.btn-record {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 4px solid white;
+    background: transparent;
+    padding: 4px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.btn-record:active {
+    transform: scale(0.95);
+}
+
+.record-icon-inner {
+    width: 100%;
+    height: 100%;
+    background: #ef4444;
+    border-radius: 50%;
+}
+
+.btn-stop {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 4px solid white;
+    background: transparent;
+    padding: 12px;
+    cursor: pointer;
+}
+
+.stop-icon-inner {
+    width: 100%;
+    height: 100%;
+    background: #ef4444;
+    border-radius: 4px;
+    /* Square for stop */
+}
+
+.btn-cancel {
+    color: #9ca3af;
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    cursor: pointer;
+    position: absolute;
+    right: 20px;
+}
+
+.review-actions {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-retake,
+.btn-confirm {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+}
+
+.btn-retake {
+    background: #374151;
+    color: white;
+}
+
+
+.btn-confirm {
+    background: #8b5cf6;
+    color: white;
+}
+
+.btn-icon-only {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    background: #374151;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.btn-icon-only:hover {
+    background: #4b5563;
+}

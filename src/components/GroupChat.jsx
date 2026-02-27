@@ -4,6 +4,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown, FaPause, FaPlay, FaArrowLeft } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import '../pages/CommunityChatRoom.css'; // Use the shared CSS for consistent look
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
@@ -123,7 +124,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                 audioUrl: url,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'audio',
                 duration: recordingDuration
@@ -164,7 +165,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                 text: messageToSend,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'text'
             });
@@ -199,9 +200,9 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                         <div className="voice-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <button className="voice-play-btn" onClick={() => handlePlayAudio(msg.audioUrl, msg.id)}>
                                 {isPlaying ? (
-                                    <FaPause color="var(--play-green)" size={14} />
+                                    <FaPause color="white" size={14} />
                                 ) : (
-                                    <FaPlay color="var(--text-main)" size={14} />
+                                    <FaPlay color="white" size={14} />
                                 )}
                             </button>
                             <div className="voice-time">{formatDuration(msg.duration || 0)}</div>
@@ -262,9 +263,10 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                background: isFullScreen ? 'rgba(20, 20, 30, 0.95)' : 'rgba(255,255,255,0.05)',
-                borderBottom: '1px solid rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(10px)'
+                background: 'var(--header-bg)',
+                borderBottom: '1px solid var(--border-color)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)'
             }}>
                 {isFullScreen ? (
                     <>
@@ -332,7 +334,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                                 {/* Avatar for Incoming */}
                                 {!isMe && (
                                     <img
-                                        src={msg.senderAvatar || `https://ui-avatars.com/api/?name=${msg.senderName}`}
+                                        src={getSafeAvatar({ photo_url: msg.senderAvatar, display_name: msg.senderName })}
                                         alt=""
                                         className="sender-avatar"
                                         style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden' }}
@@ -351,13 +353,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                                     {renderBubbleContent(msg)}
 
                                     {/* Timestamp */}
-                                    <span className="timestamp" style={{
-                                        fontSize: '0.65rem',
-                                        opacity: 0.7,
-                                        marginLeft: '8px',
-                                        float: 'right',
-                                        marginTop: '4px'
-                                    }}>
+                                    <span className="timestamp">
                                         {formatTime(msg.createdAt)}
                                     </span>
                                 </div>
@@ -383,8 +379,8 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
             </div>
 
             {/* Input Area - Clean & Simple */}
-            <div className="input-area" style={{ padding: '10px', background: 'var(--bg-secondary)' }}>
-                <div className="input-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', borderRadius: '25px', padding: '5px 15px', border: '1px solid var(--border-color)', flex: 1 }}>
+            <div className="input-area">
+                <div className="input-wrapper">
                     {isRecording ? (
                         <div className="recording-ui" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#ef4444' }}>
@@ -409,7 +405,6 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                             onChange={(e) => setNewMessage(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                             autoComplete="off"
-                            style={{ flex: 1, background: 'transparent', border: 'none', color: 'white', outline: 'none', padding: '10px 0' }}
                         />
                     )}
                 </div>
@@ -432,7 +427,8 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                         background: isRecording ? '#ef4444' : 'var(--primary)',
                         border: 'none', color: 'white',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', marginLeft: '8px'
+                        cursor: 'pointer', marginLeft: '8px',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
                     }}
                 >
                     {isRecording ? (

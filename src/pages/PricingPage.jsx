@@ -1,66 +1,73 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCheck, FaStar, FaCrown, FaFire } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { useInvitations } from '../context/InvitationContext';
 
 const PricingPage = () => {
     const navigate = useNavigate();
-    const { currentUser } = useAuth();
-    const [subscriptionPlans, setSubscriptionPlans] = useState([]);
-    const [selectedPlanType, setSelectedPlanType] = useState('user'); // user or partner
+    const location = useLocation();
+    const { currentUser, userProfile } = useAuth();
+    const { creditPacks, subscriptionPlans: contextPlans } = useInvitations();
+
+    // Determine page type from URL
+    const isBusinessPage = location.pathname.includes('/business/pricing');
+    const [selectedPlanType, setSelectedPlanType] = useState(isBusinessPage ? 'partner' : 'user');
     const [loading, setLoading] = useState(null);
-    const [fetchingPlans, setFetchingPlans] = useState(true);
-    const { t } = useTranslation();
+    const [selectedCreditPack, setSelectedCreditPack] = useState(null);
+    const { t, i18n } = useTranslation();
 
-    // Fetch plans from Firestore
+    // Set initial selected credit pack
     useEffect(() => {
-        const fetchPlans = async () => {
-            try {
-                setFetchingPlans(true);
-                const plansQuery = query(
-                    collection(db, 'subscriptionPlans'),
-                    where('active', '==', true),
-                    where('published', '==', true)
-                );
-                const snapshot = await getDocs(plansQuery);
-                const plansData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                // Sort by order
-                plansData.sort((a, b) => (a.order || 0) - (b.order || 0));
-                setSubscriptionPlans(plansData);
-            } catch (error) {
-                console.error('Error fetching plans:', error);
-            } finally {
-                setFetchingPlans(false);
-            }
-        };
+        if (creditPacks && creditPacks.length > 0 && !selectedCreditPack) {
+            setSelectedCreditPack(creditPacks[0]);
+        }
+    }, [creditPacks]);
 
-        fetchPlans();
-    }, []);
+    // Auto-detect and sync
+    useEffect(() => {
+        const pageType = isBusinessPage ? 'partner' : 'user';
+        setSelectedPlanType(pageType);
+
+        // Auto-redirect logged in users to their correct pricing page if they land on wrong one
+        if (userProfile && userProfile.accountType) {
+            const userType = userProfile.accountType === 'business' || userProfile.accountType === 'partner' ? 'partner' : 'user';
+
+            if (userType === 'partner' && !isBusinessPage) {
+                console.log('🔄 Redirecting partner to business pricing');
+                navigate('/business/pricing', { replace: true });
+            } else if (userType === 'user' && isBusinessPage) {
+                console.log('🔄 Redirecting user to standard pricing');
+                navigate('/pricing', { replace: true });
+            }
+        }
+    }, [isBusinessPage, userProfile, navigate]);
+
+    // Use plans from context
+    const subscriptionPlans = contextPlans || [];
+    const fetchingPlans = false;
 
     const filteredPlans = subscriptionPlans.filter(plan => plan.type === selectedPlanType);
 
     const getDurationText = (duration) => {
-        const typeMap = { month: t('month'), year: t('year'), day: t('day') };
+        const typeMap = { month: 'month', year: 'year', day: 'day' };
         return `${duration.value > 1 ? duration.value + ' ' : ''}${typeMap[duration.type]}`;
     };
 
     const handleSubscribe = async (plan) => {
         if (!currentUser) {
-            alert(t('please_login_first'));
+            alert('Please login first to subscribe.');
             navigate('/login');
             return;
         }
 
         // Free plan
         if (plan.price === 0) {
-            alert(t('already_free_plan'));
+            alert('You are already on a free plan or this plan is free.');
             return;
         }
 
@@ -88,7 +95,7 @@ const PricingPage = () => {
             window.location.href = result.data.url;
         } catch (error) {
             console.error('Payment Error:', error);
-            alert(t('payment_error') + ': ' + error.message + '\n\nMake sure:\n1. Cloud Functions are deployed\n2. Stripe Keys are correct in .env');
+            alert('Payment Error: ' + error.message + '\n\nMake sure:\n1. Cloud Functions are deployed\n2. Stripe Keys are correct in .env');
         } finally {
             setLoading(null);
         }
@@ -98,7 +105,7 @@ const PricingPage = () => {
         return (
             <div style={{
                 minHeight: '100vh',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'var(--bg-body)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -122,63 +129,27 @@ const PricingPage = () => {
     return (
         <div style={{
             minHeight: '100vh',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            padding: '4rem 1rem',
-            fontFamily: 'Inter, sans-serif'
+            background: 'var(--bg-body)',
+            padding: '2rem 1rem 4rem',
+            fontFamily: 'var(--font-body)'
         }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                 {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '3rem', color: 'white' }}>
-                    <h1 style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '1rem' }}>
-                        {t('choose_plan')}
+                <div style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text-main)' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '0.5rem', textShadow: 'var(--shadow-premium)' }}>
+                        {isBusinessPage ? 'Partner Plans' : 'Choose Your Plan'}
                     </h1>
-                    <p style={{ fontSize: '1.25rem', opacity: 0.9 }}>
-                        {t('flexible_plans')}
+                    <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>
+                        {isBusinessPage ? 'Professional solutions to grow your business' : 'Flexible plans to suit your needs'}
                     </p>
                 </div>
 
-                {/* Plan Type Toggle */}
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    marginBottom: '3rem',
-                    gap: '1rem'
-                }}>
-                    <button
-                        onClick={() => setSelectedPlanType('user')}
-                        style={{
-                            padding: '0.75rem 2rem',
-                            borderRadius: '50px',
-                            border: 'none',
-                            background: selectedPlanType === 'user' ? 'white' : 'rgba(255,255,255,0.2)',
-                            color: selectedPlanType === 'user' ? '#667eea' : 'white',
-                            fontWeight: 'bold',
-                            fontSize: '1rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s',
-                            boxShadow: selectedPlanType === 'user' ? '0 4px 15px rgba(0,0,0,0.2)' : 'none'
-                        }}
-                    >
-                        {t('for_individuals')}
-                    </button>
-                    <button
-                        onClick={() => setSelectedPlanType('partner')}
-                        style={{
-                            padding: '0.75rem 2rem',
-                            borderRadius: '50px',
-                            border: 'none',
-                            background: selectedPlanType === 'partner' ? 'white' : 'rgba(255,255,255,0.2)',
-                            color: selectedPlanType === 'partner' ? '#667eea' : 'white',
-                            fontWeight: 'bold',
-                            fontSize: '1rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s',
-                            boxShadow: selectedPlanType === 'partner' ? '0 4px 15px rgba(0,0,0,0.2)' : 'none'
-                        }}
-                    >
-                        {t('for_restaurants')}
-                    </button>
-                </div>
+                {/* Plan Type Toggle - HIDDEN per proposal */}
+                {/* 
+                <div style={{ ... }}> ... </div> 
+                */}
+
+                {/* Currency Toggle - REMOVED, now automatic */}
 
                 {/* Pricing Cards */}
                 <div style={{
@@ -190,22 +161,18 @@ const PricingPage = () => {
                     {filteredPlans.map(plan => (
                         <div
                             key={plan.id}
+                            className="glass-card"
                             style={{
-                                background: 'white',
-                                borderRadius: '20px',
-                                padding: '2.5rem',
+                                padding: '1.5rem',
                                 position: 'relative',
-                                boxShadow: plan.recommended
-                                    ? '0 20px 60px rgba(0,0,0,0.3)'
-                                    : '0 10px 30px rgba(0,0,0,0.15)',
-                                transform: plan.recommended ? 'scale(1.05)' : 'scale(1)',
+                                transform: plan.recommended ? 'scale(1.03)' : 'scale(1)',
                                 transition: 'all 0.3s',
-                                border: plan.recommended ? '3px solid #667eea' : 'none',
+                                border: plan.recommended ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                 display: 'flex',
                                 flexDirection: 'column'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = plan.recommended ? 'scale(1.08)' : 'scale(1.03)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = plan.recommended ? 'scale(1.05)' : 'scale(1)'}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = plan.recommended ? 'scale(1.05)' : 'scale(1.02)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = plan.recommended ? 'scale(1.03)' : 'scale(1)'}
                         >
                             {/* Recommended Badge */}
                             {plan.recommended && (
@@ -240,24 +207,41 @@ const PricingPage = () => {
 
                             {/* Plan Name & Description */}
                             <h3 style={{
-                                fontSize: '1.75rem',
+                                fontSize: '1.4rem',
                                 fontWeight: '800',
-                                marginBottom: '0.5rem',
-                                color: '#1a202c'
+                                marginBottom: '0.25rem',
+                                color: 'var(--text-main)'
                             }}>
                                 {plan.name}
                             </h3>
                             <p style={{
-                                color: '#718096',
-                                marginBottom: '1.5rem',
-                                fontSize: '0.95rem',
-                                lineHeight: '1.6'
+                                color: 'var(--text-muted)',
+                                marginBottom: '1rem',
+                                fontSize: '0.9rem',
+                                lineHeight: '1.5'
                             }}>
                                 {plan.description}
                             </p>
 
                             {/* Price */}
                             <div style={{ marginBottom: '1.5rem' }}>
+                                {plan.type === 'partner' && plan.price > 0 && (
+                                    <div style={{
+                                        background: 'rgba(72, 187, 120, 0.1)',
+                                        color: '#48bb78',
+                                        padding: '6px 12px',
+                                        borderRadius: '10px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '800',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        marginBottom: '0.75rem',
+                                        border: '1px solid rgba(72, 187, 120, 0.2)'
+                                    }}>
+                                        <span>✨</span> First Month FREE
+                                    </div>
+                                )}
                                 {plan.discount > 0 && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
                                         <span style={{
@@ -265,7 +249,7 @@ const PricingPage = () => {
                                             color: '#a0aec0',
                                             fontSize: '1.25rem'
                                         }}>
-                                            {plan.originalPrice} {t('sar')}
+                                            {plan.currencySymbol || '$'}{plan.originalPrice}
                                         </span>
                                         <span style={{
                                             background: '#48bb78',
@@ -275,28 +259,27 @@ const PricingPage = () => {
                                             fontSize: '0.875rem',
                                             fontWeight: 'bold'
                                         }}>
-                                            {t('discount_percent', { percent: plan.discount })}
+                                            {plan.discount}% Off
                                         </span>
                                     </div>
                                 )}
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
                                     <span style={{
-                                        fontSize: '3.5rem',
+                                        fontSize: '2.8rem',
                                         fontWeight: '800',
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                        WebkitBackgroundClip: 'text',
-                                        WebkitTextFillColor: 'transparent'
+                                        color: 'var(--text-main)',
+                                        textShadow: '0 2px 10px rgba(0,0,0,0.3)'
                                     }}>
-                                        {plan.price}
+                                        {plan.currencySymbol || '$'}{plan.price}
                                     </span>
-                                    <span style={{ color: '#718096', fontSize: '1.125rem' }}>
-                                        {t('per_duration', { duration: getDurationText(plan.duration) })}
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '1rem', opacity: 0.9 }}>
+                                        per {plan.duration?.value > 1 ? plan.duration.value : ''} {plan.duration?.type}
                                     </span>
                                 </div>
                             </div>
 
-                            {/* Invitation Credits & Offers */}
-                            {plan.invitationCredits !== null && (
+                            {/* Invitation Credits & Offers - Only for User Plans */}
+                            {plan.type === 'user' && plan.invitationCredits !== undefined && plan.invitationCredits !== null && (plan.invitationCredits !== 0 || plan.invitationOffers) && (
                                 <div style={{
                                     background: 'linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)',
                                     padding: '1rem',
@@ -305,7 +288,7 @@ const PricingPage = () => {
                                     border: '2px dashed #f5576c'
                                 }}>
                                     <div style={{ fontWeight: 'bold', color: '#1a202c', marginBottom: '0.5rem' }}>
-                                        {plan.invitationCredits === -1 ? t('unlimited_invitations') : t('invitations_monthly', { count: plan.invitationCredits })}
+                                        {plan.invitationCredits === -1 ? 'Unlimited Private Invitations' : `${plan.invitationCredits} Private Invitations per month`}
                                     </div>
                                     {plan.invitationOffers && (
                                         <div style={{ fontSize: '0.875rem', color: '#e53e3e', fontWeight: 'bold' }}>
@@ -319,25 +302,26 @@ const PricingPage = () => {
                             <ul style={{
                                 listStyle: 'none',
                                 padding: 0,
-                                margin: '0 0 2rem 0',
+                                margin: '0 0 1.5rem 0',
                                 flex: 1
                             }}>
-                                {plan.features.map((feature, idx) => (
+                                {(plan.features || []).map((featureText, idx) => (
                                     <li key={idx} style={{
                                         display: 'flex',
                                         alignItems: 'flex-start',
-                                        gap: '0.75rem',
-                                        marginBottom: '0.875rem',
-                                        fontSize: '0.95rem',
-                                        color: '#4a5568'
+                                        gap: '0.6rem',
+                                        marginBottom: '0.6rem',
+                                        fontSize: '0.875rem',
+                                        color: 'var(--text-main)',
+                                        opacity: 0.9
                                     }}>
                                         <FaCheck style={{
                                             color: '#48bb78',
-                                            fontSize: '1rem',
-                                            marginTop: '2px',
+                                            fontSize: '0.85rem',
+                                            marginTop: '3px',
                                             flexShrink: 0
                                         }} />
-                                        <span>{feature}</span>
+                                        <span>{featureText}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -352,8 +336,8 @@ const PricingPage = () => {
                                     borderRadius: '12px',
                                     border: 'none',
                                     background: plan.recommended
-                                        ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                                        : 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)',
+                                        ? 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)'
+                                        : 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', // Gold/Amber theme
                                     color: 'white',
                                     fontSize: '1.125rem',
                                     fontWeight: 'bold',
@@ -365,22 +349,155 @@ const PricingPage = () => {
                                 onMouseEnter={(e) => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
                                 onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                             >
-                                {loading === plan.id ? t('loading_dots') : plan.price === 0 ? t('start_free') : t('subscribe_now')}
+                                {loading === plan.id
+                                    ? 'Loading...'
+                                    : plan.price === 0
+                                        ? 'Start for Free'
+                                        : (plan.type === 'partner'
+                                            ? 'Start 1 Month Free Trial'
+                                            : 'Subscribe Now')}
                             </button>
                         </div>
                     ))}
                 </div>
+
+                {/* Credit Packs Section - ONLY for Individuals */}
+                {!isBusinessPage && (
+                    <div style={{ marginTop: '4rem', textAlign: 'center' }}>
+                        <h2 style={{ color: 'white', fontSize: '2rem', fontWeight: '900', marginBottom: '0.75rem', textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                            Add-on Packs
+                        </h2>
+                        <p style={{ color: 'white', opacity: 0.9, marginBottom: '2rem', fontSize: '1rem' }}>
+                            No subscription needed to use these packs
+                        </p>
+
+                        {/* Credit Selector UI */}
+                        <div style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            backdropFilter: 'blur(20px)',
+                            borderRadius: '32px',
+                            padding: '2.5rem',
+                            maxWidth: '800px',
+                            margin: '0 auto',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+                        }}>
+                            {/* Selection Pills */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                gap: '0.75rem',
+                                flexWrap: 'wrap',
+                                marginBottom: '2.5rem'
+                            }}>
+                                {creditPacks.map(pack => {
+                                    const isSelected = selectedCreditPack?.id === pack.id;
+                                    const getIcon = (amount) => {
+                                        if (amount >= 20) return '🔥';
+                                        if (amount >= 10) return '💎';
+                                        if (amount >= 5) return '✨';
+                                        if (amount >= 3) return '🌟';
+                                        return '📩';
+                                    };
+
+                                    return (
+                                        <div
+                                            key={pack.id}
+                                            onClick={() => setSelectedCreditPack(pack)}
+                                            style={{
+                                                padding: '0.75rem 1.25rem',
+                                                background: isSelected ? 'white' : 'rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '50px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.6rem',
+                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                border: isSelected ? '2px solid white' : '2px solid transparent',
+                                                boxShadow: isSelected ? '0 8px 20px rgba(255, 255, 255, 0.2)' : 'none',
+                                                transform: isSelected ? 'scale(1.05)' : 'scale(1)'
+                                            }}
+                                        >
+                                            <span style={{ fontSize: '1.2rem' }}>{getIcon(pack.amount)}</span>
+                                            <span style={{
+                                                fontWeight: '800',
+                                                color: isSelected ? '#764ba2' : 'white'
+                                            }}>
+                                                {pack.amount}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Active Content */}
+                            {selectedCreditPack && (
+                                <div style={{ transition: 'all 0.5s' }}>
+                                    <div style={{ marginBottom: '1.5rem' }}>
+                                        <h3 style={{ fontSize: '2rem', fontWeight: '900', color: 'white', marginBottom: '0.5rem' }}>
+                                            {selectedCreditPack.name}
+                                        </h3>
+                                        <p style={{ color: 'white', opacity: 0.8, fontSize: '1.1rem' }}>
+                                            {selectedCreditPack.amount} Invitations
+                                        </p>
+                                    </div>
+
+                                    <div style={{
+                                        fontSize: '3.5rem',
+                                        fontWeight: '950',
+                                        color: '#fdd835',
+                                        marginBottom: '2rem',
+                                        textShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                                    }}>
+                                        {selectedCreditPack.currencySymbol || '$'}{selectedCreditPack.price}
+                                        <span style={{ fontSize: '1rem', color: 'white', opacity: 0.7, marginLeft: '0.5rem', fontWeight: '400' }}>
+                                            One-time payment
+                                        </span>
+                                    </div>
+
+                                    <button
+                                        onClick={() => handleSubscribe(selectedCreditPack)}
+                                        disabled={loading === selectedCreditPack.id}
+                                        style={{
+                                            width: '100%',
+                                            maxWidth: '350px',
+                                            padding: '1.25rem',
+                                            borderRadius: '20px',
+                                            border: 'none',
+                                            background: 'linear-gradient(135deg, #fff 0%, #f0f0f0 100%)',
+                                            color: '#764ba2',
+                                            fontSize: '1.25rem',
+                                            fontWeight: '900',
+                                            cursor: loading === selectedCreditPack.id ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.3s',
+                                            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                                            margin: '0 auto'
+                                        }}
+                                    >
+                                        {loading === selectedCreditPack.id ? 'Loading...' : 'Buy Now'}
+                                    </button>
+
+                                    <div style={{ marginTop: '1.5rem', color: 'white', opacity: 0.7, fontSize: '0.9rem' }}>
+                                        Instant activation after payment
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Footer Note */}
                 <div style={{
                     textAlign: 'center',
                     marginTop: '3rem',
                     color: 'white',
-                    fontSize: '0.95rem',
-                    opacity: 0.9
+                    fontSize: '0.9rem',
+                    opacity: 0.85,
+                    borderTop: '1px solid rgba(255,255,255,0.2)',
+                    paddingTop: '1.5rem'
                 }}>
-                    <p>{t('money_back_guarantee')}</p>
-                    <p>{t('secure_payment')}</p>
+                    <p>Money back guarantee</p>
+                    <p>Secure payment processed by Stripe</p>
                 </div>
             </div>
         </div>

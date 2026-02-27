@@ -29,22 +29,35 @@ const SubscriptionSettings = () => {
             ]
         },
         {
+            id: 'pro',
+            name: 'Pro',
+            price: '$9.99',
+            period: 'per month',
+            icon: '⚡',
+            color: 'var(--primary)',
+            features: [
+                '2 Private Invites /week',
+                'Unlimited Public Invites',
+                'Pro Badge',
+                'Search Priority',
+                'Fast Support'
+            ]
+        },
+        {
             id: 'premium',
             name: 'Premium',
-            price: '$29',
+            price: '$19.99',
             period: 'per month',
             icon: '💎',
             color: '#fbbf24',
             popular: true,
             features: [
-                'Everything in Free',
-                'Unlimited photos',
-                'Priority listing',
-                'Advanced analytics',
-                'Custom branding',
-                'Priority support',
-                'Featured badge',
-                'Special offers'
+                'Unlimited Private Invites',
+                'Unlimited Public Invites',
+                'Golden Badge',
+                'Maximum Priority',
+                'Partner Discounts',
+                'Priority Support'
             ]
         }
     ];
@@ -198,6 +211,7 @@ const SubscriptionSettings = () => {
                                     <button
                                         className="submit-btn"
                                         onClick={handleUpgrade}
+                                        style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' }}
                                     >
                                         Upgrade to Premium
                                     </button>

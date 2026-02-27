@@ -1,51 +1,29 @@
+import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { auth } from '../firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Protected Route - Blocks business/partner accounts
  * Business accounts will be redirected to home page
  */
 const BusinessBlockedRoute = ({ children }) => {
-    const [loading, setLoading] = useState(true);
-    const [isBlocked, setIsBlocked] = useState(false);
-
-    useEffect(() => {
-        const checkAccess = async () => {
-            const user = auth.currentUser;
-            if (!user) {
-                setLoading(false);
-                return;
-            }
-
-            try {
-                const userDocRef = doc(db, 'users', user.uid);
-                const userDocSnap = await getDoc(userDocRef);
-
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
-
-                    if (userData.accountType === 'business' || userData.accountType === 'partner') {
-                        setIsBlocked(true);
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking access:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        checkAccess();
-    }, []);
+    const { userProfile, loading, isBusiness } = useAuth();
 
     if (loading) {
-        return null; // or a loading spinner
+        return (
+            <div style={{
+                height: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--bg-body)'
+            }}>
+                <div className="spinner"></div>
+            </div>
+        );
     }
 
-    if (isBlocked) {
+    if (isBusiness) {
         return <Navigate to="/" replace />;
     }
 

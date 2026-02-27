@@ -55,6 +55,42 @@ export const COLOR_SCHEMES = {
         light: '#fce7f3',
         gradient: 'linear-gradient(135deg, #ec4899, #db2777)',
         shadow: 'rgba(236, 72, 153, 0.3)'
+    },
+    midnightGold: {
+        name: 'Midnight Gold',
+        emoji: '✨',
+        primary: '#D4AF37', // Gold
+        secondary: '#0F172A', // Navy
+        light: '#1e293b',
+        gradient: 'linear-gradient(135deg, #0F172A, #1e293b)',
+        shadow: 'rgba(212, 175, 55, 0.4)'
+    },
+    royalRed: {
+        name: 'Royal Red',
+        emoji: '🍷',
+        primary: '#8b0000', // Dark Red
+        secondary: '#4a0000', // Deeper Red
+        light: '#ffc1c1',
+        gradient: 'linear-gradient(135deg, #8b0000, #4a0000)',
+        shadow: 'rgba(139, 0, 0, 0.4)'
+    },
+    leafGreen: {
+        name: 'Leaf Green',
+        emoji: '🌿',
+        primary: '#10b981',
+        secondary: '#059669',
+        light: '#d1fae5',
+        gradient: 'linear-gradient(135deg, #10b981, #059669)',
+        shadow: 'rgba(16, 185, 129, 0.3)'
+    },
+    slateBlue: {
+        name: 'Slate Blue',
+        emoji: '🎮',
+        primary: '#6366f1',
+        secondary: '#4f46e5',
+        light: '#e0e7ff',
+        gradient: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+        shadow: 'rgba(99, 102, 241, 0.3)'
     }
 };
 
@@ -95,6 +131,13 @@ export const TEMPLATE_STYLES = {
                 padding: '10px 20px',
                 border: 'none',
                 fontWeight: '700'
+            },
+            layout: {
+                textAlign: 'left',
+                displayDescription: true,
+                titleSize: '1.4rem',
+                messageStyle: { fontStyle: 'italic', opacity: 0.9 },
+                showSecondaryInfo: true
             }
         })
     },
@@ -140,101 +183,121 @@ export const TEMPLATE_STYLES = {
                 border: 'none',
                 fontWeight: '800',
                 boxShadow: `0 8px 24px ${colors.shadow}`
+            },
+            layout: {
+                textAlign: 'center',
+                displayDescription: true,
+                titleSize: '1.6rem',
+                fontFamily: "'Inter', sans-serif",
+                messageStyle: { fontWeight: '400', letterSpacing: '0.5px', color: 'rgba(255,255,255,0.9)' },
+                showSecondaryInfo: true,
+                accentColor: colors.primary,
+                backgroundOverlay: 'url("data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0l20 20M20 0L0 20\' stroke=\'%23f59e0b\' stroke-opacity=\'0.05\' stroke-width=\'1\'/%3E%3C/svg%3E")'
             }
         })
     },
 
     elegant: {
-        name: 'Elegant',
-        emoji: '👑',
-        description: 'Luxurious with gold accents',
+        name: 'Romantic',
+        emoji: '🌹',
+        description: 'Luxurious with rose and gold accents',
 
         getStyles: (colors) => ({
             card: {
-                background: 'var(--bg-card)',
-                borderRadius: '20px',
-                border: `3px solid ${colors.primary}`,
-                boxShadow: `0 12px 40px ${colors.shadow}, inset 0 0 0 1px rgba(255, 215, 0, 0.2)`,
+                background: colors.gradient || `linear-gradient(135deg, var(--bg-card), ${colors.light})`,
+                borderRadius: '30px',
+                border: `2px solid ${colors.primary}`,
+                boxShadow: `0 0 30px ${colors.shadow}`,
                 padding: '1.5rem',
-                position: 'relative'
+                position: 'relative',
+                color: 'white'
             },
             header: {
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary}, #ffd700)`,
+                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary}, var(--luxury-gold))`,
                 color: 'white',
                 padding: '1.5rem',
-                borderRadius: '16px',
+                borderRadius: '20px',
                 marginBottom: '1.5rem',
                 textAlign: 'center',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
             },
             badge: {
-                background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 215, 0, 0.1))',
-                color: colors.primary,
-                border: `2px solid ${colors.primary}`,
-                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                border: `1.5px solid rgba(255,255,255,0.4)`,
+                borderRadius: '20px',
                 padding: '8px 16px',
-                fontSize: '0.7rem',
-                fontWeight: '800',
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase'
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                backdropFilter: 'blur(5px)'
             },
             button: {
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary}, #ffd700)`,
+                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary}, var(--luxury-gold))`,
                 color: 'white',
-                borderRadius: '12px',
+                borderRadius: '30px',
                 padding: '12px 28px',
-                border: '2px solid rgba(255, 215, 0, 0.3)',
+                border: 'none',
                 fontWeight: '800',
                 boxShadow: `0 8px 24px ${colors.shadow}`
+            },
+            layout: {
+                textAlign: 'center',
+                displayDescription: true,
+                titleSize: '2.2rem',
+                fontFamily: "'Inter', sans-serif",
+                messageStyle: { fontSize: '1.2rem', fontStyle: 'italic', fontWeight: '400', letterSpacing: '0.2px', color: '#D4AF37' },
+                showSecondaryInfo: false,
+                backgroundOverlay: 'none'
             }
         })
     },
 
     fun: {
-        name: 'Fun',
-        emoji: '🎉',
-        description: 'Playful and colorful',
+        name: 'Family',
+        emoji: '🌳',
+        description: 'Warm, friendly and welcoming',
 
         getStyles: (colors) => ({
             card: {
-                background: `radial-gradient(circle at top left, ${colors.light}, var(--bg-card))`,
-                borderRadius: '28px',
-                border: `4px dashed ${colors.primary}`,
-                boxShadow: `0 16px 48px ${colors.shadow}, 0 0 0 8px ${colors.light}`,
-                padding: '1.75rem',
-                position: 'relative'
+                background: `linear-gradient(to bottom right, ${colors.light}20, var(--bg-card))`,
+                borderRadius: '25px',
+                border: `3px solid ${colors.primary}40`,
+                boxShadow: `0 10px 30px ${colors.shadow}`,
+                padding: '1.5rem'
             },
             header: {
                 background: colors.gradient,
                 color: 'white',
-                padding: '1.5rem',
-                borderRadius: '20px 20px 0 0',
-                marginBottom: '1.25rem',
-                transform: 'rotate(-1deg)',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
+                padding: '1.25rem',
+                borderRadius: '20px',
+                marginBottom: '1.25rem'
             },
             badge: {
-                background: colors.gradient,
+                background: colors.primary,
                 color: 'white',
-                border: `3px solid white`,
-                borderRadius: '25px',
-                padding: '10px 18px',
+                borderRadius: '12px',
+                padding: '6px 14px',
                 fontSize: '0.8rem',
-                fontWeight: '900',
-                textTransform: 'uppercase',
-                boxShadow: `0 4px 12px ${colors.shadow}`,
-                transform: 'rotate(2deg)'
+                fontWeight: '700'
             },
             button: {
                 background: colors.gradient,
                 color: 'white',
-                borderRadius: '25px',
-                padding: '14px 32px',
-                border: `3px solid white`,
-                fontWeight: '900',
-                fontSize: '1.05rem',
-                boxShadow: `0 8px 24px ${colors.shadow}`,
-                transform: 'scale(1.05)'
+                borderRadius: '18px',
+                padding: '14px 24px',
+                border: 'none',
+                fontWeight: '700',
+                boxShadow: `0 6px 15px ${colors.shadow}`
+            },
+            layout: {
+                textAlign: 'left',
+                displayDescription: true,
+                titleSize: '1.6rem',
+                fontFamily: "'Outfit', sans-serif",
+                messageStyle: { fontWeight: '500', color: 'var(--text-main)', opacity: '0.9' },
+                showSecondaryInfo: true,
+                decorativeElement: '👨‍👩‍👧‍👦',
+                backgroundOverlay: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M30 10c0-5-5-5-5 0s5 5 5 5 5-5 5-5-5 0-5 0z\' fill=\'%2310b981\' fill-opacity=\'0.03\'/%3E%3C/svg%3E")'
             }
         })
     },
@@ -275,64 +338,131 @@ export const TEMPLATE_STYLES = {
                 padding: '10px 20px',
                 border: 'none',
                 fontWeight: '600'
+            },
+            layout: {
+                textAlign: 'left',
+                displayDescription: false,
+                titleSize: '1.2rem',
+                fontFamily: "'Inter', sans-serif",
+                messageStyle: {},
+                showSecondaryInfo: true
             }
         })
     },
 
     premium: {
-        name: 'Premium',
-        emoji: '💎',
-        description: 'VIP exclusive style',
+        name: 'Business',
+        emoji: '👔',
+        description: 'Elite corporate professional',
 
         getStyles: (colors) => ({
             card: {
-                background: `linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.8)), linear-gradient(135deg, ${colors.primary}20, ${colors.secondary}20)`,
-                borderRadius: '24px',
-                border: `2px solid ${colors.primary}`,
-                boxShadow: `0 24px 72px ${colors.shadow}, inset 0 0 40px ${colors.primary}10`,
+                background: `linear-gradient(135deg, #0f172a, #1e293b)`,
+                borderRadius: '16px',
+                border: `1px solid ${colors.primary}50`,
+                boxShadow: `0 25px 50px -12px rgba(0, 0, 0, 0.5)`,
                 padding: '2rem',
-                position: 'relative',
                 overflow: 'hidden'
             },
             header: {
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                background: `rgba(255,255,255,0.05)`,
                 color: 'white',
-                padding: '1.75rem',
-                borderRadius: '18px',
+                padding: '1.5rem',
+                borderRadius: '12px',
                 marginBottom: '1.75rem',
                 textAlign: 'center',
-                boxShadow: `0 12px 36px ${colors.shadow}, inset 0 0 20px rgba(255, 255, 255, 0.1)`,
-                border: `1px solid ${colors.primary}`
+                borderBottom: `3px solid ${colors.primary}`
             },
             badge: {
-                background: colors.gradient,
-                color: 'white',
-                border: '2px solid rgba(255, 255, 255, 0.3)',
-                borderRadius: '20px',
-                padding: '10px 18px',
-                fontSize: '0.75rem',
-                fontWeight: '900',
+                background: 'transparent',
+                color: colors.primary,
+                border: `1.5px solid ${colors.primary}`,
+                borderRadius: '4px',
+                padding: '6px 12px',
+                fontSize: '0.7rem',
+                fontWeight: '800',
                 textTransform: 'uppercase',
-                letterSpacing: '1px',
-                boxShadow: `0 8px 24px ${colors.shadow}, inset 0 0 10px rgba(255, 255, 255, 0.1)`
+                letterSpacing: '1.5px'
             },
             button: {
-                background: colors.gradient,
+                background: colors.primary,
                 color: 'white',
-                borderRadius: '14px',
+                borderRadius: '4px',
                 padding: '14px 32px',
-                border: '2px solid rgba(255, 255, 255, 0.2)',
+                border: 'none',
                 fontWeight: '900',
-                fontSize: '1rem',
-                boxShadow: `0 12px 36px ${colors.shadow}, inset 0 0 10px rgba(255, 255, 255, 0.1)`,
+                fontSize: '0.95rem',
                 textTransform: 'uppercase',
-                letterSpacing: '0.5px'
+                letterSpacing: '1px'
+            },
+            layout: {
+                textAlign: 'center',
+                displayDescription: true,
+                titleSize: '1.8rem',
+                fontFamily: "'Montserrat', sans-serif",
+                messageStyle: { fontWeight: '600', letterSpacing: '0.5px', color: 'rgba(255,255,255,0.8)' },
+                showSecondaryInfo: true,
+                decorativeElement: '💼',
+                backgroundOverlay: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h40v40H0z\' fill=\'none\'/%3E%3Cpath d=\'M0 20h40M20 0v40\' stroke=\'%23ffffff\' stroke-opacity=\'0.03\' stroke-width=\'1\'/%3E%3C/svg%3E")'
             }
         })
     }
 };
 
-export const getTemplateStyle = (templateType, colorScheme) => {
+export const OCCASION_PRESETS = {
+    Dating: {
+        templateType: 'elegant',
+        colorScheme: 'royalRed',
+        lottieUrl: 'https://assets9.lottiefiles.com/packages/lf20_m6cu961l.json' // Romantic Heart
+    },
+    Birthday: {
+        templateType: 'fun',
+        colorScheme: 'sunsetOrange',
+        lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_u4j3cx7u.json' // Confetti
+    },
+    Social: {
+        templateType: 'modern',
+        colorScheme: 'leafGreen',
+        lottieUrl: 'https://assets10.lottiefiles.com/packages/lf20_o6spyj.json' // Social Network
+    },
+    Work: {
+        templateType: 'premium',
+        colorScheme: 'royalPurple',
+        lottieUrl: 'https://assets3.lottiefiles.com/packages/lf20_vnikbeve.json' // Office/Work
+    },
+    Nightlife: {
+        templateType: 'modern',
+        colorScheme: 'midnightGold',
+        lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_myej9j9j.json' // Nightlife/Party
+    },
+    Dining: {
+        templateType: 'elegant',
+        colorScheme: 'oceanBlue',
+        lottieUrl: 'https://assets4.lottiefiles.com/packages/lf20_06m8n5.json' // Dining/Food
+    },
+    Café: {
+        templateType: 'classic',
+        colorScheme: 'sunsetOrange',
+        lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_ytp7shm2.json' // Coffee
+    },
+    Gaming: {
+        templateType: 'fun',
+        colorScheme: 'slateBlue',
+        lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_5njpkv83.json' // Gaming
+    }
+};
+
+export const getTemplateStyle = (templateType, colorScheme, occasionType) => {
+    // If occasionType is provided and a preset exists, use it
+    const normalizedOccasion = (occasionType || '').charAt(0).toUpperCase() + (occasionType || '').slice(1).toLowerCase();
+    if (normalizedOccasion && OCCASION_PRESETS[normalizedOccasion]) {
+        const preset = OCCASION_PRESETS[normalizedOccasion];
+        const template = TEMPLATE_STYLES[preset.templateType] || TEMPLATE_STYLES.modern;
+        const colors = COLOR_SCHEMES[preset.colorScheme] || COLOR_SCHEMES.oceanBlue;
+        return template.getStyles(colors);
+    }
+
+    // Fallback to manual selection or defaults
     const template = TEMPLATE_STYLES[templateType] || TEMPLATE_STYLES.classic;
     const colors = COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.oceanBlue;
     return template.getStyles(colors);

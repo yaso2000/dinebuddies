@@ -1,6 +1,7 @@
 // Notification helpers for creating notifications on specific events
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Create a notification for a user
@@ -58,7 +59,7 @@ export const notifyNewFollower = async (followedUserId, followerUser) => {
         actionUrl: `/profile/${followerUser.id}`,
         fromUserId: followerUser.id,
         fromUserName: followerUser.name,
-        fromUserAvatar: followerUser.avatar
+        fromUserAvatar: getSafeAvatar(followerUser)
     });
 };
 
@@ -74,7 +75,7 @@ export const notifyInvitationAccepted = async (hostUserId, guestUser, invitation
         actionUrl: `/invitation/${invitationId}`,
         fromUserId: guestUser.id,
         fromUserName: guestUser.name,
-        fromUserAvatar: guestUser.avatar,
+        fromUserAvatar: getSafeAvatar(guestUser),
         metadata: { invitationId }
     });
 };
@@ -91,7 +92,7 @@ export const notifyInvitationRejected = async (hostUserId, guestUser, invitation
         actionUrl: `/invitation/${invitationId}`,
         fromUserId: guestUser.id,
         fromUserName: guestUser.name,
-        fromUserAvatar: guestUser.avatar,
+        fromUserAvatar: getSafeAvatar(guestUser),
         metadata: { invitationId }
     });
 };
@@ -108,7 +109,7 @@ export const notifyNewMessage = async (recipientUserId, senderUser, messagePrevi
         actionUrl: `/chat/${senderUser.id}`,
         fromUserId: senderUser.id,
         fromUserName: senderUser.name,
-        fromUserAvatar: senderUser.avatar
+        fromUserAvatar: getSafeAvatar(senderUser)
     });
 };
 
@@ -138,7 +139,7 @@ export const notifyInvitationLiked = async (invitationOwnerId, likerUser, invita
         actionUrl: `/invitation/${invitationId}`,
         fromUserId: likerUser.id,
         fromUserName: likerUser.name,
-        fromUserAvatar: likerUser.avatar,
+        fromUserAvatar: getSafeAvatar(likerUser),
         metadata: { invitationId }
     });
 };
@@ -155,7 +156,7 @@ export const notifyNewComment = async (invitationOwnerId, commenterUser, invitat
         actionUrl: `/invitation/${invitationId}`,
         fromUserId: commenterUser.id,
         fromUserName: commenterUser.name,
-        fromUserAvatar: commenterUser.avatar,
+        fromUserAvatar: getSafeAvatar(commenterUser),
         metadata: { invitationId, commentId: comment.id }
     });
 };

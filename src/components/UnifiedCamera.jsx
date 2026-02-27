@@ -163,17 +163,68 @@ const UnifiedCamera = ({
         if (!streamRef.current) startCameraStream();
     };
 
+    // --- Photo Logic ---
+    const capturePhoto = () => {
+        if (!videoRef.current) return;
+
+        const video = videoRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const ctx = canvas.getContext('2d');
+        if (facingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0);
+
+        canvas.toBlob(blob => {
+            if (blob) {
+                const file = new File([blob], `cam_photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const previewUrl = URL.createObjectURL(blob);
+                setPreviewMedia({ file, url: previewUrl, type: 'image' });
+            }
+        }, 'image/jpeg', 0.95);
+    };
+
     return (
         <div style={{
-            position: 'fixed', inset: 0, zIndex: 99999,
-            background: '#000', display: 'flex', flexDirection: 'column'
+            position: 'fixed',
+            top: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '100%',
+            maxWidth: '500px',
+            height: '100dvh',
+            zIndex: 100001,
+            background: '#000',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
         }}>
             {/* Top Bar */}
             <div style={{
                 position: 'absolute', top: 0, left: 0, right: 0, padding: '20px',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 20
             }}>
-                <button onClick={stopCamera} style={{ background: 'rgba(0,0,0,0.3)', border: 'none', color: 'white', padding: '10px', borderRadius: '50%', cursor: 'pointer' }}>
+                <button
+                    type="button"
+                    onClick={stopCamera}
+                    style={{
+                        background: 'rgba(0,0,0,0.3)',
+                        border: 'none',
+                        color: 'white',
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                    }}
+                >
                     <FaTimes size={20} />
                 </button>
                 {/* Timer (only when recording) */}
@@ -187,7 +238,7 @@ const UnifiedCamera = ({
             </div>
 
             {/* Viewport */}
-            <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+            <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'hidden' }}>
                 {previewMedia ? (
                     // Preview captured media
                     previewMedia.type === 'video' ? (
@@ -201,7 +252,7 @@ const UnifiedCamera = ({
                         {cameraError ? (
                             <div style={{ color: 'white', textAlign: 'center', padding: '20px' }}>
                                 <p>{cameraError}</p>
-                                <button onClick={() => uploadInputRef.current.click()} style={{ marginTop: '20px', padding: '10px 20px' }}>Upload Instead</button>
+                                <button type="button" onClick={() => uploadInputRef.current.click()} style={{ marginTop: '20px', padding: '10px 20px' }}>Upload Instead</button>
                             </div>
                         ) : (
                             <video
@@ -221,17 +272,19 @@ const UnifiedCamera = ({
 
             {/* Bottom Controls */}
             <div style={{
-                padding: '30px 20px', paddingBottom: '80px',
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                padding: '40px 20px', paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
                 display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-                background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)'
+                background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)',
+                zIndex: 30
             }}>
                 {previewMedia ? (
                     // Confirmation Controls
                     <>
-                        <button onClick={retake} style={{ color: 'white', background: 'transparent', border: '1px solid white', padding: '10px 30px', borderRadius: '25px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button type="button" onClick={retake} style={{ color: 'white', background: 'transparent', border: '1px solid white', padding: '10px 30px', borderRadius: '25px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <FaTrash /> Retake
                         </button>
-                        <button onClick={confirmMedia} style={{ color: 'white', background: '#2563eb', border: 'none', padding: '10px 30px', borderRadius: '25px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
+                        <button type="button" onClick={confirmMedia} style={{ color: 'white', background: '#2563eb', border: 'none', padding: '10px 30px', borderRadius: '25px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
                             <FaCheck /> {previewMedia.type === 'video' ? 'Use Video' : 'Use Photo'}
                         </button>
                     </>
@@ -239,26 +292,43 @@ const UnifiedCamera = ({
                     // Camera Controls
                     <>
                         {/* 1. Upload Button */}
-                        <button onClick={() => uploadInputRef.current.click()} style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '50%', color: 'white', border: 'none' }}>
+                        <button type="button" onClick={() => uploadInputRef.current.click()} style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '50%', color: 'white', border: 'none' }}>
                             <FaFileUpload size={20} />
                         </button>
 
                         {/* 2. Shutter / Record Button */}
                         <button
-                            onClick={isRecording ? stopRecording : startRecording}
+                            type="button"
+                            onClick={mode === 'photo' ? capturePhoto : (isRecording ? stopRecording : startRecording)}
                             style={{
                                 width: '72px', height: '72px', borderRadius: '50%',
-                                background: isRecording ? 'transparent' : 'red',
-                                border: isRecording ? '4px solid red' : '4px solid white',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                background: mode === 'photo' ? 'white' : (isRecording ? 'transparent' : 'red'),
+                                border: mode === 'photo' ? '4px solid rgba(255,255,255,0.5)' : (isRecording ? '4px solid red' : '4px solid white'),
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: mode === 'photo' ? '0 0 0 4px rgba(255,255,255,0.2)' : 'none'
                             }}
                         >
                             {isRecording && <div style={{ width: '32px', height: '32px', background: 'red', borderRadius: '4px' }} />}
                         </button>
 
                         {/* 3. Switch Camera Button */}
-                        <button onClick={switchCamera} style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '50%', color: 'white', border: 'none' }}>
-                            <FaSyncAlt size={20} />
+                        <button
+                            type="button"
+                            onClick={switchCamera}
+                            style={{
+                                background: 'rgba(255,255,255,0.2)',
+                                width: '44px',
+                                height: '44px',
+                                borderRadius: '50%',
+                                color: 'white',
+                                border: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyCenter: 'center',
+                                flexShrink: 0
+                            }}
+                        >
+                            <FaSyncAlt size={20} style={{ margin: 'auto' }} />
                         </button>
                     </>
                 )}

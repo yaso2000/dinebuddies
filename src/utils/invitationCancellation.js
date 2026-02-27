@@ -2,6 +2,7 @@ import { doc, deleteDoc, getDoc, collection, getDocs, query, where } from 'fireb
 import { db } from '../firebase/config';
 import { sendNotification } from './notificationHelpers';
 import { recordCancellation, getPenaltyInfo } from './cancellationPolicy';
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Predefined cancellation reasons
@@ -66,7 +67,7 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
                 invitationId,
                 fromUserId: currentUser.id,
                 fromUserName: currentUser.display_name || currentUser.name,
-                fromUserAvatar: currentUser.photo_url || currentUser.avatar,
+                fromUserAvatar: getSafeAvatar(currentUser),
                 cancellationReason: reasonMessage
             })
         );
@@ -99,7 +100,7 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
                         invitationId,
                         fromUserId: currentUser.id,
                         fromUserName: currentUser.display_name || currentUser.name,
-                        fromUserAvatar: currentUser.photo_url || currentUser.avatar,
+                        fromUserAvatar: getSafeAvatar(currentUser),
                         cancellationReason: reasonMessage
                     });
                 }

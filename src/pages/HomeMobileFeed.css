@@ -152,9 +152,9 @@
         width: 100% !important;
         border-radius: 12px !important;
         padding: 12px !important;
-        background: #fff !important;
-        color: #000 !important;
+        background: var(--premium-orange, #f97316) !important;
+        color: #fff !important;
         font-weight: 800 !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3) !important;
     }
 }

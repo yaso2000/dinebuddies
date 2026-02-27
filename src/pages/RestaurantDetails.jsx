@@ -5,14 +5,16 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import RestaurantRating from '../components/RestaurantRating';
+import CreateInvitationSelector from '../components/CreateInvitationSelector';
 
 const RestaurantDetails = () => {
     const { t, i18n } = useTranslation();
     const { id } = useParams();
     const navigate = useNavigate();
     const context = useInvitations();
-    const { userProfile } = useAuth();
-    const isBusinessAccount = userProfile?.accountType === 'business';
+    const { userProfile, isGuest } = useAuth();
+    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
+    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
     // Safety check for context data
     const restaurants = context?.restaurants || [];
@@ -81,8 +83,11 @@ const RestaurantDetails = () => {
             <div style={{ padding: '0 1.5rem', marginTop: '-40px', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
                     <div>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900' }}>{name}</h1>
-                        <span style={{ color: 'var(--luxury-gold)', fontWeight: '800' }}>{type}</span>
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {name}
+                            {restaurant.isVerified && <FaCheckCircle style={{ color: '#3b82f6', fontSize: '1.2rem' }} title="Verified Partner" />}
+                        </h1>
+                        <span style={{ color: 'var(--luxury-gold)', fontWeight: '800' }}>{type} • {restaurant.businessInfo?.priceLevel || '$$'}</span>
                     </div>
                     <div style={{ background: 'rgba(251, 191, 36, 0.15)', padding: '8px 15px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--luxury-gold)' }}>
                         <FaStar style={{ color: 'var(--luxury-gold)' }} />
@@ -91,35 +96,55 @@ const RestaurantDetails = () => {
                 </div>
 
                 <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                    {promoText}
+                    {restaurant.businessInfo?.description || promoText}
                 </p>
+
+
+
+                {/* FEATURES LIST */}
+                {restaurant.businessInfo?.features && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '1.5rem' }}>
+                        {restaurant.businessInfo.features.map((feature, idx) => (
+                            <span key={idx} style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                fontSize: '0.8rem',
+                                border: '1px solid rgba(255,255,255,0.2)'
+                            }}>
+                                ✨ {feature}
+                            </span>
+                        ))}
+                    </div>
+                )}
 
                 {/* Community Join Section */}
                 <div style={{ background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(244, 63, 94, 0.1) 100%)', padding: '1.5rem', borderRadius: '20px', border: '1px solid rgba(139, 92, 246, 0.3)', marginBottom: '2rem' }}>
+                    {/* ... (Existing Community Code) ... */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <div>
                             <h3 style={{ fontSize: '1.1rem', fontWeight: '900', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 👥 {t('restaurant_community')}
                             </h3>
                             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {t('members_count', { count: '1,234' })}
+                                {t('members_count', { count: restaurant.followersCount || '100+' })}
                             </p>
                         </div>
                         {!isBusinessAccount && (
                             <button
                                 onClick={() => {
-                                    if (currentUser?.isGuest) {
+                                    if (isGuest || !currentUser?.id) {
                                         navigate('/login');
                                         return;
                                     }
-                                    toggleCommunity(id);
+                                    toggleCommunity(restaurant?.ownerId || id);
                                 }}
                                 style={{
-                                    background: (currentUser.joinedCommunities || []).includes(id)
+                                    background: (currentUser?.joinedCommunities || []).some(jId => jId === id || jId === restaurant?.ownerId)
                                         ? 'transparent'
                                         : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
                                     color: 'white',
-                                    border: (currentUser.joinedCommunities || []).includes(id)
+                                    border: (currentUser?.joinedCommunities || []).some(jId => jId === id || jId === restaurant?.ownerId)
                                         ? '1px solid var(--primary)'
                                         : 'none',
                                     padding: '10px 20px',
@@ -127,7 +152,7 @@ const RestaurantDetails = () => {
                                     fontSize: '0.85rem',
                                     fontWeight: '800',
                                     cursor: 'pointer',
-                                    boxShadow: (currentUser.joinedCommunities || []).includes(id)
+                                    boxShadow: (currentUser?.joinedCommunities || []).some(jId => jId === id || jId === restaurant?.ownerId)
                                         ? 'none'
                                         : '0 4px 12px rgba(139, 92, 246, 0.3)',
                                     display: 'flex',
@@ -135,48 +160,31 @@ const RestaurantDetails = () => {
                                     gap: '6px'
                                 }}
                             >
-                                {(currentUser.joinedCommunities || []).includes(id)
+                                {(currentUser?.joinedCommunities || []).some(jId => jId === id || jId === restaurant?.ownerId)
                                     ? t('member_joined')
                                     : t('join_plus')}
                             </button>
                         )}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: 'var(--primary)' }}>✓</span>
-                            <span>{t('instant_notifications')}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: 'var(--primary)' }}>✓</span>
-                            <span>{t('exclusive_offers')}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: 'var(--primary)' }}>✓</span>
-                            <span>{t('priority_bookings')}</span>
-                        </div>
-                    </div>
-
-                    {/* Community Members - Will be fetched from Firestore in future */}
-                    <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(139, 92, 246, 0.2)' }}>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
-                            {t('community_members')}
-                        </p>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            {t('members_soon')}
-                        </p>
-                    </div>
+                    {/* ... (Rest of existing community code) ... */}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
                     <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
                         <FaMapMarkerAlt style={{ color: 'var(--primary)', marginBottom: '5px' }} />
                         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Location</div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>{location}</div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>{restaurant.businessInfo?.address || location}</div>
                     </div>
                     <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
                         <FaClock style={{ color: 'var(--accent)', marginBottom: '5px' }} />
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Opening Hours</div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>12:00 PM - 02:00 AM</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Today's Hours</div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>
+                            {(() => {
+                                const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+                                const today = days[new Date().getDay()];
+                                return restaurant.businessInfo?.openingHours?.[today] || '10:00 AM - 10:00 PM';
+                            })()}
+                        </div>
                     </div>
                 </div>
 
@@ -197,23 +205,11 @@ const RestaurantDetails = () => {
                     {!isBusinessAccount && (
                         <button
                             onClick={() => {
-                                if (currentUser?.isGuest) {
+                                if (isGuest || !currentUser?.id) {
                                     navigate('/login');
                                     return;
                                 }
-                                navigate('/create', {
-                                    state: {
-                                        fromRestaurant: true,
-                                        restaurantData: {
-                                            name: restaurant.name,
-                                            location: restaurant.location,
-                                            image: restaurant.image,
-                                            lat: restaurant.lat,
-                                            lng: restaurant.lng,
-                                            type: restaurant.type
-                                        }
-                                    }
-                                });
+                                setIsSelectorOpen(true);
                             }}
                             className="btn btn-primary"
                             style={{ flex: 3, height: '55px', fontSize: '1.1rem' }}
@@ -226,6 +222,23 @@ const RestaurantDetails = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Invitation Type Selector Modal */}
+            <CreateInvitationSelector
+                isOpen={isSelectorOpen}
+                onClose={() => setIsSelectorOpen(false)}
+                navigationState={{
+                    fromRestaurant: true,
+                    restaurantData: {
+                        name: restaurant.name,
+                        location: restaurant.location,
+                        image: restaurant.image,
+                        lat: restaurant.lat,
+                        lng: restaurant.lng,
+                        type: restaurant.type
+                    }
+                }}
+            />
         </div>
     );
 };

@@ -6,7 +6,9 @@ import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
-import PrivateInvitationModal from './PrivateInvitationModal';
+import { useTheme } from '../context/ThemeContext';
+import ProfileCompletionModal from './ProfileCompletionModal';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const Layout = ({ children }) => {
     const [imgLoaded, setImgLoaded] = useState(false);
@@ -16,17 +18,20 @@ const Layout = ({ children }) => {
     const { getFollowingInvitations, currentUser } = useInvitations();
     const { unreadCount: chatUnreadCount } = useChat();
     const { unreadCount } = useNotifications();
-    const { userProfile, isGuest } = useAuth();
+    const { userProfile, isGuest, loading: authLoading } = useAuth();
+    const { themeMode } = useTheme();
+
+
 
     const isActive = (path) => location.pathname === path;
 
     // Reset image loading state when avatar changes
     useEffect(() => {
         setImgLoaded(false);
-    }, [currentUser?.avatar]);
+    }, [userProfile?.photoURL, userProfile?.photo_url, userProfile?.avatar]);
 
-    // Check if current user is a business account
-    const isBusinessAccount = userProfile?.accountType === 'business';
+    // Check if current user is a business account (Broad check for legacy compatibility)
+    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
 
     const friendActivities = getFollowingInvitations ? getFollowingInvitations() : [];
     const hasFriendsActive = friendActivities.length > 0;
@@ -43,28 +48,19 @@ const Layout = ({ children }) => {
 
     return (
         <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+
+            {/* Profile Completion Modal */}
+            <ProfileCompletionModal />
             {/* Header - Hidden on Chat Screens */}
             {!location.pathname.startsWith('/chat/') && !location.pathname.startsWith('/community/') && !(location.pathname.startsWith('/invitation/') && location.pathname.endsWith('/chat')) && (
                 <header className="app-header">
                     <div className="logo-wrapper" onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center' }}>
                         <img
-                            src="/logo.png"
+                            src="/logo-w.png"
                             alt="DineBuddies"
-                            style={{
-                                width: '30px',
-                                height: '30px',
-                                objectFit: 'contain',
-                                filter: 'brightness(0) invert(1)'
-                            }}
+                            className="app-logo-img"
                         />
-                        <span className="app-name" style={{
-                            color: '#FFFFFF',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            lineHeight: 1,
-                            transform: 'translateY(8px)',
-                            marginLeft: '-6px'
-                        }}>DineBuddies</span>
+                        <span className="app-name">DineBuddies</span>
                     </div>
                     <div className="header-actions">
                         {!isGuest && userProfile?.accountType !== 'guest' ? (
@@ -95,26 +91,28 @@ const Layout = ({ children }) => {
                                         height: '40px',
                                         borderRadius: '50%',
                                         overflow: 'hidden',
-                                        border: '2px solid rgba(255, 255, 255, 0.2)',
+                                        border: '1px solid var(--border-color)',
                                         cursor: 'pointer',
                                         position: 'relative',
-                                        background: '#f0f0f0'
+                                        background: 'var(--hover-overlay)'
                                     }}
                                 >
                                     {!imgLoaded && (
                                         <div style={{
                                             position: 'absolute',
                                             inset: 0,
-                                            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                                            background: 'linear-gradient(90deg, var(--bg-input) 25%, var(--border-color) 50%, var(--bg-input) 75%)',
                                             backgroundSize: '200% 100%',
                                             animation: 'shimmer 1.5s infinite',
                                         }} />
                                     )}
                                     <img
-                                        src={currentUser?.avatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
+                                        src={getSafeAvatar(userProfile)}
                                         alt="Profile"
                                         onLoad={() => setImgLoaded(true)}
-                                        onError={() => setImgLoaded(true)} // Avoid stuck loading
+                                        onError={() => {
+                                            setImgLoaded(true);
+                                        }} // Avoid stuck loading
                                         style={{
                                             width: '100%',
                                             height: '100%',
@@ -224,17 +222,21 @@ const Layout = ({ children }) => {
                     )}
 
                     {/* Show Admin Dashboard for admin accounts only */}
-                    {(userProfile?.role === 'admin' || userProfile?.accountType === 'admin') && (
-                        <Link to="/admin/dashboard" className={`nav-item ${isActive('/admin/dashboard') ? 'active' : ''}`}>
-                            <FaCrown className="nav-icon" />
-                            <span>Admin</span>
-                        </Link>
-                    )}
+                    {(
+                        userProfile?.role === 'admin' ||
+                        userProfile?.accountType === 'admin' ||
+                        ['admin@dinebuddies.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au', 'y.abohamed@gmail.com'].includes(currentUser?.email?.toLowerCase()) ||
+                        currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33'
+                    ) && (
+                            <Link to="/admin" className={`nav-item ${isActive('/admin') ? 'active' : ''}`}>
+                                <FaCrown className="nav-icon" />
+                                <span>Admin</span>
+                            </Link>
+                        )}
                 </nav>
             )}
 
-            {/* Private Invitation Modal */}
-            {!isGuest && <PrivateInvitationModal />}
+
         </div>
     );
 };

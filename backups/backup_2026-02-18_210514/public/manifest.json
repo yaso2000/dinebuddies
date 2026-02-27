@@ -1,0 +1,25 @@
+{
+    "short_name": "DineBuddies",
+    "name": "DineBuddies - Premium Social Dining",
+    "icons": [
+        {
+            "src": "/logo.png",
+            "type": "image/png",
+            "sizes": "192x192",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/logo.png",
+            "type": "image/png",
+            "sizes": "512x512",
+            "purpose": "any maskable"
+        }
+    ],
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#020617",
+    "theme_color": "#020617",
+    "orientation": "portrait-primary",
+    "scope": "/",
+    "lang": "en"
+}

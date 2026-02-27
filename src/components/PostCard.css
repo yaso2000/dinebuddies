@@ -10,7 +10,7 @@
 }
 
 .post-card:not(.in-chat):hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--hover-overlay);
 }
 
 .post-card.in-chat {
@@ -30,7 +30,7 @@
     border-radius: 50%;
     background-size: cover;
     background-position: center;
-    background-color: #333;
+    background-color: var(--bg-input);
 }
 
 .post-content-col {
@@ -73,7 +73,7 @@
     font-size: 0.95rem;
     line-height: 1.5;
     white-space: pre-wrap;
-    color: var(--text-main);
+    color: inherit;
     margin-bottom: 10px;
     word-wrap: break-word;
 }

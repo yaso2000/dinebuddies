@@ -1,6 +1,7 @@
 import { doc, updateDoc, serverTimestamp, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { sendNotification } from './notificationHelpers';
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Update invitation guest count
@@ -50,7 +51,7 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
                     invitationId,
                     fromUserId: currentUser.id,
                     fromUserName: currentUser.display_name || currentUser.name,
-                    fromUserAvatar: currentUser.photo_url || currentUser.avatar
+                    fromUserAvatar: getSafeAvatar(currentUser)
                 })
             );
 
@@ -81,7 +82,7 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
                             invitationId,
                             fromUserId: currentUser.id,
                             fromUserName: currentUser.display_name || currentUser.name,
-                            fromUserAvatar: currentUser.photo_url || currentUser.avatar,
+                            fromUserAvatar: getSafeAvatar(currentUser),
                             guestCount: newGuestCount
                         });
                     }
@@ -119,8 +120,15 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
 export const updateInvitationImage = async (invitationId, newImageUrl) => {
     try {
         const invitationRef = doc(db, 'invitations', invitationId);
+
+        // When updating the image manually, we treat it as a custom image.
+        // We must clear 'restaurantImage' to ensure the new 'customImage'/ 'image' takes precedence
+        // in the display logic (customImage || restaurantImage || image).
         await updateDoc(invitationRef, {
             image: newImageUrl,
+            customImage: newImageUrl,
+            restaurantImage: null, // Clear conflicting field
+            mediaSource: 'custom_image', // Update source type
             updatedAt: serverTimestamp()
         });
 

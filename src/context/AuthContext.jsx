@@ -14,9 +14,10 @@ import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     FacebookAuthProvider,
-    TwitterAuthProvider
+    TwitterAuthProvider,
+    updateProfile as updateAuthProfile
 } from 'firebase/auth';
-import { fetchIpLocation } from '../utils/locationUtils';
+import { fetchIpLocation, reverseGeocode } from '../utils/locationUtils';
 import {
     doc,
     setDoc,
@@ -48,10 +49,12 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
     const [isGuest, setIsGuest] = useState(false);
+    const nominatimFailed = React.useRef(false);
 
     // Guest profile template
     const guestProfile = {
         uid: 'guest',
+        id: 'guest',
         display_name: 'Guest', // Will be translated in components
         email: '',
         photo_url: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E',
@@ -63,6 +66,25 @@ export const AuthProvider = ({ children }) => {
         reputation: 0,
         shortDescription: '',
         isGuest: true
+    };
+
+    // Normalization helper
+    const normalizeProfile = (data) => {
+        if (!data) return null;
+        return {
+            ...data,
+            id: data.id || data.uid || '',
+            uid: data.uid || data.id || '',
+            displayName: data.displayName || data.display_name || data.nickname || '',
+            display_name: data.display_name || data.displayName || data.nickname || '',
+            photoURL: data.photoURL || data.photo_url || data.avatar || '',
+            photo_url: data.photo_url || data.photoURL || data.avatar || '',
+            isProfileComplete: data.isProfileComplete === true || (
+                (data.displayName || data.display_name) &&
+                data.gender &&
+                (data.ageCategory || data.age)
+            )
+        };
     };
 
 
@@ -100,7 +122,11 @@ export const AuthProvider = ({ children }) => {
         const userRef = doc(db, 'users', currentUser.uid);
         const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
-                setUserProfile(docSnap.data());
+                setUserProfile(normalizeProfile({
+                    id: docSnap.id,
+                    uid: docSnap.id,
+                    ...docSnap.data()
+                }));
             } else {
                 setUserProfile(null);
             }
@@ -135,14 +161,18 @@ export const AuthProvider = ({ children }) => {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
-                try {
-                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=en`);
-                    const data = await response.json();
 
-                    if (data && data.address) {
-                        const city = data.address.city || data.address.town || data.address.village || '';
-                        const country = data.address.country || '';
-                        const fullLocation = `${city}, ${country}`;
+                // If Nominatim already failed this session, go straight to IP fallback
+                if (nominatimFailed.current) {
+                    await handleIpFallback();
+                    return;
+                }
+
+                try {
+                    const result = await reverseGeocode(latitude, longitude);
+
+                    if (result.success) {
+                        const { city, country, fullLocation } = result;
 
                         if (userProfile?.location === fullLocation &&
                             Math.abs((userProfile?.coordinates?.lat || 0) - latitude) < 0.001) {
@@ -165,41 +195,52 @@ export const AuthProvider = ({ children }) => {
                             country,
                             coordinates: { lat: latitude, lng: longitude }
                         }));
+                    } else if (result.error === 'nominatim_blocked') {
+                        nominatimFailed.current = true;
+                        await handleIpFallback();
+                    } else {
+                        await handleIpFallback();
                     }
-                } catch (error) { }
+                } catch (error) {
+                    await handleIpFallback();
+                }
             },
             async (error) => {
-                try {
-                    const data = await fetchIpLocation();
-                    if (data.success) {
-                        const city = data.city || '';
-                        const country = data.country || '';
-                        const fullLocation = `${city}, ${country}`;
-
-                        const userRef = doc(db, 'users', currentUser.uid);
-                        await updateDoc(userRef, {
-                            location: fullLocation,
-                            city,
-                            country,
-                            countryCode: data.country_code,
-                            coordinates: { lat: data.latitude, lng: data.longitude },
-                            lastLocationUpdate: serverTimestamp(),
-                            locationSource: 'ip'
-                        });
-
-                        setUserProfile(prev => ({
-                            ...prev,
-                            location: fullLocation,
-                            city,
-                            country,
-                            countryCode: data.country_code,
-                            coordinates: { lat: data.latitude, lng: data.longitude }
-                        }));
-                    }
-                } catch (ipError) { }
+                await handleIpFallback();
             },
             { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
         );
+    };
+
+    const handleIpFallback = async () => {
+        try {
+            const data = await fetchIpLocation();
+            if (data.success) {
+                const city = data.city || '';
+                const country = data.country || '';
+                const fullLocation = city && country ? `${city}, ${country}` : (city || country || '');
+
+                const userRef = doc(db, 'users', currentUser.uid);
+                await updateDoc(userRef, {
+                    location: fullLocation,
+                    city,
+                    country,
+                    countryCode: data.country_code,
+                    coordinates: { lat: data.latitude, lng: data.longitude },
+                    lastLocationUpdate: serverTimestamp(),
+                    locationSource: 'ip'
+                });
+
+                setUserProfile(prev => ({
+                    ...prev,
+                    location: fullLocation,
+                    city,
+                    country,
+                    countryCode: data.country_code,
+                    coordinates: { lat: data.latitude, lng: data.longitude }
+                }));
+            }
+        } catch (ipError) { }
     };
 
 
@@ -226,7 +267,7 @@ export const AuthProvider = ({ children }) => {
                     data.usedPrivateCreditsThisWeek = 0; // Update local data before setting state
                 }
 
-                setUserProfile(data);
+                setUserProfile(normalizeProfile(data));
             }
         } catch (error) {
             console.error('Error fetching user profile:', error);
@@ -554,10 +595,23 @@ export const AuthProvider = ({ children }) => {
         if (!currentUser) return;
 
         try {
+            // Update Firestore
             await updateDoc(doc(db, 'users', currentUser.uid), {
                 ...updates,
                 last_active_time: serverTimestamp()
             });
+
+            // Sync with Firebase Auth if critical fields changed
+            if (updates.displayName || updates.display_name || updates.photoURL || updates.photo_url) {
+                try {
+                    await updateAuthProfile(auth.currentUser, {
+                        displayName: updates.displayName || updates.display_name || auth.currentUser.displayName,
+                        photoURL: updates.photoURL || updates.photo_url || auth.currentUser.photoURL
+                    });
+                } catch (authError) {
+                    console.warn("Auth sync failed:", authError);
+                }
+            }
 
             // Refresh user profile
             await fetchUserProfile(currentUser.uid);
@@ -662,7 +716,12 @@ export const AuthProvider = ({ children }) => {
     };
 
     const value = {
-        currentUser,
+        currentUser: currentUser ? {
+            ...currentUser,
+            id: currentUser.uid,
+            name: currentUser.displayName,
+            avatar: currentUser.photoURL
+        } : null,
         userProfile,
         loading,
         isGuest,

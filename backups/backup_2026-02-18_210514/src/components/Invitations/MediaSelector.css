@@ -1,0 +1,218 @@
+.media-selector {
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+.media-selector h4 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.subtitle {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+/* Source Options (Grid) */
+.source-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.source-option {
+    padding: 32px 16px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+}
+
+.source-option:hover {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.1);
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.option-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    font-size: 28px;
+}
+
+.source-option h5 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.source-option p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Selected Source */
+.selected-source {
+    width: 100%;
+}
+
+.source-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.source-header h5 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.change-btn {
+    padding: 6px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-main);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.change-btn:hover {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: var(--primary);
+}
+
+/* Media Preview */
+.media-preview {
+    position: relative;
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--border-color);
+}
+
+.preview-image,
+.preview-video {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    display: block;
+}
+
+.remove-preview-btn {
+    margin-top: 12px;
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.remove-preview-btn:hover {
+    background: linear-gradient(135deg, #c82333, #bd2130);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
+}
+
+/* Video Mode Selection */
+.video-mode-selection {
+    width: 100%;
+}
+
+.video-mode-selection p {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.mode-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.mode-btn {
+    padding: 32px 16px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s;
+}
+
+.mode-btn:hover {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.mode-btn svg {
+    color: var(--primary);
+    font-size: 32px;
+}
+
+.mode-btn span {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .media-selector {
+        padding: 0;
+    }
+
+    .source-options {
+        grid-template-columns: 1fr;
+    }
+
+    .mode-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .preview-image,
+    .preview-video {
+        max-height: 300px;
+    }
+}

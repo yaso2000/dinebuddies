@@ -17,13 +17,14 @@ import EnhancedReviews from '../components/EnhancedReviews';
 import MenuShowcase from '../components/MenuShowcase';
 import GroupChat from '../components/GroupChat';
 import ShareButtons from '../components/ShareButtons';
+import CreateInvitationSelector from '../components/CreateInvitationSelector';
 
 
 const PartnerProfile = () => {
     const { partnerId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentUser, userProfile, updateUserProfile } = useAuth();
+    const { currentUser, userProfile, updateUserProfile, isGuest } = useAuth();
     const { joinCommunity, leaveCommunity } = useInvitations();
     const { t } = useTranslation();
 
@@ -63,6 +64,9 @@ const PartnerProfile = () => {
     const [memberCount, setMemberCount] = useState(0);
     const [isMember, setIsMember] = useState(false);
     const [joiningCommunity, setJoiningCommunity] = useState(false);
+    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+    const [selectorState, setSelectorState] = useState(null);
+    const [showShareModal, setShowShareModal] = useState(false);
 
 
     const days = [
@@ -75,47 +79,6 @@ const PartnerProfile = () => {
         { key: 'saturday', label: 'Saturday' }
     ];
 
-    useEffect(() => {
-        let unsubscribe;
-
-        const setupListener = async () => {
-            unsubscribe = await fetchPartner();
-        };
-
-        setupListener();
-
-        // Cleanup: unsubscribe when component unmounts
-        return () => {
-            if (unsubscribe) {
-                unsubscribe();
-            }
-        };
-    }, [partnerId]);
-
-
-    useEffect(() => {
-        const loadAllData = async () => {
-            if (partnerId) {
-                // Always fetch reviews and active invitations
-                await Promise.all([
-                    fetchActiveInvitations(),
-                    fetchReviews()
-                ]);
-
-                // Only fetch membership data if user is logged in
-                if (currentUser) {
-                    await Promise.all([
-                        checkMembership(),
-                        fetchMemberCount()
-                    ]);
-                }
-            }
-        };
-
-        loadAllData();
-    }, [currentUser, partnerId, partner]);
-
-
     const fetchPartner = async () => {
         try {
             setLoading(true);
@@ -124,8 +87,17 @@ const PartnerProfile = () => {
             // Use onSnapshot for real-time updates
             const unsubscribe = onSnapshot(docRef, (docSnap) => {
                 if (docSnap.exists() && docSnap.data().accountType === 'business') {
-                    setPartner({ uid: docSnap.id, ...docSnap.data() });
-                    console.log('✅ Partner data updated:', docSnap.data().subscriptionTier);
+                    const data = docSnap.data();
+                    setPartner({ uid: docSnap.id, ...data });
+
+                    // Update member count and membership state in real-time
+                    const memberIds = data.communityMembers || [];
+                    setMemberCount(memberIds.length);
+                    if (currentUser?.uid) {
+                        setIsMember(memberIds.includes(currentUser.uid) || memberIds.includes(currentUser.id));
+                    }
+
+                    console.log('✅ Partner data updated:', data.subscriptionTier);
                 } else {
                     console.error('Partner not found or not a business account');
                 }
@@ -138,151 +110,17 @@ const PartnerProfile = () => {
             // Return unsubscribe function
             return unsubscribe;
         } catch (error) {
-            console.error('Error setting up partner listener:', error);
+            console.error('Error fetching partner:', error);
             setLoading(false);
         }
     };
 
-    // Load delivery links when partner data changes
-    useEffect(() => {
-        if (partner?.businessInfo?.deliveryLinks) {
-            const links = partner.businessInfo.deliveryLinks;
-            setDeliveryLinks({
-                uberEats: links.uberEats || '',
-                menulog: links.menulog || '',
-                doorDash: links.doorDash || '',
-                deliveroo: links.deliveroo || ''
-            });
-            setTempDeliveryLinks({
-                uberEats: links.uberEats || '',
-                menulog: links.menulog || '',
-                doorDash: links.doorDash || '',
-                deliveroo: links.deliveroo || ''
-            });
-        }
-    }, [partner]);
-
-    // Track profile view - FIXED: Only track once per session
-    const viewTracked = useRef(false);
-
-    useEffect(() => {
-        const trackProfileView = async () => {
-            // Don't track if already tracked in this session
-            if (viewTracked.current) {
-                console.log('👁️ Skipping view tracking - already tracked this session');
-                return;
-            }
-
-            // Don't track if viewing own profile
-            if (currentUser?.uid === partnerId) {
-                console.log('👁️ Skipping view tracking - viewing own profile');
-                return;
-            }
-
-            // Check if already viewed recently (within 24 hours)
-            const viewKey = `profile_view_${partnerId}`;
-            const lastView = localStorage.getItem(viewKey);
-            const now = Date.now();
-
-            if (lastView && (now - parseInt(lastView)) < 24 * 60 * 60 * 1000) {
-                console.log('👁️ Skipping view tracking - already viewed recently');
-                return;
-            }
-
-            try {
-                // Increment profile views
-                const partnerRef = doc(db, 'users', partnerId);
-                const currentViews = partner?.businessInfo?.profileViews || 0;
-
-                await updateDoc(partnerRef, {
-                    'businessInfo.profileViews': currentViews + 1
-                });
-
-                // Store view timestamp
-                localStorage.setItem(viewKey, now.toString());
-                viewTracked.current = true; // Mark as tracked
-                console.log('✅ Profile view tracked:', currentViews + 1);
-            } catch (error) {
-                console.error('❌ Error tracking profile view:', error);
-                // If field doesn't exist, initialize it
-                if (error.code === 'not-found') {
-                    try {
-                        const partnerRef = doc(db, 'users', partnerId);
-                        await updateDoc(partnerRef, {
-                            'businessInfo.profileViews': 1
-                        });
-                        localStorage.setItem(viewKey, now.toString());
-                        viewTracked.current = true; // Mark as tracked
-                        console.log('✅ Profile views initialized to 1');
-                    } catch (initError) {
-                        console.error('❌ Error initializing profile views:', initError);
-                    }
-                }
-            }
-        };
-
-        if (partnerId && partner && !viewTracked.current) {
-            trackProfileView();
-        }
-    }, [partnerId, partner?.uid, currentUser?.uid]); // Only depend on IDs, not full objects
-
-    // Update social meta tags when partner loads
-    useEffect(() => {
-        if (partner) {
-            const metaData = generatePartnerMetaTags(partner);
-            updateSocialMetaTags(metaData);
-        }
-
-        // Reset meta tags when component unmounts
-        return () => {
-            resetSocialMetaTags();
-        };
-    }, [partner]);
-
     const checkMembership = async () => {
-        try {
-            if (!currentUser?.uid || !partnerId) {
-                console.log('⚠️ Cannot check membership: missing user or partner ID');
-                setIsMember(false);
-                return;
-            }
-
-            console.log('🔍 Checking membership for:', currentUser.uid, 'at partner:', partnerId);
-
-            // Fetch partner data to check if current user is in communityMembers
-            const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-            if (partnerDoc.exists()) {
-                const partnerData = partnerDoc.data();
-                const memberIds = partnerData.communityMembers || [];
-                const memberStatus = memberIds.includes(currentUser.uid);
-                console.log('✅ Membership status:', memberStatus);
-                setIsMember(memberStatus);
-            } else {
-                setIsMember(false);
-            }
-        } catch (error) {
-            console.error('❌ Error checking membership:', error);
-            setIsMember(false);
-        }
+        // Now handled by partner onSnapshot listener
     };
 
     const fetchMemberCount = async () => {
-        try {
-            console.log('📊 Fetching member count for:', partnerId);
-            const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-            if (partnerDoc.exists()) {
-                const partnerData = partnerDoc.data();
-                const memberIds = partnerData.communityMembers || [];
-                const count = memberIds.length;
-                console.log('✅ Member count:', count);
-                setMemberCount(count);
-            } else {
-                setMemberCount(0);
-            }
-        } catch (error) {
-            console.error('❌ Error fetching member count:', error);
-            setMemberCount(0);
-        }
+        // Now handled by partner onSnapshot listener
     };
 
     const fetchActiveInvitations = async () => {
@@ -340,12 +178,6 @@ const PartnerProfile = () => {
                 const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);
                 const avg = totalRating / reviewsData.length;
                 setAverageRating(avg);
-                console.log('📊 Rating calculation:', {
-                    totalReviews: reviewsData.length,
-                    totalRating,
-                    averageRating: avg.toFixed(1),
-                    individualRatings: reviewsData.map(r => ({ id: r.id, rating: r.rating, userName: r.userName }))
-                });
             } else {
                 setAverageRating(0);
             }
@@ -355,6 +187,96 @@ const PartnerProfile = () => {
             console.error('❌ Error fetching reviews:', error);
         }
     };
+
+    useEffect(() => {
+        let unsubscribe;
+        const setupListener = async () => {
+            unsubscribe = await fetchPartner();
+        };
+        setupListener();
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [partnerId]);
+
+    useEffect(() => {
+        const loadAllData = async () => {
+            if (partnerId) {
+                await Promise.all([
+                    fetchActiveInvitations(),
+                    fetchReviews()
+                ]);
+                if (currentUser) {
+                    await Promise.all([
+                        checkMembership(),
+                        fetchMemberCount()
+                    ]);
+                }
+            }
+        };
+        loadAllData();
+    }, [currentUser, partnerId, partner?.uid]); // Reduced dependency array
+
+    // Load delivery links when partner data changes
+    useEffect(() => {
+        if (partner?.businessInfo?.deliveryLinks) {
+            const links = partner.businessInfo.deliveryLinks;
+            setDeliveryLinks({
+                uberEats: links.uberEats || '',
+                menulog: links.menulog || '',
+                doorDash: links.doorDash || '',
+                deliveroo: links.deliveroo || ''
+            });
+            setTempDeliveryLinks({
+                uberEats: links.uberEats || '',
+                menulog: links.menulog || '',
+                doorDash: links.doorDash || '',
+                deliveroo: links.deliveroo || ''
+            });
+        }
+    }, [partner]);
+
+    // Track profile view
+    const viewTracked = useRef(false);
+    useEffect(() => {
+        const trackProfileView = async () => {
+            if (viewTracked.current || currentUser?.uid === partnerId || !partner) return;
+
+            const viewKey = `profile_view_${partnerId}`;
+            const lastView = localStorage.getItem(viewKey);
+            const now = Date.now();
+
+            if (lastView && (now - parseInt(lastView)) < 24 * 60 * 60 * 1000) return;
+
+            try {
+                const partnerRef = doc(db, 'users', partnerId);
+                const currentViews = partner?.businessInfo?.profileViews || 0;
+                await updateDoc(partnerRef, { 'businessInfo.profileViews': currentViews + 1 });
+                localStorage.setItem(viewKey, now.toString());
+                viewTracked.current = true;
+            } catch (error) {
+                console.error('❌ Error tracking profile view:', error);
+            }
+        };
+
+        if (partnerId && partner && !viewTracked.current) {
+            trackProfileView();
+        }
+    }, [partnerId, partner?.uid, currentUser?.uid]);
+
+    // Update social meta tags
+    useEffect(() => {
+        if (partner) {
+            const metaData = generatePartnerMetaTags(partner);
+            updateSocialMetaTags(metaData);
+        }
+        return () => resetSocialMetaTags();
+    }, [partner]);
+
+    // Robust Loading State
+    // Loading check moved below all hooks to prevent order mismatch
+
+
 
 
 
@@ -412,7 +334,7 @@ const PartnerProfile = () => {
                 partnerId,
                 userId: currentUser.uid,
                 userName: userProfile?.displayName || currentUser.displayName || 'Anonymous',
-                userPhoto: userProfile?.photoURL || currentUser.photoURL || '',
+                userPhoto: getSafeAvatar(userProfile || currentUser),
                 rating: newReview.rating,
                 comment: newReview.comment.trim(),
                 createdAt: serverTimestamp()
@@ -441,35 +363,7 @@ const PartnerProfile = () => {
         }
     };
 
-    // Handle Create Invitation with Special Offer
-    const handleCreateWithOffer = (offer) => {
-        if (!offer) return;
 
-        // Prepare offer data to pass to CreateInvitation
-        const offerData = {
-            id: offer.id,
-            title: offer.title,
-            description: offer.description,
-            imageUrl: offer.imageUrl,
-            partnerId: offer.partnerId,
-            partnerName: offer.partnerName || partner?.businessInfo?.businessName,
-            location: partner?.businessInfo?.address,
-            lat: partner?.businessInfo?.location?.latitude,
-            lng: partner?.businessInfo?.location?.longitude,
-            city: partner?.businessInfo?.city,
-            startDate: offer.startDate,
-            endDate: offer.endDate
-        };
-
-        console.log('🎟️ Creating invitation with offer:', offerData);
-
-        // Navigate to CreateInvitation with offer data
-        navigate('/create', {
-            state: {
-                offerData: offerData
-            }
-        });
-    };
 
 
     const handleJoinCommunity = async () => {
@@ -487,21 +381,18 @@ const PartnerProfile = () => {
         try {
             if (isMember) {
                 await leaveCommunity(partnerId);
+                // Optimistic UI update
                 setIsMember(false);
-                setMemberCount(prev => prev - 1);
+                setMemberCount(prev => Math.max(0, prev - 1));
             } else {
                 await joinCommunity(partnerId);
+                // Optimistic UI update
                 setIsMember(true);
                 setMemberCount(prev => prev + 1);
             }
-            // Re-check membership to ensure consistency
-            await checkMembership();
-            await fetchMemberCount();
         } catch (error) {
             console.error('Error toggling community membership:', error);
-            // Revert state on error
-            await checkMembership();
-            await fetchMemberCount();
+            // Revert state on error by triggering a refetch implicitly when snapshot updates
         } finally {
             setJoiningCommunity(false);
         }
@@ -581,19 +472,18 @@ const PartnerProfile = () => {
 
         const businessInfo = partner.businessInfo || {};
 
-        // Navigate to create invitation with pre-filled data
-        navigate('/create', {
-            state: {
-                prefilledData: {
-                    restaurantName: partner.display_name, // من display_name
-                    restaurantImage: businessInfo.coverImage,
-                    location: businessInfo.address,
-                    city: businessInfo.city,
-                    lat: businessInfo.lat,
-                    lng: businessInfo.lng
-                }
+        // Open selector with prefilled data
+        setSelectorState({
+            prefilledData: {
+                restaurantName: partner.display_name,
+                restaurantImage: businessInfo.coverImage,
+                location: businessInfo.address,
+                city: businessInfo.city,
+                lat: businessInfo.lat,
+                lng: businessInfo.lng
             }
         });
+        setIsSelectorOpen(true);
     };
 
     const handleBookInvitation = () => {
@@ -618,7 +508,7 @@ const PartnerProfile = () => {
     const isFavorite = userProfile?.favoritePlaces?.some(p => p.businessId === partnerId);
 
     const handleToggleFavorite = async () => {
-        if (!currentUser || currentUser.isGuest) {
+        if (!currentUser || isGuest) {
             navigate('/login');
             return;
         }
@@ -635,7 +525,7 @@ const PartnerProfile = () => {
                 const favoritePlace = {
                     businessId: partner.uid,
                     name: partner.display_name,
-                    image: partner.photo_url || partner.businessInfo?.coverImage,
+                    image: getSafeAvatar(partner),
                     address: partner.businessInfo?.address || '',
                     city: partner.businessInfo?.city || '',
                     source: 'partner',
@@ -660,9 +550,6 @@ const PartnerProfile = () => {
             return;
         }
 
-        const { updateUserProfile } = await import('../context/AuthContext'); // Dynamic import not needed since we have useAuth
-        // Actually we have updateUserProfile from useAuth() at the top. Let's use it.
-
         try {
             let newFavorites = [...(userProfile.favoritePlaces || [])];
 
@@ -672,7 +559,7 @@ const PartnerProfile = () => {
                 const favoritePlace = {
                     businessId: partner.uid,
                     name: partner.display_name,
-                    image: partner.photo_url,
+                    image: getSafeAvatar(partner),
                     address: partner.businessInfo?.address || '',
                     city: partner.businessInfo?.city || '',
                     source: 'partner',
@@ -681,28 +568,14 @@ const PartnerProfile = () => {
                 newFavorites.push(favoritePlace);
             }
 
-            // Use the context function which handles Firestore update AND state update
-            // We need to access updateUserProfile from the hook we called at the top
-            // But wait, the hook call `const { currentUser, userProfile } = useAuth();` didn't destructure updateUserProfile. 
-            // I need to update that line too.
-            // For now, I'll direct update Firestore and force a reload or hope for the best? 
-            // No, I should fix the destructuring.
-
-            const userRef = doc(db, 'users', currentUser.uid);
-            await updateDoc(userRef, { favoritePlaces: newFavorites });
-
-            // Manually trigger profile refresh if possible? 
-            // The userProfile in AuthContext is not a snapshot listener, it's a fetch.
-            // So we MUST use the context method to update it or manually update the local state.
-            // Converting to use updateUserProfile is best but I need to change the top of the component.
+            // Sync with context
+            await updateUserProfile({ favoritePlaces: newFavorites });
         } catch (e) {
-            console.log(e);
+            console.error('❌ Error in handleToggleFavoriteSafe:', e);
         }
     };
 
 
-
-    const [showShareModal, setShowShareModal] = useState(false);
 
     const handleShare = () => {
         setShowShareModal(true);
@@ -735,37 +608,45 @@ const PartnerProfile = () => {
         setEditingDeliveryLinks(false);
     };
 
-    if (loading) {
+    // All hooks must be above this line
+    if (loading || !partner) {
         return (
-            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
-                <div style={{
-                    width: '50px',
-                    height: '50px',
-                    border: '4px solid var(--border-color)',
-                    borderTop: '4px solid var(--primary)',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '0 auto 1rem'
-                }} />
-                <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
-            </div>
-        );
-    }
-
-    if (!partner) {
-        return (
-            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
-                <HiBuildingStorefront style={{ fontSize: '4rem', color: 'var(--primary)', marginBottom: '1rem' }} />
-                <h2>Partner not found</h2>
-                <button onClick={() => navigate('/restaurants')} className="btn btn-primary" style={{ marginTop: '1.5rem' }}>
-                    Back to Partners
+            <div className="page-container" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100vh',
+                background: 'var(--bg-body)',
+                padding: '2rem',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}>
+                <div className="loader-ring"></div>
+                <p style={{ marginTop: '20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    {!partner && !loading ? t('partner_not_found', 'Partner not found') : t('loading_partner', 'Finding partner...')}
+                </p>
+                <button
+                    onClick={() => navigate('/')}
+                    style={{
+                        marginTop: '20px',
+                        padding: '10px 20px',
+                        borderRadius: '12px',
+                        background: 'rgba(139, 92, 246, 0.1)',
+                        border: '1px solid var(--primary)',
+                        color: 'var(--primary)',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {t('back_to_home', 'Back to Home')}
                 </button>
             </div>
         );
     }
 
     const businessInfo = partner.businessInfo || {};
-    const isPremium = partner.subscriptionTier === 'premium';
+    const tier = partner.subscriptionTier || 'free';
+    const isPaid = tier === 'professional' || tier === 'elite' || tier === 'premium';
+    const isElite = tier === 'elite' || tier === 'premium';
+    const isPremium = isPaid; // Keep isPremium for backward compatibility in the code
     const isOwner = currentUser?.uid === partnerId;
 
 
@@ -972,7 +853,7 @@ const PartnerProfile = () => {
                     <div
                         onClick={() => {
                             if (currentUser && userProfile?.accountType !== 'business') {
-                                if (currentUser.isGuest) {
+                                if (isGuest) {
                                     navigate('/login');
                                 } else {
                                     setShowReviewModal(true);
@@ -1102,7 +983,7 @@ const PartnerProfile = () => {
                     {currentUser?.uid !== partnerId && userProfile?.accountType !== 'business' && (
                         <button
                             onClick={() => {
-                                if (currentUser?.isGuest) {
+                                if (isGuest) {
                                     navigate('/login');
                                 } else {
                                     handleJoinCommunity();
@@ -1361,6 +1242,18 @@ const PartnerProfile = () => {
                                         allowFullScreen
                                         title="Business Location"
                                     />
+                                    {!isPaid && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            zIndex: 1,
+                                            background: 'rgba(0,0,0,0)',
+                                            cursor: 'not-allowed'
+                                        }} title="Upgrade to interact with the map" />
+                                    )}
                                 </div>
                             )}
 
@@ -1849,11 +1742,11 @@ const PartnerProfile = () => {
                             type="partner"
                             storyData={{
                                 title: partner.display_name,
-                                image: partner.businessInfo?.coverImage || partner.photo_url,
+                                image: partner.businessInfo?.coverImage || getSafeAvatar(partner),
                                 description: partner.businessInfo?.description,
                                 location: partner.businessInfo?.address,
                                 hostName: partner.display_name,
-                                hostImage: partner.photo_url || partner.businessInfo?.logo
+                                hostImage: getSafeAvatar(partner)
                             }}
                         />
                         <button
@@ -1865,7 +1758,13 @@ const PartnerProfile = () => {
                     </div>
                 </div>
             )}
-        </div >
+            {/* Invitation Type Selector Modal */}
+            <CreateInvitationSelector
+                isOpen={isSelectorOpen}
+                onClose={() => setIsSelectorOpen(false)}
+                navigationState={selectorState}
+            />
+        </div>
     );
 };
 

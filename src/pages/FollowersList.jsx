@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { FaArrowRight, FaComments, FaUserPlus, FaUserCheck, FaUsers, FaHeart } from 'react-icons/fa';
 import { getFollowers, getFollowing, getMutualFollowers, getMutualFollowersCount } from '../utils/followHelpers';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const FollowersList = () => {
     const { t, i18n } = useTranslation();
@@ -277,10 +278,10 @@ const FollowersList = () => {
                                             overflow: 'hidden'
                                         }}>
                                             <img
-                                                src={user.avatar || user.photoURL || user.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+                                                src={getSafeAvatar(user)}
                                                 alt={user.name}
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`; }}
+                                                onError={(e) => { e.target.src = getSafeAvatar(null); }}
                                             />
                                         </div>
                                     </div>

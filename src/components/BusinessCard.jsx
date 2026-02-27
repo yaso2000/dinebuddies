@@ -10,7 +10,7 @@ const BusinessCard = ({ business }) => {
     const [currentSlide, setCurrentSlide] = useState(0);
 
     // Check if current user is a business account
-    const isBusinessAccount = userProfile?.accountType === 'business';
+    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
 
     // Gather images for slider: Cover + Services
     const slides = [];
@@ -202,7 +202,7 @@ const BusinessCard = ({ business }) => {
                         }}
                     >
                         <FaCalendarPlus />
-                        Host Invitation Here
+                        {t('host_invitation_here')}
                     </button>
                 )}
             </div>

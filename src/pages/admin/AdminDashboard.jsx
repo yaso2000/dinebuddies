@@ -245,6 +245,114 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
+            {/* Demo Data Management */}
+            <div className="admin-mb-4" style={{ marginTop: '2rem', borderTop: '1px solid #334155', paddingTop: '2rem' }}>
+                <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: '700',
+                    color: '#ffffff',
+                    marginBottom: '1rem',
+                    letterSpacing: '-0.025em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                }}>
+                    🧪 Demo Data Management (Internal Use)
+                </h2>
+                <div className="admin-grid admin-grid-3">
+                    <button
+                        onClick={async () => {
+                            if (window.confirm('🧨 DANGER: This will delete ALL users and invitations from the database. Are you absolutely sure?')) {
+                                if (window.confirm('Type YES to confirm wipe.')) { // Simple double check
+                                    setLoading(true);
+                                    try {
+                                        const { wipeAllData } = await import('../../utils/demoDataGenerator');
+                                        const count = await wipeAllData();
+                                        alert(`🧨 Wiped ${count} documents. Database is clean.`);
+                                        fetchStats();
+                                    } catch (err) {
+                                        alert('Error: ' + err.message);
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }
+                            }
+                        }}
+                        className="admin-card"
+                        style={{
+                            background: '#7f1d1d', // Dark red
+                            color: 'white',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            border: '1px solid #ef4444'
+                        }}
+                    >
+                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>💀</div>
+                        WIPE EVERYTHING
+                    </button>
+                    <button
+                        onClick={async () => {
+                            if (window.confirm('Generate 20+ demo accounts and invitations for Bundaberg? This might take a few seconds.')) {
+                                setLoading(true);
+                                try {
+                                    const { createDemoData } = await import('../../utils/demoDataGenerator');
+                                    const result = await createDemoData();
+                                    alert(`✅ Generated: ${result.users} Users, ${result.businesses} Businesses, ${result.invitations} Invitations in Bundaberg`);
+                                    fetchStats();
+                                } catch (err) {
+                                    alert('Error: ' + err.message);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }
+                        }}
+                        className="admin-card"
+                        style={{
+                            background: '#10b981',
+                            color: 'white',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            border: 'none'
+                        }}
+                    >
+                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🚀</div>
+                        Generate Demo Data (Bundaberg)
+                    </button>
+
+                    <button
+                        onClick={async () => {
+                            if (window.confirm('⚠️ DELETE ALL DEMO DATA? This cannot be undone.')) {
+                                setLoading(true);
+                                try {
+                                    const { deleteAllDemoData } = await import('../../utils/demoDataGenerator');
+                                    const count = await deleteAllDemoData();
+                                    alert(`🗑️ Deleted ${count} demo records.`);
+                                    fetchStats();
+                                } catch (err) {
+                                    alert('Error: ' + err.message);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }
+                        }}
+                        className="admin-card"
+                        style={{
+                            background: '#ef4444',
+                            color: 'white',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            border: 'none'
+                        }}
+                    >
+                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🗑️</div>
+                        Delete All Demo Data
+                    </button>
+                </div>
+            </div>
+
             {/* Create New */}
             <div className="admin-mb-4">
                 <h2 style={{

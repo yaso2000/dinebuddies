@@ -4,6 +4,9 @@ import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt, FaClock, F
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
+import { FaVenusMars, FaBirthdayCake } from 'react-icons/fa';
+import { getTemplateStyle } from '../utils/invitationTemplates';
 
 const InvitationPreview = () => {
     const { t } = useTranslation();
@@ -13,6 +16,12 @@ const InvitationPreview = () => {
     const [invitation, setInvitation] = useState(null);
     const [isPublishing, setIsPublishing] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    const templateStyles = invitation ? getTemplateStyle(
+        invitation.templateType || 'classic',
+        invitation.colorScheme || 'oceanBlue',
+        invitation.occasionType
+    ) : null;
 
     // Fetch draft invitation from Firestore
     useEffect(() => {
@@ -114,7 +123,6 @@ const InvitationPreview = () => {
         switch (invitation.privacy) {
             case 'public': return <FaGlobe />;
             case 'followers': return <FaUserFriends />;
-            case 'private': return <FaLock />;
             default: return <FaGlobe />;
         }
     };
@@ -123,7 +131,6 @@ const InvitationPreview = () => {
         switch (invitation.privacy) {
             case 'public': return t('public') || 'Public';
             case 'followers': return t('followers_only') || 'Followers Only';
-            case 'private': return t('private') || 'Private';
             default: return 'Public';
         }
     };
@@ -169,12 +176,10 @@ const InvitationPreview = () => {
 
             {/* PREVIEW CARD */}
             <div style={{
-                background: 'var(--card-bg)',
-                borderRadius: '20px',
-                border: '2px solid var(--border-color)',
+                ...(templateStyles?.card || {}),
                 overflow: 'hidden',
                 marginBottom: '2rem',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+                minHeight: 'auto' // Override minHeight for preview
             }}>
                 {/* Media (Image or Video) */}
                 {(() => {
@@ -248,105 +253,122 @@ const InvitationPreview = () => {
                 })()}
 
                 {/* Content */}
-                <div style={{ padding: '2rem' }}>
+                <div style={{
+                    padding: '2rem',
+                    textAlign: templateStyles.layout?.textAlign || 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start'
+                }}>
+                    {/* Decorative Header (Optional) */}
+                    {templateStyles.layout?.decorativeElement && (
+                        <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
+                            {templateStyles.layout.decorativeElement}
+                        </div>
+                    )}
+
+                    {/* Date & Time Row - More prominent */}
+                    <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
+                        alignItems: 'center',
+                        gap: '12px',
+                        marginBottom: '1rem'
+                    }}>
+                        <span className="meta-badge" style={{
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            background: 'rgba(255,255,255,0.1)', padding: '6px 14px',
+                            borderRadius: '12px', fontSize: '0.9rem', color: 'white',
+                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                        }}>
+                            <FaCalendarAlt style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} />
+                            {(() => {
+                                if (!invitation.date) return 'TBD';
+                                const d = new Date(invitation.date);
+                                return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                            })()}
+                        </span>
+                        <span className="meta-badge" style={{
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            background: 'rgba(255,255,255,0.1)', padding: '6px 14px',
+                            borderRadius: '12px', fontSize: '0.9rem', color: 'white',
+                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                        }}>
+                            <FaClock style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} /> {invitation.time}
+                        </span>
+                    </div>
+
                     {/* Title */}
                     <h3 style={{
-                        fontSize: '1.5rem',
+                        fontSize: templateStyles.layout?.titleSize || '1.6rem',
                         fontWeight: '900',
-                        marginBottom: '1.5rem',
-                        color: 'white'
+                        color: 'white',
+                        margin: '0 0 1rem 0',
+                        lineHeight: 1.2,
+                        fontFamily: templateStyles.layout?.fontFamily || 'inherit'
                     }}>
                         {invitation.title}
                     </h3>
 
-                    {/* Details Grid */}
+                    {/* Message / Description */}
+                    {templateStyles.layout?.displayDescription && invitation.description && (
+                        <p style={{
+                            fontSize: '1rem',
+                            color: 'rgba(255,255,255,0.9)',
+                            margin: '0 0 1.5rem 0',
+                            lineHeight: '1.6',
+                            ...templateStyles.layout.messageStyle
+                        }}>
+                            {invitation.description}
+                        </p>
+                    )}
+
+                    {/* Location / Restaurant Name */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
+                        gap: '8px',
+                        fontSize: '1.1rem',
+                        color: 'white',
+                        fontWeight: '700',
+                        marginBottom: '1.5rem',
+                        padding: '0.5rem 1rem',
+                        background: 'rgba(255,255,255,0.05)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                        <FaMapMarkerAlt style={{ color: '#f87171' }} />
+                        <span>
+                            {invitation.location || t('venue_selected')}
+                        </span>
+                    </div>
+
+                    {/* Grid of Other Info */}
                     <div style={{
                         display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
                         gap: '1rem',
-                        marginBottom: '1.5rem'
+                        width: '100%',
+                        marginBottom: '1.5rem',
+                        opacity: 0.9
                     }}>
-                        {/* Date & Time */}
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <FaCalendarAlt style={{ color: 'var(--primary)', fontSize: '1.2rem' }} />
-                                <div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        {t('date')}
-                                    </div>
-                                    <div style={{ fontWeight: '700' }}>
-                                        {new Date(invitation.date).toLocaleDateString()}
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <FaClock style={{ color: 'var(--primary)', fontSize: '1.2rem' }} />
-                                <div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        {t('time')}
-                                    </div>
-                                    <div style={{ fontWeight: '700' }}>
-                                        {invitation.time}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Location */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <FaMapMarkerAlt style={{ color: 'var(--primary)', fontSize: '1.2rem' }} />
+                            <FaUsers style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                             <div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    {t('location')}
-                                </div>
-                                <div style={{ fontWeight: '700' }}>
-                                    {invitation.location}
-                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('guests')}</div>
+                                <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.guestsNeeded}</div>
                             </div>
                         </div>
-
-                        {/* Guests & Payment */}
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <FaUsers style={{ color: 'var(--primary)', fontSize: '1.2rem' }} />
-                                <div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        {t('guests_needed')}
-                                    </div>
-                                    <div style={{ fontWeight: '700' }}>
-                                        {invitation.guestsNeeded} {t('guests')}
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <FaMoneyBillWave style={{ color: 'var(--primary)', fontSize: '1.2rem' }} />
-                                <div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        {t('payment')}
-                                    </div>
-                                    <div style={{ fontWeight: '700' }}>
-                                        {invitation.paymentType}
-                                    </div>
-                                </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <FaMoneyBillWave style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
+                            <div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('payment')}</div>
+                                <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.paymentType}</div>
                             </div>
                         </div>
                     </div>
-
-                    {/* Description */}
-                    {invitation.description && (
-                        <div style={{
-                            background: 'rgba(255,255,255,0.03)',
-                            padding: '1rem',
-                            borderRadius: '12px',
-                            border: '1px solid var(--border-color)'
-                        }}>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                                {t('description')}
-                            </div>
-                            <div style={{ color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-                                {invitation.description}
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -363,10 +385,10 @@ const InvitationPreview = () => {
                     disabled={isPublishing}
                     style={{
                         padding: '1.25rem',
-                        borderRadius: '12px',
-                        border: '2px solid var(--border-color)',
-                        background: 'var(--card-bg)',
-                        color: 'white',
+                        borderRadius: '16px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-card)',
+                        color: 'var(--text-main)',
                         fontSize: '1rem',
                         fontWeight: '700',
                         cursor: isPublishing ? 'not-allowed' : 'pointer',
@@ -375,20 +397,23 @@ const InvitationPreview = () => {
                         justifyContent: 'center',
                         gap: '0.75rem',
                         transition: 'all 0.2s',
-                        opacity: isPublishing ? 0.5 : 1
+                        opacity: isPublishing ? 0.5 : 1,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
                     }}
                     onMouseEnter={(e) => {
                         if (!isPublishing) {
-                            e.currentTarget.style.borderColor = 'var(--primary)';
-                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
+                            e.currentTarget.style.borderColor = templateStyles?.badge?.color || 'var(--primary)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 6px 15px rgba(0,0,0,0.1)';
                         }
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.borderColor = 'var(--border-color)';
-                        e.currentTarget.style.background = 'var(--card-bg)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
                     }}
                 >
-                    <FaEdit />
+                    <FaEdit style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                     {t('edit_details') || 'Edit Details'}
                 </button>
 
@@ -397,13 +422,8 @@ const InvitationPreview = () => {
                     onClick={handlePublish}
                     disabled={isPublishing}
                     style={{
+                        ...(templateStyles?.button || {}),
                         padding: '1.25rem',
-                        borderRadius: '12px',
-                        border: 'none',
-                        background: isPublishing
-                            ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.5), rgba(244, 63, 94, 0.5))'
-                            : 'linear-gradient(135deg, #8b5cf6, #f43f5e)',
-                        color: 'white',
                         fontSize: '1.1rem',
                         fontWeight: '800',
                         cursor: isPublishing ? 'not-allowed' : 'pointer',
@@ -411,18 +431,19 @@ const InvitationPreview = () => {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '0.75rem',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        width: '100%',
+                        border: templateStyles?.button?.border || 'none'
                     }}
                     onMouseEnter={(e) => {
                         if (!isPublishing) {
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(139, 92, 246, 0.4)';
+                            e.currentTarget.style.transform = 'translateY(-3px) scale(1.02)';
+                            e.currentTarget.style.boxShadow = templateStyles?.button?.boxShadow || '0 12px 25px rgba(0,0,0,0.3)';
                         }
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                        e.currentTarget.style.boxShadow = templateStyles?.button?.boxShadow || 'none';
                     }}
                 >
                     <FaCheckCircle />

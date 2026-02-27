@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog } from 'react-icons/fa';
-import { HiBuildingStorefront } from 'react-icons/hi2';
+import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
+import PremiumOfferEditor from '../components/PremiumOfferEditor';
+import PremiumOfferCard from '../components/PremiumOfferCard';
+import { premiumOfferService } from '../services/premiumOfferService';
+import { getSafeAvatar } from '../utils/avatarUtils';
+import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf } from 'react-icons/fa';
 
 const BusinessDashboard = () => {
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, loading: authLoading } = useAuth();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         memberCount: 0,
@@ -19,19 +24,9 @@ const BusinessDashboard = () => {
         reviewCount: 0
     });
     const [recentActivity, setRecentActivity] = useState([]);
-
-    // Redirect if not a business account
-    useEffect(() => {
-        if (!userProfile || userProfile.accountType !== 'business') {
-            navigate('/');
-        }
-    }, [userProfile, navigate]);
-
-    useEffect(() => {
-        if (currentUser && userProfile?.accountType === 'business') {
-            fetchDashboardData();
-        }
-    }, [currentUser, userProfile]);
+    const [publishingOffer, setPublishingOffer] = useState(false);
+    const [offers, setOffers] = useState([]);
+    const [offersLoading, setOffersLoading] = useState(false);
 
     const fetchDashboardData = async () => {
         try {
@@ -112,16 +107,43 @@ const BusinessDashboard = () => {
             setStats(finalStats);
 
             setRecentActivity(recentData);
+
+            // Fetch offers
+            setOffersLoading(true);
+            const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
+            setOffers(businessOffers);
+            setOffersLoading(false);
         } catch (error) {
             console.error('❌ Error fetching dashboard data:', error);
         } finally {
             setLoading(false);
+            setOffersLoading(false);
         }
     };
 
-    if (loading) {
+    // Initial loading state and redirection
+    useEffect(() => {
+        // Wait for auth and profile listener to finish
+        if (authLoading) return;
+
+        // If no user or not a business account, redirect
+        if (!currentUser || !userProfile || userProfile.accountType !== 'business') {
+            console.log('🚫 Unauthorized or missing business profile, redirecting...');
+            navigate('/');
+            return;
+        }
+
+        // Only fetch data if we are surely a business user
+        if (userProfile.accountType === 'business') {
+            fetchDashboardData();
+        } else {
+            setLoading(false);
+        }
+    }, [currentUser, userProfile, authLoading, navigate]);
+
+    if (authLoading || (loading && userProfile?.accountType === 'business')) {
         return (
-            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
+            <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{
                     width: '50px',
                     height: '50px',
@@ -131,10 +153,71 @@ const BusinessDashboard = () => {
                     animation: 'spin 1s linear infinite',
                     margin: '0 auto 1rem'
                 }} />
-                <p style={{ color: 'var(--text-muted)' }}>Loading dashboard...</p>
+                <p style={{ color: 'var(--text-muted)' }}>{t('loading_dashboard', 'Loading dashboard...')}</p>
             </div>
         );
     }
+
+    if (!currentUser || !userProfile || userProfile.accountType !== 'business') {
+        return null;
+    }
+
+
+    const handlePublishOffer = async (offerData, file, offerId = null) => {
+        try {
+            setPublishingOffer(true);
+            if (offerId) {
+                await premiumOfferService.updateOffer(offerId, offerData, file);
+                alert('✅ Offer updated successfully!');
+            } else {
+                await premiumOfferService.createOffer(offerData, file);
+                alert('✅ Offer published successfully!');
+            }
+
+            // Refresh data
+            const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
+            setOffers(businessOffers);
+            fetchDashboardData();
+        } catch (error) {
+            console.error('Error in handlePublishOffer:', error);
+            alert(`❌ Failed to publish offer: ${error.message}`);
+        } finally {
+            setPublishingOffer(false);
+        }
+    };
+
+    const handleFreezeOffer = async (offerId) => {
+        if (!window.confirm('Are you sure you want to freeze this offer? It will be removed from the active carousel.')) return;
+        try {
+            await premiumOfferService.freezeOffer(offerId);
+            const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
+            setOffers(businessOffers);
+        } catch (error) {
+            alert('Error freezing offer: ' + error.message);
+        }
+    };
+
+    const handleRepublishOffer = async (offerId, offerData) => {
+        if (!window.confirm('Are you sure you want to republish this offer?')) return;
+        try {
+            await premiumOfferService.republishOffer(offerId, currentUser.uid, offerData);
+            const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
+            setOffers(businessOffers);
+        } catch (error) {
+            alert('Could not republish: ' + error.message);
+        }
+    };
+
+    const handleDeleteOffer = async (offerId) => {
+        if (!window.confirm('Are you sure you want to delete this offer permanently?')) return;
+        try {
+            await premiumOfferService.deleteOffer(offerId);
+            setOffers(offers.filter(o => o.id !== offerId));
+        } catch (error) {
+            alert('Error deleting offer: ' + error.message);
+        }
+    };
+
 
     const businessInfo = userProfile?.businessInfo || {};
 
@@ -161,46 +244,115 @@ const BusinessDashboard = () => {
                 marginBottom: '1.5rem'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                    {userProfile?.photo_url ? (
-                        <img
-                            src={userProfile.photo_url}
-                            alt="Logo"
-                            style={{
-                                width: '60px',
-                                height: '60px',
-                                borderRadius: '12px',
-                                objectFit: 'cover',
-                                border: '2px solid var(--primary)'
-                            }}
-                        />
-                    ) : (
-                        <div style={{
+                    <img
+                        src={getSafeAvatar(userProfile)}
+                        alt="Logo"
+                        style={{
                             width: '60px',
                             height: '60px',
                             borderRadius: '12px',
-                            background: 'linear-gradient(135deg, var(--primary), #f97316)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '1.5rem'
-                        }}>
-                            <HiBuildingStorefront style={{ color: 'var(--btn-text)' }} />
-                        </div>
-                    )}
+                            objectFit: 'cover',
+                            border: '2px solid var(--primary)'
+                        }}
+                    />
                     <div style={{ flex: 1 }}>
                         <h2 style={{ fontSize: '1.3rem', fontWeight: '800', marginBottom: '0.25rem' }}>
                             {userProfile?.display_name || 'Your Business'}
                         </h2>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                            <span style={{
+                                padding: '4px 10px',
+                                background: userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'premium'
+                                    ? 'linear-gradient(135deg, #fbbf24, #d97706)'
+                                    : userProfile?.subscriptionTier === 'professional'
+                                        ? 'linear-gradient(135deg, #8b5cf6, #d946ef)'
+                                        : 'rgba(156, 163, 175, 0.2)',
+                                borderRadius: '12px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                color: 'white'
+                            }}>
+                                {userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'premium'
+                                    ? 'Elite Partner'
+                                    : userProfile?.subscriptionTier === 'professional'
+                                        ? 'Professional'
+                                        : 'Free Plan'}
+                            </span>
+                            {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
+                                <button
+                                    onClick={() => navigate('/pricing')}
+                                    style={{
+                                        border: 'none',
+                                        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                                        color: 'white',
+                                        padding: '4px 12px',
+                                        borderRadius: '20px',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+                                        marginLeft: '8px',
+                                        transition: 'transform 0.2s ease',
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                    {t('upgrade_now', 'Upgrade Now')}
+                                </button>
+                            )}
+                        </div>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
                             {businessInfo.businessType || 'Business'} • {businessInfo.city || 'Location'}
                         </p>
                     </div>
                 </div>
 
+                {/* Trial Promo Banner */}
+                {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
+                    <div
+                        onClick={() => navigate('/business/pricing')}
+                        style={{
+                            background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                            padding: '12px 20px',
+                            borderRadius: '16px',
+                            marginBottom: '1.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            color: 'white',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 15px rgba(234, 88, 12, 0.3)',
+                            animation: 'pulse 2s infinite ease-in-out'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ fontSize: '1.5rem' }}>🎁</div>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800' }}>
+                                    Try Elite Partner FREE!
+                                </h4>
+                                <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>
+                                    Get a full month of premium features
+                                </p>
+                            </div>
+                        </div>
+                        <div style={{
+                            background: 'white',
+                            color: '#ea580c',
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            fontSize: '0.8rem',
+                            fontWeight: '900'
+                        }}>
+                            Explore
+                        </div>
+                    </div>
+                )}
+
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
-                        onClick={() => navigate(`/partner/${currentUser.uid}`)}
+                        onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}
                         style={{
                             flex: '1 1 calc(50% - 5px)',
                             padding: '12px',
@@ -285,6 +437,31 @@ const BusinessDashboard = () => {
                         }}
                     >
                         <FaCog /> Settings
+                    </button>
+                    <button
+                        onClick={() => navigate('/offer/new')}
+                        style={{
+                            flex: '1 1 100%',
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, #ff6b00, #ff8c00)',
+                            border: 'none',
+                            borderRadius: '12px',
+                            color: 'white',
+                            fontWeight: '800',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            marginTop: '10px',
+                            boxShadow: '0 4px 15px rgba(255, 107, 0, 0.3)',
+                            transition: 'transform 0.2s',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                        <span>✨ Create Special Offer</span>
                     </button>
                 </div>
             </div>
@@ -415,6 +592,67 @@ const BusinessDashboard = () => {
                         Rating ({stats.reviewCount} reviews)
                     </div>
                 </div>
+            </div>
+
+            {/* Special Offers Management */}
+            <div style={{
+                marginTop: '1.5rem',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '1.5rem'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{
+                        fontSize: '1.1rem',
+                        fontWeight: '800',
+                        margin: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        <FaStore style={{ color: '#ff6b00' }} />
+                        My Special Offers
+                    </h3>
+                    <button
+                        onClick={() => {
+                            setEditingOffer(null);
+                            setShowPremiumOfferEditor(true);
+                        }}
+                        style={{
+                            background: 'var(--primary)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '6px 14px',
+                            borderRadius: '12px',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        + New
+                    </button>
+                </div>
+
+                {offersLoading ? (
+                    <div style={{ textAlign: 'center', padding: '1rem' }}>Loading offers...</div>
+                ) : offers.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>No offers created yet.</p>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {offers.map((offer) => (
+                            <PremiumOfferCard
+                                key={offer.id}
+                                offer={offer}
+                                isOwnerView={true}
+                                onEdit={(o) => navigate(`/offer/edit/${o.id}`)}
+                                onFreeze={(o) => handleFreezeOffer(o.id)}
+                                onRepublish={(o) => handleRepublishOffer(o.id, o)}
+                                onDelete={(o) => handleDeleteOffer(o.id)}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Recent Activity */}

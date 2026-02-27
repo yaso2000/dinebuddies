@@ -1,0 +1,77 @@
+/* Mobile Optimization Tricks for Native App Feel using DVH units */
+
+/* Fix viewport height to handle dynamic address bars */
+html,
+body {
+    height: 100%;
+    height: 100dvh;
+    /* The magic unit that respects the dynamic browser chrome */
+    width: 100%;
+    overflow: hidden;
+    /* Lock the main scroll */
+    position: fixed;
+    /* Force the viewport to stay put */
+    margin: 0;
+    padding: 0;
+
+    /* Disable elastic bounce effect (rubber-banding) */
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+
+    /* Improve tap response */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+
+    /* Standard app background */
+    background-color: #020617;
+}
+
+/* Ensure React Root takes full space */
+#root {
+    height: 100%;
+    height: 100dvh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* The scrollable container inside the fixed viewport */
+.app-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    /* Prevent double scrollbars */
+}
+
+/* The actual scrollable content area */
+.app-main {
+    flex: 1;
+    overflow-y: auto;
+    /* Allow internal scrolling */
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scroll on iOS */
+    width: 100%;
+    position: relative;
+}
+
+/* Ensure Chat Screens ignore safe-area complications */
+.chat-screen {
+    height: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Safe Area Insets for iPhone Notch/Home Bar */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .bottom-nav {
+        padding-bottom: env(safe-area-inset-bottom);
+        height: calc(65px + env(safe-area-inset-bottom));
+    }
+
+    .chat-screen .input-area {
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+}

@@ -11,6 +11,10 @@ import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firesto
 import { db } from '../firebase/config';
 import '../components/MapStyles.css';
 import './HomeMobileFeed.css';
+import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import { useTheme } from '../context/ThemeContext';
+import { getSafeAvatar } from '../utils/avatarUtils';
+import OffersBanner from '../components/OffersBanner';
 
 
 const Home = () => {
@@ -18,7 +22,8 @@ const Home = () => {
     const navigate = useNavigate();
     const { invitations, restaurants, currentUser, loading } = useInvitations();
     const { userProfile } = useAuth();
-    const isBusinessAccount = userProfile?.accountType === 'business';
+    const { isDark } = useTheme();
+    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
 
     // Debugging to ensure we don't have posts mixing in
     useEffect(() => {
@@ -34,15 +39,13 @@ const Home = () => {
     const [viewMode, setViewMode] = useState('list');
     const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
     const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
+    const [showSelector, setShowSelector] = useState(false); // New: For пригласительный селектор (fixed) - Create Invitation Selector
 
     // User location state
     const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
 
-    // Special offers state
-    // Special offers state
-    const [specialOffers, setSpecialOffers] = useState([]);
-    const [loadingOffers, setLoadingOffers] = useState(true);
+
 
 
     const mapRef = useRef(null);
@@ -86,54 +89,7 @@ const Home = () => {
         }
     }, []);
 
-    // Fetch special offers
-    useEffect(() => {
-        const fetchSpecialOffers = async () => {
-            try {
-                setLoadingOffers(true);
-                const offersQuery = query(
-                    collection(db, 'specialOffers'),
-                    where('status', '==', 'active')
-                );
 
-                const offersSnapshot = await getDocs(offersQuery);
-                const offersList = [];
-
-                for (const offerDoc of offersSnapshot.docs) {
-                    const offerData = offerDoc.data();
-
-                    // Check if offer is not expired
-                    const endDate = offerData.endDate?.toDate ? offerData.endDate.toDate() : new Date(offerData.endDate);
-                    if (endDate > new Date()) {
-                        // Fetch partner data
-                        const partnerDoc = await getDoc(doc(db, 'users', offerData.partnerId));
-                        if (partnerDoc.exists() && partnerDoc.data().subscriptionTier === 'premium') {
-                            offersList.push({
-                                id: offerDoc.id,
-                                ...offerData,
-                                partnerData: partnerDoc.data()
-                            });
-                        }
-                    }
-                }
-
-                // Sort by creation date (newest first)
-                offersList.sort((a, b) => {
-                    const dateA = a.createdAt?.toDate?.() || new Date(0);
-                    const dateB = b.createdAt?.toDate?.() || new Date(0);
-                    return dateB - dateA;
-                });
-
-                setSpecialOffers(offersList);
-            } catch (error) {
-                console.error('Error fetching special offers:', error);
-            } finally {
-                setLoadingOffers(false);
-            }
-        };
-
-        fetchSpecialOffers();
-    }, []);
 
     const locationFilters = [
         { id: 'All', label: t('all'), icon: '🌍' },
@@ -168,7 +124,7 @@ const Home = () => {
             if (inv.status === 'draft') return false;
 
             // 1. HOME SPECIFIC: OWNERSHIP (Always show mine)
-            const isOwn = inv.author.id === currentUser.id;
+            const isOwn = inv.author.id === currentUser?.id;
 
             // 2. HOME SPECIFIC: EXPIRY LOGIC
             // Priority 1: If manually completed, hide after 1 hour
@@ -188,8 +144,8 @@ const Home = () => {
             }
 
             // 3. HOME SPECIFIC: SOCIAL PRIVACY
-            if (inv.privacy === 'private') {
-                if (!isOwn && !inv.invitedUserIds?.includes(currentUser.id)) return false;
+            if (inv.privacy === 'private' || (inv.invitedFriends && inv.invitedFriends.length > 0)) {
+                return false; // Hide all private (or legacy private) invitations from all feeds
             } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
                 const isFollowing = currentUser?.following?.includes(inv.author.id);
                 if (!isOwn && !isFollowing) return false;
@@ -208,7 +164,9 @@ const Home = () => {
         });
 
         // 6. LOCATION FILTER (EXACT COPY FROM RESTAURANT DIRECTORY)
-        if (geoFilter !== 'global' && geoFilter !== 'All' && userLocation) {
+        const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role || userProfile?.accountType);
+
+        if (geoFilter !== 'global' && geoFilter !== 'All' && userLocation && !isStaff) {
             filtered = filtered.filter(inv => {
                 let distance = null;
                 if (inv.lat && inv.lng) {
@@ -239,194 +197,7 @@ const Home = () => {
         return filtered;
     }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser]);
 
-    // OLD BROKEN LOGIC (Disabled by renaming)
-    const legacy_filteredInvitations = useMemo(() => {
-        return []; /*
-        let filtered = safeInvitations;
-        const now = new Date();
-
-        // 1. Smart Location Filtering (Auto-Expand Logic)
-        // Hierarchy: City (100km) -> Region (500km) -> Broad Country (2000km) -> Global Fallback
-        const coords = userProfile?.coordinates || userLocation;
-
-        if (coords && !searchQuery) {
-            const { lat: userLat, lng: userLng } = coords;
-
-            // Calculate distances for all invitations first
-            const invitationsWithDist = filtered.map(inv => {
-                let dist = null;
-                if (inv.lat && inv.lng) {
-                    dist = calculateDistance(userLat, userLng, inv.lat, inv.lng);
-                }
-                return { ...inv, dist };
-            });
-
-            // 1. Filter Logic: Manual Override vs Smart Default
-
-            // Standard Location Filter (Matching Partner Directory)
-            // If Global/All, we do nothing (show all).
-            if (geoFilter !== 'global' && geoFilter !== 'All') {
-                filtered = invitationsWithDist.filter(inv => {
-                    if (inv.dist === null) return false;
-
-                    switch (geoFilter) {
-                        case 'nearby':
-                            return inv.dist < 10;
-                        case 'city':
-                            return inv.dist < 50;
-                        case 'country':
-                            return inv.dist < 500;
-                        default:
-                            return true;
-                    }
-                });
-            }
-
-
-            // Logic: Level 1 (City) -> Level 2 (Region) -> Level 3 (Country) -> Level 4 (Global)
-
-            // Level 1: City (Strict ~100km)
-            const cityMatch = invitationsWithDist.filter(inv => {
-                if (inv.dist !== null) return inv.dist < 100;
-                if (userProfile?.city && inv.location) return inv.location.toLowerCase().includes(userProfile.city.toLowerCase());
-                return false;
-            });
-
-            if (cityMatch.length > 0) {
-                filtered = cityMatch;
-            } else {
-                // Level 2: Region (Expanded ~500km)
-                const regionMatch = invitationsWithDist.filter(inv => inv.dist !== null && inv.dist < 500);
-
-                if (regionMatch.length > 0) {
-                    filtered = regionMatch;
-                } else {
-                    // Level 3: Country / Broad Region (~2000km)
-                    const countryMatch = invitationsWithDist.filter(inv => inv.dist !== null && inv.dist < 2000);
-
-                    if (countryMatch.length > 0) {
-                        filtered = countryMatch;
-                    }
-                    // Level 4: Global Fallback (Show everything naturally)
-                }
-            }
-        }
-    }
-
-        filtered = filtered.filter(inv => {
-        if (!inv || !inv.author) return false;
-
-        // 0. HIDE DRAFTS (Don't show drafts on home page)
-        if (inv.status === 'draft') return false;
-
-        // 1. OWNERSHIP (Always show mine)
-        const isOwn = inv.author.id === currentUser.id;
-        if (isOwn) return true;
-
-        // 2. AUTO-CLOSE LOGIC
-        // Priority 1: If manually completed, hide after 1 hour from completion
-        if (inv.meetingStatus === 'completed' && inv.completedAt) {
-            const completedTime = inv.completedAt.toDate ? inv.completedAt.toDate() : new Date(inv.completedAt);
-            const oneHourAfterCompletion = new Date(completedTime.getTime() + 60 * 60 * 1000); // +1 hour
-            if (now > oneHourAfterCompletion) return false;
-            // If completed but within 1 hour, show it (with special styling)
-            return true; // ← CRITICAL: Stop here, don't check scheduled time!
-        }
-
-        // Priority 2: For non-completed invitations, hide 1 hour after scheduled time
-        const inviteDate = new Date(inv.date || now);
-        if (!isNaN(inviteDate.getTime())) {
-            const [hours, minutes] = (inv.time || "20:30").split(':');
-            inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
-            const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
-            if (now > expiry) return false;
-        }
-
-        // 3. SOCIAL PRIVACY
-        if (inv.privacy === 'private') {
-            // Only author or invited guests can see private invitations
-            if (!isOwn && !inv.invitedUserIds?.includes(currentUser.id)) return false;
-        } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
-            // Followers only
-            const isFollowing = currentUser?.following?.includes(inv.author.id);
-            if (!isOwn && !isFollowing) return false;
-        }
-        // Public invitations are visible to everyone
-
-
-        // 4. ENHANCED SEARCH (title + location + description)
-        const matchesSearch = !searchQuery ||
-            (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
-        const matchesFilter = activeFilter === 'All' || inv.type === activeFilter;
-
-        // Debug logging
-        if (searchQuery || activeFilter !== 'All') {
-            console.log('🔍 Filtering:', {
-                title: inv.title,
-                type: inv.type,
-                activeFilter,
-                matchesFilter,
-                matchesSearch
-            });
-        }
-
-        return matchesSearch && matchesFilter;
-    });
-
-    // Calculate distance for each invitation FIRST (before filtering)
-    if (userLocation) {
-        filtered = filtered.map(inv => ({
-            ...inv,
-            distance: inv.lat && inv.lng
-                ? calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng)
-                : null
-        }));
-    }
-
-
-    // Apply time filter
-    if (timeFilter !== 'all') {
-        filtered = filtered.filter(inv => {
-            if (!inv.date || !inv.time) return false;
-
-            if (!inv.date || !inv.time) return true;
-            const invDate = new Date(`${inv.date}T${inv.time}`);
-
-            if (timeFilter === 'today') {
-                return invDate.toDateString() === now.toDateString();
-            } else if (timeFilter === 'tomorrow') {
-                const tomorrow = new Date(now);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                return invDate.toDateString() === tomorrow.toDateString();
-            } else if (timeFilter === 'week') {
-                const nextWeek = new Date(now);
-                nextWeek.setDate(nextWeek.getDate() + 7);
-                return invDate >= now && invDate <= nextWeek;
-            }
-            return true;
-        });
-    }
-
-    // Apply category filter
-    if (activeFilter !== 'All') {
-        filtered = filtered.filter(inv => inv.category === activeFilter);
-    }
-
-    // Apply search query
-    if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter(inv =>
-            inv.title?.toLowerCase().includes(query) ||
-            inv.restaurantName?.toLowerCase().includes(query) ||
-            inv.description?.toLowerCase().includes(query) ||
-            inv.location?.toLowerCase().includes(query) // Allow searching by location name too
-        );
-    }
-
-    return filtered;
-*/ }, []);
+    // Legacy filtering logic removed.
 
     const premiumAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 3), [safeRestaurants]);
     const inFeedAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 2), [safeRestaurants]);
@@ -502,9 +273,6 @@ const Home = () => {
                     tap: false
                 }).setView([initialLat, initialLng], initialZoom);
 
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstance.current);
-
-                // If we used invitations to center, try to fit bounds perfectly
                 if (!userLocation && invitationsWithCoords.length > 0) {
                     const bounds = invitationsWithCoords.map(inv => [inv.lat, inv.lng]);
                     try {
@@ -512,6 +280,17 @@ const Home = () => {
                     } catch (e) { console.warn("Could not fit bounds on init", e); }
                 }
             }
+
+            // Always ensure tiles match current theme
+            mapInstance.current.eachLayer((layer) => {
+                if (layer instanceof L.TileLayer) mapInstance.current.removeLayer(layer);
+            });
+
+            const tileUrl = isDark
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+            L.tileLayer(tileUrl).addTo(mapInstance.current);
 
             // Cleanup previous markers
             mapInstance.current.eachLayer((layer) => {
@@ -553,11 +332,8 @@ const Home = () => {
                         travelTime = Math.round((distance / 40) * 60);
                     }
 
-                    // Get real profile picture - check multiple sources
-                    const profilePic = inv.author?.photoURL ||
-                        inv.author?.profilePicture ||
-                        inv.author?.avatar ||
-                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${inv.author?.id || 'default'}`;
+                    // Get real profile picture using unified utility
+                    const profilePic = getSafeAvatar(inv.author);
 
                     // Create custom marker with profile picture
                     // Color logic: Gold for own, Red for not eligible, Green for eligible
@@ -583,11 +359,16 @@ const Home = () => {
                         iconAnchor: [25, 50]
                     });
 
+                    // Determine correct image URL logic (matching InvitationCard.jsx priority)
+                    const displayImage = (inv.mediaType === 'video' && inv.videoThumbnail)
+                        ? inv.videoThumbnail
+                        : (inv.customImage || inv.restaurantImage || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400');
+
                     // Create compact popup content
                     const popupContent = `
                         <div class="compact-popup">
                             <div style="position: relative;">
-                                <img src="${inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}" class="compact-popup-image" />
+                                <img src="${displayImage}" class="compact-popup-image" onerror="this.src='https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'" />
                                 <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 4px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);">
                                     <span style="background: ${markerColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${inv.type || 'Event'}</span>
                                 </div>
@@ -663,7 +444,7 @@ const Home = () => {
                 }
             }, 300);
         }
-    }, [viewMode, userLocation, invitationsWithCoords, currentUser, t, i18n.language]);
+    }, [viewMode, userLocation, invitationsWithCoords, currentUser, t, i18n.language, isDark]);
 
     // Fix for map disappearing when switching between list and map view
     useEffect(() => {
@@ -756,15 +537,15 @@ const Home = () => {
                                 alt={restaurant.name}
                                 style={{
                                     width: '55px', height: '55px', borderRadius: '50%',
-                                    border: '2px solid #f59e0b', objectFit: 'cover',
-                                    padding: '2px', background: 'white'
+                                    border: '2px solid var(--luxury-gold)', objectFit: 'cover',
+                                    padding: '2px', background: 'var(--bg-card)'
                                 }}
                             />
                             <div style={{
                                 position: 'absolute', bottom: '-2px', right: '-2px',
-                                background: '#f59e0b', color: 'black', borderRadius: '50%',
+                                background: 'var(--luxury-gold)', color: 'black', borderRadius: '50%',
                                 width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '10px', fontWeight: 'bold', border: '2px solid white'
+                                fontSize: '10px', fontWeight: 'bold', border: '2px solid var(--bg-card)'
                             }}>
                                 <FaCheck />
                             </div>
@@ -776,7 +557,7 @@ const Home = () => {
                                 display: 'flex', alignItems: 'center', gap: '6px'
                             }}>
                                 {restaurant.name}
-                                <span style={{ fontSize: '0.7em', background: '#f59e0b', color: 'black', padding: '1px 6px', borderRadius: '6px' }}>AD</span>
+                                <span style={{ fontSize: '0.7em', background: 'var(--luxury-gold)', color: 'black', padding: '1px 6px', borderRadius: '6px' }}>AD</span>
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <FaStar style={{ color: '#fbbf24' }} /> {restaurant.rating} • {t('partner', { defaultValue: 'Partner' })}
@@ -826,11 +607,11 @@ const Home = () => {
                     <div className="footer-actions" style={{ pointerEvents: 'auto' }}>
                         <button style={{
                             width: '100%', padding: '14px', borderRadius: '30px', border: 'none',
-                            background: '#f59e0b', // Gold for business action
+                            background: 'var(--luxury-gold)', // Gold for business action
                             color: 'black',
                             fontWeight: '800', fontSize: '1rem', cursor: 'pointer',
                             display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
-                            boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)'
+                            boxShadow: '0 4px 15px rgba(251, 191, 36, 0.4)'
                         }}>
                             {t('view_profile', { defaultValue: 'View Profile' })}
                         </button>
@@ -851,7 +632,6 @@ const Home = () => {
     // Return statement
     return (
         <div className="home-page" style={{ minHeight: '100vh', animation: 'fadeIn 0.5s ease-out' }}>
-
 
             <style>{`
                 .filter-select {
@@ -912,7 +692,7 @@ const Home = () => {
 
                 {/* Location Filter Tabs (City / Country / Global) */}
 
-
+                <OffersBanner />
                 {/* Filter Bar - Responsive Layout */}
                 <div className="filter-bar" style={{
                     display: 'flex',
@@ -965,7 +745,7 @@ const Home = () => {
                                     border: '1px solid var(--border-color)',
                                     borderRadius: '12px',
                                     fontSize: '0.85rem',
-                                    background: 'var(--bg-main)'
+                                    background: 'var(--bg-input)'
                                 }}
                             />
                         </div>
@@ -1112,6 +892,7 @@ const Home = () => {
                     display: viewMode === 'list' ? 'block' : 'none'
                 }}
             >
+
                 {premiumAds.length > 0 && (
                     <div className="promo-banner" onClick={() => navigate(`/restaurant/${premiumAds[0].id}`)}>
                         <span className="promo-badge">HOT DEAL</span>
@@ -1125,222 +906,7 @@ const Home = () => {
                     </div>
                 )}
 
-                {/* Special Offers Carousel */}
-                {!loadingOffers && specialOffers.length > 0 && (
-                    <div className="special-offers-section" style={{ marginBottom: '1.5rem', padding: '0 1.25rem' }}>
-                        <h2 style={{
-                            fontSize: '1.2rem',
-                            fontWeight: '800',
-                            marginBottom: '1rem',
-                            color: 'var(--text-main)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                        }}>
-                            🔥 {t('special_offers', 'Special Offers')}
-                            <span style={{
-                                fontSize: '0.7rem',
-                                fontWeight: '700',
-                                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                                color: 'white',
-                                padding: '4px 8px',
-                                borderRadius: '10px'
-                            }}>
-                                {specialOffers.length}
-                            </span>
-                        </h2>
 
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: specialOffers.length === 1 ? 'center' : 'flex-start',
-                            gap: '1rem',
-                            overflowX: 'auto',
-                            paddingBottom: '1rem',
-                            scrollbarWidth: 'thin',
-                            scrollbarColor: 'var(--primary) var(--bg-card)',
-                            marginLeft: '-1.25rem',
-                            marginRight: '-1.25rem',
-                            paddingLeft: '1.25rem',
-                            paddingRight: '1.25rem'
-                        }}>
-                            {specialOffers.map(offer => {
-                                const endDate = offer.endDate?.toDate ? offer.endDate.toDate() : new Date(offer.endDate);
-                                const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
-
-                                // Simple color mapping
-                                const colors = {
-                                    'Fire': '#f59e0b',
-                                    'Royal': '#a855f7',
-                                    'Ocean': '#3b82f6',
-                                    'Fresh': '#10b981',
-                                    'Passion': '#ef4444',
-                                    'Sweet': '#ec4899'
-                                };
-                                const accentColor = colors[offer.colorTheme] || colors['Fire'];
-
-                                return (
-                                    <div
-                                        key={offer.id}
-                                        onClick={() => navigate(`/partner/${offer.partnerId}`)}
-                                        style={{
-                                            minWidth: '280px',
-                                            maxWidth: '280px',
-                                            borderRadius: '16px',
-                                            overflow: 'hidden',
-                                            border: `3px solid ${accentColor}`,
-                                            boxShadow: `0 8px 24px ${accentColor}30`,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.3s',
-                                            background: offer.imageUrl
-                                                ? `linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7)), url(${offer.imageUrl})`
-                                                : `linear-gradient(135deg, ${accentColor}dd, ${accentColor})`,
-                                            backgroundSize: 'cover',
-                                            backgroundPosition: 'center',
-                                            position: 'relative',
-                                            minHeight: '220px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            justifyContent: 'space-between',
-                                            padding: '1rem'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-6px)';
-                                            e.currentTarget.style.boxShadow = `0 12px 36px ${accentColor}50`;
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.boxShadow = `0 8px 24px ${accentColor}30`;
-                                        }}
-                                    >
-                                        {/* Top Section */}
-                                        <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'flex-start'
-                                        }}>
-                                            {/* Discount Badge */}
-                                            <div style={{
-                                                background: 'white',
-                                                color: accentColor,
-                                                padding: '8px 14px',
-                                                borderRadius: '10px',
-                                                fontWeight: '900',
-                                                fontSize: '1.3rem',
-                                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                                                lineHeight: '1'
-                                            }}>
-                                                {offer.discount}%
-                                            </div>
-
-                                            {/* Days Left Badge */}
-                                            <div style={{
-                                                background: 'rgba(0,0,0,0.6)',
-                                                color: 'white',
-                                                padding: '6px 10px',
-                                                borderRadius: '8px',
-                                                fontSize: '0.7rem',
-                                                fontWeight: '700',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                            }}>
-                                                ⏰ {daysLeft}d left
-                                            </div>
-                                        </div>
-
-                                        {/* Bottom Section */}
-                                        <div>
-                                            {/* Title */}
-                                            <div style={{
-                                                fontSize: '1.1rem',
-                                                fontWeight: '900',
-                                                color: 'white',
-                                                marginBottom: '0.4rem',
-                                                textShadow: '0 2px 8px rgba(0,0,0,0.6)',
-                                                lineHeight: '1.3',
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 2,
-                                                WebkitBoxOrient: 'vertical',
-                                                overflow: 'hidden'
-                                            }}>
-                                                {offer.title}
-                                            </div>
-
-                                            {/* Partner Name */}
-                                            <div style={{
-                                                fontSize: '0.8rem',
-                                                fontWeight: '700',
-                                                color: 'rgba(255, 255, 255, 0.95)',
-                                                marginBottom: '0.5rem',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                textShadow: '0 1px 4px rgba(0,0,0,0.5)'
-                                            }}>
-                                                <HiBuildingStorefront style={{ fontSize: '0.9rem' }} />
-                                                {offer.partnerData?.businessInfo?.businessName || offer.partnerName}
-                                            </div>
-
-                                            {/* Create Invitation Button - Only for non-business users and non-guests */}
-                                            {currentUser && currentUser.accountType !== 'business' && currentUser.id !== 'guest' && userProfile?.accountType !== 'guest' && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        // Navigate to create invitation page with offer data
-                                                        navigate('/create', {
-                                                            state: {
-                                                                offerData: {
-                                                                    title: offer.title,
-                                                                    description: offer.description,
-                                                                    image: offer.imageUrl,
-                                                                    location: offer.partnerData?.businessInfo?.businessName || offer.partnerName,
-                                                                    locationDetails: offer.partnerData?.businessInfo?.location || '',
-                                                                    startDate: offer.startDate?.toDate ? offer.startDate.toDate() : new Date(offer.startDate),
-                                                                    endDate: offer.endDate?.toDate ? offer.endDate.toDate() : new Date(offer.endDate),
-                                                                    discount: offer.discount,
-                                                                    menuItem: offer.menuItem,
-                                                                    partnerId: offer.partnerId,
-                                                                    offerId: offer.id
-                                                                }
-                                                            }
-                                                        });
-                                                    }}
-                                                    style={{
-                                                        width: '100%',
-                                                        background: 'white',
-                                                        color: accentColor,
-                                                        border: 'none',
-                                                        borderRadius: '10px',
-                                                        padding: '10px',
-                                                        fontWeight: '800',
-                                                        fontSize: '0.85rem',
-                                                        cursor: 'pointer',
-                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                                                        transition: 'all 0.2s',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '6px'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.stopPropagation();
-                                                        e.currentTarget.style.transform = 'scale(1.05)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.stopPropagation();
-                                                        e.currentTarget.style.transform = 'scale(1)';
-                                                    }}
-                                                >
-                                                    🎟️ {t('create_invitation', 'Create Invitation')}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
 
                 <div className="feed-list">
                     {loading ? (
@@ -1452,7 +1018,7 @@ const Home = () => {
                                     </button>
                                 ) : !isBusinessAccount && currentUser?.id !== 'guest' && userProfile?.accountType !== 'guest' && (
                                     <button
-                                        onClick={() => navigate('/create')}
+                                        onClick={() => setShowSelector(true)}
                                         style={{
                                             padding: '0.75rem 2rem',
                                             borderRadius: '16px',
@@ -1488,36 +1054,49 @@ const Home = () => {
 
             {/* Create Invitation FAB - Only on invitations/home page, not for business accounts */}
             {/* Create Invitation FAB - Only on invitations/home page, not for business accounts and not for guests */}
-            {
-                !isBusinessAccount && currentUser?.id !== 'guest' && userProfile?.accountType !== 'guest' && (
-                    <div
-                        onClick={() => navigate('/create')}
-                        style={{
-                            position: 'fixed',
-                            bottom: '100px',
-                            right: '25px',
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '50%',
-                            background: '#ef4444',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)',
-                            cursor: 'pointer',
-                            zIndex: 1000,
-                            border: '2px solid rgba(255,255,255,0.2)'
-                        }}
-                        role="button"
-                        className="home-fab-btn"
-                    >
-                        <FaPlus size={24} />
-                    </div>
-                )
-            }
+            {/* Create Invitation FAB - Visible to all, but prompts guests sign up */}
+            {!isBusinessAccount && (
+                <div
+                    onClick={() => {
+                        if (userProfile?.accountType === 'guest' || userProfile?.isGuest) {
+                            if (window.confirm(i18n.language === 'ar'
+                                ? 'يجب تسجيل الدخول لإنشاء دعوة. هل تريد التسجيل الآن؟'
+                                : 'You need to sign in to create an invitation. Sign up now?')) {
+                                navigate('/login');
+                            }
+                        } else {
+                            setShowSelector(true);
+                        }
+                    }}
+                    style={{
+                        position: 'fixed',
+                        bottom: '100px',
+                        right: '25px',
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '18px', // More modern shape
+                        background: '#ef4444',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 8px 16px rgba(239, 68, 68, 0.4)',
+                        cursor: 'pointer',
+                        zIndex: 1000,
+                        border: '2px solid rgba(255,255,255,0.2)'
+                    }}
+                    role="button"
+                    className="home-fab-btn"
+                >
+                    <FaPlus size={24} />
+                </div>
+            )}
 
 
+            <CreateInvitationSelector
+                isOpen={showSelector}
+                onClose={() => setShowSelector(false)}
+            />
         </div >
     );
 };

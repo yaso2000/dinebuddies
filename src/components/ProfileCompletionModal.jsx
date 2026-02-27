@@ -80,6 +80,7 @@ const ProfileCompletionModal = () => {
 
             const updateData = {
                 displayName: formData.displayName,
+                display_name: formData.displayName, // Normalize to display_name
                 nickname: formData.displayName,
                 ageCategory: formData.ageCategory,
                 gender: formData.gender,
@@ -100,7 +101,7 @@ const ProfileCompletionModal = () => {
                 try {
                     await updateAuthProfile(currentUser, {
                         displayName: formData.displayName,
-                        photoURL: currentUser.photoURL
+                        photoURL: updateData.photoURL || currentUser.photoURL
                     });
                 } catch (err) {
                     console.warn("Auth update warning:", err);

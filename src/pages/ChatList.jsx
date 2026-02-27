@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaArrowLeft, FaSearch, FaEllipsisV } from 'react-icons/fa';
 import './ChatList.css';
 
@@ -113,8 +114,13 @@ const ChatList = () => {
                                 {/* Avatar */}
                                 <div className="conversation-avatar">
                                     <img
-                                        src={otherUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherUser.displayName)}&background=8b5cf6&color=fff&size=128`}
+                                        src={getSafeAvatar(otherUser)}
                                         alt={otherUser.displayName}
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
+                                        }}
+                                        style={{ objectFit: 'cover' }}
                                     />
                                     {otherUser.isOnline && <div className="online-indicator" />}
                                 </div>

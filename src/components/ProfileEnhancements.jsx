@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
 import {
     FaCamera,
     FaCog,
@@ -99,8 +100,11 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
 // ================================
 export const StatisticsCards = ({ userId }) => {
     const { t } = useTranslation();
+    const { userProfile: viewerProfile } = useAuth();
     const [stats, setStats] = useState({
         totalPosts: 0,
+        publicPosts: 0,
+        privatePosts: 0,
         totalJoined: 0,
         avgRating: 0,
         attendanceRate: 0,
@@ -111,17 +115,37 @@ export const StatisticsCards = ({ userId }) => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
+                const viewerId = viewerProfile?.uid || viewerProfile?.id;
+                const isOwner = viewerId === userId;
+
                 // Fetch invitations where user is host
                 const invitationsRef = collection(db, 'invitations');
                 const postedQuery = query(invitationsRef, where('hostId', '==', userId));
                 const postedSnap = await getDocs(postedQuery);
-                const totalPosts = postedSnap.size;
+                const allPosted = postedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Filter based on visibility
+                const visiblePosted = allPosted.filter(inv => {
+                    if (inv.privacy !== 'private') return true;
+                    if (isOwner) return true;
+                    if (inv.invitedFriends?.includes(viewerId)) return true;
+                    return false;
+                });
 
                 // Fetch invitations where user joined
                 const joinedQuery = query(invitationsRef, where('attendees', 'array-contains', userId));
                 const joinedSnap = await getDocs(joinedQuery);
-                const joinedDocs = joinedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const totalJoined = joinedDocs.length;
+                const allJoined = joinedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Filter joined based on visibility
+                const visibleJoined = allJoined.filter(inv => {
+                    if (inv.privacy !== 'private') return true;
+                    if (isOwner) return true;
+                    if (inv.invitedFriends?.includes(viewerId)) return true;
+                    return false;
+                });
+
+                const totalJoined = visibleJoined.length;
 
                 // Fetch reviews
                 const reviewsRef = collection(db, 'users', userId, 'reviews');
@@ -135,10 +159,7 @@ export const StatisticsCards = ({ userId }) => {
                 // Calculate REAL attendance rate
                 let attendedCount = 0;
                 if (totalJoined > 0) {
-                    joinedDocs.forEach(inv => {
-                        // Consider attended if:
-                        // 1. The meeting is marked as 'completed' (assuming everyone attended)
-                        // 2. OR The specific user status is 'arrived' or 'completed'
+                    visibleJoined.forEach(inv => {
                         const userStatus = inv.participantStatus?.[userId];
                         const isCompleted = inv.meetingStatus === 'completed';
 
@@ -153,7 +174,9 @@ export const StatisticsCards = ({ userId }) => {
                     : 0;
 
                 setStats({
-                    totalPosts,
+                    totalPosts: visiblePosted.length,
+                    publicPosts: visiblePosted.filter(p => p.privacy !== 'private').length,
+                    privatePosts: visiblePosted.filter(p => p.privacy === 'private').length,
                     totalJoined,
                     avgRating: avgRating.toFixed(1),
                     attendanceRate,
@@ -169,7 +192,7 @@ export const StatisticsCards = ({ userId }) => {
         if (userId) {
             fetchStats();
         }
-    }, [userId]);
+    }, [userId, viewerProfile]);
 
     if (loading) {
         return (
@@ -187,6 +210,9 @@ export const StatisticsCards = ({ userId }) => {
             icon: '📝',
             value: stats.totalPosts,
             label: t('posted_invites', 'Posted'),
+            sublabel: (stats.publicPosts > 0 || stats.privatePosts > 0)
+                ? `🌐 ${stats.publicPosts} | 🔒 ${stats.privatePosts}`
+                : '',
             color: '#8b5cf6'
         },
         {

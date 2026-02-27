@@ -8,6 +8,7 @@ import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { BiRepost } from 'react-icons/bi';
 import { IoShareSocialOutline } from 'react-icons/io5';
 import ShareButtons from './ShareButtons';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import './PostCard.css';
 
 const PostCard = ({ post, showInChat = false }) => {
@@ -82,7 +83,7 @@ const PostCard = ({ post, showInChat = false }) => {
                 author: {
                     id: currentUser.uid,
                     name: currentUser.displayName || 'User',
-                    avatar: currentUser.photoURL
+                    avatar: getSafeAvatar(userProfile || currentUser)
                 },
                 originalPost: targetPost, // Store snapshot of original content
                 createdAt: serverTimestamp(),
@@ -127,7 +128,7 @@ const PostCard = ({ post, showInChat = false }) => {
                 id: Date.now().toString(),
                 userId: currentUser.uid,
                 userName: currentUser.displayName || 'User',
-                userPhoto: currentUser.photoURL || null,
+                userPhoto: getSafeAvatar(userProfile || currentUser),
                 text: newComment.trim(),
                 createdAt: new Date().toISOString()
             };
@@ -146,16 +147,23 @@ const PostCard = ({ post, showInChat = false }) => {
 
     const formatDate = (timestamp) => {
         if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        const date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
         const now = new Date();
         const diff = now - date;
+
+        if (isNaN(diff)) return '';
 
         // Twitter style time
         if (diff < 60000) return 'Just now';
         if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
         if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
         if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        try {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } catch (e) {
+            return '';
+        }
     };
 
     // --- AUTHOR DATA RESOLUTION ---
@@ -168,16 +176,7 @@ const PostCard = ({ post, showInChat = false }) => {
     }
     authorName = authorName || 'User';
 
-    let authorAvatar =
-        post.partnerLogo ||
-        post.author?.avatar ||
-        post.author?.photoURL ||
-        post.userPhoto ||
-        post.user_photo ||
-        post.photoURL ||
-        post.photo_url ||
-        post.profilePicture ||
-        null;
+    let authorAvatar = getSafeAvatar(post.author || post);
 
     let authorHandle = post.author?.username || post.author?.handle || null;
 
@@ -194,38 +193,28 @@ const PostCard = ({ post, showInChat = false }) => {
             authorName = fetchedName || userData.email?.split('@')[0] || authorName;
         }
 
-        authorAvatar = userData.photoURL || userData.photo_url || userData.avatar || userData.businessInfo?.logo || authorAvatar;
+        authorAvatar = getSafeAvatar(userData);
         authorHandle = userData.username || userData.handle || authorHandle;
     }
 
     // 3. Override with Current User - Live Profile (Highest Priority for Self)
-    // This fixes the issue where my own posts show stale "User" name immediately.
     if (currentUser?.uid === authorId && userProfile) {
-        authorName =
-            userProfile.businessInfo?.businessName ||
-            userProfile.displayName ||
-            userProfile.display_name ||
-            userProfile.name ||
-            authorName;
-
-        authorAvatar =
-            userProfile.businessInfo?.logo ||
-            userProfile.photoURL ||
-            userProfile.photo_url ||
-            userProfile.avatar ||
-            authorAvatar;
-
+        authorName = userProfile.businessInfo?.businessName || userProfile.displayName || userProfile.display_name || userProfile.name || authorName;
+        authorAvatar = getSafeAvatar(userProfile);
         authorHandle = userProfile.username || userProfile.handle || authorHandle;
+    } else {
+        // Use utility for general case
+        authorAvatar = getSafeAvatar(userData || post.author || post);
     }
 
     // Fallbacks
-    if (!authorAvatar || authorAvatar.includes('dicebear')) {
-        authorAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'User')}&background=random`;
+    if (!authorAvatar || String(authorAvatar).includes('dicebear')) {
+        authorAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(String(authorName || 'User'))}&background=random`;
     }
 
     if (!authorHandle) {
-        authorHandle = `@${authorName.toLowerCase().replace(/\s/g, '')}`;
-    } else if (!authorHandle.startsWith('@')) {
+        authorHandle = `@${String(authorName).toLowerCase().replace(/\s/g, '')}`;
+    } else if (!String(authorHandle).startsWith('@')) {
         authorHandle = `@${authorHandle}`;
     }
 
@@ -236,24 +225,21 @@ const PostCard = ({ post, showInChat = false }) => {
     const displayPost = isRepost ? post.originalPost : post;
 
     // Resolve Display Post Author (Original Author)
-    // We need to apply the SAME logic as above but for the displayPost object
     let displayAuthorName = displayPost.partnerName || displayPost.author?.name || displayPost.userName || displayPost.user_name || displayPost.displayName || 'User';
-    let displayAuthorAvatar = displayPost.partnerLogo || displayPost.author?.avatar || displayPost.author?.photoURL || displayPost.userPhoto || displayPost.user_photo || displayPost.photoURL || displayPost.photo_url || displayPost.profilePicture || null;
     let displayAuthorId = displayPost.partnerId || displayPost.author?.id || displayPost.authorId || displayPost.userId || displayPost.uid;
+
+    // Use utility for display author avatar
+    let displayAuthorAvatar = getSafeAvatar(displayPost.author || displayPost);
 
     // Override for current user (if I am the original author)
     if (currentUser?.uid === displayAuthorId && userProfile && !isRepost) {
         displayAuthorName = userProfile.businessInfo?.businessName || userProfile.displayName || userProfile.display_name || userProfile.name || displayAuthorName;
-        displayAuthorAvatar = userProfile.businessInfo?.logo || userProfile.photoURL || userProfile.photo_url || userProfile.avatar || displayAuthorAvatar;
-    }
-
-    if (!displayAuthorAvatar || displayAuthorAvatar.includes('dicebear')) {
-        displayAuthorAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayAuthorName || 'User')}&background=random`;
+        displayAuthorAvatar = getSafeAvatar(userProfile);
     }
 
     let displayAuthorHandle = displayPost.author?.username || displayPost.author?.handle || null;
     if (!displayAuthorHandle) {
-        displayAuthorHandle = `@${displayAuthorName.toLowerCase().replace(/\s/g, '')}`;
+        displayAuthorHandle = `@${String(displayAuthorName).toLowerCase().replace(/\s/g, '')}`;
     }
 
 
@@ -375,7 +361,7 @@ const PostCard = ({ post, showInChat = false }) => {
                             fontWeight: displayPost.textStyle?.fontWeight || 'normal',
                             fontStyle: displayPost.textStyle?.fontStyle || 'normal',
                             lineHeight: '1.5',
-                            color: 'var(--text-main)',
+                            color: 'inherit',
                             padding: '0 4px'
                         }}>
                             {displayPost.content || displayPost.caption}
@@ -431,7 +417,9 @@ const PostCard = ({ post, showInChat = false }) => {
                         <div
                             onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/invitation/${displayPost.attachedInvitation.id}`);
+                                const inv = displayPost.attachedInvitation;
+                                const path = inv.privacy === 'private' ? `/invitation/private/${inv.id}` : `/invitation/${inv.id}`;
+                                navigate(path);
                             }}
                             style={{
                                 marginTop: '12px',
@@ -500,7 +488,7 @@ const PostCard = ({ post, showInChat = false }) => {
                         }}
                     >
                         <FaRegCommentDots size={19} />
-                        {post.comments?.length > 0 && <span className="action-count">{post.comments.length}</span>}
+                        {(post.comments?.length || 0) > 0 && <span className="action-count">{post.comments.length}</span>}
                     </button>
 
                     {/* Repost */}
@@ -557,9 +545,9 @@ const PostCard = ({ post, showInChat = false }) => {
                         </form>
 
                         {/* Recent Comments */}
-                        {post.comments?.length > 0 && (
+                        {(post.comments?.length || 0) > 0 && (
                             <div className="recent-comments">
-                                {post.comments.slice(-3).reverse().map((comment, idx) => (
+                                {(post.comments || []).slice(-3).reverse().map((comment, idx) => (
                                     <div key={idx} style={{
                                         padding: '8px 0',
                                         borderTop: '1px solid var(--border-color)',
@@ -590,7 +578,7 @@ const PostCard = ({ post, showInChat = false }) => {
                         style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_post')}</h3>
+                        <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>{t('share_post')}</h3>
                         <ShareButtons
                             url={window.location.href}
                             title={`Post by ${authorName}`}

@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from './AuthContext';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const ChatContext = createContext();
 
@@ -69,7 +70,7 @@ export const ChatProvider = ({ children }) => {
                             otherUser = {
                                 uid: otherUserId,
                                 displayName: userData.display_name || userData.email || 'User',
-                                photoURL: userData.photo_url || null,
+                                photoURL: getSafeAvatar(userData),
                                 isOnline: userData.isOnline || false,
                                 lastSeen: userData.lastSeen || null
                             };

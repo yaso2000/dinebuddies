@@ -158,7 +158,6 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
                         border: 'none',
                         background: 'rgba(255, 255, 255, 0.05)',
                         color: platform.color,
-                        fontSize: '1.5rem',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',

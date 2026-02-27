@@ -1,0 +1,322 @@
+/* Critical Fix: Override any overflow constraints that break Leaflet positioning */
+html,
+body,
+#root,
+.app-container {
+    overflow-x: hidden !important;
+}
+
+/* Ensure body can scroll vertically */
+body {
+    overflow-y: auto !important;
+}
+
+.leaflet-container {
+    direction: ltr !important;
+    text-align: left !important;
+    transform: translate3d(0, 0, 0) !important;
+    transform-origin: center center !important;
+    /* Force GPU acceleration, reset transforms, and center zoom origin */
+}
+
+.leaflet-map-pane {
+    transform-origin: center center !important;
+    /* Ensure zooming happens from center of map, not edges */
+}
+
+.leaflet-tile-pane {
+    transform-origin: center center !important;
+}
+
+/* Responsive Map Styles */
+.responsive-map-container {
+    width: 100%;
+    height: 500px;
+    border-radius: 16px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+}
+
+/* Map Controls - Vertical Center Right + High Contrast */
+/* Map Controls - Top Right */
+.map-zoom-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    padding: 12px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-map-control {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #1f2937;
+    /* Dark Gray bg */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    /* White icon */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-map-control:hover {
+    transform: translateX(-2px) scale(1.05);
+    /* Slight move left and scale */
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+    background: var(--primary);
+    /* Use primary color on hover */
+    border-color: var(--primary);
+    color: white;
+}
+
+.btn-map-control:active {
+    transform: translateX(0) scale(0.95);
+}
+
+/* Discovery Badge */
+.map-discovery-badge {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.9);
+    /* Dark background for readability */
+    padding: 10px 20px;
+    border-radius: 50px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: white;
+    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    white-space: nowrap;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+@media (max-width: 640px) {
+    .responsive-map-container {
+        width: 100% !important;
+        height: 60vh !important;
+        /* Taller on mobile for better view */
+        margin: 0 !important;
+        padding: 0 !important;
+        position: relative !important;
+        border-radius: 0 !important;
+        text-align: left !important;
+        direction: ltr !important;
+    }
+
+    /* Global Leaflet Fixes */
+    .leaflet-container {
+        direction: ltr !important;
+        text-align: left !important;
+    }
+
+    .map-view-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Adjust controls for mobile */
+    .map-zoom-controls {
+        top: 20px;
+        bottom: auto;
+        right: 10px;
+        transform: none;
+        padding: 8px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.7);
+    }
+
+    .btn-map-control {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+
+    .map-discovery-badge {
+        bottom: 20px;
+        padding: 8px 16px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Compact Popup Styles */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: var(--bg-card) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-color);
+}
+
+.leaflet-popup-tip {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-color);
+}
+
+.leaflet-popup-content {
+    margin: 0 !important;
+    width: 200px !important;
+    /* Force smaller width */
+}
+
+.compact-popup {
+    font-family: 'Tajawal', sans-serif;
+    width: 200px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.compact-popup-image {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    display: block;
+}
+
+.compact-popup-body {
+    padding: 8px 10px;
+}
+
+.compact-popup-title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    margin: 0 0 4px 0;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compact-popup-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.compact-popup-stats {
+    display: flex;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    margin-bottom: 8px;
+    color: var(--text-main);
+}
+
+.compact-popup-btn {
+    width: 100%;
+    padding: 6px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    display: block;
+    text-decoration: none;
+}
+
+/* Filter Select Styles */
+.filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--bg-card, #ffffff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    padding: 0 28px 0 10px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-main, #1e293b);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 14px;
+    min-width: auto;
+    max-width: 140px;
+    transition: all 0.2s ease;
+    height: 38px;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--primary, #6366f1);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.search-input {
+    height: 38px;
+    font-size: 0.85rem;
+    background-color: var(--bg-input, #f8fafc) !important;
+    color: var(--text-main, #1e293b) !important;
+    border: 1px solid var(--border-color, #e2e8f0) !important;
+}
+
+/* Utility to hide scrollbar but allow scrolling */
+.no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari and Opera */
+}

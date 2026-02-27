@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { useAuth } from '../../context/AuthContext';
 import { FaSearch, FaFilter, FaUser, FaStore, FaBan, FaTrash, FaEye, FaCrown, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 
 const UserManagement = () => {
+    const { currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('all');
+    const [filterRole, setFilterRole] = useState('all');
     const [selectedUser, setSelectedUser] = useState(null);
     const [showUserModal, setShowUserModal] = useState(false);
+    const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
 
     useEffect(() => {
         fetchUsers();
@@ -18,7 +23,7 @@ const UserManagement = () => {
 
     useEffect(() => {
         filterUsers();
-    }, [users, searchQuery, filterType]);
+    }, [users, searchQuery, filterType, filterRole]);
 
     const fetchUsers = async () => {
         try {
@@ -46,13 +51,16 @@ const UserManagement = () => {
 
         // Filter by type
         if (filterType !== 'all') {
-            if (filterType === 'admin') {
-                filtered = filtered.filter(user => user.role === 'admin');
-            } else if (filterType === 'business') {
+            if (filterType === 'business') {
                 filtered = filtered.filter(user => user.accountType === 'business');
             } else if (filterType === 'individual') {
-                filtered = filtered.filter(user => user.accountType !== 'business' && user.role !== 'admin');
+                filtered = filtered.filter(user => user.accountType !== 'business');
             }
+        }
+
+        // Filter by role
+        if (filterRole !== 'all') {
+            filtered = filtered.filter(user => user.role === filterRole);
         }
 
         // Filter by search
@@ -97,25 +105,150 @@ const UserManagement = () => {
         try {
             await deleteDoc(doc(db, 'users', userId));
             setUsers(users.filter(user => user.id !== userId));
-            alert('User deleted successfully!');
+
+            // Clean up user's posts, stories, and invitations automatically
+            let deletedItems = 0;
+
+            // Delete Posts
+            const postsSnap = await getDocs(collection(db, 'communityPosts'));
+            for (const docSnap of postsSnap.docs) {
+                const post = docSnap.data();
+                const authorId = post.partnerId || post.author?.id || post.authorId || post.userId || post.uid;
+                if (authorId === userId) {
+                    await deleteDoc(doc(db, 'communityPosts', docSnap.id));
+                    deletedItems++;
+                }
+            }
+
+            // Delete Stories
+            const storiesSnap = await getDocs(collection(db, 'stories'));
+            for (const docSnap of storiesSnap.docs) {
+                const story = docSnap.data();
+                const authorId = story.userId || story.uid || story.authorId || story.author?.id;
+                if (authorId === userId) {
+                    await deleteDoc(doc(db, 'stories', docSnap.id));
+                    deletedItems++;
+                }
+            }
+
+            // Delete Invitations
+            const invSnap = await getDocs(collection(db, 'invitations'));
+            for (const docSnap of invSnap.docs) {
+                const inv = docSnap.data();
+                const authorId = inv.author?.id || inv.authorId || inv.userId || inv.uid;
+                if (authorId === userId) {
+                    await deleteDoc(doc(db, 'invitations', docSnap.id));
+                    deletedItems++;
+                }
+            }
+
+            alert(`User deleted successfully! Cleaned up ${deletedItems} associated items.`);
         } catch (error) {
             console.error('Error deleting user:', error);
-            alert('Failed to delete user');
+            alert('Failed to delete user: ' + error.message);
         }
     };
 
-    const handleMakeAdmin = async (userId, currentRole) => {
-        const action = currentRole === 'admin' ? 'remove admin role from' : 'make admin';
-        if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
+    const handleCleanOrphans = async () => {
+        if (!window.confirm("This will scan the entire database for posts and stories belonging to deleted users and remove them. Continuing this action might take a few seconds. Proceed?")) return;
+
+        setIsCleaningOrphans(true);
+        try {
+            // Get all valid user IDs
+            const usersSnap = await getDocs(collection(db, 'users'));
+            const validUserIds = new Set();
+            usersSnap.docs.forEach(d => validUserIds.add(d.id));
+
+            let deletedPosts = 0;
+            let deletedStories = 0;
+
+            // Check Posts
+            const postsSnap = await getDocs(collection(db, 'communityPosts'));
+            for (const docSnap of postsSnap.docs) {
+                const post = docSnap.data();
+                const authorId = post.partnerId || post.author?.id || post.authorId || post.userId || post.uid;
+                if (authorId && !validUserIds.has(authorId)) {
+                    await deleteDoc(doc(db, 'communityPosts', docSnap.id));
+                    deletedPosts++;
+                }
+            }
+
+            // Check Stories
+            const storiesSnap = await getDocs(collection(db, 'stories'));
+            for (const docSnap of storiesSnap.docs) {
+                const story = docSnap.data();
+                const authorId = story.userId || story.uid || story.authorId || story.author?.id;
+                if (authorId && !validUserIds.has(authorId)) {
+                    await deleteDoc(doc(db, 'stories', docSnap.id));
+                    deletedStories++;
+                }
+            }
+
+            alert(`Cleanup Complete!\nDeleted ${deletedPosts} orphaned posts.\nDeleted ${deletedStories} orphaned stories.`);
+        } catch (err) {
+            console.error(err);
+            alert("Error cleaning orphans: " + err.message);
+        } finally {
+            setIsCleaningOrphans(false);
+        }
+    };
+
+    const handleDeleteAllPosts = async () => {
+        const confirm1 = window.confirm("⚠️ WARNING: This will DELETE ALL POSTS AND STORIES from the database for ALL USERS. This action is irreversible. Are you absolutely sure?");
+        if (!confirm1) return;
+
+        const confirm2 = window.prompt('To confirm deletion of ALL POSTS AND STORIES, please type "DELETE ALL"');
+        if (confirm2 !== "DELETE ALL") {
+            alert("Deletion cancelled.");
+            return;
+        }
+
+        setIsDeletingAll(true);
+        try {
+            let deletedPosts = 0;
+            let deletedStories = 0;
+
+            // Delete ALL Posts
+            const postsSnap = await getDocs(collection(db, 'communityPosts'));
+            for (const docSnap of postsSnap.docs) {
+                await deleteDoc(doc(db, 'communityPosts', docSnap.id));
+                deletedPosts++;
+            }
+
+            // Delete ALL Stories
+            const storiesSnap = await getDocs(collection(db, 'stories'));
+            for (const docSnap of storiesSnap.docs) {
+                await deleteDoc(doc(db, 'stories', docSnap.id));
+                deletedStories++;
+            }
+
+            alert(`✅ Full Wipe Complete!\nDeleted ${deletedPosts} posts.\nDeleted ${deletedStories} stories.`);
+        } catch (err) {
+            console.error(err);
+            alert("Error wiping database: " + err.message);
+        } finally {
+            setIsDeletingAll(false);
+        }
+    };
+
+    const handleUpdateRole = async (userId, newRole) => {
+        if (!window.confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
 
         try {
-            await updateDoc(doc(db, 'users', userId), {
-                role: currentRole === 'admin' ? 'user' : 'admin'
-            });
+            const updates = {};
+            if (newRole === 'business') {
+                updates.accountType = 'business';
+                updates.role = 'user';
+            } else {
+                updates.accountType = 'individual';
+                updates.role = newRole;
+            }
+
+            await updateDoc(doc(db, 'users', userId), updates);
 
             setUsers(users.map(user =>
                 user.id === userId
-                    ? { ...user, role: currentRole === 'admin' ? 'user' : 'admin' }
+                    ? { ...user, ...updates }
                     : user
             ));
 
@@ -124,6 +257,11 @@ const UserManagement = () => {
             console.error('Error updating user role:', error);
             alert('Failed to update user role');
         }
+    };
+
+    const handleMakeAdmin = async (userId, currentRole) => {
+        const newRole = currentRole === 'admin' ? 'user' : 'admin';
+        await handleUpdateRole(userId, newRole);
     };
 
     if (loading) {
@@ -145,12 +283,30 @@ const UserManagement = () => {
                     <h1 className="admin-page-title">User Management</h1>
                     <p className="admin-page-subtitle">Manage all users and their accounts</p>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '2rem', fontWeight: '800', color: '#6366f1' }}>
-                        {filteredUsers.length}
-                    </div>
-                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                        Total Users
+                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button
+                        onClick={handleDeleteAllPosts}
+                        disabled={isDeletingAll || isCleaningOrphans}
+                        className="admin-btn"
+                        style={{ padding: '8px 16px', fontWeight: 'bold', background: '#dc2626', color: 'white', border: 'none' }}
+                    >
+                        {isDeletingAll ? 'Wiping DB...' : 'Delete ALL Posts & Stories'}
+                    </button>
+                    <button
+                        onClick={handleCleanOrphans}
+                        disabled={isCleaningOrphans || isDeletingAll}
+                        className="admin-btn admin-btn-danger"
+                        style={{ padding: '8px 16px', fontWeight: 'bold' }}
+                    >
+                        {isCleaningOrphans ? 'Cleaning...' : 'Clean Orphaned Posts/Stories'}
+                    </button>
+                    <div style={{ marginLeft: '12px', textAlign: 'right' }}>
+                        <div style={{ fontSize: '2rem', fontWeight: '800', color: '#6366f1' }}>
+                            {filteredUsers.length}
+                        </div>
+                        <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+                            Total Users
+                        </div>
                     </div>
                 </div>
             </div>
@@ -170,18 +326,37 @@ const UserManagement = () => {
                         />
                     </div>
 
-                    {/* Filter */}
-                    <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                        className="admin-select"
-                        style={{ width: '200px' }}
-                    >
-                        <option value="all">All Users</option>
-                        <option value="individual">Individual</option>
-                        <option value="business">Business</option>
-                        <option value="admin">Admins</option>
-                    </select>
+                    {/* Type Filter */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ACCOUNT TYPE</label>
+                        <select
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                            className="admin-select"
+                            style={{ width: '160px' }}
+                        >
+                            <option value="all">All Types</option>
+                            <option value="individual">Individual</option>
+                            <option value="business">Business</option>
+                        </select>
+                    </div>
+
+                    {/* Role Filter */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>SYSTEM ROLE</label>
+                        <select
+                            value={filterRole}
+                            onChange={(e) => setFilterRole(e.target.value)}
+                            className="admin-select"
+                            style={{ width: '160px' }}
+                        >
+                            <option value="all">All Roles</option>
+                            <option value="user">User</option>
+                            <option value="staff">Staff</option>
+                            <option value="support">Support</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -189,25 +364,25 @@ const UserManagement = () => {
             <div className="admin-grid admin-grid-4 admin-mb-4">
                 <div className="admin-card">
                     <div style={{ fontSize: '2rem', fontWeight: '800', color: '#ffffff' }}>{users.length}</div>
-                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Total</div>
+                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Total Users</div>
                 </div>
                 <div className="admin-card">
                     <div style={{ fontSize: '2rem', fontWeight: '800', color: '#60a5fa' }}>
-                        {users.filter(u => u.accountType !== 'business' && u.role !== 'admin').length}
+                        {users.filter(u => u.accountType !== 'business' && (!u.role || u.role === 'user')).length}
                     </div>
-                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Individual</div>
+                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Individuals</div>
                 </div>
                 <div className="admin-card">
                     <div style={{ fontSize: '2rem', fontWeight: '800', color: '#c084fc' }}>
                         {users.filter(u => u.accountType === 'business').length}
                     </div>
-                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Business</div>
+                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Businesses</div>
                 </div>
                 <div className="admin-card">
                     <div style={{ fontSize: '2rem', fontWeight: '800', color: '#fbbf24' }}>
-                        {users.filter(u => u.role === 'admin').length}
+                        {users.filter(u => u.role === 'admin' || u.role === 'staff' || u.role === 'support').length}
                     </div>
-                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Admins</div>
+                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Team Members</div>
                 </div>
             </div>
 
@@ -268,21 +443,25 @@ const UserManagement = () => {
                                         </div>
                                     </td>
 
-                                    {/* Type */}
+                                    {/* System Role Dropdown */}
                                     <td>
-                                        <div className="admin-flex admin-gap-1" style={{ alignItems: 'center' }}>
-                                            {user.accountType === 'business' ? (
-                                                <>
-                                                    <FaStore style={{ color: '#c084fc' }} />
-                                                    <span style={{ color: '#c084fc' }}>Business</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <FaUser style={{ color: '#60a5fa' }} />
-                                                    <span style={{ color: '#60a5fa' }}>Individual</span>
-                                                </>
-                                            )}
-                                        </div>
+                                        <select
+                                            value={user.accountType === 'business' ? 'business' : (user.role || 'user')}
+                                            onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                                            className="admin-select"
+                                            style={{
+                                                width: '120px',
+                                                borderColor: user.accountType === 'business' ? '#c084fc' : user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                                                color: user.accountType === 'business' ? '#c084fc' : user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : '#ffffff',
+                                                fontWeight: (user.role !== 'user' || user.accountType === 'business') ? 'bold' : 'normal'
+                                            }}
+                                        >
+                                            <option value="user">User</option>
+                                            <option value="business">Business</option>
+                                            <option value="staff">Staff</option>
+                                            <option value="support">Support</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
                                     </td>
 
                                     {/* Subscription */}
@@ -344,7 +523,16 @@ const UserManagement = () => {
                                     {/* Joined */}
                                     <td>
                                         <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                                            {user.createdAt?.toDate?.()?.toLocaleDateString() || 'N/A'}
+                                            {(() => {
+                                                if (!user.createdAt) return 'N/A';
+                                                try {
+                                                    // Handle Firestore Timestamp or standard Date/String
+                                                    const date = user.createdAt?.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
+                                                    return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+                                                } catch (e) {
+                                                    return 'N/A';
+                                                }
+                                            })()}
                                         </div>
                                     </td>
 
@@ -363,18 +551,6 @@ const UserManagement = () => {
                                                 <FaEye />
                                             </button>
                                             <button
-                                                onClick={() => handleMakeAdmin(user.id, user.role)}
-                                                className="admin-btn admin-btn-sm"
-                                                style={{
-                                                    background: user.role === 'admin' ? '#f59e0b' : '#a855f7',
-                                                    color: '#ffffff',
-                                                    padding: '0.5rem'
-                                                }}
-                                                title={user.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
-                                            >
-                                                <FaCrown />
-                                            </button>
-                                            <button
                                                 onClick={() => handleBanUser(user.id, user.banned)}
                                                 className={`admin-btn admin-btn-sm ${user.banned ? 'admin-btn-success' : 'admin-btn-danger'}`}
                                                 style={{ padding: '0.5rem' }}
@@ -382,14 +558,30 @@ const UserManagement = () => {
                                             >
                                                 <FaBan />
                                             </button>
-                                            <button
-                                                onClick={() => handleDeleteUser(user.id)}
-                                                className="admin-btn admin-btn-sm admin-btn-danger"
-                                                style={{ padding: '0.5rem' }}
-                                                title="Delete User"
-                                            >
-                                                <FaTrash />
-                                            </button>
+                                            {/* Delete Button - PROTECTED */}
+                                            {(() => {
+                                                const isSuperOwner = ['admin@dinebuddies.com', 'y.abohamed@gmail.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au'].includes(currentUser?.email?.toLowerCase()) ||
+                                                    currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33';
+
+                                                const targetIsAdmin = user.role === 'admin' || user.accountType === 'admin';
+
+                                                // Only show delete button if:
+                                                // 1. Target is NOT an admin (anyone with admin rights can delete normal users)
+                                                // 2. OR Current user IS Super Owner (can delete anyone)
+                                                if (!targetIsAdmin || isSuperOwner) {
+                                                    return (
+                                                        <button
+                                                            onClick={() => handleDeleteUser(user.id)}
+                                                            className="admin-btn admin-btn-sm admin-btn-danger"
+                                                            style={{ padding: '0.5rem' }}
+                                                            title="Delete User"
+                                                        >
+                                                            <FaTrash />
+                                                        </button>
+                                                    );
+                                                }
+                                                return null; // Hide button for admins if you are not super owner
+                                            })()}
                                         </div>
                                     </td>
                                 </tr>
@@ -474,7 +666,15 @@ const UserManagement = () => {
                             <div>
                                 <label className="admin-label">Joined</label>
                                 <div style={{ color: '#ffffff' }}>
-                                    {selectedUser.createdAt?.toDate?.()?.toLocaleString() || 'N/A'}
+                                    {(() => {
+                                        if (!selectedUser.createdAt) return 'N/A';
+                                        try {
+                                            const date = selectedUser.createdAt?.toDate ? selectedUser.createdAt.toDate() : new Date(selectedUser.createdAt);
+                                            return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
+                                        } catch (e) {
+                                            return 'N/A';
+                                        }
+                                    })()}
                                 </div>
                             </div>
                             {selectedUser.businessInfo && (

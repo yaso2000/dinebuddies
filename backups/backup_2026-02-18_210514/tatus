@@ -1,0 +1,471 @@
+[1mdiff --git a/src/components/BusinessCard.jsx b/src/components/BusinessCard.jsx[m
+[1mindex 5563456..af2bf96 100644[m
+[1m--- a/src/components/BusinessCard.jsx[m
+[1m+++ b/src/components/BusinessCard.jsx[m
+[36m@@ -1,41 +1,144 @@[m
+ import React, { useState, useEffect } from 'react';[m
+ import { useNavigate } from 'react-router-dom';[m
+[31m-import { FaMapMarkerAlt, FaStar, FaChevronLeft, FaChevronRight, FaCalendarPlus } from 'react-icons/fa';[m
+[32m+[m[32mimport { FaMapMarkerAlt, FaStar, FaCalendarPlus, FaUserPlus, FaCheck } from 'react-icons/fa';[m
+ import { useAuth } from '../context/AuthContext';[m
+[32m+[m[32mimport { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';[m
+[32m+[m[32mimport { db } from '../firebase/config';[m
+ [m
+[32m+[m[32m// Updated: iPhone 17 Pro Design with Community Members[m
+ const BusinessCard = ({ business }) => {[m
+     const navigate = useNavigate();[m
+[31m-    const { userProfile } = useAuth();[m
+[32m+[m[32m    const { currentUser, userProfile } = useAuth();[m
+     const info = business.businessInfo || {};[m
+[31m-    const [currentSlide, setCurrentSlide] = useState(0);[m
+[32m+[m[32m    const [averageRating, setAverageRating] = useState(0);[m
+[32m+[m[32m    const [reviewCount, setReviewCount] = useState(0);[m
+[32m+[m[32m    const [communityMembers, setCommunityMembers] = useState([]);[m
+[32m+[m[32m    const [memberCount, setMemberCount] = useState(0);[m
+[32m+[m[32m    const [isMember, setIsMember] = useState(false);[m
+[32m+[m[32m    const [joiningCommunity, setJoiningCommunity] = useState(false);[m
+ [m
+[31m-    // Check if current user is a business account[m
+     const isBusinessAccount = userProfile?.accountType === 'business';[m
+ [m
+[31m-    // Gather images for slider: Cover + Services[m
+[31m-    const slides = [];[m
+[31m-    if (info.coverImage) slides.push({ image: info.coverImage, caption: info.tagline || 'Welcome' });[m
+[31m-    if (info.services && info.services.length > 0) {[m
+[31m-        info.services.slice(0, 4).forEach(service => { // Limit to 4 service images[m
+[31m-            // Assuming service might have an image field eventually, but for now we might only have text?[m
+[31m-            // If text-only services, we skip. If we had images in services, we'd add them.[m
+[31m-            // Since current service structure might not have images, we'll stick to Cover + Logo or placeholder if needed.[m
+[31m-            // For now, let's just use cover. If user wants multiple, we need a way to add them.[m
+[31m-            // *Wait*, let's simulate a slider if only cover exists to show functionality, or just show cover.[m
+[31m-        });[m
+[31m-    }[m
+[32m+[m[32m    // Fetch reviews[m
+[32m+[m[32m    useEffect(() => {[m
+[32m+[m[32m        const fetchReviews = async () => {[m
+[32m+[m[32m            try {[m
+[32m+[m[32m                const reviewsRef = collection(db, 'reviews');[m
+[32m+[m[32m                const q = query(reviewsRef, where('partnerId', '==', business.uid));[m
+[32m+[m[32m                const snapshot = await getDocs(q);[m
+[32m+[m
+[32m+[m[32m                const reviewsData = snapshot.docs.map(doc => ({[m
+[32m+[m[32m                    id: doc.id,[m
+[32m+[m[32m                    ...doc.data()[m
+[32m+[m[32m                }));[m
+[32m+[m
+[32m+[m[32m                setReviewCount(reviewsData.length);[m
+[32m+[m
+[32m+[m[32m                if (reviewsData.length > 0) {[m
+[32m+[m[32m                    const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);[m
+[32m+[m[32m                    const avg = totalRating / reviewsData.length;[m
+[32m+[m[32m                    setAverageRating(avg);[m
+[32m+[m[32m                }[m
+[32m+[m[32m            } catch (error) {[m
+[32m+[m[32m                console.error('Error fetching reviews:', error);[m
+[32m+[m[32m            }[m
+[32m+[m[32m        };[m
+ [m
+[31m-    // Fallback if no specific images: Just use Cover[m
+[31m-    const activeSlides = slides.length > 0 ? slides : [{ image: info.coverImage || '', caption: info.tagline || 'Welcome' }];[m
+[32m+[m[32m        if (business.uid) {[m
+[32m+[m[32m            fetchReviews();[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }, [business.uid]);[m
+ [m
+[31m-    // Auto-advance slider if multiple images[m
+[31m-    // (For this specific request, since data might be sparse, I'll stick to a clean single Hero image [m
+[31m-    // unless multiple *actually* exist to avoid broken sliders. [m
+[31m-    // The user said "slider with caption", implies multiple images. [m
+[31m-    // I will implement the layout for it.)[m
+[32m+[m[32m    // Fetch community members[m
+[32m+[m[32m    useEffect(() => {[m
+[32m+[m[32m        const fetchCommunityMembers = async () => {[m
+[32m+[m[32m            try {[m
+[32m+[m[32m                // Get partner data to find community members[m
+[32m+[m[32m                const partnerDoc = await getDoc(doc(db, 'users', business.uid));[m
+[32m+[m[32m                if (partnerDoc.exists()) {[m
+[32m+[m[32m                    const partnerData = partnerDoc.data();[m
+[32m+[m[32m                    const memberIds = partnerData.communityMembers || [];[m
+[32m+[m[32m                    setMemberCount(memberIds.length);[m
+[32m+[m
+[32m+[m[32m                    // Check if current user is a member[m
+[32m+[m[32m                    if (currentUser) {[m
+[32m+[m[32m                        setIsMember(memberIds.includes(currentUser.uid));[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    // Fetch last 5 members' data[m
+[32m+[m[32m                    const lastFiveIds = memberIds.slice(-5).reverse();[m
+[32m+[m[32m                    const membersData = [];[m
+[32m+[m
+[32m+[m[32m                    for (const memberId of lastFiveIds) {[m
+[32m+[m[32m                        const memberDoc = await getDoc(doc(db, 'users', memberId));[m
+[32m+[m[32m                        if (memberDoc.exists()) {[m
+[32m+[m[32m                            membersData.push({[m
+[32m+[m[32m                                uid: memberId,[m
+[32m+[m[32m                                ...memberDoc.data()[m
+[32m+[m[32m                            });[m
+[32m+[m[32m                        }[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    setCommunityMembers(membersData);[m
+[32m+[m[32m                }[m
+[32m+[m[32m            } catch (error) {[m
+[32m+[m[32m                console.error('Error fetching community members:', error);[m
+[32m+[m[32m            }[m
+[32m+[m[32m        };[m
+[32m+[m
+[32m+[m[32m        if (business.uid) {[m
+[32m+[m[32m            fetchCommunityMembers();[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }, [business.uid, currentUser]);[m
+[32m+[m
+[32m+[m[32m    const handleJoinCommunity = async (e) => {[m
+[32m+[m[32m        e.stopPropagation();[m
+[32m+[m
+[32m+[m[32m        if (!currentUser) {[m
+[32m+[m[32m            alert('Please login to join the community');[m
+[32m+[m[32m            navigate('/login');[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (isBusinessAccount) {[m
+[32m+[m[32m            alert('Business accounts cannot join communities');[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            setJoiningCommunity(true);[m
+[32m+[m
+[32m+[m[32m            if (isMember) {[m
+[32m+[m[32m                // Leave community[m
+[32m+[m[32m                await updateDoc(doc(db, 'users', business.uid), {[m
+[32m+[m[32m                    communityMembers: arrayRemove(currentUser.uid)[m
+[32m+[m[32m                });[m
+[32m+[m[32m                await updateDoc(doc(db, 'users', currentUser.uid), {[m
+[32m+[m[32m                    joinedCommunities: arrayRemove(business.uid)[m
+[32m+[m[32m                });[m
+[32m+[m[32m                setIsMember(false);[m
+[32m+[m[32m                setMemberCount(prev => prev - 1);[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                // Join community[m
+[32m+[m[32m                await updateDoc(doc(db, 'users', business.uid), {[m
+[32m+[m[32m                    communityMembers: arrayUnion(currentUser.uid)[m
+[32m+[m[32m                });[m
+[32m+[m[32m                await updateDoc(doc(db, 'users', currentUser.uid), {[m
+[32m+[m[32m                    joinedCommunities: arrayUnion(business.uid)[m
+[32m+[m[32m                });[m
+[32m+[m[32m                setIsMember(true);[m
+[32m+[m[32m                setMemberCount(prev => prev + 1);[m
+[32m+[m[32m            }[m
+[32m+[m[32m        } catch (error) {[m
+[32m+[m[32m            console.error('Error toggling community membership:', error);[m
+[32m+[m[32m            alert('Failed to update membership');[m
+[32m+[m[32m        } finally {[m
+[32m+[m[32m            setJoiningCommunity(false);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    };[m
+ [m
+     const handleCreateInvitation = (e) => {[m
+[31m-        e.stopPropagation(); // Prevent card click[m
+[32m+[m[32m        e.stopPropagation();[m
+         navigate('/create', {[m
+             state: {[m
+                 restaurantData: {[m
+[36m@@ -59,25 +162,25 @@[m [mconst BusinessCard = ({ business }) => {[m
+         <div[m
+             onClick={handleCardClick}[m
+             style={{[m
+[31m-                background: 'var(--bg-card)',[m
+[31m-                border: '1px solid var(--border-color)',[m
+[32m+[m[32m                background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%)',[m
+[32m+[m[32m                border: '1px solid rgba(139, 92, 246, 0.3)',[m
+                 borderRadius: '24px',[m
+                 overflow: 'hidden',[m
+                 cursor: 'pointer',[m
+[31m-                transition: 'transform 0.3s ease, box-shadow 0.3s ease',[m
+[32m+[m[32m                transition: 'all 0.3s ease',[m
+                 position: 'relative',[m
+                 display: 'flex',[m
+                 flexDirection: 'column',[m
+                 height: '100%',[m
+[31m-                boxShadow: '0 4px 20px rgba(0,0,0,0.05)'[m
+[32m+[m[32m                boxShadow: '0 8px 32px rgba(139, 92, 246, 0.15)'[m
+             }}[m
+             onMouseEnter={(e) => {[m
+[31m-                e.currentTarget.style.transform = 'translateY(-6px)';[m
+[31m-                e.currentTarget.style.boxShadow = '0 15px 30px rgba(0,0,0,0.1)';[m
+[32m+[m[32m                e.currentTarget.style.transform = 'translateY(-8px)';[m
+[32m+[m[32m                e.currentTarget.style.boxShadow = '0 16px 48px rgba(139, 92, 246, 0.25)';[m
+             }}[m
+             onMouseLeave={(e) => {[m
+                 e.currentTarget.style.transform = 'translateY(0)';[m
+[31m-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)';[m
+[32m+[m[32m                e.currentTarget.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.15)';[m
+             }}[m
+         >[m
+             {/* Image Section */}[m
+[36m@@ -85,10 +188,10 @@[m [mconst BusinessCard = ({ business }) => {[m
+                 position: 'relative',[m
+                 height: '200px',[m
+                 overflow: 'hidden',[m
+[31m-                background: 'var(--bg-body)'[m
+[32m+[m[32m                background: 'linear-gradient(135deg, var(--bg-elevated), var(--bg-card))'[m
+             }}>[m
+                 <img[m
+[31m-                    src={info.coverImage || 'https://via.placeholder.com/400x200?text=No+Image'}[m
+[32m+[m[32m                    src={info.coverImage || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="200"%3E%3Crect fill="%238b5cf6" width="400" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="40" fill="white"%3E🏪%3C/text%3E%3C/svg%3E'}[m
+                     alt={info.businessName}[m
+                     style={{[m
+                         width: '100%',[m
+[36m@@ -100,14 +203,14 @@[m [mconst BusinessCard = ({ business }) => {[m
+                     onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}[m
+                 />[m
+ [m
+[31m-                {/* Overlay Caption/Tagline */}[m
+[32m+[m[32m                {/* Overlay */}[m
+                 <div style={{[m
+                     position: 'absolute',[m
+                     bottom: 0,[m
+                     left: 0,[m
+                     right: 0,[m
+                     padding: '20px 15px 10px',[m
+[31m-                    background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',[m
+[32m+[m[32m                    background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',[m
+                     color: 'white',[m
+                     display: 'flex',[m
+                     flexDirection: 'column',[m
+[36m@@ -118,7 +221,7 @@[m [mconst BusinessCard = ({ business }) => {[m
+                         fontWeight: '600',[m
+                         textTransform: 'uppercase',[m
+                         letterSpacing: '0.5px',[m
+[31m-                        opacity: 0.9,[m
+[32m+[m[32m                        color: '#b294d9',[m
+                         marginBottom: '2px'[m
+                     }}>[m
+                         {info.businessType || 'Venue'}[m
+[36m@@ -131,6 +234,46 @@[m [mconst BusinessCard = ({ business }) => {[m
+                         {info.businessName}[m
+                     </span>[m
+                 </div>[m
+[32m+[m
+[32m+[m[32m                {/* Rating Badge */}[m
+[32m+[m[32m                {reviewCount > 0 && ([m
+[32m+[m[32m                    <div[m
+[32m+[m[32m                        onClick={(e) => {[m
+[32m+[m[32m                            e.stopPropagation();[m
+[32m+[m[32m                            navigate(`/partner/${business.uid}`);[m
+[32m+[m[32m                        }}[m
+[32m+[m[32m                        style={{[m
+[32m+[m[32m                            position: 'absolute',[m
+[32m+[m[32m                            top: '12px',[m
+[32m+[m[32m                            right: '12px',[m
+[32m+[m[32m                            background: 'rgba(139, 92, 246, 0.95)',[m
+[32m+[m[32m                            backdropFilter: 'blur(8px)',[m
+[32m+[m[32m                            borderRadius: '20px',[m
+[32m+[m[32m                            padding: '0.4rem 0.7rem',[m
+[32m+[m[32m                            display: 'flex',[m
+[32m+[m[32m                            alignItems: 'center',[m
+[32m+[m[32m                            gap: '6px',[m
+[32m+[m[32m                            cursor: 'pointer',[m
+[32m+[m[32m                            transition: 'all 0.2s',[m
+[32m+[m[32m                            zIndex: 2,[m
+[32m+[m[32m                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'[m
+[32m+[m[32m                        }}[m
+[32m+[m[32m                        onMouseEnter={(e) => {[m
+[32m+[m[32m                            e.currentTarget.style.transform = 'scale(1.05)';[m
+[32m+[m[32m                        }}[m
+[32m+[m[32m                        onMouseLeave={(e) => {[m
+[32m+[m[32m                            e.currentTarget.style.transform = 'scale(1)';[m
+[32m+[m[32m                        }}[m
+[32m+[m[32m                    >[m
+[32m+[m[32m                        <span style={{ fontSize: '1rem' }}>⭐</span>[m
+[32m+[m[32m                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'white' }}>[m
+[32m+[m[32m                            {averageRating > 0 ? averageRating.toFixed(1) : '0.0'}[m
+[32m+[m[32m                        </span>[m
+[32m+[m[32m                        <span style={{ fontSize: '0.65rem', fontWeight: '600', color: 'rgba(255,255,255,0.8)' }}>[m
+[32m+[m[32m                            ({reviewCount})[m
+[32m+[m[32m                        </span>[m
+[32m+[m[32m                    </div>[m
+[32m+[m[32m                )}[m
+             </div>[m
+ [m
+             {/* Details Section */}[m
+[36m@@ -139,52 +282,150 @@[m [mconst BusinessCard = ({ business }) => {[m
+                 display: 'flex',[m
+                 flexDirection: 'column',[m
+                 flex: 1,[m
+[31m-                gap: '12px'[m
+[32m+[m[32m                gap: '12px',[m
+[32m+[m[32m                background: 'var(--bg-card)'[m
+             }}>[m
+                 {/* Location */}[m
+                 <div style={{[m
+                     display: 'flex',[m
+                     alignItems: 'center',[m
+                     gap: '8px',[m
+[31m-                    color: 'var(--text-secondary)',[m
+[32m+[m[32m                    color: 'var(--text-main)',[m
+                     fontSize: '0.9rem'[m
+                 }}>[m
+                     <FaMapMarkerAlt style={{ color: 'var(--primary)' }} />[m
+                     <span style={{[m
+                         whiteSpace: 'nowrap',[m
+                         overflow: 'hidden',[m
+[31m-                        textOverflow: 'ellipsis'[m
+[32m+[m[32m                        textOverflow: 'ellipsis',[m
+[32m+[m[32m                        fontWeight: '600'[m
+                     }}>[m
+                         {info.city || 'Unknown City'}[m
+                         {info.address && `, ${info.address}`}[m
+                     </span>[m
+                 </div>[m
+ [m
+[31m-                {/* Rating/Services Info (Optional) */}[m
+[32m+[m[32m                {/* Services */}[m
+                 {info.services && info.services.length > 0 && ([m
+                     <div style={{[m
+                         display: 'flex',[m
+                         alignItems: 'center',[m
+                         gap: '6px',[m
+                         fontSize: '0.8rem',[m
+[31m-                        color: 'var(--text-muted)'[m
+[32m+[m[32m                        color: 'var(--text-secondary)',[m
+[32m+[m[32m                        fontWeight: '600'[m
+                     }}>[m
+[31m-                        <FaStar style={{ color: '#f59e0b', fontSize: '0.9rem' }} />[m
+[32m+[m[32m                        <FaStar style={{ color: '#b294d9', fontSize: '0.9rem' }} />[m
+                         <span>{info.services.length} Menu Items Available</span>[m
+                     </div>[m
+                 )}[m
+ [m
+[32m+[m[32m                {/* Community Members Section */}[m
+[32m+[m[32m                {memberCount > 0 && ([m
+[32m+[m[32m                    <div style={{[m
+[32m+[m[32m                        display: 'flex',[m
+[32m+[m[32m                        alignItems: 'center',[m
+[32m+[m[32m                        justifyContent: 'space-between',[m
+[32m+[m[32m                        padding: '10px 12px',[m
+[32m+[m[32m                        background: 'rgba(139, 92, 246, 0.1)',[m
+[32m+[m[32m                        borderRadius: '12px',[m
+[32m+[m[32m                        marginTop: '4px'[m
+[32m+[m[32m                    }}>[m
+[32m+[m[32m                        {/* Stacked Avatars */}[m
+[32m+[m[32m                        <div style={{[m
+[32m+[m[32m                            display: 'flex',[m
+[32m+[m[32m                            alignItems: 'center',[m
+[32m+[m[32m                            gap: '8px'[m
+[32m+[m[32m                        }}>[m
+[32m+[m[32m                            <div style={{[m
+[32m+[m[32m                                display: 'flex',[m
+[32m+[m[32m                                alignItems: 'center',[m
+[32m+[m[32m                                marginRight: '-8px'[m
+[32m+[m[32m                            }}>[m
+[32m+[m[32m                                {communityMembers.slice(0, 5).map((member, index) => ([m
+[32m+[m[32m                                    <img[m
+[32m+[m[32m                                        key={member.uid}[m
+[32m+[m[32m                                        src={member.photo_url || member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.display_name || member.displayName || 'U')}&background=37074A&color=b294d9&size=128`}[m
+[32m+[m[32m                                        alt=""[m
+[32m+[m[32m                                        style={{[m
+[32m+[m[32m                                            width: '32px',[m
+[32m+[m[32m                                            height: '32px',[m
+[32m+[m[32m                                            borderRadius: '50%',[m
+[32m+[m[32m                                            border: '2px solid var(--primary)',[m
+[32m+[m[32m                                            objectFit: 'cover',[m
+[32m+[m[32m                                            marginLeft: index > 0 ? '-12px' : '0',[m
+[32m+[m[32m                                            zIndex: 5 - index,[m
+[32m+[m[32m                                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'[m
+[32m+[m[32m                                        }}[m
+[32m+[m[32m                                    />[m
+[32m+[m[32m                                ))}[m
+[32m+[m[32m                            </div>[m
+[32m+[m[32m                            <span style={{[m
+[32m+[m[32m                                fontSize: '0.85rem',[m
+[32m+[m[32m                                fontWeight: '700',[m
+[32m+[m[32m                                color: 'var(--text-main)'[m
+[32m+[m[32m                            }}>[m
+[32m+[m[32m                                {memberCount} {memberCount === 1 ? 'member' : 'members'}[m
+[32m+[m[32m                            </span>[m
+[32m+[m[32m                        </div>[m
+[32m+[m
+[32m+[m[32m                        {/* Join Button - Only for non-business users */}[m
+[32m+[m[32m                        {!isBusinessAccount && currentUser && ([m
+[32m+[m[32m                            <button[m
+[32m+[m[32m                                onClick={handleJoinCommunity}[m
+[32m+[m[32m                                disabled={joiningCommunity}[m
+[32m+[m[32m                                style={{[m
+[32m+[m[32m                                    padding: '6px 14px',[m
+[32m+[m[32m                                    background: isMember[m
+[32m+[m[32m                                        ? 'rgba(139, 92, 246, 0.2)'[m
+[32m+[m[32m                                        : 'var(--primary)',[m
+[32m+[m[32m                                    border: isMember ? '1px solid var(--primary)' : 'none',[m
+[32m+[m[32m                                    borderRadius: '10px',[m
+[32m+[m[32m                                    color: 'white',[m
+[32m+[m[32m                                    fontWeight: '700',[m
+[32m+[m[32m                                    fontSize: '0.75rem',[m
+[32m+[m[32m                                    cursor: joiningCommunity ? 'not-allowed' : 'pointer',[m
+[32m+[m[32m                                    display: 'flex',[m
+[32m+[m[32m                                    alignItems: 'center',[m
+[32m+[m[32m                                    gap: '4px',[m
+[32m+[m[32m                                    transition: 'all 0.2s',[m
+[32m+[m[32m                                    boxShadow: isMember ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.5)'[m
+[32m+[m[32m                                }}[m
+[32m+[m[32m                                onMouseEnter={(e) => {[m
+[32m+[m[32m                                    if (!joiningCommunity) {[m
+[32m+[m[32m                                        e.currentTarget.style.transform = 'scale(1.05)';[m
+[32m+[m[32m                                    }[m
+[32m+[m[32m                                }}[m
+[32m+[m[32m                                onMouseLeave={(e) => {[m
+[32m+[m[32m                                    e.currentTarget.style.transform = 'scale(1)';[m
+[32m+[m[32m                                }}[m
+[32m+[m[32m                            >[m
+[32m+[m[32m                                {joiningCommunity ? '...' : isMember ? ([m
+[32m+[m[32m                                    <>[m
+[32m+[m[32m                                        <FaCheck style={{ fontSize: '0.7rem' }} />[m
+[32m+[m[32m                                        Joined[m
+[32m+[m[32m                                    </>[m
+[32m+[m[32m                                ) : ([m
+[32m+[m[32m                                    <>[m
+[32m+[m[32m                                        <FaUserPlus style={{ fontSize: '0.7rem' }} />[m
+[32m+[m[32m                                        Join[m
+[32m+[m[32m                                    </>[m
+[32m+[m[32m                                )}[m
+[32m+[m[32m                            </button>[m
+[32m+[m[32m                        )}[m
+[32m+[m[32m                    </div>[m
+[32m+[m[32m                )}[m
+[32m+[m
+                 <div style={{ flex: 1 }}></div>[m
+ [m
+[31m-                {/* Action Button: Create Invitation Here */}[m
+[31m-                {/* Only show invitation button for regular users, not business accounts */}[m
+[32m+[m[32m                {/* Host Invitation Button */}[m
+                 {!isBusinessAccount && ([m
+                     <button[m
+                         onClick={handleCreateInvitation}[m
+                         style={{[m
+                             width: '100%',[m
+                             padding: '12px',[m
+[31m-                            background: 'linear-gradient(135deg, var(--primary), #f97316)',[m
+[32m+[m[32m                            background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))',[m
+                             border: 'none',[m
+                             borderRadius: '16px',[m
+                             color: 'white',[m
+[36m@@ -196,15 +437,15 @@[m [mconst BusinessCard = ({ business }) => {[m
+                             justifyContent: 'center',[m
+                             gap: '8px',[m
+                             transition: 'all 0.2s',[m
+[31m-                            boxShadow: '0 4px 12px rgba(249, 115, 22, 0.3)'[m
+[32m+[m[32m                            boxShadow: '0 4px 16px rgba(139, 92, 246, 0.3)'[m
+                         }}[m
+                         onMouseEnter={(e) => {[m
+                             e.currentTarget.style.transform = 'scale(1.02)';[m
+[31m-                            e.currentTarget.style.boxShadow = '0 6px 15px rgba(249, 115, 22, 0.4)';[m
+[32m+[m[32m                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(139, 92, 246, 0.5)';[m
+                         }}[m
+                         onMouseLeave={(e) => {[m
+                             e.currentTarget.style.transform = 'scale(1)';[m
+[31m-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(249, 115, 22, 0.3)';[m
+[32m+[m[32m                            e.currentTarget.style.boxShadow = '0 4px 16px rgba(139, 92, 246, 0.3)';[m
+                         }}[m
+                     >[m
+                         <FaCalendarPlus />[m

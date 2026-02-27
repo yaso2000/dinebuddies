@@ -136,6 +136,7 @@ const MediaUpload = ({
             {!preview ? (
                 <div className="upload-area">
                     <button
+                        type="button"
                         className="upload-btn"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
@@ -161,7 +162,7 @@ const MediaUpload = ({
                     {error && (
                         <div className="error-message">
                             <p>{error}</p>
-                            <button onClick={() => setError(null)}>Dismiss</button>
+                            <button type="button" onClick={() => setError(null)}>Dismiss</button>
                         </div>
                     )}
                 </div>
@@ -188,6 +189,7 @@ const MediaUpload = ({
                         )}
 
                         <button
+                            type="button"
                             className="remove-btn"
                             onClick={handleRemove}
                         >
