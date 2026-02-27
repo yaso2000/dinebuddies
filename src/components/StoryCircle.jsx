@@ -31,7 +31,8 @@ const StoryCircle = ({ partner, hasNewStory, onClick }) => {
                     width: '64px',
                     height: '64px',
                     borderRadius: '50%',
-                    background: `url(${partner.logo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${partner.id || 'default'}`})`,
+                    backgroundColor: 'var(--bg-input)',
+                    backgroundImage: `url("${partner.logo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${partner.id || 'default'}`}")`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     border: '3px solid var(--bg-body)'

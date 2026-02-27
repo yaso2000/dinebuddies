@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaUsers, FaTrash, FaEnvelope, FaUserShield, FaBan, FaCheck } from 'react-icons/fa';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { collection, query, where, getDocs, doc, updateDoc, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { createNotification } from '../utils/notificationHelpers';
@@ -39,13 +40,12 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                 const data = doc.data();
                 // Normalize data fields
                 const displayName = data.display_name || data.displayName || data.name || data.email?.split('@')[0] || 'Member';
-                const photoUrl = data.photo_url || data.photoURL || data.avatar || data.image || null;
 
                 return {
                     id: doc.id,
                     ...data,
                     name: displayName,
-                    avatar: photoUrl
+                    avatar: getSafeAvatar(data)
                 };
             });
 
@@ -98,7 +98,7 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                 actionUrl: `/partner/${partnerId}`,
                 fromUserId: currentUserId,
                 fromUserName: partnerName,
-                fromUserAvatar: null
+                fromUserAvatar: getSafeAvatar({ id: currentUserId, name: partnerName }) // Minimal object for fallback
             });
 
             // Reload members
@@ -134,7 +134,7 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                     actionUrl: `/partner/${partnerId}`,
                     fromUserId: currentUserId,
                     fromUserName: partnerName,
-                    fromUserAvatar: null,
+                    fromUserAvatar: getSafeAvatar({ id: currentUserId, name: partnerName }),
                     metadata: { fullMessage: message }
                 });
             }
@@ -281,7 +281,7 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
 
                             {/* Avatar */}
                             <img
-                                src={member.avatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
+                                src={getSafeAvatar(member)}
                                 alt={member.name}
                                 style={{
                                     width: '48px',
@@ -290,6 +290,7 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                                     objectFit: 'cover',
                                     flexShrink: 0
                                 }}
+                                onError={(e) => { e.target.src = getSafeAvatar(null); }}
                             />
 
                             {/* Member Info */}

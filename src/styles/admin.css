@@ -46,6 +46,11 @@
     flex: 1;
     margin-left: 280px;
     background: #0f172a;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 @media (max-width: 1023px) {
@@ -152,6 +157,7 @@
 /* Content Area */
 .admin-content {
     padding: 2rem;
+    flex: 1;
 }
 
 /* Page Header */

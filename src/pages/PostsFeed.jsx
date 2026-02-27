@@ -162,17 +162,21 @@ const PostsFeed = () => {
                 {isSearchActive ? (
                     /* --- ACTIVE SEARCH MODE --- */
                     <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
-                        <span style={{ position: 'absolute', left: '10px', opacity: 0.5, fontSize: '0.9rem' }}>🔍</span>
                         <input
                             type="text"
                             autoFocus
                             value={searchQuery}
                             placeholder={t('search_posts', { defaultValue: 'Search...' })}
                             onChange={e => setSearchQuery(e.target.value)}
-                            onBlur={() => { if (!searchQuery || searchQuery.trim() === '') setIsSearchActive(false); }}
+                            onBlur={() => {
+                                // Close search ONLY if it's empty
+                                if (!searchQuery || searchQuery.trim() === '') {
+                                    setIsSearchActive(false);
+                                }
+                            }}
                             style={{
                                 width: '100%',
-                                padding: '8px 30px 8px 32px',
+                                padding: '8px 12px 8px 32px', // Adjusted padding (removed right space)
                                 borderRadius: '12px',
                                 border: 'none',
                                 background: 'var(--bg-main)',
@@ -181,18 +185,6 @@ const PostsFeed = () => {
                                 color: 'var(--text-main)'
                             }}
                         />
-                        {/* Clear/Close Button */}
-                        <button
-                            onClick={() => { setSearchQuery(''); setIsSearchActive(false); }}
-                            style={{
-                                position: 'absolute', right: '4px',
-                                background: 'none', border: 'none',
-                                cursor: 'pointer', fontSize: '1.2rem',
-                                padding: '0 8px', color: 'var(--text-muted)'
-                            }}
-                        >
-                            &times;
-                        </button>
                     </div>
                 ) : (
                     /* --- DEFAULT MODE: FILTERS + SEARCH ICON --- */

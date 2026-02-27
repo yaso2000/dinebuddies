@@ -5,6 +5,9 @@ import Home from './pages/Home';
 
 // User Pages
 import CreateInvitation from './pages/CreateInvitation';
+import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
+import PrivateInvitationPreview from './pages/PrivateInvitationPreview';
+import PrivateInvitationDetails from './pages/PrivateInvitationDetails';
 import CreatePost from './pages/CreatePost';
 import CreateStory from './pages/CreateStory';
 import InvitationDetails from './pages/InvitationDetails';
@@ -22,6 +25,7 @@ import Chat from './pages/Chat';
 import PricingPage from './pages/PricingPage';
 import AuthPage from './pages/AuthPage';
 import QuickLogin from './pages/QuickLogin';
+import CompleteProfile from './pages/CompleteProfile';
 import Settings from './pages/Settings';
 
 import EmailSettings from './pages/EmailSettings';
@@ -38,6 +42,7 @@ import BusinessSignup from './pages/BusinessSignup';
 
 import EditBusinessProfile from './pages/EditBusinessProfile';
 import PartnerProfile from './pages/PartnerProfile';
+import PremiumOfferPage from './pages/PremiumOfferPage';
 import BusinessDashboard from './pages/BusinessDashboard';
 import MyCommunities from './pages/MyCommunities';
 import MyCommunity from './pages/MyCommunity';
@@ -46,8 +51,9 @@ import PostsFeed from './pages/PostsFeed';
 import BusinessLimitsManager from './pages/AdminDashboard';
 import AdminPanel from './pages/AdminPanel';
 import MigrationPage from './pages/MigrationPage';
-import Privacy from './pages/Privacy';
-import Terms from './pages/Terms';
+import LegalPrivacy from './pages/PrivacyPolicy';
+import LegalTerms from './pages/TermsOfService';
+import PrivateInvitationOverlay from './components/Invitation/PrivateInvitationOverlay';
 
 
 // Admin Pages
@@ -62,6 +68,7 @@ import InvitationManagement from './pages/admin/InvitationManagement';
 import ReportsAnalytics from './pages/admin/ReportsAnalytics';
 import MigrationTools from './pages/admin/MigrationTools';
 import AdminSettings from './pages/admin/AdminSettings';
+import CodeBackups from './pages/admin/CodeBackups';
 import AdminRoute from './components/AdminRoute';
 
 import BusinessBlockedRoute from './components/BusinessBlockedRoute';
@@ -78,6 +85,11 @@ import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Navigate } from 'react-router-dom';
 
+import StaffBlockedRoute from './components/StaffBlockedRoute';
+import ProfileGuard from './components/ProfileGuard';
+import OfflineNotice from './components/OfflineNotice';
+import AuthBlockedRoute from './components/AuthBlockedRoute';
+
 function App() {
     return (
         <ThemeProvider>
@@ -87,13 +99,27 @@ function App() {
                         <ChatProvider>
                             <StripeProvider>
                                 <Router>
+                                    <OfflineNotice />
+                                    <PrivateInvitationOverlay />
 
                                     <Routes>
-                                        {/* Auth Routes */}
-                                        <Route path="/login" element={<QuickLogin />} />
-                                        <Route path="/auth" element={<AuthPage />} />
-                                        <Route path="/business/signup" element={<BusinessSignup />} />
-                                        <Route path="/auth" element={<AuthPage />} />
+                                        {/* Auth Routes - Blocked if already logged in */}
+                                        <Route path="/login" element={
+                                            <AuthBlockedRoute>
+                                                <QuickLogin />
+                                            </AuthBlockedRoute>
+                                        } />
+                                        <Route path="/auth" element={
+                                            <AuthBlockedRoute>
+                                                <AuthPage />
+                                            </AuthBlockedRoute>
+                                        } />
+                                        <Route path="/business/signup" element={
+                                            <AuthBlockedRoute>
+                                                <BusinessSignup />
+                                            </AuthBlockedRoute>
+                                        } />
+                                        <Route path="/complete-profile" element={<CompleteProfile />} />
 
 
                                         {/* User Routes with Layout */}
@@ -104,24 +130,49 @@ function App() {
                                             {/* Protected Create Routes */}
                                             <Route path="/create" element={
                                                 <GuestBlockedRoute>
-                                                    <BusinessBlockedRoute>
-                                                        <CreateInvitation />
-                                                    </BusinessBlockedRoute>
+                                                    <StaffBlockedRoute>
+                                                        <BusinessBlockedRoute>
+                                                            <ProfileGuard>
+                                                                <CreateInvitation />
+                                                            </ProfileGuard>
+                                                        </BusinessBlockedRoute>
+                                                    </StaffBlockedRoute>
+                                                </GuestBlockedRoute>
+                                            } />
+                                            <Route path="/create-private" element={
+                                                <GuestBlockedRoute>
+                                                    <StaffBlockedRoute>
+                                                        <BusinessBlockedRoute>
+                                                            <ProfileGuard>
+                                                                <CreatePrivateInvitation />
+                                                            </ProfileGuard>
+                                                        </BusinessBlockedRoute>
+                                                    </StaffBlockedRoute>
                                                 </GuestBlockedRoute>
                                             } />
                                             <Route path="/create-post" element={
                                                 <GuestBlockedRoute>
-                                                    <CreatePost />
+                                                    <StaffBlockedRoute>
+                                                        <ProfileGuard>
+                                                            <CreatePost />
+                                                        </ProfileGuard>
+                                                    </StaffBlockedRoute>
                                                 </GuestBlockedRoute>
                                             } />
                                             <Route path="/create-story" element={
                                                 <GuestBlockedRoute>
-                                                    <CreateStory />
+                                                    <StaffBlockedRoute>
+                                                        <ProfileGuard>
+                                                            <CreateStory />
+                                                        </ProfileGuard>
+                                                    </StaffBlockedRoute>
                                                 </GuestBlockedRoute>
                                             } />
 
                                             <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
+                                            <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
                                             <Route path="/invitation/:id" element={<InvitationDetails />} />
+                                            <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
                                             <Route path="/invitation/:id/chat" element={<InvitationChatRoom />} />
                                             <Route path="/restaurants" element={<RestaurantDirectory />} />
                                             <Route path="/restaurant/:id" element={<RestaurantDetails />} />
@@ -162,6 +213,7 @@ function App() {
                                             } />
 
                                             <Route path="/pricing" element={<PricingPage />} />
+                                            <Route path="/business/pricing" element={<PricingPage />} />
                                             <Route path="/payment-success" element={<PaymentSuccess />} />
 
                                             {/* Protected Settings Routes */}
@@ -215,9 +267,18 @@ function App() {
                                             <Route path="/edit-business-profile" element={<EditBusinessProfile />} />
                                             <Route path="/business-dashboard" element={<BusinessDashboard />} />
                                             <Route path="/migration" element={<MigrationPage />} />
-                                            {/* Redirect old /partners to new /restaurants */}
                                             <Route path="/partners" element={<Navigate to="/restaurants" replace />} />
                                             <Route path="/partner/:partnerId" element={<PartnerProfile />} />
+                                            <Route path="/offer/new" element={
+                                                <GuestBlockedRoute>
+                                                    <PremiumOfferPage />
+                                                </GuestBlockedRoute>
+                                            } />
+                                            <Route path="/offer/edit/:id" element={
+                                                <GuestBlockedRoute>
+                                                    <PremiumOfferPage />
+                                                </GuestBlockedRoute>
+                                            } />
 
                                             {/* Protected Community Routes */}
                                             <Route path="/communities" element={
@@ -258,12 +319,13 @@ function App() {
                                             <Route path="reports" element={<ReportsAnalytics />} />
                                             <Route path="migration" element={<MigrationTools />} />
                                             <Route path="settings" element={<AdminSettings />} />
+                                            <Route path="backups" element={<CodeBackups />} />
                                             <Route index element={<Navigate to="/admin/dashboard" replace />} />
                                         </Route>
 
                                         {/* Public Legal Pages */}
-                                        <Route path="/privacy" element={<Privacy />} />
-                                        <Route path="/terms" element={<Terms />} />
+                                        <Route path="/privacy" element={<LegalPrivacy />} />
+                                        <Route path="/terms" element={<LegalTerms />} />
                                     </Routes>
                                 </Router>
                             </StripeProvider>

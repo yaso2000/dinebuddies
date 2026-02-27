@@ -81,20 +81,31 @@
    ================================ */
 .statistics-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 1rem;
-    margin: 2rem 0;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+    /* Block any inherited or global animations */
+    animation: none !important;
+    transform: none !important;
+}
+
+.statistics-cards * {
+    animation: none !important;
 }
 
 .stat-card {
     background: var(--bg-card);
-    border: 2px solid var(--border-color);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 1.5rem 1rem;
+    padding: 1rem 0.5rem;
     text-align: center;
-    transition: all 0.3s;
+    /* Only transition needed properties for hover */
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     position: relative;
     overflow: hidden;
+    /* Ensure absolutely no entry movement */
+    animation: none !important;
+    transform: none !important;
 }
 
 .stat-card::before {
@@ -120,23 +131,23 @@
 }
 
 .stat-icon {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
-}
-
-.stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text-main);
+    font-size: 1.5rem;
     margin-bottom: 0.25rem;
 }
 
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 0.15rem;
+}
+
 .stat-label {
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.25px;
 }
 
 .stat-sublabel {
@@ -152,9 +163,10 @@
 
 .skeleton-card {
     height: 120px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    background: var(--bg-input);
+    /* Static background instead of moving gradient */
+    animation: none !important;
+    /* Kill shimmer */
     border-radius: 12px;
 }
 
@@ -172,16 +184,16 @@
    3. ACHIEVEMENTS
    ================================ */
 .achievements-section {
-    margin: 2rem 0;
+    margin: 1.25rem 0;
 }
 
 .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .section-header h3 {
@@ -203,15 +215,15 @@
 
 .achievements-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.75rem;
 }
 
 .achievement {
     background: var(--bg-card);
-    border: 2px solid var(--border-color);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 1rem;
+    padding: 0.75rem;
     text-align: center;
     position: relative;
     transition: all 0.3s;
@@ -233,8 +245,8 @@
 }
 
 .ach-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
+    font-size: 1.8rem;
+    margin-bottom: 0.25rem;
 }
 
 .ach-title {
@@ -263,7 +275,7 @@
    4. FAVORITE PLACES
    ================================ */
 .favorite-places-section {
-    margin: 2rem 0;
+    margin: 1.25rem 0;
 }
 
 .add-place-btn {
@@ -328,8 +340,8 @@
 .place-item {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem;
+    gap: 0.75rem;
+    padding: 0.75rem;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;

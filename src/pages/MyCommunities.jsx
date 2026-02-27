@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaUsers, FaSearch, FaArrowLeft, FaTrash } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import EmptyState from '../components/EmptyState';
@@ -26,19 +27,22 @@ const MyCommunities = () => {
     }, [userProfile, navigate]);
 
     useEffect(() => {
-        if (currentUser && currentUser.uid) {
+        if (userProfile && userProfile.id) {
             fetchMyCommunities();
+        } else if (userProfile !== undefined && !userProfile) {
+            // userProfile is explicitly null/false = not logged in, stop loading
+            setLoading(false);
         }
-    }, [currentUser]);
+    }, [userProfile?.joinedCommunities, userProfile?.id]);
 
     const fetchMyCommunities = async () => {
         try {
             setLoading(true);
 
-            // Get user's joined communities
-            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-            const joinedCommunities = userDoc.data()?.joinedCommunities || [];
-            const lastReadTimestamps = userDoc.data()?.communityLastRead || {};
+            // We cannot query the 'users' collection directly for the current user's own profile without hitting permission errors sometimes.
+            // But AuthContext maintains an `onSnapshot` listener on `userProfile` that includes `joinedCommunities`.
+            const joinedCommunities = userProfile?.joinedCommunities || [];
+            const lastReadTimestamps = userProfile?.communityLastRead || {};
 
             if (joinedCommunities.length === 0) {
                 setCommunities([]);
@@ -49,62 +53,72 @@ const MyCommunities = () => {
             // Fetch each community's details
             const communitiesData = await Promise.all(
                 joinedCommunities.map(async (partnerId) => {
-                    const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-                    if (partnerDoc.exists() && partnerDoc.data().accountType === 'business') {
-                        const data = partnerDoc.data();
-                        const businessInfo = data.businessInfo || {};
+                    try {
+                        const partnerDoc = await getDoc(doc(db, 'users', partnerId));
+                        console.log('🔍 Checking partner:', partnerId, 'exists:', partnerDoc.exists(), partnerDoc.exists() ? 'data:' : '', partnerDoc.exists() ? partnerDoc.data() : '');
 
-                        // Fetch unread messages count
-                        const messagesRef = collection(db, 'communities', partnerId, 'messages');
-                        let lastReadTime = new Date(0);
-                        const rawLastRead = lastReadTimestamps[partnerId];
+                        if (partnerDoc.exists() && (partnerDoc.data().accountType === 'business' || partnerDoc.data().accountType === 'partner' || partnerDoc.data().role === 'partner')) {
+                            const data = partnerDoc.data();
+                            const businessInfo = data.businessInfo || {};
 
-                        if (rawLastRead) {
-                            if (typeof rawLastRead.toDate === 'function') {
-                                lastReadTime = rawLastRead.toDate();
-                            } else if (rawLastRead instanceof Date) {
-                                lastReadTime = rawLastRead;
-                            } else {
-                                const d = new Date(rawLastRead);
-                                if (!isNaN(d.getTime())) {
-                                    lastReadTime = d;
+                            // Fetch unread messages count
+                            const messagesRef = collection(db, 'communities', partnerId, 'messages');
+                            let lastReadTime = new Date(0);
+                            const rawLastRead = lastReadTimestamps[partnerId];
+
+                            if (rawLastRead) {
+                                if (typeof rawLastRead.toDate === 'function') {
+                                    lastReadTime = rawLastRead.toDate();
+                                } else if (rawLastRead instanceof Date) {
+                                    lastReadTime = rawLastRead;
+                                } else {
+                                    const d = new Date(rawLastRead);
+                                    if (!isNaN(d.getTime())) {
+                                        lastReadTime = d;
+                                    }
                                 }
                             }
+
+                            // Get all messages after last read
+                            let unreadCount = 0;
+                            let lastMessage = null;
+                            let lastMessageTime = null;
+
+                            try {
+                                const messagesSnapshot = await getDocs(messagesRef);
+                                messagesSnapshot.forEach((msgDoc) => {
+                                    const msgData = msgDoc.data();
+                                    const msgTime = msgData.createdAt?.toDate() || new Date(0);
+
+                                    // Count unread messages (not from current user)
+                                    if (msgTime > lastReadTime && msgData.senderId !== userProfile?.id && msgData.senderId !== currentUser?.uid) {
+                                        unreadCount++;
+                                    }
+
+                                    // Track last message
+                                    if (!lastMessageTime || msgTime > lastMessageTime) {
+                                        lastMessageTime = msgTime;
+                                        lastMessage = msgData.text || msgData.message || '';
+                                    }
+                                });
+                            } catch (msgError) {
+                                console.warn(`💬 Could not fetch messages for ${partnerId} (Permissions or Missing Index):`, msgError.message);
+                            }
+
+                            return {
+                                id: partnerId,
+                                name: businessInfo.businessName || data.display_name || data.name || 'Business',
+                                logo: getSafeAvatar(data),
+                                cover: businessInfo.coverImage || data.cover_url || data.coverImage,
+                                type: businessInfo.businessType || data.business_type || 'Restaurant',
+                                location: businessInfo.city || businessInfo.address || data.city || data.address || '',
+                                memberCount: data.communityMembers?.length || 0,
+                                unreadCount: unreadCount,
+                                lastMessage: lastMessage ? (lastMessage.length > 40 ? lastMessage.substring(0, 40) + '...' : lastMessage) : null
+                            };
                         }
-
-                        // Get all messages after last read
-                        const messagesSnapshot = await getDocs(messagesRef);
-                        let unreadCount = 0;
-                        let lastMessage = null;
-                        let lastMessageTime = null;
-
-                        messagesSnapshot.forEach((msgDoc) => {
-                            const msgData = msgDoc.data();
-                            const msgTime = msgData.createdAt?.toDate() || new Date(0);
-
-                            // Count unread messages (not from current user)
-                            if (msgTime > lastReadTime && msgData.senderId !== currentUser.uid) {
-                                unreadCount++;
-                            }
-
-                            // Track last message
-                            if (!lastMessageTime || msgTime > lastMessageTime) {
-                                lastMessageTime = msgTime;
-                                lastMessage = msgData.text || msgData.message || '';
-                            }
-                        });
-
-                        return {
-                            id: partnerId,
-                            name: businessInfo.businessName || data.display_name || data.name || 'Business',
-                            logo: businessInfo.logoImage || data.photo_url || data.photoURL,
-                            cover: businessInfo.coverImage || data.cover_url || data.coverImage,
-                            type: businessInfo.businessType || data.business_type || 'Restaurant',
-                            location: businessInfo.city || businessInfo.address || data.city || data.address || '',
-                            memberCount: data.communityMembers?.length || 0,
-                            unreadCount: unreadCount,
-                            lastMessage: lastMessage ? (lastMessage.length > 40 ? lastMessage.substring(0, 40) + '...' : lastMessage) : null
-                        };
+                    } catch (innerError) {
+                        console.error(`🚨 Error fetching partner ${partnerId}:`, innerError);
                     }
                     return null;
                 })

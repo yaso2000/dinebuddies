@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaMapMarkerAlt, FaSearch, FaStar, FaPlus, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { geocode } from '../utils/locationUtils';
 
-const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, userLat, userLng }) => {
+const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, userLat, userLng, className = '' }) => {
     const { t, i18n } = useTranslation();
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -141,21 +142,22 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                     setLoading(false);
                 });
             } else {
-                // Fallback to OpenStreetMap if Google API not available
+                // Fallback to our resilient geocode utility (Nominatim)
                 const searchQuery = city ? `${val} ${city}` : val;
 
-                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&addressdetails=1&limit=5`, {
-                    headers: { 'Accept-Language': searchLanguage }
-                })
-                    .then(res => res.json())
-                    .then(data => {
-                        setSuggestions(data.map(item => ({
-                            name: item.name || item.display_name.split(',')[0],
-                            address: item.display_name,
-                            lat: parseFloat(item.lat),
-                            lng: parseFloat(item.lon),
-                            fallback: true
-                        })));
+                geocode(searchQuery)
+                    .then(result => {
+                        if (result.success) {
+                            setSuggestions(result.results.map(item => ({
+                                name: item.raw.name || item.displayName.split(',')[0],
+                                address: item.displayName,
+                                lat: item.lat,
+                                lng: item.lng,
+                                fallback: true
+                            })));
+                        } else {
+                            setSuggestions([]);
+                        }
                         setLoading(false);
                     })
                     .catch(() => {
@@ -240,7 +242,7 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                 value={value}
                 onChange={handleInput}
                 required
-                className="input-field"
+                className={`input-field ${className}`}
                 autoComplete="off"
             />
             {loading && (
@@ -255,8 +257,8 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                     top: '100%',
                     left: 0,
                     right: 0,
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e5e7eb',
+                    backgroundColor: 'var(--bg-card, #ffffff)',
+                    border: '1px solid var(--border-color, #e5e7eb)',
                     borderRadius: '0 0 12px 12px',
                     zIndex: 1000,
                     boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
@@ -264,7 +266,7 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                     overflowY: 'auto'
                 }}>
                     {suggestions.length === 0 && !loading && (
-                        <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                             {city ? `${t('no_results_found')} in ${city}` : t('no_results_found')}
                         </div>
                     )}
@@ -276,19 +278,20 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                             style={{
                                 padding: '14px 16px',
                                 cursor: 'pointer',
-                                borderBottom: '1px solid #f3f4f6',
+                                borderBottom: '1px solid var(--border-color)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '12px',
-                                background: 'white',
+                                background: 'transparent',
                                 transition: 'background 0.2s'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                         >
                             <div style={{
                                 minWidth: '36px', height: '36px', borderRadius: '50%',
-                                background: place.fallback ? '#e0f2fe' : '#fef3c7',
+                                background: place.fallback ? 'var(--bg-input)' : 'var(--bg-input)',
+                                border: '1px solid var(--border-color)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 fontSize: '1.1rem'
                             }}>
@@ -297,12 +300,12 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
 
                             <div style={{ flex: 1 }}>
                                 <div style={{
-                                    fontWeight: '700', fontSize: '0.95rem', color: '#111827',
+                                    fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)',
                                     marginBottom: '3px'
                                 }}>
                                     {place.name}
                                 </div>
-                                <div style={{ fontSize: '0.8rem', color: '#6b7280', lineHeight: '1.3' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
                                     {place.address || place.full_description}
                                 </div>
                             </div>
@@ -335,27 +338,27 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                             style={{
                                 padding: '14px 16px',
                                 cursor: 'pointer',
-                                borderTop: suggestions.length > 0 ? '2px solid #f3f4f6' : 'none',
+                                borderTop: suggestions.length > 0 ? '2px solid var(--border-color)' : 'none',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '12px',
-                                background: '#f0fdf4',
+                                background: 'var(--bg-input)',
                                 transition: 'background 0.2s'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#dcfce7'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = '#f0fdf4'}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input)'}
                         >
                             <div style={{
                                 minWidth: '36px', height: '36px', borderRadius: '50%', background: '#bbf7d0',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center'
                             }}>
-                                <FaPlus style={{ color: '#16a34a', fontSize: '1rem' }} />
+                                <FaPlus style={{ color: 'var(--primary)', fontSize: '1rem' }} />
                             </div>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827' }}>
+                                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>
                                     {t('use_location', { value })}
                                 </div>
-                                <div style={{ fontSize: '0.8rem', color: '#166534' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>
                                     {t('add_manual_location')}
                                 </div>
                             </div>

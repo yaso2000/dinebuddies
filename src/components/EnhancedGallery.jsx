@@ -23,14 +23,17 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
     const [captionEdit, setCaptionEdit] = useState(null);
 
     const gallery = partner?.businessInfo?.galleryEnhanced || [];
-    const MAX_IMAGES = 20;
+
+    // Tier-based limits
+    const tier = partner?.subscriptionTier || 'free';
+    const MAX_IMAGES = tier === 'elite' || tier === 'premium' ? 20 : tier === 'professional' ? 6 : 1;
 
     const handleImageUpload = async (e, category) => {
         const file = e.target.files[0];
         if (!file) return;
 
         if (gallery.length >= MAX_IMAGES) {
-            alert(t('gallery_max_reached', `Maximum ${MAX_IMAGES} images allowed`));
+            alert(t('gallery_max_reached', `Your current plan allows up to ${MAX_IMAGES} images. Upgrade to add more.`));
             return;
         }
 

@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
+import { getSafeAvatar } from '../utils/avatarUtils';
+import { useTranslation } from 'react-i18next';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun } from 'react-icons/fa';
+import { useTheme } from '../context/ThemeContext';
 
 const Settings = () => {
     const navigate = useNavigate();
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, deleteUserAccount } = useAuth();
+    const { t, i18n } = useTranslation();
+    const { isDark, toggleTheme } = useTheme();
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -34,35 +38,30 @@ const Settings = () => {
 
         try {
             setDeleting(true);
-
-            // Delete user document from Firestore
-            await deleteDoc(doc(db, 'users', currentUser.uid));
-
-            // Delete Firebase Auth account
-            await currentUser.delete();
-
+            await deleteUserAccount();
             navigate('/login');
         } catch (error) {
             console.error('Error deleting account:', error);
-            alert('Failed to delete account. Please try again or contact support.');
+            alert(i18n.language === 'ar' ? 'فشل حذف الحساب. يرجى المحاولة لاحقاً.' : 'Failed to delete account. Please try again.');
             setDeleting(false);
+            setShowDeleteConfirm(false);
         }
     };
 
     const settingsSections = [
         {
-            title: 'Account',
+            title: i18n.language === 'ar' ? 'الحساب' : 'Account',
             items: [
                 {
                     icon: <FaEnvelope />,
-                    label: 'Email',
+                    label: i18n.language === 'ar' ? 'البريد الإلكتروني' : 'Email',
                     value: currentUser?.email || 'Not set',
                     onClick: () => navigate('/settings/email'),
                     color: '#3b82f6'
                 },
                 {
                     icon: <FaLock />,
-                    label: 'Password',
+                    label: i18n.language === 'ar' ? 'كلمة المرور' : 'Password',
                     value: '••••••••',
                     onClick: () => navigate('/settings/password'),
                     color: '#8b5cf6'
@@ -70,33 +69,57 @@ const Settings = () => {
             ]
         },
         {
-            title: 'Preferences',
+            title: i18n.language === 'ar' ? 'التفضيلات' : 'Preferences',
             items: [
                 {
                     icon: <FaBell />,
-                    label: 'Notifications',
-                    value: 'Enabled',
+                    label: i18n.language === 'ar' ? 'الإشعارات' : 'Notifications',
+                    value: i18n.language === 'ar' ? 'مفعلة' : 'Enabled',
                     onClick: () => navigate('/settings/notifications'),
                     color: '#f59e0b'
                 },
                 {
                     icon: <FaGlobe />,
-                    label: 'Language',
-                    value: 'English',
+                    label: i18n.language === 'ar' ? 'اللغة' : 'Language',
+                    value: i18n.language === 'ar' ? 'العربية' : 'English',
                     onClick: () => navigate('/settings/language'),
                     color: '#10b981'
+                },
+                {
+                    icon: isDark ? <FaMoon /> : <FaSun />,
+                    label: i18n.language === 'ar' ? 'المظهر' : 'Appearance',
+                    value: i18n.language === 'ar' ? (isDark ? 'ليلي' : 'نهاري') : (isDark ? 'Dark Mode' : 'Light Mode'),
+                    onClick: toggleTheme,
+                    color: isDark ? '#8b5cf6' : '#f59e0b'
                 }
             ]
         },
         {
-            title: 'Privacy & Security',
+            title: i18n.language === 'ar' ? 'الخصوصية والأمان' : 'Privacy & Security',
             items: [
                 {
                     icon: <FaShieldAlt />,
-                    label: 'Privacy Settings',
-                    value: 'Public',
+                    label: i18n.language === 'ar' ? 'إعدادات الخصوصية' : 'Privacy Settings',
+                    value: i18n.language === 'ar' ? 'عام' : 'Public',
                     onClick: () => navigate('/settings/privacy'),
                     color: '#06b6d4'
+                }
+            ]
+        },
+        {
+            title: i18n.language === 'ar' ? 'عن التطبيق وخدماتنا' : 'About & Legal',
+            items: [
+                {
+                    icon: <FaShieldAlt />,
+                    label: i18n.language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy',
+                    onClick: () => navigate('/privacy'),
+                    color: '#10b981'
+                },
+                {
+                    icon: <FaFileContract />,
+                    label: i18n.language === 'ar' ? 'شروط الخدمة' : 'Terms of Service',
+                    onClick: () => navigate('/terms'),
+                    color: '#3b82f6'
                 }
             ]
         }
@@ -325,8 +348,8 @@ const Settings = () => {
                     width: '60px',
                     height: '60px',
                     borderRadius: '50%',
-                    background: userProfile?.profilePicture || userProfile?.photo_url
-                        ? `url(${userProfile?.profilePicture || userProfile?.photo_url})`
+                    background: getSafeAvatar(userProfile)
+                        ? `url(${getSafeAvatar(userProfile)})`
                         : 'linear-gradient(135deg, var(--primary), #f97316)',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
@@ -338,7 +361,7 @@ const Settings = () => {
                     color: 'white',
                     fontWeight: '800'
                 }}>
-                    {!userProfile?.profilePicture && !userProfile?.photo_url && (
+                    {!getSafeAvatar(userProfile) && (
                         (userProfile?.displayName || userProfile?.display_name || 'U')[0].toUpperCase()
                     )}
                 </div>

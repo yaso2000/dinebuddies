@@ -26,21 +26,24 @@
 }
 
 .settings-header .back-btn {
-    background: transparent;
-    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-body);
+    /* Slightly different from header bg for depth */
+    border: 1px solid var(--border-color);
     color: var(--text-main);
     font-size: 1.2rem;
     cursor: pointer;
-    padding: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
     transition: all 0.2s;
 }
 
 .settings-header .back-btn:hover {
     background: var(--bg-hover);
+    transform: scale(1.1);
 }
 
 /* Container */

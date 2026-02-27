@@ -3,6 +3,7 @@ import { collection, query, where, orderBy, limit, getDocs, addDoc, serverTimest
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { FaStar, FaRegStar, FaStarHalfAlt, FaUserCircle } from 'react-icons/fa';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const PartnerReviews = ({ partnerId, partnerName }) => {
     const { currentUser } = useAuth();
@@ -373,7 +374,7 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                                     {review.userPhoto ? (
                                         <img
-                                            src={review.userPhoto}
+                                            src={getSafeAvatar({ photoURL: review.userPhoto })}
                                             alt={review.userName}
                                             style={{
                                                 width: '40px',

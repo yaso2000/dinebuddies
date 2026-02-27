@@ -2,18 +2,29 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 :root {
-    --bg-dark: #0b1220;
-    --bg-darker: #0f1724;
-    --text-primary: #E6EEF8;
-    --text-muted: #94A3B8;
-    --accent-color: #6C5CE7;
-    /* Luxurious Purple */
-    --incoming-bg: rgba(30, 41, 59, 0.7);
-    --outgoing-bg: #5a4ad1;
-    /* Slightly darker purple for bubbles */
-    --header-bg: rgba(11, 18, 32, 0.85);
-    --composer-bg: #1E293B;
-    --font-family: 'Inter', system-ui, sans-serif;
+    --bg-dark: #020617;
+    --bg-darker: #0b1222;
+    --text-primary: #f1f5f9;
+    --text-muted: #94a3b8;
+    --accent-color: #8b5cf6;
+    --incoming-bg: #1e293b;
+    --outgoing-bg: #6366f1;
+    --header-bg: rgba(2, 6, 23, 0.8);
+    --composer-bg: #1e293b;
+    --border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='light'] {
+    --bg-dark: #F8FAFC;
+    --bg-darker: #F1F5F9;
+    --text-primary: #0F172A;
+    --text-muted: #64748B;
+    --accent-color: #7C3AED;
+    --incoming-bg: #FFFFFF;
+    --outgoing-bg: #7C3AED;
+    --header-bg: rgba(255, 255, 255, 0.9);
+    --composer-bg: rgba(255, 255, 255, 0.82);
+    --border-color: rgba(0, 0, 0, 0.08);
 }
 
 body,
@@ -57,31 +68,40 @@ html {
     align-items: center;
     padding: 0 16px;
     position: fixed;
-    /* Changed from absolute to fixed */
     top: 0;
     left: 0;
     right: 0;
     z-index: 100;
-    /* Increased z-index */
     background: var(--header-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    /* Added shadow for depth */
     color: var(--text-primary);
     padding-top: env(safe-area-inset-top);
-    /* Handle notch */
 }
 
 .back-btn {
-    background: none;
-    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-dark);
+    /* Using local var for theme compatibility */
+    border: 1px solid var(--border-color);
     color: var(--text-primary);
     font-size: 1.2rem;
     cursor: pointer;
-    padding: 8px;
-    margin-right: 8px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    transition: all 0.2s;
+}
+
+.back-btn:hover {
+    background: var(--border-color);
+    transform: scale(1.1);
 }
 
 .header-avatar {
@@ -166,8 +186,8 @@ html {
     /* Bottom align avatars */
     max-width: 100%;
     position: relative;
-    margin-top: 12px;
-    /* Default spacing between different users */
+    margin-top: 6px;
+    /* Unified 6px spacing between different users */
     margin-bottom: 0;
 }
 
@@ -210,15 +230,31 @@ html {
 }
 
 .message-bubble {
-    padding: 10px 14px;
-    border-radius: 18px;
+    padding: 8px 12px;
+    border-radius: 20px;
     position: relative;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     color: var(--text-primary);
     font-size: 15px;
-    line-height: 1.4;
+    line-height: 1.5;
     word-wrap: break-word;
     overflow: visible !important;
+    border: 1px solid var(--border-color);
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-end !important;
+    gap: 8px !important;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+body.light-mode .message-wrapper.other .message-bubble {
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.message-text {
+    margin: 0;
+    display: inline;
 }
 
 /* Add compatible .bubble class */
@@ -259,13 +295,34 @@ html {
     align-items: center;
     justify-content: flex-end;
     gap: 4px;
-    margin-top: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-bottom: 2px;
 }
 
 .message-time {
-    font-size: 11px;
+    font-size: 10px;
     color: rgba(255, 255, 255, 0.5);
-    vertical-align: bottom;
+    white-space: nowrap;
+}
+
+.message-wrapper.own .message-time {
+    color: #FFFFFF !important;
+    opacity: 1 !important;
+}
+
+/* Light Mode Overrides for Time Visibility */
+body.light-mode .message-time {
+    color: #64748b !important;
+}
+
+body.light-mode .message-wrapper.other .message-time {
+    color: #475569 !important;
+    /* Darker for incoming */
+}
+
+.message-wrapper.other .message-time {
+    color: var(--text-muted);
 }
 
 .message-status {
@@ -373,21 +430,19 @@ html {
 /* Message Reactions Badge */
 .message-reaction-badge {
     position: absolute;
-    bottom: -10px;
-    left: 10px;
-    /* Incoming: Pin Left (Outside), Grow Right (Inwards) */
-    right: auto;
-    background: #1f2937;
-    border: 2px solid var(--bg-dark);
-    border-radius: 12px;
-    padding: 2px 6px;
-    font-size: 11px;
-    color: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    bottom: -12px;
+    left: 8px;
+    background: var(--bg-card, #1f2937);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     z-index: 5;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
+    backdrop-filter: blur(8px);
 }
 
 /* Position badge on the right for own messages (Outwards anchor, growing Inwards/Left) */
@@ -507,21 +562,25 @@ html {
 /* --- Composer --- */
 .chat-input-area {
     position: relative;
-    /* Changed from fixed to relative/static flex item */
-    /* bottom, left, right removed */
     flex-shrink: 0;
-    /* Prevent shrinking */
     min-height: 60px;
     box-sizing: border-box;
-    background: var(--bg-darker);
+    background: var(--header-bg) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
     padding: 10px 12px;
+    z-index: 100;
+    border-top: 1px solid var(--border-color);
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+.chat-input-inner {
     display: flex;
     align-items: center;
+    padding: 8px 12px;
     gap: 10px;
-    z-index: 100;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-    /* backdrop-filter removed as it's no longer overlaying content */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Reply Bar above Input */
@@ -608,15 +667,14 @@ html {
     /* CRITICAL: Allows flex container to shrink this element to fit */
     min-width: 0;
     /* CSS Grid/Flex override */
-    background: #2D3748;
-    /* Lighter/distinct background for input box */
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 24px;
     display: flex;
     align-items: center;
     padding: 4px 8px;
     min-height: 44px;
     box-sizing: border-box;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
 }
 
 .input-btn {
@@ -665,9 +723,9 @@ html {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--accent-color);
+    background: var(--primary) !important;
     border: none;
-    color: white;
+    color: white !important;
     font-size: 1.1rem;
     display: flex;
     align-items: center;
@@ -676,6 +734,10 @@ html {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     flex-shrink: 0;
     transition: transform 0.1s;
+}
+
+.send-btn svg {
+    color: white !important;
 }
 
 .send-btn:active {
@@ -830,5 +892,145 @@ html {
 
     40% {
         transform: scale(1);
+    }
+}
+
+/* Fix input transparency appearing as white box in some browsers */
+.chat-input-pill {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: var(--bg-input) !important;
+    /* Use softer background in light mode */
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 0 16px;
+    height: 48px;
+    min-width: 0;
+    transition: all 0.3s ease;
+}
+
+:root[data-theme='light'] .chat-input-pill {
+    background: #f1f5f9 !important;
+    /* Explicit light grey for consistency */
+}
+
+.chat-input-field {
+    flex: 1;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: var(--text-main) !important;
+    font-size: 1rem;
+    height: 100%;
+    min-width: 10px;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    padding: 0 !important;
+}
+
+/* Ensure no background on autofill too */
+.chat-input-field:-webkit-autofill,
+.chat-input-field:-webkit-autofill:hover,
+.chat-input-field:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #f1f5f9 inset !important;
+    -webkit-text-fill-color: var(--text-main) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+:root[data-theme='dark'] .chat-input-field:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-card) inset !important;
+}
+
+/* --- Recording UI --- */
+.recording-ui {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    padding: 0 16px;
+    height: 45px;
+    background: #1f2937;
+    border-radius: 24px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+body.light-mode .recording-ui {
+    background: #F1F5F9;
+    border: 1px solid var(--border-color);
+}
+
+.recording-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.recording-pulse {
+    width: 10px;
+    height: 10px;
+    background: #ef4444;
+    border-radius: 50%;
+    animation: pulseCustomRed 1s infinite;
+}
+
+.recording-timer {
+    color: #fff;
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 600;
+    min-width: 45px;
+}
+
+body.light-mode .recording-timer {
+    color: var(--text-primary);
+}
+
+.delete-recording-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.delete-recording-btn:hover {
+    transform: scale(1.05);
+}
+
+@keyframes pulseCustomRed {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.7;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
 import CancellationModal from '../components/CancellationModal';
 // Added Import
-import { updateGuestCount, updateInvitationImage } from '../utils/invitationEditHelpers';
+import { updateGuestCount } from '../utils/invitationEditHelpers';
 import { cancelInvitation } from '../utils/invitationCancellation';
 import { completeInvitation, canCompleteInvitation } from '../utils/invitationCompletion';
 import { updateSocialMetaTags, generateInvitationMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
@@ -19,6 +19,7 @@ import MembersList from '../components/Invitation/MembersList';
 import InvitationHeader from '../components/Invitation/InvitationHeader';
 import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
 import InvitationTimeline from '../components/Invitation/InvitationTimeline';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -58,7 +59,7 @@ const InvitationDetails = () => {
                     ...prev,
                     participantStatus: {
                         ...(prev.participantStatus || {}),
-                        [currentUser.id]: newStatus
+                        [currentUser?.id]: newStatus
                     },
                     meetingStatus: newStatus === 'completed' ? 'completed' : prev.meetingStatus,
                     completedAt: newStatus === 'completed' ? new Date() : prev.completedAt
@@ -79,7 +80,7 @@ const InvitationDetails = () => {
         invitation = fetchedInvitation;
     }
 
-    // Fetch invitation from Firestore if not in context (for private invitations)
+    // Fetch invitation from Firestore if not in context (e.g., deep linking)
     useEffect(() => {
         const fetchInvitation = async () => {
             if (!invitation && id && !loadingInvitations) {
@@ -163,7 +164,7 @@ const InvitationDetails = () => {
                         const userData = userDoc.data();
                         data[userId] = {
                             name: userData.display_name || userData.name || 'User',
-                            avatar: userData.photo_url || userData.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + userId
+                            avatar: getSafeAvatar(userData)
                         };
                     }
                 } catch (error) {
@@ -194,7 +195,7 @@ const InvitationDetails = () => {
                         const userData = userDoc.data();
                         data[userId] = {
                             name: userData.display_name || userData.name || 'User',
-                            avatar: userData.photo_url || userData.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + userId
+                            avatar: getSafeAvatar(userData)
                         };
                     }
                 } catch (error) {
@@ -427,7 +428,18 @@ const InvitationDetails = () => {
         );
     }
 
-    const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange, privacy, invitedUserIds = [], mediaType, customVideo, videoThumbnail, customImage, restaurantImage, restaurantName } = invitation;
+    const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange, privacy, mediaType, customVideo, videoThumbnail, customImage, restaurantImage, restaurantName } = invitation;
+
+    // REDIRECTION GUARD: If this is a private invitation, redirect to the private view
+    useEffect(() => {
+        if (privacy === 'private') {
+            navigate(`/invitation/private/${id}`, { replace: true });
+        }
+    }, [privacy, id, navigate]);
+
+    if (privacy === 'private') {
+        return null; // Don't render anything while redirecting
+    }
 
     // Determine media to display
     const isVideo = mediaType === 'video' && customVideo;
@@ -436,12 +448,11 @@ const InvitationDetails = () => {
         : customImage || restaurantImage || image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
     const thumbnailUrl = isVideo ? videoThumbnail : mediaUrl;
     const isHost = author?.id === currentUser?.id;
-    const isAccepted = joined.includes(currentUser.id);
-    const isPending = requests.includes(currentUser.id);
+    const isAccepted = joined.includes(currentUser?.id);
+    const isPending = requests.includes(currentUser?.id);
     const spotsLeft = guestsNeeded - joined.length;
 
-    // Check if user is invited to private invitation
-    const isInvited = privacy === 'private' && invitedUserIds.includes(currentUser?.id);
+
 
     // Determine current user's specific status for the timeline
     // If global meeting is completed, everyone sees completed.
@@ -454,7 +465,7 @@ const InvitationDetails = () => {
         setIsUpdatingStatus(true);
         try {
             // Update in Firestore
-            const userRef = doc(db, 'users', currentUser.id);
+            const userRef = doc(db, 'users', currentUser?.id);
             await import('firebase/firestore').then(({ updateDoc }) => {
                 updateDoc(userRef, { ageCategory: selectedCategory });
             });
@@ -494,11 +505,20 @@ const InvitationDetails = () => {
         }
 
         // Check gender preference
-        if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
+        // Check gender preference (Unified)
+        if (invitation.genderGroups && invitation.genderGroups.length > 0 && !invitation.genderGroups.includes('any')) {
+            // New Multi-Select Logic
+            // 'unspecified' in groups matches if user gender is unspecified or missing? Or strictly matches?
+            // Assuming strict match for now.
+            if (currentUser?.gender && !invitation.genderGroups.includes(currentUser.gender)) {
+                return { eligible: false, reason: t('gender_mismatch') };
+            }
+        } else if (genderPreference && genderPreference !== 'any' && genderPreference !== 'custom' && currentUser?.gender !== genderPreference) {
+            // Legacy Single-Select Logic
             return { eligible: false, reason: t('gender_mismatch') };
         }
 
-        const userAgeCategory = manualAgeCategory || currentUser.ageCategory || userProfile?.ageCategory;
+        const userAgeCategory = manualAgeCategory || currentUser?.ageCategory || userProfile?.ageCategory;
 
         // Check NEW age groups preference (Multi-Select)
         if (invitation.ageGroups && invitation.ageGroups.length > 0 && !invitation.ageGroups.includes('any')) {
@@ -522,7 +542,7 @@ const InvitationDetails = () => {
         if (ageRange && ageRange !== 'any' && !invitation.ageGroups) { // Only check if new system not used
             // If we have categories, try to map/guess or just skip
             // For legacy '18-25' string matching
-            if (currentUser.age) {
+            if (currentUser?.age) {
                 const [minAge, maxAge] = ageRange.split('-').map(Number);
                 if (currentUser.age < minAge || currentUser.age > maxAge) {
                     return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
@@ -579,43 +599,21 @@ const InvitationDetails = () => {
                 <InvitationHeader
                     invitation={invitation}
                     isHost={isHost}
-                    onImageUpdate={() => document.getElementById('imageUpload')?.click()}
-                    onEdit={() => setIsEditing(true)}
+
+                    onEdit={() => navigate('/create', { state: { editingInvitation: invitation } })}
                     onDelete={() => setShowCancellationModal(true)}
                     showShare={showShare}
                     setShowShare={setShowShare}
                 />
 
-                {/* Hidden Input for Image Upload (kept for compatibility with onImageUpdate) */}
-                {isHost && (
-                    <input
-                        type="file"
-                        id="imageUpload"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        onChange={async (e) => {
-                            const file = e.target.files[0];
-                            if (!file) return;
-                            const reader = new FileReader();
-                            reader.onload = async (event) => {
-                                const imageUrl = event.target.result;
-                                const result = await updateInvitationImage(id, imageUrl);
-                                if (result.success) {
-                                    alert(t('image_updated'));
-                                    window.location.reload();
-                                }
-                            };
-                            reader.readAsDataURL(file);
-                        }}
-                    />
-                )}
+
 
                 <div style={{ padding: '1.5rem' }}>
 
                     {/* Host Info - Small Compact */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '12px' }}>
                         <img
-                            src={author.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author.id}`}
+                            src={getSafeAvatar(author)}
                             style={{ width: '40px', height: '40px', borderRadius: '50%' }}
                             alt={author.name}
                         />
@@ -624,7 +622,7 @@ const InvitationDetails = () => {
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('host')}</div>
                         </div>
                         <div style={{ marginLeft: 'auto' }}>
-                            {currentUser.id !== author.id && (
+                            {currentUser?.id !== author.id && (
                                 <button
                                     onClick={() => toggleFollow(author.id)}
                                     style={{
@@ -637,7 +635,7 @@ const InvitationDetails = () => {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    {currentUser.following?.includes(author.id) ? t('following') : t('follow')}
+                                    {currentUser?.following?.includes(author.id) ? t('following') : t('follow')}
                                 </button>
                             )}
                         </div>
@@ -651,6 +649,7 @@ const InvitationDetails = () => {
                     />
 
                     <InvitationTimeline
+                        invitation={invitation}
                         myStatus={myStatus}
                         isAccepted={isAccepted}
                         isHost={isHost}
@@ -665,7 +664,7 @@ const InvitationDetails = () => {
                         {description || t('no_description')}
                     </p>
                     {/* NEW: Time Change Approval Bar */}
-                    {invitation.pendingChangeApproval && invitation.pendingChangeApproval.includes(currentUser.id) && (
+                    {invitation.pendingChangeApproval && invitation.pendingChangeApproval.includes(currentUser?.id) && (
                         <div style={{ background: 'var(--primary)', padding: '12px', borderRadius: '12px', marginBottom: '1rem', animation: 'pulse 2s infinite' }}>
                             <p style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '8px' }}>{t('time_change_warning')}</p>
                             <div style={{ display: 'flex', gap: '8px' }}>
@@ -732,8 +731,8 @@ const InvitationDetails = () => {
                                     style={{
                                         height: '60px',
                                         fontSize: '1.1rem',
-                                        background: !eligibility.eligible && !currentUser?.isGuest ? 'rgba(55, 65, 81, 0.8)' : undefined,
-                                        color: !eligibility.eligible && !currentUser?.isGuest ? '#d1d5db' : undefined,
+                                        background: !eligibility.eligible && !currentUser?.isGuest ? 'var(--bg-input)' : undefined,
+                                        color: !eligibility.eligible && !currentUser?.isGuest ? 'var(--text-muted)' : undefined,
                                         cursor: !eligibility.eligible && !currentUser?.isGuest ? 'not-allowed' : 'pointer'
                                     }}
                                 >
@@ -766,7 +765,7 @@ const InvitationDetails = () => {
                                         className="btn btn-block glass-card"
                                         style={{
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-                                            padding: '1rem', background: 'rgba(30, 41, 59, 0.4)',
+                                            padding: '1rem', background: 'var(--hover-overlay)',
                                             border: '1px solid var(--border-color)', textAlign: 'left'
                                         }}
                                     >

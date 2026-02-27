@@ -1,14 +1,23 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCheckCircle, FaMapMarkerAlt, FaWalking, FaFlagCheckered } from 'react-icons/fa';
+import { getTemplateStyle } from '../../utils/invitationTemplates';
+import { FaCheckCircle, FaWalking, FaMapMarkerAlt, FaFlagCheckered } from 'react-icons/fa';
 
 /**
  * InvitationTimeline Component
  * Displays the progress of a meeting (Planning -> On Way -> Arrived -> Completed)
  * Adapts to individual user status (myStatus).
  */
-const InvitationTimeline = ({ myStatus, isAccepted, isHost, onUpdateStatus, isUpdatingStatus }) => {
+const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdateStatus, onComplete, isUpdatingStatus }) => {
     const { t } = useTranslation();
+
+    const templateStyles = invitation ? getTemplateStyle(
+        invitation.templateType || 'classic',
+        invitation.colorScheme || 'oceanBlue',
+        invitation.occasionType
+    ) : null;
+
+    const themeColor = templateStyles?.badge?.color || 'var(--primary)';
 
     // Calculate progress width based on status
     const getProgressWidth = () => {
@@ -52,11 +61,11 @@ const InvitationTimeline = ({ myStatus, isAccepted, isHost, onUpdateStatus, isUp
                     left: '0',
                     width: getProgressWidth(),
                     height: '4px',
-                    background: 'var(--primary)',
+                    background: themeColor,
                     borderRadius: '2px',
                     zIndex: 2,
                     transition: 'width 0.5s ease-in-out',
-                    boxShadow: '0 0 10px var(--primary)'
+                    boxShadow: `0 0 10px ${themeColor}`
                 }}></div>
 
                 {/* Steps */}
@@ -70,15 +79,15 @@ const InvitationTimeline = ({ myStatus, isAccepted, isHost, onUpdateStatus, isUp
                                     width: '32px',
                                     height: '32px',
                                     borderRadius: '50%',
-                                    background: active ? 'var(--primary)' : 'var(--bg-body)',
-                                    border: `2px solid ${active ? 'var(--primary)' : 'var(--border-color)'}`,
+                                    background: active ? themeColor : 'var(--bg-body)',
+                                    border: `2px solid ${active ? themeColor : 'var(--border-color)'}`,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginBottom: '8px',
                                     transition: 'all 0.3s ease',
                                     color: active ? 'white' : 'var(--text-muted)',
-                                    boxShadow: active ? '0 0 15px rgba(249, 115, 22, 0.4)' : 'none'
+                                    boxShadow: active ? `0 0 15px ${themeColor}66` : 'none'
                                 }}>
                                     <Icon size={14} />
                                 </div>
@@ -104,7 +113,11 @@ const InvitationTimeline = ({ myStatus, isAccepted, isHost, onUpdateStatus, isUp
                             onClick={() => onUpdateStatus('on_way')}
                             disabled={isUpdatingStatus}
                             className="btn btn-primary"
-                            style={{ flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', opacity: isUpdatingStatus ? 0.7 : 1 }}
+                            style={{
+                                ...(templateStyles?.button || {}),
+                                flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', opacity: isUpdatingStatus ? 0.7 : 1,
+                                height: 'auto', border: templateStyles?.button?.border || 'none'
+                            }}
                         >
                             {isUpdatingStatus ? 'Updating...' : t('im_on_way')}
                         </button>
@@ -115,7 +128,11 @@ const InvitationTimeline = ({ myStatus, isAccepted, isHost, onUpdateStatus, isUp
                             onClick={() => onUpdateStatus('arrived')}
                             disabled={isUpdatingStatus}
                             className="btn btn-secondary"
-                            style={{ flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', background: '#10b981', border: 'none', color: 'white', opacity: isUpdatingStatus ? 0.7 : 1 }}
+                            style={{
+                                flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
+                                background: 'var(--success)', border: 'none', color: 'white',
+                                opacity: isUpdatingStatus ? 0.7 : 1, height: 'auto'
+                            }}
                         >
                             {isUpdatingStatus ? 'Updating...' : t('ive_arrived')}
                         </button>
@@ -123,16 +140,23 @@ const InvitationTimeline = ({ myStatus, isAccepted, isHost, onUpdateStatus, isUp
 
                     {myStatus === 'arrived' && isHost && (
                         <button
-                            onClick={onComplete} // Changed from onUpdateStatus
+                            onClick={onComplete}
                             disabled={isUpdatingStatus}
-                            style={{ flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', background: 'var(--luxury-gold)', border: 'none', color: 'black', fontWeight: 'bold' }}
+                            style={{
+                                ...(templateStyles?.button || {}),
+                                flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
+                                height: 'auto', border: templateStyles?.button?.border || 'none',
+                                background: templateStyles?.button?.background || 'var(--luxury-gold)',
+                                color: templateStyles?.button?.color || 'black',
+                                fontWeight: 'bold'
+                            }}
                         >
                             {t('complete_meeting')}
                         </button>
                     )}
 
                     {myStatus === 'arrived' && !isHost && (
-                        <div style={{ flex: 1, textAlign: 'center', padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '10px', background: 'var(--hover-overlay)', borderRadius: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             {t('waiting_host_complete', 'Waiting for host to complete...')}
                         </div>
                     )}

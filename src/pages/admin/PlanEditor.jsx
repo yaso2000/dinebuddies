@@ -3,10 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { FaSave, FaTimes, FaEye, FaPlus, FaTrash, FaCrown, FaGift } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 
 const PlanEditor = () => {
     const navigate = useNavigate();
     const { id } = useParams();
+    const { t, i18n } = useTranslation();
     const isEditMode = !!id;
 
     const [loading, setLoading] = useState(false);
@@ -33,6 +35,7 @@ const PlanEditor = () => {
         stripe: {
             priceId: ''
         },
+        stripePriceId: '',
         active: true,
         published: true,
         recommended: false
@@ -53,12 +56,12 @@ const PlanEditor = () => {
             if (planDoc.exists()) {
                 setFormData({ id: planDoc.id, ...planDoc.data() });
             } else {
-                alert('Plan not found!');
+                alert(t('admin_plan_not_found'));
                 navigate('/admin/plans');
             }
         } catch (error) {
             console.error('Error fetching plan:', error);
-            alert('Failed to fetch plan');
+            alert(t('admin_fetch_plan_error'));
         } finally {
             setLoading(false);
         }
@@ -85,7 +88,10 @@ const PlanEditor = () => {
         if (!newFeature.trim()) return;
         setFormData(prev => ({
             ...prev,
-            features: [...prev.features, { text: newFeature, enabled: true }]
+            features: [...prev.features, {
+                text: newFeature,
+                enabled: true
+            }]
         }));
         setNewFeature('');
     };
@@ -100,15 +106,15 @@ const PlanEditor = () => {
     const handleSave = async () => {
         // Validation
         if (!formData.name.trim()) {
-            alert('Please enter a plan name');
+            alert(t('admin_enter_plan_name'));
             return;
         }
         if (formData.price < 0) {
-            alert('Price cannot be negative');
+            alert(t('admin_negative_price'));
             return;
         }
         if (formData.features.length === 0) {
-            alert('Please add at least one feature');
+            alert(t('admin_add_feature_error'));
             return;
         }
 
@@ -121,17 +127,24 @@ const PlanEditor = () => {
 
             if (isEditMode) {
                 const { id: planId, ...dataToUpdate } = planData;
+                // Ensure stripePriceId is at top level if provided in stripe object
+                if (dataToUpdate.stripe?.priceId) {
+                    dataToUpdate.stripePriceId = dataToUpdate.stripe.priceId;
+                }
                 await updateDoc(doc(db, 'subscriptionPlans', id), dataToUpdate);
-                alert('Plan updated successfully!');
+                alert(t('admin_plan_update_success'));
             } else {
                 planData.createdAt = new Date();
+                if (planData.stripe?.priceId) {
+                    planData.stripePriceId = planData.stripe.priceId;
+                }
                 await addDoc(collection(db, 'subscriptionPlans'), planData);
-                alert('Plan created successfully!');
+                alert(t('admin_plan_create_success'));
             }
             navigate('/admin/plans');
         } catch (error) {
             console.error('Error saving plan:', error);
-            alert('Failed to save plan: ' + error.message);
+            alert(t('admin_plan_save_error', { error: error.message }));
         } finally {
             setLoading(false);
         }
@@ -142,14 +155,14 @@ const PlanEditor = () => {
             <div className="admin-loading">
                 <div style={{ textAlign: 'center' }}>
                     <div className="admin-spinner" />
-                    <p style={{ color: '#94a3b8', fontSize: '1rem', marginTop: '1rem' }}>Loading plan...</p>
+                    <p style={{ color: '#94a3b8', fontSize: '1rem', marginTop: '1rem' }}>{t('admin_loading_plan')}</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div>
+        <div dir="ltr">
             {/* Header */}
             <div className="admin-flex-between admin-mb-4">
                 <div className="admin-page-header" style={{ marginBottom: 0 }}>
@@ -157,7 +170,7 @@ const PlanEditor = () => {
                         {isEditMode ? 'Edit Plan' : 'Create New Plan'}
                     </h1>
                     <p className="admin-page-subtitle">
-                        {isEditMode ? 'Update subscription plan details' : 'Build a new subscription plan'}
+                        {isEditMode ? 'Modify existing plan details' : 'Define a new subscription model'}
                     </p>
                 </div>
                 <div className="admin-flex admin-gap-2">
@@ -210,27 +223,27 @@ const PlanEditor = () => {
                                 <textarea
                                     value={formData.description}
                                     onChange={(e) => handleInputChange('description', e.target.value)}
-                                    placeholder="Brief description of the plan"
+                                    placeholder="Plan benefits description..."
                                     className="admin-input"
                                     rows="3"
                                 />
                             </div>
                             <div>
-                                <label className="admin-label">Plan Type</label>
+                                <label className="admin-label">{t('admin_plan_type')}</label>
                                 <div className="admin-flex admin-gap-2">
                                     <button
                                         onClick={() => handleInputChange('type', 'user')}
                                         className={`admin-btn ${formData.type === 'user' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
                                         style={{ flex: 1 }}
                                     >
-                                        👤 For Users
+                                        👤 {t('admin_for_users')}
                                     </button>
                                     <button
                                         onClick={() => handleInputChange('type', 'partner')}
                                         className={`admin-btn ${formData.type === 'partner' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
                                         style={{ flex: 1 }}
                                     >
-                                        🏪 For Partners
+                                        🏪 {t('admin_for_partners')}
                                     </button>
                                 </div>
                             </div>
@@ -240,11 +253,11 @@ const PlanEditor = () => {
                     {/* Pricing */}
                     <div className="admin-card">
                         <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            💰 Pricing
+                            💰 {t('admin_pricing')}
                         </h2>
                         <div style={{ display: 'grid', gap: '1rem' }}>
                             <div>
-                                <label className="admin-label">Price ($) *</label>
+                                <label className="admin-label">{t('admin_price')} ($) *</label>
                                 <input
                                     type="number"
                                     value={formData.price}
@@ -256,7 +269,7 @@ const PlanEditor = () => {
                                 />
                             </div>
                             <div>
-                                <label className="admin-label">Original Price ($)</label>
+                                <label className="admin-label">{t('admin_original_price')} ($)</label>
                                 <input
                                     type="number"
                                     value={formData.originalPrice}
@@ -268,7 +281,7 @@ const PlanEditor = () => {
                                 />
                             </div>
                             <div>
-                                <label className="admin-label">Discount (%)</label>
+                                <label className="admin-label">{t('admin_discount')} (%)</label>
                                 <input
                                     type="number"
                                     value={formData.discount}
@@ -281,7 +294,7 @@ const PlanEditor = () => {
                             </div>
                             <div className="admin-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label className="admin-label">Duration Value</label>
+                                    <label className="admin-label">{t('admin_duration_value')}</label>
                                     <input
                                         type="number"
                                         value={formData.duration.value}
@@ -291,15 +304,15 @@ const PlanEditor = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="admin-label">Duration Type</label>
+                                    <label className="admin-label">{t('admin_duration_type')}</label>
                                     <select
                                         value={formData.duration.type}
                                         onChange={(e) => handleNestedChange('duration', 'type', e.target.value)}
                                         className="admin-select"
                                     >
-                                        <option value="day">Day</option>
-                                        <option value="month">Month</option>
-                                        <option value="year">Year</option>
+                                        <option value="day">{t('admin_day')}</option>
+                                        <option value="month">{t('admin_month')}</option>
+                                        <option value="year">{t('admin_year')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -309,11 +322,11 @@ const PlanEditor = () => {
                     {/* Design */}
                     <div className="admin-card">
                         <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            🎨 Design
+                            🎨 {t('admin_design')}
                         </h2>
                         <div style={{ display: 'grid', gap: '1rem' }}>
                             <div>
-                                <label className="admin-label">Icon (Emoji)</label>
+                                <label className="admin-label">{t('admin_icon')} (Emoji)</label>
                                 <input
                                     type="text"
                                     value={formData.design.icon}
@@ -331,7 +344,7 @@ const PlanEditor = () => {
                                         onChange={(e) => handleInputChange('recommended', e.target.checked)}
                                         style={{ width: '1rem', height: '1rem' }}
                                     />
-                                    Mark as Recommended
+                                    {t('admin_mark_as_recommended')}
                                 </label>
                             </div>
                             <div>
@@ -342,17 +355,17 @@ const PlanEditor = () => {
                                         onChange={(e) => handleNestedChange('design', 'badge', { ...formData.design.badge, show: e.target.checked })}
                                         style={{ width: '1rem', height: '1rem' }}
                                     />
-                                    Show Badge
+                                    {t('admin_show_badge')}
                                 </label>
                             </div>
                             {formData.design.badge.show && (
                                 <div>
-                                    <label className="admin-label">Badge Text</label>
+                                    <label className="admin-label">{t('admin_badge_text')}</label>
                                     <input
                                         type="text"
                                         value={formData.design.badge.text}
                                         onChange={(e) => handleNestedChange('design', 'badge', { ...formData.design.badge, text: e.target.value })}
-                                        placeholder="Recommended"
+                                        placeholder={t('admin_recommended')}
                                         className="admin-input"
                                     />
                                 </div>
@@ -363,27 +376,34 @@ const PlanEditor = () => {
                     {/* Features */}
                     <div className="admin-card">
                         <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            ✨ Features
+                            ✨ {t('admin_features')}
                         </h2>
                         <div style={{ display: 'grid', gap: '1rem' }}>
-                            <div className="admin-flex admin-gap-2">
+                            <div className="admin-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <input
                                     type="text"
-                                    value={newFeature}
-                                    onChange={(e) => setNewFeature(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleAddFeature()}
-                                    placeholder="Add a feature..."
+                                    value={newFeatureAr}
+                                    onChange={(e) => setNewFeatureAr(e.target.value)}
+                                    placeholder={t('admin_feature_ar')}
                                     className="admin-input"
-                                    style={{ flex: 1 }}
+                                    dir="rtl"
                                 />
-                                <button
-                                    onClick={handleAddFeature}
-                                    className="admin-btn admin-btn-primary"
-                                >
-                                    <FaPlus />
-                                    Add
-                                </button>
+                                <input
+                                    type="text"
+                                    value={newFeatureEn}
+                                    onChange={(e) => setNewFeatureEn(e.target.value)}
+                                    placeholder={t('admin_feature_en')}
+                                    className="admin-input"
+                                />
                             </div>
+                            <button
+                                onClick={handleAddFeature}
+                                className="admin-btn admin-btn-primary"
+                                style={{ width: '100%' }}
+                            >
+                                <FaPlus />
+                                {t('admin_add_bilingual_feature')}
+                            </button>
                             <div style={{ display: 'grid', gap: '0.5rem' }}>
                                 {formData.features.map((feature, index) => (
                                     <div key={index} className="admin-flex-between" style={{
@@ -392,9 +412,16 @@ const PlanEditor = () => {
                                         borderRadius: '0.5rem',
                                         border: '1px solid #334155'
                                     }}>
-                                        <div className="admin-flex admin-gap-2" style={{ alignItems: 'center', flex: 1 }}>
-                                            <span style={{ color: '#22c55e' }}>✓</span>
-                                            <span style={{ color: '#e2e8f0' }}>{feature.text || feature}</span>
+                                        <div className="admin-flex admin-gap-2" style={{ alignItems: 'flex-start', flex: 1, flexDirection: 'column' }}>
+                                            <div className="admin-flex admin-gap-2" style={{ alignItems: 'center' }}>
+                                                <span style={{ color: '#22c55e' }}>✓</span>
+                                                <span style={{ color: '#e2e8f0', fontWeight: '600' }}>{feature.text || feature}</span>
+                                            </div>
+                                            {feature.textEn && (
+                                                <span style={{ color: '#94a3b8', fontSize: '0.8rem', paddingLeft: '1.5rem' }}>
+                                                    {feature.textEn}
+                                                </span>
+                                            )}
                                         </div>
                                         <button
                                             onClick={() => handleRemoveFeature(index)}
@@ -417,10 +444,10 @@ const PlanEditor = () => {
                     {/* Stripe Integration */}
                     <div className="admin-card">
                         <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            💳 Stripe Integration
+                            💳 {t('admin_stripe_integration')}
                         </h2>
                         <div>
-                            <label className="admin-label">Price ID</label>
+                            <label className="admin-label">Stripe Price ID</label>
                             <input
                                 type="text"
                                 value={formData.stripe.priceId}
@@ -429,7 +456,7 @@ const PlanEditor = () => {
                                 className="admin-input"
                             />
                             <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>
-                                Get this from your Stripe dashboard
+                                Enter the Stripe Price ID from your Stripe dashboard
                             </p>
                         </div>
                     </div>
@@ -437,7 +464,7 @@ const PlanEditor = () => {
                     {/* Status */}
                     <div className="admin-card">
                         <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            📊 Status
+                            📊 {t('admin_status')}
                         </h2>
                         <div style={{ display: 'grid', gap: '0.75rem' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: '#e2e8f0' }}>
@@ -447,7 +474,7 @@ const PlanEditor = () => {
                                     onChange={(e) => handleInputChange('active', e.target.checked)}
                                     style={{ width: '1rem', height: '1rem' }}
                                 />
-                                Active
+                                {t('admin_active')}
                             </label>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: '#e2e8f0' }}>
                                 <input
@@ -456,7 +483,7 @@ const PlanEditor = () => {
                                     onChange={(e) => handleInputChange('published', e.target.checked)}
                                     style={{ width: '1rem', height: '1rem' }}
                                 />
-                                Published
+                                {t('admin_published')}
                             </label>
                         </div>
                     </div>
@@ -467,7 +494,7 @@ const PlanEditor = () => {
                     <div style={{ position: 'sticky', top: '2rem' }}>
                         <div className="admin-card">
                             <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '1rem' }}>
-                                👁️ Live Preview
+                                👁️ {t('admin_live_preview')}
                             </h2>
                             <div className="admin-card" style={{ background: '#0f172a' }}>
                                 {/* Badge */}
@@ -505,14 +532,9 @@ const PlanEditor = () => {
                                 </h3>
 
                                 {/* Description */}
-                                <p style={{
-                                    fontSize: '0.9375rem',
-                                    color: '#94a3b8',
-                                    marginBottom: '1rem',
-                                    minHeight: '3rem'
-                                }}>
-                                    {formData.description || 'Plan description'}
-                                </p>
+                                <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '1rem', minHeight: '3rem' }}>
+                                    <p>{formData.description || 'Description will appear here'}</p>
+                                </div>
 
                                 {/* Price */}
                                 <div className="admin-mb-2">
@@ -522,7 +544,7 @@ const PlanEditor = () => {
                                                 ${formData.originalPrice}
                                             </span>
                                             <span className="admin-badge admin-badge-success">
-                                                {formData.discount}% OFF
+                                                {formData.discount}% Off
                                             </span>
                                         </div>
                                     )}
@@ -551,17 +573,19 @@ const PlanEditor = () => {
 
                                 {/* Features */}
                                 <div>
-                                    {formData.features.slice(0, 5).map((feature, idx) => (
-                                        <div key={idx} className="admin-flex admin-gap-1 admin-mb-1" style={{ alignItems: 'flex-start' }}>
-                                            <span style={{ color: '#22c55e', fontSize: '1rem' }}>✓</span>
-                                            <span style={{ color: '#cbd5e1', fontSize: '0.9375rem' }}>
-                                                {feature.text || feature}
-                                            </span>
+                                    {formData.features.slice(0, 8).map((feature, idx) => (
+                                        <div key={idx} className="admin-mb-2" style={{ borderLeft: '2px solid #334155', paddingLeft: '0.75rem' }}>
+                                            <div className="admin-flex admin-gap-1" style={{ alignItems: 'flex-start' }}>
+                                                <span style={{ color: '#22c55e', fontSize: '1rem' }}>✓</span>
+                                                <span style={{ color: '#cbd5e1', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                                                    {feature.text || feature}
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                     {formData.features.length === 0 && (
                                         <div style={{ color: '#64748b', fontSize: '0.875rem', textAlign: 'center', padding: '1rem' }}>
-                                            No features added
+                                            {t('admin_no_features_added')}
                                         </div>
                                     )}
                                 </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { getSafeAvatar } from '../../utils/avatarUtils';
 
 const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
     const { t } = useTranslation();
@@ -27,11 +28,11 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                         boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
                     }}>
                         <img
-                            src={author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author?.id || 'host'}`}
+                            src={getSafeAvatar(author)}
                             alt={author?.name}
                             title={`${author?.name} (Host)`}
                             style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-                            onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${author?.id || 'host'}` }}
+                            onError={(e) => { e.target.src = getSafeAvatar(null); }}
                         />
                         <div style={{
                             position: 'absolute',
@@ -67,11 +68,11 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                                 onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                             >
                                 <img
-                                    src={member.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`}
+                                    src={getSafeAvatar(member)}
                                     alt={member.name}
                                     title={member.name}
                                     style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-                                    onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` }}
+                                    onError={(e) => { e.target.src = getSafeAvatar(null); }}
                                 />
                             </div>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</span>
@@ -80,7 +81,7 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                 })}
 
                 {/* Empty Spots */}
-                {[...Array(Math.max(0, spotsLeft))].map((_, i) => (
+                {[...Array(Math.max(0, parseInt(spotsLeft) || 0))].map((_, i) => (
                     <div key={i} style={{ textAlign: 'center' }}>
                         <div style={{
                             width: '56px',

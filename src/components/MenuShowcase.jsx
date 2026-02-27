@@ -34,13 +34,16 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
     // Filter menu items by category
     const filteredItems = selectedCategory === 'all'
         ? menuItems
-        : menuItems.filter(item => item.category === selectedCategory);
+        : menuItems.filter(item => (item.category || 'mains').toLowerCase() === selectedCategory.toLowerCase());
 
     // Get category stats
     const getCategoryStats = () => {
         const stats = { all: menuItems.length };
         MENU_CATEGORIES.forEach(cat => {
-            stats[cat.id] = menuItems.filter(item => item.category === cat.id).length;
+            // Count items matching this category (case-insensitive, default to 'mains' if missing)
+            stats[cat.id] = menuItems.filter(item =>
+                (item.category || 'mains').toLowerCase() === cat.id.toLowerCase()
+            ).length;
         });
         return stats;
     };
@@ -315,7 +318,13 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                                 <div className="item-content">
                                     <div className="item-header">
                                         <h4>{item.name}</h4>
-                                        <div className="item-price">${item.price.toFixed(2)}</div>
+                                        <div className="item-price">
+                                            {typeof item.price === 'number'
+                                                ? `$${item.price.toFixed(2)}`
+                                                : item.price?.toString().startsWith('$')
+                                                    ? item.price
+                                                    : `$${item.price}`}
+                                        </div>
                                     </div>
                                     {item.description && (
                                         <p className="item-description">{item.description}</p>

@@ -2,6 +2,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { verifyUserAtLocation, LOCATION_VERIFICATION_CONFIG } from './locationVerification';
 import { sendNotification } from './notificationHelpers';
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Complete an invitation (mark as completed)
@@ -73,7 +74,7 @@ export const completeInvitation = async (invitationId, invitation, currentUser) 
                 invitationId,
                 fromUserId: currentUser.id,
                 fromUserName: currentUser.name || currentUser.displayName,
-                fromUserAvatar: currentUser.avatar || currentUser.photoURL
+                fromUserAvatar: getSafeAvatar(currentUser)
             })
         );
 

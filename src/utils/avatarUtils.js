@@ -10,6 +10,9 @@ export const getSafeAvatar = (userData) => {
         userData.avatar,
         userData.photoURL,
         userData.photo_url,
+        userData.userPhoto, // Field used by CreateStory.jsx
+        userData.logo,
+        userData.logoImage,
         userData.profilePicture,
         userData.businessInfo?.logo,
         userData.businessInfo?.logoImage,

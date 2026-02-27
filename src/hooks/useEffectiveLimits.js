@@ -43,7 +43,11 @@ export const useEffectiveLimits = (businessId, userProfile = null) => {
 
                 // Calculate effective limits
                 const now = new Date();
-                const effectiveLimits = { ...defaultLimits };
+
+                // SOFT LAUNCH: UNLOCK EVERYTHING
+                // Force all businesses to have 'premium' plan features regardless of actual plan
+                const premiumPlan = getPlanById('premium');
+                const effectiveLimits = { ...premiumPlan };
 
                 // Override with custom limits if they exist and haven't expired
                 Object.keys(customLimits).forEach(key => {
@@ -57,8 +61,8 @@ export const useEffectiveLimits = (businessId, userProfile = null) => {
 
                 // Add metadata
                 effectiveLimits._meta = {
-                    planId,
-                    planName: defaultLimits.name,
+                    planId: 'premium', // Force premium ID for UI
+                    planName: 'Premium (Launch Promo)', // Custom name
                     hasCustomLimits: Object.keys(customLimits).length > 0,
                     customLimits,
                     customLimitsExpiry,

@@ -5,8 +5,12 @@ import './index.css'
 import './mobile-optimizations.css';
 import './i18n';
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <App />
+        <ErrorBoundary>
+            <App />
+        </ErrorBoundary>
     </React.StrictMode>,
-)
+);

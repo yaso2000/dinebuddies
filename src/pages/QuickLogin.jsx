@@ -101,7 +101,7 @@ const QuickLogin = () => {
             let result;
             if (provider === 'google') result = await signInWithGoogle();
             else if (provider === 'facebook') result = await signInWithFacebook();
-            // Only navigate if we got a valid user back (popup wasn't closed)
+
             if (result?.user) {
                 navigate('/');
             }

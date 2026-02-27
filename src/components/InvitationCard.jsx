@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaMoneyBillWave, FaUserFriends, FaShareAlt, FaPlay, FaVolumeUp, FaVolumeMute, FaBullhorn } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaGenderless, FaMoneyBillWave, FaUserFriends, FaShareAlt, FaPlay, FaVolumeUp, FaVolumeMute, FaBullhorn, FaHeart, FaUsers, FaBriefcase, FaSmile } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,8 @@ import ShareButtons from './ShareButtons';
 import NewReportModal from './NewReportModal';
 import VideoPlayer from './Shared/VideoPlayer';
 import { getTemplateStyle } from '../utils/invitationTemplates';
+import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
@@ -24,20 +26,21 @@ const InvitationCard = ({ invitation }) => {
         image, time, description, genderPreference, ageRange,
         // NEW: Video fields
         mediaSource, mediaType, customVideo, videoThumbnail,
-        customImage, restaurantImage
+        customImage, restaurantImage, occasionType
     } = invitation;
 
     // Get template styles
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
-        invitation.colorScheme || 'oceanBlue'
+        invitation.colorScheme || 'oceanBlue',
+        invitation.occasionType
     );
 
     const isHost = author?.id === currentUser?.id;
     const isPending = (requests || []).includes(currentUser?.id);
     const isAccepted = (joined || []).includes(currentUser?.id);
     const spotsLeft = Math.max(0, guestsNeeded - (joined || []).length);
-    const isFollowing = currentUser.following?.includes(author?.id);
+    const isFollowing = userProfile?.following?.includes(author?.id);
 
     // Business accounts cannot interact with invitations
 
@@ -84,12 +87,17 @@ const InvitationCard = ({ invitation }) => {
         }
 
         // Check gender preference
-        if (genderPreference && genderPreference !== 'any' && currentUser.gender !== genderPreference) {
+        // Check gender preference (Unified)
+        if (invitation.genderGroups && invitation.genderGroups.length > 0 && !invitation.genderGroups.includes('any')) {
+            if (currentUser?.gender && !invitation.genderGroups.includes(currentUser.gender)) {
+                return { eligible: false, reason: t('gender_mismatch') };
+            }
+        } else if (genderPreference && genderPreference !== 'any' && genderPreference !== 'custom' && currentUser?.gender !== genderPreference) {
             return { eligible: false, reason: t('gender_mismatch') };
         }
 
         // Check age range preference
-        if (ageRange && currentUser.age) {
+        if (ageRange && currentUser?.age) {
             const [minAge, maxAge] = ageRange.split('-').map(Number);
             const userAge = currentUser.age;
             if (userAge < minAge || userAge > maxAge) {
@@ -171,6 +179,17 @@ const InvitationCard = ({ invitation }) => {
                 }
             }}
         >
+            {/* --- BACKGROUND PATTERN OVERLAY --- */}
+            {templateStyles.layout?.backgroundOverlay && (
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    zIndex: 1,
+                    backgroundImage: templateStyles.layout.backgroundOverlay,
+                    opacity: 0.4,
+                    pointerEvents: 'none'
+                }} />
+            )}
             {/* --- 1. HEADER (User Info & Top Actions) --- */}
             <div className="card-header" style={{
                 position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
@@ -183,10 +202,10 @@ const InvitationCard = ({ invitation }) => {
                 <div className="header-host-info" style={{ display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto' }} onClick={handleAvatarClick}>
                     <div style={{ position: 'relative' }}>
                         <img
-                            src={(author?.avatar && !author.avatar.includes('dicebear')) ? author.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(author?.name || 'User')}&background=random`}
+                            src={getSafeAvatar(author)}
                             onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(author?.name || 'User')}&background=random`;
+                                e.target.src = getSafeAvatar(null);
                             }}
                             alt={author?.name}
                             style={{
@@ -277,6 +296,35 @@ const InvitationCard = ({ invitation }) => {
                             <FaFlag size={14} />
                         </button>
                     )}
+
+                    {/* ADMIN DELETE BUTTON */}
+                    {(
+                        userProfile?.accountType === 'admin' ||
+                        userProfile?.email?.includes('admin') ||
+                        userProfile?.email === 'info@dinebuddies.com.au' ||
+                        currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33'
+                    ) && (
+                            <button
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm('🗑️ ADMIN ACTION: Delete this invitation permanently?')) {
+                                        try {
+                                            const { deleteDoc, doc } = await import('firebase/firestore');
+                                            const { db } = await import('../firebase/config');
+                                            await deleteDoc(doc(db, 'invitations', id));
+                                            // Force refresh or remove from UI locally if possible, but context should handle it
+                                        } catch (err) {
+                                            alert('Error deleting: ' + err.message);
+                                        }
+                                    }
+                                }}
+                                className="delete-btn"
+                                style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}
+                                title="Delete Invitation (Admin)"
+                            >
+                                <span style={{ fontWeight: 'bold', fontSize: '18px' }}>×</span>
+                            </button>
+                        )}
                 </div>
             </div>
 
@@ -316,7 +364,9 @@ const InvitationCard = ({ invitation }) => {
                 {/* Overlay Gradient */}
                 <div className="media-overlay" style={{
                     position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0.95) 100%)',
+                    background: templateStyles.card.background?.includes('rgba(0,0,0')
+                        ? 'linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.8) 70%, rgba(0,0,0,0.95) 100%)'
+                        : 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0.95) 100%)',
                     pointerEvents: 'none'
                 }} />
             </div>
@@ -324,81 +374,162 @@ const InvitationCard = ({ invitation }) => {
             {/* --- 3. FOOTER / BODY (Info & Main Actions) --- */}
             <div className="card-footer" style={{
                 position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
-                padding: '20px',
-                display: 'flex', flexDirection: 'column', gap: '10px',
-                pointerEvents: 'none'
+                padding: '24px',
+                display: 'flex', flexDirection: 'column', gap: '12px',
+                pointerEvents: 'none',
+                textAlign: templateStyles.layout?.textAlign || 'left',
+                alignItems: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start'
             }}>
                 {/* Title & Info */}
-                <div className="footer-info" style={{ pointerEvents: 'auto' }}>
-                    <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: 'white', margin: '0 0 8px 0', lineHeight: 1.2, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                <div className="footer-info" style={{ pointerEvents: 'auto', width: '100%' }}>
+                    {/* Decorative Header (Optional) */}
+                    {templateStyles.layout?.decorativeElement && (
+                        <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>
+                            {templateStyles.layout.decorativeElement}
+                        </div>
+                    )}
+
+                    {/* Date & Time Row - More prominent */}
+                    <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
+                        alignItems: 'center',
+                        gap: '10px',
+                        marginBottom: '8px'
+                    }}>
+                        <span className="meta-badge" style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
+                            borderRadius: '10px', fontSize: '0.85rem', color: 'white',
+                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                        }}>
+                            <FaCalendarAlt style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} />
+                            {(() => {
+                                if (!date) return 'TBD';
+                                const d = new Date(date);
+                                return d.toLocaleDateString(i18n.language === 'ar' ? 'ar-EG' : undefined, { month: 'short', day: 'numeric' });
+                            })()}
+                        </span>
+                        <span className="meta-badge" style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
+                            borderRadius: '10px', fontSize: '0.85rem', color: 'white',
+                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                        }}>
+                            <FaClock style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} /> {time}
+                        </span>
+                        {occasionType && (
+                            <span className="meta-badge" style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
+                                borderRadius: '10px', fontSize: '0.85rem', color: 'white',
+                                fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                            }}>
+                                {occasionType === 'romantic' ? <FaHeart style={{ color: '#ec4899' }} /> :
+                                    occasionType === 'family' ? <FaUsers style={{ color: '#10b981' }} /> :
+                                        occasionType === 'business' ? <FaBriefcase style={{ color: '#a855f7' }} /> :
+                                            <FaSmile style={{ color: '#f59e0b' }} />}
+                                {t(`occasion_${occasionType}`)}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Title */}
+                    <h3 style={{
+                        fontSize: templateStyles.layout?.titleSize || '1.4rem',
+                        fontWeight: '900',
+                        color: 'white',
+                        margin: '0 0 10px 0',
+                        lineHeight: 1.2,
+                        textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+                        fontFamily: templateStyles.layout?.fontFamily || 'inherit',
+                        maxWidth: '100%'
+                    }}>
                         {title}
                     </h3>
 
-                    {/* Row 1: Time & Distance */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                        <span className="meta-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.15)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.85rem', color: 'white' }}>
-                            <FaClock style={{ color: '#fbbf24' }} /> {time}
-                        </span>
+                    {/* Message / Description (New) */}
+                    {templateStyles.layout?.displayDescription && description && (
+                        <p style={{
+                            fontSize: '0.9rem',
+                            color: 'rgba(255,255,255,0.9)',
+                            margin: '0 0 15px 0',
+                            lineHeight: '1.4',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            ...templateStyles.layout.messageStyle
+                        }}>
+                            {description}
+                        </p>
+                    )}
 
-                        {invitation.distance !== null && invitation.distance !== undefined && (
-                            <span className="meta-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(16, 185, 129, 0.2)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.85rem', color: '#6ee7b7' }}>
-                                <FaMapMarkerAlt />
-                                <span>{invitation.distance.toFixed(1)} km</span>
-                                <span style={{ opacity: 0.7, fontSize: '0.75em', marginLeft: '2px' }}>
-                                    (~{Math.round((invitation.distance / 40) * 60)} min)
-                                </span>
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Row 2: Demographics (Spots, Gender, Age) */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        {/* Spots */}
-                        <span className="meta-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.15)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.8rem', color: 'white' }}>
-                            <FaUserFriends style={{ color: '#60a5fa' }} /> {spotsLeft} {t('spots', { defaultValue: 'spots' })}
-                        </span>
-
-                        {/* Gender */}
-                        <span className="meta-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.15)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.8rem', color: 'white' }}>
-                            {(!genderPreference || genderPreference === 'any')
-                                ? <><FaVenusMars style={{ color: '#a78bfa' }} /> {t('any', { defaultValue: 'Any' })}</>
-                                : (genderPreference === 'male'
-                                    ? <><FaMars style={{ color: '#60a5fa' }} /> {t('male', { defaultValue: 'Male' })}</>
-                                    : <><FaVenus style={{ color: '#f472b6' }} /> {t('female', { defaultValue: 'Female' })}</>)
-                            }
-                        </span>
-
-                        {/* Age Group - assuming invitation.ageRange exists, formatted like "18-25" */}
-                        {invitation.ageRange && (
-                            <span className="meta-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.15)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.8rem', color: 'white' }}>
-                                <span>🔞 {invitation.ageRange}</span>
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Location Text */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)' }}>
+                    {/* Location / Restaurant */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
+                        gap: '6px',
+                        fontSize: '0.95rem',
+                        color: 'white',
+                        fontWeight: '700',
+                        marginBottom: '10px'
+                    }}>
                         <FaMapMarkerAlt style={{ color: '#f87171' }} />
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '280px' }}>
+                        <span style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '280px',
+                            textDecoration: 'underline',
+                            textUnderlineOffset: '3px'
+                        }}>
                             {location || t('venue_selected')}
                         </span>
                     </div>
+
+                    {/* Secondary Info Row (Distance, Spots, etc.) */}
+                    {templateStyles.layout?.showSecondaryInfo && (
+                        <div style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '12px',
+                            opacity: 0.85
+                        }}>
+                            {invitation.distance !== null && invitation.distance !== undefined && (
+                                <span style={{ fontSize: '0.8rem', color: '#6ee7b7', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <FaMapMarkerAlt /> {invitation.distance.toFixed(1)} km
+                                </span>
+                            )}
+                            <span style={{ fontSize: '0.8rem', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <FaUserFriends /> {spotsLeft}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Primary Action Button */}
                 {userProfile?.accountType !== 'business' && (
-                    <div className="footer-actions" style={{ pointerEvents: 'auto' }}>
+                    <div className="footer-actions" style={{ pointerEvents: 'auto', width: '100%' }}>
                         <button
                             onClick={handleAction}
                             style={{
-                                width: '100%', padding: '12px', borderRadius: '12px', border: 'none',
+                                width: '100%', padding: '14px', borderRadius: '14px', border: 'none',
                                 background: invitation.meetingStatus === 'completed'
                                     ? '#10b981'
-                                    : !eligibility.eligible ? '#374151' : 'white',
-                                color: invitation.meetingStatus === 'completed' ? 'white' : !eligibility.eligible ? '#9ca3af' : 'black',
-                                fontWeight: '800', fontSize: '0.95rem', cursor: 'pointer',
+                                    : !eligibility.eligible ? '#374151' : (templateStyles.button?.background || 'var(--premium-orange, #f97316)'),
+                                color: invitation.meetingStatus === 'completed' ? 'white' : !eligibility.eligible ? '#9ca3af' : 'white',
+                                fontWeight: '900', fontSize: '1rem', cursor: 'pointer',
                                 display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
-                                boxShadow: '0 4px 15px rgba(0,0,0,0.3)'
+                                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                                transition: 'all 0.3s ease',
+                                textTransform: templateStyles.button?.textTransform || 'none',
+                                letterSpacing: templateStyles.button?.letterSpacing || 'normal'
                             }}
                             disabled={!eligibility.eligible && !isHost && invitation.meetingStatus !== 'completed'}
                         >

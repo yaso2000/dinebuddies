@@ -2,37 +2,15 @@
 
 /* Fix viewport height to handle dynamic address bars */
 html,
-body {
-    height: 100%;
-    height: 100dvh;
-    /* The magic unit that respects the dynamic browser chrome */
-    width: 100%;
-    overflow: hidden;
-    /* Lock the main scroll */
-    position: fixed;
-    /* Force the viewport to stay put */
-    margin: 0;
-    padding: 0;
-
-    /* Disable elastic bounce effect (rubber-banding) */
-    overscroll-behavior: none;
-    overscroll-behavior-y: none;
-
-    /* Improve tap response */
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-
-    /* Standard app background */
-    background-color: #020617;
-}
-
-/* Ensure React Root takes full space */
+body,
 #root {
     height: 100%;
     height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    position: fixed;
     width: 100%;
-    display: flex;
-    flex-direction: column;
 }
 
 /* The scrollable container inside the fixed viewport */

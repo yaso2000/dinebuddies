@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, increment, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { notifyNewFollower } from './notificationHelpers';
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Get users who follow a specific user
@@ -109,7 +110,7 @@ export const followUser = async (currentUserId, targetUserId, currentUserData = 
             followerData = {
                 id: currentUserId,
                 name: currentUserDoc.data()?.name || 'Someone',
-                avatar: currentUserDoc.data()?.avatar || null
+                avatar: getSafeAvatar(currentUserDoc.data())
             };
         }
 

@@ -124,116 +124,8 @@ const MigrationTools = () => {
                 </div>
             </div>
 
-            {/* Plan Migration Card */}
-            <div className="admin-card admin-mb-4">
-                <div className="admin-flex admin-gap-3" style={{ alignItems: 'flex-start' }}>
-                    <div style={{
-                        width: '3.5rem',
-                        height: '3.5rem',
-                        borderRadius: '0.75rem',
-                        background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                    }}>
-                        <FaDatabase style={{ fontSize: '1.75rem', color: '#ffffff' }} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#ffffff', marginBottom: '0.5rem' }}>
-                            Migrate Subscription Plans
-                        </h2>
-                        <p style={{ fontSize: '0.9375rem', color: '#94a3b8', marginBottom: '1.5rem' }}>
-                            Move the 3 existing subscription plans from code to Firestore.
-                            This needs to be done once before using the Plan Builder.
-                        </p>
-
-                        {/* What will be migrated */}
-                        <div className="admin-card" style={{ background: '#0f172a', marginBottom: '1.5rem' }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#ffffff', marginBottom: '0.75rem' }}>
-                                What will be migrated:
-                            </h3>
-                            <div style={{ display: 'grid', gap: '0.5rem' }}>
-                                <div className="admin-flex admin-gap-2" style={{ alignItems: 'center', color: '#22c55e' }}>
-                                    <FaCheckCircle />
-                                    <span style={{ color: '#cbd5e1' }}>Free Plan ($0/month)</span>
-                                </div>
-                                <div className="admin-flex admin-gap-2" style={{ alignItems: 'center', color: '#22c55e' }}>
-                                    <FaCheckCircle />
-                                    <span style={{ color: '#cbd5e1' }}>Pro Plan ($39/month)</span>
-                                </div>
-                                <div className="admin-flex admin-gap-2" style={{ alignItems: 'center', color: '#22c55e' }}>
-                                    <FaCheckCircle />
-                                    <span style={{ color: '#cbd5e1' }}>Premium Plan ($79/month)</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Migration Button */}
-                        <button
-                            onClick={handleMigrate}
-                            disabled={migrating}
-                            className="admin-btn admin-btn-primary"
-                            style={{
-                                background: migrating ? '#64748b' : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                                fontSize: '1rem',
-                                fontWeight: '700',
-                                padding: '0.75rem 2rem'
-                            }}
-                        >
-                            <FaRocket />
-                            {migrating ? 'Migrating...' : 'Run Migration'}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Result */}
-                {result && (
-                    <div style={{
-                        marginTop: '1.5rem',
-                        padding: '1rem',
-                        borderRadius: '0.75rem',
-                        background: result.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                        border: `1px solid ${result.success ? '#22c55e' : '#ef4444'}`
-                    }}>
-                        <div className="admin-flex admin-gap-2" style={{ alignItems: 'flex-start' }}>
-                            {result.success ? (
-                                <FaCheckCircle style={{ color: '#22c55e', fontSize: '1.25rem', marginTop: '0.25rem' }} />
-                            ) : (
-                                <FaExclamationTriangle style={{ color: '#ef4444', fontSize: '1.25rem', marginTop: '0.25rem' }} />
-                            )}
-                            <div style={{ flex: 1 }}>
-                                <h3 style={{
-                                    fontSize: '1.125rem',
-                                    fontWeight: '700',
-                                    color: result.success ? '#22c55e' : '#ef4444',
-                                    marginBottom: '0.5rem'
-                                }}>
-                                    {result.success ? 'Migration Successful!' : 'Migration Failed'}
-                                </h3>
-                                <p style={{ fontSize: '0.875rem', color: '#cbd5e1', marginBottom: '0.75rem' }}>
-                                    {result.message}
-                                </p>
-
-                                {result.success && result.plans && (
-                                    <div>
-                                        <p style={{ fontSize: '0.875rem', fontWeight: '600', color: '#ffffff', marginBottom: '0.5rem' }}>
-                                            Migrated Plans:
-                                        </p>
-                                        <div style={{ display: 'grid', gap: '0.25rem' }}>
-                                            {result.plans.map((plan, idx) => (
-                                                <div key={idx} style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                                                    • {plan.name} (ID: {plan.id})
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
+            {/* Legacy plan migration removed to avoid duplication of old $39/$79 data. 
+               Please use PlanManagement.jsx for sync/reset tools. */}
 
             {/* User Cleanup Migration Card */}
             <div className="admin-card admin-mb-4" style={{ marginTop: '2rem', borderTop: '1px solid #334155', paddingTop: '2rem' }}>
@@ -352,7 +244,7 @@ const MigrationTools = () => {
                                                 // Update post with fresh data
                                                 await updateDoc(doc(db, 'posts', postDoc.id), {
                                                     userName: userData.display_name || 'Member',
-                                                    userPhoto: userData.photo_url || ''
+                                                    userPhoto: userData.photo_url || userData.photoURL || ''
                                                 });
                                                 updatedCount++;
                                             }

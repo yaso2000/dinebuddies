@@ -9,6 +9,7 @@ import { serverTimestamp } from 'firebase/firestore';
 import LocationPicker from '../components/LocationPicker';
 import ServiceMediaPicker from '../components/ServiceMediaPicker';
 import LocationAutocomplete from '../components/LocationAutocomplete';
+import { geocode } from '../utils/locationUtils';
 import './EditBusinessProfile.css';
 
 const EditBusinessProfile = () => {
@@ -85,8 +86,16 @@ const EditBusinessProfile = () => {
         'BBQ Parties', 'Food Truck', 'Lounge', 'Other'
     ];
 
+    // Redirect if not a business account
+    useEffect(() => {
+        if (!loading && (!userProfile || userProfile.accountType !== 'business')) {
+            navigate('/');
+        }
+    }, [userProfile, loading, navigate]);
+
     // Load existing data
     useEffect(() => {
+        if (!userProfile) return;
         const info = userProfile?.businessInfo || userProfile?.businessInfoDraft;
         if (info) {
             setFormData({
@@ -306,20 +315,18 @@ const EditBusinessProfile = () => {
                 });
             }
 
-            // Fallback to OpenStreetMap Nominatim
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
-            );
-            const data = await response.json();
+            // Fallback to our resilient geocode utility (Nominatim)
+            const result = await geocode(address);
 
-            if (data && data.length > 0) {
-                console.log('✅ Geocoded address (OSM):', address, '→', {
-                    lat: parseFloat(data[0].lat),
-                    lng: parseFloat(data[0].lon)
+            if (result.success && result.results.length > 0) {
+                const firstResult = result.results[0];
+                console.log('✅ Geocoded address (Utility):', address, '→', {
+                    lat: firstResult.lat,
+                    lng: firstResult.lng
                 });
                 return {
-                    lat: parseFloat(data[0].lat),
-                    lng: parseFloat(data[0].lon)
+                    lat: firstResult.lat,
+                    lng: firstResult.lng
                 };
             }
 
@@ -400,14 +407,14 @@ const EditBusinessProfile = () => {
             }
 
             const updates = {
-                // تحديث البيانات الأساسية للمطعم
-                display_name: formData.businessName, // اسم المطعم
-                photo_url: logoImageUrl, // لوجو المطعم
+                // Update basic business data
+                display_name: formData.businessName, // Restaurant Name
+                photo_url: logoImageUrl, // Restaurant Logo
 
                 businessInfo: {
                     ...currentInfo,
-                    // NO businessName - موجود في display_name
-                    // NO logoImage - موجود في photo_url
+                    // NO businessName - exists in display_name
+                    // NO logoImage - exists in photo_url
                     tagline: formData.tagline,
                     businessType: formData.businessType,
                     description: formData.description,
@@ -424,7 +431,7 @@ const EditBusinessProfile = () => {
                         lng: finalLng ? parseFloat(finalLng) : null
                     },
                     coverImage: coverImageUrl,
-                    // NO logoImage - استخدم photo_url
+                    // NO logoImage - use photo_url
                     socialMedia: {
                         instagram: formData.instagram,
                         twitter: formData.twitter,

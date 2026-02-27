@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaBirthdayCake, FaMoneyBillWave, FaLock, FaGlobe, FaPlus } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaBirthdayCake, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaHeart, FaBriefcase, FaCocktail, FaSearch, FaMoon, FaUtensils, FaCoffee, FaGamepad } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale, IoPeople } from 'react-icons/io5';
 import { HiUserGroup, HiUser } from 'react-icons/hi2';
 import { useInvitations } from '../context/InvitationContext';
@@ -14,8 +14,9 @@ import { uploadInvitationPhoto } from '../utils/imageUpload';
 import { processInvitationMedia } from '../services/mediaService';
 import { validateInvitationCreation } from '../utils/invitationValidation';
 import { canCreateInvitation } from '../utils/cancellationPolicy';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { fetchIpLocation } from '../utils/locationUtils';
 
 const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
@@ -38,7 +39,8 @@ const CreateInvitation = () => {
     const [mediaData, setMediaData] = useState(null); // NEW: For MediaSelector
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [showFriendSelector, setShowFriendSelector] = useState(false); // To toggle modal
+    const [friendsLoading, setFriendsLoading] = useState(false);
+
     const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
     const [suggestedImages, setSuggestedImages] = useState([]); // Suggested venue images
 
@@ -48,6 +50,30 @@ const CreateInvitation = () => {
     const fromRestaurant = location.state?.fromRestaurant || !!restaurantData;
     const editingDraft = location.state?.editingDraft; // Editing draft from preview
     const draftId = location.state?.draftId; // Draft ID to load
+    const editingInvitation = location.state?.editingInvitation; // Editing PUBLISHED invitation
+
+    // Normalize legacy invitation data for validation (Safety Check)
+    const originalGenderGroups = React.useMemo(() => {
+        if (!editingInvitation) return [];
+        if (editingInvitation.genderGroups && editingInvitation.genderGroups.length > 0) return editingInvitation.genderGroups;
+        // Legacy handling
+        if (editingInvitation.genderPreference === 'any' || !editingInvitation.genderPreference) return ['male', 'female', 'unspecified'];
+        return [editingInvitation.genderPreference];
+    }, [editingInvitation]);
+
+    const originalAgeGroups = React.useMemo(() => {
+        if (!editingInvitation) return [];
+        if (editingInvitation.ageGroups && editingInvitation.ageGroups.length > 0) return editingInvitation.ageGroups;
+        // Legacy handling
+        if (!editingInvitation.ageRange || editingInvitation.ageRange === 'any') {
+            return ['18-24', '25-34', '35-44', '45-54', '55+'];
+        }
+        // If specific legacy range, we try to match or default to all to be safe (preventing removal of potentially huge groups)
+        // For now, if it's not 'any', we assume it maps to 'all' to prevent accidental restriction, or just let them edit.
+        // User specific case: "Defined all ages".
+        return ['18-24', '25-34', '35-44', '45-54', '55+'];
+    }, [editingInvitation]);
+
 
     const [formData, setFormData] = useState({
         title: offerData?.title
@@ -68,8 +94,11 @@ const CreateInvitation = () => {
         // Get location from multiple possible sources
         location: offerData?.locationDetails || offerData?.location || restaurantData?.address || restaurantData?.location || prefilledData?.location || '',
         guestsNeeded: 3,
-        genderPreference: 'any',
-        ageRange: 'any',
+        guestsNeeded: 3,
+        genderPreference: 'custom',
+        genderGroups: [], // Default to NONE selected
+        ageRange: 'custom',
+        ageGroups: [], // Default to NONE selected
         paymentType: 'Split',
         description: offerData?.description || '',
         image: offerData?.image || restaurantData?.image || prefilledData?.restaurantImage || null,
@@ -77,11 +106,31 @@ const CreateInvitation = () => {
         lat: offerData?.lat || restaurantData?.lat || restaurantData?.coordinates?.lat || prefilledData?.lat,
         lng: offerData?.lng || restaurantData?.lng || restaurantData?.coordinates?.lng || prefilledData?.lng,
         privacy: 'public',
-        invitedUserIds: [],
+
         // Special Offer constraints
         minDate: offerData?.startDate || null,
         maxDate: offerData?.endDate || null,
-        offerId: offerData?.offerId || null
+        lastLocationUpdate: serverTimestamp(),
+        occasionType: editingInvitation?.occasionType || 'Social',
+        // Override with editingInvitation data if present
+        ...(editingInvitation ? {
+            ...editingInvitation,
+            title: editingInvitation.title,
+            description: editingInvitation.description,
+            date: editingInvitation.date,
+            time: editingInvitation.time,
+            guestsNeeded: editingInvitation.guestsNeeded,
+            genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
+            ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
+            image: editingInvitation.image, // Keep existing image URL
+            location: editingInvitation.location,
+            lat: editingInvitation.lat,
+            lng: editingInvitation.lng,
+            city: editingInvitation.city,
+            country: editingInvitation.country,
+            userLat: editingInvitation.userLat,
+            userLng: editingInvitation.userLng,
+        } : {})
     });
 
     // Load draft if editing
@@ -96,7 +145,7 @@ const CreateInvitation = () => {
                         const draft = invitationDoc.data();
                         setFormData({
                             ...draft,
-                            invitedUserIds: draft.invitedUserIds || []
+
                         });
                     }
                 } catch (error) {
@@ -108,55 +157,10 @@ const CreateInvitation = () => {
         loadDraft();
     }, [editingDraft, draftId]);
 
-    // Derived Friends List (Mutual Friends - المتابعة المتبادلة)
-    // Only show people where: I follow them AND they follow me
-    const friendsList = React.useMemo(() => {
+    // Mutual friend fetching removed (Private-only feature)
 
-        // Check if user is logged in properly
-        if (!currentUser || !currentUser.id || currentUser.id === 'guest') {
-            return [];
-        }
 
-        if (!currentUser?.following || !allUsers || !currentUser?.id) {
-            return [];
-        }
 
-        // Filter for MUTUAL friends only
-        const mutualFriends = allUsers.filter(u => {
-            // Skip self
-            if (u.id === currentUser.id) return false;
-
-            // I must be following them
-            const iFollowThem = currentUser.following && currentUser.following.includes(u.id);
-
-            if (!iFollowThem) return false; // Skip if I don't follow them
-
-            // They must be following me back
-            // Check if they have a following field and it's an array
-            const theirFollowing = u.following;
-            const hasFollowingField = theirFollowing !== undefined && theirFollowing !== null;
-            const isArray = Array.isArray(theirFollowing);
-            const theyFollowMe = hasFollowingField && isArray && theirFollowing.includes(currentUser.id);
-
-            const isMutual = theyFollowMe;
-
-            return isMutual;
-        });
-
-        return mutualFriends;
-    }, [currentUser?.following, allUsers, currentUser?.id]);
-
-    // Handle friend selection
-    const handleFriendToggle = (userId) => {
-        setFormData(prev => {
-            const currentSelected = prev.invitedUserIds || [];
-            if (currentSelected.includes(userId)) {
-                return { ...prev, invitedUserIds: currentSelected.filter(id => id !== userId) };
-            } else {
-                return { ...prev, invitedUserIds: [...currentSelected, userId] };
-            }
-        });
-    };
 
     // Update title when language changes if from restaurant
     useEffect(() => {
@@ -226,11 +230,20 @@ const CreateInvitation = () => {
             return;
         }
 
-        if (formData.privacy === 'private' && (!formData.invitedUserIds || formData.invitedUserIds.length === 0)) {
-            console.log('❌ Private invitation validation failed');
-            alert(t('please_select_friends') || 'Please select at least one friend for private invitation.');
+
+
+        // Validate Gender Groups (Must have at least one)
+        if (!formData.genderGroups || formData.genderGroups.length === 0) {
+            alert(t('please_select_gender_group', { defaultValue: 'Please select at least one gender group' }));
             return;
         }
+
+        // Validate Age Groups (Must have at least one)
+        if (!formData.ageGroups || formData.ageGroups.length === 0) {
+            alert(t('please_select_age_group', { defaultValue: 'Please select at least one age group' }));
+            return;
+        }
+
 
         // Check for cancellation restrictions
         if (restrictionInfo && !restrictionInfo.canCreate) {
@@ -243,12 +256,16 @@ const CreateInvitation = () => {
 
         // Check daily invitation limit
         console.log('✅ Starting validation check...');
-        const validation = await validateInvitationCreation(currentUser.uid);
+        const userId = currentUser?.id || authUser?.uid;
+        if (!userId) {
+            alert(t('login_required') || 'Authentication required');
+            return;
+        }
+
+        const validation = await validateInvitationCreation(userId);
         if (!validation.valid) {
             console.log('❌ Daily limit validation failed:', validation.error);
-            const confirmMessage = i18n.language === 'ar'
-                ? `${validation.error}\n\n${t('go_to_current_invitation')}`
-                : `${validation.error}\n\nDo you want to go to your current invitation?`;
+            const confirmMessage = `${validation.error}\n\nDo you want to go to your current invitation?`;
 
             if (window.confirm(confirmMessage)) {
                 navigate(`/invitation/${validation.existingInvitation.id}`);
@@ -279,6 +296,24 @@ const CreateInvitation = () => {
                     console.log('👤 Using User ID:', userId);
                     mediaFields = await processInvitationMedia(mediaData, userId);
                     console.log('✅ Media processed:', mediaFields);
+
+                    if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
+                        // For updates, use deleteField. For new docs, just exclude them.
+                        const isUpdate = (editingDraft && draftId) || editingInvitation;
+
+                        if (isUpdate) {
+                            mediaFields.customImage = deleteField();
+                            mediaFields.customVideo = deleteField();
+                            mediaFields.videoThumbnail = deleteField();
+                        } else {
+                            // On new doc, we just ensure these aren't in the object if we don't want them
+                            delete mediaFields.customImage;
+                            delete mediaFields.customVideo;
+                            delete mediaFields.videoThumbnail;
+                        }
+                        mediaFields.mediaType = 'image';
+                    }
+
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
                     throw new Error(t('media_upload_failed') || 'Failed to upload media');
@@ -313,7 +348,6 @@ const CreateInvitation = () => {
             if (editingDraft && draftId) {
                 // Update existing draft
                 console.log('🔄 Updating existing draft:', draftId);
-                const { updateDoc } = await import('firebase/firestore');
                 const invitationRef = doc(db, 'invitations', draftId);
                 await updateDoc(invitationRef, draftData);
                 finalDraftId = draftId;
@@ -330,6 +364,7 @@ const CreateInvitation = () => {
                 navigate(`/invitation/preview/${finalDraftId}`);
             } else {
                 console.error('❌ No draft ID returned!');
+                alert(t('failed_create_invitation') || 'Failed to create invitation. Please try again.');
             }
         } catch (error) {
             console.error('❌ Error creating draft:', error);
@@ -343,7 +378,7 @@ const CreateInvitation = () => {
     // Keep original handleSubmit for backward compatibility (if needed)
     const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log('🚀 Publishing invitation directly...');
+        console.log('🚀 Publishing invitation directly/updating...');
 
         if (isSubmitting) return;
 
@@ -371,10 +406,7 @@ const CreateInvitation = () => {
             return;
         }
 
-        if (formData.privacy === 'private' && (!formData.invitedUserIds || formData.invitedUserIds.length === 0)) {
-            alert(t('please_select_friends') || 'Please select at least one friend for private invitation.');
-            return;
-        }
+
 
         // Check for cancellation restrictions
         if (restrictionInfo && !restrictionInfo.canCreate) {
@@ -384,17 +416,19 @@ const CreateInvitation = () => {
             return;
         }
 
-        // Check daily invitation limit
-        const validation = await validateInvitationCreation(currentUser.uid);
-        if (!validation.valid) {
-            const confirmMessage = i18n.language === 'ar'
-                ? `${validation.error}\n\n${t('go_to_current_invitation')}`
-                : `${validation.error}\n\nDo you want to go to your current invitation?`;
+        // Check daily invitation limit (only if creating new)
+        if (!editingInvitation) {
+            const validation = await validateInvitationCreation(currentUser.uid);
+            if (!validation.valid) {
+                const confirmMessage = i18n.language === 'ar'
+                    ? `${validation.error}\n\n${t('go_to_current_invitation')}`
+                    : `${validation.error}\n\nDo you want to go to your current invitation?`;
 
-            if (window.confirm(confirmMessage)) {
-                navigate(`/invitation/${validation.existingInvitation.id}`);
+                if (window.confirm(confirmMessage)) {
+                    navigate(`/invitation/${validation.existingInvitation.id}`);
+                }
+                return;
             }
-            return;
         }
 
         setIsSubmitting(true);
@@ -402,11 +436,48 @@ const CreateInvitation = () => {
 
         try {
             let finalImageUrl = formData.image;
+            let mediaFields = {};
 
-            // Upload new image if selected
-            if (imageFile) {
-                console.log('📤 Uploading image...');
-                const invitationId = `temp_${Date.now()}`; // Temporary ID for upload path
+            // 1. Process New Media from MediaSelector (Prioritized)
+            if (mediaData) {
+                console.log('📤 Processing media from MediaSelector...');
+                setUploadProgress(20);
+
+                try {
+                    const userId = currentUser?.id || authUser?.uid;
+                    if (!userId) throw new Error('User ID missing');
+
+                    mediaFields = await processInvitationMedia(mediaData, userId);
+                    console.log('✅ Media processed successfully:', mediaFields);
+
+                    if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
+                        if (editingInvitation) {
+                            mediaFields.customImage = deleteField();
+                            mediaFields.customVideo = deleteField();
+                            mediaFields.videoThumbnail = deleteField();
+                        } else {
+                            delete mediaFields.customImage;
+                            delete mediaFields.customVideo;
+                            delete mediaFields.videoThumbnail;
+                        }
+                        mediaFields.mediaType = 'image';
+                    }
+
+                    if (mediaFields.restaurantImage) {
+                        finalImageUrl = mediaFields.restaurantImage;
+                    }
+                } catch (mediaError) {
+                    console.error('❌ Media processing failed:', mediaError);
+                    alert(t('media_upload_failed') || 'Failed to upload media');
+                    setIsSubmitting(false);
+                    return;
+                }
+                setUploadProgress(80);
+            }
+            // 2. Fallback: Legacy Image Upload (if imageFile exists and no mediaData)
+            else if (imageFile) {
+                console.log('📤 Uploading image (Legacy)...');
+                const invitationId = editingInvitation ? editingInvitation.id : `temp_${Date.now()}`;
                 const url = await uploadInvitationPhoto(
                     imageFile,
                     invitationId,
@@ -415,28 +486,48 @@ const CreateInvitation = () => {
                 );
                 finalImageUrl = url;
                 console.log('✅ Image uploaded:', url);
+
+                // Construct legacy media fields
+                mediaFields = {
+                    mediaSource: 'custom',
+                    restaurantImage: url,
+                    mediaType: 'image'
+                };
             }
 
             const cleanData = {
                 ...formData,
-                image: finalImageUrl,
-                isFollowersOnly: formData.privacy === 'followers' // Backward compatibility
-                // privacy: formData.privacy, // Already getting spread from formData
-                // invitedUserIds: formData.invitedUserIds // Already getting spread
+                ...mediaFields, // Merge new media fields
+                image: finalImageUrl, // Ensure backward compatibility for views using 'image'
+                isFollowersOnly: formData.privacy === 'followers'
             };
 
-            console.log('📝 Creating invitation with data:', cleanData);
-            const newId = await addInvitation(cleanData);
-            console.log('✅ Invitation created with ID:', newId);
+            // Remove purely UI fields if strictly necessary, but Firestore ignores undefined usually.
+            // If mediaFields provided a video, ensure we don't accidentally keep old image as primary if unnecessary
+            if (mediaFields.mediaType === 'video') {
+                // If video, maybe clear image field if it was a photo? 
+                // But usually we need a thumbnail. processInvitationMedia returns thumbnail in restaurantImage or similar? 
+                // Let's rely on mediaFields return values.
+            }
 
-            if (newId) {
-                console.log('🔄 Navigating to invitation:', `/invitation/${newId}`);
-                navigate(`/invitation/${newId}`);
+            if (editingInvitation) {
+                console.log('📝 Updating invitation:', editingInvitation.id);
+                const invitationRef = doc(db, 'invitations', editingInvitation.id);
+
+                await updateDoc(invitationRef, cleanData);
+                console.log('✅ Invitation updated');
+                alert(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }));
+                navigate(`/invitation/${editingInvitation.id}`);
             } else {
-                console.error('❌ No invitation ID returned!');
+                // This path is usually handled by handlePreview -> Draft -> Publish, but logic remains
+                console.log('📝 Creating invitation via direct submit...');
+                const newId = await addInvitation(cleanData);
+                if (newId) {
+                    navigate(`/invitation/${newId}`);
+                }
             }
         } catch (error) {
-            console.error('❌ Error creating invitation:', error);
+            console.error('❌ Error creating/updating invitation:', error);
             alert(t('failed_create_invitation'));
         } finally {
             setIsSubmitting(false);
@@ -498,26 +589,17 @@ const CreateInvitation = () => {
             return false;
         };
 
-        const fetchIpLocation = async () => {
-            try {
-                console.log('🌐 Fetching IP-based location (Hidden Fallback)...');
-                const response = await fetch('https://ipwho.is/');
-                const data = await response.json();
-
-                if (data.success) {
-                    console.log('✅ IP Location found:', data.city, data.country_code);
-                    setFormData(prev => ({
-                        ...prev,
-                        city: data.city,
-                        country: data.country_code,
-                        userLat: data.latitude,
-                        userLng: data.longitude
-                    }));
-                } else {
-                    console.warn('❌ IP Location failed:', data.message);
-                }
-            } catch (error) {
-                console.error('❌ IP Location Error:', error);
+        const fetchLocation = async () => {
+            const data = await fetchIpLocation();
+            if (data.success) {
+                console.log('✅ IP Location found:', data.city, data.country_code);
+                setFormData(prev => ({
+                    ...prev,
+                    city: data.city,
+                    country: data.country_code,
+                    userLat: data.latitude,
+                    userLng: data.longitude
+                }));
             }
         };
 
@@ -527,10 +609,66 @@ const CreateInvitation = () => {
 
             // 2. If no profile location, use IP Fallback
             if (!profileFound) {
-                fetchIpLocation();
+                fetchLocation();
             }
         }
     }, [userProfile, restaurantData]);
+
+    // Restore Google Images when editing (Address User Issue: Images missing in Edit Mode)
+    useEffect(() => {
+        const restoreImages = () => {
+            if (editingInvitation &&
+                (!suggestedImages || suggestedImages.length === 0) &&
+                !fromRestaurant &&
+                window.google &&
+                window.google.maps &&
+                window.google.maps.places) {
+
+                // Use location name for search
+                const queryName = editingInvitation.location || editingInvitation.restaurantName;
+                if (!queryName) return;
+
+                const searchQuery = queryName + (editingInvitation.city ? ` ${editingInvitation.city}` : '');
+                console.log('🔄 Restoring Google Images for:', searchQuery);
+
+                try {
+                    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+                    const request = {
+                        query: searchQuery,
+                        fields: ['place_id'] // Fetch ID first
+                    };
+
+                    service.findPlaceFromQuery(request, (results, status) => {
+                        if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+                            const placeId = results[0].place_id;
+
+                            // Get full details to ensure we get ALL photos
+                            service.getDetails({
+                                placeId: placeId,
+                                fields: ['photos']
+                            }, (placeDetails, detailStatus) => {
+                                if (detailStatus === window.google.maps.places.PlacesServiceStatus.OK && placeDetails.photos) {
+                                    const urls = placeDetails.photos.slice(0, 5).map(p => p.getUrl({ maxWidth: 800 }));
+                                    console.log('✅ Successfully restored', urls.length, 'images via getDetails');
+                                    setSuggestedImages(urls);
+                                } else {
+                                    console.log('⚠️ Place found but getDetails returned no photos');
+                                }
+                            });
+                        } else {
+                            console.log('⚠️ Could not find place to restore images:', status);
+                        }
+                    });
+                } catch (err) {
+                    console.error('❌ Error restoring images:', err);
+                }
+            }
+        };
+
+        // Attempt restore after short delay to ensure Google API loaded
+        const timer = setTimeout(restoreImages, 1000);
+        return () => clearTimeout(timer);
+    }, [editingInvitation, fromRestaurant]);
 
     // Check for cancellation restrictions
     useEffect(() => {
@@ -553,7 +691,9 @@ const CreateInvitation = () => {
 
     return (
         <div className="page-container">
-            <h2 style={{ marginBottom: '1rem', fontSize: '1.5rem', fontWeight: '900' }}>{t('create_invitation_title')}</h2>
+            <h2 style={{ marginBottom: '1rem', fontSize: '1.5rem', fontWeight: '900' }}>
+                {editingInvitation ? t('edit_invitation', { defaultValue: 'Edit Invitation' }) : t('create_invitation_title')}
+            </h2>
 
             {/* Restriction Warning Banner */}
             {restrictionInfo && !restrictionInfo.canCreate && (
@@ -630,52 +770,86 @@ const CreateInvitation = () => {
                 </div>
             )}
 
-            <form onSubmit={handlePreview} className="create-form">
-
-                {/* 1. Location Search - FIRST STEP */}
+            {/* Show Locked Venue when Editing (Title/Location cannot change) */}
+            {editingInvitation && (
                 <div style={{
-                    background: 'var(--card-bg)',
-                    padding: '1rem', // Condensed padding
-                    borderRadius: '16px',
-                    border: '1px solid var(--border-color)',
-                    marginBottom: '1rem' // Condensed margin
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(244, 63, 94, 0.15))',
+                    border: '1px solid var(--primary)',
+                    borderRadius: '15px',
+                    padding: '1rem 1.25rem',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
                 }}>
-                    <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        📍 {t('search_venue') || 'Search for a Venue'}
-                    </h3>
-
-
-
-                    {/* Venue Search */}
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
-                            {t('form_location_label')}
-                            {formData.city && (
-                                <span style={{
-                                    color: 'var(--primary)',
-                                    fontWeight: 'bold',
-                                    fontSize: '0.95rem',
-                                    marginLeft: '8px',
-                                    marginRight: '8px'
-                                }}>
-                                    ({t('in_my_city') || 'In'} {formData.city} 📍)
-                                </span>
-                            )}
-                        </label>
-                        <LocationAutocomplete
-                            value={formData.location}
-                            onChange={handleChange}
-                            onSelect={handleLocationSelect}
-                            city={formData.city}
-                            countryCode={formData.country}
-                            userLat={formData.userLat}
-                            userLng={formData.userLng}
-                        />
-                        <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
-                            {t('location_helper_text') || 'Search for restaurants, cafes, or venues near you'}
-                        </small>
+                    <FaMapMarkerAlt style={{ color: 'var(--primary)', fontSize: '1.2rem' }} />
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                            {t('venue_location') || 'Venue Location'}
+                        </div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)' }}>
+                            {formData.restaurantName || formData.location || formData.title}
+                        </div>
+                        {formData.city && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                {formData.city}
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ fontSize: '1.2rem', color: 'var(--text-muted)', opacity: 0.5 }}>
+                        <FaLock />
                     </div>
                 </div>
+            )}
+
+            <form onSubmit={editingInvitation ? handleSubmit : handlePreview} className="create-form">
+
+                {/* 1. Location Search - FIRST STEP - Hidden when editing */}
+                {!editingInvitation && (
+                    <div style={{
+                        background: 'var(--card-bg)',
+                        padding: '1rem', // Condensed padding
+                        borderRadius: '16px',
+                        border: '1px solid var(--border-color)',
+                        marginBottom: '1rem' // Condensed margin
+                    }}>
+                        <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            📍 {t('search_venue') || 'Search for a Venue'}
+                        </h3>
+
+
+
+                        {/* Venue Search */}
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
+                                {t('form_location_label')}
+                                {formData.city && (
+                                    <span style={{
+                                        color: 'var(--primary)',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.95rem',
+                                        marginLeft: '8px',
+                                        marginRight: '8px'
+                                    }}>
+                                        ({t('in_my_city') || 'In'} {formData.city} 📍)
+                                    </span>
+                                )}
+                            </label>
+                            <LocationAutocomplete
+                                value={formData.location}
+                                onChange={handleChange}
+                                onSelect={handleLocationSelect}
+                                city={formData.city}
+                                countryCode={formData.country}
+                                userLat={formData.userLat}
+                                userLng={formData.userLng}
+                            />
+                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
+                                {t('location_helper_text') || 'Search for restaurants, cafes, or venues near you'}
+                            </small>
+                        </div>
+                    </div>
+                )}
 
                 {/* 2. Media Selection - SECOND STEP */}
                 <div style={{
@@ -744,7 +918,28 @@ const CreateInvitation = () => {
                         onChange={handleChange}
                         required
                         className="input-field"
+                        disabled={!!editingInvitation}
+                        style={editingInvitation ? { opacity: 0.6, cursor: 'not-allowed', background: 'var(--hover-overlay)' } : {}}
                     />
+                </div>
+
+                {/* 4. Message Area (Moved from bottom) */}
+                <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label>{t('form_message_label', 'Message')}</label>
+                        <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) > 180 ? '#f87171' : 'var(--text-muted)' }}>
+                            {(formData.description?.length || 0)}/200
+                        </span>
+                    </div>
+                    <textarea
+                        name="description"
+                        rows="4"
+                        placeholder={t('form_message_placeholder', 'Write your message to the invitees here...')}
+                        value={formData.description}
+                        onChange={handleChange}
+                        className="input-field text-area"
+                        maxLength="200"
+                    ></textarea>
                 </div>
 
                 <div className="form-grid">
@@ -765,8 +960,60 @@ const CreateInvitation = () => {
                         <select name="paymentType" value={formData.paymentType} onChange={handleChange} className="input-field">
                             <option value="Split">{t('payment_split')}</option>
                             <option value="Host Pays">{t('payment_host')}</option>
-                            <option value="Each pays their own">{t('payment_own')}</option>
                         </select>
+                    </div>
+                </div>
+
+                {/* 5. Invitation Mood / Occasion Type Selection - For Card Design */}
+                <div className="form-group" style={{ marginTop: '1rem' }}>
+                    <label className="elegant-label">
+                        <span className="label-icon"><FaPlus /></span>
+                        {t('invitation_occasion_type', 'Invitation Mood (Card Design)')}
+                    </label>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '12px',
+                        marginTop: '0.5rem'
+                    }}>
+                        {[
+                            { value: 'Dating', label: t('occasion_dating'), icon: FaHeart, color: '#f43f5e' },
+                            { value: 'Birthday', label: t('occasion_birthday'), icon: FaBirthdayCake, color: '#fb923c' },
+                            { value: 'Social', label: t('occasion_social'), icon: FaUsers, color: '#22c55e' },
+                            { value: 'Work', label: t('occasion_work'), icon: FaBriefcase, color: '#8b5cf6' },
+                            { value: 'Nightlife', label: t('occasion_nightlife'), icon: FaMoon, color: '#eab308' },
+                            { value: 'Dining', label: t('occasion_dining'), icon: FaUtensils, color: '#3b82f6' },
+                            { value: 'Café', label: t('occasion_cafe'), icon: FaCoffee, color: '#d97706' },
+                            { value: 'Gaming', label: t('occasion_gaming'), icon: FaGamepad, color: '#6366f1' }
+                        ].map((option) => {
+                            const isSelected = formData.occasionType === option.value;
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, occasionType: option.value })}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '10px',
+                                        padding: '16px 10px',
+                                        borderRadius: '16px',
+                                        border: isSelected ? `2px solid ${option.color}` : '1px solid var(--border-color)',
+                                        background: isSelected ? `${option.color}15` : 'var(--bg-input)',
+                                        color: isSelected ? option.color : 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease',
+                                        transform: isSelected ? 'translateY(-2px)' : 'none',
+                                        boxShadow: isSelected ? `0 4px 15px ${option.color}20` : 'none'
+                                    }}
+                                >
+                                    <option.icon style={{ fontSize: '1.4rem' }} />
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '800' }}>{option.label}</span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -786,7 +1033,9 @@ const CreateInvitation = () => {
                             value={formData.date}
                             onChange={handleChange}
                             required
+                            disabled={!!editingInvitation} // Lock Date
                             className="input-field"
+                            style={editingInvitation ? { opacity: 0.6, cursor: 'not-allowed', background: 'var(--hover-overlay)' } : {}}
                         />
                     </div>
 
@@ -803,7 +1052,9 @@ const CreateInvitation = () => {
                             value={formData.time}
                             onChange={handleChange}
                             required
+                            disabled={!!editingInvitation} // Lock Time
                             className="input-field"
+                            style={editingInvitation ? { opacity: 0.6, cursor: 'not-allowed', background: 'var(--hover-overlay)' } : {}}
                         />
                     </div>
                 </div>
@@ -813,7 +1064,7 @@ const CreateInvitation = () => {
                         <span className="label-icon">
                             <FaUserFriends />
                         </span>
-                        {t('form_guests_label')}
+                        {t('guests_needed')}
                     </label>
                     <input
                         type="number"
@@ -827,186 +1078,177 @@ const CreateInvitation = () => {
                     />
                 </div>
 
-                {/* Gender Preference */}
+                {/* Gender Groups Preference */}
                 <div className="form-group">
-                    <label className="elegant-label">
-                        <span className="label-icon">
-                            <FaVenusMars />
+                    <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>
+                            <span className="label-icon"><FaVenusMars /></span>
+                            {t('guest_gender_preference')}
                         </span>
-                        {t('guest_gender_preference')}
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                        <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, genderPreference: 'male' })}
-                            style={{
-                                padding: '12px',
-                                borderRadius: '12px',
-                                border: formData.genderPreference === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                background: formData.genderPreference === 'male' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                color: 'var(--text-main)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <IoMale style={{ fontSize: '1.8rem', color: formData.genderPreference === 'male' ? 'var(--primary)' : 'var(--text-secondary)' }} />
-                            <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                {t('male')}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, genderPreference: 'female' })}
-                            style={{
-                                padding: '12px',
-                                borderRadius: '12px',
-                                border: formData.genderPreference === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                background: formData.genderPreference === 'female' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                color: 'var(--text-main)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <IoFemale style={{ fontSize: '1.8rem', color: formData.genderPreference === 'female' ? 'var(--primary)' : 'var(--text-secondary)' }} />
-                            <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                {t('female')}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, genderPreference: 'any' })}
-                            style={{
-                                padding: '12px',
-                                borderRadius: '12px',
-                                border: formData.genderPreference === 'any' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                background: formData.genderPreference === 'any' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                color: 'var(--text-main)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <IoMaleFemale style={{ fontSize: '1.8rem', color: formData.genderPreference === 'any' ? 'var(--primary)' : 'var(--text-secondary)' }} />
-                            <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                                {t('any')}
-                            </span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Age Range Preference */}
-                {/* Age Groups Preference (Multi-Select) */}
-                <div className="form-group">
-                    <label className="elegant-label">
-                        <span className="label-icon">
-                            <FaBirthdayCake />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+                            {t('multi_select', { defaultValue: '(Select multiple)' })}
                         </span>
-                        {t('age_range_preference')}
                     </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                         {[
-                            { value: '18-24', label: '18-24' },
-                            { value: '25-34', label: '25-34' },
-                            { value: '35-44', label: '35-44' },
-                            { value: '45-54', label: '45-54' },
-                            { value: '55+', label: '55+' },
-                            { value: 'any', label: t('any') }
+                            { value: 'male', label: t('male'), icon: IoMale },
+                            { value: 'female', label: t('female'), icon: IoFemale },
+                            { value: 'unspecified', label: t('non_binary', { defaultValue: 'Non-Binary' }), icon: IoMaleFemale }
                         ].map((option) => {
-                            // Check if selected
-                            const isAny = formData.ageGroups?.includes('any') || !formData.ageGroups || formData.ageGroups.length === 0;
-                            const isSelected = option.value === 'any' ? isAny : formData.ageGroups?.includes(option.value);
+                            const currentGroups = formData.genderGroups || [];
+                            const isSelected = currentGroups.includes(option.value);
 
                             return (
                                 <button
                                     key={option.value}
                                     type="button"
                                     onClick={() => {
-                                        let newGroups = formData.ageGroups || [];
-
-                                        if (option.value === 'any') {
-                                            // Ensure 'any' is exclusive or just clears others?
-                                            // Ideally, if 'any' is clicked, clear specific groups and set 'any'
-                                            newGroups = ['any'];
-                                        } else {
-                                            // If a specific group is clicked
-                                            // Remove 'any' first
-                                            if (newGroups.includes('any')) newGroups = [];
-
-                                            if (newGroups.includes(option.value)) {
-                                                // Deselect
-                                                newGroups = newGroups.filter(g => g !== option.value);
-                                            } else {
-                                                // Select
-                                                newGroups = [...newGroups, option.value];
+                                        let newGroups = [...currentGroups];
+                                        if (isSelected) {
+                                            // PREVENT REMOVAL if it was in the original invitation (Normalized)
+                                            if (originalGenderGroups.includes(option.value)) {
+                                                alert(t('cannot_remove_gender_group', { defaultValue: 'Cannot remove a previously selected group. You can only add more.' }));
+                                                return;
                                             }
-
-                                            // If nothing selected, default back to 'any'
-                                            if (newGroups.length === 0) newGroups = ['any'];
+                                            newGroups = newGroups.filter(g => g !== option.value);
+                                        } else {
+                                            newGroups.push(option.value);
                                         }
-
-                                        setFormData({ ...formData, ageGroups: newGroups });
+                                        setFormData({ ...formData, genderGroups: newGroups, genderPreference: 'custom' });
                                     }}
                                     style={{
-                                        padding: '14px 12px',
-                                        borderRadius: '12px',
+                                        position: 'relative',
+                                        padding: '16px 12px',
+                                        borderRadius: '16px',
                                         border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                        background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                        color: 'var(--text-main)',
+                                        background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
+                                        color: isSelected ? 'var(--text-main)' : 'var(--text-secondary)',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '4px',
-                                        transition: 'all 0.2s',
-                                        gridColumn: option.value === 'any' ? 'span 3' : 'span 1',
-                                        // Make '55+' span 2 to fit nicely in 3-column grid? No, 5 items + any = 6 items. 
-                                        // 18-24, 25-34, 35-44 (Row 1)
-                                        // 45-54, 55+, Any (Row 2)? "Any" spanning 1? Or make "Any" span 3 at bottom?
-                                        // Let's standard grid:
-                                        // Row 1: 18-24, 25-34, 35-44
-                                        // Row 2: 45-54, 55+, (Empty)
-                                        // Row 3: Any (Span 3)
-                                        // Let's force Any to span 3.
-                                        minHeight: '70px'
+                                        gap: '8px',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        transform: isSelected ? 'translateY(-2px)' : 'none',
+                                        boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
                                     }}
                                 >
-                                    <HiUser style={{
-                                        fontSize: '1.6rem',
-                                        color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
-                                        marginBottom: '4px'
-                                    }} />
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
+                                    {isSelected && (
+                                        <div style={{ position: 'absolute', top: '8px', right: '8px', color: 'var(--primary)', fontSize: '0.8rem' }}>
+                                            <FaCheckCircle />
+                                        </div>
+                                    )}
+                                    <option.icon style={{ fontSize: '2rem', color: isSelected ? 'var(--primary)' : 'inherit', filter: isSelected ? 'drop-shadow(0 0 8px rgba(139, 92, 246, 0.5))' : 'none' }} />
+                                    <span style={{ fontSize: '0.9rem', fontWeight: isSelected ? '800' : '600' }}>
                                         {option.label}
                                     </span>
                                 </button>
                             );
                         })}
                     </div>
+                    {(!formData.genderGroups || formData.genderGroups.length === 0) && (
+                        <p style={{ fontSize: '0.85rem', color: '#f87171', marginTop: '8px', textAlign: 'center', background: 'rgba(248, 113, 113, 0.1)', padding: '4px', borderRadius: '8px' }}>
+                            ⚠️ {t('select_at_least_one_gender', { defaultValue: 'Please select at least one option' })}
+                        </p>
+                    )}
+                </div>
+
+                {/* Age Groups Preference */}
+                <div className="form-group">
+                    <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>
+                            <span className="label-icon"><FaBirthdayCake /></span>
+                            {t('age_range_preference')}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+                            {t('multi_select', { defaultValue: '(Select multiple)' })}
+                        </span>
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                        {[
+                            { value: '18-24', label: '18-24' },
+                            { value: '25-34', label: '25-34' },
+                            { value: '35-44', label: '35-44' },
+                            { value: '45-54', label: '45-54' },
+                            { value: '55+', label: '55+' },
+                            // Removed 'Any' option as requested
+                        ].map((option) => {
+                            const currentGroups = formData.ageGroups || [];
+                            const isSelected = currentGroups.includes(option.value);
+
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => {
+                                        let newGroups = [...currentGroups];
+                                        if (isSelected) {
+                                            // PREVENT REMOVAL if it was in the original invitation (Normalized)
+                                            if (originalAgeGroups.includes(option.value)) {
+                                                alert(t('cannot_remove_age_group', { defaultValue: 'Cannot remove a previously selected age group. You can only add more.' }));
+                                                return;
+                                            }
+                                            newGroups = newGroups.filter(g => g !== option.value);
+                                        } else {
+                                            newGroups.push(option.value);
+                                        }
+                                        // If ageGroups is modified, we set ageRange to 'custom' to avoid legacy logic taking over
+                                        setFormData({ ...formData, ageGroups: newGroups, ageRange: 'custom' });
+                                    }}
+                                    style={{
+                                        position: 'relative',
+                                        padding: '16px 12px',
+                                        borderRadius: '16px',
+                                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                                        background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
+                                        color: isSelected ? 'var(--text-main)' : 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '4px',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        opacity: 1, // Full opacity for clear visibility
+                                        minHeight: '80px',
+                                        transform: isSelected ? 'translateY(-2px)' : 'none',
+                                        boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
+                                    }}
+                                >
+                                    {isSelected && (
+                                        <div style={{ position: 'absolute', top: '6px', right: '6px', color: 'var(--primary)', fontSize: '0.7rem' }}>
+                                            <FaCheckCircle />
+                                        </div>
+                                    )}
+                                    <HiUser style={{
+                                        fontSize: '1.8rem',
+                                        color: isSelected ? 'var(--primary)' : 'inherit',
+                                        marginBottom: '4px',
+                                        filter: isSelected ? 'drop-shadow(0 0 5px rgba(139, 92, 246, 0.5))' : 'none'
+                                    }} />
+                                    <span style={{ fontSize: '0.9rem', fontWeight: isSelected ? '800' : '600' }}>
+                                        {option.label}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {(!formData.ageGroups || formData.ageGroups.length === 0) && (
+                        <p style={{ fontSize: '0.85rem', color: '#f87171', marginTop: '8px', textAlign: 'center', background: 'rgba(248, 113, 113, 0.1)', padding: '4px', borderRadius: '8px' }}>
+                            ⚠️ {t('select_at_least_one_age', { defaultValue: 'Please select at least one age group' })}
+                        </p>
+                    )}
                 </div>
 
                 {/* Privacy Settings */}
-                <div className="form-group" style={{ marginTop: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1.25rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                <div className="form-group" style={{ marginTop: '1.5rem', background: 'var(--hover-overlay)', padding: '1.25rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
                     <label className="elegant-label" style={{ marginBottom: '1rem' }}>
                         <span className="label-icon"><FaLock /></span>
                         {t('privacy_settings') || 'Privacy Settings'}
                     </label>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                        {['public', 'followers', 'private'].map(mode => (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                        {['public', 'followers'].map(mode => (
                             <button
                                 key={mode}
                                 type="button"
@@ -1028,177 +1270,20 @@ const CreateInvitation = () => {
                                 {/* Icons */}
                                 {mode === 'public' && <FaGlobe style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
                                 {mode === 'followers' && <FaUserFriends style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
-                                {mode === 'private' && <FaLock style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
 
                                 <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
-                                    {mode === 'public' ? (t('public') || 'Public') :
-                                        mode === 'followers' ? (t('followers_only') || 'Followers') :
-                                            (t('private') || 'Private')}
+                                    {mode === 'public' ? (t('public') || 'Public') : (t('followers_only') || 'Followers')}
                                 </span>
                             </button>
                         ))}
                     </div>
-
-                    {/* Private Mode: Select Friends */}
-                    {
-                        formData.privacy === 'private' && (
-                            <div style={{ marginTop: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                    {t('select_specific_friends') || 'Select Friends to Invite'}
-                                </label>
-
-                                {/* Friends List - Inline */}
-                                <div style={{
-                                    background: 'var(--bg-card)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    padding: '1rem',
-                                    maxHeight: '300px',
-                                    overflowY: 'auto'
-                                }}>
-                                    {(() => {
-                                        console.log('🎯 RENDERING FRIENDS LIST:', {
-                                            friendsListLength: friendsList.length,
-                                            friendsList: friendsList,
-                                            currentUserId: currentUser?.id,
-                                            currentUserFollowing: currentUser?.following,
-                                            allUsersCount: allUsers?.length
-                                        });
-                                        return null;
-                                    })()}
-
-                                    {friendsList.length === 0 ? (
-                                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
-                                            <FaUserFriends style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }} />
-                                            <p style={{ margin: 0, marginBottom: '1rem' }}>
-                                                {t('no_friends_found_desc') || 'You need mutual friends to invite them privately.'}
-                                            </p>
-                                            <small style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                                                (People who follow you AND you follow them)
-                                            </small>
-
-                                            {/* Debug Info */}
-                                            <div style={{
-                                                marginTop: '1.5rem',
-                                                padding: '1rem',
-                                                background: 'rgba(255,0,0,0.1)',
-                                                borderRadius: '8px',
-                                                fontSize: '0.75rem',
-                                                textAlign: 'left'
-                                            }}>
-                                                <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#ef4444' }}>
-                                                    🔍 Debug Info:
-                                                </div>
-                                                <div>Your ID: {currentUser?.id || 'N/A'}</div>
-                                                <div>You follow: {currentUser?.following?.length || 0} people</div>
-                                                <div>Following IDs: {JSON.stringify(currentUser?.following || [])}</div>
-                                                <div>Total users in DB: {allUsers?.length || 0}</div>
-                                                <div>Mutual friends found: {friendsList.length}</div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <div style={{ marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                                {friendsList.length} {friendsList.length === 1 ? 'friend' : 'friends'} available
-                                            </div>
-                                            {friendsList.map(friend => {
-                                                const friendName = friend.display_name || friend.name || 'User';
-                                                const friendAvatar = friend.photo_url || friend.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default&backgroundColor=b6e3f4';
-                                                const friendUsername = friendName.replace(/\s/g, '').toLowerCase();
-                                                const isSelected = formData.invitedUserIds.includes(friend.id);
-
-                                                return (
-                                                    <div
-                                                        key={friend.id}
-                                                        onClick={() => handleFriendToggle(friend.id)}
-                                                        style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '12px',
-                                                            padding: '10px',
-                                                            borderRadius: '12px',
-                                                            background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
-                                                            cursor: 'pointer',
-                                                            marginBottom: '8px',
-                                                            border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                        onMouseEnter={e => {
-                                                            if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                                                        }}
-                                                        onMouseLeave={e => {
-                                                            if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                                        }}
-                                                    >
-                                                        <img
-                                                            src={friendAvatar}
-                                                            alt={friendName}
-                                                            style={{
-                                                                width: '40px',
-                                                                height: '40px',
-                                                                borderRadius: '50%',
-                                                                objectFit: 'cover'
-                                                            }}
-                                                        />
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ color: 'white', fontWeight: 'bold', fontSize: '0.95rem' }}>
-                                                                {friendName}
-                                                            </div>
-                                                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                                                @{friendUsername}
-                                                            </div>
-                                                        </div>
-                                                        <div style={{
-                                                            width: '24px',
-                                                            height: '24px',
-                                                            borderRadius: '50%',
-                                                            border: isSelected ? 'none' : '2px solid var(--text-muted)',
-                                                            background: isSelected ? 'var(--primary)' : 'transparent',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center'
-                                                        }}>
-                                                            {isSelected && <FaCheckCircle style={{ color: 'white', fontSize: '1rem' }} />}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {formData.invitedUserIds.length > 0 && (
-                                    <div style={{
-                                        marginTop: '0.5rem',
-                                        padding: '0.5rem',
-                                        background: 'rgba(139, 92, 246, 0.1)',
-                                        borderRadius: '8px',
-                                        color: 'var(--primary)',
-                                        fontSize: '0.85rem',
-                                        textAlign: 'center'
-                                    }}>
-                                        ✓ {formData.invitedUserIds.length} {formData.invitedUserIds.length === 1 ? 'friend' : 'friends'} selected
-                                    </div>
-                                )}
-                            </div>
-                        )
-                    }
                 </div >
 
-                <div className="form-group">
-                    <label>{t('form_details_label')}</label>
-                    <textarea
-                        name="description"
-                        rows="4"
-                        placeholder={t('form_details_placeholder')}
-                        value={formData.description}
-                        onChange={handleChange}
-                        className="input-field text-area"
-                    ></textarea>
-                </div>
+
+
 
                 <button type="submit" className="btn btn-primary btn-block" style={{ height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
-                    {isSubmitting ? t('loading') : (t('preview_invitation') || '📋 Preview Invitation')}
+                    {isSubmitting ? t('loading') : (editingInvitation ? (t('save_changes') || '💾 Save Changes') : (t('preview_invitation') || '📋 Preview Invitation'))}
                 </button>
             </form >
         </div >

@@ -8,6 +8,7 @@ import UnifiedCamera from '../components/UnifiedCamera';
 import { uploadImage } from '../utils/imageUpload';
 import { db } from '../firebase/config';
 import { collection, addDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import './CreateStory.css';
 
 const GRADIENTS = [
@@ -67,6 +68,23 @@ const CreateStory = () => {
 
     const fileInputRef = useRef(null);
     const videoUploadRef = useRef(null);
+    const moodPickerRef = useRef(null);
+
+    // Click outside to close emoji picker
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (moodPickerRef.current && !moodPickerRef.current.contains(event.target)) {
+                setShowMoodPicker(false);
+            }
+        };
+
+        if (showMoodPicker) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showMoodPicker]);
 
     // Initial setup
     useEffect(() => {
@@ -79,18 +97,25 @@ const CreateStory = () => {
     // Attach stream when camera UI opens
 
 
-    // Access Control
+    // Access Control - Broad permission check (Allow all non-guests)
     useEffect(() => {
         if (!authLoading && userProfile) {
-            const type = userProfile.accountType;
-            if (type !== 'business' && type !== 'individual') {
-                let msg = "Stories are available for Business and Personal accounts only.";
-                if (type === 'guest') msg = "Guests cannot post stories. Please sign up.";
-                alert(msg);
+            const type = (userProfile.accountType || '').toLowerCase();
+            const role = (userProfile.role || '').toLowerCase();
+
+            // Check if user is a guest (either by type OR by role)
+            const isGuest = type === 'guest' || role === 'guest' || userProfile.isGuest;
+
+            // Debugging logs to help identify user-specific blocks
+            console.log("CreateStory Access Check:", { uid: currentUser?.uid, type, role, isGuest });
+
+            if (isGuest) {
+                alert("Guests cannot post stories. Please sign up.");
                 navigate('/');
             }
+            // All other members (individual, business, partner, user, admin, etc.) are allowed.
         }
-    }, [authLoading, userProfile, navigate]);
+    }, [authLoading, userProfile, navigate, currentUser]);
 
     const startCamera = () => {
         setShowCamera(true);
@@ -156,7 +181,7 @@ const CreateStory = () => {
             const freshUserData = userDocSnap.exists() ? userDocSnap.data() : {};
 
             const finalUserNameFresh = freshUserData.businessInfo?.businessName || freshUserData.name || freshUserData.displayName || currentUser.displayName || 'User';
-            const finalUserPhotoFresh = freshUserData.businessInfo?.logoImage || freshUserData.businessInfo?.logo || freshUserData.avatar || freshUserData.photoURL || freshUserData.profilePicture || currentUser.photoURL;
+            const finalUserPhotoFresh = getSafeAvatar(freshUserData || currentUser);
 
             let mediaUrl = null;
             let finalType = 'text';
@@ -195,7 +220,7 @@ const CreateStory = () => {
     };
 
     return (
-        <div className="create-story-container">
+        <div className="create-story-container" style={{ zIndex: 100000 }}>
             <div className="story-header">
                 <button onClick={() => { navigate(-1); }} className="icon-btn"><FaTimes /></button>
                 <div className="story-title">{backgroundType === 'GRADIENT' ? 'Create' : 'Edit'} Story</div>
@@ -232,12 +257,42 @@ const CreateStory = () => {
                         maxLength={200}
                     />
                 )}
-                {isTextMode && (
-                    <style>
-                        {` .story-textarea::placeholder { color: ${textColor} !important; opacity: 0.7; }
-                           .story-textarea::-webkit-input-placeholder { color: ${textColor} !important; opacity: 0.7; } `}
-                    </style>
-                )}
+                <style>
+                    {`
+                        .create-story-container {
+                            font-family: ${FONTS[fontIndex].family} !important;
+                        }
+                        .story-canvas {
+                            background-color: ${backgroundType === 'GRADIENT' && !GRADIENTS[bgIndex].bg.includes('gradient') ? GRADIENTS[bgIndex].bg : '#000'} !important;
+                            background-image: ${backgroundType === 'GRADIENT' && GRADIENTS[bgIndex].bg.includes('gradient') ? GRADIENTS[bgIndex].bg : (backgroundType === 'IMAGE' && mediaPreview ? `url(${mediaPreview})` : 'none')} !important;
+                            font-family: ${FONTS[fontIndex].family} !important;
+                        }
+                        .story-textarea {
+                            color: ${textColor} !important;
+                            font-family: ${FONTS[fontIndex].family} !important;
+                            background: transparent !important;
+                            border: none !important;
+                            outline: none !important;
+                            box-shadow: none !important;
+                        }
+                        .story-textarea::placeholder {
+                            color: ${textColor} !important;
+                            opacity: 0.7 !important;
+                        }
+                        .story-textarea::-webkit-input-placeholder {
+                            color: ${textColor} !important;
+                            opacity: 0.7 !important;
+                        }
+                        .story-textarea::-moz-placeholder {
+                            color: ${textColor} !important;
+                            opacity: 0.7 !important;
+                        }
+                        .story-textarea:-ms-input-placeholder {
+                            color: ${textColor} !important;
+                            opacity: 0.7 !important;
+                        }
+                    `}
+                </style>
             </div>
 
             {/* Sidebar Tools */}
@@ -256,21 +311,31 @@ const CreateStory = () => {
                 )}
 
                 {isTextMode && (
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} ref={moodPickerRef}>
                         <button className={`tool-btn ${showMoodPicker ? 'active' : ''}`} onClick={() => setShowMoodPicker(!showMoodPicker)}>
                             <FaSmile />
                         </button>
                         {showMoodPicker && (
                             <div style={{
                                 position: 'absolute', right: '60px', top: '-20px', background: 'rgba(0,0,0,0.85)',
-                                backdropFilter: 'blur(10px)', borderRadius: '16px', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', zIndex: 100
+                                backdropFilter: 'blur(10px)', borderRadius: '16px', padding: '12px', zIndex: 100,
+                                display: 'flex', flexDirection: 'column', minWidth: '160px'
                             }}>
-                                {MOOD_EMOJIS.map((emoji) => (
-                                    <button
-                                        key={emoji} onClick={() => { setText((prev) => prev + emoji); setShowMoodPicker(false); }}
-                                        style={{ background: 'transparent', border: 'none', fontSize: '1.8rem', cursor: 'pointer' }}
-                                    > {emoji} </button>
-                                ))}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                    <span style={{ color: 'white', fontSize: '0.8rem', fontWeight: 'bold', paddingLeft: '4px' }}>Emojis</span>
+                                    <button onClick={() => setShowMoodPicker(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', padding: '4px', display: 'flex' }}>
+                                        <FaTimes size={14} />
+                                    </button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                                    {MOOD_EMOJIS.map((emoji) => (
+                                        <button
+                                            key={emoji} onClick={() => { setText((prev) => prev + emoji); }}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            style={{ background: 'transparent', border: 'none', fontSize: '1.8rem', cursor: 'pointer' }}
+                                        > {emoji} </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>

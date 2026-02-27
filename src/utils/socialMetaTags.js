@@ -1,7 +1,7 @@
 /**
- * Social Media Meta Tags Utility
  * Updates Open Graph and Twitter Card meta tags dynamically for rich social sharing
  */
+import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Update meta tags for social media sharing
@@ -101,13 +101,13 @@ export const generatePartnerMetaTags = (partner) => {
     const { businessInfo } = partner;
     const name = businessInfo?.businessName || partner.name || 'Restaurant';
     const description = businessInfo?.description || `Discover ${name} on DineBuddies`;
-    const image = businessInfo?.logo || partner.avatar || 'https://dinebuddies.com/og-default.jpg';
+    const image = getSafeAvatar(partner);
     const location = businessInfo?.location || '';
 
     return {
         title: `${name} - DineBuddies`,
         description: `${description}${location ? `\n📍 ${location}` : ''}`,
-        image,
+        image: getSafeAvatar(partner),
         url: window.location.href,
         type: 'profile'
     };

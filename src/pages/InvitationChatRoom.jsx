@@ -9,19 +9,25 @@ import {
     FaPlay, FaPause, FaArrowDown, FaImage, FaPlus
 } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import EmojiPicker from 'emoji-picker-react';
 import './CommunityChatRoom.css';
 
 const InvitationChatRoom = () => {
     const { id: invitationId } = useParams();
     const navigate = useNavigate();
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, isGuest } = useAuth();
 
-    // Data State
+    const [loading, setLoading] = useState(true);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [invitation, setInvitation] = useState(null);
-    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!loading && (!currentUser || isGuest)) {
+            navigate('/login');
+        }
+    }, [currentUser, isGuest, loading, navigate]);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
 
     // Reaction State
@@ -60,15 +66,16 @@ const InvitationChatRoom = () => {
 
                     // Handle different array names (joined vs joinedMembers)
                     const members = data.joinedMembers || data.joined || [];
-                    const isParticipant = members.includes(currentUser.uid);
+                    const isPrivateAccepted = data.privacy === 'private' && data.rsvps?.[currentUser.uid] === 'accepted';
+                    const isParticipant = members.includes(currentUser.uid) || isPrivateAccepted;
 
                     if (!isHost && !isParticipant) {
                         alert("You are not a member of this invitation group chat.");
-                        navigate(`/invitation/${invitationId}`);
+                        navigate(data.privacy === 'private' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`);
                     }
                 } else {
                     alert("Invitation not found");
-                    navigate('/invitations');
+                    navigate('/');
                 }
             } catch (error) {
                 console.error("Error fetching invitation:", error);
@@ -152,7 +159,7 @@ const InvitationChatRoom = () => {
                 imageUrl: imageUrl,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'image'
             });
@@ -227,7 +234,7 @@ const InvitationChatRoom = () => {
                 audioUrl: url,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'audio',
                 duration: recordingDuration
@@ -265,7 +272,7 @@ const InvitationChatRoom = () => {
                 text: text,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'text'
             });
@@ -308,7 +315,7 @@ const InvitationChatRoom = () => {
             }}>
                 <button
                     className="header-back-btn"
-                    onClick={() => navigate(`/invitation/${invitationId}`)}
+                    onClick={() => navigate(invitation?.privacy === 'private' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`)}
                     style={{
                         background: 'rgba(255,255,255,0.05)',
                         border: 'none',
@@ -328,7 +335,7 @@ const InvitationChatRoom = () => {
                 {/* Host Image */}
                 <div style={{ position: 'relative' }}>
                     <img
-                        src={invitation?.author?.avatar || invitation?.author?.photo_url || 'https://via.placeholder.com/40'}
+                        src={getSafeAvatar(invitation?.author)}
                         alt="Host"
                         style={{
                             width: '42px',
@@ -336,6 +343,10 @@ const InvitationChatRoom = () => {
                             borderRadius: '50%',
                             objectFit: 'cover',
                             border: '2px solid #3b82f6' /* Blue border for host */
+                        }}
+                        onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = getSafeAvatar(null);
                         }}
                     />
                 </div>
@@ -383,9 +394,13 @@ const InvitationChatRoom = () => {
                         <div key={msg.id} className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isSequence ? 'sequence' : 'first-of-group'}`}>
                             {!isMe && !isSequence && (
                                 <img
-                                    src={msg.senderAvatar || 'https://via.placeholder.com/40'}
+                                    src={msg.senderAvatar || getSafeAvatar(null)}
                                     alt="avatar"
                                     className="sender-avatar"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = getSafeAvatar(null);
+                                    }}
                                 />
                             )}
                             {/* Empty placeholder for alignment if sequence */}
@@ -471,7 +486,7 @@ const InvitationChatRoom = () => {
                                         width="300px"
                                         height="350px"
                                         theme="dark"
-                                        searchPlaceholder="Search reaction..."
+                                        searchDisabled={true}
                                         previewConfig={{ showPreview: false }}
                                     />
                                 </div>
@@ -485,7 +500,7 @@ const InvitationChatRoom = () => {
             {showScrollBottom && (
                 <button
                     onClick={scrollToBottom}
-                    style={{ position: 'fixed', bottom: '90px', right: '20px', zIndex: 200, borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-color)', border: 'none', color: 'white', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}
+                    style={{ position: 'fixed', bottom: '90px', right: '20px', zIndex: 200, borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', border: 'none', color: 'white', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}
                 >
                     <FaArrowDown />
                 </button>

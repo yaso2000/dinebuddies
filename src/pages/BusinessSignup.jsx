@@ -224,37 +224,39 @@ const BusinessSignup = () => {
             <div style={{
                 width: '100%',
                 maxWidth: '400px',
-                background: 'rgba(255, 255, 255, 0.05)',
+                background: 'var(--bg-card)',
                 borderRadius: '16px',
                 padding: '1.5rem',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: '1px solid var(--border-color)',
                 margin: 'auto',
-                flexShrink: 0
+                flexShrink: 0,
+                boxShadow: 'var(--shadow-premium)'
             }}>
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                     <div style={{
                         width: '50px',
                         height: '50px',
-                        background: 'rgba(255, 255, 255, 0.1)',
+                        background: 'var(--primary)',
                         borderRadius: '14px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         margin: '0 auto 0.8rem',
-                        fontSize: '1.6rem'
+                        fontSize: '1.6rem',
+                        boxShadow: '0 4px 10px rgba(139, 92, 246, 0.3)'
                     }}>
-                        <HiBuildingStorefront style={{ color: 'white' }} />
+                        <HiBuildingStorefront style={{ color: '#fff' }} />
                     </div>
                     <h1 style={{
                         fontSize: '1.3rem',
                         fontWeight: '800',
                         marginBottom: '0.3rem',
-                        color: '#FFFFFF'
+                        color: 'var(--text-main)'
                     }}>
                         Create Business Account
                     </h1>
-                    <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem' }}>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                         Join DineBuddies as a partner
                     </p>
                 </div>
@@ -269,16 +271,16 @@ const BusinessSignup = () => {
                     }}>
                         <div style={{
                             width: '30%',
-                            height: '3px',
-                            background: step >= 1 ? '#a78bfa' : 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '2px',
+                            height: '4px',
+                            background: step >= 1 ? 'var(--primary)' : 'var(--bg-input)',
+                            borderRadius: '4px',
                             transition: 'all 0.3s'
                         }} />
                         <div style={{
                             width: '30%',
-                            height: '3px',
-                            background: step >= 2 ? '#a78bfa' : 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '2px',
+                            height: '4px',
+                            background: step >= 2 ? 'var(--primary)' : 'var(--bg-input)',
+                            borderRadius: '4px',
                             transition: 'all 0.3s'
                         }} />
                     </div>
@@ -307,7 +309,7 @@ const BusinessSignup = () => {
                             fontSize: '1rem',
                             fontWeight: '700',
                             marginBottom: '1rem',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             textAlign: 'center'
                         }}>
                             Account Information
@@ -320,7 +322,7 @@ const BusinessSignup = () => {
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    color: 'var(--text-muted)',
                                     fontSize: '0.9rem'
                                 }} />
                                 <input
@@ -332,10 +334,10 @@ const BusinessSignup = () => {
                                     style={{
                                         width: '100%',
                                         padding: '0.8rem 1rem 0.8rem 2.8rem',
-                                        background: 'rgba(255, 255, 255, 0.1)',
-                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        background: 'var(--bg-input)',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '10px',
-                                        color: '#fff',
+                                        color: 'var(--text-main)',
                                         fontSize: '0.95rem'
                                     }}
                                 />
@@ -349,7 +351,7 @@ const BusinessSignup = () => {
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    color: 'var(--text-muted)',
                                     fontSize: '0.9rem'
                                 }} />
                                 <input
@@ -361,10 +363,10 @@ const BusinessSignup = () => {
                                     style={{
                                         width: '100%',
                                         padding: '0.8rem 1rem 0.8rem 2.8rem',
-                                        background: 'rgba(255, 255, 255, 0.1)',
-                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        background: 'var(--bg-input)',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '10px',
-                                        color: '#fff',
+                                        color: 'var(--text-main)',
                                         fontSize: '0.95rem'
                                     }}
                                 />
@@ -378,7 +380,7 @@ const BusinessSignup = () => {
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    color: 'var(--text-muted)',
                                     fontSize: '0.9rem'
                                 }} />
                                 <input
@@ -390,10 +392,10 @@ const BusinessSignup = () => {
                                     style={{
                                         width: '100%',
                                         padding: '0.8rem 1rem 0.8rem 2.8rem',
-                                        background: 'rgba(255, 255, 255, 0.1)',
-                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        background: 'var(--bg-input)',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '10px',
-                                        color: '#fff',
+                                        color: 'var(--text-main)',
                                         fontSize: '0.95rem'
                                     }}
                                 />
@@ -432,7 +434,7 @@ const BusinessSignup = () => {
                             fontSize: '1rem',
                             fontWeight: '700',
                             marginBottom: '1rem',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             textAlign: 'center'
                         }}>
                             Business Information
@@ -445,7 +447,7 @@ const BusinessSignup = () => {
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    color: 'var(--text-muted)',
                                     fontSize: '0.9rem'
                                 }} />
                                 <input
@@ -457,10 +459,10 @@ const BusinessSignup = () => {
                                     style={{
                                         width: '100%',
                                         padding: '0.8rem 1rem 0.8rem 2.8rem',
-                                        background: 'rgba(255, 255, 255, 0.1)',
-                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        background: 'var(--bg-input)',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '10px',
-                                        color: '#fff',
+                                        color: 'var(--text-main)',
                                         fontSize: '0.95rem'
                                     }}
                                 />
@@ -475,16 +477,16 @@ const BusinessSignup = () => {
                                 style={{
                                     width: '100%',
                                     padding: '0.8rem 1rem',
-                                    background: 'rgba(255, 255, 255, 0.1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    background: 'var(--bg-input)',
+                                    border: '1px solid var(--border-color)',
                                     borderRadius: '10px',
-                                    color: '#fff',
+                                    color: 'var(--text-main)',
                                     fontSize: '0.95rem',
-                                    appearance: 'none' // Remove default arrow for custom look if desired, but keeping simple for now
+                                    appearance: 'none'
                                 }}
                             >
                                 {businessTypes.map(type => (
-                                    <option key={type} value={type} style={{ color: '#000' }}>{type}</option>
+                                    <option key={type} value={type} style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }}>{type}</option>
                                 ))}
                             </select>
                         </div>
@@ -496,7 +498,7 @@ const BusinessSignup = () => {
                                     left: '1rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: 'rgba(255, 255, 255, 0.4)',
+                                    color: 'var(--text-muted)',
                                     fontSize: '0.9rem'
                                 }} />
                                 <input
@@ -508,10 +510,10 @@ const BusinessSignup = () => {
                                     style={{
                                         width: '100%',
                                         padding: '0.8rem 1rem 0.8rem 2.8rem',
-                                        background: 'rgba(255, 255, 255, 0.1)',
-                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        background: 'var(--bg-input)',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '10px',
-                                        color: '#fff',
+                                        color: 'var(--text-main)',
                                         fontSize: '0.95rem'
                                     }}
                                 />
@@ -523,14 +525,14 @@ const BusinessSignup = () => {
                             {formData.city ? (
                                 <div style={{
                                     padding: '0.6rem 0.8rem',
-                                    background: 'rgba(167, 139, 250, 0.1)',
+                                    background: 'var(--bg-input)',
                                     borderRadius: '10px',
-                                    border: '1px solid rgba(167, 139, 250, 0.3)',
+                                    border: '1px solid var(--primary)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     fontSize: '0.8rem',
-                                    color: '#d8b4fe'
+                                    color: 'var(--text-main)'
                                 }}>
                                     <span>📍</span>
                                     <span>{formData.city}, {Country.getCountryByCode(formData.country)?.name}</span>
@@ -538,13 +540,13 @@ const BusinessSignup = () => {
                             ) : (
                                 <div style={{
                                     padding: '0.6rem 0.8rem',
-                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    background: 'var(--bg-input)',
                                     borderRadius: '10px',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     fontSize: '0.8rem',
-                                    color: 'rgba(255, 255, 255, 0.5)'
+                                    color: 'var(--text-muted)'
                                 }}>
                                     <span>⏳</span>
                                     <span>Detecting location...</span>
@@ -572,10 +574,10 @@ const BusinessSignup = () => {
                                 style={{
                                     flex: 1,
                                     padding: '0.8rem',
-                                    background: 'rgba(255, 255, 255, 0.1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    background: 'var(--bg-input)',
+                                    border: '1px solid var(--border-color)',
                                     borderRadius: '10px',
-                                    color: '#fff',
+                                    color: 'var(--text-main)',
                                     fontSize: '0.9rem',
                                     fontWeight: '600',
                                     cursor: 'pointer',
@@ -594,7 +596,7 @@ const BusinessSignup = () => {
                                 style={{
                                     flex: 2,
                                     padding: '0.8rem',
-                                    background: loading ? 'rgba(255, 255, 255, 0.1)' : 'linear-gradient(135deg, #a78bfa, #ec4899)',
+                                    background: loading ? 'var(--bg-input)' : 'linear-gradient(135deg, #a78bfa, #ec4899)',
                                     border: 'none',
                                     borderRadius: '10px',
                                     color: 'white',
@@ -637,12 +639,12 @@ const BusinessSignup = () => {
                             fontSize: '1.5rem',
                             fontWeight: '800',
                             marginBottom: '0.8rem',
-                            color: '#fff'
+                            color: 'var(--text-main)'
                         }}>
                             Account Created!
                         </h2>
                         <p style={{
-                            color: 'rgba(255, 255, 255, 0.7)',
+                            color: 'var(--text-secondary)',
                             marginBottom: '2rem',
                             lineHeight: '1.5',
                             fontSize: '0.9rem'
@@ -672,9 +674,9 @@ const BusinessSignup = () => {
                                 width: '100%',
                                 padding: '0.8rem',
                                 background: 'transparent',
-                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                border: '1px solid var(--border-color)',
                                 borderRadius: '10px',
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'var(--text-secondary)',
                                 fontSize: '0.9rem',
                                 fontWeight: '600',
                                 cursor: 'pointer'
@@ -690,10 +692,10 @@ const BusinessSignup = () => {
                     <div style={{
                         marginTop: '1.5rem',
                         paddingTop: '1rem',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderTop: '1px solid var(--border-color)',
                         textAlign: 'center'
                     }}>
-                        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.85rem' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                             Already have an account?{' '}
                             <span
                                 onClick={() => navigate('/login')}

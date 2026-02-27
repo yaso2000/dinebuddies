@@ -30,6 +30,8 @@ export const NotificationProvider = ({ children }) => {
     const { currentUser } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [activePrivateInvitation, setActivePrivateInvitation] = useState(null);
+    const [dismissedNotificationIds, setDismissedNotificationIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
 
     // Load notifications for current user
@@ -64,6 +66,14 @@ export const NotificationProvider = ({ children }) => {
                 const unread = notifs.filter(n => !n.read).length;
                 setUnreadCount(unread);
 
+                // Find unread private invitations for the Digital Envelope
+                const unreadPrivate = notifs.filter(n =>
+                    n.type === 'private_invitation' &&
+                    !n.read &&
+                    !dismissedNotificationIds.has(n.id)
+                );
+                setActivePrivateInvitation(unreadPrivate.length > 0 ? unreadPrivate[0] : null);
+
                 setLoading(false);
             },
             (error) => {
@@ -75,7 +85,7 @@ export const NotificationProvider = ({ children }) => {
         );
 
         return () => unsubscribe();
-    }, [currentUser?.uid]);
+    }, [currentUser?.uid, dismissedNotificationIds]);
 
     // Helper: Check if current time is in Do Not Disturb period
     const isInDNDPeriod = (dndSettings) => {
@@ -251,6 +261,12 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
+    // Dismiss notification (hide for current session)
+    const dismissNotification = (notificationId) => {
+        if (!notificationId) return;
+        setDismissedNotificationIds(prev => new Set(prev).add(notificationId));
+    };
+
     // Format time
     const formatTime = (date) => {
         if (!date) return '';
@@ -278,6 +294,14 @@ export const NotificationProvider = ({ children }) => {
         markAllAsRead,
         deleteNotification,
         deleteAllNotifications,
+        activePrivateInvitation,
+        setActivePrivateInvitation,
+        unreadPrivateInvitations: notifications.filter(n =>
+            n.type === 'private_invitation' &&
+            !n.read &&
+            !dismissedNotificationIds.has(n.id)
+        ),
+        dismissNotification,
         formatTime
     };
 

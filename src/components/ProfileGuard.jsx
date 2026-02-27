@@ -23,9 +23,9 @@ const ProfileGuard = ({ children }) => {
 
     // Check if profile is complete (Name, Gender, Age Category)
     const isComplete = userProfile?.isProfileComplete || (
-        userProfile?.displayName &&
+        (userProfile?.displayName || userProfile?.display_name || userProfile?.nickname) &&
         userProfile?.gender &&
-        userProfile?.ageCategory
+        (userProfile?.ageCategory || userProfile?.age)
     );
 
     if (!isComplete) {

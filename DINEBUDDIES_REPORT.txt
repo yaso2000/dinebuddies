@@ -1,0 +1,55 @@
+DineBuddies: Technical & Functional Report
+==========================================
+
+1. System Architecture & Tech Stack
+----------------------------------
+DineBuddies is engineered as a high-performance Progressive Web App (PWA) built on a modern, serverless architecture.
+
+* Frontend: React 18, Vite, Vanilla CSS + Glassmorphism.
+* Infrastructure (BaaS): Google Firebase.
+    - Firestore: Real-time document database.
+    - Authentication: OAuth (Google, Facebook, Apple, Twitter) & Phone/Email OTP.
+    - Cloud Storage: Distributed media hosting.
+* External Integrations: Stripe SDK (Payments), OpenStreetMap/Leaflet (Mapping), Nominatim (Geocoding).
+
+2. Real-Time Operational Mechanics
+----------------------------------
+* Data Flow: "Push-First" architecture using Firestore snapshots. Updates reflect in milliseconds.
+* Finger-Synced UI: Custom touch-gesture engine for 1:1 story peeking and transitions.
+* Dynamic Currency Engine: Geolocation-based currency detection and real-time USD conversion.
+
+3. Detailed Feature Matrix by User Role
+---------------------------------------
+
+A. Individual Members:
+* Guest: Browse public feed, limited preview of stories.
+* Standard Member: Create unlimited public invites, direct messaging, story posting, reputation points.
+* Premium/Elite: Weekly private invitation quota, priority visibility, boosted reputation rewards.
+
+B. Business Partners (Restaurants & Venues):
+* Community Engine: Hosts dedicated chat rooms for followers.
+* Engagement Analytics: Dashboard for profile views, story impressions, and bookings.
+* Offer System: Converting digital offers into user-driven invitations.
+* Professional Suite: Custom business hours, high-res galleries, and delivery integration (UberEats, etc.).
+
+C. Platform Administration:
+* Limit Governance: Custom business limit overrides.
+* Moderation Suite: User banning and report resolution tools.
+* System Management: Pricing plan control and global credit packs.
+
+4. The Invitation Economy
+-------------------------
+* Public Invitations: Free and discoverable in the main feed.
+* Private Invitations: 
+    - Quota-based (Weekly reset).
+    - Link-only access (Hidden from feed).
+    - Credits: Purchased credits supplement the free weekly quota and never expire.
+
+5. Security & Privacy
+---------------------
+* Profile Guards: component-level protection for sensitive pages.
+* Session Privacy: Guest data is never persisted in permanent databases.
+* Geolocation Privacy: Location data is used strictly for localized content and proximity.
+
+Generated on: February 26, 2026
+Project: DineBuddies - Premium Social Dining

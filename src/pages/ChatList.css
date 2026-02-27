@@ -8,12 +8,14 @@
 
 /* Header */
 .chat-list-header {
-    background: var(--card-bg);
+    background: rgba(10, 10, 20, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     padding: 1rem;
     display: flex;
     align-items: center;
     gap: 1rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -47,8 +49,10 @@
 /* Search Bar */
 .search-bar {
     padding: 1rem;
-    background: var(--card-bg);
-    border-bottom: 1px solid var(--border);
+    background: rgba(10, 10, 20, 0.55);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     position: relative;
 }
 

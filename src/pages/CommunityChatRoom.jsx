@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fa';
 import EmojiPicker from 'emoji-picker-react';
 import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils'; // Added media utils
+import { getSafeAvatar } from '../utils/avatarUtils';
 import './CommunityChatRoom.css';
 
 const CommunityChatRoom = () => {
@@ -198,7 +199,7 @@ const CommunityChatRoom = () => {
                 audioUrl: url,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'audio',
                 duration: recordingDuration
@@ -243,7 +244,7 @@ const CommunityChatRoom = () => {
                 text: newMessage.trim(),
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: isAvgEmoji ? 'emoji-big' : 'text' // Auto-detect big emoji
             });
@@ -270,7 +271,7 @@ const CommunityChatRoom = () => {
                 caption: '', // Optional caption
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: userProfile?.photo_url || currentUser.photoURL || '',
+                senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
                 type: 'image'
             });
@@ -328,7 +329,7 @@ const CommunityChatRoom = () => {
                             </svg>
                             <div className="voice-avatar">
                                 <img
-                                    src={msg.senderAvatar || `https://ui-avatars.com/api/?name=${msg.senderName}`}
+                                    src={msg.senderAvatar || getSafeAvatar(null)}
                                     alt={msg.senderName}
                                 />
                             </div>
@@ -366,11 +367,11 @@ const CommunityChatRoom = () => {
         }
     };
 
-    if (loading) return <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'white' }}>Loading...</div>;
+    if (loading) return <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--text-primary)' }}>Loading...</div>;
 
     if (!isMember) {
         return (
-            <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'white' }}>
+            <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--text-primary)' }}>
                 <h2>Access Denied</h2>
                 <button onClick={() => navigate('/communities')} style={{ padding: '10px', marginTop: '10px' }}>Go Back</button>
             </div>
@@ -381,14 +382,18 @@ const CommunityChatRoom = () => {
         <div className="chat-screen">
             {/* 1. Glass Header */}
             <header className="chat-header">
-                <button className="header-back-btn" onClick={() => navigate(-1)}>
-                    <FaArrowLeft />
+                <button className="header-back-btn" onClick={() => navigate(-1)} style={{ color: 'var(--text-primary)' }}>
+                    <FaArrowLeft size={20} />
                 </button>
                 <div className="header-info" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginLeft: '8px' }}>
                     <img
-                        src={partner?.businessInfo?.logoImage || partner?.logoImage || partner?.photo_url || `https://ui-avatars.com/api/?name=${partner?.display_name || 'Community'}`}
+                        src={getSafeAvatar(partner)}
                         alt=""
                         style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '10px', objectFit: 'cover' }}
+                        onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
+                        }}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                         <h1 className="header-title" style={{ fontSize: '16px' }}>{partner?.display_name || 'Community Chat'}</h1>
@@ -432,11 +437,29 @@ const CommunityChatRoom = () => {
                         >
                             {/* Avatar for Incoming */}
                             {!isMe && !isBigEmoji && (
-                                <img
-                                    src={msg.senderAvatar || `https://ui-avatars.com/api/?name=${msg.senderName}`}
-                                    alt=""
-                                    className="sender-avatar"
-                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                    {isFirstOfGroup && (
+                                        <span style={{
+                                            fontSize: '11px',
+                                            fontWeight: '700',
+                                            color: 'var(--accent-color)',
+                                            marginLeft: '12px',
+                                            marginBottom: '2px'
+                                        }}>
+                                            {msg.senderName}
+                                        </span>
+                                    )}
+                                    <img
+                                        src={msg.senderAvatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
+                                        alt=""
+                                        className="sender-avatar"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
+                                        }}
+                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden' }}
+                                    />
+                                </div>
                             )}
 
                             {/* Bubble */}
@@ -448,7 +471,9 @@ const CommunityChatRoom = () => {
 
                                 {/* Timestamp */}
                                 {!isBigEmoji && msg.type !== 'audio' && (
-                                    <span className="timestamp">{formatTime(msg.createdAt)}</span>
+                                    <span className="timestamp" style={{ color: isMe ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>
+                                        {formatTime(msg.createdAt)}
+                                    </span>
                                 )}
 
                                 {/* Reaction Badge (Displayed on message) */}
@@ -497,7 +522,7 @@ const CommunityChatRoom = () => {
                                         width="300px"
                                         height="350px"
                                         theme="dark"
-                                        searchPlaceholder="Search reaction..."
+                                        searchDisabled={true}
                                         previewConfig={{ showPreview: false }}
                                     />
                                 </div>
@@ -537,13 +562,14 @@ const CommunityChatRoom = () => {
 
             {/* 3. Composer */}
             {/* 3. Composer Section */}
-            <div style={{ flexShrink: 0, background: '#1f2937' }}>
-                <div className="input-area" style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ flexShrink: 0, background: 'var(--bg-darker)' }}>
+                <div className="input-area" style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid var(--border-color)' }}>
 
                     {/* Input Wrapper */}
                     <div className="input-wrapper" style={{
                         flex: 1, display: 'flex', alignItems: 'center',
-                        background: '#374151', borderRadius: '24px', padding: '4px 12px'
+                        background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
+                        border: '1px solid var(--border-color)'
                     }}>
                         {isRecording ? (
                             /* RECORDING UI */
@@ -573,11 +599,6 @@ const CommunityChatRoom = () => {
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                                    style={{
-                                        flex: 1, background: 'transparent', border: 'none',
-                                        color: 'white', outline: 'none', fontSize: '1rem',
-                                        minHeight: '24px'
-                                    }}
                                 />
 
                                 {/* Attachments */}
@@ -603,10 +624,11 @@ const CommunityChatRoom = () => {
                         onPointerDown={(e) => e.preventDefault()}
                         onClick={isRecording ? () => handleStopRecording(true) : handleSendMessage}
                         style={{
-                            background: isRecording ? '#ef4444' : 'var(--accent)',
+                            background: isRecording ? '#ef4444' : 'var(--primary)',
                             color: 'white', border: 'none', borderRadius: '50%',
                             width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', flexShrink: 0
+                            cursor: 'pointer', flexShrink: 0,
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
                         }}
                     >
                         {isRecording ? (

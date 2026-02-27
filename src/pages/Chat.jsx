@@ -4,19 +4,23 @@ import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
+import { useTheme } from '../context/ThemeContext';
 import {
     FaArrowLeft, FaCamera, FaMicrophone,
     FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile,
     FaDownload, FaStop, FaPlus, FaArrowDown
 } from 'react-icons/fa';
 import EmojiPicker from 'emoji-picker-react';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
+import NewReportModal from '../components/NewReportModal';
 import './Chat.css';
 
 const Chat = () => {
     const { userId } = useParams();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
+    const { isDark } = useTheme();
     const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
 
     const [conversationId, setConversationId] = useState(null);
@@ -68,7 +72,7 @@ const Chat = () => {
                     setOtherUser({
                         uid: userId,
                         displayName: userData.display_name || userData.email || 'User',
-                        photoURL: userData.photo_url || null,
+                        photoURL: getSafeAvatar(userData),
                         isOnline: userData.isOnline || false,
                         lastSeen: userData.lastSeen || null
                     });
@@ -295,23 +299,47 @@ const Chat = () => {
             <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
 
             {/* Header */}
-            <div className="chat-header">
-                <button className="back-btn" onClick={() => navigate('/messages')}>
-                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
+            <div className="chat-header" style={{
+                background: 'var(--header-bg)',
+                borderBottom: '1px solid var(--border-color)',
+                boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
+                zIndex: 100
+            }}>
+                <button className="back-btn" onClick={() => navigate('/messages')} style={{
+                    background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+                    borderRadius: '50%',
+                    width: '38px',
+                    height: '38px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+                    color: 'var(--text-main)',
+                    marginRight: '12px',
+                    border: '1px solid var(--border-color)'
+                }}>
+                    <FaArrowLeft size={18} />
                 </button>
                 {otherUser && (
                     <>
                         <div className="header-avatar">
-                            <img src={otherUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherUser.displayName)}&background=8b5cf6&color=fff&size=128`} alt={otherUser.displayName} />
+                            <img
+                                src={getSafeAvatar(otherUser)}
+                                alt={otherUser.displayName}
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
+                                }}
+                            />
                             {otherUser.isOnline && <div className="online-dot" />}
                         </div>
-                        <div className="header-info">
-                            <h3>{otherUser.displayName}</h3>
-                            <p className="status">{otherUserTyping ? 'typing...' : otherUser.isOnline ? 'Online' : formatLastSeen(otherUser.lastSeen)}</p>
+                        <div className="header-info" style={{ textAlign: 'left' }}>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{otherUser.displayName}</h3>
+                            <p className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>{otherUserTyping ? 'typing...' : otherUser.isOnline ? 'Online' : formatLastSeen(otherUser.lastSeen)}</p>
                         </div>
                     </>
                 )}
-                <button className="options-btn"><FaEllipsisV /></button>
+                <button className="options-btn" style={{ color: 'var(--text-main)' }}><FaEllipsisV /></button>
             </div>
 
             {/* Messages */}
@@ -414,7 +442,7 @@ const Chat = () => {
                                             width="300px"
                                             height="350px"
                                             theme="dark"
-                                            searchPlaceholder="Search reaction..."
+                                            searchDisabled={true}
                                             previewConfig={{ showPreview: false }}
                                         />
                                     </div>
@@ -484,37 +512,34 @@ const Chat = () => {
             }
 
             {/* Input Area - WhatsApp Style - Fixed Layout */}
-            <div className="chat-input-area-custom" style={{ flexShrink: 0, padding: 0, background: '#1f2937', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+            <div className="chat-input-area">
+                <div className="chat-input-inner">
                     {/* Recording UI */}
                     {isRecording ? (
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#374151', padding: '8px 16px', borderRadius: '24px', height: '45px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{ width: '10px', height: '10px', background: '#ef4444', borderRadius: '50%', animation: 'pulse 1s infinite' }}></div>
-                                <span style={{ color: 'white', fontWeight: '500' }}>{formatDuration(recordingDuration)}</span>
+                        <div className="recording-ui">
+                            <div className="recording-info">
+                                <div className="recording-pulse"></div>
+                                <span className="recording-timer">{formatDuration(recordingDuration)}</span>
                             </div>
-                            <button onClick={stopRecording} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px', fontWeight: '600' }}>
+                            <button className="delete-recording-btn" onClick={stopRecording}>
                                 <FaStop /> Stop
                             </button>
                         </div>
                     ) : (
                         /* Normal Input UI */
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#374151', borderRadius: '24px', padding: '0 12px', height: '45px', minWidth: 0 }}>
+                        <div className="chat-input-pill">
                             <input
                                 ref={inputRef}
                                 type="text"
-                                name="chat-message-input" // Specific name helps avoid heuristic
-                                autoComplete="off" // Disables browser suggestions
-                                autoCorrect="off" // Optional: depends on preference, but helps cleanup
-                                enterKeyHint="send" // Shows 'Send' on keyboard instead of return
+                                name="chat-message-input"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                enterKeyHint="send"
                                 placeholder="Message"
                                 value={newMessage}
                                 onChange={(e) => handleTyping(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                                style={{
-                                    flex: 1, background: 'transparent', border: 'none', color: 'white',
-                                    outline: 'none', fontSize: '1rem', height: '100%', minWidth: '10px'
-                                }}
+                                className="chat-input-field"
                             />
 
                             {/* Attachments */}
@@ -531,10 +556,10 @@ const Chat = () => {
                         onPointerDown={(e) => e.preventDefault()}
                         onClick={newMessage.trim() ? handleSendMessage : startRecording}
                         style={{
-                            background: isRecording ? '#ef4444' : 'var(--accent-color)',
+                            background: isRecording ? '#ef4444' : 'var(--primary)',
                             color: 'white', border: 'none', borderRadius: '50%',
                             width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                            cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
                         }}
                     >
                         {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />)}

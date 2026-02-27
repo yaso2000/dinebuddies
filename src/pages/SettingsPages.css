@@ -29,8 +29,8 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: transparent;
-    border: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     color: var(--text-main);
     cursor: pointer;
     display: flex;
@@ -40,7 +40,8 @@
 }
 
 .back-btn:hover {
-    background: var(--bg-secondary);
+    background: var(--bg-hover);
+    transform: scale(1.1);
 }
 
 .settings-content {

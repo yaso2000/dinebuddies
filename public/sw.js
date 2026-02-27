@@ -1,6 +1,10 @@
-/* Simple Service Worker for PWA Installation Criteria */
-self.addEventListener('fetch', (event) => {
-    // Basic fetch handler required for PWA installability criteria
-    // This doesn't actually cache anything, but satisfies the browser requirement
-    return;
+// Minimal Service Worker - Forces unregistration and clears way for production
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        self.registration.unregister()
+            .then(() => {
+                console.log('🧹 Service Worker cleaned up safely.');
+            })
+    );
 });

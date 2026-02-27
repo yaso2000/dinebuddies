@@ -5,13 +5,14 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { uploadImage } from '../utils/imageUpload';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaArrowLeft, FaImage, FaVideo, FaSmile, FaTimes, FaFont, FaPalette, FaCircle, FaFileUpload, FaBold, FaItalic, FaAlignLeft, FaAlignCenter, FaAlignRight } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
 import './CreatePost.css';
 
 const FONTS = [
     { name: 'Modern', family: '"Inter", sans-serif' },
-    { name: 'Classic', family: '"Playfair Display", serif' },
+    { name: 'Classic', family: '"Inter", sans-serif' },
     { name: 'Bold', family: '"Impact", sans-serif' },
     { name: 'Typewriter', family: '"Courier New", monospace' }
 ];
@@ -71,7 +72,7 @@ const CreatePost = () => {
     // Initialize author info from userProfile (Firestore) or currentUser (Auth)
     const [authorInfo, setAuthorInfo] = useState({
         name: userProfile?.display_name || userProfile?.name || userProfile?.businessInfo?.businessName || currentUser?.displayName || 'User',
-        avatar: userProfile?.photo_url || userProfile?.photoURL || userProfile?.avatar || userProfile?.businessInfo?.logo || currentUser?.photoURL || ''
+        avatar: getSafeAvatar(userProfile || currentUser)
     });
 
     // Update author info when userProfile changes
@@ -79,7 +80,7 @@ const CreatePost = () => {
         if (userProfile) {
             setAuthorInfo({
                 name: userProfile.display_name || userProfile.name || userProfile.businessInfo?.businessName || currentUser?.displayName || 'User',
-                avatar: userProfile.photo_url || userProfile.photoURL || userProfile.avatar || userProfile.businessInfo?.logo || currentUser?.photoURL || ''
+                avatar: getSafeAvatar(userProfile || currentUser)
             });
         } else if (currentUser?.uid) {
             // Fallback fetch if userProfile is not yet available in context
@@ -88,7 +89,7 @@ const CreatePost = () => {
                     const data = snap.data();
                     setAuthorInfo({
                         name: data.display_name || data.name || data.businessInfo?.businessName || currentUser.displayName || 'User',
-                        avatar: data.photo_url || data.photoURL || data.avatar || data.businessInfo?.logo || currentUser.photoURL || ''
+                        avatar: getSafeAvatar(data || currentUser)
                     });
                 }
             });
@@ -198,7 +199,7 @@ const CreatePost = () => {
 
     return (
         <div className="create-post-container" style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
+            position: 'fixed', inset: 0, zIndex: 100000,
             background: 'var(--bg-body)', display: 'flex', flexDirection: 'column'
         }}>
             {/* Header */}
@@ -210,16 +211,17 @@ const CreatePost = () => {
                 zIndex: 10
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button onClick={() => { navigate(-1); }} className="icon-btn">
-                        <FaArrowLeft />
+                    <button onClick={() => { navigate(-1); }} className="icon-btn" style={{ color: 'var(--text-main)', background: 'var(--bg-input)' }}>
+                        <FaArrowLeft size={20} />
                     </button>
                     <img
-                        src={authorInfo.avatar || currentUser?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.uid}`}
+                        src={getSafeAvatar(userProfile || currentUser)}
                         alt="Profile"
                         style={{
                             width: '32px', height: '32px', borderRadius: '50%',
-                            objectFit: 'cover', backgroundColor: '#ccc', flexShrink: 0
+                            objectFit: 'cover', border: '1px solid var(--border-color)', flexShrink: 0
                         }}
+                        onError={(e) => { e.target.src = getSafeAvatar(null); }}
                     />
                 </div>
 
@@ -382,7 +384,7 @@ const CreatePost = () => {
                     <div style={{
                         textAlign: 'right',
                         fontSize: '0.85rem',
-                        color: text.length >= Math.floor(4800 / fontSize) ? 'red' : ((bgColor === 'transparent' || bgColor === '#ffffff' || bgColor === '#f59e0b' || bgColor === '#ec4899') ? '#555' : 'rgba(255,255,255,0.7)'),
+                        color: text.length >= Math.floor(4800 / fontSize) ? 'var(--secondary)' : 'var(--text-muted)',
                         marginTop: '8px'
                     }}>
                         {text.length} / {Math.floor(4800 / fontSize)}
@@ -392,13 +394,14 @@ const CreatePost = () => {
                 {/* Toolbar Buttons (Now below content card) */}
                 <div style={{
                     display: 'flex',
-                    gap: '5px',
-                    flexWrap: 'nowrap', // Ensure single row
-                    overflowX: 'auto', // Scroll if needed on very small screens
+                    gap: '4px',
+                    flexWrap: 'nowrap',
+                    overflowX: 'auto',
                     alignItems: 'center',
                     marginBottom: '20px',
-                    scrollbarWidth: 'none', // Hide scrollbar for cleaner look
-                    msOverflowStyle: 'none'
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    justifyContent: 'space-between'
                 }}>
 
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} className="create-post-emoji-wrapper">
@@ -406,64 +409,83 @@ const CreatePost = () => {
                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                             style={{
                                 background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                                color: '#1d9bf0', padding: '6px 10px', borderRadius: '20px', fontSize: '0.85rem',
+                                color: 'var(--primary)', padding: '6px 10px', borderRadius: '20px', fontSize: '0.75rem',
                                 display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 'bold',
-                                whiteSpace: 'nowrap', flexShrink: 0
+                                whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                             }}
                         >
                             <FaSmile size={16} /> Emoji
                         </button>
                         {showEmojiPicker && (
-                            <div style={{
-                                position: 'fixed',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                zIndex: 10002,
-                                background: 'var(--bg-card)',
-                                border: '1px solid var(--border-color)',
-                                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-                                borderRadius: '12px',
-                                padding: '12px',
-                                width: '90%',
-                                maxWidth: '320px',
-                                maxHeight: '150px', // Limit to approx 3 lines
-                                overflowY: 'auto'
-                            }}>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                                    {CUSTOM_EMOJIS.map((emoji, index) => (
+                            <>
+                                {/* Click-out overlay */}
+                                <div
+                                    onClick={() => setShowEmojiPicker(false)}
+                                    style={{
+                                        position: 'fixed', inset: 0, zIndex: 10001,
+                                        background: 'transparent'
+                                    }}
+                                />
+                                <div style={{
+                                    position: 'fixed',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    zIndex: 10002,
+                                    background: 'var(--bg-card)',
+                                    border: '1px solid var(--border-color)',
+                                    boxShadow: 'var(--shadow-premium)',
+                                    borderRadius: '18px',
+                                    padding: '16px',
+                                    width: '90%',
+                                    maxWidth: '320px',
+                                    maxHeight: '220px',
+                                    overflowY: 'auto',
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Quick Emojis</span>
                                         <button
-                                            key={index}
-                                            onClick={() => {
-                                                setText(prev => prev + emoji);
-                                                // Don't close immediately to allow picking multiple
-                                            }}
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                fontSize: '1.5rem',
-                                                cursor: 'pointer',
-                                                padding: '4px',
-                                                borderRadius: '8px',
-                                                transition: 'background 0.2s',
-                                                flexShrink: 0
-                                            }}
-                                            onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                                            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                                            onClick={() => setShowEmojiPicker(false)}
+                                            style={{ background: 'var(--bg-input)', border: 'none', color: 'var(--text-main)', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                         >
-                                            {emoji}
+                                            <FaTimes size={14} />
                                         </button>
-                                    ))}
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                                        {CUSTOM_EMOJIS.map((emoji, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => {
+                                                    setText(prev => prev + emoji);
+                                                }}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    fontSize: '1.6rem',
+                                                    cursor: 'pointer',
+                                                    padding: '6px',
+                                                    borderRadius: '10px',
+                                                    transition: 'background 0.2s'
+                                                }}
+                                                onMouseOver={(e) => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                                onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                                        <button
+                                            onClick={() => setShowEmojiPicker(false)}
+                                            style={{ background: 'var(--primary)', border: 'none', color: 'white', padding: '8px 24px', borderRadius: '12px', fontSize: '0.9rem', fontWeight: '600', width: '100%' }}
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                                    <button
-                                        onClick={() => setShowEmojiPicker(false)}
-                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.8rem' }}
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </div>
+                            </>
                         )}
                     </div>
 
@@ -472,9 +494,9 @@ const CreatePost = () => {
                         onClick={() => fileInputRef.current.click()}
                         style={{
                             background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                            color: '#1d9bf0', padding: '6px 10px', borderRadius: '20px', fontSize: '0.85rem',
+                            color: 'var(--primary)', padding: '6px 10px', borderRadius: '20px', fontSize: '0.75rem',
                             display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 'bold',
-                            whiteSpace: 'nowrap', flexShrink: 0
+                            whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                         }}
                     >
                         <FaImage size={16} /> Photo
@@ -485,9 +507,9 @@ const CreatePost = () => {
                         onClick={() => videoUploadRef.current.click()}
                         style={{
                             background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                            color: '#1d9bf0', padding: '6px 10px', borderRadius: '20px', fontSize: '0.85rem',
+                            color: 'var(--primary)', padding: '6px 10px', borderRadius: '20px', fontSize: '0.75rem',
                             display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 'bold',
-                            whiteSpace: 'nowrap', flexShrink: 0
+                            whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                         }}
                     >
                         <FaVideo size={16} /> Video
@@ -498,12 +520,12 @@ const CreatePost = () => {
                         onClick={startCamera}
                         style={{
                             background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                            color: '#ef4444', padding: '6px 10px', borderRadius: '20px', fontSize: '0.85rem',
+                            color: 'var(--secondary)', padding: '6px 10px', borderRadius: '20px', fontSize: '0.75rem',
                             display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 'bold',
-                            whiteSpace: 'nowrap', flexShrink: 0
+                            whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                         }}
                     >
-                        <FaCircle size={14} /> Record
+                        <FaCircle size={12} /> Record
                     </button>
                 </div>
 
@@ -519,26 +541,26 @@ const CreatePost = () => {
                     gap: '16px'
                 }}>
                     {/* Section 1: Size */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                        <span style={{ fontSize: '0.8rem', opacity: 0.7, minWidth: '30px' }}>Size</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', minWidth: '40px' }}>Size</span>
                         <input
                             type="range" min="12" max="48" value={fontSize}
                             onChange={(e) => setFontSize(parseInt(e.target.value))}
                             style={{ flex: 1, accentColor: 'var(--primary)' }}
                         />
-                        <span style={{ fontSize: '0.9rem', minWidth: '35px', textAlign: 'right' }}>{fontSize}px</span>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', minWidth: '40px', textAlign: 'right', fontWeight: '600' }}>{fontSize}px</span>
                     </div>
 
                     {/* Section 2: Style & Align */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => setIsBold(!isBold)} style={{ fontWeight: 'bold', padding: '8px 12px', borderRadius: '8px', background: isBold ? 'var(--primary)' : 'var(--bg-main)', color: isBold ? 'white' : 'inherit', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><FaBold /></button>
-                            <button onClick={() => setIsItalic(!isItalic)} style={{ fontStyle: 'italic', padding: '8px 12px', borderRadius: '8px', background: isItalic ? 'var(--primary)' : 'var(--bg-main)', color: isItalic ? 'white' : 'inherit', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><FaItalic /></button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={() => setIsBold(!isBold)} className={`tool-btn ${isBold ? 'active' : ''}`}><FaBold /></button>
+                            <button onClick={() => setIsItalic(!isItalic)} className={`tool-btn ${isItalic ? 'active' : ''}`}><FaItalic /></button>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => setTextAlign('left')} style={{ padding: '8px 12px', borderRadius: '8px', background: textAlign === 'left' ? 'var(--primary)' : 'var(--bg-main)', color: textAlign === 'left' ? 'white' : 'inherit', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><FaAlignLeft /></button>
-                            <button onClick={() => setTextAlign('center')} style={{ padding: '8px 12px', borderRadius: '8px', background: textAlign === 'center' ? 'var(--primary)' : 'var(--bg-main)', color: textAlign === 'center' ? 'white' : 'inherit', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><FaAlignCenter /></button>
-                            <button onClick={() => setTextAlign('right')} style={{ padding: '8px 12px', borderRadius: '8px', background: textAlign === 'right' ? 'var(--primary)' : 'var(--bg-main)', color: textAlign === 'right' ? 'white' : 'inherit', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><FaAlignRight /></button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={() => setTextAlign('left')} className={`tool-btn ${textAlign === 'left' ? 'active' : ''}`}><FaAlignLeft /></button>
+                            <button onClick={() => setTextAlign('center')} className={`tool-btn ${textAlign === 'center' ? 'active' : ''}`}><FaAlignCenter /></button>
+                            <button onClick={() => setTextAlign('right')} className={`tool-btn ${textAlign === 'right' ? 'active' : ''}`}><FaAlignRight /></button>
                         </div>
                     </div>
 
@@ -550,14 +572,18 @@ const CreatePost = () => {
                                     key={font.name}
                                     onClick={() => setSelectedFont(idx)}
                                     style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         borderRadius: '20px',
                                         border: selectedFont === idx ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                        background: 'transparent',
-                                        color: 'inherit',
+                                        background: selectedFont === idx ? 'var(--primary)' : 'var(--bg-input)',
+                                        color: selectedFont === idx ? 'white' : 'var(--text-main)',
                                         fontFamily: font.family,
                                         whiteSpace: 'nowrap',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '500',
+                                        transition: 'all 0.2s',
+                                        boxShadow: selectedFont === idx ? 'var(--shadow-glow)' : 'none'
                                     }}
                                 >
                                     {font.name}
@@ -568,22 +594,23 @@ const CreatePost = () => {
 
                     {/* Section 3: Text Color */}
                     <div>
-                        <div style={{ fontSize: '0.8rem', marginBottom: '8px', opacity: 0.7 }}>Text Color</div>
-                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '10px', fontWeight: '600', color: 'var(--text-main)' }}>Text Color</div>
+                        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '6px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                             {COLORS.map(c => (
                                 <button
                                     key={c}
                                     onClick={() => setTextColor(c)}
                                     style={{
-                                        width: '24px', height: '24px', borderRadius: '50%',
-                                        background: c === '' ? 'linear-gradient(135deg, #ffffff 50%, #000000 50%)' : c, // Split circle for Auto
+                                        width: '28px', height: '28px', borderRadius: '50%',
+                                        background: c === '' ? 'linear-gradient(135deg, #000 50%, #fff 50%)' : c,
                                         border: textColor === c ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                         cursor: 'pointer', flexShrink: 0,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                     }}
-                                    title={c === '' ? "Auto (Theme Adaptive)" : c}
+                                    title={c === '' ? "Auto" : c}
                                 >
-                                    {c === '' && textColor === '' && <div style={{ w: '6px', h: '6px', borderRadius: '50%', bg: 'var(--primary)' }} />}
+                                    {c === '' && textColor === '' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }} />}
                                 </button>
                             ))}
                         </div>
@@ -591,24 +618,25 @@ const CreatePost = () => {
 
                     {/* Section 4: Background Color */}
                     <div>
-                        <div style={{ fontSize: '0.8rem', marginBottom: '8px', opacity: 0.7 }}>Background Color</div>
-                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '10px', fontWeight: '600', color: 'var(--text-main)' }}>Background Color</div>
+                        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '6px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                             {BG_COLORS.map(c => (
                                 <button
                                     key={c}
                                     onClick={() => setBgColor(c)}
                                     style={{
-                                        width: '24px', height: '24px', borderRadius: '50%',
+                                        width: '28px', height: '28px', borderRadius: '50%',
                                         background: c,
                                         border: bgColor === c ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                         cursor: 'pointer', flexShrink: 0,
-                                        position: 'relative'
+                                        position: 'relative',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                     }}
                                 >
                                     {c === 'transparent' && (
                                         <div style={{
                                             position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(45deg)',
-                                            width: '1px', height: '20px', background: 'red'
+                                            width: '1px', height: '20px', background: 'var(--secondary)'
                                         }} />
                                     )}
                                 </button>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { geocode, reverseGeocode } from '../utils/locationUtils';
 
 // Fix default marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -30,16 +31,12 @@ const LocationPicker = ({ onLocationSelect, initialLat, initialLng, onAddressCha
     // Reverse Geocoding: Get address from coordinates
     const getAddressFromCoords = async (lat, lng) => {
         try {
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
-            );
-            const data = await response.json();
+            const result = await reverseGeocode(lat, lng);
 
-            if (data && data.address) {
-                const addr = data.address;
-                const fullAddress = data.display_name || '';
-                const city = addr.city || addr.town || addr.village || addr.state || '';
-                const street = addr.road || addr.suburb || '';
+            if (result.success) {
+                const fullAddress = result.fullLocation;
+                const city = result.city;
+                const street = result.raw?.road || result.raw?.suburb || '';
 
                 setAddress(fullAddress);
 
@@ -62,15 +59,12 @@ const LocationPicker = ({ onLocationSelect, initialLat, initialLng, onAddressCha
 
         setSearching(true);
         try {
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`
-            );
-            const data = await response.json();
+            const result = await geocode(query);
 
-            if (data && data.length > 0) {
-                const result = data[0];
-                const lat = parseFloat(result.lat);
-                const lng = parseFloat(result.lon);
+            if (result.success && result.results.length > 0) {
+                const firstResult = result.results[0];
+                const lat = firstResult.lat;
+                const lng = firstResult.lng;
 
                 if (mapInstanceRef.current) {
                     // Move map to location

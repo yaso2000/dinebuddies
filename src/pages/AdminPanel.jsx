@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaArrowLeft, FaUser, FaStore, FaCrown, FaSearch } from 'react-icons/fa';
 import './AdminPanel.css';
 
@@ -153,13 +154,7 @@ const AdminPanel = () => {
                                 {/* User Info */}
                                 <div className="user-info">
                                     <div className="user-avatar">
-                                        {user.photo_url ? (
-                                            <img src={user.photo_url} alt={user.display_name} />
-                                        ) : (
-                                            <div className="avatar-placeholder">
-                                                {user.accountType === 'business' ? '🏪' : '👤'}
-                                            </div>
-                                        )}
+                                        <img src={getSafeAvatar(user)} alt={user.display_name} />
                                     </div>
 
                                     <div className="user-details">

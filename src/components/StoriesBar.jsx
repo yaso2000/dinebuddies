@@ -4,6 +4,7 @@ import { collection, query, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import StoryCircle from './StoryCircle';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaPlus, FaCamera } from 'react-icons/fa';
 
 const StoriesBar = ({ onStoryClick }) => {
@@ -14,13 +15,7 @@ const StoriesBar = ({ onStoryClick }) => {
     const [myStoryData, setMyStoryData] = useState(null);
 
     // Robust user photo retrieval
-    const userPhoto = userProfile?.businessInfo?.logoImage ||
-        userProfile?.businessInfo?.logo ||
-        userProfile?.avatar ||
-        userProfile?.photoURL ||
-        userProfile?.photo_url ||
-        userProfile?.profilePicture ||
-        currentUser?.photoURL;
+    const userPhoto = getSafeAvatar(userProfile || currentUser);
 
     useEffect(() => {
         if (!currentUser) {
@@ -42,7 +37,7 @@ const StoriesBar = ({ onStoryClick }) => {
                         // Check if expired
                         const expiresAt = story.expiresAt;
                         if (expiresAt) {
-                            const expiryDate = expiresAt.toDate ? expiresAt.toDate() : new Date(expiresAt);
+                            const expiryDate = typeof expiresAt.toDate === 'function' ? expiresAt.toDate() : new Date(expiresAt);
                             // Compare timestamps for accuracy
                             if (expiryDate.getTime() <= Date.now()) return false;
                         }
@@ -61,7 +56,7 @@ const StoriesBar = ({ onStoryClick }) => {
                     if (!storyOwnerId) return;
 
                     // Check if it's my story (String comparison for safety)
-                    if (String(storyOwnerId) === String(currentUser.uid)) {
+                    if (currentUser?.uid && String(storyOwnerId) === String(currentUser.uid)) {
                         myStories.push(story);
                         return; // Don't add to general map
                     }
@@ -70,7 +65,7 @@ const StoriesBar = ({ onStoryClick }) => {
                         userStoriesMap[storyOwnerId] = {
                             userId: storyOwnerId,
                             partnerName: story.userName || story.author?.name, // Can be undefined/null initially
-                            partnerLogo: story.userPhoto || story.author?.avatar || null,
+                            partnerLogo: getSafeAvatar(story.author || story),
                             stories: [],
                             hasNewActiveStory: false
                         };
@@ -79,7 +74,7 @@ const StoriesBar = ({ onStoryClick }) => {
                     userStoriesMap[storyOwnerId].stories.push(story);
 
                     const views = story.views || [];
-                    if (!views.includes(currentUser.uid)) {
+                    if (currentUser?.uid && !views.includes(currentUser.uid)) {
                         userStoriesMap[storyOwnerId].hasNewActiveStory = true;
                     }
                 });
@@ -107,7 +102,7 @@ const StoriesBar = ({ onStoryClick }) => {
                                 if (profile.accountType === 'guest') return null;
 
                                 const pName = profile.displayName || profile.name || profile.businessInfo?.businessName || userGroup.partnerName || 'User';
-                                const pLogo = profile.photoURL || profile.avatar || profile.businessInfo?.logo || userGroup.partnerLogo;
+                                const pLogo = getSafeAvatar(profile);
 
                                 // Filter out "User" if they have a cartoon/default avatar (likely unconfigured/dummy account)
                                 if (pName === 'User' && (String(pLogo).includes('dicebear') || !pLogo)) {
@@ -174,7 +169,7 @@ const StoriesBar = ({ onStoryClick }) => {
                 // Set My Story Data
                 if (myStories.length > 0) {
                     setMyStoryData({
-                        userId: currentUser.uid,
+                        userId: currentUser?.uid,
                         partnerName: 'You',
                         partnerLogo: userPhoto,
                         stories: myStories,
@@ -248,7 +243,10 @@ const StoriesBar = ({ onStoryClick }) => {
 
                         {/* 2. My Story (View) */}
                         <div
-                            onClick={() => onStoryClick(myStoryData)}
+                            onClick={() => onStoryClick({
+                                allUserStories: [myStoryData, ...stories],
+                                initialUserIndex: 0
+                            })}
                             style={{
                                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0
                             }}
@@ -261,7 +259,8 @@ const StoriesBar = ({ onStoryClick }) => {
                             }}>
                                 <div style={{
                                     width: '100%', height: '100%', borderRadius: '50%',
-                                    background: userPhoto ? `url(${userPhoto})` : 'linear-gradient(135deg, #666, #333)',
+                                    backgroundColor: 'var(--bg-input)',
+                                    backgroundImage: userPhoto ? `url("${userPhoto}")` : 'linear-gradient(135deg, #666, #333)',
                                     backgroundSize: 'cover', backgroundPosition: 'center',
                                     border: '2px solid var(--bg-card)' // Border inside ring
                                 }} />
@@ -282,7 +281,8 @@ const StoriesBar = ({ onStoryClick }) => {
                         <div style={{ position: 'relative', width: '64px', height: '64px' }}>
                             <div style={{
                                 width: '100%', height: '100%', borderRadius: '50%',
-                                background: userPhoto ? `url(${userPhoto})` : 'linear-gradient(135deg, #666, #333)',
+                                backgroundColor: 'var(--bg-input)',
+                                backgroundImage: userPhoto ? `url("${userPhoto}")` : 'linear-gradient(135deg, #666, #333)',
                                 backgroundSize: 'cover', backgroundPosition: 'center',
                                 border: '2px solid var(--border-color)'
                             }} />
@@ -303,7 +303,7 @@ const StoriesBar = ({ onStoryClick }) => {
                 )}
 
                 {/* Other Users' Stories */}
-                {stories.map(user => (
+                {stories.map((user, index) => (
                     <StoryCircle
                         key={user.userId}
                         partner={{
@@ -312,7 +312,10 @@ const StoriesBar = ({ onStoryClick }) => {
                             logo: user.partnerLogo
                         }}
                         hasNewStory={user.hasNewActiveStory}
-                        onClick={() => onStoryClick(user)}
+                        onClick={() => onStoryClick({
+                            allUserStories: myStoryData ? [myStoryData, ...stories] : stories,
+                            initialUserIndex: myStoryData ? index + 1 : index
+                        })}
                     />
                 ))}
             </div>

@@ -1,17 +1,25 @@
 /* CreateStory.css */
 /* Full Screen Container */
 .create-story-container {
+    --bg-body: #000000;
+    --bg-card: #0f172a;
+    --bg-input: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --hover-overlay: rgba(255, 255, 255, 0.1);
+
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100vh;
-    background: #000;
+    background: var(--bg-body);
     display: flex;
     flex-direction: column;
     z-index: 2000;
     overflow: hidden;
-    color: white;
+    color: var(--text-main);
 }
 
 /* Header */
