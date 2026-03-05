@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaBirthdayCake, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaHeart, FaBriefcase, FaCocktail, FaSearch, FaMoon, FaUtensils, FaCoffee, FaGamepad } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaCocktail, FaSearch } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale, IoPeople } from 'react-icons/io5';
 import { HiUserGroup, HiUser } from 'react-icons/hi2';
 import { useInvitations } from '../context/InvitationContext';
@@ -27,7 +27,7 @@ const CreateInvitation = () => {
 
     // Redirect guests to login immediately
     useEffect(() => {
-        if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
+        if (userProfile?.isGuest || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
             navigate('/login');
         }
     }, [userProfile, currentUser, navigate]);
@@ -563,56 +563,81 @@ const CreateInvitation = () => {
         }
     };
 
-    // Auto-detect user location - REPLACED WITH IMPLICIT PROFILE LOCATION
-    /*
+    // Real-time location detection: GPS first → profile fallback → IP last resort
     useEffect(() => {
-        if (!restaurantData && navigator.geolocation) {
-           // ... (Browser Geolocation Logic Disabled) ...
-        }
-    }, [restaurantData]);
-    */
+        if (restaurantData) return; // Already have location from restaurant
 
-    // Use Implicit User Location from Profile OR IP Fallback
-    useEffect(() => {
-        const setLocationFromProfile = () => {
-            if (userProfile?.city && userProfile?.coordinates) {
-                console.log('📍 Using Implicit Profile Location:', userProfile.city);
+        const detectLocation = async () => {
+            // ── STEP 1: Try live GPS (always most accurate, reflects current city) ──
+            if (navigator.geolocation) {
+                try {
+                    const pos = await new Promise((resolve, reject) =>
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            timeout: 6000,
+                            maximumAge: 0 // Force fresh reading — don't use cached GPS
+                        })
+                    );
+
+                    const { latitude, longitude } = pos.coords;
+                    console.log('🛰️ Live GPS:', latitude, longitude);
+
+                    // Reverse geocode with BigDataCloud
+                    const res = await fetch(
+                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+                    );
+                    if (res.ok) {
+                        const d = await res.json();
+                        const city = d.city || d.locality || d.principalSubdivision || '';
+                        const country = d.countryName || '';
+                        const countryCode = d.countryCode || '';
+
+                        if (city) {
+                            console.log('✅ GPS → city:', city);
+                            setFormData(prev => ({
+                                ...prev,
+                                city,
+                                country,
+                                countryCode,
+                                userLat: latitude,
+                                userLng: longitude,
+                            }));
+                            return; // Done
+                        }
+                    }
+                } catch {
+                    console.log('📵 GPS unavailable or denied — using fallback');
+                }
+            }
+
+            // ── STEP 2: Fallback to saved profile city (if GPS denied/unavailable) ──
+            if (userProfile?.city) {
+                console.log('📍 Using saved profile city as fallback:', userProfile.city);
                 setFormData(prev => ({
                     ...prev,
-                    city: userProfile.city || prev.city,
+                    city: userProfile.city,
                     country: userProfile.countryCode || prev.country || '',
-                    userLat: userProfile.coordinates.lat,
-                    userLng: userProfile.coordinates.lng,
+                    userLat: userProfile.coordinates?.lat || prev.userLat,
+                    userLng: userProfile.coordinates?.lng || prev.userLng,
                 }));
-                return true;
+                return;
             }
-            return false;
-        };
 
-        const fetchLocation = async () => {
+            // ── STEP 3: Last resort — IP geolocation ──
             const data = await fetchIpLocation();
             if (data.success) {
-                console.log('✅ IP Location found:', data.city, data.country_code);
+                console.log('🌐 IP fallback city:', data.city);
                 setFormData(prev => ({
                     ...prev,
                     city: data.city,
                     country: data.country_code,
                     userLat: data.latitude,
-                    userLng: data.longitude
+                    userLng: data.longitude,
                 }));
             }
         };
 
-        if (!restaurantData) {
-            // 1. Try Profile First
-            const profileFound = setLocationFromProfile();
-
-            // 2. If no profile location, use IP Fallback
-            if (!profileFound) {
-                fetchLocation();
-            }
-        }
-    }, [userProfile, restaurantData]);
+        detectLocation();
+    }, [restaurantData]); // Only re-run if restaurantData changes — NOT on every userProfile update
 
     // Restore Google Images when editing (Address User Issue: Images missing in Edit Mode)
     useEffect(() => {
@@ -964,58 +989,6 @@ const CreateInvitation = () => {
                     </div>
                 </div>
 
-                {/* 5. Invitation Mood / Occasion Type Selection - For Card Design */}
-                <div className="form-group" style={{ marginTop: '1rem' }}>
-                    <label className="elegant-label">
-                        <span className="label-icon"><FaPlus /></span>
-                        {t('invitation_occasion_type', 'Invitation Mood (Card Design)')}
-                    </label>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '12px',
-                        marginTop: '0.5rem'
-                    }}>
-                        {[
-                            { value: 'Dating', label: t('occasion_dating'), icon: FaHeart, color: '#f43f5e' },
-                            { value: 'Birthday', label: t('occasion_birthday'), icon: FaBirthdayCake, color: '#fb923c' },
-                            { value: 'Social', label: t('occasion_social'), icon: FaUsers, color: '#22c55e' },
-                            { value: 'Work', label: t('occasion_work'), icon: FaBriefcase, color: '#8b5cf6' },
-                            { value: 'Nightlife', label: t('occasion_nightlife'), icon: FaMoon, color: '#eab308' },
-                            { value: 'Dining', label: t('occasion_dining'), icon: FaUtensils, color: '#3b82f6' },
-                            { value: 'Café', label: t('occasion_cafe'), icon: FaCoffee, color: '#d97706' },
-                            { value: 'Gaming', label: t('occasion_gaming'), icon: FaGamepad, color: '#6366f1' }
-                        ].map((option) => {
-                            const isSelected = formData.occasionType === option.value;
-                            return (
-                                <button
-                                    key={option.value}
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, occasionType: option.value })}
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '10px',
-                                        padding: '16px 10px',
-                                        borderRadius: '16px',
-                                        border: isSelected ? `2px solid ${option.color}` : '1px solid var(--border-color)',
-                                        background: isSelected ? `${option.color}15` : 'var(--bg-input)',
-                                        color: isSelected ? option.color : 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease',
-                                        transform: isSelected ? 'translateY(-2px)' : 'none',
-                                        boxShadow: isSelected ? `0 4px 15px ${option.color}20` : 'none'
-                                    }}
-                                >
-                                    <option.icon style={{ fontSize: '1.4rem' }} />
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '800' }}>{option.label}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
 
                 <div className="form-grid">
                     <div className="form-group">
@@ -1157,7 +1130,7 @@ const CreateInvitation = () => {
                 <div className="form-group">
                     <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>
-                            <span className="label-icon"><FaBirthdayCake /></span>
+                            <span className="label-icon"><FaUserFriends /></span>
                             {t('age_range_preference')}
                         </span>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>

@@ -16,8 +16,9 @@ const MyCommunity = () => {
         posts: 0
     });
 
-    // Check if user is a business account
-    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
+    // Check if user is a business account (unified flag)
+    const isBusinessAccount = userProfile?.isBusiness || false;
+
 
     useEffect(() => {
         if (!isBusinessAccount) {

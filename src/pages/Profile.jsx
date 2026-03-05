@@ -84,7 +84,7 @@ const Profile = () => {
 
     // Redirect business accounts to business profile
     useEffect(() => {
-        if (userProfile?.accountType === 'business') {
+        if (userProfile?.isBusiness) {
             navigate(`/partner/${currentUser.uid}`);
         }
     }, [userProfile, navigate]);
@@ -360,7 +360,7 @@ const Profile = () => {
                                             }}
                                         />
                                     </div>
-                                    {userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
+                                    {!userProfile?.isGuest && (
                                         <button
                                             onClick={() => navigate('/create-story')}
                                             style={{
@@ -599,7 +599,7 @@ const Profile = () => {
                         </div>
 
                         {/* Subscription & Credits Section */}
-                        {userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
+                        {!userProfile?.isGuest && (
                             <div style={{
                                 background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(251, 191, 36, 0.04))',
                                 borderRadius: '14px',
@@ -617,7 +617,7 @@ const Profile = () => {
                                         fontSize: '0.75rem',
                                         fontWeight: '800'
                                     }}>
-                                        {userProfile?.accountType === 'admin' ? 'ADMIN' : (userProfile?.subscriptionPlan?.toUpperCase() || 'FREE')}
+                                        {userProfile?.role === 'admin' ? 'ADMIN' : (userProfile?.subscriptionPlan?.toUpperCase() || 'FREE')}
                                     </div>
                                     <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
                                         Subscription Plan
@@ -625,7 +625,7 @@ const Profile = () => {
                                 </div>
 
                                 {/* Hide Invitation Quotas for Business Accounts */}
-                                {userProfile?.accountType !== 'business' && (
+                                {!userProfile?.isBusiness && (
                                     <div style={{ display: 'flex', gap: '10px' }}>
                                         <div style={{
                                             flex: 1,
@@ -729,7 +729,7 @@ const Profile = () => {
                         )}
 
                         {/* Profile Actions: Edit & Create Invitation - Hide for Guests */}
-                        {!isEditing && userProfile?.accountType !== 'guest' && !userProfile?.isGuest && (
+                        {!isEditing && !userProfile?.isGuest && (
                             <div style={{ display: 'flex', gap: '12px', marginBottom: '1rem' }}>
                                 <button
                                     onClick={() => setIsEditing(true)}
@@ -748,7 +748,7 @@ const Profile = () => {
                                 >
                                     {t('edit_profile') || 'Edit Profile'}
                                 </button>
-                                {userProfile?.accountType !== 'business' && (
+                                {!userProfile?.isBusiness && (
                                     <button
                                         onClick={() => setIsSelectorOpen(true)}
                                         className="btn"
@@ -772,7 +772,7 @@ const Profile = () => {
                         )}
 
                         {/* Guest Mode Login Prompt */}
-                        {(userProfile?.accountType === 'guest' || userProfile?.isGuest) && (
+                        {(userProfile?.isGuest) && (
                             <div style={{
                                 padding: '1.5rem',
                                 background: 'rgba(139, 92, 246, 0.1)',

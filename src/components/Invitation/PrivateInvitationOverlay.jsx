@@ -44,7 +44,7 @@ const PrivateInvitationOverlay = () => {
             if (activePrivateInvitation?.invitationId) {
                 setLoading(true);
                 try {
-                    const docRef = doc(db, 'invitations', activePrivateInvitation.invitationId);
+                    const docRef = doc(db, 'private_invitations', activePrivateInvitation.invitationId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
                         setInvitation({ id: docSnap.id, ...docSnap.data() });

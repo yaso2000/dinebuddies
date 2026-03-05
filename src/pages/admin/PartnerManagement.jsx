@@ -32,7 +32,7 @@ const PartnerManagement = () => {
                     id: doc.id,
                     ...doc.data()
                 }))
-                .filter(user => user.accountType === 'business');
+                .filter(user => user.role === 'business');
 
             console.log('Partners:', businessUsers);
             setPartners(businessUsers);

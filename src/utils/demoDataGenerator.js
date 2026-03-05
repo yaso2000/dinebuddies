@@ -123,7 +123,7 @@ const generateDemoBusiness = (index) => {
         display_name: bizData.name,
         email: `b${index + 1}@d.c`,
         photo_url: bizData.logo,
-        role: 'partner',
+        role: 'business',
         accountType: 'business',
         isDemo: true,
         password: '123',

@@ -9,7 +9,8 @@ import {
     FaPlay, FaPause, FaTrash, FaArrowDown
 } from 'react-icons/fa';
 import EmojiPicker from 'emoji-picker-react';
-import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils'; // Added media utils
+import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
+import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import './CommunityChatRoom.css';
 
@@ -21,17 +22,36 @@ const CommunityChatRoom = () => {
     // Real Data State
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [activeReactionId, setActiveReactionId] = useState(null); // New state for reactions
+    const [activeReactionId, setActiveReactionId] = useState(null);
     const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
     const [partner, setPartner] = useState(null);
     const [isMember, setIsMember] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    const emojiBtnRef = useRef(null);
 
     const handleScroll = (e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
         const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
         setShowScrollBottom(!isNearBottom);
+    };
+
+    const handleEmojiClick = (emojiData) => {
+        const emoji = emojiData.emoji;
+        const input = inputRef.current;
+        if (input) {
+            const s = input.selectionStart ?? newMessage.length;
+            const e = input.selectionEnd ?? newMessage.length;
+            setNewMessage(newMessage.slice(0, s) + emoji + newMessage.slice(e));
+            setTimeout(() => {
+                input.focus();
+                input.setSelectionRange(s + emoji.length, s + emoji.length);
+            }, 0);
+        } else {
+            setNewMessage(p => p + emoji);
+        }
     };
 
     const scrollToBottom = () => {
@@ -591,6 +611,15 @@ const CommunityChatRoom = () => {
                         ) : (
                             /* NORMAL INPUT UI */
                             <>
+                                {!isMobile && (
+                                    <button
+                                        ref={emojiBtnRef}
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }}
+                                        style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', padding: '0 4px', opacity: 0.7, flexShrink: 0 }}
+                                        title="Emoji"
+                                    >😊</button>
+                                )}
                                 <input
                                     ref={inputRef}
                                     type="text"
@@ -621,8 +650,11 @@ const CommunityChatRoom = () => {
                     <button
                         type="button"
                         className="send-btn-circle"
-                        onPointerDown={(e) => e.preventDefault()}
-                        onClick={isRecording ? () => handleStopRecording(true) : handleSendMessage}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            if (isRecording) handleStopRecording(true);
+                            else handleSendMessage(e);
+                        }}
                         style={{
                             background: isRecording ? '#ef4444' : 'var(--primary)',
                             color: 'white', border: 'none', borderRadius: '50%',
@@ -637,13 +669,22 @@ const CommunityChatRoom = () => {
                             newMessage.trim() ? (
                                 <FaPaperPlane style={{ marginLeft: '-2px' }} />
                             ) : (
-                                <FaMicrophone onClick={(e) => { e.stopPropagation(); handleStartRecording(); }} />
+                                <FaMicrophone onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleStartRecording(); }} />
                             )
                         )}
                     </button>
                 </div>
 
             </div>
+
+            {/* Desktop Emoji Picker Portal */}
+            <EmojiPickerPortal
+                open={showEmojiPicker}
+                onClose={() => setShowEmojiPicker(false)}
+                anchorRef={emojiBtnRef}
+                onEmojiClick={handleEmojiClick}
+            />
+
         </div>
     );
 };

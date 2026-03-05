@@ -5,7 +5,9 @@ import { useAuth } from '../context/AuthContext';
 import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown, FaPause, FaPlay, FaArrowLeft } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import '../pages/CommunityChatRoom.css'; // Use the shared CSS for consistent look
+import EmojiPicker from 'emoji-picker-react';
+import EmojiPickerPortal, { isMobile } from './EmojiPickerPortal';
+import '../pages/CommunityChatRoom.css';
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
     const { currentUser, userProfile } = useAuth();
@@ -27,6 +29,9 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
 
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+    const emojiBtnRef = useRef(null);
+
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
     // Initial scroll state
     const [initialScrollDone, setInitialScrollDone] = useState(false);
@@ -362,24 +367,58 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                     })
                 )}
                 <div ref={messagesEndRef} />
-
-                {showScrollBottom && (
-                    <button
-                        onClick={scrollToBottom}
-                        style={{
-                            position: 'absolute', bottom: '80px', right: '20px',
-                            background: 'var(--primary)', color: 'white', border: 'none',
-                            borderRadius: '50%', width: '35px', height: '35px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                        }}
-                    >
-                        <FaArrowDown />
-                    </button>
-                )}
             </div>
 
-            {/* Input Area - Clean & Simple */}
-            <div className="input-area">
+            {/* Scroll to Bottom — OUTSIDE message-list */}
+            {showScrollBottom && (
+                <button
+                    onClick={scrollToBottom}
+                    style={{
+                        position: 'absolute',
+                        bottom: '80px',
+                        right: '20px',
+                        background: 'var(--primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+                        zIndex: 200,
+                    }}
+                >
+                    <FaArrowDown />
+                </button>
+            )}
+
+            {/* Input Area */}
+            <div className="input-area" style={{ position: 'relative' }}>
+                {/* Emoji Picker Portal */}
+                <EmojiPickerPortal
+                    open={showEmojiPicker}
+                    onClose={() => setShowEmojiPicker(false)}
+                    anchorRef={emojiBtnRef}
+                    onEmojiClick={(emojiData) => {
+                        const input = inputRef.current;
+                        if (input) {
+                            const start = input.selectionStart ?? newMessage.length;
+                            const end = input.selectionEnd ?? newMessage.length;
+                            const updated = newMessage.slice(0, start) + emojiData.emoji + newMessage.slice(end);
+                            setNewMessage(updated);
+                            setTimeout(() => {
+                                input.focus();
+                                input.setSelectionRange(start + emojiData.emoji.length, start + emojiData.emoji.length);
+                            }, 0);
+                        } else {
+                            setNewMessage(prev => prev + emojiData.emoji);
+                        }
+                    }}
+                />
+
                 <div className="input-wrapper">
                     {isRecording ? (
                         <div className="recording-ui" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -389,23 +428,42 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                             </div>
                             <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Recording...</span>
                             <button
-                                onClick={() => handleStopRecording(false)} // Cancel
+                                onClick={() => handleStopRecording(false)}
                                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
                             >
                                 <FaTrash />
                             </button>
                         </div>
                     ) : (
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            className="message-input"
-                            placeholder="Type a message..."
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                            autoComplete="off"
-                        />
+                        <>
+                            {/* Emoji Button — desktop only */}
+                            {!isMobile && (
+                                <button
+                                    ref={emojiBtnRef}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(prev => !prev); }}
+                                    style={{
+                                        background: 'none', border: 'none',
+                                        fontSize: '1.3rem', cursor: 'pointer',
+                                        padding: '0 6px', lineHeight: 1,
+                                        opacity: 0.7, transition: 'opacity 0.2s',
+                                        flexShrink: 0,
+                                    }}
+                                    title="Emoji"
+                                >😊</button>
+                            )}
+
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                className="message-input"
+                                placeholder="Type a message..."
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                                autoComplete="off"
+                            />
+                        </>
                     )}
                 </div>
 

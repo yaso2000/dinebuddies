@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
 const ThemeContext = createContext();
 
@@ -11,37 +11,20 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-    // Check local storage or default to dark
-    const [themeMode, setThemeMode] = useState(localStorage.getItem('theme') || 'dark');
-
+    // App is permanently dark — no light mode
     useEffect(() => {
-        document.documentElement.setAttribute('data-theme', themeMode);
-        localStorage.setItem('theme', themeMode);
-
-        // Sync class to body for backward compatibility with CSS targeting body.light-mode
-        if (themeMode === 'light') {
-            document.body.classList.add('light-mode');
-        } else {
-            document.body.classList.remove('light-mode');
-        }
-
-        // Update meta theme-color for mobile browsers
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.body.classList.remove('light-mode');
+        localStorage.setItem('theme', 'dark');
         const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-        if (metaThemeColor) {
-            // Dark: #020617, Light: #f8fafc
-            metaThemeColor.setAttribute('content', themeMode === 'dark' ? '#020617' : '#f8fafc');
-        }
-    }, [themeMode]);
-
-    const toggleTheme = () => {
-        setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
-    };
+        if (metaThemeColor) metaThemeColor.setAttribute('content', '#020617');
+    }, []);
 
     const value = {
-        themeMode,
-        isDark: themeMode === 'dark',
-        toggleTheme,
-        setTheme: setThemeMode
+        themeMode: 'dark',
+        isDark: true,
+        toggleTheme: () => { }, // no-op — kept for backward compat
+        setTheme: () => { },    // no-op
     };
 
     return (

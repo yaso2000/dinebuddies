@@ -13,8 +13,10 @@ const MENU_CATEGORIES = [
     { id: 'drinks', label: 'Drinks', icon: '🥤', color: '#3b82f6' }
 ];
 
-const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
+const MenuShowcase = ({ partnerId, menuData = [], isOwner, theme }) => {
     const { t } = useTranslation();
+    const tc = theme?.colors || null;
+    const th = (themed, fallback) => tc ? themed : fallback;
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [editingItem, setEditingItem] = useState(null);
@@ -169,17 +171,24 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
     };
 
     return (
-        <div className="menu-showcase-section">
+        <div className="menu-showcase-section" style={{ background: th(tc?.cardBg, undefined) }}>
             {/* Header */}
             <div className="menu-header">
-                <h3>
-                    <FaUtensils style={{ color: '#f59e0b' }} />
+                <h3 style={{ color: th(tc?.accent, undefined) }}>
+                    <FaUtensils style={{ color: th(tc?.accent, '#f59e0b') }} />
                     {t('menu', 'Menu')} ({menuItems.length})
                 </h3>
                 {isOwner && (
                     <button
                         className={`edit-menu-btn ${isEditMode ? 'active' : ''}`}
                         onClick={() => setIsEditMode(!isEditMode)}
+                        style={tc ? {
+                            background: isEditMode ? tc.badgeBg : tc.footerBg,
+                            border: `1px solid ${tc.border}`,
+                            color: tc.accentText || tc.accent,
+                            boxShadow: tc.btnShadow,
+                            borderRadius: tc.btnBorderRadius
+                        } : {}}
                     >
                         {isEditMode ? <><FaTimes /> {t('done', 'Done')}</> : <><FaEdit /> {t('edit', 'Edit')}</>}
                     </button>
@@ -191,6 +200,12 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                 <button
                     className={`category-btn ${selectedCategory === 'all' ? 'active' : ''}`}
                     onClick={() => setSelectedCategory('all')}
+                    style={tc && selectedCategory === 'all' ? {
+                        borderColor: tc.accent,
+                        color: tc.accent,
+                        background: tc.badgeBg,
+                        boxShadow: `0 0 8px ${tc.accent}44`
+                    } : tc ? { borderColor: tc.border, color: tc.badgeText } : {}}
                 >
                     <span className="category-icon">🍴</span>
                     <span className="category-label">{t('all', 'All')}</span>
@@ -201,7 +216,12 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                         key={cat.id}
                         className={`category-btn ${selectedCategory === cat.id ? 'active' : ''}`}
                         onClick={() => setSelectedCategory(cat.id)}
-                        style={{
+                        style={tc ? {
+                            borderColor: selectedCategory === cat.id ? tc.accent : tc.border,
+                            color: selectedCategory === cat.id ? tc.accent : tc.badgeText,
+                            background: selectedCategory === cat.id ? tc.badgeBg : 'transparent',
+                            boxShadow: selectedCategory === cat.id ? `0 0 8px ${tc.accent}44` : 'none'
+                        } : {
                             borderColor: selectedCategory === cat.id ? cat.color : 'var(--border-color)',
                             color: selectedCategory === cat.id ? cat.color : 'var(--text-main)'
                         }}
@@ -277,6 +297,13 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                         className="add-item-btn"
                         onClick={handleAddItem}
                         disabled={uploadingImage || !newItem.name.trim() || !newItem.price}
+                        style={tc ? {
+                            background: tc.footerBg,
+                            border: `1px solid ${tc.border}`,
+                            color: tc.accentText || '#fff',
+                            boxShadow: tc.btnShadow,
+                            borderRadius: tc.btnBorderRadius
+                        } : {}}
                     >
                         <FaPlus />
                         {uploadingImage ? t('uploading', 'Uploading...') : t('add_item', 'Add Item')}
@@ -300,14 +327,18 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                         const isEditing = editingItem === item.id;
 
                         return (
-                            <div key={item.id} className="menu-item-card">
+                            <div key={item.id} className="menu-item-card" style={tc ? {
+                                background: tc.badgeBg,
+                                border: `1px solid ${tc.border}`,
+                                boxShadow: tc.cardShadow
+                            } : {}}>
                                 {/* Image */}
                                 {item.imageUrl && (
                                     <div className="item-image">
                                         <img src={item.imageUrl} alt={item.name} />
                                         <div
                                             className="category-badge"
-                                            style={{ background: category?.color }}
+                                            style={{ background: tc ? tc.accent : category?.color }}
                                         >
                                             {category?.icon}
                                         </div>
@@ -317,8 +348,15 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                                 {/* Content */}
                                 <div className="item-content">
                                     <div className="item-header">
-                                        <h4>{item.name}</h4>
-                                        <div className="item-price">
+                                        <h4 style={{ color: th(tc?.accent, undefined) }}>{item.name}</h4>
+                                        <div className="item-price" style={tc ? {
+                                            color: tc.accent,
+                                            textShadow: `0 0 8px ${tc.accent}66`,
+                                            background: tc.badgeBg,
+                                            border: `1px solid ${tc.border}`,
+                                            borderRadius: '8px',
+                                            padding: '2px 8px'
+                                        } : {}}>
                                             {typeof item.price === 'number'
                                                 ? `$${item.price.toFixed(2)}`
                                                 : item.price?.toString().startsWith('$')
@@ -330,7 +368,7 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner }) => {
                                         <p className="item-description">{item.description}</p>
                                     )}
                                     {!item.imageUrl && (
-                                        <div className="category-tag" style={{ background: category?.color }}>
+                                        <div className="category-tag" style={{ background: tc ? tc.accent : category?.color, color: tc ? tc.accentText : '#fff' }}>
                                             {category?.icon} {t(category?.id, category?.label)}
                                         </div>
                                     )}

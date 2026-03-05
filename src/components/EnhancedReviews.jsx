@@ -19,9 +19,12 @@ const EnhancedReviews = ({
     currentUser,
     userProfile,
     onWriteReview,
-    averageRating
+    averageRating,
+    theme
 }) => {
     const { t } = useTranslation();
+    const tc = theme?.colors || null;
+    const th = (themed, fallback) => tc ? themed : fallback;
     const [showAll, setShowAll] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortBy, setSortBy] = useState('recent');
@@ -116,58 +119,77 @@ const EnhancedReviews = ({
     };
 
     return (
-        <div className="enhanced-reviews-section">
+        <div className="enhanced-reviews-section" style={{ background: th(tc?.cardBg, undefined) }}>
             {/* Header */}
             <div className="reviews-header">
                 <div className="header-left">
-                    <h3>
-                        <FaStar style={{ color: '#fbbf24' }} />
+                    <h3 style={{ color: th(tc?.accent, undefined) }}>
+                        <FaStar style={{ color: th(tc?.accent, '#fbbf24') }} />
                         {t('reviews', 'Reviews')} ({totalReviews})
                     </h3>
                     {averageRating > 0 && (
                         <div className="average-rating">
-                            <span className="rating-number">{averageRating.toFixed(1)}</span>
+                            <span className="rating-number" style={{ color: th(tc?.accent, undefined) }}>{averageRating.toFixed(1)}</span>
                             {renderStars(Math.round(averageRating))}
                         </div>
                     )}
                 </div>
                 {currentUser && userProfile?.accountType !== 'business' && (
-                    <button className="write-review-btn" onClick={onWriteReview}>
+                    <button
+                        className="write-review-btn"
+                        onClick={onWriteReview}
+                        style={tc ? {
+                            background: tc.footerBg,
+                            border: `1px solid ${tc.border}`,
+                            color: tc.accentText || '#fff',
+                            boxShadow: tc.btnShadow,
+                            borderRadius: tc.btnBorderRadius
+                        } : {}}
+                    >
                         <FaStar />
                         {t('write_review', 'Write Review')}
                     </button>
                 )}
             </div>
 
-            {/* Rating Distribution */}
+            {/* Rating Distribution — compact horizontal layout */}
             {totalReviews > 0 && (
-                <div className="rating-distribution">
-                    <h4>{t('rating_breakdown', 'Rating Breakdown')}</h4>
-                    <div className="distribution-bars">
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 0', marginBottom: '0.5rem', flexWrap: 'wrap'
+                }}>
+                    {/* Big average number */}
+                    <div style={{ textAlign: 'center', minWidth: '48px' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: '900', lineHeight: 1, color: th(tc?.accent, '#fbbf24') }}>
+                            {averageRating > 0 ? averageRating.toFixed(1) : '–'}
+                        </div>
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '2px' }}>/ 5</div>
+                    </div>
+                    {/* Mini bars */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
                         {[5, 4, 3, 2, 1].map(rating => {
                             const count = distribution[rating] || 0;
                             const percentage = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
-
                             return (
                                 <div
                                     key={rating}
-                                    className="distribution-row"
                                     onClick={() => setFilterRating(filterRating === rating ? 0 : rating)}
-                                    style={{ cursor: 'pointer' }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
                                 >
-                                    <div className="rating-label">
-                                        {rating} <FaStar className="mini-star" />
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: '10px', textAlign: 'right' }}>{rating}</span>
+                                    <FaStar style={{ fontSize: '0.55rem', color: th(tc?.accent, '#fbbf24'), flexShrink: 0 }} />
+                                    <div style={{
+                                        flex: 1, height: '5px', borderRadius: '3px',
+                                        background: 'var(--border-color)', overflow: 'hidden'
+                                    }}>
+                                        <div style={{
+                                            width: `${percentage}%`, height: '100%',
+                                            background: th(tc?.accent, '#fbbf24'),
+                                            opacity: filterRating === 0 || filterRating === rating ? 1 : 0.3,
+                                            borderRadius: '3px', transition: 'width 0.3s'
+                                        }} />
                                     </div>
-                                    <div className="bar-container">
-                                        <div
-                                            className="bar-fill"
-                                            style={{
-                                                width: `${percentage}%`,
-                                                opacity: filterRating === 0 || filterRating === rating ? 1 : 0.3
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="count">{count}</div>
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: '14px' }}>{count}</span>
                                 </div>
                             );
                         })}
@@ -226,20 +248,29 @@ const EnhancedReviews = ({
                 <>
                     <div className="reviews-list">
                         {displayedReviews.map(review => (
-                            <div key={review.id} className="review-card">
+                            <div
+                                key={review.id}
+                                className="review-card"
+                                style={tc ? {
+                                    background: tc.badgeBg,
+                                    border: `1px solid ${tc.border}`,
+                                    boxShadow: tc.cardShadow
+                                } : {}}
+                            >
                                 {/* Review Header */}
                                 <div className="review-header">
                                     <div className="user-info">
                                         <div
                                             className="user-avatar"
                                             style={{
-                                                backgroundImage: review.userPhoto ? `url(${review.userPhoto})` : 'none'
+                                                backgroundImage: review.userPhoto ? `url(${review.userPhoto})` : 'none',
+                                                border: tc ? `2px solid ${tc.accent}66` : undefined
                                             }}
                                         >
                                             {!review.userPhoto && (review.userName?.charAt(0) || '?')}
                                         </div>
                                         <div className="user-details">
-                                            <div className="user-name">
+                                            <div className="user-name" style={{ color: th(tc?.accent, undefined) }}>
                                                 {review.userName || 'Anonymous'}
                                             </div>
                                             <div className="review-date">

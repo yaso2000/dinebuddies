@@ -19,12 +19,13 @@ const MyCommunities = () => {
 
     // Redirect guests to login & business accounts to their dashboard
     useEffect(() => {
-        if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest') {
+        if (userProfile?.isGuest) {
             navigate('/login');
-        } else if (userProfile?.accountType === 'business') {
-            navigate('/business-dashboard'); // Or '/my-community' if that's their dedicated page
+        } else if (userProfile?.isBusiness) {
+            navigate('/business-dashboard');
         }
     }, [userProfile, navigate]);
+
 
     useEffect(() => {
         if (userProfile && userProfile.id) {
@@ -57,7 +58,7 @@ const MyCommunities = () => {
                         const partnerDoc = await getDoc(doc(db, 'users', partnerId));
                         console.log('🔍 Checking partner:', partnerId, 'exists:', partnerDoc.exists(), partnerDoc.exists() ? 'data:' : '', partnerDoc.exists() ? partnerDoc.data() : '');
 
-                        if (partnerDoc.exists() && (partnerDoc.data().accountType === 'business' || partnerDoc.data().accountType === 'partner' || partnerDoc.data().role === 'partner')) {
+                        if (partnerDoc.exists() && partnerDoc.data().role === 'business') {
                             const data = partnerDoc.data();
                             const businessInfo = data.businessInfo || {};
 
@@ -151,8 +152,9 @@ const MyCommunities = () => {
     );
 
     // Guest check - Don't render anything for guests
-    const isGuest = userProfile?.accountType === 'guest' || userProfile?.role === 'guest';
+    const isGuest = userProfile?.isGuest || false;
     if (isGuest) {
+
         return null; // Redirect will happen via useEffect
     }
 

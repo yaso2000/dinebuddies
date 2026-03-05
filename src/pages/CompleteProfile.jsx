@@ -30,11 +30,10 @@ const CompleteProfile = () => {
 
     // Load existing data if available
     useEffect(() => {
-        // SAFEGUARD: If user is a business account, they should not be on this page.
-        // Redirect them to business dashboard or home.
-        if (userProfile?.accountType === 'business' || userProfile?.role === 'partner') {
-            console.log("🏢 Business user detected on /complete-profile. Redirecting...");
-            navigate('/business-dashboard');
+        // SAFEGUARD: If user is a business account, redirect to their dashboard
+        if (userProfile?.isBusiness) {
+            console.log('🏢 Business user detected on /complete-profile. Redirecting...');
+            navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard');
             return;
         }
 
@@ -58,8 +57,9 @@ const CompleteProfile = () => {
 
         console.log("Submitting profile form...", formData);
 
-        if (!formData.displayName || !formData.ageCategory || !formData.gender || !formData.photoURL) {
-            alert(t('fill_all_fields_photo', 'Please fill all fields, including your profile photo.'));
+        // Photo is optional — only name, age category, and gender are required
+        if (!formData.displayName || !formData.ageCategory || !formData.gender) {
+            alert(t('fill_required_fields', 'Please fill in your name, age group, and gender.'));
             return;
         }
 

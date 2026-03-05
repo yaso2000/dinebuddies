@@ -35,17 +35,16 @@ export const BASE_SUBSCRIPTION_PLANS = [
         currency: 'USD',
         priceEur: 4.49,
         duration: { type: 'month', value: 1 },
-        weeklyPrivateQuota: 2,
+        monthlyPrivateQuota: 4,
         stripePriceId: 'price_1T4DptKpQn3RDJUCrhwtOx0u',
+        tier: 'pro',
         features: [
-            '2 Private Invitations per week',
+            '4 Private Invitations per month',
             'Unlimited Public Invitations',
-            'Lock editing after sending',
             'Distinctive Pro Badge',
             'Priority in search results',
             'Fast technical support'
         ],
-        tier: 'pro',
         active: true,
         recommended: true
     },
@@ -59,13 +58,13 @@ export const BASE_SUBSCRIPTION_PLANS = [
         currency: 'USD',
         priceEur: 8.99,
         duration: { type: 'month', value: 1 },
-        weeklyPrivateQuota: -1,
+        weeklyPrivateQuota: 10,
+        monthlyPrivateQuota: 10,
         stripePriceId: 'price_1T4DrkKpQn3RDJUC7cPercNu',
         tier: 'vip',
         features: [
-            'Unlimited Private Invitations',
+            '10 Private Invitations per month',
             'Unlimited Public Invitations',
-            'Unlimited invitation editing',
             'Exclusive Golden Badge',
             'Top priority + Partner discounts',
             'Undo cancellation option'
@@ -78,7 +77,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
         name: 'Professional Partner Plan',
         title: 'For Small Venues',
         description: 'Perfect solution for emerging businesses and venues',
-        type: 'partner',
+        type: 'business',
         price: 12.42, // $19 AUD
         currency: 'USD',
         originalPrice: 18.95, // $29 AUD
@@ -90,10 +89,15 @@ export const BASE_SUBSCRIPTION_PLANS = [
         invitationOffers: null,
         stripePriceId: 'price_1T4DfJKpQn3RDJUC4ANefmpl',
         tier: 'professional',
+        // Offer rules
+        offerSlots: 1,
+        offerHoursPerSlot: 50,
+        offerPerpetual: false,
         features: [
             '1 Month FREE Trial ✨',
             'Full dashboard access',
             'Listing in partner directory',
+            '1 offer slot (50 hours/week)',
             'Accept reservations',
             'Basic statistics',
             'Email support'
@@ -106,7 +110,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
         name: 'Elite Partner Plan',
         title: 'For Businesses & Large Venues',
         description: 'Professional tools to manage and grow your business',
-        type: 'partner',
+        type: 'business',
         price: 18.95, // $29 AUD
         currency: 'USD',
         originalPrice: 25.49, // $39 AUD
@@ -117,9 +121,15 @@ export const BASE_SUBSCRIPTION_PLANS = [
         invitationCredits: null,
         invitationOffers: null,
         stripePriceId: 'price_1T4DlqKpQn3RDJUC6vrueW0n',
+        tier: 'elite',
+        // Offer rules
+        offerSlots: 1,
+        offerHoursPerSlot: null,  // null = perpetual
+        offerPerpetual: true,
         features: [
             '1 Month FREE Trial ✨',
             'All Basic features',
+            '1 permanent offer slot ♾️',
             'Featured in search results',
             'Advanced analytics',
             'Menu & Offer management',
@@ -135,7 +145,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
         name: 'Free Partner Plan',
         title: 'For Basic Presence',
         description: 'Start listing your restaurant in the directory for free',
-        type: 'partner',
+        type: 'business',
         price: 0,
         duration: { type: 'month', value: 1 },
         invitationCredits: 0,
@@ -156,6 +166,7 @@ export const BASE_CREDIT_PACKS = [
     {
         id: 'c1',
         name: 'Single Private Invitation',
+        type: 'invitation',
         amount: 1,
         price: 1.31, // $2 AUD
         currency: 'USD',
@@ -164,6 +175,7 @@ export const BASE_CREDIT_PACKS = [
     {
         id: 'c2',
         name: '3 Private Invitations',
+        type: 'invitation',
         amount: 3,
         price: 2.61, // $4 AUD
         currency: 'USD',
@@ -172,6 +184,7 @@ export const BASE_CREDIT_PACKS = [
     {
         id: 'c3',
         name: '5 Private Invitations',
+        type: 'invitation',
         amount: 5,
         price: 3.92, // $6 AUD
         currency: 'USD',
@@ -180,6 +193,7 @@ export const BASE_CREDIT_PACKS = [
     {
         id: 'c4',
         name: '10 Private Invitations',
+        type: 'invitation',
         amount: 10,
         price: 5.88, // $9 AUD
         currency: 'USD',
@@ -188,9 +202,20 @@ export const BASE_CREDIT_PACKS = [
     {
         id: 'c5',
         name: '20 Private Invitations',
+        type: 'invitation',
         amount: 20,
         price: 9.80, // $15 AUD
         currency: 'USD',
         stripePriceId: 'price_1T4E8AKpQn3RDJUCc3tJwnAI'
+    },
+    {
+        id: 'o1',
+        name: '50 Hour Offer Slot',
+        type: 'offer_slot',
+        offerHours: 50,
+        price: 3.27, // $5 AUD
+        currency: 'USD',
+        stripePriceId: 'price_1T5mIGKpQn3RDJUCMzhlyN6a',
+        description: 'Adds one 50-hour premium offer display slot to your banner'
     }
 ];

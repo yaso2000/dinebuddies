@@ -23,7 +23,7 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
         }
 
         const data = restaurantSnap.data();
-        if (data.accountType !== 'business') {
+        if (data.role !== 'business') {
             throw new Error("Target account is not a business account.");
         }
 

@@ -14,7 +14,7 @@ const ChatList = () => {
 
     // Redirect guests to login
     useEffect(() => {
-        if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest') {
+        if (userProfile?.isGuest || userProfile?.role === 'guest') {
             navigate('/login');
         }
     }, [userProfile, navigate]);
@@ -56,7 +56,7 @@ const ChatList = () => {
         return (
             <div className="chat-list-container">
                 <header className="chat-list-header">
-                    <button className="back-btn" onClick={() => navigate(-1)}>
+                    <button className="back-btn" onClick={() => navigate('/')}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
                     <h1>Messages</h1>
@@ -69,83 +69,95 @@ const ChatList = () => {
     }
 
     return (
-        <div className="chat-list-container">
-            {/* Header */}
-            <header className="chat-list-header">
-                <button className="back-btn" onClick={() => navigate(-1)}>
-                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                </button>
-                <h1>Messages</h1>
-                <button className="options-btn">
-                    <FaEllipsisV />
-                </button>
-            </header>
-
-            {/* Search Bar */}
-            <div className="search-bar">
-                <FaSearch className="search-icon" />
-                <input
-                    type="text"
-                    placeholder="Search conversations..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
+        <>
+            {/* ── DESKTOP: sidebar already shows the list → show a placeholder in center ── */}
+            <div className="chat-list-desktop-placeholder">
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '12px' }}>💬</div>
+                    <h3 style={{ fontWeight: '700', marginBottom: '6px', color: 'var(--text-main)' }}>Your Messages</h3>
+                    <p style={{ fontSize: '0.9rem' }}>Select a conversation from the left sidebar to start chatting</p>
+                </div>
             </div>
 
-            {/* Conversations List */}
-            <div className="conversations-list">
-                {filteredConversations.length === 0 ? (
-                    <div className="empty-state">
-                        <div className="empty-icon">💬</div>
-                        <h3>No conversations yet</h3>
-                        <p>Start chatting with your friends!</p>
-                    </div>
-                ) : (
-                    filteredConversations.map((convo) => {
-                        const otherUser = convo.otherUser;
-                        if (!otherUser) return null;
+            {/* ── MOBILE: full conversations list (no sidebar on mobile) ── */}
+            <div className="chat-list-container">
+                {/* Header */}
+                <header className="chat-list-header">
+                    <button className="back-btn" onClick={() => navigate('/')}>
+                        <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
+                    </button>
+                    <h1>Messages</h1>
+                    <button className="options-btn">
+                        <FaEllipsisV />
+                    </button>
+                </header>
 
-                        return (
-                            <div
-                                key={convo.id}
-                                className={`conversation-item ${convo.isUnread ? 'unread' : ''}`}
-                                onClick={() => navigate(`/chat/${otherUser.uid}`)}
-                            >
-                                {/* Avatar */}
-                                <div className="conversation-avatar">
-                                    <img
-                                        src={getSafeAvatar(otherUser)}
-                                        alt={otherUser.displayName}
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                                        }}
-                                        style={{ objectFit: 'cover' }}
-                                    />
-                                    {otherUser.isOnline && <div className="online-indicator" />}
-                                </div>
+                {/* Search Bar */}
+                <div className="search-bar">
+                    <FaSearch className="search-icon" />
+                    <input
+                        type="text"
+                        placeholder="Search conversations..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
 
-                                {/* Content */}
-                                <div className="conversation-content">
-                                    <div className="conversation-top">
-                                        <h3 className="conversation-name">{otherUser.displayName}</h3>
-                                        <span className="conversation-time">
-                                            {formatTime(convo.lastMessageTime)}
-                                        </span>
+                {/* Conversations List */}
+                <div className="conversations-list">
+                    {filteredConversations.length === 0 ? (
+                        <div className="empty-state">
+                            <div className="empty-icon">💬</div>
+                            <h3>No conversations yet</h3>
+                            <p>Start chatting with your friends!</p>
+                        </div>
+                    ) : (
+                        filteredConversations.map((convo) => {
+                            const otherUser = convo.otherUser;
+                            if (!otherUser) return null;
+
+                            return (
+                                <div
+                                    key={convo.id}
+                                    className={`conversation-item ${convo.isUnread ? 'unread' : ''}`}
+                                    onClick={() => navigate(`/chat/${otherUser.uid}`)}
+                                >
+                                    {/* Avatar */}
+                                    <div className="conversation-avatar">
+                                        <img
+                                            src={getSafeAvatar(otherUser)}
+                                            alt={otherUser.displayName}
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
+                                            }}
+                                            style={{ objectFit: 'cover' }}
+                                        />
+                                        {otherUser.isOnline && <div className="online-indicator" />}
                                     </div>
-                                    <div className="conversation-bottom">
-                                        <p className="last-message">
-                                            {convo.lastMessage || 'No messages yet'}
-                                        </p>
-                                        {convo.isUnread && <div className="unread-badge"></div>}
+
+                                    {/* Content */}
+                                    <div className="conversation-content">
+                                        <div className="conversation-top">
+                                            <h3 className="conversation-name">{otherUser.displayName}</h3>
+                                            <span className="conversation-time">
+                                                {formatTime(convo.lastMessageTime)}
+                                            </span>
+                                        </div>
+                                        <div className="conversation-bottom">
+                                            <p className="last-message">
+                                                {convo.lastMessage || 'No messages yet'}
+                                            </p>
+                                            {convo.isUnread && <div className="unread-badge"></div>}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
-                    })
-                )}
+                            );
+                        })
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 

@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { sendNotification } from './notificationHelpers';
 import { getSafeAvatar } from './avatarUtils';
@@ -14,12 +14,17 @@ export const checkDailyInvitationLimit = async (userId) => {
             return { hasInvitationToday: false, count: 0 };
         }
 
-        const today = new Date().toISOString().split('T')[0];
+        // Check by createdAt (within the past 24 hours), NOT by the invitation's scheduled date
+        // Using scheduled date was wrong: a user could create an invitation for next week and get blocked
+        const oneDayAgo = new Date();
+        oneDayAgo.setHours(0, 0, 0, 0); // Start of today (midnight)
+        const startOfToday = Timestamp.fromDate(oneDayAgo);
+
         const invitationsRef = collection(db, 'invitations');
         const q = query(
             invitationsRef,
             where('author.id', '==', userId),
-            where('date', '>=', today)
+            where('createdAt', '>=', startOfToday)
         );
 
         const snapshot = await getDocs(q);
@@ -36,6 +41,7 @@ export const checkDailyInvitationLimit = async (userId) => {
         return { hasInvitationToday: false, count: 0 };
     }
 };
+
 
 /**
  * Check if invitation can be edited

@@ -100,6 +100,11 @@ export const SUBSCRIPTION_PLANS = {
         showInInvitations: true,
         featuredListing: false,
 
+        // Offer Display Rules
+        offerSlots: 1,                  // 1 included offer slot
+        offerHoursPerWeek: 50,          // 50 hours of display time per week
+        offerPerpetual: false,          // expires after offerHoursPerWeek
+
         // Analytics
         analytics: 'advanced',
 
@@ -137,6 +142,11 @@ export const SUBSCRIPTION_PLANS = {
         priorityListing: true,
         showInInvitations: true,
         featuredListing: true,
+
+        // Offer Display Rules
+        offerSlots: 1,                  // 1 included offer slot (permanent)
+        offerHoursPerWeek: Infinity,    // no time limit — always active
+        offerPerpetual: true,           // offer never expires
 
         // Analytics
         analytics: 'full',

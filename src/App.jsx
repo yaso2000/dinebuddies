@@ -40,10 +40,11 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import BusinessSignup from './pages/BusinessSignup';
 
 
-import EditBusinessProfile from './pages/EditBusinessProfile';
+
 import PartnerProfile from './pages/PartnerProfile';
 import PremiumOfferPage from './pages/PremiumOfferPage';
 import BusinessDashboard from './pages/BusinessDashboard';
+import BusinessProDashboard from './pages/BusinessProDashboard';
 import MyCommunities from './pages/MyCommunities';
 import MyCommunity from './pages/MyCommunity';
 import CommunityChatRoom from './pages/CommunityChatRoom';
@@ -89,6 +90,51 @@ import StaffBlockedRoute from './components/StaffBlockedRoute';
 import ProfileGuard from './components/ProfileGuard';
 import OfflineNotice from './components/OfflineNotice';
 import AuthBlockedRoute from './components/AuthBlockedRoute';
+import { useState, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from './firebase/config';
+import { useParams, useNavigate } from 'react-router-dom';
+
+// Smart profile router: shows PartnerProfile for business accounts, UserProfile for regular users
+const SmartProfileRoute = () => {
+    const { userId } = useParams();
+    const navigate = useNavigate();
+    const [accountType, setAccountType] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!userId) { setLoading(false); return; }
+        getDoc(doc(db, 'users', userId))
+            .then(snap => {
+                if (snap.exists()) {
+                    const d = snap.data();
+                    setAccountType(d.role || 'user');
+                } else {
+                    setAccountType('user');
+                }
+            })
+            .catch(() => setAccountType('user'))
+            .finally(() => setLoading(false));
+    }, [userId]);
+
+    // Redirect business accounts to /partner/:userId (PartnerProfile reads 'partnerId' from params)
+    useEffect(() => {
+        if (accountType === null) return;
+        if (accountType === 'business') {
+            navigate(`/partner/${userId}`, { replace: true });
+        }
+    }, [accountType, userId, navigate]);
+
+    if (loading || accountType === 'business') {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+                <div style={{ width: 40, height: 40, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            </div>
+        );
+    }
+
+    return <UserProfile />;
+};
 
 function App() {
     return (
@@ -120,6 +166,8 @@ function App() {
                                             </AuthBlockedRoute>
                                         } />
                                         <Route path="/complete-profile" element={<CompleteProfile />} />
+                                        <Route path="/business-pro" element={<BusinessProDashboard />} />
+
 
 
                                         {/* User Routes with Layout */}
@@ -171,8 +219,8 @@ function App() {
 
                                             <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
                                             <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
-                                            <Route path="/invitation/:id" element={<InvitationDetails />} />
                                             <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
+                                            <Route path="/invitation/:id" element={<InvitationDetails />} />
                                             <Route path="/invitation/:id/chat" element={<InvitationChatRoom />} />
                                             <Route path="/restaurants" element={<RestaurantDirectory />} />
                                             <Route path="/restaurant/:id" element={<RestaurantDetails />} />
@@ -204,7 +252,7 @@ function App() {
                                                     <Profile />
                                                 </GuestBlockedRoute>
                                             } />
-                                            <Route path="/profile/:userId" element={<UserProfile />} />
+                                            <Route path="/profile/:userId" element={<SmartProfileRoute />} />
 
                                             <Route path="/notifications" element={
                                                 <GuestBlockedRoute>
@@ -264,7 +312,8 @@ function App() {
                                             } />
 
 
-                                            <Route path="/edit-business-profile" element={<EditBusinessProfile />} />
+
+
                                             <Route path="/business-dashboard" element={<BusinessDashboard />} />
                                             <Route path="/migration" element={<MigrationPage />} />
                                             <Route path="/partners" element={<Navigate to="/restaurants" replace />} />

@@ -13,8 +13,10 @@ const CATEGORIES = [
     { id: 'events', label: 'Events', icon: FaCalendar, color: '#8b5cf6' }
 ];
 
-const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
+const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
     const { t } = useTranslation();
+    const tc = theme?.colors || null;
+    const th = (themed, fallback) => tc ? themed : fallback;
     const [isEditMode, setIsEditMode] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -132,11 +134,11 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
     const stats = getCategoryStats();
 
     return (
-        <div className="enhanced-gallery-section">
+        <div className="enhanced-gallery-section" style={{ background: th(tc?.cardBg, undefined) }}>
             {/* Header */}
             <div className="gallery-header">
-                <h3>
-                    <FaImages style={{ color: '#f59e0b', marginRight: '0.5rem' }} />
+                <h3 style={{ color: th(tc?.accent, undefined) }}>
+                    <FaImages style={{ color: th(tc?.accent, '#f59e0b'), marginRight: '0.5rem' }} />
                     {t('gallery', 'Gallery')}
                     <span style={{
                         fontSize: '0.9rem',
@@ -152,6 +154,13 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                         className={`edit-gallery-btn ${isEditMode ? 'active' : ''}`}
                         onClick={() => setIsEditMode(!isEditMode)}
                         title={isEditMode ? t('done', 'Done') : t('edit', 'Edit')}
+                        style={tc ? {
+                            background: isEditMode ? tc.badgeBg : tc.footerBg,
+                            border: `1px solid ${tc.border}`,
+                            color: tc.accentText || tc.accent,
+                            boxShadow: tc.btnShadow,
+                            borderRadius: tc.btnBorderRadius
+                        } : {}}
                     >
                         {isEditMode ? <><FaTimes /> {t('done', 'Done')}</> : <><FaEdit /> {t('edit', 'Edit')}</>}
                     </button>
@@ -164,6 +173,12 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                     className={`category-btn ${selectedCategory === 'all' ? 'active' : ''}`}
                     onClick={() => setSelectedCategory('all')}
                     title={t('all', 'All')}
+                    style={tc && selectedCategory === 'all' ? {
+                        borderColor: tc.accent,
+                        color: tc.accent,
+                        background: tc.badgeBg,
+                        boxShadow: `0 0 8px ${tc.accent}44`
+                    } : tc ? { borderColor: tc.border, color: tc.badgeText } : {}}
                 >
                     <FaImages />
                     <span className="category-label">{t('all', 'All')}</span>
@@ -177,12 +192,17 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                             className={`category-btn ${selectedCategory === cat.id ? 'active' : ''}`}
                             onClick={() => setSelectedCategory(cat.id)}
                             title={t(cat.id, cat.label)}
-                            style={{
+                            style={tc ? {
+                                borderColor: selectedCategory === cat.id ? tc.accent : tc.border,
+                                color: selectedCategory === cat.id ? tc.accent : tc.badgeText,
+                                background: selectedCategory === cat.id ? tc.badgeBg : 'transparent',
+                                boxShadow: selectedCategory === cat.id ? `0 0 8px ${tc.accent}44` : 'none'
+                            } : {
                                 borderColor: selectedCategory === cat.id ? cat.color : 'var(--border-color)',
                                 color: selectedCategory === cat.id ? cat.color : 'var(--text-main)'
                             }}
                         >
-                            <Icon style={{ color: cat.color }} />
+                            <Icon style={{ color: tc ? tc.accent : cat.color }} />
                             <span className="category-label">{t(cat.id, cat.label)}</span>
                             <span className="category-count">{stats[cat.id] || 0}</span>
                         </button>
@@ -248,28 +268,48 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                         const Icon = category?.icon || FaImages;
 
                         return (
-                            <div key={actualIndex} className="gallery-item">
+                            <div
+                                key={actualIndex}
+                                className="gallery-item"
+                                style={tc ? {
+                                    background: tc.badgeBg,
+                                    border: `1px solid ${tc.border}`,
+                                    boxShadow: tc.cardShadow
+                                } : {}}
+                            >
                                 {/* Category Badge */}
                                 <div
                                     className="category-badge"
-                                    style={{ background: category?.color || '#666' }}
+                                    style={{ background: tc ? tc.accent : (category?.color || '#666') }}
                                 >
                                     <Icon />
                                 </div>
 
-                                {/* Image */}
-                                <img
-                                    src={image.url}
-                                    alt={image.caption || `${category?.label} ${index + 1}`}
-                                    onClick={() => {
-                                        setLightboxIndex(actualIndex);
-                                        setLightboxOpen(true);
-                                    }}
-                                />
+                                {/* Image with theme overlay */}
+                                <div style={{ position: 'relative', overflow: 'hidden' }}>
+                                    <img
+                                        src={image.url}
+                                        alt={image.caption || `${category?.label} ${index + 1}`}
+                                        onClick={() => {
+                                            setLightboxIndex(actualIndex);
+                                            setLightboxOpen(true);
+                                        }}
+                                        style={{ display: 'block', width: '100%' }}
+                                    />
+                                    {/* Theme accent overlay on image */}
+                                    {tc && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            background: `linear-gradient(to bottom, transparent 50%, ${tc.accent}55 100%)`,
+                                            pointerEvents: 'none'
+                                        }} />
+                                    )}
+                                </div>
 
                                 {/* Caption */}
                                 {(image.caption || captionEdit === actualIndex) && (
-                                    <div className="image-caption">
+                                    <div className="image-caption" style={{ color: th(tc?.accent, undefined) }}>
                                         {captionEdit === actualIndex ? (
                                             <div className="caption-edit">
                                                 <input
@@ -300,6 +340,7 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                                             className="control-btn caption-btn"
                                             onClick={() => setCaptionEdit(actualIndex)}
                                             title={t('edit_caption', 'Edit caption')}
+                                            style={tc ? { border: `1px solid ${tc.border}`, color: tc.accent } : {}}
                                         >
                                             <FaEdit />
                                         </button>
@@ -321,7 +362,15 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
             {/* Lightbox */}
             {lightboxOpen && (
                 <div className="gallery-lightbox" onClick={() => setLightboxOpen(false)}>
-                    <button className="lightbox-close" onClick={() => setLightboxOpen(false)}>
+                    <button
+                        className="lightbox-close"
+                        onClick={() => setLightboxOpen(false)}
+                        style={tc ? {
+                            border: `2px solid ${tc.accent}`,
+                            color: tc.accent,
+                            boxShadow: `0 0 12px ${tc.accent}55`
+                        } : {}}
+                    >
                         <FaTimes />
                     </button>
 
@@ -329,10 +378,19 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                         <img
                             src={gallery[lightboxIndex]?.url}
                             alt={gallery[lightboxIndex]?.caption || 'Gallery'}
+                            style={tc ? { boxShadow: tc.headerGlow } : {}}
                         />
 
                         {gallery[lightboxIndex]?.caption && (
-                            <div className="lightbox-caption">
+                            <div
+                                className="lightbox-caption"
+                                style={tc ? {
+                                    background: tc.cardBg,
+                                    color: tc.accent,
+                                    border: `1px solid ${tc.border}`,
+                                    borderRadius: '8px'
+                                } : {}}
+                            >
                                 {gallery[lightboxIndex].caption}
                             </div>
                         )}
@@ -345,6 +403,7 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                                     onClick={() => setLightboxIndex(prev =>
                                         prev === 0 ? gallery.length - 1 : prev - 1
                                     )}
+                                    style={tc ? { border: `2px solid ${tc.accent}99`, color: tc.accent } : {}}
                                 >
                                     ‹
                                 </button>
@@ -353,13 +412,17 @@ const EnhancedGallery = ({ partnerId, partner, isOwner }) => {
                                     onClick={() => setLightboxIndex(prev =>
                                         prev === gallery.length - 1 ? 0 : prev + 1
                                     )}
+                                    style={tc ? { border: `2px solid ${tc.accent}99`, color: tc.accent } : {}}
                                 >
                                     ›
                                 </button>
                             </>
                         )}
 
-                        <div className="lightbox-counter">
+                        <div
+                            className="lightbox-counter"
+                            style={tc ? { background: tc.badgeBg, color: tc.accent, border: `1px solid ${tc.border}` } : {}}
+                        >
                             {lightboxIndex + 1} / {gallery.length}
                         </div>
                     </div>

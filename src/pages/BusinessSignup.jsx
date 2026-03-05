@@ -168,8 +168,7 @@ const BusinessSignup = () => {
             await setDoc(doc(db, 'users', user.uid), {
                 uid: user.uid,
                 email: formData.email,
-                accountType: 'business',
-                role: 'partner',
+                role: 'business',
                 display_name: formData.businessName, // اسم المطعم مباشرة
                 photo_url: null, // سيتم رفع اللوجو في Edit Profile
                 created_at: serverTimestamp(),
@@ -652,7 +651,7 @@ const BusinessSignup = () => {
                             Your business account is ready.
                         </p>
                         <button
-                            onClick={() => navigate('/edit-business-profile')}
+                            onClick={() => navigate(`/partner/${currentUser?.uid}`)}
                             style={{
                                 width: '100%',
                                 padding: '0.8rem',

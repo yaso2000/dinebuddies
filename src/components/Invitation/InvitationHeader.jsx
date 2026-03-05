@@ -1,11 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaShareAlt, FaEdit, FaImage, FaTrash } from 'react-icons/fa';
-import ShareButtons from '../ShareButtons';
+import { FaShareAlt, FaEdit, FaSpinner } from 'react-icons/fa';
 import { getTemplateStyle } from '../../utils/invitationTemplates';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 
-const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete, showShare, setShowShare }) => {
+const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete, onShare, sharingCard }) => {
     const { t } = useTranslation();
 
     const templateStyles = getTemplateStyle(
@@ -34,10 +33,13 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
             {/* Action Buttons (Top Right) */}
             <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10, display: 'flex', gap: '10px' }}>
                 <button
-                    onClick={() => setShowShare(!showShare)}
-                    style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer' }}
+                    onClick={onShare}
+                    disabled={sharingCard}
+                    style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: sharingCard ? 'wait' : 'pointer', opacity: sharingCard ? 0.6 : 1 }}
                 >
-                    <FaShareAlt />
+                    {sharingCard
+                        ? <FaSpinner style={{ animation: 'spin 1s linear infinite' }} />
+                        : <FaShareAlt />}
                 </button>
                 {isHost && (
                     <>
@@ -116,43 +118,6 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
                 )}
             </div>
 
-
-
-            {showShare && (
-                <div
-                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={() => setShowShare(false)}
-                >
-                    <div
-                        className="glass-card"
-                        style={{ padding: '24px', position: 'relative', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>{t('share_via')}</h3>
-                        <ShareButtons
-                            url={window.location.href}
-                            title={invitation.title}
-                            description={invitation.description}
-                            storyData={{
-                                title: invitation.title,
-                                image: invitation.image,
-                                description: invitation.description,
-                                date: invitation.date, // Assuming formatted or string
-                                time: invitation.time,
-                                location: invitation.restaurantName || invitation.locationName,
-                                hostName: invitation.hostName || invitation.author?.name,
-                                hostImage: getSafeAvatar({ photo_url: invitation.hostAvatar || (invitation.author?.photoURL || invitation.author?.photo_url), display_name: invitation.hostName || invitation.author?.name })
-                            }}
-                        />
-                        <button
-                            onClick={() => setShowShare(false)}
-                            style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}
-                        >
-                            {t('close')}
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

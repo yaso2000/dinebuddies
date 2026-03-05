@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FaCamera, FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaVideo, FaCircle, FaFileUpload } from 'react-icons/fa';
+import { FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaCamera } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
-
 
 import { uploadImage } from '../utils/imageUpload';
 import { db } from '../firebase/config';
@@ -41,8 +40,8 @@ const CreateStory = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile, loading: authLoading } = useAuth();
 
-    // State
-    const [backgroundType, setBackgroundType] = useState('GRADIENT'); // 'GRADIENT' | 'IMAGE' | 'VIDEO'
+    // State — only GRADIENT or IMAGE (no VIDEO)
+    const [backgroundType, setBackgroundType] = useState('GRADIENT'); // 'GRADIENT' | 'IMAGE'
 
     // Auth Loading Check
     if (authLoading) {
@@ -61,13 +60,9 @@ const CreateStory = () => {
     const [textColorIndex, setTextColorIndex] = useState(0);
     const [showMoodPicker, setShowMoodPicker] = useState(false);
     const [loading, setLoading] = useState(false);
-
-    // Camera Stats
-    // Camera State
     const [showCamera, setShowCamera] = useState(false);
 
     const fileInputRef = useRef(null);
-    const videoUploadRef = useRef(null);
     const moodPickerRef = useRef(null);
 
     // Click outside to close emoji picker
@@ -77,7 +72,6 @@ const CreateStory = () => {
                 setShowMoodPicker(false);
             }
         };
-
         if (showMoodPicker) {
             document.addEventListener('mousedown', handleClickOutside);
         }
@@ -86,67 +80,34 @@ const CreateStory = () => {
         };
     }, [showMoodPicker]);
 
-    // Initial setup
-    useEffect(() => {
-        // Start in gradient mode
-    }, []);
-
-    // Cleanup stream on unmount
-
-
-    // Attach stream when camera UI opens
-
-
-    // Access Control - Broad permission check (Allow all non-guests)
+    // Access Control
     useEffect(() => {
         if (!authLoading && userProfile) {
-            const type = (userProfile.accountType || '').toLowerCase();
             const role = (userProfile.role || '').toLowerCase();
-
-            // Check if user is a guest (either by type OR by role)
-            const isGuest = type === 'guest' || role === 'guest' || userProfile.isGuest;
-
-            // Debugging logs to help identify user-specific blocks
-            console.log("CreateStory Access Check:", { uid: currentUser?.uid, type, role, isGuest });
-
+            const isGuest = role === 'guest' || userProfile.isGuest;
             if (isGuest) {
                 alert("Guests cannot post stories. Please sign up.");
                 navigate('/');
             }
-            // All other members (individual, business, partner, user, admin, etc.) are allowed.
         }
     }, [authLoading, userProfile, navigate, currentUser]);
 
-    const startCamera = () => {
-        setShowCamera(true);
-    };
-
+    const startCamera = () => setShowCamera(true);
 
     const handleFileSelect = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (file.type.startsWith('video/')) {
-            const videoEl = document.createElement('video');
-            videoEl.preload = 'metadata';
-            videoEl.onloadedmetadata = function () {
-                window.URL.revokeObjectURL(videoEl.src);
-                if (videoEl.duration > 16) { // Allow 16s buffer
-                    alert("Video is too long (Max 15s). Please choose a shorter video.");
-                    e.target.value = "";
-                    return;
-                }
-                setBackgroundType('VIDEO');
-                setMediaFile(file);
-                setMediaPreview(URL.createObjectURL(file));
-            };
-            videoEl.onerror = () => { alert("Failed to load video."); e.target.value = ""; };
-            videoEl.src = URL.createObjectURL(file);
-        } else {
-            setBackgroundType('IMAGE');
-            setMediaFile(file);
-            setMediaPreview(URL.createObjectURL(file));
+        // Only accept images
+        if (!file.type.startsWith('image/')) {
+            alert("Only image files are supported for stories.");
+            e.target.value = "";
+            return;
         }
+
+        setBackgroundType('IMAGE');
+        setMediaFile(file);
+        setMediaPreview(URL.createObjectURL(file));
     };
 
     const cycleTextColor = () => {
@@ -172,7 +133,7 @@ const CreateStory = () => {
     const handleShare = async () => {
         if (loading) return;
         if (backgroundType === 'GRADIENT' && !text.trim()) return;
-        if ((backgroundType === 'IMAGE' || backgroundType === 'VIDEO') && !mediaFile) return;
+        if (backgroundType === 'IMAGE' && !mediaFile) return;
 
         setLoading(true);
         try {
@@ -180,8 +141,8 @@ const CreateStory = () => {
             const userDocSnap = await import('firebase/firestore').then(({ getDoc }) => getDoc(userDocRef));
             const freshUserData = userDocSnap.exists() ? userDocSnap.data() : {};
 
-            const finalUserNameFresh = freshUserData.businessInfo?.businessName || freshUserData.name || freshUserData.displayName || currentUser.displayName || 'User';
-            const finalUserPhotoFresh = getSafeAvatar(freshUserData || currentUser);
+            const finalUserName = freshUserData.businessInfo?.businessName || freshUserData.name || freshUserData.displayName || currentUser.displayName || 'User';
+            const finalUserPhoto = getSafeAvatar(freshUserData || currentUser);
 
             let mediaUrl = null;
             let finalType = 'text';
@@ -190,15 +151,13 @@ const CreateStory = () => {
                 const sanitizedName = mediaFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const path = `stories/${currentUser.uid}/${Date.now()}_${sanitizedName}`;
                 mediaUrl = await uploadImage(mediaFile, path);
-                finalType = backgroundType === 'VIDEO' ? 'video' : 'image';
-            } else {
-                finalType = 'text';
+                finalType = 'image';
             }
 
             const storyData = {
                 userId: String(currentUser.uid),
-                userPhoto: finalUserPhotoFresh,
-                userName: finalUserNameFresh,
+                userPhoto: finalUserPhoto,
+                userName: finalUserName,
                 type: finalType,
                 url: mediaUrl,
                 text: text.trim(),
@@ -237,16 +196,12 @@ const CreateStory = () => {
                     backgroundImage: backgroundType === 'GRADIENT' && GRADIENTS[bgIndex].bg.includes('gradient')
                         ? GRADIENTS[bgIndex].bg
                         : (backgroundType === 'IMAGE' && mediaPreview ? `url(${mediaPreview})` : 'none'),
-                    backgroundSize: backgroundType === 'IMAGE' ? 'contain' : 'cover',
+                    backgroundSize: 'cover',
                     backgroundRepeat: 'no-repeat',
                     backgroundPosition: 'center',
                     fontFamily: FONTS[fontIndex].family
                 }}
             >
-                {backgroundType === 'VIDEO' && mediaPreview && (
-                    <video src={mediaPreview} autoPlay loop muted playsInline className="story-video-preview" />
-                )}
-
                 {isTextMode && (
                     <textarea
                         value={text}
@@ -259,12 +214,7 @@ const CreateStory = () => {
                 )}
                 <style>
                     {`
-                        .create-story-container {
-                            font-family: ${FONTS[fontIndex].family} !important;
-                        }
                         .story-canvas {
-                            background-color: ${backgroundType === 'GRADIENT' && !GRADIENTS[bgIndex].bg.includes('gradient') ? GRADIENTS[bgIndex].bg : '#000'} !important;
-                            background-image: ${backgroundType === 'GRADIENT' && GRADIENTS[bgIndex].bg.includes('gradient') ? GRADIENTS[bgIndex].bg : (backgroundType === 'IMAGE' && mediaPreview ? `url(${mediaPreview})` : 'none')} !important;
                             font-family: ${FONTS[fontIndex].family} !important;
                         }
                         .story-textarea {
@@ -275,22 +225,9 @@ const CreateStory = () => {
                             outline: none !important;
                             box-shadow: none !important;
                         }
-                        .story-textarea::placeholder {
-                            color: ${textColor} !important;
-                            opacity: 0.7 !important;
-                        }
-                        .story-textarea::-webkit-input-placeholder {
-                            color: ${textColor} !important;
-                            opacity: 0.7 !important;
-                        }
-                        .story-textarea::-moz-placeholder {
-                            color: ${textColor} !important;
-                            opacity: 0.7 !important;
-                        }
-                        .story-textarea:-ms-input-placeholder {
-                            color: ${textColor} !important;
-                            opacity: 0.7 !important;
-                        }
+                        .story-textarea::placeholder { color: ${textColor} !important; opacity: 0.7 !important; }
+                        .story-textarea::-webkit-input-placeholder { color: ${textColor} !important; opacity: 0.7 !important; }
+                        .story-textarea::-moz-placeholder { color: ${textColor} !important; opacity: 0.7 !important; }
                     `}
                 </style>
             </div>
@@ -303,7 +240,9 @@ const CreateStory = () => {
 
                 {isTextMode && (
                     <>
-                        <button className="tool-btn" onClick={cycleFont}> <span style={{ fontFamily: FONTS[(fontIndex + 1) % FONTS.length].family, fontSize: '1rem', fontWeight: 'bold' }}>Aa</span> </button>
+                        <button className="tool-btn" onClick={cycleFont}>
+                            <span style={{ fontFamily: FONTS[(fontIndex + 1) % FONTS.length].family, fontSize: '1rem', fontWeight: 'bold' }}>Aa</span>
+                        </button>
                         <button className="tool-btn" onClick={cycleTextColor}>
                             <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: textColor, border: '2px solid white' }}></div>
                         </button>
@@ -341,51 +280,51 @@ const CreateStory = () => {
                     </div>
                 )}
 
-                <div style={{ height: '20px' }}></div>
-
                 {backgroundType === 'GRADIENT' && (
                     <button className="tool-btn" onClick={cycleBackground} title="Background">
                         <FaPalette />
                     </button>
                 )}
 
-                <button className={`tool-btn ${backgroundType !== 'GRADIENT' ? 'active' : ''}`} onClick={() => fileInputRef.current?.click()} title="Upload">
+                <button className={`tool-btn ${backgroundType === 'IMAGE' ? 'active' : ''}`} onClick={() => fileInputRef.current?.click()} title="Upload Photo">
                     <FaPhotoVideo />
                 </button>
 
-                <button className={`tool-btn`} onClick={startCamera} title="Camera">
-                    <FaVideo />
+                <button className="tool-btn" onClick={startCamera} title="Camera">
+                    <FaCamera />
                 </button>
 
-                {backgroundType !== 'GRADIENT' && (
+                {backgroundType === 'IMAGE' && (
                     <button
                         className="tool-btn"
-                        onClick={() => {
-                            setMediaFile(null); setMediaPreview(null); setBackgroundType('GRADIENT');
-                        }}
-                        style={{ background: 'rgba(239, 68, 68, 0.6)', marginTop: '10px' }}
+                        onClick={() => { setMediaFile(null); setMediaPreview(null); setBackgroundType('GRADIENT'); }}
+                        style={{ background: 'rgba(239, 68, 68, 0.6)', marginTop: '4px' }}
                     >
                         <FaTimes />
                     </button>
                 )}
             </div>
 
-            {/* CAMERA OVERLAY */}
+            {/* CAMERA OVERLAY — images only */}
             {showCamera && (
                 <UnifiedCamera
                     stopCamera={() => setShowCamera(false)}
                     onMediaCaptured={(file, previewUrl, type) => {
-                        setBackgroundType(type === 'video' ? 'VIDEO' : 'IMAGE');
+                        if (type === 'video') {
+                            // ignore video captures
+                            setShowCamera(false);
+                            return;
+                        }
+                        setBackgroundType('IMAGE');
                         setMediaFile(file);
                         setMediaPreview(previewUrl);
                     }}
-                    maxDuration={30} // User requested 30s limit for all
-                    mode="both"
+                    maxDuration={0}
+                    mode="photo"
                 />
             )}
 
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileSelect} />
-            <input type="file" ref={videoUploadRef} className="hidden" accept="video/*" onChange={handleFileSelect} />
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
         </div>
     );
 };

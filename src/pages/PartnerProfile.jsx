@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { ServiceIcon } from '../utils/serviceIcons.jsx';
 import { updateSocialMetaTags, generatePartnerMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { useTranslation } from 'react-i18next';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import DeliveryLinksSection from '../components/DeliveryLinksSection';
 import BusinessHours from '../components/BusinessHours';
 import EnhancedGallery from '../components/EnhancedGallery';
@@ -18,6 +19,9 @@ import MenuShowcase from '../components/MenuShowcase';
 import GroupChat from '../components/GroupChat';
 import ShareButtons from '../components/ShareButtons';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import { generateShareCardBlob } from '../utils/shareCardCanvas';
+import ServiceModal from '../components/ServiceModal';
+
 
 
 const PartnerProfile = () => {
@@ -27,6 +31,9 @@ const PartnerProfile = () => {
     const { currentUser, userProfile, updateUserProfile, isGuest } = useAuth();
     const { joinCommunity, leaveCommunity } = useInvitations();
     const { t } = useTranslation();
+
+    // Ref to prevent snapshot from overwriting optimistic join/leave state
+    const joiningRef = React.useRef(false);
 
     const [partner, setPartner] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -63,10 +70,29 @@ const PartnerProfile = () => {
     // Community membership states
     const [memberCount, setMemberCount] = useState(0);
     const [isMember, setIsMember] = useState(false);
+    const [memberAvatars, setMemberAvatars] = useState([]); // photo_url for first 5 members
     const [joiningCommunity, setJoiningCommunity] = useState(false);
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [selectorState, setSelectorState] = useState(null);
     const [showShareModal, setShowShareModal] = useState(false);
+    const [isSharing, setIsSharing] = useState(false);
+    const [headerCardPreviewUrl, setHeaderCardPreviewUrl] = useState(null);
+    const [headerCardFile, setHeaderCardFile] = useState(null);
+    // Inline editing states
+    const [services, setServices] = useState([]);
+    const [showServiceModal, setShowServiceModal] = useState(false);
+    const [editingService, setEditingService] = useState(null);
+
+    const [showBasicInfoModal, setShowBasicInfoModal] = useState(false);
+    const [basicInfoForm, setBasicInfoForm] = useState({ businessName: '', tagline: '', businessType: 'Restaurant', description: '' });
+
+    const [showContactModal, setShowContactModal] = useState(false);
+    const [contactForm, setContactForm] = useState({ phone: '', email: '', website: '', address: '', city: '' });
+
+    const [savingInfo, setSavingInfo] = useState(false);
+    const [coverUploading, setCoverUploading] = useState(false);
+    const [logoUploading, setLogoUploading] = useState(false);
+
 
 
     const days = [
@@ -86,14 +112,15 @@ const PartnerProfile = () => {
 
             // Use onSnapshot for real-time updates
             const unsubscribe = onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists() && docSnap.data().accountType === 'business') {
+                if (docSnap.exists() && (docSnap.data().role === 'business')) {
                     const data = docSnap.data();
                     setPartner({ uid: docSnap.id, ...data });
 
                     // Update member count and membership state in real-time
                     const memberIds = data.communityMembers || [];
                     setMemberCount(memberIds.length);
-                    if (currentUser?.uid) {
+                    // Only update isMember from snapshot when NOT in the middle of a join/leave
+                    if (currentUser?.uid && !joiningRef.current) {
                         setIsMember(memberIds.includes(currentUser.uid) || memberIds.includes(currentUser.id));
                     }
 
@@ -236,7 +263,27 @@ const PartnerProfile = () => {
         }
     }, [partner]);
 
-    // Track profile view
+    // Load services when partner data changes
+    useEffect(() => {
+        if (partner?.businessInfo?.services) {
+            setServices(partner.businessInfo.services);
+        }
+    }, [partner]);
+
+    // Fetch avatars for first 5 community members
+    useEffect(() => {
+        const memberIds = partner?.communityMembers || [];
+        if (memberIds.length === 0) { setMemberAvatars([]); return; }
+        const top5 = memberIds.slice(0, 5);
+        Promise.all(
+            top5.map(uid =>
+                getDoc(doc(db, 'users', uid))
+                    .then(snap => snap.exists() ? (snap.data().photo_url || null) : null)
+                    .catch(() => null)
+            )
+        ).then(photos => setMemberAvatars(photos.filter(Boolean)));
+    }, [partner?.communityMembers?.length]);
+
     const viewTracked = useRef(false);
     useEffect(() => {
         const trackProfileView = async () => {
@@ -287,7 +334,7 @@ const PartnerProfile = () => {
         }
 
         // Check if user is a business account
-        if (userProfile?.accountType === 'business') {
+        if (userProfile?.isBusiness) {
             alert('Business accounts cannot submit reviews');
             return;
         }
@@ -372,29 +419,35 @@ const PartnerProfile = () => {
             return;
         }
 
-        if (userProfile?.accountType === 'business') {
+        if (userProfile?.isBusiness) {
             alert('Business accounts cannot join other communities.');
             return;
         }
 
+        // Set flag BEFORE the optimistic update so snapshot won't override it
+        joiningRef.current = true;
         setJoiningCommunity(true);
+
+        // Optimistic UI
+        const wasJoined = isMember;
+        setIsMember(!wasJoined);
+        setMemberCount(prev => wasJoined ? Math.max(0, prev - 1) : prev + 1);
+
         try {
-            if (isMember) {
+            if (wasJoined) {
                 await leaveCommunity(partnerId);
-                // Optimistic UI update
-                setIsMember(false);
-                setMemberCount(prev => Math.max(0, prev - 1));
             } else {
                 await joinCommunity(partnerId);
-                // Optimistic UI update
-                setIsMember(true);
-                setMemberCount(prev => prev + 1);
             }
         } catch (error) {
             console.error('Error toggling community membership:', error);
-            // Revert state on error by triggering a refetch implicitly when snapshot updates
+            // Revert on error
+            setIsMember(wasJoined);
+            setMemberCount(prev => wasJoined ? prev + 1 : Math.max(0, prev - 1));
         } finally {
             setJoiningCommunity(false);
+            // Small delay then allow snapshot to sync naturally
+            setTimeout(() => { joiningRef.current = false; }, 1500);
         }
     };
 
@@ -528,7 +581,7 @@ const PartnerProfile = () => {
                     image: getSafeAvatar(partner),
                     address: partner.businessInfo?.address || '',
                     city: partner.businessInfo?.city || '',
-                    source: 'partner',
+                    source: 'business',
                     addedAt: new Date().toISOString()
                 };
                 newFavorites.push(favoritePlace);
@@ -562,7 +615,7 @@ const PartnerProfile = () => {
                     image: getSafeAvatar(partner),
                     address: partner.businessInfo?.address || '',
                     city: partner.businessInfo?.city || '',
-                    source: 'partner',
+                    source: 'business',
                     addedAt: new Date().toISOString()
                 };
                 newFavorites.push(favoritePlace);
@@ -577,8 +630,49 @@ const PartnerProfile = () => {
 
 
 
-    const handleShare = () => {
-        setShowShareModal(true);
+    const handleShare = async () => {
+        if (!partner) return;
+        const shareTitle = partner.display_name || 'DineBuddies Partner';
+        const storyData = {
+            title: shareTitle,
+            image: partner.businessInfo?.coverImage || getSafeAvatar(partner),
+            description: partner.businessInfo?.description,
+            location: partner.businessInfo?.address || partner.businessInfo?.city,
+            hostName: shareTitle,
+            hostImage: getSafeAvatar(partner),
+        };
+        try {
+            setIsSharing(true);
+            const blob = await generateShareCardBlob(storyData, 'partner');
+            if (!blob) throw new Error('No blob');
+            const file = new File([blob], 'business-card.png', { type: 'image/png' });
+            // Always show the overlay — let the user share from fresh gesture
+            setHeaderCardFile(file);
+            setHeaderCardPreviewUrl(URL.createObjectURL(blob));
+        } catch (err) {
+            console.error('Share error:', err);
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleShareFromOverlay = async () => {
+        if (!headerCardFile) return;
+        const shareTitle = partner?.display_name || 'DineBuddies Partner';
+        const shareText = `Check out ${shareTitle} on DineBuddies!`;
+        try {
+            if (navigator.canShare && navigator.canShare({ files: [headerCardFile] })) {
+                await navigator.share({ files: [headerCardFile], title: shareTitle, text: shareText });
+            } else if (navigator.share) {
+                await navigator.share({ title: shareTitle, text: shareText, url: window.location.href });
+            }
+        } catch (e) { /* cancelled */ }
+    };
+
+    const closeHeaderPreview = () => {
+        if (headerCardPreviewUrl) URL.revokeObjectURL(headerCardPreviewUrl);
+        setHeaderCardPreviewUrl(null);
+        setHeaderCardFile(null);
     };
 
     // Delivery Links Functions
@@ -608,7 +702,102 @@ const PartnerProfile = () => {
         setEditingDeliveryLinks(false);
     };
 
-    // All hooks must be above this line
+    // Inline edit handlers
+    const handleAddService = async (serviceData) => {
+        try {
+            let updated;
+            if (editingService !== null) {
+                updated = services.map((s, i) => i === editingService ? serviceData : s);
+            } else {
+                updated = [...services, serviceData];
+            }
+            setServices(updated);
+            const userRef = doc(db, 'users', partnerId);
+            await updateDoc(userRef, { 'businessInfo.services': updated });
+            setShowServiceModal(false);
+            setEditingService(null);
+        } catch (err) { console.error('Error saving service:', err); }
+    };
+
+    const handleDeleteService = async (index) => {
+        if (!window.confirm('Delete this service?')) return;
+        const updated = services.filter((_, i) => i !== index);
+        setServices(updated);
+        const userRef = doc(db, 'users', partnerId);
+        await updateDoc(userRef, { 'businessInfo.services': updated });
+    };
+
+    const handleCoverUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            setCoverUploading(true);
+            const url = await uploadImage(file, `covers/${partnerId}/cover.jpg`, null, { maxSizeMB: 1, maxWidthOrHeight: 1600 });
+            await updateDoc(doc(db, 'users', partnerId), { 'businessInfo.coverImage': url });
+        } catch (err) { alert('Upload failed'); } finally { setCoverUploading(false); }
+    };
+
+    const handleLogoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            setLogoUploading(true);
+            const url = await uploadImage(file, `logos/${partnerId}/logo.jpg`, null, { maxSizeMB: 0.5, maxWidthOrHeight: 400 });
+            await updateDoc(doc(db, 'users', partnerId), { photo_url: url });
+        } catch (err) { alert('Upload failed'); } finally { setLogoUploading(false); }
+    };
+
+    const openBasicInfoModal = () => {
+        setBasicInfoForm({
+            businessName: partner.display_name || '',
+            tagline: businessInfo.tagline || '',
+            businessType: businessInfo.businessType || 'Restaurant',
+            description: businessInfo.description || ''
+        });
+        setShowBasicInfoModal(true);
+    };
+
+    const saveBasicInfo = async () => {
+        setSavingInfo(true);
+        try {
+            await updateDoc(doc(db, 'users', partnerId), {
+                display_name: basicInfoForm.businessName,
+                'businessInfo.tagline': basicInfoForm.tagline,
+                'businessInfo.businessType': basicInfoForm.businessType,
+                'businessInfo.description': basicInfoForm.description
+            });
+            setShowBasicInfoModal(false);
+        } catch (err) { alert('Save failed'); } finally { setSavingInfo(false); }
+    };
+
+    const openContactModal = () => {
+        setContactForm({
+            phone: businessInfo.phone || '',
+            email: businessInfo.email || '',
+            website: businessInfo.website || '',
+            address: businessInfo.address || '',
+            city: businessInfo.city || ''
+        });
+        setShowContactModal(true);
+    };
+
+    const saveContact = async () => {
+        setSavingInfo(true);
+        try {
+            await updateDoc(doc(db, 'users', partnerId), {
+                'businessInfo.phone': contactForm.phone,
+                'businessInfo.email': contactForm.email,
+                'businessInfo.website': contactForm.website,
+                'businessInfo.address': contactForm.address,
+                'businessInfo.city': contactForm.city
+            });
+            setShowContactModal(false);
+        } catch (err) { alert('Save failed'); } finally { setSavingInfo(false); }
+    };
+
+
+
+
     if (loading || !partner) {
         return (
             <div className="page-container" style={{
@@ -646,12 +835,51 @@ const PartnerProfile = () => {
     const tier = partner.subscriptionTier || 'free';
     const isPaid = tier === 'professional' || tier === 'elite' || tier === 'premium';
     const isElite = tier === 'elite' || tier === 'premium';
-    const isPremium = isPaid; // Keep isPremium for backward compatibility in the code
+    const isPremium = isPaid;
     const isOwner = currentUser?.uid === partnerId;
+
+    // ── Brand Kit: only apply custom colors when business has saved a Brand Kit
+    const brandKit = businessInfo?.brandKit || {};
+    const _p = brandKit.primaryColor;   // undefined → no brand kit
+    const _s = brandKit.secondaryColor || _p;
+    const _br = brandKit.buttonStyle || '14px';
+    const _ff = brandKit.fontFamily || undefined;
+
+    // tc = null for unbranded businesses → th() falls back to default CSS styles
+    const tc = _p ? {
+        accent: _p,
+        accentText: '#ffffff',
+        border: `${_p}55`,
+        badgeBg: `${_p}22`,
+        badgeText: _p,
+        tabActive: _p,
+        headerGlow: `0 0 40px ${_p}40`,
+        swatchGradient: `linear-gradient(135deg, ${_p}, ${_s})`,
+        gradientFrom: 'rgba(0,0,0,0.85)',
+        gradientTo: 'rgba(0,0,0,0.97)',
+        footerBg: `linear-gradient(135deg, ${_p}cc, ${_s}88)`,
+        btnShadow: `0 8px 24px ${_p}44`,
+        cardShadow: `0 4px 20px ${_p}22`,
+        btnBorderRadius: _br,
+        fontFamily: _ff,
+        cardBg: undefined,
+    } : null;
+
+    // th() returns themed when brandKit active, fallback otherwise
+    const th = (themed, fallback) => tc ? themed : fallback;
+
+
+    // Verified = profile has both cover image and logo
+    const isVerified = !!(businessInfo.coverImage && partner.photo_url);
 
 
     return (
-        <div className="page-container" style={{ paddingTop: '0', paddingBottom: '100px' }}>
+        <div className="page-container" style={{
+            paddingTop: '0',
+            paddingBottom: '100px',
+            background: th(tc?.cardBg, undefined),
+            minHeight: '100vh'
+        }}>
             {/* Header - Simplified */}
             <header className="app-header sticky-header-glass">
                 <button className="back-btn" onClick={() => navigate('/restaurants')}>
@@ -673,25 +901,55 @@ const PartnerProfile = () => {
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        maxWidth: '200px'
+                        maxWidth: '200px',
+                        fontFamily: tc?.fontFamily || undefined
                     }}>
                         {partner.display_name || 'Business'}
+                        {isVerified && (
+                            <span title="Verified Profile" style={{ marginLeft: '6px', fontSize: '0.9rem' }}>✅</span>
+                        )}
                     </h3>
 
-                    {/* Business Type Badge */}
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '2px 8px',
-                        background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.15))',
-                        border: '1px solid rgba(139, 92, 246, 0.4)',
-                        borderRadius: '10px',
-                        fontSize: '0.65rem',
-                        fontWeight: '700',
-                        color: 'var(--primary)',
-                        letterSpacing: '0.3px'
-                    }}>
-                        {businessInfo.businessType || 'Restaurant'}
+                    {/* Business Type + Cuisine + Price Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px 8px',
+                            background: th(tc?.badgeBg, 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.15))'),
+                            border: `1px solid ${th(tc?.border, 'rgba(139, 92, 246, 0.4)')}`,
+                            borderRadius: '10px',
+                            fontSize: '0.65rem',
+                            fontWeight: '700',
+                            color: th(tc?.badgeText, 'var(--primary)'),
+                            letterSpacing: '0.3px'
+                        }}>
+                            {businessInfo.businessType || 'Restaurant'}
+                        </div>
+                        {businessInfo.cuisineType && (
+                            <div style={{
+                                display: 'inline-flex', alignItems: 'center',
+                                padding: '2px 8px',
+                                background: 'rgba(52,211,153,0.12)',
+                                border: '1px solid rgba(52,211,153,0.35)',
+                                borderRadius: '10px',
+                                fontSize: '0.65rem', fontWeight: '700', color: '#34d399'
+                            }}>
+                                {businessInfo.cuisineType}
+                            </div>
+                        )}
+                        {businessInfo.priceRange && (
+                            <div style={{
+                                display: 'inline-flex', alignItems: 'center',
+                                padding: '2px 8px',
+                                background: 'rgba(251,191,36,0.12)',
+                                border: '1px solid rgba(251,191,36,0.35)',
+                                borderRadius: '10px',
+                                fontSize: '0.65rem', fontWeight: '700', color: '#fbbf24'
+                            }}>
+                                {businessInfo.priceRange}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -705,11 +963,71 @@ const PartnerProfile = () => {
                     >
                         {isFavorite ? <FaHeart /> : <FaRegHeart />}
                     </button>
-                    <button className="back-btn" onClick={handleShare}>
-                        <FaShare />
+                    <button className="back-btn" onClick={handleShare} disabled={isSharing} title="Share">
+                        {isSharing ? '⏳' : <FaShare />}
                     </button>
                 </div>
             </header>
+
+            {/* Card preview overlay */}
+            {headerCardPreviewUrl && (
+                <div
+                    onClick={closeHeaderPreview}
+                    style={{
+                        position: 'fixed', inset: 0, zIndex: 9999,
+                        background: 'rgba(0,0,0,0.8)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '20px',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#1e1e2e', borderRadius: 20, padding: 20,
+                            maxWidth: 380, width: '100%', position: 'relative',
+                            boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+                        }}
+                    >
+                        <button onClick={closeHeaderPreview} style={{
+                            position: 'absolute', top: 10, right: 10,
+                            width: 30, height: 30, borderRadius: '50%', border: 'none',
+                            background: 'rgba(255,255,255,0.15)', color: 'white',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>✕</button>
+
+                        <img
+                            src={headerCardPreviewUrl} alt="Business Card"
+                            style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: 14 }}
+                        />
+
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            {/* Share — fresh user gesture so navigator.share({files}) works like invitations */}
+                            <button
+                                onClick={handleShareFromOverlay}
+                                style={{
+                                    flex: 1, padding: '13px 0', borderRadius: 12, border: 'none',
+                                    background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                    color: 'white', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                }}
+                            >
+                                📤 {t('share_image', 'Share Image')}
+                            </button>
+
+                            {/* Download fallback */}
+                            <a
+                                href={headerCardPreviewUrl} download="business-card.png"
+                                style={{
+                                    padding: '13px 16px', borderRadius: 12, textDecoration: 'none',
+                                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                                    color: 'white', fontSize: '1rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                            >⬇</a>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Cover Image with Logo and Status Badges */}
             <div style={{
@@ -718,9 +1036,10 @@ const PartnerProfile = () => {
                 height: '250px',
                 background: businessInfo.coverImage
                     ? `url(${businessInfo.coverImage})`
-                    : 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3))',
+                    : th(tc?.gradientFrom ? `linear-gradient(135deg, ${tc.gradientFrom}, ${tc.gradientTo})` : null, 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3))'),
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
+                boxShadow: tc ? tc.headerGlow : undefined,
                 marginTop: '0'
             }}>
                 <div style={{
@@ -817,6 +1136,24 @@ const PartnerProfile = () => {
                             {!partner.photo_url && '🏪'}
                         </div>
 
+                        {/* Logo Upload Overlay - Owner Only */}
+                        {isOwner && (
+                            <label style={{
+                                position: 'absolute', inset: 0, borderRadius: '12px',
+                                background: logoUploading ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'background 0.2s', zIndex: 1
+                            }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.45)'}
+                                onMouseLeave={e => e.currentTarget.style.background = logoUploading ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0)'}>
+                                <span style={{ fontSize: logoUploading ? '0.6rem' : '1rem', color: 'white' }}>
+                                    {logoUploading ? '⏳' : '📷'}
+                                </span>
+                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} disabled={logoUploading} />
+                            </label>
+                        )}
+
+
                         {/* Premium Crown Icon - Top Right Corner of Logo */}
                         {isPremium && (
                             <div style={{
@@ -840,7 +1177,23 @@ const PartnerProfile = () => {
                     </div>
                 </div>
 
+                {/* Cover Upload Button - Owner Only */}
+                {isOwner && (
+                    <label style={{
+                        position: 'absolute', bottom: '0.75rem', left: '1rem',
+                        zIndex: 3, cursor: 'pointer',
+                        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+                        border: '1px solid rgba(255,255,255,0.25)', borderRadius: '10px',
+                        padding: '6px 10px', color: 'white', fontSize: '0.75rem', fontWeight: '700',
+                        display: 'flex', alignItems: 'center', gap: '5px'
+                    }}>
+                        {coverUploading ? '⏳' : '📷'} {coverUploading ? 'Uploading...' : 'Change Cover'}
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload} disabled={coverUploading} />
+                    </label>
+                )}
+
                 {/* Stats Cards - Bottom Right */}
+
                 <div style={{
                     position: 'absolute',
                     bottom: '0.75rem',
@@ -852,7 +1205,7 @@ const PartnerProfile = () => {
                     {/* Rating - Clickable to add review (only for regular users) */}
                     <div
                         onClick={() => {
-                            if (currentUser && userProfile?.accountType !== 'business') {
+                            if (currentUser && !userProfile?.isBusiness) {
                                 if (isGuest) {
                                     navigate('/login');
                                 } else {
@@ -869,11 +1222,11 @@ const PartnerProfile = () => {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            cursor: (currentUser && userProfile?.accountType !== 'business' && !currentUser?.isGuest) ? 'pointer' : 'default',
+                            cursor: (currentUser && !userProfile?.isBusiness && !currentUser?.isGuest) ? 'pointer' : 'default',
                             transition: 'all 0.2s'
                         }}
                         onMouseEnter={(e) => {
-                            if (currentUser && userProfile?.accountType !== 'business') {
+                            if (currentUser && !userProfile?.isBusiness) {
                                 e.currentTarget.style.transform = 'scale(1.05)';
                                 e.currentTarget.style.background = 'rgba(251, 191, 36, 0.2)';
                             }
@@ -896,7 +1249,7 @@ const PartnerProfile = () => {
                     <div style={{
                         background: 'rgba(0, 0, 0, 0.3)',
                         backdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                        border: `1px solid ${tc?.accent ? tc.accent + '55' : 'rgba(139, 92, 246, 0.3)'}`,
                         borderRadius: '20px',
                         padding: '0.4rem 0.7rem',
                         display: 'flex',
@@ -904,7 +1257,7 @@ const PartnerProfile = () => {
                         gap: '6px'
                     }}>
                         <span style={{ fontSize: '1rem' }}>👥</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#a78bfa' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: tc?.accent || '#a78bfa' }}>
                             {memberCount}
                         </span>
                     </div>
@@ -934,7 +1287,8 @@ const PartnerProfile = () => {
             {/* Business Info */}
             <div style={{
                 padding: '1.5rem 1.5rem 1.5rem',
-                borderBottom: '1px solid var(--border-color)'
+                borderBottom: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
+                background: th(tc?.cardBg, undefined)
             }}>
                 {businessInfo.tagline && (
                     <p style={{
@@ -979,77 +1333,108 @@ const PartnerProfile = () => {
                     gap: '10px',
                     marginTop: '1rem'
                 }}>
-                    {/* Join Community Button - Only show for regular users (not business accounts, not owner) */}
-                    {currentUser?.uid !== partnerId && userProfile?.accountType !== 'business' && (
-                        <button
-                            onClick={() => {
-                                if (isGuest) {
-                                    navigate('/login');
-                                } else {
+                    {/* Community Row: Avatar Stack + Join/Count Button */}
+                    {currentUser?.uid !== partnerId && !userProfile?.isBusiness && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 14px',
+                            background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #ec4899, #f97316)'),
+                            borderRadius: th(tc?.btnBorderRadius, '14px'),
+                            boxShadow: th(tc?.btnShadow, '0 4px 16px rgba(139,92,246,0.3)'),
+                        }}>
+                            {/* Avatar Stack */}
+                            <div style={{ display: 'flex', alignItems: 'center', paddingLeft: '4px' }}>
+                                {memberAvatars.length > 0 ? (
+                                    <>
+                                        {memberAvatars.map((url, i) => (
+                                            <img
+                                                key={i}
+                                                src={url}
+                                                alt=""
+                                                style={{
+                                                    width: '26px', height: '26px',
+                                                    borderRadius: '50%',
+                                                    border: '2px solid rgba(255,255,255,0.6)',
+                                                    objectFit: 'cover',
+                                                    marginLeft: i === 0 ? 0 : '-8px',
+                                                    zIndex: 10 - i,
+                                                    position: 'relative'
+                                                }}
+                                            />
+                                        ))}
+                                        <span style={{ marginLeft: '10px', fontSize: '0.82rem', color: 'rgba(255,255,255,0.95)', fontWeight: '700' }}>
+                                            {memberCount}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>
+                                        <FaUsers style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                                        {memberCount > 0 ? memberCount : 'Community'}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Join / Joined Button */}
+                            <button
+                                onClick={() => {
+                                    if (isGuest) { navigate('/login'); return; }
                                     handleJoinCommunity();
-                                }
-                            }}
-                            disabled={joiningCommunity}
-                            style={{
-                                padding: '16px 20px',
-                                background: isMember
-                                    ? 'var(--bg-card)'
-                                    : 'linear-gradient(135deg, #8b5cf6, #ec4899, #f97316)',
-                                border: isMember ? '1px solid var(--border-color)' : 'none',
-                                borderRadius: '16px',
-                                color: 'white',
-                                fontWeight: '800',
-                                fontSize: '1rem',
-                                cursor: joiningCommunity ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '10px',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                opacity: joiningCommunity ? 0.6 : 1,
-                                boxShadow: isMember ? 'none' : '0 4px 20px rgba(139, 92, 246, 0.3)',
-                                transform: 'translateY(0)',
-                                position: 'relative',
-                                overflow: 'hidden'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!joiningCommunity && !isMember) {
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 30px rgba(139, 92, 246, 0.4)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!joiningCommunity && !isMember) {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(139, 92, 246, 0.3)';
-                                }
-                            }}
-                        >
-                            <FaUsers style={{ fontSize: '1.1rem' }} />
-                            {joiningCommunity
-                                ? 'Processing...'
-                                : isMember
-                                    ? `Joined (${memberCount} members)`
-                                    : `Join Community (${memberCount} members)`
-                            }
-                        </button>
+                                }}
+                                disabled={joiningCommunity}
+                                style={{
+                                    padding: isMember ? '6px 14px' : '7px 18px',
+                                    background: isMember ? 'rgba(255,255,255,0.25)' : '#ffffff',
+                                    border: isMember ? '1px solid rgba(255,255,255,0.4)' : 'none',
+                                    borderRadius: th(tc?.btnBorderRadius, '12px'),
+                                    color: isMember ? '#ffffff' : (tc?.accent || '#f97316'),
+                                    fontWeight: '900',
+                                    fontSize: '0.82rem',
+                                    fontFamily: tc?.fontFamily || undefined,
+                                    cursor: joiningCommunity ? 'not-allowed' : 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: '5px',
+                                    transition: 'all 0.2s',
+                                    opacity: joiningCommunity ? 0.7 : 1,
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: isMember ? 'none' : '0 2px 8px rgba(0,0,0,0.15)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (joiningCommunity) return;
+                                    if (isMember) {
+                                        e.currentTarget.style.background = 'rgba(239,68,68,0.3)';
+                                        e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (joiningCommunity) return;
+                                    e.currentTarget.style.background = isMember ? 'rgba(255,255,255,0.25)' : '#ffffff';
+                                    e.currentTarget.style.borderColor = isMember ? 'rgba(255,255,255,0.4)' : 'transparent';
+                                }}
+                            >
+                                {joiningCommunity ? '...' : isMember ? `✓ ${memberCount}` : '+ Join'}
+                            </button>
+                        </div>
                     )}
 
+
                     {/* Create Invitation Button - Only for regular users (not business accounts, not owner) and NOT guests */}
-                    {currentUser?.uid !== partnerId && userProfile?.accountType !== 'business' && !currentUser?.isGuest && (
+                    {currentUser?.uid !== partnerId && !userProfile?.isBusiness && !currentUser?.isGuest && (
                         <button
                             onClick={handleCreateInvitation}
                             style={{
                                 padding: '16px 20px',
-                                background: 'var(--bg-card)',
-                                border: '2px solid transparent',
-                                backgroundImage: 'linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #8b5cf6, #ec4899)',
-                                backgroundOrigin: 'border-box',
-                                backgroundClip: 'padding-box, border-box',
-                                borderRadius: '16px',
-                                color: 'white',
+                                background: th(tc?.cardBg, 'var(--bg-card)'),
+                                border: tc ? 'none' : '2px solid transparent',
+                                backgroundImage: tc ? undefined : 'linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                backgroundOrigin: tc ? undefined : 'border-box',
+                                backgroundClip: tc ? undefined : 'padding-box, border-box',
+                                borderRadius: th(tc?.btnBorderRadius, '16px'),
+                                color: th(tc?.accent, 'white'),
                                 fontWeight: '800',
                                 fontSize: '1rem',
+                                letterSpacing: tc ? '0.5px' : undefined,
+                                textShadow: tc ? `0 0 8px ${tc.accent}88` : undefined,
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -1058,17 +1443,18 @@ const PartnerProfile = () => {
                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                 transform: 'translateY(0)',
                                 position: 'relative',
-                                overflow: 'hidden'
+                                overflow: 'hidden',
+                                boxShadow: th(tc?.btnShadow, 'none')
                             }}
                             onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 6px 30px rgba(139, 92, 246, 0.2)';
-                                e.currentTarget.style.backgroundImage = 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1)), linear-gradient(135deg, #8b5cf6, #ec4899)';
+                                e.currentTarget.style.transform = 'translateY(-3px)';
+                                e.currentTarget.style.filter = tc ? 'brightness(1.15)' : undefined;
+                                e.currentTarget.style.boxShadow = th(tc?.btnShadow?.replace('0 8px 24px', '0 14px 36px'), '0 6px 30px rgba(139, 92, 246, 0.2)');
                             }}
                             onMouseLeave={(e) => {
                                 e.currentTarget.style.transform = 'translateY(0)';
-                                e.currentTarget.style.boxShadow = 'none';
-                                e.currentTarget.style.backgroundImage = 'linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #8b5cf6, #ec4899)';
+                                e.currentTarget.style.filter = '';
+                                e.currentTarget.style.boxShadow = th(tc?.btnShadow, 'none');
                             }}
                         >
                             <FaUserPlus style={{ fontSize: '1.1rem' }} />
@@ -1094,53 +1480,95 @@ const PartnerProfile = () => {
             {/* Tabs */}
             <div style={{
                 display: 'flex',
-                gap: '8px',
-                padding: '1rem 12px',
-                borderBottom: '1px solid var(--border-color)',
+                gap: '5px',
+                padding: '0.5rem 10px',
+                borderBottom: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
                 overflowX: 'auto',
                 WebkitOverflowScrolling: 'touch',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                background: th(tc?.cardBg, undefined)
             }}>
-                {['about', 'menu', 'hours', 'contact'].map(tab => (
+                {['about', 'menu', 'services', 'hours', 'contact'].map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         style={{
-                            padding: '8px 12px',
-                            background: activeTab === tab ? 'var(--primary)' : 'transparent',
+                            padding: '6px 10px',
+                            background: activeTab === tab
+                                ? (tc?.accent || 'var(--primary)')
+                                : 'transparent',
                             border: activeTab === tab ? 'none' : '1px solid var(--border-color)',
-                            color: activeTab === tab ? 'white' : 'var(--text-main)',
-                            borderRadius: '12px',
+                            color: activeTab === tab
+                                ? (tc?.accentText || 'white')
+                                : 'var(--text-main)',
+                            borderRadius: '10px',
                             cursor: 'pointer',
                             fontWeight: '700',
-                            fontSize: '0.8rem',
+                            fontSize: '0.78rem',
                             whiteSpace: 'nowrap',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s',
+                            boxShadow: activeTab === tab && tc ? `0 0 12px ${tc.accent}55` : 'none'
                         }}
                     >
-                        {tab === 'about' ? 'About' : tab === 'menu' ? 'Menu' : tab === 'hours' ? 'Hours' : 'Contact'}
+                        {tab === 'about' ? 'About' : tab === 'menu' ? 'Menu' : tab === 'services' ? 'Services' : tab === 'hours' ? 'Hours' : 'Contact'}
                     </button>
                 ))}
             </div>
 
             {/* Content */}
-            <div style={{ padding: '1rem 1rem', maxWidth: '100%', boxSizing: 'border-box' }}>
+            <div style={{ padding: '0.6rem 1rem', maxWidth: '100%', boxSizing: 'border-box', background: th(tc?.cardBg, undefined) }}>
                 {activeTab === 'about' && (
                     <div>
-                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
-                            About the Business
-                        </h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>About the Business</h3>
+                            {isOwner && (
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                    <button
+                                        onClick={() => navigate('/business-pro/brand-kit')}
+                                        style={{
+                                            padding: '7px 13px', fontSize: '0.78rem', fontWeight: '700',
+                                            background: tc ? tc.swatchGradient : 'rgba(139,92,246,0.15)',
+                                            border: tc ? `1px solid ${tc.border}` : '1px solid rgba(139,92,246,0.4)',
+                                            borderRadius: '10px',
+                                            color: tc ? tc.accentText || '#fff' : 'var(--primary)',
+                                            cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: '5px'
+                                        }}
+                                    >
+                                        🎨 Brand Kit
+                                    </button>
+                                    <button
+                                        onClick={openBasicInfoModal}
+                                        style={{
+                                            padding: '7px 13px', fontSize: '0.78rem', fontWeight: '700',
+                                            background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'),
+                                            border: tc ? `1px solid ${tc.border}` : 'none',
+                                            borderRadius: '10px',
+                                            color: th(tc?.accentText || '#fff', 'white'),
+                                            cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: '5px'
+                                        }}
+                                    >
+                                        ✏️ Edit Info
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         {businessInfo.description ? (
                             <p style={{
-                                color: 'var(--text-secondary)',
+                                color: th(tc?.badgeText, 'var(--text-secondary)'),
                                 lineHeight: '1.8',
                                 fontSize: '0.95rem',
-                                marginBottom: '2rem'
+                                marginBottom: '2rem',
+                                borderLeft: tc ? `3px solid ${tc.accent}66` : undefined,
+                                paddingLeft: tc ? '1rem' : undefined,
+                                fontStyle: tc ? 'italic' : undefined
                             }}>
                                 {businessInfo.description}
                             </p>
                         ) : (
                             <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>No description available</p>
+
                         )}
 
 
@@ -1149,6 +1577,7 @@ const PartnerProfile = () => {
                             partnerId={partnerId}
                             partner={partner}
                             isOwner={isOwner}
+                            theme={{ colors: tc }}
                         />
 
 
@@ -1162,6 +1591,7 @@ const PartnerProfile = () => {
                             userProfile={userProfile}
                             onWriteReview={() => setShowReviewModal(true)}
                             averageRating={averageRating}
+                            theme={{ colors: tc }}
                         />
 
 
@@ -1175,7 +1605,82 @@ const PartnerProfile = () => {
                         partnerId={partnerId}
                         menuData={businessInfo.menu || []}
                         isOwner={isOwner}
+                        theme={{ colors: tc }}
                     />
+                )}
+
+                {/* Services Tab */}
+                {activeTab === 'services' && (
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>Business Services</h3>
+                            {isOwner && (
+                                <button
+                                    onClick={() => { setEditingService(null); setShowServiceModal(true); }}
+                                    style={{
+                                        padding: '8px 14px', fontSize: '0.8rem', fontWeight: '700',
+                                        background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'),
+                                        border: tc ? `1px solid ${tc.border}` : 'none',
+                                        borderRadius: '10px',
+                                        color: th(tc?.accentText || '#fff', 'white'),
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    ➕ Add Service
+                                </button>
+                            )}
+                        </div>
+                        {services.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
+                                {services.map((service, index) => (
+                                    <div key={service.id || index} style={{
+                                        background: th(tc?.badgeBg, 'var(--bg-card)'),
+                                        border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
+                                        borderRadius: '16px', padding: '1rem',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                        textAlign: 'center', gap: '8px', position: 'relative',
+                                        boxShadow: tc ? tc.cardShadow : undefined
+                                    }}>
+                                        <div style={{ fontSize: '2.5rem', lineHeight: 1 }}>{service.icon || '⚙️'}</div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '700', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>{service.name}</h4>
+                                        {service.description && (
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                                                {service.description}
+                                            </p>
+                                        )}
+                                        {isOwner && (
+                                            <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                                                <button onClick={() => { setEditingService(index); setShowServiceModal(true); }}
+                                                    style={{ padding: '3px 8px', fontSize: '0.7rem', background: th(tc?.badgeBg, 'rgba(139,92,246,0.15)'), border: `1px solid ${th(tc?.border, 'rgba(139,92,246,0.3)')}`, borderRadius: '8px', color: th(tc?.accent, 'var(--primary)'), cursor: 'pointer' }}>
+                                                    Edit
+                                                </button>
+                                                <button onClick={() => handleDeleteService(index)}
+                                                    style={{ padding: '3px 8px', fontSize: '0.7rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#ef4444', cursor: 'pointer' }}>
+                                                    Del
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>No services listed yet.</p>
+                                {isOwner && (
+                                    <button
+                                        onClick={() => { setEditingService(null); setShowServiceModal(true); }}
+                                        style={{
+                                            padding: '10px 20px', fontSize: '0.85rem', fontWeight: '700',
+                                            background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
+                                            border: 'none', borderRadius: '12px', color: 'white', cursor: 'pointer'
+                                        }}
+                                    >
+                                        ⚙️ Add Your First Service
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {/* Hours Tab - NEW Business Hours Component */}
@@ -1184,38 +1689,57 @@ const PartnerProfile = () => {
                         partnerId={partnerId}
                         businessInfo={partner.businessInfo}
                         isOwner={isOwner}
+                        theme={{ colors: tc }}
                     />
                 )}
 
                 {/* Contact Tab */}
                 {activeTab === 'contact' && (
                     <div>
-                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
-                            Contact Information
-                        </h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>Contact Information</h3>
+                            {isOwner && (
+                                <button
+                                    onClick={openContactModal}
+                                    style={{
+                                        padding: '7px 13px', fontSize: '0.78rem', fontWeight: '700',
+                                        background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'),
+                                        border: tc ? `1px solid ${tc.border}` : 'none',
+                                        borderRadius: '10px',
+                                        color: th(tc?.accentText || '#fff', 'white'),
+                                        cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: '5px'
+                                    }}
+                                >
+                                    ✏️ Edit Contact
+                                </button>
+                            )}
+                        </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             {businessInfo.phone && (
                                 <div style={{
-                                    background: 'var(--bg-card)',
-                                    border: '1px solid var(--border-color)',
+                                    background: th(tc?.badgeBg, 'var(--bg-card)'),
+                                    border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
                                     borderRadius: '12px',
                                     padding: '1.25rem',
-                                    display: 'flex', alignItems: 'center', gap: '1rem'
+                                    display: 'flex', alignItems: 'center', gap: '1rem',
+                                    boxShadow: th(tc?.cardShadow, 'none')
                                 }}>
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e', fontSize: '1.3rem' }}><FaPhone /></div>
-                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Phone</div><div style={{ fontWeight: '700' }}>{businessInfo.phone}</div></div>
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: th(tc?.badgeBg, 'rgba(34,197,94,0.1)'), border: tc ? `1px solid ${tc.border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#22c55e'), fontSize: '1.3rem' }}><FaPhone /></div>
+                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Phone</div><div style={{ fontWeight: '700', color: th(tc?.accent, 'var(--text-main)') }}>{businessInfo.phone}</div></div>
                                 </div>
                             )}
                             {businessInfo.address && (
                                 <div style={{
-                                    background: 'var(--bg-card)',
-                                    border: '1px solid var(--border-color)',
+                                    background: th(tc?.badgeBg, 'var(--bg-card)'),
+                                    border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
                                     borderRadius: '12px',
                                     padding: '1.25rem',
-                                    display: 'flex', alignItems: 'center', gap: '1rem'
+                                    display: 'flex', alignItems: 'center', gap: '1rem',
+                                    boxShadow: th(tc?.cardShadow, 'none')
                                 }}>
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', fontSize: '1.3rem' }}><FaMapMarkerAlt /></div>
-                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Address</div><div style={{ fontWeight: '700' }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: th(tc?.badgeBg, 'rgba(239,68,68,0.1)'), border: tc ? `1px solid ${tc.border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#ef4444'), fontSize: '1.3rem' }}><FaMapMarkerAlt /></div>
+                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Address</div><div style={{ fontWeight: '700', color: th(tc?.accent, 'var(--text-main)') }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
                                 </div>
                             )}
 
@@ -1260,8 +1784,8 @@ const PartnerProfile = () => {
                             {/* Website Link */}
                             {businessInfo.website && (
                                 <div style={{
-                                    background: 'var(--bg-card)',
-                                    border: `1px solid ${isPremium ? 'var(--border-color)' : 'rgba(251, 191, 36, 0.3)'}`,
+                                    background: th(tc?.badgeBg, 'var(--bg-card)'),
+                                    border: `1px solid ${isPremium ? th(tc?.border, 'var(--border-color)') : 'rgba(251, 191, 36, 0.3)'}`,
                                     borderRadius: '12px',
                                     padding: '1.25rem',
                                     display: 'flex', alignItems: 'center', gap: '1rem',
@@ -1282,10 +1806,10 @@ const PartnerProfile = () => {
                                         e.currentTarget.style.boxShadow = 'none';
                                     }}
                                 >
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', fontSize: '1.3rem' }}><FaGlobe /></div>
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: th(tc?.badgeBg, 'rgba(59,130,246,0.1)'), border: tc ? `1px solid ${tc.border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#3b82f6'), fontSize: '1.3rem' }}><FaGlobe /></div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Website</div>
-                                        <div style={{ fontWeight: '700' }}>{isPremium ? businessInfo.website : '••••••••'}</div>
+                                        <div style={{ fontWeight: '700', color: th(tc?.accent, 'var(--text-main)') }}>{isPremium ? businessInfo.website : '••••••••'}</div>
                                     </div>
                                     {isPremium ? (
                                         <FaExternalLinkAlt style={{ color: 'var(--text-muted)', fontSize: '1rem' }} />
@@ -1442,9 +1966,11 @@ const PartnerProfile = () => {
                                     style={{
                                         width: '100%',
                                         padding: '1rem',
-                                        background: isPremium ? 'linear-gradient(135deg, #4285F4, #34A853)' : 'rgba(156, 163, 175, 0.3)',
-                                        border: 'none',
-                                        borderRadius: '12px',
+                                        background: isPremium
+                                            ? th(tc?.swatchGradient, 'linear-gradient(135deg, #8b5cf6, #f97316)')
+                                            : 'rgba(156, 163, 175, 0.3)',
+                                        border: tc ? `1px solid ${tc.border}` : 'none',
+                                        borderRadius: tc ? '14px' : '12px',
                                         color: 'white',
                                         fontWeight: '800',
                                         fontSize: '1rem',
@@ -1455,17 +1981,20 @@ const PartnerProfile = () => {
                                         gap: '10px',
                                         marginTop: '1rem',
                                         transition: 'all 0.2s',
-                                        opacity: isPremium ? 1 : 0.6
+                                        opacity: isPremium ? 1 : 0.6,
+                                        boxShadow: tc && isPremium ? `0 4px 16px ${tc.accent}44` : 'none'
                                     }}
                                     onMouseEnter={(e) => {
                                         if (isPremium) {
                                             e.currentTarget.style.transform = 'translateY(-2px)';
-                                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(66, 133, 244, 0.4)';
+                                            e.currentTarget.style.boxShadow = tc
+                                                ? `0 8px 24px ${tc.accent}66`
+                                                : '0 8px 20px rgba(66, 133, 244, 0.4)';
                                         }
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = 'none';
+                                        e.currentTarget.style.boxShadow = tc && isPremium ? `0 4px 16px ${tc.accent}44` : 'none';
                                     }}
                                 >
                                     <FaMapMarkerAlt style={{ fontSize: '1.2rem' }} />
@@ -1493,14 +2022,15 @@ const PartnerProfile = () => {
                         padding: '1rem'
                     }}>
                         <div style={{
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border-color)',
+                            background: th(tc?.cardBg, 'var(--bg-card)'),
+                            border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
                             borderRadius: '20px',
                             padding: '2rem',
                             maxWidth: '500px',
-                            width: '100%'
+                            width: '100%',
+                            boxShadow: tc ? tc.headerGlow : undefined
                         }}>
-                            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: '800' }}>
+                            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: '800', color: th(tc?.accent, 'var(--text-main)') }}>
                                 Write a Review
                             </h2>
 
@@ -1560,10 +2090,10 @@ const PartnerProfile = () => {
                                     style={{
                                         flex: 1,
                                         padding: '12px',
-                                        background: 'var(--bg-primary)',
-                                        border: '1px solid var(--border-color)',
+                                        background: th(tc?.badgeBg, 'var(--bg-primary)'),
+                                        border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
                                         borderRadius: '12px',
-                                        color: 'var(--text-primary)',
+                                        color: th(tc?.accent, 'var(--text-main)'),
                                         fontWeight: '700',
                                         cursor: 'pointer'
                                     }}
@@ -1576,10 +2106,10 @@ const PartnerProfile = () => {
                                     style={{
                                         flex: 1,
                                         padding: '12px',
-                                        background: submittingReview ? '#6b7280' : 'linear-gradient(135deg, var(--primary), #f97316)',
+                                        background: submittingReview ? '#6b7280' : th(tc?.footerBg, 'linear-gradient(135deg, var(--primary), #f97316)'),
                                         border: 'none',
                                         borderRadius: '12px',
-                                        color: 'white',
+                                        color: th(tc?.accentText || '#fff', 'white'),
                                         fontWeight: '800',
                                         cursor: submittingReview ? 'not-allowed' : 'pointer',
                                         opacity: submittingReview ? 0.6 : 1
@@ -1764,7 +2294,84 @@ const PartnerProfile = () => {
                 onClose={() => setIsSelectorOpen(false)}
                 navigationState={selectorState}
             />
+
+            {/* Service Modal - Inline */}
+            {showServiceModal && (
+                <ServiceModal
+                    service={editingService !== null ? services[editingService] : null}
+                    onSave={handleAddService}
+                    onClose={() => { setShowServiceModal(false); setEditingService(null); }}
+                />
+            )}
+
+            {/* Basic Info Modal */}
+            {showBasicInfoModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>✏️ Edit Basic Info</h3>
+                            <button onClick={() => setShowBasicInfoModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
+                        </div>
+                        {[
+                            { label: 'Business Name *', key: 'businessName', type: 'text' },
+                            { label: 'Tagline', key: 'tagline', type: 'text' },
+                            { label: 'Business Type', key: 'businessType', type: 'text' },
+                        ].map(({ label, key, type }) => (
+                            <div key={key} style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
+                                <input type={type} value={basicInfoForm[key]} onChange={e => setBasicInfoForm(p => ({ ...p, [key]: e.target.value }))}
+                                    style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+                            </div>
+                        ))}
+                        <div style={{ marginBottom: '1.25rem' }}>
+                            <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Description</label>
+                            <textarea rows={4} value={basicInfoForm.description} onChange={e => setBasicInfoForm(p => ({ ...p, description: e.target.value }))}
+                                style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', resize: 'vertical' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button onClick={() => setShowBasicInfoModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                            <button onClick={saveBasicInfo} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
+                                {savingInfo ? '💾 Saving...' : '💾 Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Contact Modal */}
+            {showContactModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>📞 Edit Contact</h3>
+                            <button onClick={() => setShowContactModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
+                        </div>
+                        {[
+                            { label: 'Phone', key: 'phone', placeholder: '+61 400 000 000' },
+                            { label: 'Email', key: 'email', placeholder: 'info@yourbusiness.com' },
+                            { label: 'Website', key: 'website', placeholder: 'https://yourbusiness.com' },
+                            { label: 'Address', key: 'address', placeholder: '123 Main St' },
+                            { label: 'City', key: 'city', placeholder: 'Sydney' },
+                        ].map(({ label, key, placeholder }) => (
+                            <div key={key} style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
+                                <input type="text" value={contactForm[key]} placeholder={placeholder} onChange={e => setContactForm(p => ({ ...p, [key]: e.target.value }))}
+                                    style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+                            </div>
+                        ))}
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                            <button onClick={() => setShowContactModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                            <button onClick={saveContact} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
+                                {savingInfo ? '💾 Saving...' : '💾 Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
+
+
     );
 };
 

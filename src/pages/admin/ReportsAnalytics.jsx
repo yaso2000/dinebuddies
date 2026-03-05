@@ -52,7 +52,8 @@ const ReportsAnalytics = () => {
             const totalInvitations = invitationsSnapshot.size;
 
             // Fetch Partners (business accounts)
-            const partnersQuery = query(collection(db, 'users'), where('accountType', '==', 'business'));
+            const partnersQuery = query(collection(db, 'users'), where('role', '==', 'business'));
+
             const partnersSnapshot = await getDocs(partnersQuery);
             const totalPartners = partnersSnapshot.size;
 

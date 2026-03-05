@@ -13,6 +13,36 @@ import '../components/MapStyles.css';
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
     if (!members) return null;
 
+    // Local following Set — prevents stale-closure mismatch where toggling one member
+    // affects a different member's display due to shared context re-render
+    const [localFollowing, setLocalFollowing] = React.useState(
+        () => new Set(currentUser?.following || [])
+    );
+
+    // Sync if the user's following list changes externally (e.g. from another part of the app)
+    React.useEffect(() => {
+        setLocalFollowing(new Set(currentUser?.following || []));
+    }, [currentUser?.following]);
+
+    const handleToggle = async (memberId) => {
+        // Optimistic UI update — flip immediately
+        setLocalFollowing(prev => {
+            const next = new Set(prev);
+            if (next.has(memberId)) next.delete(memberId); else next.add(memberId);
+            return next;
+        });
+        try {
+            await onToggleFollow(memberId);
+        } catch {
+            // Rollback on error
+            setLocalFollowing(prev => {
+                const next = new Set(prev);
+                if (next.has(memberId)) next.delete(memberId); else next.add(memberId);
+                return next;
+            });
+        }
+    };
+
     return (
         <div style={{
             position: 'fixed',
@@ -78,7 +108,7 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {members.map(member => {
                                 const isMe = currentUser?.id === member.id;
-                                const isFollowing = (currentUser?.following || []).includes(member.id);
+                                const isFollowing = localFollowing.has(member.id);
 
                                 return (
                                     <div key={member.id} style={{
@@ -133,7 +163,7 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                                 </button>
 
                                                 <button
-                                                    onClick={() => onToggleFollow(member.id)}
+                                                    onClick={() => handleToggle(member.id)}
                                                     style={{
                                                         background: isFollowing ? 'transparent' : 'var(--primary)',
                                                         color: isFollowing ? 'var(--text-muted)' : 'white',
@@ -172,9 +202,35 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
     if (!res) return null;
 
+    // Brand Kit — only apply when business has saved custom colors
+    // Note: InvitationContext spreads `...businessInfo` onto res directly,
+    // so brandKit is at res.brandKit (not res.businessInfo?.brandKit)
+    const bk = res.brandKit || res.businessInfo?.brandKit || {};
+    const _p = bk.primaryColor;   // undefined → no brand kit
+    const _s = bk.secondaryColor || _p;
+    const _br = bk.buttonStyle || '14px';
+    const _ff = bk.fontFamily || undefined;
+
+    // null when no Brand Kit → card uses default styling
+    const tc = _p ? {
+        accent: _p,
+        accentText: '#ffffff',
+        border: `${_p}55`,
+        badgeBg: `${_p}22`,
+        badgeText: _p,
+        headerGlow: `0 0 40px ${_p}40`,
+        gradientFrom: 'rgba(0,0,0,0.88)',
+        gradientTo: 'rgba(0,0,0,0.60)',
+        footerBg: `linear-gradient(135deg, ${_p}cc, ${_s}88)`,
+        btnShadow: `0 8px 24px ${_p}44`,
+        btnBorderRadius: _br,
+        fontFamily: _ff,
+    } : null;
+
+
     const isJoined = (currentUser.joinedCommunities || []).some(id => id === res.id || id === res.ownerId);
     const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
-    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
+    const isBusinessAccount = userProfile?.isBusiness || false;
 
     const isFavorite = userProfile?.favoritePlaces?.some(p => p.businessId === res.id);
 
@@ -197,7 +253,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                     name: res.name,
                     image: res.image,
                     address: res.location || '',
-                    source: 'partner',
+                    source: 'business',
                     addedAt: new Date().toISOString()
                 };
                 newFavorites.push(favoritePlace);
@@ -279,12 +335,12 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
             className="restaurant-card"
             onClick={() => navigate(`/partner/${res.id}`)}
             style={{
-                background: '#0f172a', // Constant Dark Card BG
+                background: tc?.cardBg || '#0f172a',
                 borderRadius: '24px',
                 overflow: 'hidden',
                 marginBottom: '20px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: tc ? `0 4px 24px rgba(0,0,0,0.5), ${tc.headerGlow}` : '0 4px 20px rgba(0,0,0,0.4)',
+                border: tc ? `1px solid ${tc.border}` : '1px solid rgba(255, 255, 255, 0.1)',
                 position: 'relative',
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
@@ -317,7 +373,9 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                     left: 0,
                     width: '100%',
                     height: '100%',
-                    background: 'linear-gradient(to top, rgba(2, 6, 23, 0.95) 0%, rgba(2, 6, 23, 0.7) 40%, transparent 100%)',
+                    background: tc
+                        ? `linear-gradient(to top, ${tc.gradientFrom} 0%, ${tc.gradientTo} 40%, transparent 100%)`
+                        : 'linear-gradient(to top, rgba(2, 6, 23, 0.95) 0%, rgba(2, 6, 23, 0.7) 40%, transparent 100%)',
                     zIndex: 1
                 }} />
 
@@ -487,7 +545,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
             {/* Bottom Section: Footer (Community) */}
             <div style={{
                 padding: '14px 20px',
-                background: 'var(--premium-orange)',
+                background: tc?.footerBg || 'var(--premium-orange)',
                 borderTop: 'none',
                 position: 'relative',
                 zIndex: 20
@@ -503,7 +561,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                         {communityMembers && communityMembers.length > 0 ? (
                             <div
                                 onClick={(e) => { e.stopPropagation(); onViewMembers && onViewMembers(res.id); }}
-                                style={{ display: 'flex', alignItems: 'center', paddingLeft: '8px', cursor: 'pointer' }}
+                                style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', minWidth: 0, flex: 1 }}
                             >
                                 {communityMembers.slice(0, 5).map((member, index) => (
                                     <img
@@ -511,17 +569,18 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                         src={getSafeAvatar(member)}
                                         alt=""
                                         style={{
-                                            width: '28px',
-                                            height: '28px',
+                                            width: '24px',
+                                            height: '24px',
                                             borderRadius: '50%',
-                                            border: '2px solid var(--bg-card)',
+                                            border: '2px solid rgba(255,255,255,0.5)',
                                             objectFit: 'cover',
-                                            marginLeft: '-8px',
-                                            zIndex: 10 - index
+                                            marginLeft: index === 0 ? '0' : '-9px',
+                                            zIndex: 10 - index,
+                                            flexShrink: 0
                                         }}
                                     />
                                 ))}
-                                <span style={{ marginLeft: '10px', fontSize: '0.85rem', color: 'white', fontWeight: '700' }}>
+                                <span style={{ marginLeft: '8px', fontSize: '0.82rem', color: 'white', fontWeight: '700', whiteSpace: 'nowrap' }}>
                                     {communityMembers.length} {t('members')}
                                 </span>
                             </div>
@@ -682,7 +741,7 @@ const RestaurantDirectory = () => {
         });
 
         // Apply location filter
-        const userRole = userProfile?.role || userProfile?.accountType;
+        const userRole = userProfile?.role;
         const isStaff = ['admin', 'moderator', 'support'].includes(userRole);
 
         if (locationFilter !== 'All' && userLocation && !isStaff) {

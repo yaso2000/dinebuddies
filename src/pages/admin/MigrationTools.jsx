@@ -278,6 +278,79 @@ const MigrationTools = () => {
                     </div>
                 </div>
             </div>
+
+            {/* ── Roles Migration ── */}
+            <div className="admin-card admin-mb-4" style={{ marginTop: '2rem', border: '1px solid rgba(99,102,241,0.4)', background: 'rgba(99,102,241,0.05)' }}>
+                <div className="admin-flex admin-gap-3" style={{ alignItems: 'flex-start' }}>
+                    <div style={{
+                        width: '3.5rem', height: '3.5rem', borderRadius: '0.75rem',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}>
+                        <span style={{ fontSize: '1.5rem' }}>🔑</span>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#ffffff', marginBottom: '0.5rem' }}>
+                            Roles Migration
+                        </h2>
+                        <p style={{ fontSize: '0.9375rem', color: '#94a3b8', marginBottom: '1.5rem' }}>
+                            Updates all users: <code style={{ color: '#a5b4fc' }}>role: 'partner'</code> → <code style={{ color: '#a5b4fc' }}>role: 'business'</code><br />
+                            Also removes the legacy <code style={{ color: '#fbbf24' }}>accountType</code> field from every user document.
+                        </p>
+
+                        <button
+                            onClick={async () => {
+                                if (!window.confirm('This will:\n• role: "partner" → "business"\n• Remove accountType field from all users\n\nContinue?')) return;
+
+                                setMigrating(true);
+                                try {
+                                    const { collection, getDocs, updateDoc, doc, deleteField } = await import('firebase/firestore');
+                                    const { db } = await import('../../firebase/config');
+
+                                    const snapshot = await getDocs(collection(db, 'users'));
+                                    let updatedRole = 0, removedType = 0, errors = 0;
+
+                                    for (const userDoc of snapshot.docs) {
+                                        const data = userDoc.data();
+                                        const updates = {};
+
+                                        if (data.role === 'partner') {
+                                            updates.role = 'business';
+                                            updatedRole++;
+                                        }
+                                        if (data.accountType !== undefined) {
+                                            updates.accountType = deleteField();
+                                            removedType++;
+                                        }
+
+                                        if (Object.keys(updates).length > 0) {
+                                            try {
+                                                await updateDoc(doc(db, 'users', userDoc.id), updates);
+                                            } catch (e) {
+                                                errors++;
+                                            }
+                                        }
+                                    }
+
+                                    alert(`✅ Roles Migration Complete!\n\nrole updated: ${updatedRole}\naccountType removed: ${removedType}\nErrors: ${errors}`);
+                                } catch (err) {
+                                    alert('Failed: ' + err.message);
+                                } finally {
+                                    setMigrating(false);
+                                }
+                            }}
+                            disabled={migrating}
+                            className="admin-btn admin-btn-primary"
+                            style={{
+                                background: migrating ? '#64748b' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                                fontSize: '1rem', fontWeight: '700', padding: '0.75rem 2rem'
+                            }}
+                        >
+                            {migrating ? '⏳ Running...' : '🚀 Run Roles Migration'}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

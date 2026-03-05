@@ -32,15 +32,26 @@ const InvitationContext = createContext();
 
 export const useInvitations = () => useContext(InvitationContext);
 
+// ── Monthly private invitation quota per subscription tier ─────────────
+// Derived directly from planDefaults.js plan configuration.
+// Key = subscriptionTier value stored in Firestore users/{id}.subscriptionTier
+// ───────────────────────────────────────────────────────────
+const MONTHLY_PRIVATE_QUOTAS = {
+    pro: 4,   // Pro plan     —  4 private invitations per month
+    premium: 10,  // Premium plan — 10 private invitations per month
+    vip: 10,  // legacy tier alias for premium
+};
+// free tier is intentionally absent — free users rely on purchasedPrivateCredits only
 
 export const InvitationProvider = ({ children }) => {
     const { currentUser, userProfile: firebaseProfile, updateUserProfile, isGuest } = useAuth();
     const [invitations, setInvitations] = useState([]);
+    const [privateInvitations, setPrivateInvitations] = useState([]);
     const [restaurants, setRestaurants] = useState([]);
     const [loadingInvitations, setLoadingInvitations] = useState(true);
     const [detectedCountry, setDetectedCountry] = useState(null);
 
-    // --- 1. Sync Invitations ---
+    // --- 1. Sync Public Invitations ---
     useEffect(() => {
         const q = query(collection(db, 'invitations'), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -57,9 +68,65 @@ export const InvitationProvider = ({ children }) => {
         return () => unsubscribe();
     }, []);
 
+    // --- 1b. Sync Private Invitations (separate collection) ---
+    useEffect(() => {
+        if (!currentUser?.id || currentUser.id === 'guest') return;
+        const userId = currentUser.id;
+
+        // Query 1: invitations where user is the host
+        const qHost = query(
+            collection(db, 'private_invitations'),
+            where('authorId', '==', userId),
+            orderBy('createdAt', 'desc')
+        );
+
+        // Query 2: invitations where user is invited
+        const qInvited = query(
+            collection(db, 'private_invitations'),
+            where('invitedFriends', 'array-contains', userId),
+            orderBy('createdAt', 'desc')
+        );
+
+        const mergeResults = (hostDocs, invitedDocs) => {
+            const seen = new Set();
+            const merged = [];
+            [...hostDocs, ...invitedDocs].forEach(doc => {
+                if (!seen.has(doc.id)) {
+                    seen.add(doc.id);
+                    merged.push(doc);
+                }
+            });
+            // Sort by createdAt desc
+            merged.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setPrivateInvitations(merged);
+        };
+
+        let hostDocs = [];
+        let invitedDocs = [];
+
+        const unsubHost = onSnapshot(qHost, (snap) => {
+            hostDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            mergeResults(hostDocs, invitedDocs);
+        }, (error) => {
+            console.error("Error syncing hosted private invitations:", error);
+        });
+
+        const unsubInvited = onSnapshot(qInvited, (snap) => {
+            invitedDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            mergeResults(hostDocs, invitedDocs);
+        }, (error) => {
+            console.error("Error syncing invited private invitations:", error);
+        });
+
+        return () => {
+            unsubHost();
+            unsubInvited();
+        };
+    }, [currentUser?.id]);
+
     // --- 2. Sync Businesses from Users Collection ---
     useEffect(() => {
-        const q = query(collection(db, 'users'), where('accountType', 'in', ['business', 'partner']));
+        const q = query(collection(db, 'users'), where('role', '==', 'business'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const businessList = [];
 
@@ -202,6 +269,23 @@ export const InvitationProvider = ({ children }) => {
 
     const baseSubscriptionPlans = BASE_SUBSCRIPTION_PLANS;
     const baseCreditPacks = BASE_CREDIT_PACKS;
+
+    // --- Auto-reset monthly private invitation counter when month changes ---
+    // Runs once per login session; resets Firestore counter if the month has changed
+    useEffect(() => {
+        if (!currentUser?.id || !firebaseProfile) return;
+        const tier = firebaseProfile.subscriptionTier || 'free';
+        if (!MONTHLY_PRIVATE_QUOTAS[tier]) return; // free users have no monthly quota to reset
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
+        if (firebaseProfile.lastPrivateResetMonth !== currentMonth) {
+            const userRef = doc(db, 'users', currentUser.id);
+            updateDoc(userRef, {
+                usedPrivateCreditsThisMonth: 0,
+                lastPrivateResetMonth: currentMonth
+            }).catch(e => console.warn('Monthly reset failed:', e));
+        }
+    }, [currentUser?.id, firebaseProfile?.subscriptionTier, firebaseProfile?.lastPrivateResetMonth]);
 
     // Helper to detect Arabic text
     const hasArabic = (text) => /[\u0600-\u06FF]/.test(text);
@@ -379,7 +463,7 @@ export const InvitationProvider = ({ children }) => {
                     id: currentUser.id,
                     name: currentUser.name || 'User',
                     avatar: getSafeAvatar(currentUser),
-                    isPartner: currentUser.accountType === 'business'
+                    isPartner: currentUser.role === 'business'
                 },
                 requests: [], joined: [], chat: [], meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
@@ -391,12 +475,7 @@ export const InvitationProvider = ({ children }) => {
             };
 
             const docRef = await addDoc(collection(db, 'invitations'), inviteData);
-            if (newInvite.type === 'Private') {
-                await deductPrivateInvitationCredit();
-                addNotification('Published!', 'Your private invitation sent successfully.', 'success');
-            } else {
-                addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
-            }
+            addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
 
             if (newInvite.restaurantId) {
                 const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
@@ -415,6 +494,40 @@ export const InvitationProvider = ({ children }) => {
             return docRef.id;
         } catch (err) {
             console.error("Error adding invitation:", err);
+            return false;
+        }
+    };
+
+    // --- Private Invitation: separate collection ---
+    const addPrivateInvitation = async (newInvite) => {
+        if (isGuest) return false;
+        try {
+            if (!newInvite.title) return false;
+
+            // Remove undefined values — Firestore rejects them (e.g. lat/lng when no location selected)
+            const sanitize = (obj) => {
+                const clean = {};
+                Object.entries(obj).forEach(([k, v]) => {
+                    if (v !== undefined) clean[k] = v;
+                });
+                return clean;
+            };
+
+            const inviteData = sanitize({
+                ...newInvite,
+                authorId: currentUser.id,
+                author: {
+                    id: currentUser.id,
+                    name: currentUser.name || 'User',
+                    avatar: getSafeAvatar(currentUser)
+                },
+                privacy: 'private',
+                createdAt: serverTimestamp()
+            });
+            const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
+            return docRef.id;
+        } catch (err) {
+            console.error("Error adding private invitation:", err);
             return false;
         }
     };
@@ -552,51 +665,69 @@ export const InvitationProvider = ({ children }) => {
         } catch (err) { console.error("Error rejecting user:", err); }
     };
 
+    // ── Private Invitation Quota System ──────────────────────────────────────
+    // Quotas are derived from subscriptionTier — no extra Firestore fields needed.
+    // Priority: plan monthly quota → purchased credits → deny
+    // ─────────────────────────────────────────────────────────────────────────
+
     const canCreatePrivateInvitation = () => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
         if (currentUser.role === 'admin') return { canCreate: true, quota: 'unlimited' };
-        const isTrialActive = firebaseProfile?.trialExpiry && new Date(firebaseProfile.trialExpiry.seconds * 1000) > new Date();
-        const effectiveWeeklyQuota = isTrialActive ? 2 : (firebaseProfile?.weeklyPrivateQuota || 0);
-        const usedThisWeek = firebaseProfile?.usedPrivateCreditsThisWeek || 0;
-        if (effectiveWeeklyQuota === -1) return { canCreate: true, quota: 'unlimited' };
-        if (effectiveWeeklyQuota > 0 && usedThisWeek < effectiveWeeklyQuota) {
-            return { canCreate: true, quota: effectiveWeeklyQuota - usedThisWeek };
+        if (firebaseProfile?.isTester) return { canCreate: true, quota: '∞', isTester: true };
+
+        const tier = firebaseProfile?.subscriptionTier || 'free';
+        const monthlyQuota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
+
+        // 1. Check plan monthly quota
+        if (monthlyQuota > 0) {
+            const usedThisMonth = firebaseProfile?.usedPrivateCreditsThisMonth || 0;
+            const remaining = monthlyQuota - usedThisMonth;
+            if (remaining > 0) return { canCreate: true, quota: remaining, period: 'month', source: 'plan' };
         }
+
+        // 2. Check purchased credits (available to all tiers)
         const purchasedCredits = firebaseProfile?.purchasedPrivateCredits || 0;
         if (purchasedCredits > 0) {
-            return { canCreate: true, quota: purchasedCredits };
+            return { canCreate: true, quota: purchasedCredits, source: 'purchased' };
         }
+
         return { canCreate: false, reason: 'no_credits' };
     };
 
     const deductPrivateInvitationCredit = async () => {
-        if (!currentUser || currentUser.role === 'admin') return true;
+        // Admin and Testers never consume credits
+        if (!currentUser || currentUser.role === 'admin' || firebaseProfile?.isTester) return true;
+
         const userRef = doc(db, 'users', currentUser.id);
-        const isTrialActive = firebaseProfile?.trialExpiry && new Date(firebaseProfile.trialExpiry.seconds * 1000) > new Date();
-        const effectiveWeeklyQuota = isTrialActive ? 2 : (firebaseProfile?.weeklyPrivateQuota || 0);
-        const usedThisWeek = firebaseProfile?.usedPrivateCreditsThisWeek || 0;
-        if (effectiveWeeklyQuota === -1) return true;
-        if (effectiveWeeklyQuota > 0 && usedThisWeek < effectiveWeeklyQuota) {
-            await updateDoc(userRef, { usedPrivateCreditsThisWeek: increment(1) });
+        const tier = firebaseProfile?.subscriptionTier || 'free';
+        const monthlyQuota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
+        const usedThisMonth = firebaseProfile?.usedPrivateCreditsThisMonth || 0;
+
+        // 1. Deduct from plan monthly quota
+        if (monthlyQuota > 0 && usedThisMonth < monthlyQuota) {
+            await updateDoc(userRef, { usedPrivateCreditsThisMonth: increment(1) });
             return true;
         }
+
+        // 2. Deduct from purchased credits
         const purchasedCredits = firebaseProfile?.purchasedPrivateCredits || 0;
         if (purchasedCredits > 0) {
             await updateDoc(userRef, { purchasedPrivateCredits: increment(-1) });
             return true;
         }
+
         return false;
     };
 
     const respondToPrivateInvitation = async (invId, status) => {
         if (!currentUser || currentUser.id === 'guest') return;
         try {
-            const invRef = doc(db, 'invitations', invId);
+            const invRef = doc(db, 'private_invitations', invId);
             const invDoc = await getDoc(invRef);
             if (!invDoc.exists()) return;
 
             const invData = invDoc.data();
-            const hostId = invData.author?.id;
+            const hostId = invData.authorId || invData.author?.id;
 
             await updateDoc(invRef, { [`rsvps.${currentUser.id}`]: status });
 
@@ -604,21 +735,21 @@ export const InvitationProvider = ({ children }) => {
                 const updatedDoc = await getDoc(invRef);
                 const data = updatedDoc.data();
                 const rsvps = data.rsvps || {};
-                const invitees = data.invitees || [];
-                const hasNoMoreOptions = invitees.length > 0 && invitees.every(id => rsvps[id] === 'declined');
+                const invitedFriends = data.invitedFriends || [];
+                const allDeclined = invitedFriends.length > 0 && invitedFriends.every(id => rsvps[id] === 'declined');
 
-                if (hasNoMoreOptions || (invitees.length === 0 && status === 'declined')) {
+                if (allDeclined) {
                     await addDoc(collection(db, 'notifications'), {
                         userId: hostId,
                         type: 'system_announcement',
                         title: '⚠️ Invitation Cancelled',
-                        message: `The invitee(s) declined your private invitation "${data.title}". The system will now delete it automatically.`,
+                        message: `All invitees declined your private invitation "${data.title}"`,
                         style: 'warning',
                         createdAt: serverTimestamp(),
                         read: false
                     });
                     setTimeout(async () => { await deleteDoc(invRef); }, 5000);
-                    addNotification('Cancelled', 'Invitation rejected entirely, system will delete it.', 'warning');
+                    addNotification('Cancelled', 'Invitation rejected by all invitees.', 'warning');
                     return;
                 }
             }
@@ -697,19 +828,20 @@ export const InvitationProvider = ({ children }) => {
 
     const toggleFollow = async (userId) => {
         if (isGuest || !userId || userId === currentUser.id) return;
-        const originalFollowing = currentUser.following || [];
-        const isFollowing = originalFollowing.includes(userId);
+        const isCurrentlyFollowing = (currentUser.following || []).includes(userId);
         try {
             const targetUserDoc = await getDoc(doc(db, 'users', userId));
-            if (!targetUserDoc.exists() || targetUserDoc.data().accountType === 'business') return;
+            if (!targetUserDoc.exists() || targetUserDoc.data().role === 'business') return;
 
-            if (isFollowing) {
-                const newFollowing = originalFollowing.filter(id => id !== userId);
-                updateUserProfile({ following: newFollowing });
+            const currentUserRef = doc(db, 'users', currentUser.id);
+
+            if (isCurrentlyFollowing) {
+                // Atomic remove — no race condition
+                await updateDoc(currentUserRef, { following: arrayRemove(userId) });
                 await unfollowUser(currentUser.id, userId);
             } else {
-                const newFollowing = [...originalFollowing, userId];
-                updateUserProfile({ following: newFollowing });
+                // Atomic add — no race condition
+                await updateDoc(currentUserRef, { following: arrayUnion(userId) });
                 await followUser(currentUser.id, userId, {
                     id: currentUser.id,
                     name: currentUser.name,
@@ -718,7 +850,6 @@ export const InvitationProvider = ({ children }) => {
             }
         } catch (error) {
             console.error('Error in toggleFollow:', error);
-            updateUserProfile({ following: originalFollowing });
         }
     };
 
@@ -846,7 +977,7 @@ export const InvitationProvider = ({ children }) => {
     const canEditRestaurant = (restaurantId) => {
         if (!currentUser) return false;
         if (currentUser.userRole === 'admin') return true;
-        return currentUser.accountType === 'business' && currentUser.ownedRestaurants?.includes(restaurantId);
+        return currentUser.role === 'business' && currentUser.ownedRestaurants?.includes(restaurantId);
     };
 
     const submitReport = async (report) => {
@@ -863,12 +994,24 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) { console.error("Error submitting report:", error); return null; }
     };
 
-    const deleteInvitation = async (invId) => {
+    const deleteInvitation = async (invId, isPrivate = false) => {
         if (!invId || !currentUser) return false;
         try {
-            const invRef = doc(db, 'invitations', invId);
+            const collName = isPrivate ? 'private_invitations' : 'invitations';
+            const invRef = doc(db, collName, invId);
             const invDoc = await getDoc(invRef);
-            if (invDoc.exists() && (invDoc.data().author?.id === currentUser.id || currentUser.userRole === 'admin')) {
+            if (!invDoc.exists()) {
+                // Try the other collection as fallback
+                const altRef = doc(db, isPrivate ? 'invitations' : 'private_invitations', invId);
+                const altDoc = await getDoc(altRef);
+                if (altDoc.exists() && (altDoc.data().author?.id === currentUser.id || altDoc.data().authorId === currentUser.id || currentUser.userRole === 'admin')) {
+                    await deleteDoc(altRef);
+                    return true;
+                }
+                return false;
+            }
+            const data = invDoc.data();
+            if (data.author?.id === currentUser.id || data.authorId === currentUser.id || currentUser.userRole === 'admin') {
                 await deleteDoc(invRef);
                 return true;
             }
@@ -883,8 +1026,10 @@ export const InvitationProvider = ({ children }) => {
 
     return (
         <InvitationContext.Provider value={{
-            invitations, restaurants, currentUser: extendedCurrentUser, loadingInvitations, addInvitation, requestToJoin, cancelRequest,
-            approveUser, rejectUser, respondToPrivateInvitation, canCreatePrivateInvitation, sendChatMessage, updateMeetingStatus,
+            invitations, privateInvitations, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
+            addInvitation, addPrivateInvitation, requestToJoin, cancelRequest,
+            approveUser, rejectUser, respondToPrivateInvitation, canCreatePrivateInvitation, deductPrivateInvitationCredit,
+            sendChatMessage, updateMeetingStatus,
             updateInvitationTime, approveNewTime, rejectNewTime,
             notifications, updateProfile, updateRestaurant, markAllAsRead, addNotification, deleteInvitation,
             toggleFollow, getFollowingInvitations, submitRating, submitRestaurantRating, joinCommunity, leaveCommunity, toggleCommunity,

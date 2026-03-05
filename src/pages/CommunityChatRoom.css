@@ -16,18 +16,7 @@
     --font-family: 'Inter', system-ui, sans-serif;
 }
 
-:root[data-theme='light'] {
-    --bg-dark: #F8FAFC;
-    --bg-darker: #F1F5F9;
-    --text-primary: #0F172A;
-    --text-muted: #64748B;
-    --accent-color: #7C3AED;
-    --incoming-bg: #FFFFFF;
-    --outgoing-bg: #7C3AED;
-    --header-bg: rgba(255, 255, 255, 0.9);
-    --composer-bg: rgba(255, 255, 255, 0.82);
-    --border-color: rgba(0, 0, 0, 0.08);
-}
+
 
 body,
 html {
@@ -42,8 +31,8 @@ html {
 .chat-screen {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    height: 100dvh;
+    height: 100%;
+    /* fill the grid cell, not the whole viewport */
     background: linear-gradient(to bottom, var(--bg-dark), var(--bg-darker));
     position: relative;
     overflow: hidden;
@@ -69,20 +58,16 @@ html {
     display: flex;
     align-items: center;
     padding: 0 16px;
-    position: fixed;
-    /* Changed from absolute to fixed */
+    position: sticky;
+    /* sticks at top of center column, not full viewport */
     top: 0;
-    left: 0;
-    right: 0;
     z-index: 100;
-    /* Increased z-index */
     background: var(--header-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
-    padding-top: env(safe-area-inset-top);
-    /* Handle notch */
+    flex-shrink: 0;
 }
 
 .header-back-btn {
@@ -140,8 +125,8 @@ html {
 .message-list {
     flex: 1;
     overflow-y: auto;
-    padding: calc(60px + env(safe-area-inset-top) + 20px) 16px 10px 16px;
-    /* Top pad for header, Bot pad 10px */
+    padding: 12px 16px 10px 16px;
+    /* no extra top offset — header is in flow */
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -208,10 +193,7 @@ html {
     transition: background 0.2s, box-shadow 0.2s;
 }
 
-body.light-mode .message-row.incoming .bubble {
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
+
 
 .message-row.incoming .bubble {
     background: var(--incoming-bg);
@@ -229,13 +211,17 @@ body.light-mode .message-row.incoming .bubble {
 
 /* Sharp corner modifiers */
 .message-row.incoming.first-of-group .bubble {
-    border-bottom-left-radius: 4px;
-    /* Only first incoming has tail */
+    border-top-left-radius: 2px;
+    /* Sharp tail at top — sharper than before */
+    border-bottom-left-radius: 18px;
+    /* Keep bottom rounded */
 }
 
 .message-row.outgoing.first-of-group .bubble {
-    border-bottom-right-radius: 4px;
-    /* Only first outgoing has tail */
+    border-top-right-radius: 2px;
+    /* Sharp tail at top — sharper than before */
+    border-bottom-right-radius: 18px;
+    /* Keep bottom rounded */
 }
 
 /* Timestamp */
@@ -247,12 +233,7 @@ body.light-mode .message-row.incoming .bubble {
     padding-bottom: 2px;
 }
 
-/* Light Mode Overrides for Time Visibility */
-body.light-mode .timestamp {
-    color: #475569;
-    /* Darker slate for readability */
-    opacity: 1;
-}
+
 
 .message-row.outgoing .timestamp {
     color: #FFFFFF !important;

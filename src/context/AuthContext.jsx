@@ -60,17 +60,20 @@ export const AuthProvider = ({ children }) => {
         photo_url: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E',
         photoURL: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E',
         role: 'guest',
-        accountType: 'guest',
+        isGuest: true,
         following: [],
         followersCount: 0,
         reputation: 0,
-        shortDescription: '',
-        isGuest: true
+        shortDescription: ''
     };
 
     // Normalization helper
+    // isBusiness = role === 'business'
+    // isGuest    = role === 'guest'
     const normalizeProfile = (data) => {
         if (!data) return null;
+        const isBusiness = data.role === 'business';
+        const isGuestProfile = data.role === 'guest' || data.isGuest === true;
         return {
             ...data,
             id: data.id || data.uid || '',
@@ -79,15 +82,23 @@ export const AuthProvider = ({ children }) => {
             display_name: data.display_name || data.displayName || data.nickname || '',
             photoURL: data.photoURL || data.photo_url || data.avatar || '',
             photo_url: data.photo_url || data.photoURL || data.avatar || '',
-            isProfileComplete: data.isProfileComplete === true || (
-                (data.displayName || data.display_name) &&
-                data.gender &&
-                (data.ageCategory || data.age)
-            )
+            // ── Unified flags — use ONLY these across the whole codebase ──
+            isBusiness,
+            isGuest: isGuestProfile,
+            // Ensure role is always set
+            role: isBusiness ? 'business' : isGuestProfile ? 'guest' : (data.role || 'user'),
+            // Business accounts are always profile-complete (no gender/age required)
+            // Guests are always considered complete (minimal profile)
+            // Only regular users need to fill gender + ageCategory
+            isProfileComplete: isBusiness || isGuestProfile
+                ? true
+                : data.isProfileComplete === true || (
+                    (data.displayName || data.display_name) &&
+                    data.gender &&
+                    (data.ageCategory || data.age)
+                )
         };
     };
-
-
 
     // Listen to auth state changes
     useEffect(() => {
@@ -156,59 +167,69 @@ export const AuthProvider = ({ children }) => {
 
     const trackUserLocation = () => {
         if (!currentUser || isGuest) return;
-        if (!navigator.geolocation) return;
+        if (!navigator.geolocation) {
+            handleIpFallback();
+            return;
+        }
 
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
 
-                // If Nominatim already failed this session, go straight to IP fallback
-                if (nominatimFailed.current) {
-                    await handleIpFallback();
-                    return;
-                }
-
                 try {
-                    const result = await reverseGeocode(latitude, longitude);
+                    // Use BigDataCloud directly — reliable, no CORS issues, works on production
+                    const response = await fetch(
+                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+                    );
+                    if (!response.ok) throw new Error('BigDataCloud failed');
+                    const d = await response.json();
 
-                    if (result.success) {
-                        const { city, country, fullLocation } = result;
+                    const city = d.city || d.locality || d.principalSubdivision || '';
+                    const country = d.countryName || '';
+                    const countryCode = d.countryCode || '';
+                    const fullLocation = [city, d.principalSubdivision, country].filter(Boolean).join(', ');
 
-                        if (userProfile?.location === fullLocation &&
-                            Math.abs((userProfile?.coordinates?.lat || 0) - latitude) < 0.001) {
-                            return;
-                        }
-
-                        const userRef = doc(db, 'users', currentUser.uid);
-                        await updateDoc(userRef, {
-                            location: fullLocation,
-                            city,
-                            country,
-                            coordinates: { lat: latitude, lng: longitude },
-                            lastLocationUpdate: serverTimestamp()
-                        });
-
-                        setUserProfile(prev => ({
-                            ...prev,
-                            location: fullLocation,
-                            city,
-                            country,
-                            coordinates: { lat: latitude, lng: longitude }
-                        }));
-                    } else if (result.error === 'nominatim_blocked') {
-                        nominatimFailed.current = true;
+                    if (!city) {
                         await handleIpFallback();
-                    } else {
-                        await handleIpFallback();
+                        return;
                     }
+
+                    // Skip update if nothing has changed (within ~100m)
+                    if (userProfile?.city === city &&
+                        Math.abs((userProfile?.coordinates?.lat || 0) - latitude) < 0.001) {
+                        return;
+                    }
+
+                    const userRef = doc(db, 'users', currentUser.uid);
+                    await updateDoc(userRef, {
+                        location: fullLocation,
+                        city,
+                        country,
+                        countryCode,
+                        coordinates: { lat: latitude, lng: longitude },
+                        lastLocationUpdate: serverTimestamp(),
+                        locationSource: 'gps'
+                    });
+
+                    setUserProfile(prev => ({
+                        ...prev,
+                        location: fullLocation,
+                        city,
+                        country,
+                        countryCode,
+                        coordinates: { lat: latitude, lng: longitude }
+                    }));
+
                 } catch (error) {
+                    console.warn('⚠️ BigDataCloud reverse geocode failed, trying IP fallback:', error.message);
                     await handleIpFallback();
                 }
             },
-            async (error) => {
+            async () => {
+                // GPS permission denied → IP fallback
                 await handleIpFallback();
             },
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
         );
     };
 
@@ -251,22 +272,6 @@ export const AuthProvider = ({ children }) => {
             const userDoc = await getDoc(userRef);
             if (userDoc.exists()) {
                 const data = userDoc.data();
-
-                // --- 🔄 WEEKLY QUOTA RESET LOGIC (LAZY RESET) ---
-                const lastReset = data.lastQuotaResetDate?.toDate() || data.created_time?.toDate() || new Date();
-                const now = new Date();
-                const diffMs = now - lastReset;
-                const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
-                if (diffMs >= sevenDaysMs) {
-                    console.log('📅 Resetting weekly quota for user:', userId);
-                    await updateDoc(userRef, {
-                        usedPrivateCreditsThisWeek: 0,
-                        lastQuotaResetDate: serverTimestamp()
-                    });
-                    data.usedPrivateCreditsThisWeek = 0; // Update local data before setting state
-                }
-
                 setUserProfile(normalizeProfile(data));
             }
         } catch (error) {
@@ -558,12 +563,10 @@ export const AuthProvider = ({ children }) => {
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
                 role: 'user',
-                accountType: 'individual',
                 reputation: 100,
-                purchasedPrivateCredits: 5,
-                usedPrivateCreditsThisWeek: 0,
-                trialExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                lastQuotaResetDate: serverTimestamp(),
+                purchasedPrivateCredits: 5,          // welcome gift: 5 free private invitation credits
+                usedPrivateCreditsThisMonth: 0,       // monthly usage counter (reset by InvitationContext)
+                lastPrivateResetMonth: '',             // tracks which month was last reset
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
@@ -659,43 +662,6 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Convert to Business Account
-    const convertToBusiness = async (businessData) => {
-        if (!currentUser) {
-            throw new Error('No user logged in');
-        }
-
-        try {
-            const userRef = doc(db, 'users', currentUser.uid);
-
-            console.log('Converting to business with data:', businessData);
-
-            // Update user document with business info AND correct role
-            await updateDoc(userRef, {
-                accountType: 'business',
-                role: 'partner', // Explicitly set role to partner
-                businessInfo: {
-                    ...businessData,
-                    isPublished: true, // Default to true (published) for initial conversion
-                    createdAt: serverTimestamp()
-                },
-                updatedAt: serverTimestamp()
-            });
-
-            console.log('✅ Successfully updated Firestore with accountType: business and role: partner');
-
-            // Refresh user profile
-            await fetchUserProfile(currentUser.uid);
-
-            console.log('✅ User profile refreshed');
-
-            // Return success - component will handle navigation
-            return true;
-        } catch (error) {
-            console.error('❌ Error converting to business:', error);
-            throw error;
-        }
-    };
 
     // Continue as Guest
     const continueAsGuest = () => {
@@ -724,9 +690,10 @@ export const AuthProvider = ({ children }) => {
         } : null,
         userProfile,
         loading,
-        isGuest,
-        isAdmin: userProfile?.role === 'admin' || userProfile?.accountType === 'admin',
-        isBusiness: userProfile?.accountType === 'business' || userProfile?.role === 'partner',
+        // Derive from normalised profile so there is ONE source of truth
+        isGuest: isGuest || userProfile?.isGuest || false,
+        isBusiness: userProfile?.isBusiness || false,
+        isAdmin: userProfile?.role === 'admin',
         isStaff: userProfile?.role === 'staff' || userProfile?.role === 'support' || userProfile?.role === 'admin',
         sendPhoneOTP,
         verifyPhoneOTP,
@@ -741,7 +708,7 @@ export const AuthProvider = ({ children }) => {
         updateUserProfile,
         deleteUserAccount,
         setupRecaptcha,
-        convertToBusiness,
+        convertToBusiness: null, // removed — use role: 'business' directly
         updateProfile: updateUserProfile,
         continueAsGuest,
         exitGuestMode

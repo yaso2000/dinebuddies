@@ -5,11 +5,10 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
-import PremiumOfferEditor from '../components/PremiumOfferEditor';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop } from 'react-icons/fa';
 
 const BusinessDashboard = () => {
     const { t, i18n } = useTranslation();
@@ -28,7 +27,16 @@ const BusinessDashboard = () => {
     const [offers, setOffers] = useState([]);
     const [offersLoading, setOffersLoading] = useState(false);
 
+    // Desktop redirect — if user opens this on a wide screen, send to Pro Dashboard
+    useEffect(() => {
+        if (window.innerWidth >= 1024) {
+            navigate('/business-pro', { replace: true });
+        }
+    }, [navigate]);
+
+
     const fetchDashboardData = async () => {
+
         try {
             setLoading(true);
             console.log('🔄 Fetching dashboard data for:', currentUser.uid);
@@ -127,21 +135,21 @@ const BusinessDashboard = () => {
         if (authLoading) return;
 
         // If no user or not a business account, redirect
-        if (!currentUser || !userProfile || userProfile.accountType !== 'business') {
+        if (!currentUser || !userProfile || userProfile.role !== 'business') {
             console.log('🚫 Unauthorized or missing business profile, redirecting...');
             navigate('/');
             return;
         }
 
         // Only fetch data if we are surely a business user
-        if (userProfile.accountType === 'business') {
+        if (userProfile.role === 'business') {
             fetchDashboardData();
         } else {
             setLoading(false);
         }
     }, [currentUser, userProfile, authLoading, navigate]);
 
-    if (authLoading || (loading && userProfile?.accountType === 'business')) {
+    if (authLoading || (loading && userProfile?.role === 'business')) {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{
@@ -158,7 +166,7 @@ const BusinessDashboard = () => {
         );
     }
 
-    if (!currentUser || !userProfile || userProfile.accountType !== 'business') {
+    if (!currentUser || !userProfile || userProfile.role !== 'business') {
         return null;
     }
 
@@ -229,7 +237,7 @@ const BusinessDashboard = () => {
                 <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
                     📊 Business Dashboard
                 </h3>
-                <button className="back-btn" onClick={() => navigate('/edit-business-profile')}>
+                <button className="back-btn" onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}>
                     <FaEdit />
                 </button>
             </header>
@@ -381,7 +389,7 @@ const BusinessDashboard = () => {
                         <FaEye /> View Profile
                     </button>
                     <button
-                        onClick={() => navigate('/edit-business-profile')}
+                        onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}
                         style={{
                             flex: '1 1 calc(50% - 5px)',
                             padding: '12px',
@@ -615,10 +623,7 @@ const BusinessDashboard = () => {
                         My Special Offers
                     </h3>
                     <button
-                        onClick={() => {
-                            setEditingOffer(null);
-                            setShowPremiumOfferEditor(true);
-                        }}
+                        onClick={() => navigate('/business-pro', { state: { openDesign: true } })}
                         style={{
                             background: 'var(--primary)',
                             color: 'white',
@@ -645,7 +650,7 @@ const BusinessDashboard = () => {
                                 key={offer.id}
                                 offer={offer}
                                 isOwnerView={true}
-                                onEdit={(o) => navigate(`/offer/edit/${o.id}`)}
+                                onEdit={(o) => navigate('/business-pro', { state: { openDesign: true, editOffer: o } })}
                                 onFreeze={(o) => handleFreezeOffer(o.id)}
                                 onRepublish={(o) => handleRepublishOffer(o.id, o)}
                                 onDelete={(o) => handleDeleteOffer(o.id)}

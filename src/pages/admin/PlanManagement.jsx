@@ -238,9 +238,9 @@ const PlanManagement = () => {
                         </button>
                         <button
                             onClick={() => setFilterType('partner')}
-                            className={`admin-btn ${filterType === 'partner' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
+                            className={`admin-btn ${filterType === 'business' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
                         >
-                            {t('admin_partner')} ({plans.filter(p => p.type === 'partner').length})
+                            {t('admin_partner')} ({plans.filter(p => p.type === 'business').length})
                         </button>
                     </div>
                 )}

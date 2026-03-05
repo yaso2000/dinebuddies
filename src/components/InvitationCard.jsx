@@ -10,15 +10,19 @@ import VideoPlayer from './Shared/VideoPlayer';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { generateShareCardBlob } from '../utils/shareCardCanvas';
 
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, toggleFollow, submitReport } = useInvitations();
-    const { userProfile } = useAuth(); // Get userProfile for accountType check
+    const { userProfile } = useAuth();
     const [showReportModal, setShowReportModal] = useState(false);
+    const [sharingCard, setSharingCard] = useState(false);
+    const [cardPreviewUrl, setCardPreviewUrl] = useState(null); // desktop fallback
     const [isPlayingVideo, setIsPlayingVideo] = useState(false);
     const [isMuted, setIsMuted] = useState(true);
+
 
     const {
         id, author, title, type, location, paymentType,
@@ -82,7 +86,7 @@ const InvitationCard = ({ invitation }) => {
 
     const checkEligibility = () => {
         // Business accounts cannot join invitations
-        if (userProfile?.accountType === 'business') {
+        if (userProfile?.role === 'business') {
             return { eligible: false, reason: t('business_cannot_join', { defaultValue: 'Business accounts cannot join invitations' }) };
         }
 
@@ -109,34 +113,40 @@ const InvitationCard = ({ invitation }) => {
     };
     const eligibility = checkEligibility();
 
+    // Direct image share — generates card and opens native share sheet (Windows/Mobile)
     const handleShare = async (e) => {
         e.stopPropagation();
-        const shareUrl = `${window.location.origin}/invitation/${id}`;
-
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: title,
-                    text: `${title} at ${location}`,
-                    url: shareUrl,
-                });
-            } catch (err) {
-                console.log('Share cancelled or failed:', err);
-            }
-        } else {
-            // Fallback to clipboard
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(shareUrl)
-                    .then(() => alert(t('link_copied_clipboard')))
-                    .catch(err => {
-                        console.error('Clipboard failed:', err);
-                        alert(t('share_manual', { url: shareUrl, defaultValue: `Share this link: ${shareUrl}` }));
-                    });
+        if (sharingCard) return;
+        try {
+            setSharingCard(true);
+            setCardPreviewUrl(null);
+            const blob = await generateShareCardBlob(storyData);
+            if (!blob) throw new Error('No blob');
+            const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title, text: description || title, url: shareUrl });
             } else {
-                // Fallback for non-secure contexts
-                prompt(t('copy_link', { defaultValue: 'Copy this link:' }), shareUrl);
+                // Desktop fallback: show preview
+                setCardPreviewUrl(URL.createObjectURL(blob));
             }
+        } catch (err) {
+            if (err?.name !== 'AbortError') console.error('Share error:', err);
+        } finally {
+            setSharingCard(false);
         }
+    };
+
+    const shareUrl = `${window.location.origin}/invitation/${id}`;
+    const storyData = {
+        title,
+        image: customImage || restaurantImage || image,
+        description,
+        date,
+        time,
+        location,
+        maxGuests: guestsNeeded,
+        hostName: author?.name,
+        hostImage: getSafeAvatar(author),
     };
 
     // Determine media to display
@@ -430,7 +440,7 @@ const InvitationCard = ({ invitation }) => {
                                     occasionType === 'family' ? <FaUsers style={{ color: '#10b981' }} /> :
                                         occasionType === 'business' ? <FaBriefcase style={{ color: '#a855f7' }} /> :
                                             <FaSmile style={{ color: '#f59e0b' }} />}
-                                {t(`occasion_${occasionType}`)}
+                                {t(`occasion_${occasionType?.toLowerCase?.()}`, { defaultValue: occasionType })}
                             </span>
                         )}
                     </div>
@@ -514,7 +524,7 @@ const InvitationCard = ({ invitation }) => {
                 </div>
 
                 {/* Primary Action Button */}
-                {userProfile?.accountType !== 'business' && (
+                {userProfile?.role !== 'business' && (
                     <div className="footer-actions" style={{ pointerEvents: 'auto', width: '100%' }}>
                         <button
                             onClick={handleAction}
@@ -541,6 +551,38 @@ const InvitationCard = ({ invitation }) => {
                     </div>
                 )}
             </div>
+
+
+            {/* Desktop fallback: card preview + download */}
+            {cardPreviewUrl && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
+                >
+                    <div
+                        style={{ width: 320, padding: 16, borderRadius: 20, background: '#111', border: '1px solid rgba(255,255,255,0.1)', position: 'relative' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <a href={shareUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={cardPreviewUrl} alt="Share Card" style={{ width: '100%', borderRadius: 10, display: 'block', cursor: 'pointer' }} />
+                        </a>
+                        <a
+                            href={cardPreviewUrl}
+                            download="invitation-card.png"
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, padding: '10px 0', borderRadius: 10, background: 'linear-gradient(135deg,#8b5cf6,#ec4899)', color: 'white', fontWeight: 700, textDecoration: 'none', fontSize: '0.9rem' }}
+                        >
+                            ⬇️ Download Card
+                        </a>
+                        <button
+                            onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
+                            style={{ width: '100%', marginTop: 8, padding: '8px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', borderRadius: 10, cursor: 'pointer', fontSize: '0.82rem' }}
+                        >
+                            {t('close')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
 
             {/* Report Modal */}
             {showReportModal && (

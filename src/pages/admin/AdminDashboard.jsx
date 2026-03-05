@@ -34,7 +34,7 @@ const AdminDashboard = () => {
             const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             const totalUsers = users.length;
-            const totalPartners = users.filter(u => u.accountType === 'business').length;
+            const totalPartners = users.filter(u => u.role === 'business').length;
             const activeSubscriptions = users.filter(u => u.subscription?.status === 'active').length;
 
             // Calculate revenue

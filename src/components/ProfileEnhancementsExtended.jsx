@@ -373,8 +373,8 @@ export const FavoritePlaces = ({ userId }) => {
                         <p>{t('no_favorite_places', 'No favorite places yet')}</p>
                     </div>
                 ) : (
-                    places.map(place => (
-                        <div key={place.id} className="place-item" style={{ alignItems: 'flex-start' }}>
+                    places.map((place, idx) => (
+                        <div key={place.id || place.businessId || idx} className="place-item" style={{ alignItems: 'flex-start' }}>
                             <div className="place-icon" style={{ flexShrink: 0 }}>
                                 {place.image ? (
                                     <img
@@ -395,7 +395,7 @@ export const FavoritePlaces = ({ userId }) => {
                                         {place.address}
                                     </div>
                                 )}
-                                {place.source === 'partner' && (
+                                {place.source === 'business' && (
                                     <span style={{
                                         display: 'inline-block',
                                         marginTop: '4px',

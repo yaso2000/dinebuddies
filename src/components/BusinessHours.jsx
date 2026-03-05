@@ -5,11 +5,16 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import './BusinessHours.css';
 
-const BusinessHours = ({ partnerId, businessInfo, isOwner }) => {
+const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
     const { t } = useTranslation();
+    const tc = theme?.colors || null;
+    const th = (themed, fallback) => tc ? themed : fallback;
     const [isEditing, setIsEditing] = useState(false);
     const [hours, setHours] = useState(businessInfo?.hours || getDefaultHours());
     const [saving, setSaving] = useState(false);
+
+    // Get today's day name for highlighting
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
 
     // Get current status
     const getCurrentStatus = () => {
@@ -141,21 +146,39 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner }) => {
     };
 
     return (
-        <div className="business-hours-section">
+        <div className="business-hours-section" style={{ background: th(tc?.cardBg, undefined) }}>
             <div className="section-header">
-                <h3>
-                    <FaClock style={{ color: '#3b82f6', marginRight: '0.5rem' }} />
+                <h3 style={{ color: th(tc?.accent, undefined) }}>
+                    <FaClock style={{ color: th(tc?.accent, '#3b82f6'), marginRight: '0.5rem' }} />
                     {t('business_hours', 'Business Hours')}
                 </h3>
                 {isOwner && !isEditing && (
-                    <button className="edit-hours-btn" onClick={() => setIsEditing(true)}>
+                    <button
+                        className="edit-hours-btn"
+                        onClick={() => setIsEditing(true)}
+                        style={tc ? {
+                            background: tc.footerBg,
+                            border: `1px solid ${tc.border}`,
+                            color: tc.accentText || '#fff',
+                            boxShadow: tc.btnShadow,
+                            borderRadius: tc.btnBorderRadius
+                        } : {}}
+                    >
                         <FaEdit /> {t('edit', 'Edit')}
                     </button>
                 )}
             </div>
 
             {/* Live Status Badge */}
-            <div className={`status-badge ${status.isOpen ? 'open' : 'closed'} ${status.closingSoon ? 'closing-soon' : ''}`}>
+            <div
+                className={`status-badge ${status.isOpen ? 'open' : 'closed'} ${status.closingSoon ? 'closing-soon' : ''}`}
+                style={tc ? {
+                    border: `1px solid ${status.isOpen ? tc.accent : tc.border}`,
+                    background: status.isOpen ? tc.badgeBg : 'rgba(239,68,68,0.1)',
+                    color: status.isOpen ? tc.accent : '#ef4444',
+                    boxShadow: status.isOpen ? `0 0 12px ${tc.accent}44` : undefined
+                } : {}}
+            >
                 {status.isOpen ? (
                     <>
                         <FaCheckCircle />
@@ -214,30 +237,62 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner }) => {
                         </div>
                     ))}
                     <div className="edit-actions">
-                        <button onClick={handleSave} className="save-btn" disabled={saving}>
+                        <button
+                            onClick={handleSave}
+                            className="save-btn"
+                            disabled={saving}
+                            style={tc ? {
+                                background: tc.footerBg,
+                                border: `1px solid ${tc.border}`,
+                                color: tc.accentText || '#fff',
+                                boxShadow: tc.btnShadow,
+                                borderRadius: tc.btnBorderRadius
+                            } : {}}
+                        >
                             <FaSave /> {saving ? t('saving', 'Saving...') : t('save', 'Save')}
                         </button>
-                        <button onClick={handleCancel} className="cancel-btn" disabled={saving}>
+                        <button
+                            onClick={handleCancel}
+                            className="cancel-btn"
+                            disabled={saving}
+                            style={tc ? {
+                                background: tc.badgeBg,
+                                border: `1px solid ${tc.border}`,
+                                color: tc.accent
+                            } : {}}
+                        >
                             <FaTimes /> {t('cancel', 'Cancel')}
                         </button>
                     </div>
                 </div>
             ) : (
                 <div className="hours-display">
-                    {Object.entries(hours).map(([day, dayHours]) => (
-                        <div key={day} className="day-row">
-                            <div className="day-name">
-                                {t(day, day.charAt(0).toUpperCase() + day.slice(1))}
+                    {Object.entries(hours).map(([day, dayHours]) => {
+                        const isToday = day === todayKey;
+                        return (
+                            <div
+                                key={day}
+                                className="day-row"
+                                style={tc ? {
+                                    background: isToday ? tc.badgeBg : 'transparent',
+                                    borderLeft: isToday ? `3px solid ${tc.accent}` : '3px solid transparent',
+                                    borderRadius: isToday ? '8px' : undefined,
+                                    paddingLeft: '8px'
+                                } : {}}
+                            >
+                                <div className="day-name" style={isToday && tc ? { color: tc.accent, fontWeight: '800' } : {}}>
+                                    {t(day, day.charAt(0).toUpperCase() + day.slice(1))}
+                                </div>
+                                <div className="day-hours">
+                                    {dayHours?.closed ? (
+                                        <span className="closed-text">{t('closed', 'Closed')}</span>
+                                    ) : (
+                                        <span style={{ color: th(tc?.accent, undefined) }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
+                                    )}
+                                </div>
                             </div>
-                            <div className="day-hours">
-                                {dayHours?.closed ? (
-                                    <span className="closed-text">{t('closed', 'Closed')}</span>
-                                ) : (
-                                    <span>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>
