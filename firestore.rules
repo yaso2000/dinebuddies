@@ -38,6 +38,12 @@ service cloud.firestore {
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       allow update: if isAdmin();
+      // Allow any signed-in user to increment profile view counter only
+      allow update: if isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['businessInfo']) &&
+                       request.resource.data.businessInfo.diff(resource.data.businessInfo).affectedKeys()
+                         .hasOnly(['profileViews']);
       
       // SUPER OWNER PROTECTION:
       // 1. Only Super Owner can delete Admins.
@@ -82,6 +88,25 @@ service cloud.firestore {
         // User can delete their own preferences
         allow delete: if isOwner(userId);
       }
+    }
+    
+    // ============================================
+    // COMMUNITY POSTS COLLECTION
+    // ============================================
+    
+    match /communityPosts/{postId} {
+      // Anyone can read posts (public feed)
+      allow read: if true;
+      
+      // Signed-in users can create posts (includes reposts)
+      allow create: if isSignedIn();
+      
+      // Signed-in users can update any post (likes, comments, reposts arrays)
+      allow update: if isSignedIn();
+      
+      // Only the post author can delete their post (admins override)
+      allow delete: if isSignedIn() && 
+                       (resource.data.author.id == request.auth.uid || isAdmin());
     }
     
     // ============================================
@@ -132,10 +157,62 @@ service cloud.firestore {
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
-    
+
+    // ============================================
+    // PRIVATE INVITATIONS COLLECTION (separate from public)
+    // ============================================
+
+    match /private_invitations/{invitationId} {
+      // Allow list (queries) for any signed-in user — app always filters by authorId or invitedFriends
+      allow list: if isSignedIn();
+
+      // Single document read: only host or invited friends
+      allow get: if isSignedIn() &&
+                    (resource.data.authorId == request.auth.uid ||
+                     request.auth.uid in resource.data.invitedFriends);
+
+      // Any signed-in user can create (author must be self)
+      allow create: if isSignedIn() &&
+                       (request.resource.data.authorId == request.auth.uid ||
+                        request.resource.data.author.id == request.auth.uid);
+
+      // Host can update freely; invited friends can update only their RSVP
+      allow update: if isSignedIn() &&
+                       (resource.data.authorId == request.auth.uid ||
+                        resource.data.author.id == request.auth.uid ||
+                        (request.auth.uid in resource.data.invitedFriends &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps'])));
+
+      // Only host or admin can delete
+      allow delete: if isSignedIn() &&
+                       (resource.data.authorId == request.auth.uid ||
+                        resource.data.author.id == request.auth.uid ||
+                        isAdmin());
+
+      // MESSAGES SUBCOLLECTION (Private Group Chat)
+      match /messages/{messageId} {
+        // Only host or RSVP-accepted invitees can read/write messages
+        allow read: if isSignedIn() &&
+                       (get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.authorId == request.auth.uid ||
+                        request.auth.uid in get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.invitedFriends);
+
+        allow create: if isSignedIn() &&
+                         request.resource.data.senderId == request.auth.uid &&
+                         (get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.authorId == request.auth.uid ||
+                          request.auth.uid in get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.invitedFriends);
+
+        allow update: if isSignedIn() &&
+                         resource.data.senderId == request.auth.uid;
+
+        allow delete: if isSignedIn() &&
+                         (resource.data.senderId == request.auth.uid || isAdmin());
+      }
+    }
+
     // ============================================
     // CHATS COLLECTION (Group Chats)
     // ============================================
+
     
     match /chats/{chatId} {
       // Anyone signed in can read (we'll filter in app)
@@ -205,8 +282,8 @@ service cloud.firestore {
     
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
-      allow update, delete: if isSignedIn() && (resource.data.fromUserId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // ============================================
@@ -255,7 +332,7 @@ service cloud.firestore {
       allow read: if true;
       // Any signed in user can create a story
       allow create: if isSignedIn();
-      // Only the author or an admin can update/delete their story
+      // Only the author or an admin can fully update/delete their story
       allow update, delete: if isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         resource.data.authorId == request.auth.uid ||
@@ -263,6 +340,10 @@ service cloud.firestore {
         (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
         isAdmin()
       );
+      // Any signed-in user can add their reaction / like / view (append-only fields)
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['reactions', 'likes', 'views']);
     }
 
     match /likes/{likeId} {
@@ -347,6 +428,44 @@ service cloud.firestore {
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
     
+    // ============================================
+    // COMMUNITIES COLLECTION (Community Chat)
+    // ============================================
+
+    match /communities/{partnerId} {
+      // Any signed-in user can read community info
+      allow read: if isSignedIn();
+
+      // Only the partner (owner) can create/update the community document
+      allow create, update: if isOwner(partnerId) || isAdmin();
+      allow delete: if isAdmin();
+
+      // MESSAGES SUBCOLLECTION
+      match /messages/{messageId} {
+        // Any signed-in user can read (membership check done in app)
+        allow read: if isSignedIn();
+
+        // Any signed-in user who is the sender can create messages
+        allow create: if isSignedIn() &&
+                         request.resource.data.senderId == request.auth.uid;
+
+        // Sender can update their own message (edit text, etc.)
+        allow update: if isSignedIn() &&
+                         resource.data.senderId == request.auth.uid;
+
+        // Any member can add/change their own reaction
+        allow update: if isSignedIn() &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+
+        // Admin can update anything
+        allow update: if isAdmin();
+
+        // Sender or admin can delete
+        allow delete: if isSignedIn() &&
+                         (resource.data.senderId == request.auth.uid || isAdmin());
+      }
+    }
+
     // ============================================
     // FINAL SECURITY: DENY ALL OTHER COLLECTIONS
     // ============================================

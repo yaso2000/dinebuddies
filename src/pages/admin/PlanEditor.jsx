@@ -240,7 +240,7 @@ const PlanEditor = () => {
                                     </button>
                                     <button
                                         onClick={() => handleInputChange('type', 'partner')}
-                                        className={`admin-btn ${formData.type === 'partner' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
+                                        className={`admin-btn ${formData.type === 'business' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
                                         style={{ flex: 1 }}
                                     >
                                         🏪 {t('admin_for_partners')}

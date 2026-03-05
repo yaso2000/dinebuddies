@@ -39,9 +39,7 @@ const Notifications = () => {
 
     // Redirect guests to login
     useEffect(() => {
-        if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest') {
-            navigate('/login');
-        }
+        if (userProfile?.isGuest) navigate('/login');
     }, [userProfile, navigate]);
 
     // Filter and search states

@@ -69,7 +69,7 @@ class NotificationSound {
     playMessageSound(senderName, message, onClick) {
         // Only show if tab is not focused
         if (document.hidden) {
-            return this.showNotification(`رسالة جديدة من ${senderName}`, {
+            return this.showNotification(`New message from ${senderName}`, {
                 body: message,
                 tag: 'message',
                 onClick
@@ -92,8 +92,8 @@ class NotificationSound {
     // Show join request notification
     showJoinRequestNotification(userName, invitationTitle, onClick) {
         if (document.hidden) {
-            return this.showNotification('طلب انضمام جديد', {
-                body: `${userName} يريد الانضمام إلى "${invitationTitle}"`,
+            return this.showNotification('New Join Request', {
+                body: `${userName} wants to join "${invitationTitle}"`,
                 tag: 'join-request',
                 onClick
             });

@@ -34,10 +34,10 @@ const PricingPage = () => {
         setSelectedPlanType(pageType);
 
         // Auto-redirect logged in users to their correct pricing page if they land on wrong one
-        if (userProfile && userProfile.accountType) {
-            const userType = userProfile.accountType === 'business' || userProfile.accountType === 'partner' ? 'partner' : 'user';
+        if (userProfile) {
+            const userType = userProfile.role === 'business' ? 'partner' : 'user';
 
-            if (userType === 'partner' && !isBusinessPage) {
+            if (userType === 'business' && !isBusinessPage) {
                 console.log('🔄 Redirecting partner to business pricing');
                 navigate('/business/pricing', { replace: true });
             } else if (userType === 'user' && isBusinessPage) {
@@ -50,6 +50,10 @@ const PricingPage = () => {
     // Use plans from context
     const subscriptionPlans = contextPlans || [];
     const fetchingPlans = false;
+
+    // Separate offer slot packs from invitation credit packs
+    const userCreditPacks = creditPacks.filter(pack => pack.type !== 'offer_slot');
+    const offerSlotPacks = creditPacks.filter(pack => pack.type === 'offer_slot');
 
     const filteredPlans = subscriptionPlans.filter(plan => plan.type === selectedPlanType);
 
@@ -225,7 +229,7 @@ const PricingPage = () => {
 
                             {/* Price */}
                             <div style={{ marginBottom: '1.5rem' }}>
-                                {plan.type === 'partner' && plan.price > 0 && (
+                                {plan.type === 'business' && plan.price > 0 && (
                                     <div style={{
                                         background: 'rgba(72, 187, 120, 0.1)',
                                         color: '#48bb78',
@@ -353,7 +357,7 @@ const PricingPage = () => {
                                     ? 'Loading...'
                                     : plan.price === 0
                                         ? 'Start for Free'
-                                        : (plan.type === 'partner'
+                                        : (plan.type === 'business'
                                             ? 'Start 1 Month Free Trial'
                                             : 'Subscribe Now')}
                             </button>
@@ -361,8 +365,8 @@ const PricingPage = () => {
                     ))}
                 </div>
 
-                {/* Credit Packs Section - ONLY for Individuals */}
-                {!isBusinessPage && (
+                {/* Credit Packs Section - ONLY for Individuals (excludes offer slots) */}
+                {!isBusinessPage && userCreditPacks.length > 0 && (
                     <div style={{ marginTop: '4rem', textAlign: 'center' }}>
                         <h2 style={{ color: 'white', fontSize: '2rem', fontWeight: '900', marginBottom: '0.75rem', textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
                             Add-on Packs
@@ -390,7 +394,7 @@ const PricingPage = () => {
                                 flexWrap: 'wrap',
                                 marginBottom: '2.5rem'
                             }}>
-                                {creditPacks.map(pack => {
+                                {userCreditPacks.map(pack => {
                                     const isSelected = selectedCreditPack?.id === pack.id;
                                     const getIcon = (amount) => {
                                         if (amount >= 20) return '🔥';
@@ -482,6 +486,49 @@ const PricingPage = () => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Offer Slot Packs - ONLY for Business/Partner pricing */}
+                {isBusinessPage && offerSlotPacks.length > 0 && (
+                    <div style={{ marginTop: '4rem', textAlign: 'center' }}>
+                        <h2 style={{ color: 'var(--text-main)', fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem' }}>
+                            🎯 Add-on Offer Slots
+                        </h2>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.95rem' }}>
+                            Boost your visibility with extra offer display time
+                        </p>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                            gap: '1.5rem',
+                            maxWidth: '700px',
+                            margin: '0 auto'
+                        }}>
+                            {offerSlotPacks.map(pack => (
+                                <div key={pack.id} className="glass-card" style={{ padding: '1.5rem', textAlign: 'left' }}>
+                                    <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>⏱️</div>
+                                    <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: '0.4rem' }}>{pack.name}</h3>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>{pack.description}</p>
+                                    <div style={{ fontSize: '2rem', fontWeight: '900', color: 'var(--text-main)', marginBottom: '1rem' }}>
+                                        {pack.currencySymbol || '$'}{pack.price}
+                                        <span style={{ fontSize: '0.9rem', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '6px' }}>one-time</span>
+                                    </div>
+                                    <button
+                                        onClick={() => handleSubscribe(pack)}
+                                        disabled={loading === pack.id}
+                                        style={{
+                                            width: '100%', padding: '0.75rem', borderRadius: '10px',
+                                            border: 'none', background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                                            color: 'white', fontWeight: '700', cursor: loading === pack.id ? 'not-allowed' : 'pointer',
+                                            opacity: loading === pack.id ? 0.6 : 1
+                                        }}
+                                    >
+                                        {loading === pack.id ? 'Loading...' : 'Buy Now'}
+                                    </button>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}

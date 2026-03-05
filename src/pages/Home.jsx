@@ -23,7 +23,7 @@ const Home = () => {
     const { invitations, restaurants, currentUser, loading } = useInvitations();
     const { userProfile } = useAuth();
     const { isDark } = useTheme();
-    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
+    const isBusinessAccount = userProfile?.role === 'business';
 
     // Debugging to ensure we don't have posts mixing in
     useEffect(() => {
@@ -37,6 +37,7 @@ const Home = () => {
     const [locationFilter, setLocationFilter] = useState('All');
     const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'today', 'week', 'soon'
     const [viewMode, setViewMode] = useState('list');
+    const [hasOffers, setHasOffers] = useState(false);
     const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
     const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
     const [showSelector, setShowSelector] = useState(false); // New: For пригласительный селектор (fixed) - Create Invitation Selector
@@ -164,7 +165,7 @@ const Home = () => {
         });
 
         // 6. LOCATION FILTER (EXACT COPY FROM RESTAURANT DIRECTORY)
-        const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role || userProfile?.accountType);
+        const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
 
         if (geoFilter !== 'global' && geoFilter !== 'All' && userLocation && !isStaff) {
             filtered = filtered.filter(inv => {
@@ -560,7 +561,7 @@ const Home = () => {
                                 <span style={{ fontSize: '0.7em', background: 'var(--luxury-gold)', color: 'black', padding: '1px 6px', borderRadius: '6px' }}>AD</span>
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <FaStar style={{ color: '#fbbf24' }} /> {restaurant.rating} • {t('partner', { defaultValue: 'Partner' })}
+                                <FaStar style={{ color: '#fbbf24' }} /> {restaurant.rating} • {t('partner', { defaultValue: 'business' })}
                             </div>
                         </div>
                     </div>
@@ -673,39 +674,48 @@ const Home = () => {
 
 
 
-            <div className="home-header">
-                <div className="top-row">
-                    {/* Compact Title */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>
-                            {t('feed_header')}
-                        </h2>
-                    </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div className="view-mode-toggle">
-                            <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{t('list_view')}</button>
-                            <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{t('map_view')}</button>
-                        </div>
+            {/* ── Offer Banner: Mobile only — desktop shows it in right sidebar ── */}
+            <div className="mobile-only-offers">
+                {hasOffers && (
+                    <div style={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 120,
+                        background: 'var(--bg-main)',
+                        padding: '6px 2px 0',
+                    }}>
+                        <OffersBanner onHasOffers={setHasOffers} />
                     </div>
+                )}
+                {!hasOffers && <OffersBanner onHasOffers={setHasOffers} style={{ display: 'none' }} />}
+            </div>
+
+            {/* Title row + List/Map toggle — normal scrollable content */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px 4px' }}>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>
+                    {t('feed_header')}
+                </h2>
+                <div className="view-mode-toggle">
+                    <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{t('list_view')}</button>
+                    <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{t('map_view')}</button>
                 </div>
+            </div>
 
-                {/* Location Filter Tabs (City / Country / Global) */}
 
-                <OffersBanner />
-                {/* Filter Bar - Responsive Layout */}
-                <div className="filter-bar" style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    background: 'var(--bg-card)',
-                    padding: '6px 12px',
-                    borderRadius: '16px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-                    position: 'relative',
-                    zIndex: 50
-                }}>
-                    <style>{`
+            {/* Filter Bar - Responsive Layout */}
+            <div className="filter-bar" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                background: 'var(--bg-card)',
+                padding: '6px 12px',
+                borderRadius: '16px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                position: 'relative',
+                zIndex: 50
+            }}>
+                <style>{`
                         .filter-select {
                             appearance: none !important;
                             -webkit-appearance: none !important;
@@ -726,105 +736,104 @@ const Home = () => {
                         }
                     `}</style>
 
-                    {/* Row 1: Search + Location Filter */}
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {/* Row 1: Search + Location Filter */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
 
-                        {/* Search Input - Always Visible */}
-                        <div style={{ position: 'relative', flex: '1 1 auto' }}>
-                            <FaSearch className="search-icon" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
-                            <input
-                                type="text"
-                                placeholder={t('search_placeholder')}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onFocus={() => setShowFilters(true)}
-                                className="search-input"
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 10px 8px 36px',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    fontSize: '0.85rem',
-                                    background: 'var(--bg-input)'
-                                }}
-                            />
-                        </div>
-
-                        {/* Location Filter Dropdown - Restore Control */}
-                        <div style={{ flex: '0 0 auto' }}>
-                            <select
-                                value={geoFilter}
-                                onChange={(e) => setGeoFilter(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="All">🌍 {t('all') || 'All'}</option>
-                                <option value="nearby">📍 {t('near_me') || 'Near me'}</option>
-                                <option value="city">🏙️ {t('in_my_city') || 'In my city'}</option>
-                                <option value="country">🗺️ {t('in_my_country') || 'In my country'}</option>
-                            </select>
-                        </div>
+                    {/* Search Input - Always Visible */}
+                    <div style={{ position: 'relative', flex: '1 1 auto' }}>
+                        <FaSearch className="search-icon" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
+                        <input
+                            type="text"
+                            placeholder={t('search_placeholder')}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onFocus={() => setShowFilters(true)}
+                            className="search-input"
+                            style={{
+                                width: '100%',
+                                padding: '8px 10px 8px 36px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                fontSize: '0.85rem',
+                                background: 'var(--bg-input)'
+                            }}
+                        />
                     </div>
 
-                    {/* Row 2: Category Icons - Show when search is focused */}
-                    {showFilters && (
-                        <div style={{
-                            display: 'flex',
-                            gap: '6px',
-                            width: '100%',
-                            overflowX: 'auto',
-                            paddingBottom: '4px',
-                            animation: 'slideDown 0.2s ease-out',
-                            scrollbarWidth: 'none',
-                            msOverflowStyle: 'none'
-                        }}
-                            className="category-icons-scroll"
+                    {/* Location Filter Dropdown - Restore Control */}
+                    <div style={{ flex: '0 0 auto' }}>
+                        <select
+                            value={geoFilter}
+                            onChange={(e) => setGeoFilter(e.target.value)}
+                            className="filter-select"
                         >
-                            {categories.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => handleCategoryClick(cat)}
-                                    style={{
-                                        flex: '0 0 auto',
-                                        padding: '8px 12px',
-                                        borderRadius: '10px',
-                                        border: activeFilter === cat.id
-                                            ? '2px solid var(--primary)'
-                                            : '1px solid var(--border-color)',
-                                        background: activeFilter === cat.id
-                                            ? 'rgba(139, 92, 246, 0.1)'
-                                            : 'var(--bg-card)',
-                                        color: activeFilter === cat.id
-                                            ? 'var(--primary)'
-                                            : 'var(--text-main)',
-                                        fontSize: '0.8rem',
-                                        fontWeight: activeFilter === cat.id ? '700' : '500',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (activeFilter !== cat.id) {
-                                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.05)';
-                                            e.currentTarget.style.borderColor = 'var(--primary)';
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (activeFilter !== cat.id) {
-                                            e.currentTarget.style.background = 'var(--bg-card)';
-                                            e.currentTarget.style.borderColor = 'var(--border-color)';
-                                        }
-                                    }}
-                                >
-                                    {cat.icon && <span>{cat.icon}</span>}
-                                    <span>{cat.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                            <option value="All">🌍 {t('all') || 'All'}</option>
+                            <option value="nearby">📍 {t('near_me') || 'Near me'}</option>
+                            <option value="city">🏙️ {t('in_my_city') || 'In my city'}</option>
+                            <option value="country">🗺️ {t('in_my_country') || 'In my country'}</option>
+                        </select>
+                    </div>
                 </div>
+
+                {/* Row 2: Category Icons - Show when search is focused */}
+                {showFilters && (
+                    <div style={{
+                        display: 'flex',
+                        gap: '6px',
+                        width: '100%',
+                        overflowX: 'auto',
+                        paddingBottom: '4px',
+                        animation: 'slideDown 0.2s ease-out',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none'
+                    }}
+                        className="category-icons-scroll"
+                    >
+                        {categories.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => handleCategoryClick(cat)}
+                                style={{
+                                    flex: '0 0 auto',
+                                    padding: '8px 12px',
+                                    borderRadius: '10px',
+                                    border: activeFilter === cat.id
+                                        ? '2px solid var(--primary)'
+                                        : '1px solid var(--border-color)',
+                                    background: activeFilter === cat.id
+                                        ? 'rgba(139, 92, 246, 0.1)'
+                                        : 'var(--bg-card)',
+                                    color: activeFilter === cat.id
+                                        ? 'var(--primary)'
+                                        : 'var(--text-main)',
+                                    fontSize: '0.8rem',
+                                    fontWeight: activeFilter === cat.id ? '700' : '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    whiteSpace: 'nowrap'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (activeFilter !== cat.id) {
+                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.05)';
+                                        e.currentTarget.style.borderColor = 'var(--primary)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (activeFilter !== cat.id) {
+                                        e.currentTarget.style.background = 'var(--bg-card)';
+                                        e.currentTarget.style.borderColor = 'var(--border-color)';
+                                    }
+                                }}
+                            >
+                                {cat.icon && <span>{cat.icon}</span>}
+                                <span>{cat.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
 
@@ -1016,7 +1025,7 @@ const Home = () => {
                                     >
                                         🔄 {t('clear_filters') || 'Clear Filters'}
                                     </button>
-                                ) : !isBusinessAccount && currentUser?.id !== 'guest' && userProfile?.accountType !== 'guest' && (
+                                ) : !isBusinessAccount && currentUser?.id !== 'guest' && !userProfile?.isGuest && (
                                     <button
                                         onClick={() => setShowSelector(true)}
                                         style={{
@@ -1055,49 +1064,49 @@ const Home = () => {
             {/* Create Invitation FAB - Only on invitations/home page, not for business accounts */}
             {/* Create Invitation FAB - Only on invitations/home page, not for business accounts and not for guests */}
             {/* Create Invitation FAB - Visible to all, but prompts guests sign up */}
-            {!isBusinessAccount && (
-                <div
-                    onClick={() => {
-                        if (userProfile?.accountType === 'guest' || userProfile?.isGuest) {
-                            if (window.confirm(i18n.language === 'ar'
-                                ? 'يجب تسجيل الدخول لإنشاء دعوة. هل تريد التسجيل الآن؟'
-                                : 'You need to sign in to create an invitation. Sign up now?')) {
-                                navigate('/login');
+            {
+                !isBusinessAccount && (
+                    <div
+                        onClick={() => {
+                            if (userProfile?.isGuest) {
+                                if (window.confirm('You need to sign in to create an invitation. Sign up now?')) {
+                                    navigate('/login');
+                                }
+                            } else {
+                                setShowSelector(true);
                             }
-                        } else {
-                            setShowSelector(true);
-                        }
-                    }}
-                    style={{
-                        position: 'fixed',
-                        bottom: '100px',
-                        right: '25px',
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '18px', // More modern shape
-                        background: '#ef4444',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 8px 16px rgba(239, 68, 68, 0.4)',
-                        cursor: 'pointer',
-                        zIndex: 1000,
-                        border: '2px solid rgba(255,255,255,0.2)'
-                    }}
-                    role="button"
-                    className="home-fab-btn"
-                >
-                    <FaPlus size={24} />
-                </div>
-            )}
+                        }}
+                        style={{
+                            position: 'fixed',
+                            bottom: '100px',
+                            right: '25px',
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '18px', // More modern shape
+                            background: '#ef4444',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 8px 16px rgba(239, 68, 68, 0.4)',
+                            cursor: 'pointer',
+                            zIndex: 1000,
+                            border: '2px solid rgba(255,255,255,0.2)'
+                        }}
+                        role="button"
+                        className="home-fab-btn"
+                    >
+                        <FaPlus size={24} />
+                    </div>
+                )
+            }
 
 
             <CreateInvitationSelector
                 isOpen={showSelector}
                 onClose={() => setShowSelector(false)}
             />
-        </div >
+        </div>
     );
 };
 

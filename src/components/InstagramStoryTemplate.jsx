@@ -3,16 +3,14 @@ import { useTranslation } from 'react-i18next';
 
 const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) => {
     const { t } = useTranslation();
-    // data expected: title, image, date, time, location, hostName, hostImage, logo
-
-    const isInvitation = type === 'invitation';
+    const isPartner = type === 'partner';
 
     return (
         <div
             ref={ref}
             style={{
                 position: 'fixed',
-                top: '-9999px', // Hide it off-screen but keep it rendered
+                top: '-9999px',
                 left: '-9999px',
                 width: '1080px',
                 height: '1920px',
@@ -33,10 +31,11 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                 left: 0,
                 width: '100%',
                 height: '100%',
-                backgroundImage: `url(${data.image || '/logo.png'})`,
+                backgroundImage: `url(${data.image || '/icon-light.png'})`,
+
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                opacity: 0.6
+                opacity: isPartner ? 0.5 : 0.6
             }} />
 
             {/* Gradient Overlay */}
@@ -46,10 +45,12 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                 left: 0,
                 width: '100%',
                 height: '100%',
-                background: 'linear-gradient(to bottom, rgba(15, 23, 42, 0.3) 0%, rgba(15, 23, 42, 0.9) 100%)'
+                background: isPartner
+                    ? 'linear-gradient(to bottom, rgba(15,23,42,0.4) 0%, rgba(120,53,15,0.6) 50%, rgba(15,23,42,0.97) 100%)'
+                    : 'linear-gradient(to bottom, rgba(15,23,42,0.3) 0%, rgba(15,23,42,0.9) 100%)'
             }} />
 
-            {/* Content Container */}
+            {/* Content */}
             <div style={{
                 position: 'relative',
                 zIndex: 10,
@@ -58,23 +59,27 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                textAlign: 'center' // Center align everything for Instagram style
+                textAlign: 'center'
             }}>
-                {/* Header */}
+                {/* Header Badge */}
                 <div style={{ paddingTop: '100px' }}>
                     <div style={{
                         display: 'inline-block',
                         padding: '12px 32px',
-                        background: 'rgba(255, 255, 255, 0.2)',
+                        background: isPartner
+                            ? 'linear-gradient(135deg, rgba(249,115,22,0.35), rgba(234,179,8,0.35))'
+                            : 'rgba(255,255,255,0.2)',
                         backdropFilter: 'blur(10px)',
                         borderRadius: '50px',
                         textTransform: 'uppercase',
                         letterSpacing: '2px',
                         fontWeight: '700',
                         fontSize: '24px',
-                        border: '2px solid rgba(255, 255, 255, 0.3)'
+                        border: isPartner
+                            ? '2px solid rgba(249,115,22,0.5)'
+                            : '2px solid rgba(255,255,255,0.3)'
                     }}>
-                        {isInvitation ? t('invitation_card_title') : 'DineBuddies'}
+                        {isPartner ? '🍽️ Partner Restaurant' : (t('invitation_card_title') || 'DineBuddies')}
                     </div>
                 </div>
 
@@ -95,18 +100,23 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                             display: 'flex',
                             alignItems: 'center',
                             gap: '16px',
-                            fontSize: '32px',
-                            opacity: 0.9
+                            fontSize: '36px',
+                            fontWeight: '700',
+                            color: isPartner ? '#fdba74' : 'rgba(255,255,255,0.9)',
+                            background: isPartner ? 'rgba(251,146,60,0.15)' : 'rgba(255,255,255,0.08)',
+                            padding: '14px 40px',
+                            borderRadius: '50px',
+                            border: isPartner ? '1.5px solid rgba(251,146,60,0.35)' : '1.5px solid rgba(255,255,255,0.15)',
                         }}>
                             <span>📍 {data.location}</span>
                         </div>
                     )}
 
-                    {data.date && (
+                    {!isPartner && data.date && (
                         <div style={{
                             fontSize: '40px',
                             fontWeight: '600',
-                            color: '#fbbf24' // Gold/Amber
+                            color: '#fbbf24'
                         }}>
                             📅 {data.date} • {data.time}
                         </div>
@@ -114,18 +124,18 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
 
                     {data.description && (
                         <p style={{
-                            fontSize: '28px',
+                            fontSize: '30px',
                             lineHeight: '1.5',
-                            maxWidth: '800px',
+                            maxWidth: '850px',
                             opacity: 0.8,
-                            marginTop: '20px'
+                            marginTop: '10px'
                         }}>
-                            {data.description.length > 150 ? data.description.substring(0, 150) + '...' : data.description}
+                            {data.description.length > 160 ? data.description.substring(0, 160) + '...' : data.description}
                         </p>
                     )}
                 </div>
 
-                {/* Footer / Host Info */}
+                {/* Footer */}
                 <div style={{ paddingBottom: '100px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '40px' }}>
                     {data.hostName && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -137,23 +147,42 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                                         width: '100px',
                                         height: '100px',
                                         borderRadius: '50%',
-                                        border: '4px solid white',
+                                        border: isPartner ? '4px solid #f97316' : '4px solid white',
                                         objectFit: 'cover'
                                     }}
                                 />
                             )}
                             <div style={{ textAlign: 'left' }}>
-                                <div style={{ fontSize: '24px', opacity: 0.8 }}>{t('hosted_by')}</div>
+                                <div style={{ fontSize: '24px', opacity: 0.7 }}>
+                                    {isPartner ? 'Restaurant' : t('hosted_by')}
+                                </div>
                                 <div style={{ fontSize: '36px', fontWeight: 'bold' }}>{data.hostName}</div>
                             </div>
                         </div>
                     )}
 
-                    <div style={{ width: '100%', height: '2px', background: 'rgba(255,255,255,0.2)', margin: '20px 0' }} />
+                    <div style={{ width: '100%', height: '2px', background: 'rgba(255,255,255,0.15)', margin: '10px 0' }} />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <img src="/logo.png" alt="DineBuddies" style={{ width: '80px', height: '80px' }} />
-                        <div style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '1px' }}>DineBuddies</div>
+                    {/* DineBuddies branding + CTA */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                            <img src="/db-logo-white.svg" alt="DineBuddies" style={{ width: '80px', height: '80px', filter: 'brightness(0) invert(1)' }} />
+                            <div style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '1px' }}>DineBuddies</div>
+                        </div>
+                        {isPartner && (
+                            <div style={{
+                                padding: '20px 56px',
+                                background: 'linear-gradient(135deg, #f97316, #eab308)',
+                                borderRadius: '50px',
+                                fontSize: '30px',
+                                fontWeight: '800',
+                                color: 'white',
+                                letterSpacing: '0.5px',
+                                boxShadow: '0 8px 32px rgba(249,115,22,0.45)',
+                            }}>
+                                Visit Us on DineBuddies 🍽️
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -162,3 +191,5 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
 });
 
 export default InstagramStoryTemplate;
+
+

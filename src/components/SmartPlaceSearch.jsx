@@ -108,7 +108,7 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                         name: data.display_name,
                         address: data.businessInfo?.address || data.businessInfo?.city || '',
                         image: getSafeAvatar(data),
-                        source: 'partner',
+                        source: 'business',
                         businessId: doc.id
                     };
                 })

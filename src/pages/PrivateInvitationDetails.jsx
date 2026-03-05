@@ -30,7 +30,7 @@ const PrivateInvitationDetails = () => {
     useEffect(() => {
         if (!id) return;
 
-        const unsubscribe = onSnapshot(doc(db, 'invitations', id), async (docSnap) => {
+        const unsubscribe = onSnapshot(doc(db, 'private_invitations', id), async (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.id ? { id: docSnap.id, ...docSnap.data() } : docSnap.data();
 
@@ -104,6 +104,10 @@ const PrivateInvitationDetails = () => {
     const isHost = viewerId === (invitation.authorId || invitation.author?.id);
     const myRSVP = invitation.rsvps?.[viewerId] || 'pending';
     const canChat = isHost || myRSVP === 'accepted';
+
+    // Edit is allowed only if NO ONE has accepted yet
+    const hasAccepted = Object.values(invitation.rsvps || {}).some(s => s === 'accepted');
+    const canEdit = isHost && !hasAccepted;
 
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
@@ -317,48 +321,57 @@ const PrivateInvitationDetails = () => {
                         )}
                     </div>
                 </div>
-            </div>
+                {/* Host Actions - inline, below the guest list */}
+                {isHost && (
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px', marginBottom: '2rem' }}>
+                        <button
+                            onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
+                            style={{
+                                flex: 1, height: '54px', borderRadius: '18px', border: 'none',
+                                background: 'var(--primary)', color: 'white',
+                                fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                boxShadow: '0 10px 20px rgba(139, 92, 246, 0.3)',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <FaComments /> {t('chat', 'Chat')}
+                        </button>
 
-            {/* Fixed Footer Actions - Only show chat if host OR accepted and outside of cards */}
-            {isHost && (
-                <div className="private-fixed-actions" style={{
-                    position: 'fixed',
-                    bottom: '90px',
-                    left: '20px',
-                    right: '20px',
-                    display: 'flex',
-                    gap: '12px',
-                    zIndex: 1000
-                }}>
-                    <button
-                        onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
-                        style={{
-                            flex: 1, height: '54px', borderRadius: '18px', border: 'none',
-                            background: 'var(--primary)', color: 'white',
-                            fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                            boxShadow: '0 10px 20px rgba(139, 92, 246, 0.3)',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <FaComments /> {t('chat', 'Chat')}
-                    </button>
-                    <button
-                        style={{ width: '54px', height: '54px', borderRadius: '18px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                        onClick={async () => {
-                            if (window.confirm(t('confirm_delete_invitation', 'Are you sure you want to delete this invitation?'))) {
-                                const success = await deleteInvitation(invitation.id);
-                                if (success) {
-                                    navigate('/');
+                        {canEdit && (
+                            <button
+                                onClick={() => navigate('/create-private', { state: { editInvitation: invitation } })}
+                                style={{
+                                    width: '54px', height: '54px', borderRadius: '18px',
+                                    border: '1px solid rgba(139, 92, 246, 0.4)',
+                                    background: 'rgba(139, 92, 246, 0.1)', color: 'var(--primary)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    cursor: 'pointer', fontSize: '1.1rem'
+                                }}
+                                title={t('edit_invitation', 'Edit invitation')}
+                            >
+                                ✏️
+                            </button>
+                        )}
+
+                        <button
+                            style={{ width: '54px', height: '54px', borderRadius: '18px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                            onClick={async () => {
+                                if (window.confirm(t('confirm_delete_invitation', 'Are you sure you want to delete this invitation?'))) {
+                                    const success = await deleteInvitation(invitation.id, true);
+                                    if (success) {
+                                        navigate('/');
+                                    }
                                 }
-                            }
-                        }}
-                    >
-                        <FaTrash />
-                    </button>
-                </div>
-            )}
+                            }}
+                        >
+                            <FaTrash />
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
 
 export default PrivateInvitationDetails;
+

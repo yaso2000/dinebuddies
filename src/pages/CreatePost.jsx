@@ -199,8 +199,8 @@ const CreatePost = () => {
 
     return (
         <div className="create-post-container" style={{
-            position: 'fixed', inset: 0, zIndex: 100000,
-            background: 'var(--bg-body)', display: 'flex', flexDirection: 'column'
+            display: 'flex', flexDirection: 'column',
+            background: 'var(--bg-body)',
         }}>
             {/* Header */}
             <div style={{
@@ -239,7 +239,7 @@ const CreatePost = () => {
             </div>
 
             {/* Main Content (Scrollable) */}
-            <div style={{ flex: 1, padding: '16px', paddingBottom: '120px', overflowY: 'auto' }}>
+            <div style={{ flex: 1, padding: '16px', paddingBottom: '70px', overflowY: 'auto' }}>
 
                 {/* Content Card (Text + Media) */}
                 <div style={{
@@ -264,7 +264,7 @@ const CreatePost = () => {
                             border: 'none',
                             background: 'transparent',
                             resize: 'none',
-                            minHeight: media ? '60px' : '150px', // Shrink text area if media is present
+                            minHeight: media ? '60px' : '90px', // Shrink text area if media is present
                             fontSize: `${fontSize}px`,
                             color: textColor || 'var(--text-main)', // Use smart color if empty
                             caretColor: textColor || 'var(--text-main)',

@@ -1,41 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaMapMarkerAlt, FaStar, FaChevronLeft, FaChevronRight, FaCalendarPlus } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaStar, FaCalendarPlus, FaShare, FaDownload, FaTimes } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
+import { generateShareCardBlob } from '../utils/shareCardCanvas';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 const BusinessCard = ({ business }) => {
     const navigate = useNavigate();
     const { userProfile } = useAuth();
+    const { t } = useTranslation();
     const info = business.businessInfo || {};
-    const [currentSlide, setCurrentSlide] = useState(0);
+    const brandKit = info.brandKit || {};
+    const brandPrimary = brandKit.primaryColor || null;
+    const brandSecondary = brandKit.secondaryColor || brandPrimary;
+    const brandFont = brandKit.fontFamily || undefined;
+    const brandRadius = brandKit.buttonStyle || '16px';
+    const [isSharing, setIsSharing] = useState(false);
+    const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
+    const [cardFile, setCardFile] = useState(null);
 
     // Check if current user is a business account
-    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
-
-    // Gather images for slider: Cover + Services
-    const slides = [];
-    if (info.coverImage) slides.push({ image: info.coverImage, caption: info.tagline || 'Welcome' });
-    if (info.services && info.services.length > 0) {
-        info.services.slice(0, 4).forEach(service => { // Limit to 4 service images
-            // Assuming service might have an image field eventually, but for now we might only have text?
-            // If text-only services, we skip. If we had images in services, we'd add them.
-            // Since current service structure might not have images, we'll stick to Cover + Logo or placeholder if needed.
-            // For now, let's just use cover. If user wants multiple, we need a way to add them.
-            // *Wait*, let's simulate a slider if only cover exists to show functionality, or just show cover.
-        });
-    }
-
-    // Fallback if no specific images: Just use Cover
-    const activeSlides = slides.length > 0 ? slides : [{ image: info.coverImage || '', caption: info.tagline || 'Welcome' }];
-
-    // Auto-advance slider if multiple images
-    // (For this specific request, since data might be sparse, I'll stick to a clean single Hero image 
-    // unless multiple *actually* exist to avoid broken sliders. 
-    // The user said "slider with caption", implies multiple images. 
-    // I will implement the layout for it.)
+    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'business';
 
     const handleCreateInvitation = (e) => {
-        e.stopPropagation(); // Prevent card click
+        e.stopPropagation();
         navigate('/create', {
             state: {
                 restaurantData: {
@@ -55,12 +44,60 @@ const BusinessCard = ({ business }) => {
         navigate(`/partner/${business.uid}`);
     };
 
+    // ── Share: generate card → OS app picker directly
+    const handleShare = async (e) => {
+        e.stopPropagation();
+        const shareTitle = info.businessName || 'DineBuddies Partner';
+        const shareText = `Check out ${shareTitle} on DineBuddies!`;
+        const storyData = {
+            title: shareTitle,
+            image: info.coverImage || getSafeAvatar(business),
+            description: info.description,
+            location: info.address || info.city,
+            hostName: shareTitle,
+            hostImage: getSafeAvatar(business),
+        };
+
+        try {
+            setIsSharing(true);
+            const blob = await generateShareCardBlob(storyData, 'partner');
+            if (!blob) throw new Error('No blob');
+            const file = new File([blob], 'business-card.png', { type: 'image/png' });
+
+            // Try native share with image file → opens OS picker
+            if (navigator.share) {
+                try {
+                    await navigator.share({ files: [file], title: shareTitle, text: shareText });
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    // File sharing not supported (e.g. HTTP/localhost) → show preview overlay
+                }
+            }
+            // Fallback: show card preview so user can download & share manually
+            setCardFile(file);
+            setCardPreviewUrl(URL.createObjectURL(blob));
+        } catch (err) {
+            console.error('Share error:', err);
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const closePreview = (e) => {
+        e?.stopPropagation();
+        if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
+        setCardPreviewUrl(null);
+        setCardFile(null);
+    };
+
+
     return (
         <div
             onClick={handleCardClick}
             style={{
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
+                border: brandPrimary ? `1px solid ${brandPrimary}44` : '1px solid var(--border-color)',
                 borderRadius: '24px',
                 overflow: 'hidden',
                 cursor: 'pointer',
@@ -69,17 +106,86 @@ const BusinessCard = ({ business }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 height: '100%',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+                boxShadow: brandPrimary ? `0 4px 20px ${brandPrimary}22` : '0 4px 20px rgba(0,0,0,0.05)'
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-6px)';
-                e.currentTarget.style.boxShadow = '0 15px 30px rgba(0,0,0,0.1)';
+                e.currentTarget.style.boxShadow = brandPrimary ? `0 15px 30px ${brandPrimary}44` : '0 15px 30px rgba(0,0,0,0.1)';
             }}
             onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)';
             }}
         >
+            {/* Card preview overlay (shown when native file share not supported) */}
+            {cardPreviewUrl && (
+                <div
+                    onClick={closePreview}
+                    style={{
+                        position: 'fixed', inset: 0, zIndex: 9999,
+                        background: 'rgba(0,0,0,0.75)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '20px',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#1e1e2e', borderRadius: 16, padding: 16,
+                            maxWidth: 360, width: '100%', position: 'relative',
+                        }}
+                    >
+                        <button
+                            onClick={closePreview}
+                            style={{
+                                position: 'absolute', top: 8, right: 8,
+                                width: 28, height: 28, borderRadius: '50%', border: 'none',
+                                background: 'rgba(255,255,255,0.15)', color: 'white',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                        ><FaTimes size={11} /></button>
+                        <img
+                            src={cardPreviewUrl}
+                            alt="Business Card"
+                            style={{ width: '100%', borderRadius: 10, display: 'block', marginBottom: 12 }}
+                        />
+                        <a
+                            href={cardPreviewUrl}
+                            download="business-card.png"
+                            style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                padding: '11px 0', borderRadius: 10, textDecoration: 'none',
+                                background: 'linear-gradient(135deg, #f97316, #eab308)',
+                                color: 'white', fontWeight: 700, fontSize: '0.9rem',
+                            }}
+                        >
+                            <FaDownload /> Download Card
+                        </a>
+                    </div>
+                </div>
+            )}
+
+            {/* Share button — top right corner */}
+            <button
+                onClick={handleShare}
+                disabled={isSharing}
+                title="Share"
+                style={{
+                    position: 'absolute', top: 10, right: 10, zIndex: 10,
+                    width: 36, height: 36, borderRadius: '50%', border: 'none',
+                    background: 'rgba(0,0,0,0.45)',
+                    backdropFilter: 'blur(6px)',
+                    color: 'white', fontSize: '0.95rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: isSharing ? 'wait' : 'pointer',
+                    transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { if (!isSharing) e.currentTarget.style.background = brandPrimary ? `${brandPrimary}cc` : 'rgba(249,115,22,0.85)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.45)'; }}
+            >
+                {isSharing ? '⏳' : <FaShare />}
+            </button>
+
             {/* Image Section */}
             <div style={{
                 position: 'relative',
@@ -99,7 +205,6 @@ const BusinessCard = ({ business }) => {
                     onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
                     onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
                 />
-
             </div>
 
             {/* Details Section */}
@@ -117,7 +222,7 @@ const BusinessCard = ({ business }) => {
                         fontSize: '0.75rem',
                         fontWeight: '700',
                         textTransform: 'uppercase',
-                        color: 'var(--primary)',
+                        color: brandPrimary || 'var(--primary)',
                         letterSpacing: '0.5px',
                         marginBottom: '4px'
                     }}>
@@ -128,7 +233,8 @@ const BusinessCard = ({ business }) => {
                         fontWeight: '800',
                         color: 'var(--text-main)',
                         margin: 0,
-                        lineHeight: 1.2
+                        lineHeight: 1.2,
+                        fontFamily: brandFont || undefined
                     }}>
                         {info.businessName}
                     </h3>
@@ -141,7 +247,7 @@ const BusinessCard = ({ business }) => {
                     color: 'var(--text-secondary)',
                     fontSize: '0.9rem'
                 }}>
-                    <FaMapMarkerAlt style={{ color: 'var(--primary)' }} />
+                    <FaMapMarkerAlt style={{ color: brandPrimary || 'var(--primary)', flexShrink: 0 }} />
                     <span style={{
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
@@ -152,7 +258,7 @@ const BusinessCard = ({ business }) => {
                     </span>
                 </div>
 
-                {/* Rating/Services Info (Optional) */}
+                {/* Rating/Services Info */}
                 {info.services && info.services.length > 0 && (
                     <div style={{
                         display: 'flex',
@@ -161,7 +267,7 @@ const BusinessCard = ({ business }) => {
                         fontSize: '0.8rem',
                         color: 'var(--text-muted)'
                     }}>
-                        <FaStar style={{ color: 'var(--luxury-gold)', fontSize: '0.9rem' }} />
+                        <FaStar style={{ color: brandPrimary || 'var(--luxury-gold)', fontSize: '0.9rem' }} />
                         <span>{info.services.length} Menu Items Available</span>
                     </div>
                 )}
@@ -169,16 +275,17 @@ const BusinessCard = ({ business }) => {
                 <div style={{ flex: 1 }}></div>
 
                 {/* Action Button: Create Invitation Here */}
-                {/* Only show invitation button for regular users, not business accounts */}
                 {!isBusinessAccount && (
                     <button
                         onClick={handleCreateInvitation}
                         style={{
                             width: '100%',
                             padding: '12px',
-                            background: 'var(--primary)',
+                            background: brandPrimary
+                                ? `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary || brandPrimary})`
+                                : 'var(--primary)',
                             border: 'none',
-                            borderRadius: '16px',
+                            borderRadius: brandRadius,
                             color: 'white',
                             fontWeight: '700',
                             fontSize: '0.9rem',
@@ -188,17 +295,16 @@ const BusinessCard = ({ business }) => {
                             justifyContent: 'center',
                             gap: '8px',
                             transition: 'all 0.2s',
-                            boxShadow: 'var(--shadow-glow)'
+                            fontFamily: brandFont || undefined,
+                            boxShadow: brandPrimary ? `0 4px 16px ${brandPrimary}44` : 'var(--shadow-glow)'
                         }}
                         onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'scale(1.02)';
-                            e.currentTarget.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.5)';
-                            e.currentTarget.style.background = 'var(--primary-hover)';
+                            e.currentTarget.style.filter = 'brightness(1.15)';
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = 'var(--shadow-glow)';
-                            e.currentTarget.style.background = 'var(--primary)';
+                            e.currentTarget.style.filter = '';
                         }}
                     >
                         <FaCalendarPlus />

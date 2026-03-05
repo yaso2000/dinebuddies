@@ -99,7 +99,7 @@ const StoriesBar = ({ onStoryClick }) => {
                             const profile = fetchedProfiles[userGroup.userId];
                             if (profile) {
                                 // STRICT FILTER: No guests, no generic 'User' with dummy avatars
-                                if (profile.accountType === 'guest') return null;
+                                if (profile.isGuest || profile.accountType === 'guest') return null;
 
                                 const pName = profile.displayName || profile.name || profile.businessInfo?.businessName || userGroup.partnerName || 'User';
                                 const pLogo = getSafeAvatar(profile);

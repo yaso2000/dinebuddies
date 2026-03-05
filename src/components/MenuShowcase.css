@@ -64,6 +64,8 @@
     gap: 0.5rem;
     margin-bottom: 1.5rem;
     flex-wrap: wrap;
+    padding-top: 4px;
+    /* room for translateY hover effect */
 }
 
 .category-btn {
@@ -411,10 +413,13 @@
     .category-filter {
         gap: 0.5rem;
         overflow-x: auto;
+        overflow-y: visible;
+        /* allow translateY hover without clipping */
         flex-wrap: nowrap;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
         /* Firefox */
+        padding-top: 4px;
         padding-bottom: 0.5rem;
     }
 

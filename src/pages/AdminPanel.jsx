@@ -46,22 +46,33 @@ const AdminPanel = () => {
         }
     };
 
+    // Map tier → weeklyPrivateQuota (matches planDefaults.js)
+    const TIER_QUOTAS = {
+        free: 0,
+        pro: 2,     // Pro: 2 private invitations/week
+        vip: -1     // Premium (vip): unlimited
+    };
+
     const updateSubscription = async (userId, newTier) => {
         try {
             setUpdating(userId);
             const userRef = doc(db, 'users', userId);
+            const quota = TIER_QUOTAS[newTier] ?? 0;
             await updateDoc(userRef, {
-                subscriptionTier: newTier
+                subscriptionTier: newTier,
+                weeklyPrivateQuota: quota,
+                // Reset used credits when upgrading
+                usedPrivateCreditsThisWeek: 0
             });
 
             // Update local state
             setUsers(users.map(user =>
                 user.id === userId
-                    ? { ...user, subscriptionTier: newTier }
+                    ? { ...user, subscriptionTier: newTier, weeklyPrivateQuota: quota }
                     : user
             ));
 
-            console.log(`✅ Updated ${userId} to ${newTier}`);
+            console.log(`✅ Updated ${userId} to ${newTier} (quota: ${quota === -1 ? 'unlimited' : quota})`);
         } catch (error) {
             console.error('Error updating subscription:', error);
             alert('Failed to update subscription');
@@ -69,6 +80,23 @@ const AdminPanel = () => {
             setUpdating(null);
         }
     };
+
+    const toggleTester = async (userId, currentIsTester) => {
+        try {
+            setUpdating(userId + '_tester');
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, { isTester: !currentIsTester });
+            setUsers(users.map(u =>
+                u.id === userId ? { ...u, isTester: !currentIsTester } : u
+            ));
+        } catch (error) {
+            console.error('Error toggling tester:', error);
+            alert('Failed to update tester status');
+        } finally {
+            setUpdating(null);
+        }
+    };
+
 
     const filteredUsers = users.filter(user => {
         const matchesSearch =
@@ -175,6 +203,11 @@ const AdminPanel = () => {
                                                     👑 Admin
                                                 </span>
                                             )}
+                                            {user.isTester && (
+                                                <span className="badge" style={{ background: 'rgba(99,102,241,0.2)', color: '#818cf8', border: '1px solid #6366f1', borderRadius: '20px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: '700' }}>
+                                                    🧪 Tester
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -185,15 +218,33 @@ const AdminPanel = () => {
                                     <select
                                         value={user.subscriptionTier || 'free'}
                                         onChange={(e) => updateSubscription(user.id, e.target.value)}
-                                        disabled={updating === user.id || user.role === 'admin'}
+                                        disabled={updating === user.id}
                                     >
-                                        <option value="free">Free</option>
-                                        <option value="premium">Premium</option>
-                                        <option value="vip">VIP</option>
+                                        <option value="free">🆓 Free</option>
+                                        <option value="pro">⚡ Pro</option>
+                                        <option value="vip">👑 Premium</option>
                                     </select>
                                     {updating === user.id && (
                                         <span className="updating">Updating...</span>
                                     )}
+                                    <button
+                                        onClick={() => toggleTester(user.id, user.isTester)}
+                                        disabled={updating === user.id + '_tester'}
+                                        style={{
+                                            marginTop: '8px',
+                                            padding: '6px 14px',
+                                            borderRadius: '10px',
+                                            border: '1px solid #6366f1',
+                                            background: user.isTester ? '#4f46e5' : 'rgba(99,102,241,0.15)',
+                                            color: user.isTester ? '#fff' : '#818cf8',
+                                            fontWeight: '700',
+                                            fontSize: '0.8rem',
+                                            cursor: 'pointer',
+                                            width: '100%'
+                                        }}
+                                    >
+                                        {updating === user.id + '_tester' ? 'Updating...' : user.isTester ? '🧪 Remove Tester' : '🧪 Make Tester'}
+                                    </button>
                                 </div>
                             </div>
                         ))

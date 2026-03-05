@@ -18,7 +18,8 @@ const QuickLogin = () => {
         continueAsGuest,
         sendPhoneOTP,
         verifyPhoneOTP,
-        setupRecaptcha
+        setupRecaptcha,
+        userProfile
     } = useAuth();
 
     const [loginMethod, setLoginMethod] = useState('phone'); // 'phone', 'email', 'social'
@@ -32,6 +33,19 @@ const QuickLogin = () => {
     const [isSignUp, setIsSignUp] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [justLoggedIn, setJustLoggedIn] = useState(false);
+
+    // After login, redirect business accounts directly to the right dashboard
+    useEffect(() => {
+        if (justLoggedIn && userProfile) {
+            if (userProfile.isBusiness) {
+                navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
+            } else {
+                navigate('/', { replace: true });
+            }
+        }
+    }, [justLoggedIn, userProfile, navigate]);
+
 
     useEffect(() => {
         if (loginMethod === 'phone') {
@@ -50,7 +64,7 @@ const QuickLogin = () => {
             } else {
                 await signInWithEmail(email, password);
             }
-            navigate('/');
+            setJustLoggedIn(true);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -85,7 +99,7 @@ const QuickLogin = () => {
         if (code.length === 6) {
             try {
                 await verifyPhoneOTP(confirmationResult, code);
-                navigate('/');
+                setJustLoggedIn(true);
             } catch (error) {
                 setError(t('invalid_code', 'Invalid code. Please try again.'));
             } finally {
@@ -103,7 +117,7 @@ const QuickLogin = () => {
             else if (provider === 'facebook') result = await signInWithFacebook();
 
             if (result?.user) {
-                navigate('/');
+                setJustLoggedIn(true);
             }
         } catch (err) {
             if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {

@@ -7,14 +7,15 @@
   --luxury-gold: #fbbf24;
   --premium-orange: #f97316;
 
-  /* Backgrounds - Midnight Luxury Theme (Default) */
-  --bg-body: #050505;
-  --bg-card: rgba(25, 25, 25, 0.45);
-  --card-bg: rgba(25, 25, 25, 0.45);
-  --bg-input: rgba(30, 30, 30, 0.5);
-  --bg-main: #050505;
+  /* Backgrounds - Unified Luxury Dark (Burgundy Midnight) */
+  --bg-body: #0b0812;
+  --bg-body-gradient: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%);
+  --bg-card: rgba(22, 14, 35, 0.65);
+  --card-bg: rgba(22, 14, 35, 0.65);
+  --bg-input: rgba(18, 12, 28, 0.7);
+  --bg-main: #0b0812;
   --hover-overlay: rgba(255, 255, 255, 0.05);
-  --glass-overlay: rgba(5, 5, 5, 0.82);
+  --glass-overlay: rgba(11, 8, 18, 0.88);
 
   /* Text */
   --text-main: #ffffff;
@@ -62,38 +63,6 @@
   --header-height: 60px;
   --nav-height: 70px;
   --max-width: 500px;
-}
-
-[data-theme='light'] {
-  /* Brand Colors - Adjusted for Light Mode */
-  --primary: #d97706;
-  --primary-hover: #b45309;
-  --secondary: #d97706;
-  --accent: #b45309;
-  --luxury-gold: #d97706;
-  --premium-orange: #f97316;
-
-  /* Text */
-  --text-main: #334155;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-white: #ffffff;
-
-  /* Backgrounds - Day Mode */
-  --bg-body: #F9F9F9;
-  --bg-card: #ffffff;
-  --card-bg: #ffffff;
-  --bg-input: #f1f5f9;
-  --bg-input-hover: #e2e8f0;
-  --bg-main: #F9F9F9;
-  --hover-overlay: rgba(0, 0, 0, 0.04);
-  --glass-overlay: rgba(249, 249, 249, 0.82);
-
-  /* Borders & Effects */
-  --border-color: rgba(0, 0, 0, 0.08);
-  --shadow-premium: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
-  /* soft elevation */
-  --shadow-glow: 0 0 15px rgba(217, 119, 6, 0.1);
 }
 
 /* Reset & Base */
@@ -164,9 +133,10 @@ h4 {
   margin: 0 auto;
   min-height: 100vh;
   position: relative;
-  background-color: var(--bg-body);
-  border-left: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
+  background: var(--bg-body-gradient);
+  background-attachment: fixed;
+  border-left: 1px solid rgba(139, 92, 246, 0.08);
+  border-right: 1px solid rgba(139, 92, 246, 0.08);
   padding-bottom: calc(var(--nav-height) + 20px);
 }
 
@@ -231,36 +201,121 @@ h4 {
 /* Layout constraints for Mobile-App feel on Desktop */
 html,
 body {
-  background-color: #000;
-  /* Dark background outside the app */
+  /* Rich dark gradient as the outer canvas */
+  background: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%) !important;
+  background-attachment: fixed !important;
   height: 100%;
 }
 
+/* Mobile: narrow centered card */
 .app-layout {
   max-width: var(--max-width);
   margin: 0 auto;
   min-height: 100vh;
   position: relative;
-  background-color: var(--bg-body);
-  border-left: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
-  box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+  background: var(--bg-body-gradient);
+  background-attachment: fixed;
+  border-left: 1px solid rgba(139, 92, 246, 0.08);
+  border-right: 1px solid rgba(139, 92, 246, 0.08);
+  box-shadow: 0 0 60px rgba(90, 30, 120, 0.25);
 }
 
 /* Main Content Wrapper - Ensures content isn't hidden behind fixed bottom nav */
 .app-main {
   padding-bottom: calc(var(--nav-height) + 40px);
-  min-height: calc(100vh - var(--header-height));
+  min-height: calc(100vh - var(--header-height) - var(--nav-height));
   position: relative;
 }
+
+/* ─────────────────────────────────────────────────────
+   DESKTOP CORE ARCHITECTURE  (≥1024px)
+   Each column scrolls independently — SPA style
+   • app-layout  → flex column, height:100vh
+   • ds-body-grid → flex:1, fills remaining height
+   • each column  → overflow-y:auto, scrolls itself
+──────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+
+  /* Root containers: fixed viewport size, no window scroll */
+  html,
+  body {
+    height: 100vh !important;
+    overflow: hidden !important;
+    position: static !important;
+    width: 100% !important;
+  }
+
+  /* #root: flex container so app-layout is always centered */
+  #root {
+    height: 100vh !important;
+    overflow: hidden !important;
+    position: static !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    /* horizontally centers app-layout */
+    align-items: stretch !important;
+  }
+
+
+  /* app-layout: same max-width as ds-body-grid so header aligns with grid */
+  .app-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    max-width: 1280px !important;
+    /* matches ds-body-grid exactly */
+    width: 100% !important;
+    margin: 0 auto !important;
+    /* center on wide screens */
+    overflow: hidden !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  /* Header: fixed height, doesn't shrink */
+  .app-header {
+    flex-shrink: 0 !important;
+  }
+
+  /* Center column: independently scrollable */
+  .app-main {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    padding-bottom: 2rem !important;
+  }
+
+  /* Chat screens on desktop: no outer scroll, no bottom padding —
+     both header and composer must always be visible */
+  .app-main--chat {
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Full-screen pages (e.g. CreateStory): no padding, no scroll */
+  .app-main--fullscreen {
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Force chat-screen to fill the container height (not full dvh) */
+  .app-main--chat .chat-screen {
+    height: 100% !important;
+  }
+}
+
 
 /* Header & Nav Styling - Constrained to App Width */
 .app-header {
   height: var(--header-height);
   padding: 0 1.5rem;
-  background: var(--bg-body);
-  backdrop-filter: blur(15px);
-  opacity: 0.98;
+  background: rgba(11, 8, 18, 0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -273,6 +328,32 @@ body {
   /* Relative to .app-layout parent */
 }
 
+/* On mobile: hide header on chat pages (chat has its own header bar).
+   On desktop (>=1024px): always show regardless of chat state. */
+.app-header--chat {
+  display: none;
+}
+
+/* Fullscreen pages (e.g. Create Story): no bottom padding on all sizes */
+.app-main--fullscreen {
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+}
+
+/* PostsFeed filter bars — mobile first */
+.mobile-filter-bar {
+  display: flex;
+}
+
+.desktop-feed-filters {
+  display: none;
+}
+
+/* ChatList on messages page: show list on mobile, placeholder on desktop */
+.chat-list-desktop-placeholder {
+  display: none;
+}
+
 /* Bottom Nav - Constrained to App Width & Perfectly Centered */
 .bottom-nav {
   position: fixed;
@@ -280,22 +361,19 @@ body {
   left: 0;
   right: 0;
   margin: 0 auto;
-  /* The stable way to center fixed elements */
   width: 100%;
   max-width: var(--max-width);
-  /* Strict Max Width */
   height: var(--nav-height);
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border-color);
-  opacity: 0.98;
+  background: rgba(11, 8, 18, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(139, 92, 246, 0.12);
   display: flex;
   justify-content: space-around;
   align-items: center;
   z-index: 100;
   padding-bottom: 15px;
-  /* Safe area for modern phones */
-  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -8px 32px rgba(80, 20, 120, 0.2);
 }
 
 .back-btn {
@@ -345,11 +423,6 @@ body {
   filter: brightness(0) invert(1);
 }
 
-/* Light theme: force logo icon to match text orange #f97316 */
-[data-theme='light'] .app-logo-img {
-  filter: brightness(0) saturate(100%) invert(58%) sepia(87%) saturate(2500%) hue-rotate(351deg) brightness(101%) contrast(97%);
-}
-
 .app-name {
   font-size: 1.2rem;
   font-weight: 800;
@@ -357,13 +430,9 @@ body {
   letter-spacing: -0.5px;
   display: inline-block;
   transform: translate(-2px, 4px);
-  /* Lowered by 4px total and shifted 2px towards logo */
 }
 
-[data-theme='light'] .app-name {
-  color: #f97316 !important;
-  /* Using hex directly for maximum consistency */
-}
+
 
 /* RTL Support for Arabic */
 [dir="rtl"] {
@@ -372,13 +441,17 @@ body {
 
 /* Smart Invitation Card */
 .smart-invitation-card {
-  margin: 0 0 0.5rem 0;
-  border-radius: 0;
+  margin: 0 0 0.75rem 0;
+  border-radius: 16px;
   overflow: hidden;
   position: relative;
   height: calc(100vh - 150px);
   min-height: 600px;
-  box-shadow: var(--shadow-premium);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.08),
+    0 4px 32px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   will-change: transform;
@@ -455,16 +528,19 @@ body {
 }
 
 .type-tag {
+  display: inline-flex;
+  align-items: center;
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
   color: white;
-  padding: 0.4rem 0.8rem;
+  padding: 0.35rem 0.8rem;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border: 1px solid rgba(255, 255, 255, 0.3);
+  line-height: 1;
 }
 
 /* Card Bottom Info */
@@ -650,10 +726,7 @@ body {
   top: 0;
 }
 
-:root[data-theme='light'] .fab-container {
-  background: linear-gradient(135deg, var(--primary), var(--premium-orange));
-  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
-}
+
 
 .fab-container:hover {
   transform: scale(1.15) rotate(90deg);
@@ -1547,198 +1620,8 @@ select.input-field {
   backdrop-filter: blur(25px);
 }
 
-/* =========================================
-   NEW LIGHT MODE (High Contrast / Burnt Orange)
-   ========================================= */
-body.light-mode {
-  /* 1. Backgrounds & Surfaces */
-  --bg-body: #FFFFFF;
-  /* Pure White */
-  --bg-card: #F8FAFC;
-  /* Very Light Slate (Off-White) */
-  --bg-input: #FFFFFF;
-  /* White Input */
-  --bg-overlay: rgba(255, 255, 255, 0.98);
 
-  /* 2. Brand Identity */
-  --primary: #EA580C;
-  /* Burnt Orange (High Contrast) */
-  --primary-hover: #C2410C;
-  /* Darker Orange */
-  --secondary: #DC2626;
-  /* Red-600 */
-  --accent: #16A34A;
-  /* Green-600 */
-  --luxury-gold: #D97706;
-  /* Amber-600 */
 
-  /* 3. Text Colors (Maximum Readability) */
-  --text-main: #0F172A;
-  /* Slate-900 (Deep Black) */
-  --text-muted: #475569;
-  /* Slate-600 (Dark Gray) */
-  --text-white: #FFFFFF;
-  /* Stays white for special elements */
-
-  /* 4. Borders & Shadows */
-  --border-color: #E2E8F0;
-  /* Slate-200 */
-  --shadow-premium: 0 4px 20px rgba(0, 0, 0, 0.08);
-  --shadow-glow: 0 0 15px rgba(234, 88, 12, 0.25);
-}
-
-/* --- Global Overrides for Light Mode --- */
-
-/* Specific Fix: Force inline styles (color: white) to switch to black, 
-   UNLESS they are inside specific components like Buttons or Image Cards */
-body.light-mode [style*="color: white"]:not(.create-story-container *):not(.restaurant-card *):not(.smart-invitation-card *):not(.story-viewer-portal *),
-body.light-mode [style*="color: #fff"]:not(.create-story-container *):not(.restaurant-card *):not(.smart-invitation-card *):not(.story-viewer-portal *),
-body.light-mode [style*="color: #ffffff"]:not(.create-story-container *):not(.restaurant-card *):not(.smart-invitation-card *):not(.story-viewer-portal *),
-body.light-mode [style*="color: var(--text-main)"]:not(.create-story-container *):not(.restaurant-card *):not(.smart-invitation-card *):not(.story-viewer-portal *) {
-  color: var(--text-main) !important;
-}
-
-/* --- EXCEPTION: Elements that MUST stay White --- */
-
-/* 1. Primary Buttons & Badges */
-body.light-mode .btn-primary,
-body.light-mode .btn-primary *,
-body.light-mode .badge,
-body.light-mode .category-pill.active,
-body.light-mode .notification-badge-small,
-body.light-mode [style*="background: var(--primary)"],
-body.light-mode [style*="background-color: var(--primary)"] {
-  color: #FFFFFF !important;
-}
-
-/* 2. Invitation Cards & Restaurant Cards (Image Based) */
-/* These have dark image backgrounds, so text must remain WHITE */
-body.light-mode .smart-invitation-card,
-body.light-mode .smart-invitation-card *,
-body.light-mode .restaurant-card,
-body.light-mode .restaurant-card *:not(.community-join-btn) {
-  color: #FFFFFF !important;
-}
-
-body.light-mode .smart-invitation-card .spots-count {
-  color: #FFFFFF !important;
-}
-
-/* 3. Partner Profile Header (Image Background) */
-body.light-mode .partner-profile-header,
-body.light-mode .partner-profile-header * {
-  color: #FFFFFF !important;
-}
-
-/* --- Component Specific Styling --- */
-
-/* Cards (Glass Cards -> Solid Light Cards) */
-body.light-mode .glass-card,
-body.light-mode .feed-list>div:not(.restaurant-card) {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-/* Bottom Nav */
-body.light-mode .bottom-nav {
-  background: #FFFFFF;
-  border-top: 1px solid var(--border-color);
-}
-
-body.light-mode .bottom-nav .nav-item {
-  color: #64748B;
-  /* Slate-500 */
-}
-
-body.light-mode .bottom-nav .nav-item.active {
-  color: var(--primary);
-}
-
-/* Headers */
-body.light-mode .app-header {
-  background: rgba(255, 255, 255, 0.95);
-  border-bottom: 1px solid var(--border-color);
-}
-
-/* Inputs - Exclude story textareas and chat inputs completely from white background override */
-body.light-mode input:not(.create-story-container *):not(.story-viewer-portal *):not([class*="chat"]*):not([class*="Chat"]*):not(.message-input),
-body.light-mode textarea:not(.create-story-container *):not(.story-viewer-portal *),
-body.light-mode select:not(.create-story-container *):not(.story-viewer-portal *) {
-  background: #FFFFFF !important;
-  border: 1px solid #CBD5E1 !important;
-  /* Slate-300 */
-  color: #0F172A !important;
-}
-
-body.light-mode ::placeholder:not(.create-story-container *):not(.story-viewer-portal *) {
-  color: #94A3B8 !important;
-  /* Slate-400 */
-}
-
-/* Modal / Sheet Bg */
-body.light-mode .sheet-content {
-  background: #FFFFFF !important;
-  color: var(--text-main);
-}
-
-/* --- Additional Light Mode Overrides for Detail Pages --- */
-body.light-mode .premium-plan-card {
-  background: #FFFFFF !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-}
-
-/* --- Decisive Fix for Story Viewer (Cinematic Dark Mode Always) --- */
-body .story-viewer-portal input,
-body .story-viewer-portal textarea,
-body.light-mode .story-viewer-portal input,
-body.light-mode .story-viewer-portal textarea,
-.story-reply-input {
-  background: transparent !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-body .story-viewer-portal ::placeholder,
-body.light-mode .story-viewer-portal ::placeholder {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
-body.light-mode .premium-plan-card h3 {
-  color: var(--text-main) !important;
-}
-
-/* Fix Header & Footer Backgrounds */
-body.light-mode .sticky-header-glass,
-body.light-mode .chat-footer-glass {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-color: var(--border-color) !important;
-}
-
-/* Fix Header Text & Icons (Share button was white) */
-body.light-mode .sticky-header-glass h3,
-body.light-mode .sticky-header-glass button,
-body.light-mode .sticky-header-glass svg {
-  color: var(--text-main) !important;
-}
-
-/* Fix Chat Input Footer */
-body.light-mode .chat-footer-glass .input-field {
-  background: #F8FAFC !important;
-  border: 1px solid #CBD5E1 !important;
-  color: var(--text-main) !important;
-}
-
-/* Fix Invitation Card Action Button (Must be Black text on the White button, even in Light Mode) */
-body.light-mode .smart-invitation-card .invitation-action-btn:not(:disabled) {
-  color: #000000 !important;
-}
-
-body.light-mode .smart-invitation-card .invitation-action-btn:disabled {
-  color: #d1d5db !important;
-}
 
 /* ========================================
    ELEGANT LABELS FOR CREATE INVITATION
@@ -1949,4 +1832,299 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Desktop filter bar: only visible on desktop */
+.desktop-feed-filters {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .desktop-feed-filters {
+    display: flex !important;
+  }
+}
+
+/* Mobile filter bar + mobile offers: hidden on desktop */
+@media (min-width: 1024px) {
+  .mobile-filter-bar {
+    display: none !important;
+  }
+
+  /* Offers banner in Home.jsx (fixed-position) hidden on desktop
+     — it is shown in the right sidebar instead (Layout.jsx) */
+  .mobile-only-offers {
+    display: none !important;
+  }
+}
+
+
+/* =============================================
+   DESKTOP 3-COLUMN LAYOUT  (≥ 1024px)
+   Column 1 — Left Nav
+   Column 2 — Main Content  (app-main)
+   Column 3 — Right Widgets
+   ============================================= */
+@media (min-width: 1024px) {
+
+  /* Kill mobile nav */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  /* Header: inherits width from app-layout flex container — no override needed */
+  .app-header {
+    padding: 0 1.5rem !important;
+  }
+
+  /* On desktop: always show header, even on chat pages */
+  .app-header--chat {
+    display: flex !important;
+  }
+
+  /* PostsFeed filter bars: hide mobile bar on desktop, show desktop bar */
+  .mobile-filter-bar {
+    display: none !important;
+  }
+
+  .desktop-feed-filters {
+    display: flex !important;
+  }
+
+  /* ChatList /messages page: hide full list (sidebar handles it), show centered placeholder */
+  .chat-list-container {
+    display: none !important;
+  }
+
+  .chat-list-desktop-placeholder {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 300px;
+  }
+
+  /* ── 3-column body grid ──
+     flex:1 fills the remaining height below the header
+     align-items:stretch makes all 3 cols equal height
+     so each col can overflow-y:auto independently          */
+  .ds-body-grid {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 220px 1fr 280px;
+    width: 100%;
+    /* fills app-layout — no separate max-width needed */
+    box-sizing: border-box;
+    align-items: stretch;
+  }
+
+  /* ── Column 1: Left nav (scrolls if tall) ── */
+  .ds-left-sidebar {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 10px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-right: 1px solid var(--border-color);
+  }
+
+  .ds-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 14px;
+    border-radius: 9999px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-main);
+    text-decoration: none;
+    transition: background 0.15s;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: start;
+    white-space: nowrap;
+  }
+
+
+  .ds-nav-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .ds-nav-item.active {
+    color: var(--primary);
+    font-weight: 800;
+  }
+
+  .ds-nav-item svg {
+    font-size: 1.15rem;
+    flex-shrink: 0;
+  }
+
+  /* Create / New Post button */
+  .ds-create-btn {
+    margin-top: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 9999px;
+    border: none;
+    background: var(--primary);
+    color: white;
+    font-weight: 800;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .ds-create-btn:hover {
+    opacity: 0.85;
+  }
+
+  /* ── Column 2: Main content (scroll handled by early @media block) ── */
+  .app-main {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-width: 0;
+    border-right: 1px solid var(--border-color);
+  }
+
+  /* Undo page-container mobile width constraint */
+  .app-main .page-container {
+    padding: 1rem !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Column 3: Right widgets (scrolls independently) ── */
+  .ds-right-sidebar {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 10px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Widget cards */
+  .ds-widget-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .ds-widget-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 10px;
+  }
+
+  .ds-widget-see-all {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .ds-widget-see-all:hover {
+    text-decoration: underline;
+  }
+
+  .ds-widget-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .ds-widget-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .ds-widget-row:hover {
+    opacity: 0.75;
+  }
+
+  .ds-widget-img-sq {
+    width: 38px;
+    height: 38px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+    background: var(--bg-input);
+  }
+
+  .ds-widget-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--primary);
+    flex-shrink: 0;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ds-widget-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ds-widget-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ds-widget-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Mobile: hide desktop-only sidebars, keep ds-body-grid as flex column */
+@media (max-width: 1023px) {
+
+  .ds-left-sidebar,
+  .ds-right-sidebar {
+    display: none !important;
+  }
+
+  /* ds-body-grid must be flex so app-main gets flex:1 and can scroll.
+     The flex chain on mobile:
+       app-layout (flex-col, height:100%)
+         └── ds-body-grid (flex-col, flex:1) ← this file
+               └── app-main (flex:1, overflow-y:auto) ← mobile-optimizations.css */
+  .ds-body-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
 }

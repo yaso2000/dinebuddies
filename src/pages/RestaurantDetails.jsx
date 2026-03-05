@@ -13,7 +13,7 @@ const RestaurantDetails = () => {
     const navigate = useNavigate();
     const context = useInvitations();
     const { userProfile, isGuest } = useAuth();
-    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'partner';
+    const isBusinessAccount = userProfile?.isBusiness || false;
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
     // Safety check for context data

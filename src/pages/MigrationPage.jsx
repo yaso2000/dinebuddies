@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import migrateBusinessAccounts from '../utils/migrateBusinessAccounts';
+import migrateRoles from '../utils/migrateRoles';
 
 const MigrationPage = () => {
     const navigate = useNavigate();
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState(null);
     const [logs, setLogs] = useState([]);
+
+    const [runningRoles, setRunningRoles] = useState(false);
+    const [resultRoles, setResultRoles] = useState(null);
+    const [logsRoles, setLogsRoles] = useState([]);
 
     // Override console.log to capture logs
     const originalLog = console.log;
@@ -35,9 +40,29 @@ const MigrationPage = () => {
                 error: error.message
             });
         } finally {
-            // Restore original console.log
             console.log = originalLog;
             setRunning(false);
+        }
+    };
+
+    const runRolesMigration = async () => {
+        setRunningRoles(true);
+        setLogsRoles([]);
+        setResultRoles(null);
+        const originalLog = console.log;
+        console.log = (...args) => {
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            setLogsRoles(prev => [...prev, msg]);
+            originalLog(...args);
+        };
+        try {
+            const r = await migrateRoles();
+            setResultRoles(r);
+        } catch (e) {
+            setResultRoles({ success: false, error: e.message });
+        } finally {
+            console.log = originalLog;
+            setRunningRoles(false);
         }
     };
 
@@ -294,6 +319,74 @@ const MigrationPage = () => {
                         </div>
                     </div>
                 )}
+
+                {/* ── Roles Migration Card ── */}
+                <div style={{
+                    background: 'var(--card-bg)',
+                    padding: '2rem',
+                    borderRadius: '16px',
+                    marginTop: '2rem',
+                    border: '1px solid var(--border-color)'
+                }}>
+                    <h2 style={{
+                        fontSize: '1.5rem', fontWeight: '900', marginBottom: '0.5rem',
+                        background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+                    }}>
+                        🔑 Roles Migration
+                    </h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                        Updates all users: <code>role: 'partner'</code> → <code>role: 'business'</code><br />
+                        Also removes the legacy <code>accountType</code> field from every document.
+                    </p>
+                    <button
+                        onClick={runRolesMigration}
+                        disabled={runningRoles}
+                        style={{
+                            width: '100%', padding: '1rem',
+                            background: runningRoles ? 'var(--bg-body)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                            border: 'none', borderRadius: '12px', color: 'white',
+                            fontSize: '1rem', fontWeight: '700',
+                            cursor: runningRoles ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        {runningRoles ? '⏳ Running...' : '🚀 Run Roles Migration'}
+                    </button>
+
+                    {resultRoles && (
+                        <div style={{
+                            marginTop: '1.5rem', padding: '1rem', borderRadius: '12px',
+                            border: `2px solid ${resultRoles.success ? '#10b981' : '#ef4444'}`,
+                            background: resultRoles.success ? 'rgba(16,185,129,0.05)' : 'rgba(239,68,68,0.05)'
+                        }}>
+                            <div style={{
+                                fontWeight: '800', marginBottom: '0.5rem',
+                                color: resultRoles.success ? '#10b981' : '#ef4444'
+                            }}>
+                                {resultRoles.success ? '✅ Done!' : '❌ Failed'}
+                            </div>
+                            {resultRoles.success && (
+                                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                    Total: {resultRoles.total} &nbsp;|&nbsp;
+                                    Role updated: {resultRoles.updatedRole} &nbsp;|&nbsp;
+                                    accountType removed: {resultRoles.removedAccountType} &nbsp;|&nbsp;
+                                    Errors: {resultRoles.errors}
+                                </div>
+                            )}
+                            {resultRoles.error && <div style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '0.85rem' }}>{resultRoles.error}</div>}
+                        </div>
+                    )}
+
+                    {logsRoles.length > 0 && (
+                        <div style={{
+                            marginTop: '1rem', background: '#1e1e1e', padding: '1rem',
+                            borderRadius: '10px', maxHeight: '300px', overflowY: 'auto',
+                            fontFamily: 'monospace', fontSize: '0.8rem', color: '#d4d4d4'
+                        }}>
+                            {logsRoles.map((l, i) => <div key={i}>{l}</div>)}
+                        </div>
+                    )}
+                </div>
 
                 {/* Back Button */}
                 <button

@@ -52,15 +52,21 @@ const UserManagement = () => {
         // Filter by type
         if (filterType !== 'all') {
             if (filterType === 'business') {
-                filtered = filtered.filter(user => user.accountType === 'business');
+                filtered = filtered.filter(user => user.role === 'business');
+
             } else if (filterType === 'individual') {
-                filtered = filtered.filter(user => user.accountType !== 'business');
+                filtered = filtered.filter(user => user.role !== 'business');
+
             }
         }
 
-        // Filter by role
+        // Filter by role (including tester)
         if (filterRole !== 'all') {
-            filtered = filtered.filter(user => user.role === filterRole);
+            if (filterRole === 'tester') {
+                filtered = filtered.filter(user => user.isTester === true);
+            } else {
+                filtered = filtered.filter(user => user.role === filterRole);
+            }
         }
 
         // Filter by search
@@ -264,6 +270,19 @@ const UserManagement = () => {
         await handleUpdateRole(userId, newRole);
     };
 
+    const handleToggleTester = async (userId, currentIsTester) => {
+        const action = currentIsTester ? 'remove Tester access from' : 'grant Tester access to';
+        if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
+        try {
+            await updateDoc(doc(db, 'users', userId), { isTester: !currentIsTester });
+            setUsers(users.map(u => u.id === userId ? { ...u, isTester: !currentIsTester } : u));
+            if (selectedUser?.id === userId) setSelectedUser(s => ({ ...s, isTester: !currentIsTester }));
+        } catch (error) {
+            console.error('Error toggling tester:', error);
+            alert('Failed to update tester status');
+        }
+    };
+
     if (loading) {
         return (
             <div className="admin-loading">
@@ -368,13 +387,15 @@ const UserManagement = () => {
                 </div>
                 <div className="admin-card">
                     <div style={{ fontSize: '2rem', fontWeight: '800', color: '#60a5fa' }}>
-                        {users.filter(u => u.accountType !== 'business' && (!u.role || u.role === 'user')).length}
+                        {users.filter(u => u.role !== 'business' && u.role === 'user').length}
+
                     </div>
                     <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Individuals</div>
                 </div>
                 <div className="admin-card">
                     <div style={{ fontSize: '2rem', fontWeight: '800', color: '#c084fc' }}>
-                        {users.filter(u => u.accountType === 'business').length}
+                        {users.filter(u => u.role === 'business').length}
+
                     </div>
                     <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Businesses</div>
                 </div>
@@ -446,14 +467,17 @@ const UserManagement = () => {
                                     {/* System Role Dropdown */}
                                     <td>
                                         <select
-                                            value={user.accountType === 'business' ? 'business' : (user.role || 'user')}
+                                            value={user.role}
+
                                             onChange={(e) => handleUpdateRole(user.id, e.target.value)}
                                             className="admin-select"
                                             style={{
                                                 width: '120px',
                                                 borderColor: user.accountType === 'business' ? '#c084fc' : user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                                                color: user.accountType === 'business' ? '#c084fc' : user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : '#ffffff',
-                                                fontWeight: (user.role !== 'user' || user.accountType === 'business') ? 'bold' : 'normal'
+                                                color: user.role === 'business' ? '#c084fc' : user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : '#ffffff',
+
+                                                fontWeight: user.role !== 'user' ? 'bold' : 'normal'
+
                                             }}
                                         >
                                             <option value="user">User</option>
@@ -461,6 +485,7 @@ const UserManagement = () => {
                                             <option value="staff">Staff</option>
                                             <option value="support">Support</option>
                                             <option value="admin">Admin</option>
+                                            <option value="tester">🧪 Tester</option>
                                         </select>
                                     </td>
 
@@ -470,16 +495,19 @@ const UserManagement = () => {
                                             value={user.subscriptionTier || 'free'}
                                             onChange={async (e) => {
                                                 const newTier = e.target.value;
+                                                const TIER_QUOTAS = { free: 0, pro: 2, vip: -1 };
+                                                const quota = TIER_QUOTAS[newTier] ?? 0;
                                                 try {
                                                     await updateDoc(doc(db, 'users', user.id), {
-                                                        subscriptionTier: newTier
+                                                        subscriptionTier: newTier,
+                                                        weeklyPrivateQuota: quota,
+                                                        usedPrivateCreditsThisWeek: 0
                                                     });
                                                     setUsers(users.map(u =>
                                                         u.id === user.id
-                                                            ? { ...u, subscriptionTier: newTier }
+                                                            ? { ...u, subscriptionTier: newTier, weeklyPrivateQuota: quota }
                                                             : u
                                                     ));
-                                                    alert(`Subscription updated to ${newTier}!`);
                                                 } catch (error) {
                                                     console.error('Error updating subscription:', error);
                                                     alert('Failed to update subscription');
@@ -489,7 +517,7 @@ const UserManagement = () => {
                                                 background: '#1e293b',
                                                 border: '1px solid #334155',
                                                 borderRadius: '6px',
-                                                color: user.subscriptionTier === 'premium' ? '#22c55e' :
+                                                color: user.subscriptionTier === 'pro' ? '#22c55e' :
                                                     user.subscriptionTier === 'vip' ? '#f59e0b' : '#64748b',
                                                 padding: '6px 10px',
                                                 fontSize: '0.875rem',
@@ -497,27 +525,34 @@ const UserManagement = () => {
                                                 cursor: 'pointer'
                                             }}
                                         >
-                                            <option value="free">Free</option>
-                                            <option value="premium">Premium</option>
-                                            <option value="vip">VIP</option>
+                                            <option value="free">🆓 Free</option>
+                                            <option value="pro">⚡ Pro</option>
+                                            <option value="vip">👑 Premium</option>
                                         </select>
                                     </td>
 
                                     {/* Status */}
                                     <td>
-                                        <span className={user.banned ? 'admin-badge admin-badge-danger' : 'admin-badge admin-badge-success'}>
-                                            {user.banned ? (
-                                                <>
-                                                    <FaTimesCircle style={{ fontSize: '0.75rem' }} />
-                                                    Banned
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <FaCheckCircle style={{ fontSize: '0.75rem' }} />
-                                                    Active
-                                                </>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                                            <span className={user.banned ? 'admin-badge admin-badge-danger' : 'admin-badge admin-badge-success'}>
+                                                {user.banned ? (
+                                                    <>
+                                                        <FaTimesCircle style={{ fontSize: '0.75rem' }} />
+                                                        Banned
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <FaCheckCircle style={{ fontSize: '0.75rem' }} />
+                                                        Active
+                                                    </>
+                                                )}
+                                            </span>
+                                            {user.isTester && (
+                                                <span style={{ fontSize: '0.7rem', background: 'rgba(99,102,241,0.2)', color: '#818cf8', border: '1px solid #6366f1', borderRadius: '8px', padding: '2px 8px', fontWeight: '700' }}>
+                                                    🧪 Tester
+                                                </span>
                                             )}
-                                        </span>
+                                        </div>
                                     </td>
 
                                     {/* Joined */}
@@ -551,6 +586,14 @@ const UserManagement = () => {
                                                 <FaEye />
                                             </button>
                                             <button
+                                                onClick={() => handleToggleTester(user.id, user.isTester)}
+                                                className="admin-btn admin-btn-sm"
+                                                style={{ background: user.isTester ? '#4f46e5' : 'rgba(99,102,241,0.15)', color: user.isTester ? '#fff' : '#818cf8', border: '1px solid #6366f1', padding: '0.5rem', fontSize: '0.8rem' }}
+                                                title={user.isTester ? 'Remove Tester' : 'Make Tester'}
+                                            >
+                                                🧪
+                                            </button>
+                                            <button
                                                 onClick={() => handleBanUser(user.id, user.banned)}
                                                 className={`admin-btn admin-btn-sm ${user.banned ? 'admin-btn-success' : 'admin-btn-danger'}`}
                                                 style={{ padding: '0.5rem' }}
@@ -563,7 +606,8 @@ const UserManagement = () => {
                                                 const isSuperOwner = ['admin@dinebuddies.com', 'y.abohamed@gmail.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au'].includes(currentUser?.email?.toLowerCase()) ||
                                                     currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33';
 
-                                                const targetIsAdmin = user.role === 'admin' || user.accountType === 'admin';
+                                                const targetIsAdmin = user.role === 'admin';
+
 
                                                 // Only show delete button if:
                                                 // 1. Target is NOT an admin (anyone with admin rights can delete normal users)
@@ -648,7 +692,8 @@ const UserManagement = () => {
                             <div>
                                 <label className="admin-label">Account Type</label>
                                 <div style={{ color: '#ffffff' }}>
-                                    {selectedUser.accountType || 'individual'}
+                                    {selectedUser.role || 'user'}
+
                                 </div>
                             </div>
                             <div>
@@ -687,7 +732,19 @@ const UserManagement = () => {
                             )}
                         </div>
 
-                        <div className="admin-flex admin-gap-2 admin-mt-4">
+                        <div className="admin-flex admin-gap-2 admin-mt-4" style={{ flexWrap: 'wrap' }}>
+                            <button
+                                onClick={() => handleToggleTester(selectedUser.id, selectedUser.isTester)}
+                                className="admin-btn"
+                                style={{
+                                    flex: 1,
+                                    background: selectedUser.isTester ? '#4f46e5' : 'rgba(99,102,241,0.15)',
+                                    color: selectedUser.isTester ? '#fff' : '#818cf8',
+                                    border: '1px solid #6366f1'
+                                }}
+                            >
+                                🧪 {selectedUser.isTester ? 'Remove Tester Access' : 'Grant Tester Access'}
+                            </button>
                             <button
                                 onClick={() => {
                                     handleMakeAdmin(selectedUser.id, selectedUser.role);

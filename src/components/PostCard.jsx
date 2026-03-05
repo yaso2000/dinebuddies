@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -12,6 +13,7 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import './PostCard.css';
 
 const PostCard = ({ post, showInChat = false }) => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
 

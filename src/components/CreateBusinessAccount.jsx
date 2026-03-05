@@ -177,7 +177,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                 email: formData.email,
                 display_name: formData.businessName,
                 accountType: 'business',
-                role: 'partner',
+                role: 'business',
                 created_at: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 location: formData.lat && formData.lng ? {

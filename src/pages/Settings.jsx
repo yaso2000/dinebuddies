@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -18,7 +18,15 @@ const Settings = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
-    const isBusiness = userProfile?.accountType === 'business';
+    const isBusiness = userProfile?.role === 'business';
+
+    // Desktop: redirect business accounts to the Pro Dashboard instead of showing mobile Settings
+    useEffect(() => {
+        if (isBusiness && window.innerWidth >= 1024) {
+            navigate('/business-pro', { replace: true });
+        }
+    }, [isBusiness, navigate]);
+
 
     const handleLogout = async () => {
         try {
@@ -42,7 +50,7 @@ const Settings = () => {
             navigate('/login');
         } catch (error) {
             console.error('Error deleting account:', error);
-            alert(i18n.language === 'ar' ? 'فشل حذف الحساب. يرجى المحاولة لاحقاً.' : 'Failed to delete account. Please try again.');
+            alert('Failed to delete account. Please try again.');
             setDeleting(false);
             setShowDeleteConfirm(false);
         }
@@ -50,18 +58,18 @@ const Settings = () => {
 
     const settingsSections = [
         {
-            title: i18n.language === 'ar' ? 'الحساب' : 'Account',
+            title: t('settings_account', 'Account'),
             items: [
                 {
                     icon: <FaEnvelope />,
-                    label: i18n.language === 'ar' ? 'البريد الإلكتروني' : 'Email',
+                    label: t('email', 'Email'),
                     value: currentUser?.email || 'Not set',
                     onClick: () => navigate('/settings/email'),
                     color: '#3b82f6'
                 },
                 {
                     icon: <FaLock />,
-                    label: i18n.language === 'ar' ? 'كلمة المرور' : 'Password',
+                    label: t('password', 'Password'),
                     value: '••••••••',
                     onClick: () => navigate('/settings/password'),
                     color: '#8b5cf6'
@@ -69,55 +77,55 @@ const Settings = () => {
             ]
         },
         {
-            title: i18n.language === 'ar' ? 'التفضيلات' : 'Preferences',
+            title: t('settings_preferences', 'Preferences'),
             items: [
                 {
                     icon: <FaBell />,
-                    label: i18n.language === 'ar' ? 'الإشعارات' : 'Notifications',
-                    value: i18n.language === 'ar' ? 'مفعلة' : 'Enabled',
+                    label: t('notifications', 'Notifications'),
+                    value: t('enabled', 'Enabled'),
                     onClick: () => navigate('/settings/notifications'),
                     color: '#f59e0b'
                 },
                 {
                     icon: <FaGlobe />,
-                    label: i18n.language === 'ar' ? 'اللغة' : 'Language',
+                    label: t('language', 'Language'),
                     value: i18n.language === 'ar' ? 'العربية' : 'English',
                     onClick: () => navigate('/settings/language'),
                     color: '#10b981'
                 },
                 {
                     icon: isDark ? <FaMoon /> : <FaSun />,
-                    label: i18n.language === 'ar' ? 'المظهر' : 'Appearance',
-                    value: i18n.language === 'ar' ? (isDark ? 'ليلي' : 'نهاري') : (isDark ? 'Dark Mode' : 'Light Mode'),
+                    label: t('appearance', 'Appearance'),
+                    value: isDark ? t('dark_mode', 'Dark Mode') : t('light_mode', 'Light Mode'),
                     onClick: toggleTheme,
                     color: isDark ? '#8b5cf6' : '#f59e0b'
                 }
             ]
         },
         {
-            title: i18n.language === 'ar' ? 'الخصوصية والأمان' : 'Privacy & Security',
+            title: t('settings_privacy', 'Privacy & Security'),
             items: [
                 {
                     icon: <FaShieldAlt />,
-                    label: i18n.language === 'ar' ? 'إعدادات الخصوصية' : 'Privacy Settings',
-                    value: i18n.language === 'ar' ? 'عام' : 'Public',
+                    label: t('privacy_settings', 'Privacy Settings'),
+                    value: t('public', 'Public'),
                     onClick: () => navigate('/settings/privacy'),
                     color: '#06b6d4'
                 }
             ]
         },
         {
-            title: i18n.language === 'ar' ? 'عن التطبيق وخدماتنا' : 'About & Legal',
+            title: t('settings_about', 'About & Legal'),
             items: [
                 {
                     icon: <FaShieldAlt />,
-                    label: i18n.language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy',
+                    label: t('privacy_policy', 'Privacy Policy'),
                     onClick: () => navigate('/privacy'),
                     color: '#10b981'
                 },
                 {
                     icon: <FaFileContract />,
-                    label: i18n.language === 'ar' ? 'شروط الخدمة' : 'Terms of Service',
+                    label: t('terms_of_service', 'Terms of Service'),
                     onClick: () => navigate('/terms'),
                     color: '#3b82f6'
                 }
@@ -132,14 +140,15 @@ const Settings = () => {
             items: [
                 {
                     icon: <FaStore />,
-                    label: 'Edit Business Profile',
-                    value: '',
-                    onClick: () => navigate('/edit-business-profile'),
+                    label: 'My Business Profile',
+                    value: 'View & edit inline',
+                    onClick: () => navigate(`/partner/${currentUser?.uid}`),
                     color: '#f97316'
                 }
             ]
         });
     }
+
 
     // Add Subscription section for business accounts
     if (isBusiness) {
@@ -175,8 +184,9 @@ const Settings = () => {
         });
     }
 
-    // Check if user is guest
-    const isGuest = userProfile?.accountType === 'guest' || userProfile?.role === 'guest';
+    // Check if user is guest (unified flag)
+    const isGuest = userProfile?.isGuest || false;
+
 
     // Guest View - Prompt to Sign In
     if (isGuest) {

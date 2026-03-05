@@ -1,5 +1,6 @@
 import { db, auth, storage } from '../firebase/config';
-import { collection, query, where, getDocs, addDoc, setDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, setDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
@@ -59,10 +60,32 @@ export const premiumOfferService = {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error("Unauthorized");
 
-        // 1. Validate One-Slot Policy
-        const validation = await premiumOfferService.checkOneSlotPolicy(currentUser.uid);
-        if (!validation.allowed) {
-            throw new Error(validation.reason);
+        // 0. Verify partner subscription tier
+        const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
+        const userData = userSnap.data() || {};
+        const tier = (userData.subscriptionTier || 'free').toLowerCase();
+        const isElite = tier === 'elite';
+        const isProfessional = tier === 'professional';
+
+        // Elite → unlimited offers, no credits needed
+        // Professional → needs offerCredits (future Stripe credit product)
+        // Others → not allowed
+        if (!isElite && !isProfessional) {
+            throw new Error('Publishing premium offers requires an Elite or Professional Partner subscription.');
+        }
+        if (!isElite && isProfessional) {
+            const credits = userData.offerCredits || 0;
+            if (credits <= 0) {
+                throw new Error('No offer credits remaining. Please purchase more credits to publish an offer.');
+            }
+        }
+
+        // 1. One-Slot Policy — Elite is exempt (unlimited), Professional must respect the slot
+        if (!isElite) {
+            const validation = await premiumOfferService.checkOneSlotPolicy(currentUser.uid);
+            if (!validation.allowed) {
+                throw new Error(validation.reason);
+            }
         }
 
         // Upload image
@@ -76,19 +99,37 @@ export const premiumOfferService = {
         // 2. Strip restricted fields and non-serializable objects (like 'file')
         const { platform_commission, global_status, file: _ignoreFile, ...safeOfferData } = offerData;
 
-        // 3. Inject automatic fields
+        // 3. Compute expiry: Elite = permanent (null), Professional = 50 hours from now
+        const PROFESSIONAL_HOURS = 50;
+        const expiresAt = isElite
+            ? null
+            : new Date(Date.now() + PROFESSIONAL_HOURS * 60 * 60 * 1000);
+
+        // 4. Inject automatic fields
         const finalPayload = {
             ...safeOfferData,
             imageUrl: finalMediaUrl,
-            partnerId: currentUser.uid, // Cannot be spoofed, Firebase rules verify this
+            partnerId: currentUser.uid,
             createdAt: serverTimestamp(),
-            status: 'active'
+            status: 'active',
+            tier: isElite ? 'elite' : 'professional',
+            perpetual: isElite,
+            expiresAt,           // null = permanent, Date = auto-expires
         };
 
-        // 4. Save to `offers` (master history) AND `active_offers` (carousel pool)
+        // 5. Save to `offers` (master history) AND `active_offers` (carousel pool)
         try {
             const offerRef = await addDoc(collection(db, 'offers'), finalPayload);
             await setDoc(doc(db, 'active_offers', offerRef.id), finalPayload);
+
+            // Deduct 1 credit for Professional after successful publish
+            if (!isElite) {
+                const { updateDoc, increment } = await import('firebase/firestore');
+                await updateDoc(doc(db, 'users', currentUser.uid), {
+                    offerCredits: increment(-1)
+                });
+            }
+
             return offerRef.id;
         } catch (error) {
             console.error("Error creating premium offer:", error);

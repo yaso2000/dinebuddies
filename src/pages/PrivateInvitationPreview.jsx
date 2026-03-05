@@ -7,6 +7,7 @@ import { db } from '../firebase/config';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { useInvitations } from '../context/InvitationContext';
 import './PrivateInvitation.css';
 
 import Lottie from 'lottie-react';
@@ -16,6 +17,7 @@ const PrivateInvitationPreview = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { id: draftId } = useParams();
+    const { deductPrivateInvitationCredit } = useInvitations();
 
     const [invitation, setInvitation] = useState(null);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -30,7 +32,7 @@ const PrivateInvitationPreview = () => {
             }
 
             try {
-                const invitationRef = doc(db, 'invitations', draftId);
+                const invitationRef = doc(db, 'private_invitations', draftId);
                 const invitationDoc = await getDoc(invitationRef);
 
                 if (!invitationDoc.exists()) {
@@ -71,11 +73,14 @@ const PrivateInvitationPreview = () => {
     const handlePublish = async () => {
         setIsPublishing(true);
         try {
-            const invitationRef = doc(db, 'invitations', draftId);
+            const invitationRef = doc(db, 'private_invitations', draftId);
             await updateDoc(invitationRef, {
                 status: deleteField(),
                 publishedAt: serverTimestamp()
             });
+
+            // Deduct private invitation credit upon publishing (not at draft creation)
+            await deductPrivateInvitationCredit();
 
             // Send notifications to invited guests
             if (invitation.invitedFriends?.length > 0) {
@@ -119,7 +124,7 @@ const PrivateInvitationPreview = () => {
     );
 
     return (
-        <div className={`private-preview-container page-container theme-${(invitation.occasionType || 'social').toLowerCase()}`} style={{ paddingBottom: '120px', position: 'relative' }}>
+        <div className={`private-preview-container page-container theme-${(invitation.occasionType || 'social').toLowerCase()}`} style={{ paddingBottom: '40px', position: 'relative' }}>
             {/* Lottie Background Animation */}
             {animationData && (
                 <div className="lottie-bg-container" style={{
@@ -207,7 +212,7 @@ const PrivateInvitationPreview = () => {
             </div>
 
             {/* Bottom Controls */}
-            <div className="preview-action-bar" style={{ position: 'fixed', bottom: '90px', left: '20px', right: '20px', background: 'rgba(10, 10, 15, 0.95)', padding: '20px', display: 'flex', gap: '12px', borderRadius: '24px', border: '1px solid var(--border-color)', zIndex: 1000, backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+            <div className="preview-action-bar" style={{ margin: '30px 15px 20px', maxWidth: '640px', marginInline: 'auto', background: 'var(--bg-secondary)', padding: '20px', display: 'flex', gap: '12px', borderRadius: '24px', border: '1px solid var(--border-color)', backdropFilter: 'blur(10px)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
                 <button
                     onClick={() => navigate(`/create-private`, { state: { editInvitation: invitation } })}
                     className="action-btn-outline"

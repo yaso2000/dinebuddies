@@ -5,8 +5,38 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+// Map planId → weeklyPrivateQuota  (-1 = unlimited)
+const PLAN_QUOTA_MAP = {
+    // User plans
+    'pro': 2,
+    'premium': -1,
+    // Partner plans (no private invites — they are business accounts)
+    'professional': 0,
+    'elite': 0,
+};
+
+function getQuotaForPlan(planId) {
+    if (!planId) return 0;
+    const id = planId.toLowerCase();
+    if (id in PLAN_QUOTA_MAP) return PLAN_QUOTA_MAP[id];
+    // Fallback by keyword
+    if (id.includes('premium')) return -1;
+    if (id.includes('pro')) return 2;
+    return 0;
+}
+
+function getTierForPlan(planId) {
+    if (!planId) return 'free';
+    const id = planId.toLowerCase();
+    if (id.includes('elite')) return 'elite';
+    if (id.includes('professional')) return 'professional';
+    if (id.includes('premium')) return 'premium';
+    if (id.includes('pro')) return 'pro';
+    return 'free';
+}
+
 /**
- * معالج Webhook من Stripe
+ * Stripe Webhook handler
  */
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -14,7 +44,6 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     let event;
 
     try {
-        // التحقق من صحة الـ Webhook
         event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
     } catch (err) {
         console.error('⚠️ Webhook signature verification failed:', err.message);
@@ -23,7 +52,6 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
     console.log('✅ Webhook received:', event.type);
 
-    // معالجة الأحداث
     try {
         switch (event.type) {
             case 'checkout.session.completed':
@@ -57,13 +85,13 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     }
 });
 
-// ===== معالجات الأحداث =====
+// ===== Event Handlers =====
 
 async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
 
-    const userId = session.metadata.userId;
-    const planId = session.metadata.planId;
+    const userId = session.metadata?.userId;
+    const planId = session.metadata?.planId;
     const subscriptionId = session.subscription;
 
     if (!userId) {
@@ -71,16 +99,35 @@ async function handleCheckoutComplete(session) {
         return;
     }
 
-    try {
-        // تحديث بيانات المستخدم
-        await db.collection('users').doc(userId).update({
-            subscriptionStatus: 'active',
-            subscriptionId: subscriptionId,
-            currentPlan: planId,
-            subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp()
-        });
+    const weeklyQuota = getQuotaForPlan(planId);
+    const tier = getTierForPlan(planId);
+    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
 
-        // حفظ سجل الاشتراك
+    try {
+        if (isOfferSlot) {
+            // Credit pack: add 1 offer slot credit
+            await db.collection('users').doc(userId).update({
+                offerSlotCredits: admin.firestore.FieldValue.increment(1),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            console.log(`✅ User ${userId} received 1 offer slot credit`);
+        } else {
+            // Subscription plan
+            await db.collection('users').doc(userId).update({
+                subscriptionStatus: 'active',
+                subscriptionId: subscriptionId,
+                subscriptionTier: tier,
+                currentPlan: planId,
+                weeklyPrivateQuota: weeklyQuota,
+                usedPrivateCreditsThisWeek: 0,
+                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+                stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
+            });
+
+            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
+        }
+
+        // Save subscription record
         await db.collection('user_subscriptions').add({
             userId,
             planId,
@@ -90,7 +137,6 @@ async function handleCheckoutComplete(session) {
             sessionId: session.id
         });
 
-        console.log(`✅ User ${userId} subscription activated`);
     } catch (error) {
         console.error('Error updating user subscription:', error);
     }
@@ -101,7 +147,6 @@ async function handleSubscriptionUpdate(subscription) {
 
     const customer = subscription.customer;
 
-    // البحث عن المستخدم بواسطة Customer ID
     const usersSnapshot = await db.collection('users')
         .where('stripeCustomerId', '==', customer)
         .limit(1)
@@ -113,13 +158,18 @@ async function handleSubscriptionUpdate(subscription) {
     }
 
     const userId = usersSnapshot.docs[0].id;
+    const planId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
+    const weeklyQuota = getQuotaForPlan(planId);
+    const tier = getTierForPlan(planId);
 
     await db.collection('users').doc(userId).update({
         subscriptionStatus: subscription.status,
+        subscriptionTier: tier,
+        weeklyPrivateQuota: weeklyQuota,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`✅ User ${userId} subscription status updated to ${subscription.status}`);
+    console.log(`✅ User ${userId} updated → tier: ${tier}, quota: ${weeklyQuota}, status: ${subscription.status}`);
 }
 
 async function handleSubscriptionCanceled(subscription) {
@@ -138,18 +188,18 @@ async function handleSubscriptionCanceled(subscription) {
 
     await db.collection('users').doc(userId).update({
         subscriptionStatus: 'canceled',
+        subscriptionTier: 'free',
+        weeklyPrivateQuota: 0,
         subscriptionEndDate: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`✅ User ${userId} subscription canceled`);
+    console.log(`✅ User ${userId} subscription canceled → reverted to free`);
 }
 
 async function handlePaymentSucceeded(invoice) {
     console.log('✅ Payment succeeded:', invoice.id);
-    // يمكنك إرسال إيصال أو إشعار للمستخدم
 }
 
 async function handlePaymentFailed(invoice) {
     console.log('⚠️ Payment failed:', invoice.id);
-    // يمكنك إرسال تذكير للمستخدم بتحديث بطاقته
 }

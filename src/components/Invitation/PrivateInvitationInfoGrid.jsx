@@ -11,13 +11,11 @@ const PrivateInvitationInfoGrid = ({ invitation, t }) => {
 
     const themeColor = templateStyles?.badge?.color || 'var(--luxury-gold)';
 
-    // Helper to format date
+    // Helper to format date — always English regardless of app language
     const formatDate = (dateString) => {
         if (!dateString) return 'TBD';
         const date = new Date(dateString);
-        // Use the current language for formatting
-        const lang = (typeof window !== 'undefined' && window.localStorage.getItem('i18nextLng')) || 'ar';
-        return date.toLocaleDateString(lang, { weekday: 'short', month: 'short', day: 'numeric' });
+        return date.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' });
     };
 
     return (

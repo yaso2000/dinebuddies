@@ -6,11 +6,12 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import {
     FaArrowLeft, FaPaperPlane, FaMicrophone, FaTrash,
-    FaPlay, FaPause, FaArrowDown, FaImage, FaPlus
+    FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers
 } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import EmojiPicker from 'emoji-picker-react';
+import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
 import './CommunityChatRoom.css';
 
 const InvitationChatRoom = () => {
@@ -22,6 +23,8 @@ const InvitationChatRoom = () => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [invitation, setInvitation] = useState(null);
+    // Tracks which Firestore collection this invitation lives in
+    const [collectionName, setCollectionName] = useState('invitations');
 
     useEffect(() => {
         if (!loading && (!currentUser || isGuest)) {
@@ -38,6 +41,8 @@ const InvitationChatRoom = () => {
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const fileInputRef = useRef(null);
+    const emojiBtnRef = useRef(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
     // Audio State
     const [isRecording, setIsRecording] = useState(false);
@@ -51,27 +56,35 @@ const InvitationChatRoom = () => {
     useEffect(() => {
         const fetchInvitation = async () => {
             if (!invitationId) return;
+            // Wait for auth to be ready before trying to verify membership
+            if (!currentUser || !currentUser.uid) return;
             try {
-                const invRef = doc(db, 'invitations', invitationId);
-                const invSnap = await getDoc(invRef);
+                // Try public invitations first, fall back to private
+                let invSnap = await getDoc(doc(db, 'invitations', invitationId));
+                let resolvedCollection = 'invitations';
+
+                if (!invSnap.exists()) {
+                    invSnap = await getDoc(doc(db, 'private_invitations', invitationId));
+                    resolvedCollection = 'private_invitations';
+                }
 
                 if (invSnap.exists()) {
                     const data = invSnap.data();
                     setInvitation(data);
+                    setCollectionName(resolvedCollection);
 
                     // Robust Access Check
-                    // Handle different data structures (author object vs authorId field)
                     const hostId = data.authorId || data.author?.id;
                     const isHost = hostId === currentUser.uid;
 
-                    // Handle different array names (joined vs joinedMembers)
                     const members = data.joinedMembers || data.joined || [];
-                    const isPrivateAccepted = data.privacy === 'private' && data.rsvps?.[currentUser.uid] === 'accepted';
+                    const isPrivateAccepted = resolvedCollection === 'private_invitations' &&
+                        data.rsvps?.[currentUser.uid] === 'accepted';
                     const isParticipant = members.includes(currentUser.uid) || isPrivateAccepted;
 
                     if (!isHost && !isParticipant) {
                         alert("You are not a member of this invitation group chat.");
-                        navigate(data.privacy === 'private' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`);
+                        navigate(resolvedCollection === 'private_invitations' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`);
                     }
                 } else {
                     alert("Invitation not found");
@@ -84,7 +97,8 @@ const InvitationChatRoom = () => {
             }
         };
         fetchInvitation();
-    }, [invitationId, currentUser.uid, navigate]);
+    }, [invitationId, currentUser?.uid, navigate]);
+
 
     // Click Outside Handling
     useEffect(() => {
@@ -104,10 +118,10 @@ const InvitationChatRoom = () => {
 
     // --- 2. Real-time Messages ---
     useEffect(() => {
-        if (!invitationId) return;
+        if (!invitationId || !collectionName) return;
 
         const q = query(
-            collection(db, 'invitations', invitationId, 'messages'),
+            collection(db, collectionName, invitationId, 'messages'),
             orderBy('createdAt', 'asc')
         );
 
@@ -121,7 +135,7 @@ const InvitationChatRoom = () => {
         });
 
         return () => unsubscribe();
-    }, [invitationId]);
+    }, [invitationId, collectionName]);
 
     // Cleanup Audio
     useEffect(() => {
@@ -154,7 +168,7 @@ const InvitationChatRoom = () => {
 
         try {
             const imageUrl = await uploadImage(file, currentUser.uid);
-            await addDoc(collection(db, 'invitations', invitationId, 'messages'), {
+            await addDoc(collection(db, collectionName, invitationId, 'messages'), {
                 text: '',
                 imageUrl: imageUrl,
                 senderId: currentUser.uid,
@@ -174,7 +188,7 @@ const InvitationChatRoom = () => {
     const handleReact = async (msgId, emoji) => {
         try {
             setActiveReactionId(null); // Close popup
-            const msgRef = doc(db, 'invitations', invitationId, 'messages', msgId);
+            const msgRef = doc(db, collectionName, invitationId, 'messages', msgId);
             const message = messages.find(m => m.id === msgId);
             const currentReactions = message.reactions || {};
 
@@ -229,7 +243,7 @@ const InvitationChatRoom = () => {
     const sendVoiceMessage = async (audioBlob) => {
         try {
             const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
-            await addDoc(collection(db, 'invitations', invitationId, 'messages'), {
+            await addDoc(collection(db, collectionName, invitationId, 'messages'), {
                 text: '',
                 audioUrl: url,
                 senderId: currentUser.uid,
@@ -268,7 +282,7 @@ const InvitationChatRoom = () => {
         setTimeout(() => inputRef.current?.focus(), 10);
 
         try {
-            await addDoc(collection(db, 'invitations', invitationId, 'messages'), {
+            await addDoc(collection(db, collectionName, invitationId, 'messages'), {
                 text: text,
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
@@ -296,91 +310,167 @@ const InvitationChatRoom = () => {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    if (loading) return <div className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', background: '#0b1220' }}>Loading Chat...</div>;
+    if (loading) return (
+        <div className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Loading Chat...</div>
+        </div>
+    );
+
+    // Invitation image helper
+    const invImage = invitation?.customImage || invitation?.restaurantImage || invitation?.image;
 
     return (
-        <div className="chat-screen" style={{ background: '#0b1220' }}>
-            {/* Header */}
-            <header className="chat-header" style={{
-                height: '65px',
-                padding: '0 15px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                background: '#0f172a', /* Dark slate background */
-                borderBottom: '1px solid #1e293b',
-                position: 'sticky',
-                top: 0,
-                zIndex: 50
+        <div className="chat-screen" style={{
+            height: '100dvh', overflow: 'hidden', position: 'relative'
+        }}>
+
+            {/* Subtle dot-grid overlay for depth */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: 'radial-gradient(circle, var(--accent-color, rgba(99,102,241,0.06)) 1px, transparent 1px)',
+                backgroundSize: '26px 26px', opacity: 0.08,
+                pointerEvents: 'none', zIndex: 0
+            }} />
+
+            {/* ══════════  HEADER  ══════════ */}
+            <header style={{
+                flexShrink: 0,
+                position: 'sticky', top: 0, zIndex: 50,
+                overflow: 'hidden',
+                background: 'var(--header-bg)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                borderBottom: '1px solid var(--border-color, rgba(99,102,241,0.15))',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
             }}>
-                <button
-                    className="header-back-btn"
-                    onClick={() => navigate(invitation?.privacy === 'private' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`)}
-                    style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        border: 'none',
-                        color: 'white',
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                    }}
-                >
-                    <FaArrowLeft size={16} />
-                </button>
+                {/* Invitation image ghost behind header */}
+                {invImage && (
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        backgroundImage: `url(${invImage})`,
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        opacity: 0.07, filter: 'blur(10px)', transform: 'scale(1.15)',
+                        pointerEvents: 'none',
+                    }} />
+                )}
 
-                {/* Host Image */}
-                <div style={{ position: 'relative' }}>
-                    <img
-                        src={getSafeAvatar(invitation?.author)}
-                        alt="Host"
+                {/* Top row: back + avatar + info + members */}
+                <div style={{
+                    position: 'relative', zIndex: 1,
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 14px',
+                    minHeight: '64px',
+                }}>
+                    {/* Back btn */}
+                    <button
+                        onClick={() => navigate(
+                            collectionName === 'private_invitations'
+                                ? `/invitation/private/${invitationId}`
+                                : `/invitation/${invitationId}`,
+                            { replace: true }
+                        )}
                         style={{
-                            width: '42px',
-                            height: '42px',
-                            borderRadius: '50%',
-                            objectFit: 'cover',
-                            border: '2px solid #3b82f6' /* Blue border for host */
+                            background: 'rgba(108,92,231,0.15)',
+                            border: '1px solid rgba(108,92,231,0.3)',
+                            color: 'var(--text-primary)', width: '36px', height: '36px',
+                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s',
                         }}
-                        onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = getSafeAvatar(null);
-                        }}
-                    />
-                </div>
+                    >
+                        <FaArrowLeft size={14} />
+                    </button>
 
-                <div className="header-info" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                    <h2 className="header-title" style={{
-                        margin: 0,
-                        fontSize: '1rem', /* Much smaller than before */
-                        fontWeight: '700',
-                        color: 'white',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        lineHeight: '1.2'
+                    {/* Host avatar with gold ring + HOST badge */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <img
+                            src={getSafeAvatar(invitation?.author)}
+                            alt="Host"
+                            style={{
+                                width: '44px', height: '44px', borderRadius: '50%',
+                                objectFit: 'cover',
+                                border: '2px solid #fbbf24',
+                                boxShadow: '0 0 14px rgba(251,191,36,0.35)',
+                            }}
+                            onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                        />
+                        <div style={{
+                            position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%)',
+                            background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                            color: '#000', fontSize: '6.5px', fontWeight: '900',
+                            padding: '1.5px 4px', borderRadius: '4px', letterSpacing: '0.5px',
+                            whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                        }}>HOST</div>
+                    </div>
+
+                    {/* Invitation title + location + date */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <h2 style={{
+                            margin: '0 0 3px', fontSize: '0.92rem', fontWeight: '800',
+                            color: 'var(--text-primary)', whiteSpace: 'nowrap',
+                            overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
+                        }}>
+                            {invitation?.title || 'Group Chat'}
+                        </h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                            {invitation?.location && (
+                                <span style={{
+                                    fontSize: '0.68rem', color: 'var(--text-muted)',
+                                    display: 'flex', alignItems: 'center', gap: '2px',
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px',
+                                }}>
+                                    📍 {invitation.location}
+                                </span>
+                            )}
+                            {invitation?.date && (
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                                    📅 {new Date(invitation.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                                    {invitation.time && ` · ${invitation.time}`}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Members pill */}
+                    <div style={{
+                        background: 'rgba(108,92,231,0.15)',
+                        border: '1px solid rgba(108,92,231,0.3)',
+                        borderRadius: '20px', padding: '5px 10px',
+                        display: 'flex', alignItems: 'center', gap: '5px',
+                        flexShrink: 0,
                     }}>
-                        {invitation?.title || 'Group Chat'}
-                    </h2>
-                    <p className="header-subtitle" style={{
-                        margin: 0,
-                        fontSize: '0.75rem',
-                        color: '#94a3b8',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                    }}>
-                        <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>Host: {invitation?.author?.name?.split(' ')[0] || 'Admin'}</span>
-                        <span>•</span>
-                        <span>{(invitation?.joinedMembers || invitation?.joined || []).length + 1} Members</span>
-                    </p>
+                        <FaUsers size={11} style={{ color: 'var(--accent-color)' }} />
+                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--accent-color)' }}>
+                            {(invitation?.joinedMembers || invitation?.joined || []).length + 1}
+                        </span>
+                    </div>
                 </div>
             </header>
 
             {/* Messages List */}
-            <div className="message-list" onScroll={handleScroll}>
+            <div className="message-list" onScroll={handleScroll} style={{ position: 'relative', zIndex: 1 }}>
+
+                {/* Empty state */}
+                {messages.length === 0 && (
+                    <div style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        justifyContent: 'center', minHeight: '250px', gap: '16px', padding: '32px 24px',
+                    }}>
+                        {invImage && (
+                            <div style={{
+                                width: '90px', height: '90px', borderRadius: '18px', overflow: 'hidden',
+                                border: '2px solid rgba(108,92,231,0.4)',
+                                boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
+                            }}>
+                                <img src={invImage} alt="Venue" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                        )}
+                        <div style={{ textAlign: 'center' }}>
+                            <p style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>Say Hello! 👋</p>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>Be the first to start the conversation</p>
+                        </div>
+                    </div>
+                )}
+
                 {messages.map((msg, index) => {
                     const isMe = msg.senderId === currentUser.uid;
                     const isSequence = isConsecutive(msg, messages[index - 1]);
@@ -493,21 +583,63 @@ const InvitationChatRoom = () => {
                             )}
                         </div>
                     );
-                })}
+                })
+                }
                 <div ref={messagesEndRef} />
             </div>
 
+
             {showScrollBottom && (
+
                 <button
                     onClick={scrollToBottom}
-                    style={{ position: 'fixed', bottom: '90px', right: '20px', zIndex: 200, borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', border: 'none', color: 'white', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}
+                    style={{
+                        position: 'absolute',
+                        bottom: '80px',
+                        right: '20px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+                        zIndex: 200,
+                    }}
                 >
                     <FaArrowDown />
                 </button>
             )}
 
             {/* Input Composer */}
-            <div className="input-area">
+
+            <div className="input-area" style={{ position: 'relative' }}>
+                {/* Emoji Picker Portal */}
+                <EmojiPickerPortal
+                    open={showEmojiPicker}
+                    onClose={() => setShowEmojiPicker(false)}
+                    anchorRef={emojiBtnRef}
+                    onEmojiClick={(emojiData) => {
+                        const input = inputRef.current;
+                        if (input) {
+                            const start = input.selectionStart ?? newMessage.length;
+                            const end = input.selectionEnd ?? newMessage.length;
+                            const updated = newMessage.slice(0, start) + emojiData.emoji + newMessage.slice(end);
+                            setNewMessage(updated);
+                            setTimeout(() => {
+                                input.focus();
+                                input.setSelectionRange(start + emojiData.emoji.length, start + emojiData.emoji.length);
+                            }, 0);
+                        } else {
+                            setNewMessage(prev => prev + emojiData.emoji);
+                        }
+                    }}
+                />
+
                 <div className="input-wrapper">
                     {/* Image Input (Hidden) */}
                     <input
@@ -540,16 +672,32 @@ const InvitationChatRoom = () => {
                             </button>
                         </div>
                     ) : (
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            className="message-input"
-                            placeholder="Type a message..."
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                            autoComplete="off"
-                        />
+                        <>
+                            {/* Emoji Button — desktop only */}
+                            {!isMobile && (
+                                <button
+                                    ref={emojiBtnRef}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }}
+                                    style={{
+                                        background: 'none', border: 'none', fontSize: '1.2rem',
+                                        cursor: 'pointer', padding: '0 4px', opacity: 0.7, flexShrink: 0,
+                                    }}
+                                    title="Emoji"
+                                >😊</button>
+                            )}
+
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                className="message-input"
+                                placeholder="Type a message..."
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                                autoComplete="off"
+                            />
+                        </>
                     )}
                 </div>
 
@@ -565,6 +713,7 @@ const InvitationChatRoom = () => {
                 </button>
             </div>
         </div>
+
     );
 };
 

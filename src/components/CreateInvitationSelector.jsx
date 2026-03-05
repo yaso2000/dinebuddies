@@ -21,8 +21,8 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
             if (quotaInfo.canCreate) {
                 navigate('/create-private', { state: navigationState });
             } else {
-                alert(t('insufficient_private_credits', 'عذراً، لقد استهلكت رصيدك من الدعوات الخاصة. قم بالترقية للحصول على المزيد.'));
-                navigate('/subscription');
+                alert(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'));
+                navigate('/pricing');
             }
         }
         onClose();

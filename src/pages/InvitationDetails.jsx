@@ -20,6 +20,7 @@ import InvitationHeader from '../components/Invitation/InvitationHeader';
 import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
 import InvitationTimeline from '../components/Invitation/InvitationTimeline';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { generateShareCardBlob } from '../utils/shareCardCanvas';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -38,6 +39,8 @@ const InvitationDetails = () => {
     const [fetchedInvitation, setFetchedInvitation] = useState(null);
     const [locationStatus, setLocationStatus] = useState('');
     const [showShare, setShowShare] = useState(false);
+    const [sharingCard, setSharingCard] = useState(false);
+    const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const chatEndRef = useRef(null);
 
@@ -219,48 +222,47 @@ const InvitationDetails = () => {
         return () => {
             resetSocialMetaTags();
         };
-    }, [invitation]);
+    }, [invitation?.id]); // use id not full object to avoid infinite effect runs
+
+    // REDIRECTION GUARD: must be before any early returns (Rules of Hooks)
+    useEffect(() => {
+        if (invitation?.privacy === 'private') {
+            navigate(`/invitation/private/${id}`, { replace: true });
+        }
+    }, [invitation?.privacy, id, navigate]);
 
     const [showCopiedToast, setShowCopiedToast] = useState(false);
 
-    const handleShare = async () => {
+    // Direct image share (generates card → native share or desktop preview)
+    const handleShareCard = async () => {
+        if (sharingCard) return;
         const shareUrl = window.location.href;
-        const shareTitle = invitation?.title || 'DineBuddies Invitation';
-        const shareText = invitation?.description || 'Join me for a meal!';
-
-        // Try native share API first (mobile)
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: shareTitle,
-                    text: shareText,
-                    url: shareUrl,
-                });
-                return;
-            } catch (error) {
-                // User cancelled or error - fall through to clipboard
-                if (error.name !== 'AbortError') {
-                    console.error('Share failed:', error);
-                }
-            }
-        }
-
-        // Fallback: Copy to clipboard
+        const storyData = {
+            title: invitation?.title,
+            image: invitation?.customImage || invitation?.restaurantImage || invitation?.image,
+            description: invitation?.description,
+            date: invitation?.date,
+            time: invitation?.time,
+            location: invitation?.restaurantName || invitation?.locationName || invitation?.location,
+            maxGuests: invitation?.guestsNeeded,
+            hostName: invitation?.author?.name || invitation?.hostName,
+            hostImage: getSafeAvatar(invitation?.author || {}),
+        };
         try {
-            await navigator.clipboard.writeText(shareUrl);
-            setShowCopiedToast(true);
-            setTimeout(() => setShowCopiedToast(false), 3000);
-        } catch (error) {
-            console.error('Copy failed:', error);
-            // Final fallback: select and copy
-            const textArea = document.createElement('textarea');
-            textArea.value = shareUrl;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            setShowCopiedToast(true);
-            setTimeout(() => setShowCopiedToast(false), 3000);
+            setSharingCard(true);
+            setCardPreviewUrl(null);
+            const blob = await generateShareCardBlob(storyData);
+            if (!blob) throw new Error('No blob');
+            const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: invitation.title, url: shareUrl });
+            } else {
+                setCardPreviewUrl(URL.createObjectURL(blob));
+            }
+        } catch (err) {
+            if (err?.name !== 'AbortError') console.error('Share error:', err);
+        } finally {
+            setSharingCard(false);
         }
     };
 
@@ -314,26 +316,11 @@ const InvitationDetails = () => {
         // Check if can complete
         const check = canCompleteInvitation(invitation, currentUser);
         if (!check.canComplete) {
-            const friendlyMessage = i18n.language === 'ar'
-                ? check.reason === 'Only the host can complete the invitation'
-                    ? 'فقط صاحب الدعوة يمكنه إتمامها'
-                    : check.reason === 'No one has joined yet'
-                        ? 'لا يوجد مشاركين بعد'
-                        : check.reason === 'Already completed'
-                            ? 'تم إتمام هذه الدعوة مسبقاً'
-                            : check.reason
-                : check.reason;
-
-            alert(friendlyMessage);
+            alert(check.reason);
             return;
         }
 
-        // Confirm with user - simple and friendly
-        const confirmMessage = i18n.language === 'ar'
-            ? 'هل أنت متأكد من إتمام الدعوة؟'
-            : 'Are you sure you want to complete this invitation?';
-
-        if (!window.confirm(confirmMessage)) {
+        if (!window.confirm('Are you sure you want to complete this invitation?')) {
             return;
         }
 
@@ -345,12 +332,7 @@ const InvitationDetails = () => {
             const result = await completeInvitation(id, invitation, currentUser);
 
             if (result.success) {
-                // Success - simple and friendly
-                const successMessage = i18n.language === 'ar'
-                    ? '🎉 تم إتمام الدعوة بنجاح!\n\nشكراً لك، نتمنى أن تكون قد استمتعت بوقتك!'
-                    : '🎉 Invitation completed successfully!\n\nThank you! Hope you had a great time!';
-
-                alert(successMessage);
+                alert('🎉 Invitation completed successfully!\n\nThank you! Hope you had a great time!');
                 setLocationStatus('');
 
                 // Refresh page or navigate
@@ -360,20 +342,11 @@ const InvitationDetails = () => {
                 let errorMessage;
 
                 if (result.requiresLocation) {
-                    // Location verification failed - simple message
-                    errorMessage = i18n.language === 'ar'
-                        ? '😊 يبدو أنك لست في مكان الدعوة حالياً\n\nيمكنك إتمام الدعوة عندما تصل إلى المطعم'
-                        : '😊 It looks like you\'re not at the venue yet\n\nYou can complete the invitation once you arrive at the restaurant';
+                    errorMessage = '😊 It looks like you\'re not at the venue yet\n\nYou can complete the invitation once you arrive at the restaurant';
                 } else if (result.requiresPermission) {
-                    // Permission denied - friendly request
-                    errorMessage = i18n.language === 'ar'
-                        ? '📍 نحتاج إلى معرفة موقعك للتأكد من وصولك\n\nيرجى السماح بالوصول إلى الموقع في إعدادات المتصفح'
-                        : '📍 We need to verify you\'re at the venue\n\nPlease allow location access in your browser settings';
+                    errorMessage = '📍 We need to verify you\'re at the venue\n\nPlease allow location access in your browser settings';
                 } else {
-                    // Generic error
-                    errorMessage = i18n.language === 'ar'
-                        ? 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى'
-                        : 'Sorry, something went wrong. Please try again';
+                    errorMessage = 'Sorry, something went wrong. Please try again';
                 }
 
                 alert(errorMessage);
@@ -381,10 +354,7 @@ const InvitationDetails = () => {
             }
         } catch (error) {
             console.error('Error completing invitation:', error);
-            const errorMsg = i18n.language === 'ar'
-                ? 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى'
-                : 'Sorry, something went wrong. Please try again';
-            alert(errorMsg);
+            alert('Sorry, something went wrong. Please try again');
             setLocationStatus('');
         } finally {
             setIsCompleting(false);
@@ -429,17 +399,6 @@ const InvitationDetails = () => {
     }
 
     const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange, privacy, mediaType, customVideo, videoThumbnail, customImage, restaurantImage, restaurantName } = invitation;
-
-    // REDIRECTION GUARD: If this is a private invitation, redirect to the private view
-    useEffect(() => {
-        if (privacy === 'private') {
-            navigate(`/invitation/private/${id}`, { replace: true });
-        }
-    }, [privacy, id, navigate]);
-
-    if (privacy === 'private') {
-        return null; // Don't render anything while redirecting
-    }
 
     // Determine media to display
     const isVideo = mediaType === 'video' && customVideo;
@@ -500,7 +459,7 @@ const InvitationDetails = () => {
     // Check eligibility based on gender and age
     const checkEligibility = (manualAgeCategory) => {
         // Business accounts cannot join invitations
-        if (userProfile?.accountType === 'business') {
+        if (userProfile?.isBusiness) {
             return { eligible: false, reason: t('business_cannot_join', { defaultValue: 'Business accounts cannot join invitations' }) };
         }
 
@@ -531,9 +490,8 @@ const InvitationDetails = () => {
             if (!invitation.ageGroups.includes(userAgeCategory)) {
                 const allowed = invitation.ageGroups.join(', ');
                 return {
-                    eligible: false, reason: i18n.language === 'ar'
-                        ? `عذراً، هذه الدعوة مخصصة للفئات العمرية: ${allowed}`
-                        : `Sorry, this invitation is for age groups: ${allowed}`
+                    eligible: false,
+                    reason: `Sorry, this invitation is for age groups: ${allowed}`
                 };
             }
         }
@@ -602,8 +560,8 @@ const InvitationDetails = () => {
 
                     onEdit={() => navigate('/create', { state: { editingInvitation: invitation } })}
                     onDelete={() => setShowCancellationModal(true)}
-                    showShare={showShare}
-                    setShowShare={setShowShare}
+                    onShare={handleShareCard}
+                    sharingCard={sharingCard}
                 />
 
 
@@ -882,13 +840,9 @@ const InvitationDetails = () => {
                             textAlign: 'center'
                         }}>
                             <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎭</div>
-                            <h3 style={{ marginBottom: '8px' }}>
-                                {i18n.language === 'ar' ? 'أهلاً بالعضو الجديد!' : 'Welcome, New Member!'}
-                            </h3>
+                            <h3 style={{ marginBottom: '8px' }}>Welcome, New Member!</h3>
                             <p style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                                {i18n.language === 'ar'
-                                    ? 'عشان نضمن لك جو يناسبك (وبدون ما نسألك كل مرة)، بس علمنا بأي فئة عمرية نورت الدنيا؟ ✨'
-                                    : 'To ensure the best vibe for you (without asking every time), just let us know which age group you belong to! ✨'}
+                                To ensure the best vibe for you (without asking every time), just let us know which age group you belong to! ✨
                             </p>
 
                             <div style={{ display: 'grid', gap: '8px', marginBottom: '20px' }}>
@@ -913,6 +867,36 @@ const InvitationDetails = () => {
                                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer' }}
                             >
                                 {t('cancel')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Desktop fallback: card preview + download */}
+                {cardPreviewUrl && (
+                    <div
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
+                    >
+                        <div
+                            style={{ width: 320, padding: 16, borderRadius: 20, background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <a href={window.location.href} target="_blank" rel="noopener noreferrer">
+                                <img src={cardPreviewUrl} alt="Share Card" style={{ width: '100%', borderRadius: 10, display: 'block', cursor: 'pointer' }} />
+                            </a>
+                            <a
+                                href={cardPreviewUrl}
+                                download="invitation-card.png"
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, padding: '10px 0', borderRadius: 10, background: 'linear-gradient(135deg,#8b5cf6,#ec4899)', color: 'white', fontWeight: 700, textDecoration: 'none', fontSize: '0.9rem' }}
+                            >
+                                ⬇️ Download Card
+                            </a>
+                            <button
+                                onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
+                                style={{ width: '100%', marginTop: 8, padding: '8px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', borderRadius: 10, cursor: 'pointer', fontSize: '0.82rem' }}
+                            >
+                                {t('close')}
                             </button>
                         </div>
                     </div>

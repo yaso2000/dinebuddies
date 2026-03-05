@@ -19,7 +19,7 @@ const PremiumOfferPage = () => {
     useEffect(() => {
         if (authLoading) return;
 
-        if (!currentUser || userProfile?.accountType !== 'business') {
+        if (!currentUser || userProfile?.role !== 'business') {
             navigate('/');
             return;
         }

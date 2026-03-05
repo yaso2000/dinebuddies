@@ -1,11 +1,14 @@
 import React, { useState, useRef } from 'react';
-import { FaWhatsapp, FaTwitter, FaFacebook, FaTelegram, FaLink, FaShareAlt, FaInstagram } from 'react-icons/fa';
+import { FaWhatsapp, FaTwitter, FaFacebook, FaTelegram, FaLink, FaShareAlt, FaInstagram, FaImage, FaDownload, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import InstagramStoryTemplate from './InstagramStoryTemplate';
 
 const ShareButtons = ({ title, description, url, storyData, type = 'invitation' }) => {
     const { t } = useTranslation();
+    const [generatingCard, setGeneratingCard] = useState(false);
     const [generatingStory, setGeneratingStory] = useState(false);
+    const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
     const storyRef = useRef(null);
 
     const shareText = `${title}${description ? `\n\n${description}` : ''}`;
@@ -13,180 +16,164 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
     const encodedUrl = encodeURIComponent(url);
 
     const copyToClipboard = () => {
-        navigator.clipboard.writeText(`${shareText}\n${url}`);
-        alert(t('link_copied_clipboard'));
+        navigator.clipboard.writeText(`${shareText}\n${url}`).catch(() => { });
+        alert(t('link_copied_clipboard', 'Link copied!'));
     };
 
     const handleNativeShare = async () => {
         if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: title,
-                    text: description,
-                    url: url,
-                });
-            } catch (error) {
-                console.log('Error sharing:', error);
-            }
+            try { await navigator.share({ title, text: description, url }); }
+            catch (e) { /* cancelled */ }
         } else {
             copyToClipboard();
         }
     };
 
-    const handleInstagramStory = async () => {
-        if (!storyData) {
-            alert(t('instagram_story_not_available'));
-            return;
-        }
+    // ── Share Card (Canvas API — no CORS issues)
+    const handleShareCard = async () => {
+        if (!storyData) return;
+        try {
+            setGeneratingCard(true);
+            setCardPreviewUrl(null);
 
+            const blob = await generateShareCardBlob(storyData, type);
+            if (!blob) throw new Error('No blob');
+
+            const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
+
+            // Mobile: native file share (opens OS app picker directly)
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title, text: shareText });
+            } else {
+                // Desktop: show preview with download button
+                setCardPreviewUrl(URL.createObjectURL(blob));
+            }
+        } catch (err) {
+            console.error('Share card error:', err);
+            alert('Could not generate share card. Please try again.');
+        } finally {
+            setGeneratingCard(false);
+        }
+    };
+
+    // ── Instagram Story (html2canvas of off-screen Story template)
+    const handleInstagramStory = async () => {
+        if (!storyRef?.current) return;
         try {
             setGeneratingStory(true);
-
-            // Allow time for render
-            await new Promise(resolve => setTimeout(resolve, 500));
-
             const html2canvas = (await import('html2canvas')).default;
-
-            if (storyRef.current) {
-                const canvas = await html2canvas(storyRef.current, {
-                    useCORS: true,
-                    scale: 1, // Sufficient for 1080p
-                    backgroundColor: '#0f172a'
-                });
-
-                canvas.toBlob(async (blob) => {
-                    if (!blob) {
-                        setGeneratingStory(false);
-                        return;
-                    }
-
-                    const file = new File([blob], 'story.png', { type: 'image/png' });
-
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        try {
-                            await navigator.share({
-                                files: [file],
-                                title: t('share_via') + ' Instagram',
-                                text: shareText
-                            });
-                        } catch (err) {
-                            console.error('Share failed', err);
-                        }
-                    } else {
-                        // Fallback: Download image
-                        const link = document.createElement('a');
-                        link.download = 'instagram-story.png';
-                        link.href = canvas.toDataURL('image/png');
-                        link.click();
-                        alert(t('image_downloaded'));
-                    }
-                    setGeneratingStory(false);
-                }, 'image/png');
+            const canvas = await html2canvas(storyRef.current, {
+                useCORS: true, allowTaint: true, scale: 1,
+                backgroundColor: '#0f172a', logging: false,
+            });
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            if (!blob) throw new Error('No blob');
+            const file = new File([blob], 'instagram-story.png', { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: `${title} – Story`, text: shareText });
+            } else {
+                const link = document.createElement('a');
+                link.download = 'instagram-story.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
             }
-        } catch (error) {
-            console.error('Error generating story:', error);
+        } catch (err) {
+            console.error('Story error:', err);
+        } finally {
             setGeneratingStory(false);
-            alert(t('failed_generate_story'));
         }
     };
 
     const platforms = [
-        {
-            name: 'Native',
-            icon: <FaShareAlt />,
-            action: handleNativeShare,
-            color: 'var(--primary)',
-            show: !!navigator.share
-        },
-        {
-            name: 'WhatsApp',
-            icon: <FaWhatsapp />,
-            url: `https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`,
-            color: '#25D366',
-            show: true
-        },
-        {
-            name: 'Instagram',
-            icon: <FaInstagram />,
-            action: handleInstagramStory,
-            color: '#E1306C',
-            show: true // Always show, falls back to download
-        },
-        {
-            name: 'Facebook',
-            icon: <FaFacebook />,
-            url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`,
-            color: '#1877F2',
-            show: true
-        },
-        {
-            name: 'Twitter',
-            icon: <FaTwitter />,
-            url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
-            color: '#1DA1F2',
-            show: true
-        },
-        {
-            name: 'Telegram',
-            icon: <FaTelegram />,
-            url: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
-            color: '#0088cc',
-            show: true
-        },
-        {
-            name: 'Copy Link',
-            icon: <FaLink />,
-            action: copyToClipboard,
-            color: 'var(--text-muted)',
-            show: true
-        }
+        { name: generatingCard ? '⏳' : 'Share Card', icon: <FaImage />, action: handleShareCard, color: '#a78bfa', show: !!storyData, disabled: generatingCard },
+        { name: 'Share', icon: <FaShareAlt />, action: handleNativeShare, color: 'var(--primary)', show: !!navigator.share },
+        { name: 'WhatsApp', icon: <FaWhatsapp />, url: `https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`, color: '#25D366', show: true },
+        { name: generatingStory ? '⏳' : 'Instagram', icon: <FaInstagram />, action: handleInstagramStory, color: '#E1306C', show: true, disabled: generatingStory },
+        { name: 'Facebook', icon: <FaFacebook />, url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`, color: '#1877F2', show: true },
+        { name: 'Twitter', icon: <FaTwitter />, url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`, color: '#1DA1F2', show: true },
+        { name: 'Telegram', icon: <FaTelegram />, url: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`, color: '#0088cc', show: true },
+        { name: 'Copy Link', icon: <FaLink />, action: copyToClipboard, color: 'var(--text-muted)', show: true },
     ];
 
     return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
-            {platforms.filter(p => p.show).map((platform) => (
-                <button
-                    key={platform.name}
-                    onClick={() => {
-                        if (platform.action) platform.action();
-                        else window.open(platform.url, '_blank');
-                    }}
-                    style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: platform.color,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.2rem',
-                        transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                        opacity: 0.85,
-                        backdropFilter: 'blur(4px)',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.background = platform.color;
-                        e.currentTarget.style.opacity = '1';
-                        e.currentTarget.style.transform = 'translateY(-3px) scale(1.1)';
-                        e.currentTarget.style.boxShadow = `0 8px 15px -3px ${platform.color}66`; // glow effect
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                        e.currentTarget.style.opacity = '0.85';
-                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-                    }}
-                    title={`Share on ${platform.name}`}
-                    aria-label={`Share on ${platform.name}`}
-                >
-                    {platform.icon}
-                </button>
-            ))}
-        </div>
+        <>
+            {/* Off-screen Instagram Story template */}
+            {storyData && <InstagramStoryTemplate ref={storyRef} data={storyData} type={type} />}
+
+            {/* Desktop Card Preview */}
+            {cardPreviewUrl && (
+                <div style={{ marginBottom: 16, position: 'relative' }}>
+                    <button
+                        onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
+                        style={{
+                            position: 'absolute', top: 6, right: 6, zIndex: 2,
+                            background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                            width: 26, height: 26, color: 'white', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                    ><FaTimes size={11} /></button>
+                    <a href={url} target="_blank" rel="noopener noreferrer" title="Open">
+                        <img
+                            src={cardPreviewUrl}
+                            alt="Share Card"
+                            style={{ width: '100%', borderRadius: 10, display: 'block', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+                        />
+                    </a>
+                    <a
+                        href={cardPreviewUrl}
+                        download="invitation-card.png"
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            marginTop: 10, padding: '10px 0', borderRadius: 10,
+                            background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                            color: 'white', fontWeight: 700, fontSize: '0.9rem',
+                            textDecoration: 'none',
+                        }}
+                    >
+                        <FaDownload /> Download Image
+                    </a>
+                    <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '0.7rem', marginTop: 6 }}>
+                        Save then share on WhatsApp / Instagram
+                    </p>
+                </div>
+            )}
+
+            {/* Share Buttons */}
+            {!cardPreviewUrl && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
+                    {platforms.filter(p => p.show).map((p) => (
+                        <button
+                            key={p.name}
+                            onClick={() => { if (!p.disabled) { p.action ? p.action() : window.open(p.url, '_blank'); } }}
+                            title={p.name}
+                            aria-label={p.name}
+                            style={{
+                                width: '48px', height: '48px', borderRadius: '50%', border: 'none',
+                                background: 'rgba(255,255,255,0.05)', color: p.color,
+                                cursor: p.disabled ? 'wait' : 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1.2rem', transition: 'all 0.2s ease',
+                                opacity: p.disabled ? 0.5 : 0.85,
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!p.disabled) {
+                                    e.currentTarget.style.background = p.color;
+                                    e.currentTarget.style.opacity = '1';
+                                    e.currentTarget.style.transform = 'translateY(-3px) scale(1.1)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                e.currentTarget.style.opacity = '0.85';
+                                e.currentTarget.style.transform = 'none';
+                            }}
+                        >
+                            {p.icon}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </>
     );
 };
 
