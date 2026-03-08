@@ -53,13 +53,12 @@ const CreatePrivateInvitation = () => {
         description: '',
         privacy: 'private',
         invitedFriends: [],
-        city: restaurantData?.city || '',
         country: restaurantData?.country || '',
         lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
         lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
         userLat: null,
         userLng: null,
-        occasionType: editInvitation?.occasionType || 'social', // Default occasion
+        occasionType: editInvitation?.occasionType || 'social',
     });
 
     // Populate data when editing

@@ -62,12 +62,15 @@ const BusinessProDashboard = () => {
     };
 
     // Auto-open design studio if arrived from mobile with openDesign state
+    // OR auto-open subscription if arrived with defaultTab: 'subscription'
     useEffect(() => {
         const state = location.state;
         if (state?.openDesign) {
             setEditOfferData(state.editOffer || null);
             setActiveSection('design');
-            // Clear the state so back-navigation doesn't re-trigger
+            window.history.replaceState({}, '');
+        } else if (state?.defaultTab) {
+            setActiveSection(state.defaultTab);
             window.history.replaceState({}, '');
         }
     }, []);

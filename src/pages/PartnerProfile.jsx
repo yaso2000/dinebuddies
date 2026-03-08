@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useInvitations } from '../context/InvitationContext';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
-import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart } from 'react-icons/fa';
+import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart, FaSave } from 'react-icons/fa';
+
 import { HiBuildingStorefront } from 'react-icons/hi2';
+import { SiTiktok } from 'react-icons/si';
 import { useAuth } from '../context/AuthContext';
-import { ServiceIcon } from '../utils/serviceIcons.jsx';
 import { updateSocialMetaTags, generatePartnerMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -20,7 +21,13 @@ import GroupChat from '../components/GroupChat';
 import ShareButtons from '../components/ShareButtons';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
-import ServiceModal from '../components/ServiceModal';
+import ServiceModal, { SERVICE_ICONS } from '../components/ServiceModal';
+import { getContrastText } from '../utils/colorUtils';
+import PremiumBadge from '../components/PremiumBadge';
+import PremiumPaywallModal from '../components/PremiumPaywallModal';
+import DraftSavedModal from '../components/DraftSavedModal';
+import BrandKit from './business-pro/BrandKit';
+import PlanBadge from '../components/PlanBadge';
 
 
 
@@ -31,6 +38,23 @@ const PartnerProfile = () => {
     const { currentUser, userProfile, updateUserProfile, isGuest } = useAuth();
     const { joinCommunity, leaveCommunity } = useInvitations();
     const { t } = useTranslation();
+
+    // Brand Kit preview mode — reads live state from localStorage when ?preview=1
+    const isPreviewMode = new URLSearchParams(location.search).get('preview') === '1';
+    const [previewBrandKit, setPreviewBrandKit] = useState(() => {
+        if (!isPreviewMode) return null;
+        try { return JSON.parse(localStorage.getItem('bk_preview') || 'null'); } catch { return null; }
+    });
+    useEffect(() => {
+        if (!isPreviewMode) return;
+        const onStorage = (e) => {
+            if (e.key === 'bk_preview') {
+                try { setPreviewBrandKit(JSON.parse(e.newValue || 'null')); } catch { }
+            }
+        };
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
+    }, [isPreviewMode]);
 
     // Ref to prevent snapshot from overwriting optimistic join/leave state
     const joiningRef = React.useRef(false);
@@ -50,7 +74,6 @@ const PartnerProfile = () => {
     const [uploadingImage, setUploadingImage] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
-    const [isEditMode, setIsEditMode] = useState(false);
 
     // Delivery Links states (Premium feature)
     const [deliveryLinks, setDeliveryLinks] = useState({
@@ -82,28 +105,35 @@ const PartnerProfile = () => {
     const [services, setServices] = useState([]);
     const [showServiceModal, setShowServiceModal] = useState(false);
     const [editingService, setEditingService] = useState(null);
+    const [pendingServices, setPendingServices] = useState([]);
+    const [savingServices, setSavingServices] = useState(false);
+    const [showServiceDraftBanner, setShowServiceDraftBanner] = useState(false);
+    const [showServiceAddForm, setShowServiceAddForm] = useState(false);
+    const [serviceForm, setServiceForm] = useState({ name: '', description: '', icon: '⚙️' });
+    const [serviceIconSearch, setServiceIconSearch] = useState('');
 
     const [showBasicInfoModal, setShowBasicInfoModal] = useState(false);
     const [basicInfoForm, setBasicInfoForm] = useState({ businessName: '', tagline: '', businessType: 'Restaurant', description: '' });
 
     const [showContactModal, setShowContactModal] = useState(false);
     const [contactForm, setContactForm] = useState({ phone: '', email: '', website: '', address: '', city: '' });
+    const [proFieldsNotice, setProFieldsNotice] = useState(null); // list of filled pro field names
 
     const [savingInfo, setSavingInfo] = useState(false);
+
+
+    // Premium / Paywall state
+    const [showPaywall, setShowPaywall] = useState(false);
+    const [paywallFeature, setPaywallFeature] = useState('');
+
+    const [showBrandKitModal, setShowBrandKitModal] = useState(false);
+
     const [coverUploading, setCoverUploading] = useState(false);
     const [logoUploading, setLogoUploading] = useState(false);
 
 
 
-    const days = [
-        { key: 'sunday', label: 'Sunday' },
-        { key: 'monday', label: 'Monday' },
-        { key: 'tuesday', label: 'Tuesday' },
-        { key: 'wednesday', label: 'Wednesday' },
-        { key: 'thursday', label: 'Thursday' },
-        { key: 'friday', label: 'Friday' },
-        { key: 'saturday', label: 'Saturday' }
-    ];
+
 
     const fetchPartner = async () => {
         try {
@@ -124,7 +154,6 @@ const PartnerProfile = () => {
                         setIsMember(memberIds.includes(currentUser.uid) || memberIds.includes(currentUser.id));
                     }
 
-                    console.log('✅ Partner data updated:', data.subscriptionTier);
                 } else {
                     console.error('Partner not found or not a business account');
                 }
@@ -142,17 +171,9 @@ const PartnerProfile = () => {
         }
     };
 
-    const checkMembership = async () => {
-        // Now handled by partner onSnapshot listener
-    };
-
-    const fetchMemberCount = async () => {
-        // Now handled by partner onSnapshot listener
-    };
 
     const fetchActiveInvitations = async () => {
         try {
-            console.log('📋 Fetching active invitations for:', partnerId);
             const invitationsRef = collection(db, 'invitations');
             const q = query(
                 invitationsRef,
@@ -168,7 +189,6 @@ const PartnerProfile = () => {
                 return inviteDate > now;
             });
 
-            console.log('✅ Active invitations count:', activeInvitations.length);
             setActiveInvitationsCount(activeInvitations.length);
         } catch (error) {
             console.error('❌ Error fetching active invitations:', error);
@@ -178,7 +198,6 @@ const PartnerProfile = () => {
 
     const fetchReviews = async () => {
         try {
-            console.log('⭐ Fetching reviews for:', partnerId);
             const reviewsRef = collection(db, 'reviews');
             const q = query(
                 reviewsRef,
@@ -209,7 +228,6 @@ const PartnerProfile = () => {
                 setAverageRating(0);
             }
 
-            console.log('✅ Reviews loaded:', reviewsData.length);
         } catch (error) {
             console.error('❌ Error fetching reviews:', error);
         }
@@ -233,16 +251,10 @@ const PartnerProfile = () => {
                     fetchActiveInvitations(),
                     fetchReviews()
                 ]);
-                if (currentUser) {
-                    await Promise.all([
-                        checkMembership(),
-                        fetchMemberCount()
-                    ]);
-                }
             }
         };
         loadAllData();
-    }, [currentUser, partnerId, partner?.uid]); // Reduced dependency array
+    }, [currentUser, partnerId, partner?.uid]);
 
     // Load delivery links when partner data changes
     useEffect(() => {
@@ -270,13 +282,13 @@ const PartnerProfile = () => {
         }
     }, [partner]);
 
-    // Fetch avatars for first 5 community members
+    // Fetch avatars for last 5 community members (most recent)
     useEffect(() => {
         const memberIds = partner?.communityMembers || [];
         if (memberIds.length === 0) { setMemberAvatars([]); return; }
-        const top5 = memberIds.slice(0, 5);
+        const last5 = memberIds.slice(-5).reverse(); // last 5, newest first
         Promise.all(
-            top5.map(uid =>
+            last5.map(uid =>
                 getDoc(doc(db, 'users', uid))
                     .then(snap => snap.exists() ? (snap.data().photo_url || null) : null)
                     .catch(() => null)
@@ -370,13 +382,6 @@ const PartnerProfile = () => {
                 return;
             }
 
-            console.log('📝 Submitting review:', {
-                partnerId,
-                userId: currentUser.uid,
-                rating: newReview.rating,
-                comment: newReview.comment
-            });
-
             await addDoc(reviewsRef, {
                 partnerId,
                 userId: currentUser.uid,
@@ -387,15 +392,12 @@ const PartnerProfile = () => {
                 createdAt: serverTimestamp()
             });
 
-            console.log('✅ Review submitted successfully!');
 
             // Small delay to ensure Firestore processes serverTimestamp
             await new Promise(resolve => setTimeout(resolve, 500));
 
             // Refresh reviews
-            console.log('🔄 Refreshing reviews...');
             await fetchReviews();
-            console.log('✅ Reviews refreshed!');
 
             // Reset form
             setNewReview({ rating: 5, comment: '' });
@@ -486,7 +488,6 @@ const PartnerProfile = () => {
                 'businessInfo.gallery': updatedGallery
             });
 
-            console.log('✅ Image uploaded successfully');
         } catch (error) {
             console.error('❌ Error uploading image:', error);
             alert('Failed to upload image');
@@ -510,7 +511,6 @@ const PartnerProfile = () => {
                 'businessInfo.gallery': updatedGallery
             });
 
-            console.log('✅ Image deleted successfully');
         } catch (error) {
             console.error('❌ Error deleting image:', error);
             alert('Failed to delete image');
@@ -572,7 +572,6 @@ const PartnerProfile = () => {
             if (isFavorite) {
                 // Remove from favorites
                 newFavorites = newFavorites.filter(p => p.businessId !== partnerId);
-                console.log('💔 Removing from favorites');
             } else {
                 // Add to favorites
                 const favoritePlace = {
@@ -585,7 +584,6 @@ const PartnerProfile = () => {
                     addedAt: new Date().toISOString()
                 };
                 newFavorites.push(favoritePlace);
-                console.log('❤️ Adding to favorites:', favoritePlace);
             }
 
             // Update via AuthContext to ensure local state and Firestore are synced
@@ -687,10 +685,8 @@ const PartnerProfile = () => {
             await updateDoc(userRef, {
                 'businessInfo.deliveryLinks': tempDeliveryLinks
             });
-
             setDeliveryLinks(tempDeliveryLinks);
             setEditingDeliveryLinks(false);
-            console.log('✅ Delivery links saved');
         } catch (error) {
             console.error('❌ Error saving delivery links:', error);
             alert('Error saving delivery links');
@@ -703,20 +699,53 @@ const PartnerProfile = () => {
     };
 
     // Inline edit handlers
-    const handleAddService = async (serviceData) => {
+    // handleAddService: for editing existing (via modal) — saves immediately
+    const handleAddService = (serviceData) => {
+        if (editingService !== null) {
+            const updated = services.map((s, i) => i === editingService ? serviceData : s);
+            setServices(updated);
+            const userRef = doc(db, 'users', partnerId);
+            updateDoc(userRef, { 'businessInfo.services': updated }).catch(console.error);
+            setShowServiceModal(false);
+            setEditingService(null);
+        }
+    };
+
+    // handleAddServiceLocal: for inline add form — adds to pending, keeps form open
+    const handleAddServiceLocal = () => {
+        if (!serviceForm.name.trim()) return;
+        setPendingServices(prev => [...prev, {
+            ...serviceForm,
+            id: Date.now().toString()
+        }]);
+        setServiceForm({ name: '', description: '', icon: '⚙️' });
+        setServiceIconSearch('');
+    };
+
+    const handleSaveAllServices = async () => {
+        if (pendingServices.length === 0) return;
+        setSavingServices(true);
         try {
-            let updated;
-            if (editingService !== null) {
-                updated = services.map((s, i) => i === editingService ? serviceData : s);
-            } else {
-                updated = [...services, serviceData];
-            }
+            const updated = [...services, ...pendingServices];
             setServices(updated);
             const userRef = doc(db, 'users', partnerId);
             await updateDoc(userRef, { 'businessInfo.services': updated });
-            setShowServiceModal(false);
-            setEditingService(null);
-        } catch (err) { console.error('Error saving service:', err); }
+            setPendingServices([]);
+            setShowServiceAddForm(false);
+            setServiceForm({ name: '', description: '', icon: '⚙️' });
+            if (!isPaid) {
+                setShowServiceDraftBanner(true);
+                setTimeout(() => setShowServiceDraftBanner(false), 30000);
+            }
+        } catch (err) { console.error('Error saving services:', err); }
+        finally { setSavingServices(false); }
+    };
+
+    const handleDiscardServices = () => {
+        setPendingServices([]);
+        setShowServiceAddForm(false);
+        setServiceForm({ name: '', description: '', icon: '⚙️' });
+        setServiceIconSearch('');
     };
 
     const handleDeleteService = async (index) => {
@@ -776,7 +805,11 @@ const PartnerProfile = () => {
             email: businessInfo.email || '',
             website: businessInfo.website || '',
             address: businessInfo.address || '',
-            city: businessInfo.city || ''
+            city: businessInfo.city || '',
+            instagram: businessInfo.instagram || '',
+            facebook: businessInfo.facebook || '',
+            twitter: businessInfo.twitter || '',
+            tiktok: businessInfo.tiktok || '',
         });
         setShowContactModal(true);
     };
@@ -789,9 +822,25 @@ const PartnerProfile = () => {
                 'businessInfo.email': contactForm.email,
                 'businessInfo.website': contactForm.website,
                 'businessInfo.address': contactForm.address,
-                'businessInfo.city': contactForm.city
+                'businessInfo.city': contactForm.city,
+                'businessInfo.instagram': contactForm.instagram,
+                'businessInfo.facebook': contactForm.facebook,
+                'businessInfo.twitter': contactForm.twitter,
+                'businessInfo.tiktok': contactForm.tiktok,
             });
             setShowContactModal(false);
+            // Smart pro-fields notice for free users
+            if (!isPaid) {
+                const proFieldLabels = [
+                    { key: 'website', label: '🌐 Website' },
+                    { key: 'instagram', label: '📸 Instagram' },
+                    { key: 'facebook', label: '👥 Facebook' },
+                    { key: 'twitter', label: '🐦 Twitter / X' },
+                    { key: 'tiktok', label: '🎵 TikTok' },
+                ];
+                const filled = proFieldLabels.filter(f => contactForm[f.key]?.trim());
+                if (filled.length > 0) setProFieldsNotice(filled.map(f => f.label));
+            }
         } catch (err) { alert('Save failed'); } finally { setSavingInfo(false); }
     };
 
@@ -831,634 +880,348 @@ const PartnerProfile = () => {
         );
     }
 
-    const businessInfo = partner.businessInfo || {};
+    const rawBusinessInfo = partner.businessInfo || {};
+    // In preview mode → show visitor view (no edit controls)
+    const isOwner = !isPreviewMode && currentUser?.uid === partnerId;
+
+    // Merge drafts dynamically if viewing as owner
+    const businessInfo = isOwner && rawBusinessInfo.drafts
+        ? { ...rawBusinessInfo, ...rawBusinessInfo.drafts }
+        : rawBusinessInfo;
+
+    const hasDrafts = isOwner && rawBusinessInfo.drafts && Object.keys(rawBusinessInfo.drafts).length > 0;
+
     const tier = partner.subscriptionTier || 'free';
-    const isPaid = tier === 'professional' || tier === 'elite' || tier === 'premium';
-    const isElite = tier === 'elite' || tier === 'premium';
+    const isPaid = tier === 'professional' || tier === 'elite';
+    const isElite = tier === 'elite';
     const isPremium = isPaid;
-    const isOwner = currentUser?.uid === partnerId;
 
     // ── Brand Kit: only apply custom colors when business has saved a Brand Kit
-    const brandKit = businessInfo?.brandKit || {};
+    // In preview mode, use live state from localStorage (set by BrandKit editor)
+    const brandKit = (isPreviewMode && previewBrandKit) ? previewBrandKit : (businessInfo?.brandKit || {});
     const _p = brandKit.primaryColor;   // undefined → no brand kit
     const _s = brandKit.secondaryColor || _p;
     const _br = brandKit.buttonStyle || '14px';
-    const _ff = brandKit.fontFamily || undefined;
+    // Font: always system-ui sans-serif regardless of any stored brandKit value
+    const _ff = 'system-ui, sans-serif';
 
     // tc = null for unbranded businesses → th() falls back to default CSS styles
-    const tc = _p ? {
-        accent: _p,
-        accentText: '#ffffff',
-        border: `${_p}55`,
-        badgeBg: `${_p}22`,
-        badgeText: _p,
-        tabActive: _p,
-        headerGlow: `0 0 40px ${_p}40`,
-        swatchGradient: `linear-gradient(135deg, ${_p}, ${_s})`,
-        gradientFrom: 'rgba(0,0,0,0.85)',
-        gradientTo: 'rgba(0,0,0,0.97)',
-        footerBg: `linear-gradient(135deg, ${_p}cc, ${_s}88)`,
-        btnShadow: `0 8px 24px ${_p}44`,
-        cardShadow: `0 4px 20px ${_p}22`,
-        btnBorderRadius: _br,
-        fontFamily: _ff,
-        cardBg: undefined,
-    } : null;
+    const tc = _p ? (() => {
+        // safeText: explicit textColor from brand kit, or auto-detected readable accent
+        const lum = (hex) => {
+            try {
+                const h = hex.replace('#', '');
+                const r = parseInt(h.slice(0, 2), 16) / 255;
+                const g = parseInt(h.slice(2, 4), 16) / 255;
+                const b = parseInt(h.slice(4, 6), 16) / 255;
+                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            } catch { return 0; }
+        };
+        // Auto-detect a readable text color for dark cards. If primary is bright enough, use it, else default to white
+        const _safeText = brandKit.textColor ||
+            (lum(_p) > 0.4 ? _p : '#ffffff');
+        return {
+            accent: _p,
+            safeText: _safeText,
+            accentText: getContrastText(_p),
+            border: `${_p}55`,
+            badgeBg: `${_p}22`,
+            badgeText: _safeText,
+            tabActive: _p,
+            // Tab button overrides
+            tabBorderColor: brandKit.tabBorderColor || _p,
+            tabBgColor: brandKit.tabBgColor || 'rgba(255,255,255,0.95)',
+            tabTextColor: brandKit.tabTextColor || brandKit.tabBorderColor || _p,
+            // Community / Join button
+            joinBtnBg: brandKit.joinBtnBg || '#ffffff',
+            joinBtnTextColor: brandKit.joinBtnTextColor || _p,
+            // Create Invitation button
+            inviteBtnBg: brandKit.inviteBtnBg || undefined,
+            inviteBtnTextColor: brandKit.inviteBtnTextColor || '#ffffff',
+            // Stars
+            starColor: brandKit.starColor || _safeText,
+            // CTA button overrides
+            btnTextColor: brandKit.btnTextColor || undefined,
+            btnBorderColor: brandKit.btnBorderColor || undefined,
+            headerGlow: `0 0 40px ${_p}40`,
+            swatchGradient: `linear-gradient(135deg, ${_p}, ${_s})`,
+            gradientFrom: 'rgba(0,0,0,0.85)',
+            gradientTo: 'rgba(0,0,0,0.97)',
+            footerBg: `linear-gradient(135deg, ${_p}cc, ${_s}88)`,
+            btnShadow: `0 8px 24px ${_p}44`,
+            cardShadow: `0 4px 20px ${_p}22`,
+            btnBorderRadius: _br,
+            fontFamily: _ff,
+            cardBg: undefined,
+        };
+    })() : null;
 
-    // th() returns themed when brandKit active, fallback otherwise
-    const th = (themed, fallback) => tc ? themed : fallback;
+    // Standardized floating Edit Button for all sections
+    const EditActionBtn = ({ onClick, icon = <FaEdit size={16} /> }) => (
+        <button
+            onClick={onClick}
+            title="Edit Section"
+            style={{
+                width: '40px', height: '40px', borderRadius: '50%',
+                background: tc?.accent ? `${tc.accent}22` : 'rgba(255,255,255,0.12)', cursor: 'pointer',
+                border: `1.5px solid ${tc?.accent || 'rgba(255,255,255,0.3)'}`,
+                color: tc?.accent || 'rgba(255,255,255,0.85)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: tc?.accent ? `0 4px 14px ${tc.accent}44` : '0 4px 12px rgba(0,0,0,0.3)',
+                transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => {
+                e.currentTarget.style.transform = 'scale(1.12)';
+                e.currentTarget.style.background = tc?.accent ? `${tc.accent}44` : 'rgba(255,255,255,0.22)';
+            }}
+            onMouseLeave={e => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.background = tc?.accent ? `${tc.accent}22` : 'rgba(255,255,255,0.12)';
+            }}
+        >
+            {icon}
+        </button>
+    );
 
+    // Plan badges — توضيح أن هذه الميزة لخطة Pro وElite
+    const PlanBadges = () => (
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span title="Professional Plan" style={{
+                fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+                borderRadius: 20, border: '1px solid #8b5cf6',
+                color: '#a78bfa', background: 'rgba(139,92,246,0.12)',
+                display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+            }}>⚡ Pro</span>
+            <span title="Elite Plan" style={{
+                fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+                borderRadius: 20, border: '1px solid #f59e0b',
+                color: '#fbbf24', background: 'rgba(245,158,11,0.12)',
+                display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+            }}>👑 Elite</span>
+        </div>
+    );
+
+    // th() returns themed when brandKit active, fallback otherwise    // Free badge — للأقسام المجانية
+    const FreeBadge = () => (
+        <span title="Free Feature" style={{
+            fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+            borderRadius: 20, border: '1px solid #22c55e',
+            color: '#4ade80', background: 'rgba(34,197,94,0.12)',
+            display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+        }}>🆓 Free</span>
+    );
+
+    // IMPORTANT FIX: checks if themed is undefined, otherwise falls back
+    const th = (themed, fallback) => (tc && themed !== undefined) ? themed : fallback;
 
     // Verified = profile has both cover image and logo
     const isVerified = !!(businessInfo.coverImage && partner.photo_url);
-
+    // ── Global Save: always saves directly (theme & all features are free) ──────────────────
+    const handleGlobalSave = async () => {
+        if (!currentUser || currentUser.uid !== partnerId) return;
+        setGlobalSaving(true);
+        const userRef = doc(db, 'users', partnerId);
+        try {
+            const updates = {};
+            // Always promote drafts to live — no paywall
+            if (rawBusinessInfo.drafts?.brandKit)
+                updates['businessInfo.brandKit'] = rawBusinessInfo.drafts.brandKit;
+            if (rawBusinessInfo.drafts?.deliveryLinks)
+                updates['businessInfo.deliveryLinks'] = rawBusinessInfo.drafts.deliveryLinks;
+            if (rawBusinessInfo.drafts?.theme)
+                updates['businessInfo.theme'] = rawBusinessInfo.drafts.theme;
+            if (Object.keys(updates).length > 0)
+                await updateDoc(userRef, { ...updates, 'businessInfo.drafts': {} });
+            setGlobalSaved(true);
+            setTimeout(() => setGlobalSaved(false), 2500);
+        } catch (e) {
+            console.error('Global save error:', e);
+        } finally {
+            setGlobalSaving(false);
+        }
+    };
 
     return (
         <div className="page-container" style={{
             paddingTop: '0',
             paddingBottom: '100px',
             background: th(tc?.cardBg, undefined),
-            minHeight: '100vh'
+            minHeight: '100vh',
+            fontFamily: 'system-ui, sans-serif',
         }}>
-            {/* Header - Simplified */}
-            <header className="app-header sticky-header-glass">
-                <button className="back-btn" onClick={() => navigate('/restaurants')}>
-                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                </button>
-
-                {/* Center - Business Name and Type Badge */}
-                <div style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '6px'
-                }}>
-                    <h3 style={{
-                        fontSize: '1.1rem',
-                        fontWeight: '800',
-                        margin: 0,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        maxWidth: '200px',
-                        fontFamily: tc?.fontFamily || undefined
-                    }}>
-                        {partner.display_name || 'Business'}
-                        {isVerified && (
-                            <span title="Verified Profile" style={{ marginLeft: '6px', fontSize: '0.9rem' }}>✅</span>
-                        )}
-                    </h3>
-
-                    {/* Business Type + Cuisine + Price Badges */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                        <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '2px 8px',
-                            background: th(tc?.badgeBg, 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.15))'),
-                            border: `1px solid ${th(tc?.border, 'rgba(139, 92, 246, 0.4)')}`,
-                            borderRadius: '10px',
-                            fontSize: '0.65rem',
-                            fontWeight: '700',
-                            color: th(tc?.badgeText, 'var(--primary)'),
-                            letterSpacing: '0.3px'
-                        }}>
-                            {businessInfo.businessType || 'Restaurant'}
-                        </div>
-                        {businessInfo.cuisineType && (
-                            <div style={{
-                                display: 'inline-flex', alignItems: 'center',
-                                padding: '2px 8px',
-                                background: 'rgba(52,211,153,0.12)',
-                                border: '1px solid rgba(52,211,153,0.35)',
-                                borderRadius: '10px',
-                                fontSize: '0.65rem', fontWeight: '700', color: '#34d399'
-                            }}>
-                                {businessInfo.cuisineType}
-                            </div>
-                        )}
-                        {businessInfo.priceRange && (
-                            <div style={{
-                                display: 'inline-flex', alignItems: 'center',
-                                padding: '2px 8px',
-                                background: 'rgba(251,191,36,0.12)',
-                                border: '1px solid rgba(251,191,36,0.35)',
-                                borderRadius: '10px',
-                                fontSize: '0.65rem', fontWeight: '700', color: '#fbbf24'
-                            }}>
-                                {businessInfo.priceRange}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Share button */}
-                {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                        className="back-btn"
-                        onClick={handleToggleFavorite}
-                        style={{ color: isFavorite ? '#ef4444' : 'inherit' }}
-                    >
-                        {isFavorite ? <FaHeart /> : <FaRegHeart />}
-                    </button>
-                    <button className="back-btn" onClick={handleShare} disabled={isSharing} title="Share">
-                        {isSharing ? '⏳' : <FaShare />}
-                    </button>
-                </div>
-            </header>
 
             {/* Card preview overlay */}
             {headerCardPreviewUrl && (
-                <div
-                    onClick={closeHeaderPreview}
-                    style={{
-                        position: 'fixed', inset: 0, zIndex: 9999,
-                        background: 'rgba(0,0,0,0.8)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        padding: '20px',
-                    }}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            background: '#1e1e2e', borderRadius: 20, padding: 20,
-                            maxWidth: 380, width: '100%', position: 'relative',
-                            boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
-                        }}
-                    >
-                        <button onClick={closeHeaderPreview} style={{
-                            position: 'absolute', top: 10, right: 10,
-                            width: 30, height: 30, borderRadius: '50%', border: 'none',
-                            background: 'rgba(255,255,255,0.15)', color: 'white',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>✕</button>
-
-                        <img
-                            src={headerCardPreviewUrl} alt="Business Card"
-                            style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: 14 }}
-                        />
-
+                <div onClick={closeHeaderPreview} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ background: '#1e1e2e', borderRadius: 20, padding: 20, maxWidth: 380, width: '100%', position: 'relative', boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}>
+                        <button onClick={closeHeaderPreview} style={{ position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.15)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                        <img src={headerCardPreviewUrl} alt="Business Card" style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: 14 }} />
                         <div style={{ display: 'flex', gap: 10 }}>
-                            {/* Share — fresh user gesture so navigator.share({files}) works like invitations */}
-                            <button
-                                onClick={handleShareFromOverlay}
-                                style={{
-                                    flex: 1, padding: '13px 0', borderRadius: 12, border: 'none',
-                                    background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                                    color: 'white', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                }}
-                            >
-                                📤 {t('share_image', 'Share Image')}
-                            </button>
-
-                            {/* Download fallback */}
-                            <a
-                                href={headerCardPreviewUrl} download="business-card.png"
-                                style={{
-                                    padding: '13px 16px', borderRadius: 12, textDecoration: 'none',
-                                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                                    color: 'white', fontSize: '1rem',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                }}
-                            >⬇</a>
+                            <button onClick={handleShareFromOverlay} style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: 'white', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>📤 {t('share_image', 'Share Image')}</button>
+                            <a href={headerCardPreviewUrl} download="business-card.png" style={{ padding: '13px 16px', borderRadius: 12, textDecoration: 'none', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⬇</a>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Cover Image with Logo and Status Badges */}
-            <div style={{
-                position: 'relative',
-                width: '100%',
-                height: '250px',
-                background: businessInfo.coverImage
-                    ? `url(${businessInfo.coverImage})`
-                    : th(tc?.gradientFrom ? `linear-gradient(135deg, ${tc.gradientFrom}, ${tc.gradientTo})` : null, 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3))'),
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                boxShadow: tc ? tc.headerGlow : undefined,
-                marginTop: '0'
-            }}>
+            {/* --- Hero Design --- */}
+            <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+                {/* Cover & Top Nav */}
                 <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 100%)'
-                }} />
-
-                {/* Status Badges - Top Right */}
-                {(() => {
-                    const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
-                    const todayHours = businessInfo.workingHours?.[today];
-                    const isOpen = todayHours?.isOpen;
-                    const lastSeen = partner.lastSeen?.toDate?.() || partner.lastSeen;
-                    const isOnline = lastSeen && (Date.now() - new Date(lastSeen).getTime()) < 5 * 60 * 1000;
-
-                    return (
-                        <div style={{
-                            position: 'absolute',
-                            top: '1rem',
-                            right: '1rem',
-                            display: 'flex',
-                            gap: '8px',
-                            zIndex: 2
-                        }}>
-                            {/* Open/Closed Badge */}
-                            <div style={{
-                                background: 'rgba(0, 0, 0, 0.4)',
-                                backdropFilter: 'blur(10px)',
-                                border: `1px solid ${isOpen ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-                                borderRadius: '12px',
-                                padding: '6px 12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: isOpen ? '#22c55e' : '#ef4444'
-                            }}>
-                                <span>{isOpen ? '●' : '●'}</span>
-                                <span>{isOpen ? 'Open' : 'Closed'}</span>
-                            </div>
-
-                            {/* Online/Offline Badge */}
-                            <div style={{
-                                background: 'rgba(0, 0, 0, 0.4)',
-                                backdropFilter: 'blur(10px)',
-                                border: `1px solid ${isOnline ? 'rgba(34, 197, 94, 0.4)' : 'rgba(156, 163, 175, 0.4)'}`,
-                                borderRadius: '12px',
-                                padding: '6px 12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: isOnline ? '#22c55e' : '#9ca3af'
-                            }}>
-                                <span>{isOnline ? '🟢' : '⚫'}</span>
-                                <span>{isOnline ? 'Online' : 'Offline'}</span>
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                {/* Logo - Top Left Corner with Premium Badge */}
-                <div style={{
-                    position: 'absolute',
-                    top: '1rem',
-                    left: '1rem',
-                    zIndex: 3
+                    width: '100%', height: '300px',
+                    background: businessInfo.coverImage ? `url(${businessInfo.coverImage})` : th(tc?.gradientFrom ? `linear-gradient(135deg, ${tc.gradientFrom}, ${tc.gradientTo})` : null, 'linear-gradient(135deg, #1e1e2e, #2d2b42)'),
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    borderBottomLeftRadius: '32px', borderBottomRightRadius: '32px',
+                    boxShadow: tc?.headerGlow || '0 10px 40px rgba(0,0,0,0.3)',
+                    position: 'relative'
                 }}>
-                    <div style={{
-                        position: 'relative',
-                        width: '60px',
-                        height: '60px'
-                    }}>
-                        {/* Logo */}
-                        <div style={{
-                            width: '100%',
-                            height: '100%',
-                            borderRadius: '12px',
-                            background: partner.photo_url
-                                ? `url(${partner.photo_url})`
-                                : 'linear-gradient(135deg, var(--primary), #f97316)',
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                            border: '2px solid rgba(255, 255, 255, 0.9)',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '1.5rem'
-                        }}>
-                            {!partner.photo_url && '🏪'}
-                        </div>
+                    {/* Overlay gradient */}
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.72) 100%)', borderRadius: 'inherit' }} />
 
-                        {/* Logo Upload Overlay - Owner Only */}
-                        {isOwner && (
-                            <label style={{
-                                position: 'absolute', inset: 0, borderRadius: '12px',
-                                background: logoUploading ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', transition: 'background 0.2s', zIndex: 1
-                            }}
-                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.45)'}
-                                onMouseLeave={e => e.currentTarget.style.background = logoUploading ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0)'}>
-                                <span style={{ fontSize: logoUploading ? '0.6rem' : '1rem', color: 'white' }}>
-                                    {logoUploading ? '⏳' : '📷'}
+                    {/* Top bar: back + status badges + actions */}
+                    <div style={{ position: 'absolute', top: '1.2rem', left: '1.2rem', right: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
+                        {/* Status badges (Open + Online) */}
+                        {(() => {
+                            const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+                            const isOpen = businessInfo.workingHours?.[today]?.isOpen;
+                            const badgePill = (color, dot, label) => (
+                                <span style={{
+                                    padding: '5px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '800',
+                                    background: `rgba(${color},0.18)`, border: `1px solid rgba(${color},0.45)`,
+                                    color: `rgb(${color})`, display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                    backdropFilter: 'blur(8px)',
+                                }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: `rgb(${dot})`, boxShadow: `0 0 5px rgb(${dot})`, display: 'inline-block' }} />
+                                    {label}
                                 </span>
-                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} disabled={logoUploading} />
-                            </label>
-                        )}
+                            );
+                            return (
+                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                    {partner.isOnline && badgePill('16,185,129', '16,185,129', 'Online')}
+                                    {badgePill(isOpen ? '74,222,128' : '248,113,113', isOpen ? '74,222,128' : '248,113,113', isOpen ? 'OPEN' : 'CLOSED')}
+                                </div>
+                            );
+                        })()}
 
-
-                        {/* Premium Crown Icon - Top Right Corner of Logo */}
-                        {isPremium && (
-                            <div style={{
-                                position: 'absolute',
-                                top: '-4px',
-                                right: '-4px',
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: '50%',
-                                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                                border: '2px solid white',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.65rem',
-                                boxShadow: '0 2px 8px rgba(251, 191, 36, 0.4)'
-                            }}>
-                                👑
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Cover Upload Button - Owner Only */}
-                {isOwner && (
-                    <label style={{
-                        position: 'absolute', bottom: '0.75rem', left: '1rem',
-                        zIndex: 3, cursor: 'pointer',
-                        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(255,255,255,0.25)', borderRadius: '10px',
-                        padding: '6px 10px', color: 'white', fontSize: '0.75rem', fontWeight: '700',
-                        display: 'flex', alignItems: 'center', gap: '5px'
-                    }}>
-                        {coverUploading ? '⏳' : '📷'} {coverUploading ? 'Uploading...' : 'Change Cover'}
-                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload} disabled={coverUploading} />
-                    </label>
-                )}
-
-                {/* Stats Cards - Bottom Right */}
-
-                <div style={{
-                    position: 'absolute',
-                    bottom: '0.75rem',
-                    right: '1rem',
-                    display: 'flex',
-                    gap: '8px',
-                    zIndex: 2
-                }}>
-                    {/* Rating - Clickable to add review (only for regular users) */}
-                    <div
-                        onClick={() => {
-                            if (currentUser && !userProfile?.isBusiness) {
-                                if (isGuest) {
-                                    navigate('/login');
-                                } else {
-                                    setShowReviewModal(true);
-                                }
-                            }
-                        }}
-                        style={{
-                            background: 'rgba(0, 0, 0, 0.3)',
-                            backdropFilter: 'blur(8px)',
-                            border: '1px solid rgba(251, 191, 36, 0.3)',
-                            borderRadius: '20px',
-                            padding: '0.4rem 0.7rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            cursor: (currentUser && !userProfile?.isBusiness && !currentUser?.isGuest) ? 'pointer' : 'default',
-                            transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                            if (currentUser && !userProfile?.isBusiness) {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                                e.currentTarget.style.background = 'rgba(251, 191, 36, 0.2)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)';
-                        }}
-                    >
-                        <span style={{ fontSize: '1rem' }}>⭐</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#fbbf24' }}>
-                            {averageRating > 0 ? averageRating.toFixed(1) : '0.0'}
-                        </span>
-                        <span style={{ fontSize: '0.65rem', fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
-                            ({reviews.length})
-                        </span>
-                    </div>
-
-                    {/* Members */}
-                    <div style={{
-                        background: 'rgba(0, 0, 0, 0.3)',
-                        backdropFilter: 'blur(8px)',
-                        border: `1px solid ${tc?.accent ? tc.accent + '55' : 'rgba(139, 92, 246, 0.3)'}`,
-                        borderRadius: '20px',
-                        padding: '0.4rem 0.7rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                    }}>
-                        <span style={{ fontSize: '1rem' }}>👥</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: tc?.accent || '#a78bfa' }}>
-                            {memberCount}
-                        </span>
-                    </div>
-
-                    {/* Active Invitations */}
-                    <div style={{
-                        background: 'rgba(0, 0, 0, 0.3)',
-                        backdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(34, 197, 94, 0.3)',
-                        borderRadius: '20px',
-                        padding: '0.4rem 0.7rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                    }}>
-                        <span style={{ fontSize: '1rem' }}>📨</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#4ade80' }}>
-                            {activeInvitationsCount}
-                        </span>
-                        <span style={{ fontSize: '0.65rem', fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
-                            Invitations
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Business Info */}
-            <div style={{
-                padding: '1.5rem 1.5rem 1.5rem',
-                borderBottom: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
-                background: th(tc?.cardBg, undefined)
-            }}>
-                {businessInfo.tagline && (
-                    <p style={{
-                        fontSize: '0.95rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '0.75rem',
-                        fontStyle: 'italic'
-                    }}>
-                        {businessInfo.tagline}
-                    </p>
-                )}
-
-                {/* Social Media */}
-                {businessInfo.socialMedia && (Object.values(businessInfo.socialMedia).some(v => v)) && (
-                    <div style={{
-                        display: 'flex',
-                        gap: '12px',
-                        marginBottom: '1.25rem',
-                        flexWrap: 'wrap'
-                    }}>
-                        {businessInfo.socialMedia.instagram && (
-                            <div style={{
-                                padding: '8px 16px',
-                                background: 'rgba(225, 48, 108, 0.1)',
-                                border: '1px solid rgba(225, 48, 108, 0.3)',
-                                borderRadius: '12px',
-                                color: '#E1306C',
-                                fontSize: '0.85rem',
-                                fontWeight: '600',
-                                opacity: 0.7
-                            }}>
-                                📷 {businessInfo.socialMedia.instagram}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Action Buttons - Only for regular users, not business accounts or owner */}
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    marginTop: '1rem'
-                }}>
-                    {/* Community Row: Avatar Stack + Join/Count Button */}
-                    {currentUser?.uid !== partnerId && !userProfile?.isBusiness && (
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '10px 14px',
-                            background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #ec4899, #f97316)'),
-                            borderRadius: th(tc?.btnBorderRadius, '14px'),
-                            boxShadow: th(tc?.btnShadow, '0 4px 16px rgba(139,92,246,0.3)'),
-                        }}>
-                            {/* Avatar Stack */}
-                            <div style={{ display: 'flex', alignItems: 'center', paddingLeft: '4px' }}>
-                                {memberAvatars.length > 0 ? (
-                                    <>
-                                        {memberAvatars.map((url, i) => (
-                                            <img
-                                                key={i}
-                                                src={url}
-                                                alt=""
-                                                style={{
-                                                    width: '26px', height: '26px',
-                                                    borderRadius: '50%',
-                                                    border: '2px solid rgba(255,255,255,0.6)',
-                                                    objectFit: 'cover',
-                                                    marginLeft: i === 0 ? 0 : '-8px',
-                                                    zIndex: 10 - i,
-                                                    position: 'relative'
-                                                }}
-                                            />
-                                        ))}
-                                        <span style={{ marginLeft: '10px', fontSize: '0.82rem', color: 'rgba(255,255,255,0.95)', fontWeight: '700' }}>
-                                            {memberCount}
-                                        </span>
-                                    </>
-                                ) : (
-                                    <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>
-                                        <FaUsers style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-                                        {memberCount > 0 ? memberCount : 'Community'}
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Join / Joined Button */}
-                            <button
-                                onClick={() => {
-                                    if (isGuest) { navigate('/login'); return; }
-                                    handleJoinCommunity();
-                                }}
-                                disabled={joiningCommunity}
-                                style={{
-                                    padding: isMember ? '6px 14px' : '7px 18px',
-                                    background: isMember ? 'rgba(255,255,255,0.25)' : '#ffffff',
-                                    border: isMember ? '1px solid rgba(255,255,255,0.4)' : 'none',
-                                    borderRadius: th(tc?.btnBorderRadius, '12px'),
-                                    color: isMember ? '#ffffff' : (tc?.accent || '#f97316'),
-                                    fontWeight: '900',
-                                    fontSize: '0.82rem',
-                                    fontFamily: tc?.fontFamily || undefined,
-                                    cursor: joiningCommunity ? 'not-allowed' : 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '5px',
-                                    transition: 'all 0.2s',
-                                    opacity: joiningCommunity ? 0.7 : 1,
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: isMember ? 'none' : '0 2px 8px rgba(0,0,0,0.15)'
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (joiningCommunity) return;
-                                    if (isMember) {
-                                        e.currentTarget.style.background = 'rgba(239,68,68,0.3)';
-                                        e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (joiningCommunity) return;
-                                    e.currentTarget.style.background = isMember ? 'rgba(255,255,255,0.25)' : '#ffffff';
-                                    e.currentTarget.style.borderColor = isMember ? 'rgba(255,255,255,0.4)' : 'transparent';
-                                }}
-                            >
-                                {joiningCommunity ? '...' : isMember ? `✓ ${memberCount}` : '+ Join'}
+                        {/* Favourite + Share */}
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={handleToggleFavoriteSafe} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', color: isFavorite ? '#ef4444' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                {isFavorite ? <FaHeart fontSize="1rem" /> : <FaRegHeart fontSize="1rem" />}
+                            </button>
+                            <button onClick={handleShare} disabled={isSharing} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                {isSharing ? '⏳' : <FaShare fontSize="1rem" />}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Bottom-left: Logo + Business name + Category */}
+                    <div style={{ position: 'absolute', bottom: '1.2rem', left: '1.2rem', display: 'flex', alignItems: 'flex-end', gap: '14px', zIndex: 10 }}>
+                        {/* Logo */}
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                            <div style={{
+                                width: '90px', height: '90px', borderRadius: '22px',
+                                background: partner.photo_url ? `url(${partner.photo_url})` : tc?.swatchGradient || 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                backgroundSize: 'cover', backgroundPosition: 'center',
+                                border: `4px solid rgba(255,255,255,0.25)`,
+                                boxShadow: tc ? `0 8px 24px ${tc.accent}66` : '0 8px 24px rgba(0,0,0,0.5)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.4rem'
+                            }}>
+                                {!partner.photo_url && '🏪'}
+                            </div>
+                            {isOwner && (
+                                <label style={{ position: 'absolute', inset: 0, borderRadius: '22px', background: logoUploading ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '4px solid transparent' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = logoUploading ? 1 : 0}>
+                                    <span style={{ fontSize: '1.3rem', color: 'white' }}>{logoUploading ? '⏳' : '📷'}</span>
+                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} disabled={logoUploading} />
+                                </label>
+                            )}
+                            {/* Plan badge */}
+                            {isPaid && !isOwner && (
+                                <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#000000', border: `2px solid ${isElite ? '#f59e0b' : '#8b5cf6'}`, borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 8px ${isElite ? 'rgba(245,158,11,0.5)' : 'rgba(139,92,246,0.5)'}`, fontSize: '0.85rem' }} title={isElite ? 'Elite Partner' : 'Professional Partner'}>{isElite ? '👑' : '⚡'}</div>
+                            )}
+                        </div>
+
+                        {/* Name + Category */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingBottom: '4px' }}>
+                            <span style={{ color: 'white', fontWeight: '900', fontSize: '1.15rem', textShadow: '0 2px 8px rgba(0,0,0,0.9)', letterSpacing: '0.3px', lineHeight: 1.2 }}>
+                                {partner.display_name || 'Business'}
+                            </span>
+                            {(businessInfo.businessType || businessInfo.cuisineType) && (
+                                <span style={{ color: 'rgba(255,255,255,0.78)', fontSize: '0.82rem', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>
+                                    {businessInfo.businessType}{businessInfo.cuisineType ? ` • ${businessInfo.cuisineType}` : ''}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Cover Update button — owner only */}
+                    {isOwner && (
+                        <label style={{ position: 'absolute', bottom: '1.2rem', right: '1.2rem', zIndex: 10, cursor: 'pointer', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '12px', padding: '7px 14px', color: 'white', fontSize: '0.78rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {coverUploading ? '⏳ Uploading...' : '📷 Edit Cover'}
+                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload} disabled={coverUploading} />
+                        </label>
                     )}
+                </div>
 
 
-                    {/* Create Invitation Button - Only for regular users (not business accounts, not owner) and NOT guests */}
+                {/* Glass Stats Box */}
+                <div style={{ display: 'flex', width: '100%', background: th(tc?.badgeBg, 'rgba(255,255,255,0.03)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.08)')}`, borderRadius: '24px', padding: '16px', boxShadow: th(tc?.cardShadow, '0 8px 32px rgba(0,0,0,0.2)'), backdropFilter: 'blur(12px)', marginBottom: '24px' }}>
+                    <div onClick={() => { if (currentUser && !userProfile?.isBusiness && !isGuest) setShowReviewModal(true); }} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: (currentUser && !userProfile?.isBusiness && !isGuest) ? 'pointer' : 'default' }}>
+                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>⭐ {averageRating > 0 ? averageRating.toFixed(1) : '0.0'}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', marginTop: '4px' }}>{reviews.length} Reviews</div>
+                    </div>
+                    <div style={{ width: '1px', background: th(tc?.border, 'rgba(255,255,255,0.1)'), margin: '0 8px' }} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: th(tc?.badgeText || tc?.accent, '#a78bfa'), display: 'flex', alignItems: 'center', gap: '6px' }}>👥 {memberCount}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', marginTop: '4px' }}>Members</div>
+                    </div>
+                    <div style={{ width: '1px', background: th(tc?.border, 'rgba(255,255,255,0.1)'), margin: '0 8px' }} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '6px' }}>📨 {activeInvitationsCount}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', marginTop: '4px' }}>Invites</div>
+                    </div>
+                </div>
+
+                {businessInfo.tagline && (
+                    <p style={{ fontSize: '1rem', color: th(tc?.badgeText, 'var(--text-secondary)'), margin: '0 0 24px 0', fontStyle: 'italic', fontWeight: '500', textAlign: 'center', maxWidth: '90%' }}>"{businessInfo.tagline}"</p>
+                )}
+
+                {/* Actions Row */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginBottom: '1rem' }}>
+                    {currentUser?.uid !== partnerId && !userProfile?.isBusiness && (
+                        <button onClick={() => { if (isGuest) { navigate('/login'); return; } handleJoinCommunity(); }} disabled={joiningCommunity} style={{ width: '100%', padding: '14px 16px', borderRadius: th(tc?.btnBorderRadius, '16px'), background: isMember ? 'rgba(255,255,255,0.1)' : th(tc?.joinBtnBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'), border: isMember ? `1px solid ${th(tc?.border, 'rgba(255,255,255,0.2)')}` : 'none', color: isMember ? 'white' : th(tc?.joinBtnTextColor, 'white'), fontWeight: '900', fontSize: '1.05rem', cursor: joiningCommunity ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: isMember ? 'none' : th(tc?.btnShadow, '0 8px 24px rgba(139,92,246,0.3)'), opacity: joiningCommunity ? 0.7 : 1 }}>
+                            {joiningCommunity ? '...' : (
+                                <>
+                                    {/* Overlapping member avatars — always visible */}
+                                    {memberCount > 0 && memberAvatars.length > 0 && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                            <div style={{ display: 'flex', flexDirection: 'row-reverse' }}>
+                                                {memberAvatars.slice(0, 5).map((url, i) => (
+                                                    <img
+                                                        key={i}
+                                                        src={url}
+                                                        alt=""
+                                                        style={{
+                                                            width: 26, height: 26, borderRadius: '50%',
+                                                            objectFit: 'cover',
+                                                            border: '2px solid rgba(255,255,255,0.4)',
+                                                            marginLeft: i > 0 ? '-8px' : 0,
+                                                            background: '#333',
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 800, opacity: 0.9 }}>{memberCount}</span>
+                                        </div>
+                                    )}
+                                    {isMember ? `✓ Community Member (${memberCount})` : '+ Join Community'}
+                                </>
+                            )}
+                        </button>
+                    )}
                     {currentUser?.uid !== partnerId && !userProfile?.isBusiness && !currentUser?.isGuest && (
-                        <button
-                            onClick={handleCreateInvitation}
-                            style={{
-                                padding: '16px 20px',
-                                background: th(tc?.cardBg, 'var(--bg-card)'),
-                                border: tc ? 'none' : '2px solid transparent',
-                                backgroundImage: tc ? undefined : 'linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #8b5cf6, #ec4899)',
-                                backgroundOrigin: tc ? undefined : 'border-box',
-                                backgroundClip: tc ? undefined : 'padding-box, border-box',
-                                borderRadius: th(tc?.btnBorderRadius, '16px'),
-                                color: th(tc?.accent, 'white'),
-                                fontWeight: '800',
-                                fontSize: '1rem',
-                                letterSpacing: tc ? '0.5px' : undefined,
-                                textShadow: tc ? `0 0 8px ${tc.accent}88` : undefined,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '10px',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                transform: 'translateY(0)',
-                                position: 'relative',
-                                overflow: 'hidden',
-                                boxShadow: th(tc?.btnShadow, 'none')
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-3px)';
-                                e.currentTarget.style.filter = tc ? 'brightness(1.15)' : undefined;
-                                e.currentTarget.style.boxShadow = th(tc?.btnShadow?.replace('0 8px 24px', '0 14px 36px'), '0 6px 30px rgba(139, 92, 246, 0.2)');
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0)';
-                                e.currentTarget.style.filter = '';
-                                e.currentTarget.style.boxShadow = th(tc?.btnShadow, 'none');
-                            }}
-                        >
-                            <FaUserPlus style={{ fontSize: '1.1rem' }} />
-                            Create Invitation Here
+                        <button onClick={handleCreateInvitation} style={{ width: '100%', padding: '16px', borderRadius: th(tc?.btnBorderRadius, '16px'), background: th(tc?.inviteBtnBg, 'rgba(255,255,255,0.05)'), border: `1px solid ${th(tc?.inviteBtnBg ? 'transparent' : (tc?.border || 'rgba(255,255,255,0.1)'), 'rgba(255,255,255,0.1)')}`, color: th(tc?.inviteBtnTextColor, 'white'), fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', backdropFilter: 'blur(8px)' }}>
+                            <FaUserPlus style={{ fontSize: '1.2rem' }} /> Create Invitation
                         </button>
                     )}
                 </div>
@@ -1477,99 +1240,92 @@ const PartnerProfile = () => {
                 onCancel={handleCancelDeliveryLinks}
             />
 
-            {/* Tabs */}
+            {/* Tabs Navigation */}
             <div style={{
+                position: 'sticky', top: '10px', zIndex: 50,
                 display: 'flex',
-                gap: '5px',
-                padding: '0.5rem 10px',
-                borderBottom: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
-                overflowX: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                justifyContent: 'center',
-                background: th(tc?.cardBg, undefined)
+                flexWrap: 'wrap',
+                padding: 'clamp(4px, 1vw, 6px)',
+                margin: '0 clamp(4px, 2vw, 1rem) 1rem clamp(4px, 2vw, 1rem)',
+                background: th(tc?.cardBg ? tc.cardBg + 'cc' : 'rgba(255,255,255,0.05)', 'rgba(30, 30, 46, 0.85)'),
+                backdropFilter: 'blur(16px)',
+                border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.1)')}`,
+                borderRadius: '24px',
+                boxShadow: th(tc?.cardShadow, '0 8px 32px rgba(0,0,0,0.2)'),
+                gap: '4px',
             }}>
-                {['about', 'menu', 'services', 'hours', 'contact'].map(tab => (
+                {[
+                    { id: 'about', label: 'About', locked: false },
+                    { id: 'menu', label: 'Menu', locked: false, hide: !isOwner && (!isPaid || !(businessInfo.menu?.length > 0)) },
+                    { id: 'services', label: 'Services', locked: false, hide: !isOwner && (!isPaid || !(services?.length > 0)) },
+                    { id: 'hours', label: 'Hours', locked: false, hide: !isOwner && !businessInfo.hours },
+                    { id: 'contact', label: 'Contact', locked: false, hide: !isOwner && !(businessInfo.phone || businessInfo.email || businessInfo.address) },
+                ].filter(tab => !tab.hide).map(({ id, label, locked }) => (
                     <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
+                        key={id}
+                        onClick={() => {
+                            if (locked) { navigate('/business/pricing'); return; }
+                            setActiveTab(id);
+                        }}
                         style={{
-                            padding: '6px 10px',
-                            background: activeTab === tab
-                                ? (tc?.accent || 'var(--primary)')
-                                : 'transparent',
-                            border: activeTab === tab ? 'none' : '1px solid var(--border-color)',
-                            color: activeTab === tab
-                                ? (tc?.accentText || 'white')
-                                : 'var(--text-main)',
-                            borderRadius: '10px',
-                            cursor: 'pointer',
-                            fontWeight: '700',
-                            fontSize: '0.78rem',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.2s',
-                            boxShadow: activeTab === tab && tc ? `0 0 12px ${tc.accent}55` : 'none'
+                            padding: '8px 14px',
+                            background: activeTab === id && !locked ? th(tc?.accent, 'var(--primary)') : 'transparent',
+                            boxShadow: activeTab === id && !locked ? th(tc?.btnShadow, '0 4px 12px rgba(139,92,246,0.3)') : 'none',
+                            color: locked ? 'var(--text-muted)' : activeTab === id ? th(tc?.accentText || '#ffffff', 'white') : th(tc?.badgeText, 'var(--text-secondary)'),
+                            borderRadius: '16px', border: 'none', cursor: 'pointer',
+                            fontWeight: activeTab === id && !locked ? '800' : '600',
+                            fontSize: '13px', whiteSpace: 'nowrap',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', opacity: locked ? 0.75 : 1
                         }}
                     >
-                        {tab === 'about' ? 'About' : tab === 'menu' ? 'Menu' : tab === 'services' ? 'Services' : tab === 'hours' ? 'Hours' : 'Contact'}
+                        {label}
+                        {locked && <PlanBadge tier="pro" />}
                     </button>
                 ))}
             </div>
 
-            {/* Content */}
-            <div style={{ padding: '0.6rem 1rem', maxWidth: '100%', boxSizing: 'border-box', background: th(tc?.cardBg, undefined) }}>
+            {/* Content Area */}
+            <div style={{ padding: '0 1rem 2rem 1rem', maxWidth: '100%', boxSizing: 'border-box' }}>
+
+                {/* About Tab */}
                 {activeTab === 'about' && (
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>About the Business</h3>
-                            {isOwner && (
-                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                    <button
-                                        onClick={() => navigate('/business-pro/brand-kit')}
-                                        style={{
-                                            padding: '7px 13px', fontSize: '0.78rem', fontWeight: '700',
-                                            background: tc ? tc.swatchGradient : 'rgba(139,92,246,0.15)',
-                                            border: tc ? `1px solid ${tc.border}` : '1px solid rgba(139,92,246,0.4)',
-                                            borderRadius: '10px',
-                                            color: tc ? tc.accentText || '#fff' : 'var(--primary)',
-                                            cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: '5px'
-                                        }}
-                                    >
-                                        🎨 Brand Kit
-                                    </button>
-                                    <button
-                                        onClick={openBasicInfoModal}
-                                        style={{
-                                            padding: '7px 13px', fontSize: '0.78rem', fontWeight: '700',
-                                            background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'),
-                                            border: tc ? `1px solid ${tc.border}` : 'none',
-                                            borderRadius: '10px',
-                                            color: th(tc?.accentText || '#fff', 'white'),
-                                            cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: '5px'
-                                        }}
-                                    >
-                                        ✏️ Edit Info
-                                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                        {/* About Card */}
+                        <div style={{
+                            background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`,
+                            borderRadius: '24px', padding: '24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)'),
+                            position: 'relative', overflow: 'hidden'
+                        }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: th(tc?.accent, 'linear-gradient(to bottom, #8b5cf6, #ec4899)') }} />
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                                <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1.5rem' }}>📄</span> About Us
+                                </h3>
+                                {isOwner && (
+                                    <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <FreeBadge />
+                                        <EditActionBtn onClick={() => setShowBrandKitModal(true)} icon={<span style={{ fontSize: '1rem' }}>🎨</span>} />
+                                        <EditActionBtn onClick={openBasicInfoModal} />
+                                    </div>
+                                )}
+                            </div>
+
+                            {businessInfo.description ? (
+                                <p style={{
+                                    color: th(tc?.badgeText, 'var(--text-secondary)'), lineHeight: '1.8', fontSize: '1rem', margin: 0,
+                                    opacity: 0.9, whiteSpace: 'pre-wrap'
+                                }}>
+                                    {businessInfo.description}
+                                </p>
+                            ) : (
+                                <div style={{ padding: '20px', textAlign: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>No description available</p>
                                 </div>
                             )}
                         </div>
-                        {businessInfo.description ? (
-                            <p style={{
-                                color: th(tc?.badgeText, 'var(--text-secondary)'),
-                                lineHeight: '1.8',
-                                fontSize: '0.95rem',
-                                marginBottom: '2rem',
-                                borderLeft: tc ? `3px solid ${tc.accent}66` : undefined,
-                                paddingLeft: tc ? '1rem' : undefined,
-                                fontStyle: tc ? 'italic' : undefined
-                            }}>
-                                {businessInfo.description}
-                            </p>
-                        ) : (
-                            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>No description available</p>
-
-                        )}
 
 
                         {/* Enhanced Gallery Section */}
@@ -1605,77 +1361,254 @@ const PartnerProfile = () => {
                         partnerId={partnerId}
                         menuData={businessInfo.menu || []}
                         isOwner={isOwner}
+                        isPaid={isPaid}
                         theme={{ colors: tc }}
                     />
                 )}
 
                 {/* Services Tab */}
                 {activeTab === 'services' && (
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>Business Services</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                        {/* Draft Banner - Free Plan */}
+                        {showServiceDraftBanner && (
+                            <div style={{
+                                padding: '14px 18px', borderRadius: '14px',
+                                background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(239,68,68,0.08) 100%)',
+                                border: '1px solid rgba(245,158,11,0.35)',
+                                display: 'flex', alignItems: 'flex-start', gap: '12px',
+                            }}>
+                                <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>⚠️</span>
+                                <div style={{ flex: 1 }}>
+                                    <p style={{ margin: '0 0 6px', fontWeight: '700', fontSize: '0.95rem', color: '#f59e0b' }}>Saved as Draft</p>
+                                    <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                                        Your services were saved, but they <strong>won't appear on your public profile</strong> until you upgrade your plan.
+                                    </p>
+                                    <a href="/pricing" style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                        padding: '6px 14px', borderRadius: '8px',
+                                        background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+                                        color: '#f59e0b', fontSize: '0.85rem', fontWeight: '700', textDecoration: 'none',
+                                    }}>🚀 Upgrade Plan</a>
+                                </div>
+                                <button onClick={() => setShowServiceDraftBanner(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                            </div>
+                        )}
+
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '16px 24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
+                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '1.4rem' }}>✨</span> Business Services
+                            </h3>
                             {isOwner && (
-                                <button
-                                    onClick={() => { setEditingService(null); setShowServiceModal(true); }}
-                                    style={{
-                                        padding: '8px 14px', fontSize: '0.8rem', fontWeight: '700',
-                                        background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'),
-                                        border: tc ? `1px solid ${tc.border}` : 'none',
-                                        borderRadius: '10px',
-                                        color: th(tc?.accentText || '#fff', 'white'),
-                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
-                                    }}
-                                >
-                                    ➕ Add Service
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <PlanBadges />
+                                    {/* ＋ Add button toggles inline form */}
+                                    <button
+                                        onClick={() => setShowServiceAddForm(v => !v)}
+                                        title={showServiceAddForm ? 'Close form' : 'Add service'}
+                                        style={{
+                                            width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
+                                            border: `1px solid ${showServiceAddForm ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)'}`,
+                                            background: showServiceAddForm ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)',
+                                            color: showServiceAddForm ? '#ef4444' : '#10b981',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                    >
+                                        {showServiceAddForm ? <FaTimes size={15} /> : <FaPlus size={15} />}
+                                    </button>
+                                </div>
                             )}
                         </div>
+
+                        {/* ── Inline Add Form ── */}
+                        {isOwner && showServiceAddForm && (
+                            <div style={{
+                                background: th(tc?.cardBg, 'var(--bg-card)'),
+                                border: '1px solid rgba(139,92,246,0.25)',
+                                borderRadius: '20px', padding: '1.5rem',
+                                display: 'flex', flexDirection: 'column', gap: '14px',
+                            }}>
+                                <h4 style={{ margin: 0, fontWeight: '800', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <FaPlus style={{ color: '#10b981' }} /> Add Service
+                                </h4>
+
+                                {/* Pending preview */}
+                                {pendingServices.length > 0 && (
+                                    <div style={{
+                                        padding: '0.75rem', borderRadius: '10px',
+                                        background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)',
+                                    }}>
+                                        <p style={{ margin: '0 0 6px', fontSize: '0.8rem', fontWeight: '700', color: '#10b981' }}>
+                                            ✅ {pendingServices.length} service{pendingServices.length > 1 ? 's' : ''} ready to save:
+                                        </p>
+                                        {pendingServices.map((s, i) => (
+                                            <div key={i} style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                                {s.icon} {s.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Icon preview + search */}
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{
+                                        width: '64px', height: '64px', borderRadius: '16px', fontSize: '2.4rem',
+                                        background: 'rgba(139,92,246,0.1)', border: '2px solid rgba(139,92,246,0.3)',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px',
+                                    }}>
+                                        {serviceForm.icon}
+                                    </div>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={serviceIconSearch}
+                                    onChange={e => setServiceIconSearch(e.target.value)}
+                                    placeholder="Search icons..."
+                                    style={{
+                                        width: '100%', padding: '8px 12px', boxSizing: 'border-box',
+                                        background: 'var(--bg-body)', border: '1px solid var(--border-color)',
+                                        borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem',
+                                    }}
+                                />
+                                {/* Icon grid */}
+                                <div style={{
+                                    display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px',
+                                    maxHeight: '180px', overflowY: 'auto',
+                                    border: '1px solid var(--border-color)', borderRadius: '12px',
+                                    background: 'var(--bg-body)', padding: '6px',
+                                }}>
+                                    {(serviceIconSearch
+                                        ? SERVICE_ICONS.filter(s => s.label.toLowerCase().includes(serviceIconSearch.toLowerCase()))
+                                        : SERVICE_ICONS
+                                    ).map(s => (
+                                        <button
+                                            key={s.icon} type="button" title={s.label}
+                                            onClick={() => setServiceForm(f => ({ ...f, icon: s.icon }))}
+                                            style={{
+                                                fontSize: '1.5rem', padding: '6px', borderRadius: '8px', border: 'none',
+                                                background: serviceForm.icon === s.icon ? 'rgba(139,92,246,0.25)' : 'transparent',
+                                                outline: serviceForm.icon === s.icon ? '2px solid var(--primary)' : 'none',
+                                                cursor: 'pointer',
+                                            }}
+                                        >{s.icon}</button>
+                                    ))}
+                                </div>
+
+                                {/* Name */}
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Service Name *</label>
+                                    <input
+                                        type="text"
+                                        value={serviceForm.name}
+                                        onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))}
+                                        placeholder="e.g., Home Delivery, Live DJ..."
+                                        style={{
+                                            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                                            background: 'var(--bg-body)', border: '1px solid var(--border-color)',
+                                            borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem',
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Description */}
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Description (optional)</label>
+                                    <textarea
+                                        value={serviceForm.description}
+                                        onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))}
+                                        rows={2}
+                                        placeholder="Brief info about this service..."
+                                        style={{
+                                            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                                            background: 'var(--bg-body)', border: '1px solid var(--border-color)',
+                                            borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', resize: 'vertical',
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Action buttons: Add / Save(N) / ✕ */}
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                    {/* + Add */}
+                                    <button
+                                        onClick={handleAddServiceLocal}
+                                        disabled={!serviceForm.name.trim()}
+                                        style={{
+                                            flex: 1, padding: '0.65rem 1rem', borderRadius: '10px',
+                                            border: '1px solid rgba(139,92,246,0.4)',
+                                            background: serviceForm.name.trim() ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.04)',
+                                            color: serviceForm.name.trim() ? '#a78bfa' : 'var(--text-muted)',
+                                            fontWeight: '700', fontSize: '0.9rem',
+                                            cursor: serviceForm.name.trim() ? 'pointer' : 'not-allowed',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        }}
+                                    >
+                                        <FaPlus size={13} /> + Add
+                                    </button>
+
+                                    {/* 💾 Save all */}
+                                    <button
+                                        onClick={handleSaveAllServices}
+                                        disabled={savingServices || pendingServices.length === 0}
+                                        style={{
+                                            flex: 2, padding: '0.65rem 1rem', borderRadius: '10px',
+                                            border: '1px solid rgba(16,185,129,0.4)',
+                                            background: pendingServices.length > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                                            color: pendingServices.length > 0 ? '#10b981' : 'var(--text-muted)',
+                                            fontWeight: '700', fontSize: '0.9rem',
+                                            cursor: pendingServices.length > 0 ? 'pointer' : 'not-allowed',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        }}
+                                    >
+                                        <FaSave size={13} /> {savingServices ? 'Saving...' : `Save (${pendingServices.length})`}
+                                    </button>
+
+                                    {/* ✕ Discard */}
+                                    <button
+                                        onClick={handleDiscardServices}
+                                        style={{
+                                            padding: '0.65rem 0.9rem', borderRadius: '10px',
+                                            border: '1px solid rgba(239,68,68,0.3)',
+                                            background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                                            fontWeight: '700', cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                        title="Discard all pending"
+                                    >
+                                        <FaTimes size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Services grid */}
                         {services.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '16px' }}>
                                 {services.map((service, index) => (
                                     <div key={service.id || index} style={{
-                                        background: th(tc?.badgeBg, 'var(--bg-card)'),
-                                        border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
-                                        borderRadius: '16px', padding: '1rem',
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                        textAlign: 'center', gap: '8px', position: 'relative',
-                                        boxShadow: tc ? tc.cardShadow : undefined
-                                    }}>
-                                        <div style={{ fontSize: '2.5rem', lineHeight: 1 }}>{service.icon || '⚙️'}</div>
-                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '700', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>{service.name}</h4>
-                                        {service.description && (
-                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
-                                                {service.description}
-                                            </p>
-                                        )}
+                                        background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`,
+                                        borderRadius: '20px', padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+                                        gap: '12px', position: 'relative', boxShadow: th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.15)'), transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                    }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = th(tc?.btnShadow, '0 16px 40px rgba(139,92,246,0.3)'); }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.15)'); }}>
+                                        <div style={{ fontSize: '3rem', filter: tc ? `drop-shadow(0 4px 8px ${tc.accent}55)` : 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>{service.icon || '⚙️'}</div>
+                                        <h4 style={{ fontSize: '0.95rem', fontWeight: '800', margin: 0, color: th(tc?.badgeText, 'white') }}>{service.name}</h4>
+                                        {service.description && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{service.description}</p>}
                                         {isOwner && (
-                                            <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                                                <button onClick={() => { setEditingService(index); setShowServiceModal(true); }}
-                                                    style={{ padding: '3px 8px', fontSize: '0.7rem', background: th(tc?.badgeBg, 'rgba(139,92,246,0.15)'), border: `1px solid ${th(tc?.border, 'rgba(139,92,246,0.3)')}`, borderRadius: '8px', color: th(tc?.accent, 'var(--primary)'), cursor: 'pointer' }}>
-                                                    Edit
-                                                </button>
-                                                <button onClick={() => handleDeleteService(index)}
-                                                    style={{ padding: '3px 8px', fontSize: '0.7rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#ef4444', cursor: 'pointer' }}>
-                                                    Del
-                                                </button>
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', opacity: 0.8 }} className="service-actions">
+                                                <button onClick={() => { setEditingService(index); setShowServiceModal(true); }} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}>Edit</button>
+                                                <button onClick={() => handleDeleteService(index)} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'rgba(239,68,68,0.15)', border: 'none', borderRadius: '8px', color: '#f87171', cursor: 'pointer' }}>Del</button>
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                        ) : (
-                            <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>No services listed yet.</p>
+                        ) : !showServiceAddForm && (
+                            <div style={{ textAlign: 'center', padding: '3rem 1rem', background: th(tc?.cardBg, 'rgba(255,255,255,0.03)'), borderRadius: '24px', border: `1px dashed ${th(tc?.border, 'rgba(255,255,255,0.1)')}` }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }}>🔧</div>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '1rem' }}>No services listed yet.</p>
                                 {isOwner && (
-                                    <button
-                                        onClick={() => { setEditingService(null); setShowServiceModal(true); }}
-                                        style={{
-                                            padding: '10px 20px', fontSize: '0.85rem', fontWeight: '700',
-                                            background: 'linear-gradient(135deg, #8b5cf6, #f97316)',
-                                            border: 'none', borderRadius: '12px', color: 'white', cursor: 'pointer'
-                                        }}
-                                    >
-                                        ⚙️ Add Your First Service
+                                    <button onClick={() => setShowServiceAddForm(true)} style={{ padding: '12px 24px', fontSize: '0.9rem', fontWeight: '800', background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'), border: 'none', borderRadius: '16px', color: 'white', cursor: 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+                                        ➕ Add Your First Service
                                     </button>
                                 )}
                             </div>
@@ -1695,314 +1628,93 @@ const PartnerProfile = () => {
 
                 {/* Contact Tab */}
                 {activeTab === 'contact' && (
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: th(tc?.accent, 'var(--text-main)') }}>Contact Information</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '16px 24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
+                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '1.4rem' }}>📞</span> Contact Information
+                            </h3>
                             {isOwner && (
-                                <button
-                                    onClick={openContactModal}
-                                    style={{
-                                        padding: '7px 13px', fontSize: '0.78rem', fontWeight: '700',
-                                        background: th(tc?.footerBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'),
-                                        border: tc ? `1px solid ${tc.border}` : 'none',
-                                        borderRadius: '10px',
-                                        color: th(tc?.accentText || '#fff', 'white'),
-                                        cursor: 'pointer',
-                                        display: 'flex', alignItems: 'center', gap: '5px'
-                                    }}
-                                >
-                                    ✏️ Edit Contact
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <PlanBadges />
+                                    <EditActionBtn onClick={openContactModal} />
+                                </div>
                             )}
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                             {businessInfo.phone && (
-                                <div style={{
-                                    background: th(tc?.badgeBg, 'var(--bg-card)'),
-                                    border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
-                                    borderRadius: '12px',
-                                    padding: '1.25rem',
-                                    display: 'flex', alignItems: 'center', gap: '1rem',
-                                    boxShadow: th(tc?.cardShadow, 'none')
-                                }}>
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: th(tc?.badgeBg, 'rgba(34,197,94,0.1)'), border: tc ? `1px solid ${tc.border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#22c55e'), fontSize: '1.3rem' }}><FaPhone /></div>
-                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Phone</div><div style={{ fontWeight: '700', color: th(tc?.accent, 'var(--text-main)') }}>{businessInfo.phone}</div></div>
-                                </div>
-                            )}
-                            {businessInfo.address && (
-                                <div style={{
-                                    background: th(tc?.badgeBg, 'var(--bg-card)'),
-                                    border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
-                                    borderRadius: '12px',
-                                    padding: '1.25rem',
-                                    display: 'flex', alignItems: 'center', gap: '1rem',
-                                    boxShadow: th(tc?.cardShadow, 'none')
-                                }}>
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: th(tc?.badgeBg, 'rgba(239,68,68,0.1)'), border: tc ? `1px solid ${tc.border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#ef4444'), fontSize: '1.3rem' }}><FaMapMarkerAlt /></div>
-                                    <div><div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Address</div><div style={{ fontWeight: '700', color: th(tc?.accent, 'var(--text-main)') }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
+                                <div style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.1)'), transition: 'transform 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'} onClick={() => window.location.href = `tel:${businessInfo.phone}`}>
+                                    <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: th(tc?.badgeBg, 'rgba(34,197,94,0.15)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#22c55e'), fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaPhone /></div>
+                                    <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone</div><div style={{ fontWeight: '800', color: th(tc?.badgeText, 'white'), fontSize: '1.1rem' }}>{businessInfo.phone}</div></div>
                                 </div>
                             )}
 
-                            {/* Embedded Map */}
-                            {businessInfo.address && (
-                                <div style={{
-                                    height: '300px',
-                                    borderRadius: '16px',
-                                    overflow: 'hidden',
-                                    border: '2px solid var(--border-color)',
-                                    marginTop: '1rem',
-                                    position: 'relative',
-                                    zIndex: 0
-                                }}>
-                                    <iframe
-                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : ''))}&output=embed`}
-                                        style={{
-                                            width: '100%',
-                                            height: '100%',
-                                            border: 0,
-                                            borderRadius: '16px'
-                                        }}
-                                        loading="lazy"
-                                        allowFullScreen
-                                        title="Business Location"
-                                    />
-                                    {!isPaid && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: 0,
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0,
-                                            zIndex: 1,
-                                            background: 'rgba(0,0,0,0)',
-                                            cursor: 'not-allowed'
-                                        }} title="Upgrade to interact with the map" />
-                                    )}
+                            {/* Website — Pro only */}
+                            {isPaid && businessInfo.website && (
+                                <div onClick={() => window.open(businessInfo.website.startsWith('http') ? businessInfo.website : `https://${businessInfo.website}`, '_blank')} style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.1)'), transition: 'all 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                                    <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: th(tc?.badgeBg, 'rgba(59,130,246,0.15)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#3b82f6'), fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaGlobe /></div>
+                                    <div style={{ flex: 1 }}><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Website</div><div style={{ fontWeight: '800', color: th(tc?.badgeText, 'white'), fontSize: '1.1rem', wordBreak: 'break-all' }}>{businessInfo.website.replace(/^(https?:\/\/|\/\/)/, '')}</div></div>
+                                    <FaExternalLinkAlt style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }} />
                                 </div>
-                            )}
-
-                            {/* Website Link */}
-                            {businessInfo.website && (
-                                <div style={{
-                                    background: th(tc?.badgeBg, 'var(--bg-card)'),
-                                    border: `1px solid ${isPremium ? th(tc?.border, 'var(--border-color)') : 'rgba(251, 191, 36, 0.3)'}`,
-                                    borderRadius: '12px',
-                                    padding: '1.25rem',
-                                    display: 'flex', alignItems: 'center', gap: '1rem',
-                                    cursor: isPremium ? 'pointer' : 'not-allowed',
-                                    transition: 'all 0.2s',
-                                    opacity: isPremium ? 1 : 0.6,
-                                    position: 'relative'
-                                }}
-                                    onClick={() => isPremium && window.open(businessInfo.website.startsWith('http') ? businessInfo.website : `https://${businessInfo.website}`, '_blank')}
-                                    onMouseEnter={(e) => {
-                                        if (isPremium) {
-                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(139, 92, 246, 0.2)';
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = 'none';
-                                    }}
-                                >
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: th(tc?.badgeBg, 'rgba(59,130,246,0.1)'), border: tc ? `1px solid ${tc.border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#3b82f6'), fontSize: '1.3rem' }}><FaGlobe /></div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Website</div>
-                                        <div style={{ fontWeight: '700', color: th(tc?.accent, 'var(--text-main)') }}>{isPremium ? businessInfo.website : '••••••••'}</div>
-                                    </div>
-                                    {isPremium ? (
-                                        <FaExternalLinkAlt style={{ color: 'var(--text-muted)', fontSize: '1rem' }} />
-                                    ) : (
-                                        <span style={{
-                                            padding: '4px 8px',
-                                            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                                            borderRadius: '6px',
-                                            fontSize: '0.7rem',
-                                            fontWeight: '800',
-                                            color: 'white'
-                                        }}>
-                                            👑 Premium
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Social Media Links */}
-                            {(businessInfo.instagram || businessInfo.twitter || businessInfo.facebook) && (
-                                <div>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '0.75rem', marginTop: '1.5rem' }}>
-                                        Follow Us
-                                    </h4>
-                                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                                        {businessInfo.instagram && (
-                                            <button
-                                                onClick={() => isPremium && window.open(`https://instagram.com/${businessInfo.instagram.replace('@', '')}`, '_blank')}
-                                                disabled={!isPremium}
-                                                style={{
-                                                    flex: '1 1 calc(33.333% - 8px)',
-                                                    minWidth: '100px',
-                                                    padding: '1rem',
-                                                    background: isPremium ? 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' : 'rgba(156, 163, 175, 0.3)',
-                                                    border: 'none',
-                                                    borderRadius: '12px',
-                                                    color: 'white',
-                                                    fontWeight: '700',
-                                                    fontSize: '0.9rem',
-                                                    cursor: isPremium ? 'pointer' : 'not-allowed',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    transition: 'all 0.2s',
-                                                    opacity: isPremium ? 1 : 0.6,
-                                                    position: 'relative'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (isPremium) {
-                                                        e.currentTarget.style.transform = 'translateY(-4px)';
-                                                        e.currentTarget.style.boxShadow = '0 8px 20px rgba(240, 148, 51, 0.4)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = 'none';
-                                                }}
-                                            >
-                                                <FaInstagram style={{ fontSize: '1.5rem' }} />
-                                                <span style={{ fontSize: '0.75rem' }}>{isPremium ? 'Instagram' : '👑 Premium'}</span>
-                                            </button>
-                                        )}
-                                        {businessInfo.twitter && (
-                                            <button
-                                                onClick={() => isPremium && window.open(`https://twitter.com/${businessInfo.twitter.replace('@', '')}`, '_blank')}
-                                                disabled={!isPremium}
-                                                style={{
-                                                    flex: '1 1 calc(33.333% - 8px)',
-                                                    minWidth: '100px',
-                                                    padding: '1rem',
-                                                    background: isPremium ? 'linear-gradient(135deg, #1DA1F2, #0d8bd9)' : 'rgba(156, 163, 175, 0.3)',
-                                                    border: 'none',
-                                                    borderRadius: '12px',
-                                                    color: 'white',
-                                                    fontWeight: '700',
-                                                    fontSize: '0.9rem',
-                                                    cursor: isPremium ? 'pointer' : 'not-allowed',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    transition: 'all 0.2s',
-                                                    opacity: isPremium ? 1 : 0.6,
-                                                    position: 'relative'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (isPremium) {
-                                                        e.currentTarget.style.transform = 'translateY(-4px)';
-                                                        e.currentTarget.style.boxShadow = '0 8px 20px rgba(29, 161, 242, 0.4)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = 'none';
-                                                }}
-                                            >
-                                                <FaTwitter style={{ fontSize: '1.5rem' }} />
-                                                <span style={{ fontSize: '0.75rem' }}>{isPremium ? 'Twitter' : '👑 Premium'}</span>
-                                            </button>
-                                        )}
-                                        {businessInfo.facebook && (
-                                            <button
-                                                onClick={() => isPremium && window.open(businessInfo.facebook.startsWith('http') ? businessInfo.facebook : `https://facebook.com/${businessInfo.facebook}`, '_blank')}
-                                                disabled={!isPremium}
-                                                style={{
-                                                    flex: '1 1 calc(33.333% - 8px)',
-                                                    minWidth: '100px',
-                                                    padding: '1rem',
-                                                    background: isPremium ? 'linear-gradient(135deg, #1877F2, #0d65d9)' : 'rgba(156, 163, 175, 0.3)',
-                                                    border: 'none',
-                                                    borderRadius: '12px',
-                                                    color: 'white',
-                                                    fontWeight: '700',
-                                                    fontSize: '0.9rem',
-                                                    cursor: isPremium ? 'pointer' : 'not-allowed',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    transition: 'all 0.2s',
-                                                    opacity: isPremium ? 1 : 0.6,
-                                                    position: 'relative'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (isPremium) {
-                                                        e.currentTarget.style.transform = 'translateY(-4px)';
-                                                        e.currentTarget.style.boxShadow = '0 8px 20px rgba(24, 119, 242, 0.4)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = 'none';
-                                                }}
-                                            >
-                                                <FaFacebook style={{ fontSize: '1.5rem' }} />
-                                                <span style={{ fontSize: '0.75rem' }}>{isPremium ? 'Facebook' : '👑 Premium'}</span>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Open in Google Maps Button */}
-                            {businessInfo.address && (
-                                <button
-                                    onClick={() => {
-                                        if (isPremium) {
-                                            const address = encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : ''));
-                                            window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank');
-                                        }
-                                    }}
-                                    disabled={!isPremium}
-                                    style={{
-                                        width: '100%',
-                                        padding: '1rem',
-                                        background: isPremium
-                                            ? th(tc?.swatchGradient, 'linear-gradient(135deg, #8b5cf6, #f97316)')
-                                            : 'rgba(156, 163, 175, 0.3)',
-                                        border: tc ? `1px solid ${tc.border}` : 'none',
-                                        borderRadius: tc ? '14px' : '12px',
-                                        color: 'white',
-                                        fontWeight: '800',
-                                        fontSize: '1rem',
-                                        cursor: isPremium ? 'pointer' : 'not-allowed',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '10px',
-                                        marginTop: '1rem',
-                                        transition: 'all 0.2s',
-                                        opacity: isPremium ? 1 : 0.6,
-                                        boxShadow: tc && isPremium ? `0 4px 16px ${tc.accent}44` : 'none'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (isPremium) {
-                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                            e.currentTarget.style.boxShadow = tc
-                                                ? `0 8px 24px ${tc.accent}66`
-                                                : '0 8px 20px rgba(66, 133, 244, 0.4)';
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = tc && isPremium ? `0 4px 16px ${tc.accent}44` : 'none';
-                                    }}
-                                >
-                                    <FaMapMarkerAlt style={{ fontSize: '1.2rem' }} />
-                                    {isPremium ? 'Open in Google Maps' : '👑 Premium - Upgrade to View Map'}
-                                    {isPremium && <FaExternalLinkAlt style={{ fontSize: '0.9rem' }} />}
-                                </button>
                             )}
                         </div>
+
+                        {businessInfo.address && (
+                            <div style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                                    <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: th(tc?.badgeBg, 'rgba(239,68,68,0.15)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#ef4444'), fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaMapMarkerAlt /></div>
+                                    <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Address</div><div style={{ fontWeight: '800', color: th(tc?.badgeText, 'white'), fontSize: '1.1rem' }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
+                                </div>
+
+                                <div style={{ height: '320px', borderRadius: '20px', overflow: 'hidden', border: `2px solid ${th(tc?.border, 'rgba(255,255,255,0.1)')}`, position: 'relative', boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.1)' }}>
+                                    <iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : ''))}&output=embed`} style={{ width: '100%', height: '100%', border: 0 }} loading="lazy" allowFullScreen title="Business Location" />
+                                    {!isPaid && (
+                                        <div onClick={() => { setPaywallFeature("Interactive Maps"); setShowPaywall(true); }} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(30,30,46,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }} title="Upgrade to interact with the map">
+                                            <div style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', padding: '12px 24px', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                                                🔒 Map Interaction Locked
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Google Maps link — Pro only */}
+                                {isPaid && (
+                                    <button onClick={() => { const addr = encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : '')); window.open(`https://www.google.com/maps/search/?api=1&query=${addr}`, '_blank'); }} style={{ width: '100%', padding: '16px', background: th(tc?.swatchGradient, 'linear-gradient(135deg, #8b5cf6, #f97316)'), border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '20px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = th(tc?.btnShadow, '0 8px 24px rgba(139,92,246,0.4)'); }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                        <FaMapMarkerAlt style={{ fontSize: '1.2rem' }} />
+                                        Open in Google Maps
+                                        <FaExternalLinkAlt style={{ fontSize: '0.9rem' }} />
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Social Media — Pro only */}
+                        {isPaid && (businessInfo.instagram || businessInfo.twitter || businessInfo.facebook) && (
+                            <div style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
+                                <h4 style={{ fontSize: '1.1rem', fontWeight: '900', margin: '0 0 20px 0', color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1.3rem' }}>🌐</span> Follow Us
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '16px' }}>
+                                    {businessInfo.instagram && (
+                                        <button onClick={() => window.open(`https://instagram.com/${businessInfo.instagram.replace('@', '')}`, '_blank')} style={{ padding: '16px', background: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 24px rgba(220,39,67,0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                            <FaInstagram style={{ fontSize: '2rem' }} />
+                                            Instagram
+                                        </button>
+                                    )}
+                                    {businessInfo.twitter && (
+                                        <button onClick={() => window.open(`https://twitter.com/${businessInfo.twitter.replace('@', '')}`, '_blank')} style={{ padding: '16px', background: 'linear-gradient(135deg, #1DA1F2, #0d8bd9)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 24px rgba(29,161,242,0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                            <FaTwitter style={{ fontSize: '2rem' }} />
+                                            Twitter
+                                        </button>
+                                    )}
+                                    {businessInfo.facebook && (
+                                        <button onClick={() => window.open(businessInfo.facebook.startsWith('http') ? businessInfo.facebook : `https://facebook.com/${businessInfo.facebook}`, '_blank')} style={{ padding: '16px', background: 'linear-gradient(135deg, #1877F2, #0d65d9)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 24px rgba(24,119,242,0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                            <FaFacebook style={{ fontSize: '2rem' }} />
+                                            Facebook
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -2030,7 +1742,7 @@ const PartnerProfile = () => {
                             width: '100%',
                             boxShadow: tc ? tc.headerGlow : undefined
                         }}>
-                            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: '800', color: th(tc?.accent, 'var(--text-main)') }}>
+                            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: '800', color: th(tc?.badgeText, 'var(--text-main)') }}>
                                 Write a Review
                             </h2>
 
@@ -2073,7 +1785,7 @@ const PartnerProfile = () => {
                                         background: 'var(--bg-primary)',
                                         border: '1px solid var(--border-color)',
                                         borderRadius: '12px',
-                                        color: 'var(--text-primary)',
+                                        color: 'var(--text-main)',
                                         fontSize: '1rem',
                                         resize: 'vertical'
                                     }}
@@ -2093,13 +1805,14 @@ const PartnerProfile = () => {
                                         background: th(tc?.badgeBg, 'var(--bg-primary)'),
                                         border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
                                         borderRadius: '12px',
-                                        color: th(tc?.accent, 'var(--text-main)'),
+                                        color: th(tc?.badgeText, 'var(--text-main)'),
                                         fontWeight: '700',
                                         cursor: 'pointer'
                                     }}
                                 >
                                     Cancel
                                 </button>
+
                                 <button
                                     onClick={handleSubmitReview}
                                     disabled={submittingReview}
@@ -2255,39 +1968,49 @@ const PartnerProfile = () => {
                 )
             }
 
-            {showShareModal && (
-                <div
-                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={(e) => { e.stopPropagation(); setShowShareModal(false); }}
-                >
+            {
+                showShareModal && (
                     <div
-                        style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
-                        onClick={e => e.stopPropagation()}
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={(e) => { e.stopPropagation(); setShowShareModal(false); }}
                     >
-                        <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_profile') || 'Share Profile'}</h3>
-                        <ShareButtons
-                            url={window.location.href}
-                            title={partner.display_name}
-                            description={`Check out ${partner.display_name} on DineBuddies!`}
-                            type="partner"
-                            storyData={{
-                                title: partner.display_name,
-                                image: partner.businessInfo?.coverImage || getSafeAvatar(partner),
-                                description: partner.businessInfo?.description,
-                                location: partner.businessInfo?.address,
-                                hostName: partner.display_name,
-                                hostImage: getSafeAvatar(partner)
-                            }}
-                        />
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setShowShareModal(false); }}
-                            style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}
+                        <div
+                            style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
+                            onClick={e => e.stopPropagation()}
                         >
-                            {t('close') || 'Close'}
-                        </button>
+                            <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_profile') || 'Share Profile'}</h3>
+                            <ShareButtons
+                                url={window.location.href}
+                                title={partner.display_name}
+                                description={`Check out ${partner.display_name} on DineBuddies!`}
+                                type="partner"
+                                storyData={{
+                                    title: partner.display_name,
+                                    image: partner.businessInfo?.coverImage || getSafeAvatar(partner),
+                                    description: partner.businessInfo?.description,
+                                    location: partner.businessInfo?.address,
+                                    hostName: partner.display_name,
+                                    hostImage: getSafeAvatar(partner)
+                                }}
+                            />
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowShareModal(false); }}
+                                style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                {t('close') || 'Close'}
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+            {/* Invitation Type Selector Modal */}
+            <PremiumPaywallModal
+                isOpen={showPaywall}
+                onClose={() => setShowPaywall(false)}
+                featureName={paywallFeature}
+            />
+
+
             {/* Invitation Type Selector Modal */}
             <CreateInvitationSelector
                 isOpen={isSelectorOpen}
@@ -2296,80 +2019,154 @@ const PartnerProfile = () => {
             />
 
             {/* Service Modal - Inline */}
-            {showServiceModal && (
-                <ServiceModal
-                    service={editingService !== null ? services[editingService] : null}
-                    onSave={handleAddService}
-                    onClose={() => { setShowServiceModal(false); setEditingService(null); }}
-                />
-            )}
+            {
+                showServiceModal && (
+                    <ServiceModal
+                        service={editingService !== null ? services[editingService] : null}
+                        onSave={handleAddService}
+                        onClose={() => { setShowServiceModal(false); setEditingService(null); }}
+                    />
+                )
+            }
 
             {/* Basic Info Modal */}
-            {showBasicInfoModal && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>✏️ Edit Basic Info</h3>
-                            <button onClick={() => setShowBasicInfoModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
-                        </div>
-                        {[
-                            { label: 'Business Name *', key: 'businessName', type: 'text' },
-                            { label: 'Tagline', key: 'tagline', type: 'text' },
-                            { label: 'Business Type', key: 'businessType', type: 'text' },
-                        ].map(({ label, key, type }) => (
-                            <div key={key} style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
-                                <input type={type} value={basicInfoForm[key]} onChange={e => setBasicInfoForm(p => ({ ...p, [key]: e.target.value }))}
-                                    style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+            {
+                showBasicInfoModal && (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                        <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>✏️ Edit Basic Info</h3>
+                                <button onClick={() => setShowBasicInfoModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
                             </div>
-                        ))}
-                        <div style={{ marginBottom: '1.25rem' }}>
-                            <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Description</label>
-                            <textarea rows={4} value={basicInfoForm.description} onChange={e => setBasicInfoForm(p => ({ ...p, description: e.target.value }))}
-                                style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', resize: 'vertical' }} />
-                        </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button onClick={() => setShowBasicInfoModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
-                            <button onClick={saveBasicInfo} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
-                                {savingInfo ? '💾 Saving...' : '💾 Save'}
-                            </button>
+                            {[
+                                { label: 'Business Name *', key: 'businessName', type: 'text' },
+                                { label: 'Tagline', key: 'tagline', type: 'text' },
+                                { label: 'Business Type', key: 'businessType', type: 'text' },
+                            ].map(({ label, key, type }) => (
+                                <div key={key} style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
+                                    <input type={type} value={basicInfoForm[key]} onChange={e => setBasicInfoForm(p => ({ ...p, [key]: e.target.value }))}
+                                        style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+                                </div>
+                            ))}
+                            <div style={{ marginBottom: '1.25rem' }}>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Description</label>
+                                <textarea rows={4} value={basicInfoForm.description} onChange={e => setBasicInfoForm(p => ({ ...p, description: e.target.value }))}
+                                    style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', resize: 'vertical' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                <button onClick={() => setShowBasicInfoModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                                <button onClick={saveBasicInfo} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
+                                    {savingInfo ? '💾 Saving...' : '💾 Save'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Contact Modal */}
-            {showContactModal && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>📞 Edit Contact</h3>
-                            <button onClick={() => setShowContactModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
-                        </div>
-                        {[
-                            { label: 'Phone', key: 'phone', placeholder: '+61 400 000 000' },
-                            { label: 'Email', key: 'email', placeholder: 'info@yourbusiness.com' },
-                            { label: 'Website', key: 'website', placeholder: 'https://yourbusiness.com' },
-                            { label: 'Address', key: 'address', placeholder: '123 Main St' },
-                            { label: 'City', key: 'city', placeholder: 'Sydney' },
-                        ].map(({ label, key, placeholder }) => (
-                            <div key={key} style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
-                                <input type="text" value={contactForm[key]} placeholder={placeholder} onChange={e => setContactForm(p => ({ ...p, [key]: e.target.value }))}
-                                    style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+            {
+                showContactModal && (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                        <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>📞 Edit Contact</h3>
+                                <button onClick={() => setShowContactModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
                             </div>
-                        ))}
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                            <button onClick={() => setShowContactModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
-                            <button onClick={saveContact} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
-                                {savingInfo ? '💾 Saving...' : '💾 Save'}
-                            </button>
+                            {/* Free Fields Section Header */}
+                            <div style={{ margin: '0 0 0.8rem', padding: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Basic Info</span>
+                                <span style={{ border: '1px solid #22c55e', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#4ade80', background: 'rgba(34,197,94,0.12)' }}>🆓 Free</span>
+                            </div>
+                            {[
+                                { label: '📞 Phone', key: 'phone', placeholder: '+61 400 000 000' },
+                                { label: '✉️ Email', key: 'email', placeholder: 'info@yourbusiness.com' },
+                                { label: '📍 Address', key: 'address', placeholder: '123 Main St' },
+                                { label: '🏙️ City', key: 'city', placeholder: 'Sydney' },
+                            ].map(({ label, key, placeholder }) => (
+                                <div key={key} style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
+                                    <input type="text" value={contactForm[key]} placeholder={placeholder} onChange={e => setContactForm(p => ({ ...p, [key]: e.target.value }))}
+                                        style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+                                </div>
+                            ))}
+                            {/* Pro Features — Website & Social Media */}
+                            <div style={{ margin: '1.2rem 0 0.8rem', padding: '0.6rem 0 0.6rem', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pro Features</span>
+                                <span style={{ border: '1px solid #8b5cf6', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#a78bfa', background: 'rgba(139,92,246,0.12)' }}>⚡ Pro</span>
+                                <span style={{ border: '1px solid #f59e0b', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#fbbf24', background: 'rgba(245,158,11,0.12)' }}>👑 Elite</span>
+                            </div>
+                            {[
+                                { icon: <FaGlobe color="#8b5cf6" />, label: 'Website', key: 'website', placeholder: 'https://yourbusiness.com' },
+                                { icon: <FaInstagram color="#E1306C" />, label: 'Instagram', key: 'instagram', placeholder: '@yourbusiness' },
+                                { icon: <FaFacebook color="#1877F2" />, label: 'Facebook', key: 'facebook', placeholder: 'facebook.com/yourbusiness' },
+                                { icon: <FaTwitter color="#1DA1F2" />, label: 'Twitter / X', key: 'twitter', placeholder: '@yourbusiness' },
+                                { icon: <SiTiktok color="#fff" />, label: 'TikTok', key: 'tiktok', placeholder: '@yourbusiness' },
+                            ].map(({ icon, label, key, placeholder }) => (
+                                <div key={key} style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{icon} {label}</label>
+                                    <input type="text" value={contactForm[key] || ''} placeholder={placeholder} onChange={e => setContactForm(p => ({ ...p, [key]: e.target.value }))}
+                                        style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
+                                </div>
+                            ))}
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                                <button onClick={() => setShowContactModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                                <button onClick={saveContact} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
+                                    {savingInfo ? '💾 Saving...' : '💾 Save'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+            {/* Pro Fields Upgrade Notice */}
+            {
+                proFieldsNotice && (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(0,0,0,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                        <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', width: '90%', maxWidth: '420px', border: '1px solid rgba(245,158,11,0.3)', boxShadow: '0 0 40px rgba(245,158,11,0.15)', textAlign: 'center' }}>
+                            {/* Icon */}
+                            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#000', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', margin: '0 auto 1rem' }}>👑</div>
+                            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-primary)' }}>Information Saved!</h3>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '0 0 1.2rem', lineHeight: 1.6 }}>
+                                The following fields require a <strong style={{ color: '#f59e0b' }}>Pro plan</strong> to be visible to visitors:
+                            </p>
+                            {/* Fields list */}
+                            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '14px', padding: '1rem', marginBottom: '1.2rem', textAlign: 'left' }}>
+                                {proFieldsNotice.map(field => (
+                                    <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', color: 'var(--text-primary)', fontWeight: '600', fontSize: '0.9rem' }}>
+                                        <span style={{ color: '#f59e0b' }}>•</span> {field}
+                                    </div>
+                                ))}
+                            </div>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 1.5rem' }}>
+                                Your data is saved and will become visible once you upgrade.
+                            </p>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button onClick={() => setProFieldsNotice(null)} style={{ flex: 1, padding: '11px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>
+                                    Got it
+                                </button>
+                                <button onClick={() => { setProFieldsNotice(null); navigate('/business/pricing'); }} style={{ flex: 1, padding: '11px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem' }}>
+                                    ⚡ Upgrade to Pro
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
-        </div>
+            {/* Brand Kit Modal Editor */}
+            {
+                showBrandKitModal && (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg-body)', overflowY: 'auto' }}>
+                        <BrandKit onBack={() => setShowBrandKitModal(false)} />
+                    </div>
+                )
+            }
+
+
+
+        </div >
 
 
     );

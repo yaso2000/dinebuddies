@@ -242,7 +242,7 @@ const PrivateInvitationDetails = () => {
                                         onClick={() => handleRSVP('declined')}
                                         disabled={isResponding}
                                         style={{
-                                            flex: 1, height: '50px', borderRadius: '14px', border: 'none',
+                                            flex: 1, height: '50px', borderRadius: '14px',
                                             background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
                                             fontWeight: '800', cursor: 'pointer', border: '1px solid rgba(239, 68, 68, 0.2)'
                                         }}

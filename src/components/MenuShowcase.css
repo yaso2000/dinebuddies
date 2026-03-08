@@ -61,32 +61,38 @@
 /* Category Filter */
 .category-filter {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.4rem;
     margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-    padding-top: 4px;
-    /* room for translateY hover effect */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+}
+
+.category-filter::-webkit-scrollbar {
+    display: none;
 }
 
 .category-btn {
     position: relative;
-    padding: 0.6rem 1rem;
-    border: 2px solid var(--border-color);
+    padding: 0.25rem 0.55rem;
+    border: 1.5px solid var(--border-color);
     background: var(--bg-secondary);
-    border-radius: 10px;
-    font-size: 0.8rem;
+    border-radius: 8px;
+    font-size: 0.72rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.25rem;
     color: var(--text-main);
-    min-height: 40px;
+    min-height: 30px;
 }
 
 .category-icon {
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     flex-shrink: 0;
 }
 
@@ -122,10 +128,13 @@
 /* Add Item Form */
 .add-item-form {
     margin-bottom: 1.5rem;
-    padding: 1.5rem;
+    padding: 1rem;
     background: var(--bg-secondary);
     border-radius: 12px;
     border: 2px dashed var(--border-color);
+    box-sizing: border-box;
+    width: 100%;
+    overflow: hidden;
 }
 
 .add-item-form h4 {
@@ -139,9 +148,16 @@
 
 .form-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
     margin-bottom: 1rem;
+    box-sizing: border-box;
+}
+
+@media (min-width: 480px) {
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .form-group {
@@ -170,6 +186,10 @@
     color: var(--text-main);
     font-size: 0.85rem;
     font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .form-group input:focus,
@@ -330,7 +350,53 @@
     color: white;
 }
 
-/* Item Controls */
+/* Item Action Bar (Edit + Delete row at bottom) */
+.item-action-bar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.item-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    border: 1px solid transparent;
+}
+
+.item-edit-action {
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #a78bfa;
+}
+
+.item-edit-action:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.5);
+}
+
+.item-delete-action {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
+.item-delete-action:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Item Controls (legacy — kept for safety) */
 .item-controls {
     position: absolute;
     top: 0.75rem;
@@ -361,6 +427,35 @@
 .delete-btn:hover {
     background: #ef4444;
     transform: scale(1.1);
+}
+
+.edit-item-btn {
+    background: rgba(139, 92, 246, 0.85);
+    color: white;
+}
+
+.edit-item-btn:hover {
+    background: #8b5cf6;
+    transform: scale(1.1);
+}
+
+/* Inline Edit Form */
+.item-edit-form {
+    padding: 1rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.item-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+@media (max-width: 480px) {
+    .item-edit-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Empty State */
@@ -395,30 +490,42 @@
 
     /* Keep labels visible on mobile, make scrollable */
     .category-btn {
-        padding: 0.6rem 1rem;
+        padding: 0.75rem 1.1rem;
         min-width: auto;
+        min-height: 48px;
         white-space: nowrap;
         flex-shrink: 0;
+        font-size: 0.95rem;
     }
 
     .category-btn .category-label {
         display: inline;
-        font-size: 0.85rem;
+        font-size: 0.95rem;
     }
 
     .category-btn .category-count {
-        font-size: 0.75rem;
+        font-size: 0.82rem;
+    }
+
+    .item-header h4 {
+        font-size: 1.05rem;
+    }
+
+    .item-price {
+        font-size: 1.15rem;
+    }
+
+    .item-description {
+        font-size: 0.9rem;
     }
 
     .category-filter {
         gap: 0.5rem;
-        overflow-x: auto;
+        overflow-x: visible;
         overflow-y: visible;
-        /* allow translateY hover without clipping */
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
-        /* Firefox */
         padding-top: 4px;
         padding-bottom: 0.5rem;
     }

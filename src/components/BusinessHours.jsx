@@ -148,24 +148,32 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
     return (
         <div className="business-hours-section" style={{ background: th(tc?.cardBg, undefined) }}>
             <div className="section-header">
-                <h3 style={{ color: th(tc?.accent, undefined) }}>
-                    <FaClock style={{ color: th(tc?.accent, '#3b82f6'), marginRight: '0.5rem' }} />
+                <h3 style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                    <FaClock style={{ color: th(tc?.accent, '#3b82f6'), marginRight: '0.5rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }} />
                     {t('business_hours', 'Business Hours')}
                 </h3>
                 {isOwner && !isEditing && (
-                    <button
-                        className="edit-hours-btn"
-                        onClick={() => setIsEditing(true)}
-                        style={tc ? {
-                            background: tc.footerBg,
-                            border: `1px solid ${tc.border}`,
-                            color: tc.accentText || '#fff',
-                            boxShadow: tc.btnShadow,
-                            borderRadius: tc.btnBorderRadius
-                        } : {}}
-                    >
-                        <FaEdit /> {t('edit', 'Edit')}
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span title="Free Feature" style={{
+                            fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+                            borderRadius: 20, border: '1px solid #22c55e',
+                            color: '#4ade80', background: 'rgba(34,197,94,0.12)',
+                            display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+                        }}>🆓 Free</span>
+                        <button
+                            className="edit-hours-btn"
+                            onClick={() => setIsEditing(true)}
+                            style={tc ? {
+                                background: tc.footerBg,
+                                border: `1px solid ${tc.border}`,
+                                color: tc.accentText || '#fff',
+                                boxShadow: tc.btnShadow,
+                                borderRadius: tc.btnBorderRadius
+                            } : {}}
+                        >
+                            <FaEdit /> {t('edit', 'Edit')}
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -280,14 +288,14 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
                                     paddingLeft: '8px'
                                 } : {}}
                             >
-                                <div className="day-name" style={isToday && tc ? { color: tc.accent, fontWeight: '800' } : {}}>
+                                <div className="day-name" style={{ color: isToday && tc ? (tc?.badgeText || tc?.accent || 'white') : th(tc?.badgeText, 'white'), fontWeight: isToday ? '800' : '600', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
                                     {t(day, day.charAt(0).toUpperCase() + day.slice(1))}
                                 </div>
-                                <div className="day-hours">
+                                <div className="day-hours" style={{ color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'), textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
                                     {dayHours?.closed ? (
                                         <span className="closed-text">{t('closed', 'Closed')}</span>
                                     ) : (
-                                        <span style={{ color: th(tc?.accent, undefined) }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
+                                        <span style={{ color: th(tc?.badgeText || tc?.safeText, 'white') }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
                                     )}
                                 </div>
                             </div>

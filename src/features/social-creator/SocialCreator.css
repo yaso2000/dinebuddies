@@ -1,0 +1,432 @@
+/**
+ * CSS for Social Creator feature.
+ * ISOLATED — only imported by src/features/social-creator/
+ * Safe to delete with the entire feature folder.
+ */
+
+/* ─── Animations ─────────────────────────────────────── */
+@keyframes sc-fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes sc-slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes sc-slideLeft {
+    from {
+        opacity: 0;
+        transform: translateX(60px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes sc-zoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.7);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes sc-typewriter {
+    from {
+        width: 0;
+    }
+
+    to {
+        width: 100%;
+    }
+}
+
+@keyframes sc-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+@keyframes sc-glow {
+
+    0%,
+    100% {
+        text-shadow: 0 0 8px currentColor;
+    }
+
+    50% {
+        text-shadow: 0 0 24px currentColor, 0 0 48px currentColor;
+    }
+}
+
+/* ─── Layout ─────────────────────────────────────────── */
+.sc-page {
+    min-height: 100vh;
+    background: #0a0a12;
+    color: #f1f5f9;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+}
+
+.sc-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sc-header h1 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0;
+    background: linear-gradient(135deg, #a78bfa, #f97316);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.sc-body {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    flex: 1;
+    max-height: calc(100vh - 64px);
+}
+
+@media (max-width: 768px) {
+    .sc-body {
+        grid-template-columns: 1fr;
+        max-height: unset;
+    }
+}
+
+/* ─── Sidebar / Editor ───────────────────────────────── */
+.sc-sidebar {
+    background: rgba(255, 255, 255, 0.02);
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.sc-section-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 10px;
+}
+
+/* Template type tabs */
+.sc-type-tabs {
+    display: flex;
+    gap: 6px;
+}
+
+.sc-type-tab {
+    flex: 1;
+    padding: 9px 6px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.sc-type-tab.active {
+    background: rgba(167, 139, 250, 0.15);
+    border-color: rgba(167, 139, 250, 0.5);
+    color: #a78bfa;
+}
+
+/* Animation selector */
+.sc-anim-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.sc-anim-btn {
+    padding: 8px 4px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.sc-anim-btn.active {
+    background: rgba(249, 115, 22, 0.15);
+    border-color: rgba(249, 115, 22, 0.45);
+    color: #f97316;
+}
+
+/* Input fields */
+.sc-input,
+.sc-textarea {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: #f1f5f9;
+    font-size: 0.88rem;
+    box-sizing: border-box;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.sc-input:focus,
+.sc-textarea:focus {
+    outline: none;
+    border-color: rgba(167, 139, 250, 0.4);
+}
+
+.sc-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 5px;
+    display: block;
+}
+
+/* Color row */
+.sc-color-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.sc-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+
+.sc-color-swatch.active {
+    border-color: #a78bfa;
+    transform: scale(1.18);
+}
+
+/* Slide manager */
+.sc-slide-thumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.15s;
+}
+
+.sc-slide-thumb.active {
+    border-color: rgba(167, 139, 250, 0.45);
+    background: rgba(167, 139, 250, 0.1);
+    color: #a78bfa;
+}
+
+/* ─── Preview Area ───────────────────────────────────── */
+.sc-preview-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 24px;
+    overflow: auto;
+    background: #060610;
+}
+
+.sc-preview-wrapper {
+    position: relative;
+}
+
+.sc-canvas {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    position: relative;
+}
+
+/* ─── Template Content ───────────────────────────────── */
+.sc-text-headline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 0 28px;
+    text-align: center;
+    font-weight: 900;
+    line-height: 1.15;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sc-text-sub {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 0 28px;
+    text-align: center;
+    font-weight: 600;
+    line-height: 1.4;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-delay: 0.25s;
+}
+
+.sc-logo-box {
+    position: absolute;
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background-size: cover;
+    background-position: center;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    animation: sc-fadeIn 0.5s both;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+
+/* Typewriter helper */
+.sc-typewriter-wrap {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 3px solid currentColor;
+    animation: sc-typewriter 1.2s steps(30) both, sc-pulse 0.8s step-end 1.2s infinite;
+}
+
+/* ─── Export / Action Bar ────────────────────────────── */
+.sc-action-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.sc-btn {
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 0.88rem;
+    cursor: pointer;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.18s;
+}
+
+.sc-btn-primary {
+    background: linear-gradient(135deg, #8b5cf6, #f97316);
+    color: white;
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.35);
+}
+
+.sc-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(139, 92, 246, 0.45);
+}
+
+.sc-btn-ghost {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sc-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sc-btn-danger {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Slide nav dots */
+.sc-slide-dots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+}
+
+.sc-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sc-dot.active {
+    background: #a78bfa;
+    transform: scale(1.3);
+}
+
+/* Badge */
+.sc-elite-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #f59e0b;
+}

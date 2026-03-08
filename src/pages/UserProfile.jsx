@@ -193,7 +193,7 @@ const UserProfile = () => {
                                     }
                                 }}
                             />
-                            <div className="host-status-online"></div>
+                            {user.isOnline && <div className="host-status-online"></div>}
                         </div>
                     </div>
 
@@ -201,8 +201,10 @@ const UserProfile = () => {
                         {user.name || user.display_name || t('dinebuddy_member') || 'DineBuddy Member'}
                     </h1>
 
-                    <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-                        {t('active_member')}
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        {user.isOnline
+                            ? <><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> Online</>
+                            : t('active_member')}
                     </p>
 
                     {/* Stats */}

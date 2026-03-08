@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar } from 'react-icons/fa';
+import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar, FaTrash } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
@@ -133,17 +133,20 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
 
     const stats = getCategoryStats();
 
+    // For public view: hide entire section if gallery is empty
+    if (!isOwner && gallery.length === 0) return null;
+
     return (
-        <div className="enhanced-gallery-section" style={{ background: th(tc?.cardBg, undefined) }}>
+        <div className="enhanced-gallery-section" style={{ background: th(tc?.cardBg, undefined), position: 'relative' }}>
             {/* Header */}
             <div className="gallery-header">
-                <h3 style={{ color: th(tc?.accent, undefined) }}>
-                    <FaImages style={{ color: th(tc?.accent, '#f59e0b'), marginRight: '0.5rem' }} />
+                <h3 style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                    <FaImages style={{ color: th(tc?.accent, '#f59e0b'), marginRight: '0.5rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }} />
                     {t('gallery', 'Gallery')}
                     <span style={{
                         fontSize: '0.9rem',
                         fontWeight: '500',
-                        color: 'var(--text-muted)',
+                        color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'),
                         marginLeft: '0.5rem'
                     }}>
                         ({gallery.length}/{MAX_IMAGES})
@@ -151,34 +154,49 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                 </h3>
                 {isOwner && (
                     <button
-                        className={`edit-gallery-btn ${isEditMode ? 'active' : ''}`}
                         onClick={() => setIsEditMode(!isEditMode)}
                         title={isEditMode ? t('done', 'Done') : t('edit', 'Edit')}
-                        style={tc ? {
-                            background: isEditMode ? tc.badgeBg : tc.footerBg,
-                            border: `1px solid ${tc.border}`,
-                            color: tc.accentText || tc.accent,
-                            boxShadow: tc.btnShadow,
-                            borderRadius: tc.btnBorderRadius
-                        } : {}}
+                        style={{
+                            width: '40px', height: '40px', borderRadius: '50%',
+                            background: isEditMode ? 'rgba(239, 68, 68, 0.1)' : 'rgba(139, 92, 246, 0.1)', cursor: 'pointer',
+                            border: `1px solid ${isEditMode ? 'rgba(239, 68, 68, 0.3)' : 'rgba(139, 92, 246, 0.3)'}`,
+                            color: isEditMode ? '#ef4444' : '#8b5cf6',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            transition: 'all 0.2s', position: 'absolute', top: 16, right: 16
+                        }}
                     >
-                        {isEditMode ? <><FaTimes /> {t('done', 'Done')}</> : <><FaEdit /> {t('edit', 'Edit')}</>}
+                        {isEditMode ? <FaTimes size={16} /> : <FaEdit size={16} />}
                     </button>
                 )}
             </div>
 
             {/* Category Filter - Icon Mode */}
-            <div className="category-filter">
+            <div className="category-filter" style={{
+                display: 'flex',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                gap: '6px',
+                paddingBottom: '4px',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+            }}>
                 <button
                     className={`category-btn ${selectedCategory === 'all' ? 'active' : ''}`}
                     onClick={() => setSelectedCategory('all')}
                     title={t('all', 'All')}
                     style={tc && selectedCategory === 'all' ? {
-                        borderColor: tc.accent,
-                        color: tc.accent,
-                        background: tc.badgeBg,
-                        boxShadow: `0 0 8px ${tc.accent}44`
-                    } : tc ? { borderColor: tc.border, color: tc.badgeText } : {}}
+                        background: tc.tabBgColor || 'rgba(255,255,255,0.95)',
+                        borderColor: tc.tabBorderColor || tc.accent,
+                        borderWidth: '2px',
+                        color: tc.tabTextColor || tc.tabBorderColor || tc.accent,
+                        boxShadow: `0 2px 12px ${tc.tabBorderColor || tc.accent}33`,
+                        fontWeight: '800'
+                    } : tc ? {
+                        borderColor: `${tc.accent}44`,
+                        color: 'var(--text-secondary)',
+                        background: 'transparent'
+                    } : {}}
                 >
                     <FaImages />
                     <span className="category-label">{t('all', 'All')}</span>
@@ -186,23 +204,38 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                 </button>
                 {CATEGORIES.map(cat => {
                     const Icon = cat.icon;
+                    // For public view: hide categories with 0 images
+                    if (!isOwner && stats[cat.id] === 0) return null;
                     return (
                         <button
                             key={cat.id}
                             className={`category-btn ${selectedCategory === cat.id ? 'active' : ''}`}
                             onClick={() => setSelectedCategory(cat.id)}
                             title={t(cat.id, cat.label)}
-                            style={tc ? {
-                                borderColor: selectedCategory === cat.id ? tc.accent : tc.border,
-                                color: selectedCategory === cat.id ? tc.accent : tc.badgeText,
-                                background: selectedCategory === cat.id ? tc.badgeBg : 'transparent',
-                                boxShadow: selectedCategory === cat.id ? `0 0 8px ${tc.accent}44` : 'none'
+                            style={tc ? (selectedCategory === cat.id ? {
+                                background: tc.tabBgColor || 'rgba(255,255,255,0.95)',
+                                borderColor: tc.tabBorderColor || tc.accent,
+                                borderWidth: '2px',
+                                color: tc.tabTextColor || tc.tabBorderColor || tc.accent,
+                                boxShadow: `0 2px 12px ${tc.tabBorderColor || tc.accent}33`,
+                                fontWeight: '800'
                             } : {
+                                borderColor: `${tc.accent}44`,
+                                color: 'var(--text-secondary)',
+                                background: 'transparent'
+                            }) : {
                                 borderColor: selectedCategory === cat.id ? cat.color : 'var(--border-color)',
-                                color: selectedCategory === cat.id ? cat.color : 'var(--text-main)'
+                                color: selectedCategory === cat.id ? cat.color : 'var(--text-main)',
+                                fontWeight: selectedCategory === cat.id ? '800' : '600'
                             }}
                         >
-                            <Icon style={{ color: tc ? tc.accent : cat.color }} />
+                            <Icon style={{
+                                color: tc
+                                    ? (selectedCategory === cat.id
+                                        ? (tc.tabTextColor || tc.tabBorderColor || tc.accent)
+                                        : tc.accent)
+                                    : cat.color
+                            }} />
                             <span className="category-label">{t(cat.id, cat.label)}</span>
                             <span className="category-count">{stats[cat.id] || 0}</span>
                         </button>
@@ -277,24 +310,19 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                                     boxShadow: tc.cardShadow
                                 } : {}}
                             >
-                                {/* Category Badge */}
-                                <div
-                                    className="category-badge"
-                                    style={{ background: tc ? tc.accent : (category?.color || '#666') }}
-                                >
-                                    <Icon />
-                                </div>
 
                                 {/* Image with theme overlay */}
-                                <div style={{ position: 'relative', overflow: 'hidden' }}>
+                                <div className="gallery-img-container" style={{ position: 'relative', overflow: 'hidden' }}>
                                     <img
                                         src={image.url}
                                         alt={image.caption || `${category?.label} ${index + 1}`}
                                         onClick={() => {
-                                            setLightboxIndex(actualIndex);
-                                            setLightboxOpen(true);
+                                            if (!isEditMode) {
+                                                setLightboxIndex(actualIndex);
+                                                setLightboxOpen(true);
+                                            }
                                         }}
-                                        style={{ display: 'block', width: '100%' }}
+                                        style={{ display: 'block', width: '100%', cursor: isEditMode ? 'default' : 'pointer' }}
                                     />
                                     {/* Theme accent overlay on image */}
                                     {tc && (
@@ -305,11 +333,21 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                                             pointerEvents: 'none'
                                         }} />
                                     )}
+                                    {/* Edit Mode Dark Overlay to highlight buttons */}
+                                    {isEditMode && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            background: 'rgba(0,0,0,0.5)',
+                                            pointerEvents: 'none',
+                                            zIndex: 2
+                                        }} />
+                                    )}
                                 </div>
 
                                 {/* Caption */}
                                 {(image.caption || captionEdit === actualIndex) && (
-                                    <div className="image-caption" style={{ color: th(tc?.accent, undefined) }}>
+                                    <div className="image-caption" style={{ color: th(tc?.accent, undefined), zIndex: 4 }}>
                                         {captionEdit === actualIndex ? (
                                             <div className="caption-edit">
                                                 <input
@@ -333,23 +371,23 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                                     </div>
                                 )}
 
-                                {/* Edit Controls */}
+                                {/* Action Buttons Container */}
                                 {isEditMode && (
-                                    <div className="image-controls">
+                                    <div className="image-actions-container">
                                         <button
-                                            className="control-btn caption-btn"
-                                            onClick={() => setCaptionEdit(actualIndex)}
+                                            className="gallery-action-btn gallery-caption-btn"
+                                            onClick={(e) => { e.stopPropagation(); setCaptionEdit(actualIndex); }}
                                             title={t('edit_caption', 'Edit caption')}
-                                            style={tc ? { border: `1px solid ${tc.border}`, color: tc.accent } : {}}
                                         >
-                                            <FaEdit />
+                                            <FaEdit size={16} />
                                         </button>
+
                                         <button
-                                            className="control-btn delete-btn"
-                                            onClick={() => handleDeleteImage(actualIndex)}
+                                            className="gallery-action-btn gallery-delete-btn"
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteImage(actualIndex); }}
                                             title={t('delete', 'Delete')}
                                         >
-                                            <FaTimes />
+                                            <FaTrash size={15} />
                                         </button>
                                     </div>
                                 )}

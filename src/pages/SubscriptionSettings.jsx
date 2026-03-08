@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowLeft, FaCheck, FaCrown, FaBolt } from 'react-icons/fa';
+import ProSubscription from './business-pro/ProSubscription';
 import './SettingsPages.css';
 
 const SubscriptionSettings = () => {
@@ -31,10 +32,8 @@ const SubscriptionSettings = () => {
 
     const handleUpgrade = () => {
         if (isBusiness) {
-            // On desktop go to BusinessProDashboard Subscription section
-            // On mobile go to business pricing page
-            const isDesktop = window.innerWidth >= 1024;
-            navigate(isDesktop ? '/business-pro' : '/business/pricing');
+            // Navigate to the business pro dashboard subscriptions section
+            navigate('/business-pro', { state: { defaultTab: 'subscription' } });
         } else {
             navigate('/pricing');
         }
@@ -84,32 +83,10 @@ const SubscriptionSettings = () => {
                     )}
                 </div>
 
-                {/* Business: simple upgrade card */}
+                {/* Business: show full subscription plans */}
                 {isBusiness && (
-                    <div className="settings-card" style={{ marginTop: '2rem' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '0.75rem' }}>
-                            Partner Plans
-                        </h3>
-                        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-                            {isElite
-                                ? '✅ You have the highest partner plan. Enjoy your permanent offer slot and full access.'
-                                : isProfessional
-                                    ? '⚡ You are on the Professional plan. Upgrade to Elite for a permanent offer slot in the banner.'
-                                    : 'Upgrade to a Partner plan to unlock premium features, listings, and offer publishing.'}
-                        </p>
-                        <button
-                            className="submit-btn"
-                            onClick={handleUpgrade}
-                            style={{
-                                background: isElite ? 'var(--bg-secondary)' : 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                                color: isElite ? 'var(--text-secondary)' : 'white',
-                                cursor: isElite ? 'default' : 'pointer',
-                                boxShadow: isElite ? 'none' : '0 4px 12px rgba(245,158,11,0.3)'
-                            }}
-                            disabled={isElite}
-                        >
-                            {isElite ? 'You have the best plan ✅' : isProfessional ? 'Upgrade to Elite →' : 'View Partner Plans →'}
-                        </button>
+                    <div style={{ marginTop: '2rem' }}>
+                        <ProSubscription />
                     </div>
                 )}
 

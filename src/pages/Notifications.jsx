@@ -97,8 +97,26 @@ const Notifications = () => {
         if (filterStatus === 'unread' && notif.read) return false;
         if (filterStatus === 'read' && !notif.read) return false;
 
-        // Filter by type
-        if (filterType !== 'all' && notif.type !== filterType) return false;
+        // Filter by type — some groups match multiple Firestore types
+        if (filterType !== 'all') {
+            const TYPE_GROUPS = {
+                // Community membership notifications
+                members: ['follow', 'community_member', 'new_community_member'],
+                // All invitation-related types
+                invitations: [
+                    'invitation_accepted', 'invitation_rejected',
+                    'private_invitation', 'private_invitation_response',
+                    'join_request', 'request_approved', 'invitation_full'
+                ],
+                messages: ['message'],
+                likes: ['like'],
+                comments: ['comment'],
+                reminders: ['reminder'],
+                system: ['system_announcement'],
+            };
+            const allowed = TYPE_GROUPS[filterType] || [filterType];
+            if (!allowed.includes(notif.type)) return false;
+        }
 
         // Search filter
         if (searchQuery.trim()) {
@@ -216,13 +234,14 @@ const Notifications = () => {
                     {/* Type Filters */}
                     <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
                         {[
-                            { id: 'all', label: t('all_types', 'All') },
-                            { id: 'follow', label: t('follows', 'Follows') },
-                            { id: 'invitation_accepted', label: t('invitations', 'Invitations') },
-                            { id: 'message', label: t('messages', 'Messages') },
-                            { id: 'like', label: t('likes', 'Likes') },
-                            { id: 'comment', label: t('comments', 'Comments') },
-                            { id: 'reminder', label: t('reminders', 'Reminders') }
+                            { id: 'all', label: t('all_types', 'All'), emoji: '🔔' },
+                            { id: 'members', label: t('members', 'Members'), emoji: '👥' },
+                            { id: 'invitations', label: t('invitations', 'Invites'), emoji: '📨' },
+                            { id: 'messages', label: t('messages', 'Messages'), emoji: '💬' },
+                            { id: 'likes', label: t('likes', 'Likes'), emoji: '❤️' },
+                            { id: 'comments', label: t('comments', 'Comments'), emoji: '💭' },
+                            { id: 'reminders', label: t('reminders', 'Reminders'), emoji: '⏰' },
+                            { id: 'system', label: t('system', 'System'), emoji: '🎁' },
                         ].map(type => (
                             <button
                                 key={type.id}
@@ -238,10 +257,13 @@ const Notifications = () => {
                                     fontWeight: filterType === type.id ? '600' : '500',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
-                                    whiteSpace: 'nowrap'
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
                                 }}
                             >
-                                {type.label}
+                                <span>{type.emoji}</span>{type.label}
                             </button>
                         ))}
                     </div>

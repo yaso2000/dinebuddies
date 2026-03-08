@@ -288,7 +288,7 @@ const BusinessDashboard = () => {
                             </span>
                             {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
                                 <button
-                                    onClick={() => navigate('/pricing')}
+                                    onClick={() => navigate('/settings/subscription')}
                                     style={{
                                         border: 'none',
                                         background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
@@ -318,7 +318,7 @@ const BusinessDashboard = () => {
                 {/* Trial Promo Banner */}
                 {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
                     <div
-                        onClick={() => navigate('/business/pricing')}
+                        onClick={() => navigate('/settings/subscription')}
                         style={{
                             background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                             padding: '12px 20px',
@@ -446,31 +446,7 @@ const BusinessDashboard = () => {
                     >
                         <FaCog /> Settings
                     </button>
-                    <button
-                        onClick={() => navigate('/offer/new')}
-                        style={{
-                            flex: '1 1 100%',
-                            padding: '12px',
-                            background: 'linear-gradient(135deg, #ff6b00, #ff8c00)',
-                            border: 'none',
-                            borderRadius: '12px',
-                            color: 'white',
-                            fontWeight: '800',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            marginTop: '10px',
-                            boxShadow: '0 4px 15px rgba(255, 107, 0, 0.3)',
-                            transition: 'transform 0.2s',
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                        <span>✨ Create Special Offer</span>
-                    </button>
+
                 </div>
             </div>
 

@@ -8,6 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { getContrastText } from '../utils/colorUtils';
 import '../components/MapStyles.css';
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
@@ -214,7 +215,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     // null when no Brand Kit → card uses default styling
     const tc = _p ? {
         accent: _p,
-        accentText: '#ffffff',
+        accentText: getContrastText(_p),  // WCAG auto: white on dark, dark on light
         border: `${_p}55`,
         badgeBg: `${_p}22`,
         badgeText: _p,

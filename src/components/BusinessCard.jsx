@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { getContrastText } from '../utils/colorUtils';
+import { getTheme } from '../utils/businessThemes';
 
 const BusinessCard = ({ business }) => {
     const navigate = useNavigate();
@@ -12,10 +14,16 @@ const BusinessCard = ({ business }) => {
     const { t } = useTranslation();
     const info = business.businessInfo || {};
     const brandKit = info.brandKit || {};
-    const brandPrimary = brandKit.primaryColor || null;
-    const brandSecondary = brandKit.secondaryColor || brandPrimary;
-    const brandFont = brandKit.fontFamily || undefined;
-    const brandRadius = brandKit.buttonStyle || '16px';
+    const brandFont = 'system-ui, sans-serif';
+
+    // ── Theme colors (free for all partners) ──────────────────────────────────
+    const theme = getTheme(info.theme || 'default');
+    const tc = theme?.colors || null; // null = default styling
+    const th = (themed, fallback) => (tc && themed !== undefined) ? themed : fallback;
+
+    // Accent color: theme accent → brandKit primaryColor → CSS var
+    const accent = tc?.accent || brandKit.primaryColor || null;
+    const brandRadius = brandKit.buttonStyle || tc?.btnBorderRadius || '16px';
     const [isSharing, setIsSharing] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
     const [cardFile, setCardFile] = useState(null);
@@ -96,8 +104,8 @@ const BusinessCard = ({ business }) => {
         <div
             onClick={handleCardClick}
             style={{
-                background: 'var(--bg-card)',
-                border: brandPrimary ? `1px solid ${brandPrimary}44` : '1px solid var(--border-color)',
+                background: th(tc?.cardBg, 'var(--bg-card)'),
+                border: accent ? `1px solid ${accent}44` : '1px solid var(--border-color)',
                 borderRadius: '24px',
                 overflow: 'hidden',
                 cursor: 'pointer',
@@ -106,15 +114,15 @@ const BusinessCard = ({ business }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 height: '100%',
-                boxShadow: brandPrimary ? `0 4px 20px ${brandPrimary}22` : '0 4px 20px rgba(0,0,0,0.05)'
+                boxShadow: tc?.cardShadow || (accent ? `0 4px 20px ${accent}22` : '0 4px 20px rgba(0,0,0,0.05)')
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-6px)';
-                e.currentTarget.style.boxShadow = brandPrimary ? `0 15px 30px ${brandPrimary}44` : '0 15px 30px rgba(0,0,0,0.1)';
+                e.currentTarget.style.boxShadow = tc?.cardShadow || (accent ? `0 15px 30px ${accent}44` : '0 15px 30px rgba(0,0,0,0.1)');
             }}
             onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)';
+                e.currentTarget.style.boxShadow = tc?.cardShadow || '0 4px 20px rgba(0,0,0,0.05)';
             }}
         >
             {/* Card preview overlay (shown when native file share not supported) */}
@@ -222,7 +230,7 @@ const BusinessCard = ({ business }) => {
                         fontSize: '0.75rem',
                         fontWeight: '700',
                         textTransform: 'uppercase',
-                        color: brandPrimary || 'var(--primary)',
+                        color: th(tc?.accent, accent || 'var(--primary)'),
                         letterSpacing: '0.5px',
                         marginBottom: '4px'
                     }}>
@@ -231,7 +239,7 @@ const BusinessCard = ({ business }) => {
                     <h3 style={{
                         fontSize: '1.3rem',
                         fontWeight: '800',
-                        color: 'var(--text-main)',
+                        color: th(tc?.badgeText, 'var(--text-main)'),
                         margin: 0,
                         lineHeight: 1.2,
                         fontFamily: brandFont || undefined
@@ -281,12 +289,12 @@ const BusinessCard = ({ business }) => {
                         style={{
                             width: '100%',
                             padding: '12px',
-                            background: brandPrimary
-                                ? `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary || brandPrimary})`
-                                : 'var(--primary)',
+                            background: tc?.footerBg || (accent
+                                ? `linear-gradient(135deg, ${accent}, ${brandKit.secondaryColor || accent})`
+                                : 'var(--primary)'),
                             border: 'none',
                             borderRadius: brandRadius,
-                            color: 'white',
+                            color: tc?.accentText || 'white',
                             fontWeight: '700',
                             fontSize: '0.9rem',
                             cursor: 'pointer',
@@ -296,7 +304,7 @@ const BusinessCard = ({ business }) => {
                             gap: '8px',
                             transition: 'all 0.2s',
                             fontFamily: brandFont || undefined,
-                            boxShadow: brandPrimary ? `0 4px 16px ${brandPrimary}44` : 'var(--shadow-glow)'
+                            boxShadow: tc?.btnShadow || (accent ? `0 4px 16px ${accent}44` : 'var(--shadow-glow)')
                         }}
                         onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'scale(1.02)';

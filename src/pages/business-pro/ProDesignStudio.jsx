@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import ProOfferTemplates from './ProOfferTemplates';
 import BrandKit from './BrandKit';
 import ExportAssets from './ExportAssets';
-import { FaImage, FaMagic, FaPalette, FaDownload, FaFont, FaArrowLeft } from 'react-icons/fa';
+import SocialCreator from '../../features/social-creator/index.jsx';
+import { FaImage, FaMagic, FaPalette, FaDownload, FaFont, FaArrowLeft, FaPhotoVideo } from 'react-icons/fa';
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
@@ -26,15 +27,6 @@ const tools = [
         comingSoon: true
     },
     {
-        key: 'brand',
-        icon: <FaPalette />,
-        name: 'Brand Kit',
-        desc: 'Your colors, fonts, and logo in one place',
-        color: 'green',
-        comingSoon: false,
-        isNew: true
-    },
-    {
         key: 'text',
         icon: <FaFont />,
         name: 'Text Styles',
@@ -51,6 +43,16 @@ const tools = [
         comingSoon: false,
         isNew: true
     },
+    {
+        key: 'social-creator',
+        icon: <FaPhotoVideo />,
+        name: 'Social Creator',
+        desc: 'Design animated posts & stories for Instagram, TikTok & more',
+        color: 'orange',
+        comingSoon: false,
+        isNew: true,
+        eliteOnly: true
+    },
 ];
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -59,8 +61,14 @@ const ProDesignStudio = ({ editOffer = null }) => {
     const { currentUser, userProfile } = useAuth();
     // Auto-open offer editor if we arrived here via Edit button in ProOffers
     const [activeTool, setActiveTool] = useState(editOffer ? 'offer-editor' : null);
-    // Keep track of which offer we're editing so ProOfferTemplates can prefill
     const [currentEditOffer, setCurrentEditOffer] = useState(editOffer);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     if (activeTool === 'offer-editor') {
         return (
@@ -87,12 +95,26 @@ const ProDesignStudio = ({ editOffer = null }) => {
         );
     }
 
-    if (activeTool === 'brand') {
-        return <BrandKit onBack={() => setActiveTool(null)} />;
-    }
-
     if (activeTool === 'export') {
         return <ExportAssets onBack={() => setActiveTool(null)} />;
+    }
+
+    if (activeTool === 'social-creator') {
+        return (
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                    <button
+                        onClick={() => setActiveTool(null)}
+                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.85rem', fontWeight: 600 }}
+                    >
+                        <FaArrowLeft /> Design Studio
+                    </button>
+                    <span style={{ color: 'rgba(255,255,255,0.3)' }}>/</span>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f1f5f9' }}>Social Creator</span>
+                </div>
+                <SocialCreator />
+            </div>
+        );
     }
 
     // ── Tools grid view ──────────────────────────────────────────────────────
@@ -106,7 +128,7 @@ const ProDesignStudio = ({ editOffer = null }) => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                {tools.map(tool => (
+                {tools.filter(t => !(isMobile && t.key === 'brand')).map(tool => (
                     <div
                         key={tool.key}
                         className="bpro-stat-card"

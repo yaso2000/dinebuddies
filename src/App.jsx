@@ -39,8 +39,6 @@ import BillingSettings from './pages/BillingSettings';
 import PaymentSuccess from './pages/PaymentSuccess';
 import BusinessSignup from './pages/BusinessSignup';
 
-
-
 import PartnerProfile from './pages/PartnerProfile';
 import PremiumOfferPage from './pages/PremiumOfferPage';
 import BusinessDashboard from './pages/BusinessDashboard';
@@ -55,7 +53,8 @@ import MigrationPage from './pages/MigrationPage';
 import LegalPrivacy from './pages/PrivacyPolicy';
 import LegalTerms from './pages/TermsOfService';
 import PrivateInvitationOverlay from './components/Invitation/PrivateInvitationOverlay';
-
+// ── Social Creator (isolated feature — delete folder + this line to remove) ──
+import SocialCreator from './features/social-creator/index.jsx';
 
 // Admin Pages
 import AdminLayout from './pages/admin/AdminLayout';
@@ -75,8 +74,6 @@ import AdminRoute from './components/AdminRoute';
 import BusinessBlockedRoute from './components/BusinessBlockedRoute';
 import GuestBlockedRoute from './components/GuestBlockedRoute';
 
-
-
 // Contexts
 import { InvitationProvider } from './context/InvitationContext';
 import { AuthProvider } from './context/AuthContext';
@@ -90,6 +87,7 @@ import StaffBlockedRoute from './components/StaffBlockedRoute';
 import ProfileGuard from './components/ProfileGuard';
 import OfflineNotice from './components/OfflineNotice';
 import AuthBlockedRoute from './components/AuthBlockedRoute';
+import { usePresence } from './hooks/usePresence';
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase/config';
@@ -117,7 +115,6 @@ const SmartProfileRoute = () => {
             .finally(() => setLoading(false));
     }, [userId]);
 
-    // Redirect business accounts to /partner/:userId (PartnerProfile reads 'partnerId' from params)
     useEffect(() => {
         if (accountType === null) return;
         if (accountType === 'business') {
@@ -136,6 +133,9 @@ const SmartProfileRoute = () => {
     return <UserProfile />;
 };
 
+// Activates presence tracking for the logged-in user globally
+const PresenceManager = () => { usePresence(); return null; };
+
 function App() {
     return (
         <ThemeProvider>
@@ -145,78 +145,28 @@ function App() {
                         <ChatProvider>
                             <StripeProvider>
                                 <Router>
+                                    <PresenceManager />
                                     <OfflineNotice />
                                     <PrivateInvitationOverlay />
 
                                     <Routes>
-                                        {/* Auth Routes - Blocked if already logged in */}
-                                        <Route path="/login" element={
-                                            <AuthBlockedRoute>
-                                                <QuickLogin />
-                                            </AuthBlockedRoute>
-                                        } />
-                                        <Route path="/auth" element={
-                                            <AuthBlockedRoute>
-                                                <AuthPage />
-                                            </AuthBlockedRoute>
-                                        } />
-                                        <Route path="/business/signup" element={
-                                            <AuthBlockedRoute>
-                                                <BusinessSignup />
-                                            </AuthBlockedRoute>
-                                        } />
+                                        {/* Auth Routes */}
+                                        <Route path="/login" element={<AuthBlockedRoute><QuickLogin /></AuthBlockedRoute>} />
+                                        <Route path="/auth" element={<AuthBlockedRoute><AuthPage /></AuthBlockedRoute>} />
+                                        <Route path="/business/signup" element={<AuthBlockedRoute><BusinessSignup /></AuthBlockedRoute>} />
                                         <Route path="/complete-profile" element={<CompleteProfile />} />
                                         <Route path="/business-pro" element={<BusinessProDashboard />} />
-
-
+                                        {/* ── Social Creator ── isolated feature */}
+                                        <Route path="/social-creator" element={<SocialCreator />} />
 
                                         {/* User Routes with Layout */}
                                         <Route element={<Layout />}>
                                             <Route path="/" element={<PostsFeed />} />
                                             <Route path="/invitations" element={<Home />} />
-
-                                            {/* Protected Create Routes */}
-                                            <Route path="/create" element={
-                                                <GuestBlockedRoute>
-                                                    <StaffBlockedRoute>
-                                                        <BusinessBlockedRoute>
-                                                            <ProfileGuard>
-                                                                <CreateInvitation />
-                                                            </ProfileGuard>
-                                                        </BusinessBlockedRoute>
-                                                    </StaffBlockedRoute>
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/create-private" element={
-                                                <GuestBlockedRoute>
-                                                    <StaffBlockedRoute>
-                                                        <BusinessBlockedRoute>
-                                                            <ProfileGuard>
-                                                                <CreatePrivateInvitation />
-                                                            </ProfileGuard>
-                                                        </BusinessBlockedRoute>
-                                                    </StaffBlockedRoute>
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/create-post" element={
-                                                <GuestBlockedRoute>
-                                                    <StaffBlockedRoute>
-                                                        <ProfileGuard>
-                                                            <CreatePost />
-                                                        </ProfileGuard>
-                                                    </StaffBlockedRoute>
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/create-story" element={
-                                                <GuestBlockedRoute>
-                                                    <StaffBlockedRoute>
-                                                        <ProfileGuard>
-                                                            <CreateStory />
-                                                        </ProfileGuard>
-                                                    </StaffBlockedRoute>
-                                                </GuestBlockedRoute>
-                                            } />
-
+                                            <Route path="/create" element={<GuestBlockedRoute><StaffBlockedRoute><BusinessBlockedRoute><ProfileGuard><CreateInvitation /></ProfileGuard></BusinessBlockedRoute></StaffBlockedRoute></GuestBlockedRoute>} />
+                                            <Route path="/create-private" element={<GuestBlockedRoute><StaffBlockedRoute><BusinessBlockedRoute><ProfileGuard><CreatePrivateInvitation /></ProfileGuard></BusinessBlockedRoute></StaffBlockedRoute></GuestBlockedRoute>} />
+                                            <Route path="/create-post" element={<GuestBlockedRoute><StaffBlockedRoute><ProfileGuard><CreatePost /></ProfileGuard></StaffBlockedRoute></GuestBlockedRoute>} />
+                                            <Route path="/create-story" element={<GuestBlockedRoute><StaffBlockedRoute><ProfileGuard><CreateStory /></ProfileGuard></StaffBlockedRoute></GuestBlockedRoute>} />
                                             <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
                                             <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
                                             <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
@@ -224,138 +174,40 @@ function App() {
                                             <Route path="/invitation/:id/chat" element={<InvitationChatRoom />} />
                                             <Route path="/restaurants" element={<RestaurantDirectory />} />
                                             <Route path="/restaurant/:id" element={<RestaurantDetails />} />
-
-                                            {/* Protected Social Routes */}
-                                            <Route path="/friends" element={
-                                                <GuestBlockedRoute>
-                                                    <FriendsFeed />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/followers" element={
-                                                <GuestBlockedRoute>
-                                                    <FollowersList />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/messages" element={
-                                                <GuestBlockedRoute>
-                                                    <ChatList />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/chat/:userId" element={
-                                                <GuestBlockedRoute>
-                                                    <Chat />
-                                                </GuestBlockedRoute>
-                                            } />
-
-                                            <Route path="/profile" element={
-                                                <GuestBlockedRoute>
-                                                    <Profile />
-                                                </GuestBlockedRoute>
-                                            } />
+                                            <Route path="/friends" element={<GuestBlockedRoute><FriendsFeed /></GuestBlockedRoute>} />
+                                            <Route path="/followers" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
+                                            <Route path="/messages" element={<GuestBlockedRoute><ChatList /></GuestBlockedRoute>} />
+                                            <Route path="/chat/:userId" element={<GuestBlockedRoute><Chat /></GuestBlockedRoute>} />
+                                            <Route path="/profile" element={<GuestBlockedRoute><Profile /></GuestBlockedRoute>} />
                                             <Route path="/profile/:userId" element={<SmartProfileRoute />} />
-
-                                            <Route path="/notifications" element={
-                                                <GuestBlockedRoute>
-                                                    <Notifications />
-                                                </GuestBlockedRoute>
-                                            } />
-
+                                            <Route path="/notifications" element={<GuestBlockedRoute><Notifications /></GuestBlockedRoute>} />
                                             <Route path="/pricing" element={<PricingPage />} />
                                             <Route path="/business/pricing" element={<PricingPage />} />
                                             <Route path="/payment-success" element={<PaymentSuccess />} />
-
-                                            {/* Protected Settings Routes */}
-                                            <Route path="/settings" element={
-                                                <GuestBlockedRoute>
-                                                    <Settings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/email" element={
-                                                <GuestBlockedRoute>
-                                                    <EmailSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/password" element={
-                                                <GuestBlockedRoute>
-                                                    <PasswordSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/notifications" element={
-                                                <GuestBlockedRoute>
-                                                    <NotificationsSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/language" element={
-                                                <GuestBlockedRoute>
-                                                    <LanguageSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/privacy" element={
-                                                <GuestBlockedRoute>
-                                                    <PrivacySettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/subscription" element={
-                                                <GuestBlockedRoute>
-                                                    <SubscriptionSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/payment" element={
-                                                <GuestBlockedRoute>
-                                                    <PaymentSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/settings/billing" element={
-                                                <GuestBlockedRoute>
-                                                    <BillingSettings />
-                                                </GuestBlockedRoute>
-                                            } />
-
-
-
-
+                                            <Route path="/settings" element={<GuestBlockedRoute><Settings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/email" element={<GuestBlockedRoute><EmailSettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/password" element={<GuestBlockedRoute><PasswordSettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/notifications" element={<GuestBlockedRoute><NotificationsSettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/language" element={<GuestBlockedRoute><LanguageSettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/privacy" element={<GuestBlockedRoute><PrivacySettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/subscription" element={<GuestBlockedRoute><SubscriptionSettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
+                                            <Route path="/settings/billing" element={<GuestBlockedRoute><BillingSettings /></GuestBlockedRoute>} />
                                             <Route path="/business-dashboard" element={<BusinessDashboard />} />
                                             <Route path="/migration" element={<MigrationPage />} />
                                             <Route path="/partners" element={<Navigate to="/restaurants" replace />} />
                                             <Route path="/partner/:partnerId" element={<PartnerProfile />} />
-                                            <Route path="/offer/new" element={
-                                                <GuestBlockedRoute>
-                                                    <PremiumOfferPage />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/offer/edit/:id" element={
-                                                <GuestBlockedRoute>
-                                                    <PremiumOfferPage />
-                                                </GuestBlockedRoute>
-                                            } />
-
-                                            {/* Protected Community Routes */}
-                                            <Route path="/communities" element={
-                                                <GuestBlockedRoute>
-                                                    <MyCommunities />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/my-community" element={
-                                                <GuestBlockedRoute>
-                                                    <MyCommunity />
-                                                </GuestBlockedRoute>
-                                            } />
-                                            <Route path="/community/:partnerId" element={
-                                                <GuestBlockedRoute>
-                                                    <CommunityChatRoom />
-                                                </GuestBlockedRoute>
-                                            } />
-
+                                            <Route path="/offer/new" element={<GuestBlockedRoute><PremiumOfferPage /></GuestBlockedRoute>} />
+                                            <Route path="/offer/edit/:id" element={<GuestBlockedRoute><PremiumOfferPage /></GuestBlockedRoute>} />
+                                            <Route path="/communities" element={<GuestBlockedRoute><MyCommunities /></GuestBlockedRoute>} />
+                                            <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
+                                            <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                             <Route path="/posts-feed" element={<PostsFeed />} />
                                             <Route path="/admin-panel" element={<AdminPanel />} />
                                         </Route>
 
                                         {/* Admin Routes */}
-                                        <Route path="/admin/*" element={
-                                            <AdminRoute>
-                                                <AdminLayout />
-                                            </AdminRoute>
-                                        }>
+                                        <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
                                             <Route path="dashboard" element={<AdminDashboard />} />
                                             <Route path="business-limits" element={<BusinessLimitsManager />} />
                                             <Route path="users" element={<UserManagement />} />

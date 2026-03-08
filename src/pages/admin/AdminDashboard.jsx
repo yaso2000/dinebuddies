@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { FaUsers, FaStore, FaCreditCard, FaDollarSign, FaEnvelope, FaExclamationTriangle, FaArrowUp, FaArrowDown, FaPlus, FaUserPlus } from 'react-icons/fa';
+import { FaUsers, FaStore, FaCreditCard, FaEnvelope, FaExclamationTriangle, FaArrowUp, FaArrowDown, FaPlus, FaUserPlus } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import CreateUserAccount from '../../components/CreateUserAccount';
 import CreateBusinessAccount from '../../components/CreateBusinessAccount';
@@ -12,7 +12,11 @@ const AdminDashboard = () => {
         totalUsers: 0,
         totalPartners: 0,
         activeSubscriptions: 0,
-        monthlyRevenue: 0,
+        individuals: 0,
+        businesses: 0,
+        teamMembers: 0,
+        paidBusinesses: 0,    // professional + elite
+        paidUsers: 0,         // pro + vip
         pendingInvitations: 0,
         pendingReports: 0
     });
@@ -28,50 +32,41 @@ const AdminDashboard = () => {
     const fetchStats = async () => {
         try {
             setLoading(true);
-
-            // Fetch users
             const usersSnapshot = await getDocs(collection(db, 'users'));
             const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            const totalUsers = users.length;
-            const totalPartners = users.filter(u => u.role === 'business').length;
-            const activeSubscriptions = users.filter(u => u.subscription?.status === 'active').length;
+            const businesses = users.filter(u => u.role === 'business');
+            const team = users.filter(u => ['admin', 'staff', 'support'].includes(u.role));
+            const individuals = users.filter(u => !['business', 'admin', 'staff', 'support'].includes(u.role));
 
-            // Calculate revenue
-            const monthlyRevenue = users
-                .filter(u => u.subscription?.status === 'active')
-                .reduce((sum, u) => sum + (u.subscription?.price || 0), 0);
+            const paidBusinesses = businesses.filter(u =>
+                u.subscriptionTier === 'professional' || u.subscriptionTier === 'elite'
+            ).length;
 
-            // Fetch invitations
+            const paidUsers = individuals.filter(u =>
+                u.subscriptionTier === 'pro' || u.subscriptionTier === 'vip'
+            ).length;
+
             const invitationsSnapshot = await getDocs(collection(db, 'invitations'));
-            const pendingInvitations = invitationsSnapshot.size;
 
-            // Fetch reports
+            let pendingReports = 0;
             try {
                 const reportsSnapshot = await getDocs(
                     query(collection(db, 'reports'), where('status', '==', 'pending'))
                 );
-                const pendingReports = reportsSnapshot.size;
+                pendingReports = reportsSnapshot.size;
+            } catch { /* collection may not exist */ }
 
-                setStats({
-                    totalUsers,
-                    totalPartners,
-                    activeSubscriptions,
-                    monthlyRevenue,
-                    pendingInvitations,
-                    pendingReports
-                });
-            } catch (error) {
-                // If reports collection doesn't exist
-                setStats({
-                    totalUsers,
-                    totalPartners,
-                    activeSubscriptions,
-                    monthlyRevenue,
-                    pendingInvitations,
-                    pendingReports: 0
-                });
-            }
+            setStats({
+                totalUsers: users.length,
+                individuals: individuals.length,
+                businesses: businesses.length,
+                teamMembers: team.length,
+                paidBusinesses,
+                paidUsers,
+                pendingInvitations: invitationsSnapshot.size,
+                pendingReports
+            });
         } catch (error) {
             console.error('Error fetching stats:', error);
         } finally {
@@ -169,36 +164,65 @@ const AdminDashboard = () => {
                     icon={FaUsers}
                     label="Total Users"
                     value={stats.totalUsers}
-                    change={12}
                     color="#6366f1"
                     bgColor="rgba(99, 102, 241, 0.1)"
                     onClick={() => navigate('/admin/users')}
                 />
                 <StatCard
+                    icon={FaUsers}
+                    label="Individuals"
+                    value={stats.individuals}
+                    color="#60a5fa"
+                    bgColor="rgba(96, 165, 250, 0.1)"
+                    onClick={() => navigate('/admin/users')}
+                />
+                <StatCard
                     icon={FaStore}
-                    label="Partners"
-                    value={stats.totalPartners}
-                    change={8}
-                    color="#8b5cf6"
-                    bgColor="rgba(139, 92, 246, 0.1)"
+                    label="Businesses"
+                    value={stats.businesses}
+                    color="#c084fc"
+                    bgColor="rgba(192, 132, 252, 0.1)"
                     onClick={() => navigate('/admin/partners')}
                 />
                 <StatCard
                     icon={FaCreditCard}
-                    label="Active Subscriptions"
-                    value={stats.activeSubscriptions}
-                    change={15}
+                    label="Paid Businesses"
+                    value={stats.paidBusinesses}
                     color="#22c55e"
                     bgColor="rgba(34, 197, 94, 0.1)"
                     onClick={() => navigate('/admin/subscriptions')}
                 />
                 <StatCard
-                    icon={FaDollarSign}
-                    label="Monthly Revenue"
-                    value={`$${stats.monthlyRevenue}`}
-                    change={23}
+                    icon={FaCreditCard}
+                    label="Paid Users (Pro/VIP)"
+                    value={stats.paidUsers}
                     color="#f59e0b"
                     bgColor="rgba(245, 158, 11, 0.1)"
+                    onClick={() => navigate('/admin/users')}
+                />
+                <StatCard
+                    icon={FaUsers}
+                    label="Team Members"
+                    value={stats.teamMembers}
+                    color="#fbbf24"
+                    bgColor="rgba(251, 191, 36, 0.1)"
+                    onClick={() => navigate('/admin/users')}
+                />
+                <StatCard
+                    icon={FaEnvelope}
+                    label="Total Invitations"
+                    value={stats.pendingInvitations}
+                    color="#34d399"
+                    bgColor="rgba(52, 211, 153, 0.1)"
+                    onClick={() => navigate('/admin/invitations')}
+                />
+                <StatCard
+                    icon={FaExclamationTriangle}
+                    label="Pending Reports"
+                    value={stats.pendingReports}
+                    color="#ef4444"
+                    bgColor="rgba(239, 68, 68, 0.1)"
+                    onClick={() => navigate('/admin/reports')}
                 />
             </div>
 

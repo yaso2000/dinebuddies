@@ -107,12 +107,13 @@ const EnhancedReviews = ({
     };
 
     const renderStars = (rating) => {
+        const starCol = tc?.starColor || '#f59e0b';
         return (
             <div className="stars">
                 {[1, 2, 3, 4, 5].map(star => (
                     star <= rating
-                        ? <FaStar key={star} className="star filled" />
-                        : <FaRegStar key={star} className="star empty" />
+                        ? <FaStar key={star} className="star filled" style={{ color: starCol }} />
+                        : <FaRegStar key={star} className="star empty" style={{ color: 'rgba(255,255,255,0.2)' }} />
                 ))}
             </div>
         );
@@ -123,13 +124,13 @@ const EnhancedReviews = ({
             {/* Header */}
             <div className="reviews-header">
                 <div className="header-left">
-                    <h3 style={{ color: th(tc?.accent, undefined) }}>
-                        <FaStar style={{ color: th(tc?.accent, '#fbbf24') }} />
+                    <h3 style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                        <FaStar style={{ color: tc?.starColor || th(tc?.accent, '#fbbf24'), filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }} />
                         {t('reviews', 'Reviews')} ({totalReviews})
                     </h3>
                     {averageRating > 0 && (
                         <div className="average-rating">
-                            <span className="rating-number" style={{ color: th(tc?.accent, undefined) }}>{averageRating.toFixed(1)}</span>
+                            <span className="rating-number" style={{ color: tc?.starColor || th(tc?.accent, undefined) }}>{averageRating.toFixed(1)}</span>
                             {renderStars(Math.round(averageRating))}
                         </div>
                     )}
@@ -160,10 +161,10 @@ const EnhancedReviews = ({
                 }}>
                     {/* Big average number */}
                     <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: '900', lineHeight: 1, color: th(tc?.accent, '#fbbf24') }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: '900', lineHeight: 1, color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
                             {averageRating > 0 ? averageRating.toFixed(1) : '–'}
                         </div>
-                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '2px' }}>/ 5</div>
+                        <div style={{ fontSize: '0.6rem', color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'), marginTop: '2px' }}>/ 5</div>
                     </div>
                     {/* Mini bars */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
@@ -270,10 +271,10 @@ const EnhancedReviews = ({
                                             {!review.userPhoto && (review.userName?.charAt(0) || '?')}
                                         </div>
                                         <div className="user-details">
-                                            <div className="user-name" style={{ color: th(tc?.accent, undefined) }}>
+                                            <div className="user-name" style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontWeight: '700' }}>
                                                 {review.userName || 'Anonymous'}
                                             </div>
-                                            <div className="review-date">
+                                            <div className="review-date" style={{ color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'), fontSize: '0.8rem', marginTop: '2px' }}>
                                                 {review.createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'}
                                             </div>
                                         </div>
@@ -282,7 +283,7 @@ const EnhancedReviews = ({
                                 </div>
 
                                 {/* Review Content */}
-                                <div className="review-content">
+                                <div className="review-content" style={{ color: th(tc?.badgeText, 'white'), textShadow: '0 1px 3px rgba(0,0,0,0.5)', marginTop: '10px', lineHeight: '1.5' }}>
                                     {review.comment}
                                 </div>
 
