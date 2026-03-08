@@ -15,7 +15,7 @@ export const SUBSCRIPTION_PLANS = {
         // Limits
         maxMembers: 50,
         maxPostsPerMonth: 0,
-        maxServices: 5,
+        maxServices: 0,
 
         // Features
         canCreateOffers: false,

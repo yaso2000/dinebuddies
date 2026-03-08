@@ -17,7 +17,7 @@ export const BUSINESS_THEMES = [
         id: 'golden',
         name: 'Golden Luxury',
         emoji: '✨',
-        isPremium: true,
+        isPremium: false,
         description: 'Rich gold & amber elegance',
         colors: {
             cardBg: '#1a1100',
@@ -42,7 +42,7 @@ export const BUSINESS_THEMES = [
         id: 'silver',
         name: 'Silver Platinum',
         emoji: '🥈',
-        isPremium: true,
+        isPremium: false,
         description: 'Cool platinum & chrome',
         colors: {
             cardBg: '#0d0f14',
@@ -66,7 +66,7 @@ export const BUSINESS_THEMES = [
         id: 'bronze',
         name: 'Bronze Copper',
         emoji: '🥉',
-        isPremium: true,
+        isPremium: false,
         description: 'Warm copper & rust tones',
         colors: {
             cardBg: '#160d08',
@@ -90,7 +90,7 @@ export const BUSINESS_THEMES = [
         id: 'playful',
         name: 'Playful Vibes',
         emoji: '🎨',
-        isPremium: true,
+        isPremium: false,
         description: 'Vibrant cyan & hot pink energy',
         colors: {
             cardBg: '#0a0514',
@@ -114,7 +114,7 @@ export const BUSINESS_THEMES = [
         id: 'olive',
         name: 'Olive Prestige',
         emoji: '🌿',
-        isPremium: true,
+        isPremium: false,
         description: 'Deep forest & dark olive luxury',
         colors: {
             cardBg: '#080f08',
@@ -138,7 +138,7 @@ export const BUSINESS_THEMES = [
         id: 'burgundy',
         name: 'Burgundy Noir',
         emoji: '🍷',
-        isPremium: true,
+        isPremium: false,
         description: 'Deep wine & velvet dark red',
         colors: {
             cardBg: '#0f0508',
@@ -162,7 +162,7 @@ export const BUSINESS_THEMES = [
         id: 'rosegold',
         name: 'Rose Gold',
         emoji: '🌸',
-        isPremium: true,
+        isPremium: false,
         description: 'Soft blush & rose gold shimmer',
         colors: {
             cardBg: '#130a10',
@@ -183,10 +183,58 @@ export const BUSINESS_THEMES = [
         },
     },
     {
+        id: 'neon_nights',
+        name: 'Neon Nights',
+        emoji: '🌃',
+        isPremium: false,
+        description: 'Vibrant cyan & hot pink cyberpunk glow',
+        colors: {
+            cardBg: '#050a1f',
+            gradientFrom: 'rgba(5,10,31,0.92)',
+            gradientTo: 'rgba(2,5,15,0.98)',
+            accent: '#ff00ff', // Hot Pink
+            accentText: '#ffffff',
+            border: 'rgba(0,255,255,0.5)', // Cyan border
+            footerBg: 'linear-gradient(135deg, #1a0b2e, #0f2027)',
+            badgeBg: 'rgba(255,0,255,0.15)',
+            badgeText: '#00ffff', // Cyan text on pink badge
+            headerGlow: '0 0 50px rgba(0,255,255,0.4)',
+            tabActive: '#ff00ff',
+            swatchGradient: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+            btnShadow: '0 0 0 2px #00ffff, 0 0 0 4px #ff00ff, 0 8px 30px rgba(255,0,255,0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+            cardShadow: '0 0 0 1px #00ffff, 0 0 0 2px rgba(255,0,255,0.5), 0 4px 25px rgba(0,255,255,0.2)',
+            btnBorderRadius: '12px',
+        },
+    },
+    {
+        id: 'arcade_glow',
+        name: 'Arcade Glow',
+        emoji: '🕹️',
+        isPremium: false,
+        description: 'Toxic green & neon purple retro gaming',
+        colors: {
+            cardBg: '#090909',
+            gradientFrom: 'rgba(20,10,30,0.92)',
+            gradientTo: 'rgba(9,9,9,0.98)',
+            accent: '#39ff14', // Neon Green
+            accentText: '#090909',
+            border: 'rgba(138,43,226,0.6)', // Electric Purple
+            footerBg: 'linear-gradient(135deg, #2b00ff, #8a2be2)',
+            badgeBg: 'rgba(57,255,20,0.15)',
+            badgeText: '#39ff14',
+            headerGlow: '0 0 50px rgba(138,43,226,0.5)',
+            tabActive: '#39ff14',
+            swatchGradient: 'linear-gradient(135deg, #39ff14, #8a2be2, #2b00ff)',
+            btnShadow: '0 0 0 2px #39ff14, 0 0 0 4px #8a2be2, 0 8px 30px rgba(57,255,20,0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+            cardShadow: '0 0 0 1px #8a2be2, 0 0 0 2px rgba(57,255,20,0.4), 0 4px 25px rgba(138,43,226,0.2)',
+            btnBorderRadius: '8px',
+        },
+    },
+    {
         id: 'spring',
         name: 'Spring Fresh',
         emoji: '🌱',
-        isPremium: true,
+        isPremium: false,
         description: 'Mint green & fresh emerald',
         colors: {
             cardBg: '#041008',

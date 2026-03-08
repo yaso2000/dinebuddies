@@ -94,7 +94,6 @@ const CreateInvitation = () => {
         // Get location from multiple possible sources
         location: offerData?.locationDetails || offerData?.location || restaurantData?.address || restaurantData?.location || prefilledData?.location || '',
         guestsNeeded: 3,
-        guestsNeeded: 3,
         genderPreference: 'custom',
         genderGroups: [], // Default to NONE selected
         ageRange: 'custom',

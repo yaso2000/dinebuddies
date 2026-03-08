@@ -97,6 +97,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
             '1 Month FREE Trial ✨',
             'Full dashboard access',
             'Listing in partner directory',
+            'Services & Menu management',
             '1 offer slot (50 hours/week)',
             'Accept reservations',
             'Basic statistics',
@@ -134,8 +135,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
             'Advanced analytics',
             'Menu & Offer management',
             'Loyalty program integration',
-            'Direct phone support',
-            'Monthly marketing campaigns'
+            'Direct phone support'
         ],
         active: true,
         recommended: true

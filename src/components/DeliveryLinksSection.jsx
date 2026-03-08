@@ -1,8 +1,9 @@
 import React from 'react';
-import { updateDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { MdDeliveryDining } from 'react-icons/md';
 import { FaEdit, FaSave } from 'react-icons/fa';
+import PremiumBadge from './PremiumBadge';
+import { getPlatformsForCountry } from '../config/deliveryPlatforms';
+
 
 const DeliveryLinksSection = ({
     partner,
@@ -15,52 +16,22 @@ const DeliveryLinksSection = ({
     onSave,
     onCancel
 }) => {
-    const isPremium = partner?.subscriptionTier === 'premium';
+    // Business is "paid" only if on professional or elite plan
+    const isPaid = partner?.subscriptionTier === 'professional' || partner?.subscriptionTier === 'elite';
 
-    // Don't show if not premium and no links
-    const hasAnyLink = deliveryLinks.uberEats || deliveryLinks.menulog ||
-        deliveryLinks.doorDash || deliveryLinks.deliveroo;
+    // Get the right platforms for this partner's country
+    const partnerCountry = partner?.businessInfo?.country || '';
+    const deliveryPlatforms = getPlatformsForCountry(partnerCountry);
 
-    // Hide from public/guests if no links are added
-    // Owners always see it so they can add links (or see premium upsell)
-    if (!hasAnyLink && !isOwner) {
-        return null;
-    }
+    // Has any link saved for any known platform?
+    const hasAnyLink = deliveryPlatforms.some(p => deliveryLinks[p.key]);
 
-    const deliveryPlatforms = [
-        {
-            name: 'Uber Eats',
-            key: 'uberEats',
-            color: '#06C167',
-            gradient: 'linear-gradient(135deg, #06C167, #039855)',
-            logo: 'https://d3i4yxtzktqr9n.cloudfront.net/web-eats-v2/97c43f8974e6c876.svg',
-            placeholder: 'https://www.ubereats.com/au/store/...'
-        },
-        {
-            name: 'Menulog',
-            key: 'menulog',
-            color: '#FF6600',
-            gradient: 'linear-gradient(135deg, #FF6600, #CC5200)',
-            logo: '/images/menulog-logo.png.png',
-            placeholder: 'https://www.menulog.com.au/restaurants/...'
-        },
-        {
-            name: 'DoorDash',
-            key: 'doorDash',
-            color: '#FF3008',
-            gradient: 'linear-gradient(135deg, #FF3008, #CC2606)',
-            logo: 'https://cdn.brandfetch.io/doordash.com/w/800/h/113/logo?c=1dxbfHSJFAPEGdCLU4o5B',
-            placeholder: 'https://www.doordash.com/store/...'
-        },
-        {
-            name: 'Deliveroo',
-            key: 'deliveroo',
-            color: '#00CCBC',
-            gradient: 'linear-gradient(135deg, #00CCBC, #00A396)',
-            logo: 'https://cdn.brandfetch.io/deliveroo.com/w/400/h/400/logo?c=1dxbfHSJFAPEGdCLU4o5B',
-            placeholder: 'https://deliveroo.com.au/menu/...'
-        }
-    ];
+    // Hide from public/guests if:
+    // - No links saved, OR
+    // - Not paid (draft mode — paid fields not published)
+    if (!isOwner && (!hasAnyLink || !isPaid)) return null;
+
+    // Owner sees it always (to edit), but show a draft notice if not paid
 
     return (
         <div style={{
@@ -90,26 +61,39 @@ const DeliveryLinksSection = ({
                     Order Online
                 </h3>
 
-                {isOwner && isPremium && !editingDeliveryLinks && (
-                    <button
-                        onClick={() => setEditingDeliveryLinks(true)}
-                        style={{
-                            background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '8px 16px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontSize: '0.9rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        <FaEdit style={{ fontSize: '1rem' }} />
-                        Edit Links
-                    </button>
+                {isOwner && !editingDeliveryLinks && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {/* Plan badges — ⚡Pro + 👑Elite */}
+                        <div style={{ display: 'flex', gap: 4 }}>
+                            <span title="Professional Plan" style={{
+                                fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+                                borderRadius: 20, border: '1px solid #8b5cf6',
+                                color: '#a78bfa', background: 'rgba(139,92,246,0.12)',
+                                display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+                            }}>⚡ Pro</span>
+                            <span title="Elite Plan" style={{
+                                fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+                                borderRadius: 20, border: '1px solid #f59e0b',
+                                color: '#fbbf24', background: 'rgba(245,158,11,0.12)',
+                                display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+                            }}>👑 Elite</span>
+                        </div>
+                        <button
+                            onClick={() => setEditingDeliveryLinks(true)}
+                            title="Edit Delivery Links"
+                            style={{
+                                width: '40px', height: '40px', borderRadius: '50%',
+                                background: 'rgba(139, 92, 246, 0.1)', cursor: 'pointer',
+                                border: '1px solid rgba(139, 92, 246, 0.3)',
+                                color: '#8b5cf6',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <FaEdit size={16} />
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -132,18 +116,28 @@ const DeliveryLinksSection = ({
                                     color: 'var(--text-primary)',
                                     fontSize: '0.9rem'
                                 }}>
-                                    <img
-                                        src={platform.logo}
-                                        alt={platform.name}
-                                        style={{
-                                            height: '24px',
-                                            width: 'auto',
-                                            objectFit: 'contain',
-                                            transform: platform.key === 'menulog' ? 'scale(1.4)' :
-                                                platform.key === 'deliveroo' ? 'scale(1.5)' :
-                                                    'scale(1)'
-                                        }}
-                                    />
+                                    <div style={{
+                                        background: platform.color,
+                                        borderRadius: '8px',
+                                        padding: '4px 8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                        minWidth: '72px',
+                                        height: '32px',
+                                    }}>
+                                        <img
+                                            src={platform.logo}
+                                            alt={platform.name}
+                                            style={{
+                                                maxHeight: '20px',
+                                                maxWidth: '64px',
+                                                objectFit: 'contain',
+                                                filter: 'brightness(0) invert(1)',
+                                            }}
+                                        />
+                                    </div>
                                     {platform.name}
                                 </label>
                                 <input
@@ -162,7 +156,8 @@ const DeliveryLinksSection = ({
                                         background: 'var(--bg-secondary)',
                                         color: 'var(--text-primary)',
                                         fontSize: '0.9rem',
-                                        fontFamily: 'inherit'
+                                        fontFamily: 'inherit',
+                                        boxSizing: 'border-box',
                                     }}
                                 />
                             </div>
@@ -221,33 +216,29 @@ const DeliveryLinksSection = ({
                         const link = deliveryLinks[platform.key];
                         if (!link) return null;
 
-                        const isPaid = partner?.subscriptionTier === 'professional' || partner?.subscriptionTier === 'elite' || partner?.subscriptionTier === 'premium';
-
                         const content = (
                             <>
-                                <img
-                                    src={platform.logo}
-                                    alt={platform.name}
-                                    style={{
-                                        height: '30px',
-                                        width: 'auto',
-                                        objectFit: 'contain',
-                                        filter: 'brightness(0) invert(1)', // Makes logos white
-                                        transform: platform.key === 'menulog' ? 'scale(1.4)' :
-                                            platform.key === 'deliveroo' ? 'scale(1.5)' :
-                                                'scale(1)'
-                                    }}
-                                />
-                                {platform.key === 'deliveroo' && (
-                                    <span style={{
-                                        fontWeight: '700',
-                                        fontSize: '1.5rem',
-                                        marginLeft: '10px',
-                                        letterSpacing: '0.02em'
-                                    }}>
-                                        {platform.name}
-                                    </span>
-                                )}
+                                <div style={{
+                                    background: platform.color,
+                                    borderRadius: '10px',
+                                    padding: '5px 10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    minWidth: '90px',
+                                    height: '38px',
+                                }}>
+                                    <img
+                                        src={platform.logo}
+                                        alt={platform.name}
+                                        style={{
+                                            maxHeight: '26px',
+                                            maxWidth: '80px',
+                                            objectFit: 'contain',
+                                            filter: 'brightness(0) invert(1)',
+                                        }}
+                                    />
+                                </div>
                                 {!isPaid && (
                                     <div style={{
                                         position: 'absolute',
@@ -259,7 +250,7 @@ const DeliveryLinksSection = ({
                                         borderRadius: '6px',
                                         backdropFilter: 'blur(4px)'
                                     }}>
-                                        👑 Paid
+                                        🔒 Locked
                                     </div>
                                 )}
                             </>
@@ -283,7 +274,7 @@ const DeliveryLinksSection = ({
                             minHeight: '60px',
                             position: 'relative',
                             cursor: isPaid ? 'pointer' : 'not-allowed',
-                            opacity: isPaid ? 1 : 0.8
+                            opacity: isPaid ? 1 : 0.6
                         };
 
                         if (isPaid) {
@@ -310,7 +301,7 @@ const DeliveryLinksSection = ({
                             return (
                                 <div
                                     key={platform.key}
-                                    title="Upgrade to Paid Plan to access delivery links"
+                                    title="Upgrade to Pro to unlock Delivery Links"
                                     style={commonStyles}
                                 >
                                     {content}
@@ -318,47 +309,6 @@ const DeliveryLinksSection = ({
                             );
                         }
                     })}
-                </div>
-            )}
-
-            {/* Premium Upgrade Prompt */}
-            {!isPremium && isOwner && (
-                <div style={{
-                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1))',
-                    border: '2px solid rgba(139, 92, 246, 0.3)',
-                    borderRadius: '12px',
-                    padding: '1rem',
-                    textAlign: 'center',
-                    marginTop: '1rem'
-                }}>
-                    <p style={{
-                        margin: 0,
-                        color: 'var(--text-primary)',
-                        fontWeight: '600',
-                        marginBottom: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px'
-                    }}>
-                        <MdDeliveryDining style={{ fontSize: '1.3rem' }} />
-                        Unlock Delivery Links with Premium
-                    </p>
-                    <button
-                        onClick={() => window.location.href = '/pricing'}
-                        style={{
-                            background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '10px 24px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontSize: '0.9rem'
-                        }}
-                    >
-                        Upgrade to Premium
-                    </button>
                 </div>
             )}
         </div>
