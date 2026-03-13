@@ -44,3 +44,4 @@ ui-debug.log
 .runtimeconfig.json
 .vercel
 .env*.local
+service-account-key.json 
