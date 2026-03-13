@@ -16,7 +16,7 @@ const BusinessCard = ({ business }) => {
     const brandKit = info.brandKit || {};
     const brandFont = 'system-ui, sans-serif';
 
-    // ── Theme colors (free for all partners) ──────────────────────────────────
+    // ── Theme colors (free for all businesses) ──────────────────────────────────
     const theme = getTheme(info.theme || 'default');
     const tc = theme?.colors || null; // null = default styling
     const th = (themed, fallback) => (tc && themed !== undefined) ? themed : fallback;
@@ -28,8 +28,8 @@ const BusinessCard = ({ business }) => {
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
     const [cardFile, setCardFile] = useState(null);
 
-    // Check if current user is a business account
-    const isBusinessAccount = userProfile?.accountType === 'business' || userProfile?.role === 'business';
+    // Canonical: only role. Partner = role === 'business'.
+    const isBusinessAccount = userProfile?.role === 'business';
 
     const handleCreateInvitation = (e) => {
         e.stopPropagation();
@@ -49,14 +49,15 @@ const BusinessCard = ({ business }) => {
     };
 
     const handleCardClick = () => {
-        navigate(`/partner/${business.uid}`);
+        navigate(`/business/${business.uid}`);
     };
 
-    // ── Share: generate card → OS app picker directly
+    // ── Share: generate card → OS app picker directly (image + link text)
     const handleShare = async (e) => {
         e.stopPropagation();
         const shareTitle = info.businessName || 'DineBuddies Partner';
-        const shareText = `Check out ${shareTitle} on DineBuddies!`;
+        const shareUrl = `${window.location.origin}/business/${business.uid}`;
+        const shareText = `Check out ${shareTitle} on DineBuddies!\n\n🔗 ${shareUrl}`;
         const storyData = {
             title: shareTitle,
             image: info.coverImage || getSafeAvatar(business),
@@ -68,14 +69,14 @@ const BusinessCard = ({ business }) => {
 
         try {
             setIsSharing(true);
-            const blob = await generateShareCardBlob(storyData, 'partner');
+            const blob = await generateShareCardBlob(storyData, 'business');
             if (!blob) throw new Error('No blob');
             const file = new File([blob], 'business-card.png', { type: 'image/png' });
 
             // Try native share with image file → opens OS picker
-            if (navigator.share) {
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 try {
-                    await navigator.share({ files: [file], title: shareTitle, text: shareText });
+                    await navigator.share({ files: [file], title: shareTitle, text: shareText, url: shareUrl });
                     return;
                 } catch (err) {
                     if (err.name === 'AbortError') return;
@@ -225,17 +226,41 @@ const BusinessCard = ({ business }) => {
             }}>
                 {/* Title & Type Header */}
                 <div style={{ marginBottom: '2px' }}>
-                    <span style={{
-                        display: 'block',
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        textTransform: 'uppercase',
-                        color: th(tc?.accent, accent || 'var(--primary)'),
-                        letterSpacing: '0.5px',
-                        marginBottom: '4px'
-                    }}>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/restaurants?category=${encodeURIComponent(info.businessType || 'Venue')}`);
+                        }}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: '24px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '6px',
+                            color: th(tc?.accent, accent || 'var(--primary)'),
+                            background: 'rgba(139, 92, 246, 0.08)',
+                            border: `1px solid ${th(tc?.accent, accent || 'var(--primary)')}44`,
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                            e.currentTarget.style.transform = 'scale(1.02)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.08)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                    >
                         {info.businessType || 'Venue'}
-                    </span>
+                    </button>
                     <h3 style={{
                         fontSize: '1.3rem',
                         fontWeight: '800',

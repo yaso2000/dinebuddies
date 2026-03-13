@@ -1,6 +1,7 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import { generateThumbnail } from '../utils/thumbnailGenerator';
+import { compressImage } from '../utils/imageUpload';
 
 /**
  * Upload media file (image or video) to Firebase Storage
@@ -10,17 +11,36 @@ import { generateThumbnail } from '../utils/thumbnailGenerator';
  * @param {string} folder - Folder name (e.g., 'invitations', 'posts', 'stories')
  * @returns {Promise<string>} - Download URL
  */
+const MAX_IMAGE_MB = 15;
+const MAX_VIDEO_MB = 100;
+
 export const uploadMedia = async (file, userId, type, folder = 'invitations') => {
     try {
+        const sizeMB = file.size / (1024 * 1024);
+        if (type === 'video' && sizeMB > MAX_VIDEO_MB) {
+            throw new Error(`Video must be under ${MAX_VIDEO_MB}MB (current: ${sizeMB.toFixed(1)}MB)`);
+        }
+        if (type === 'image' && sizeMB > MAX_IMAGE_MB) {
+            throw new Error(`Image must be under ${MAX_IMAGE_MB}MB (current: ${sizeMB.toFixed(1)}MB)`);
+        }
+        // Compress images and thumbnails on the client before upload (saves storage and speeds up uploads)
+        let fileToUpload = file;
+        if ((type === 'image' || type === 'thumbnail') && file.type?.startsWith('image/')) {
+            try {
+                fileToUpload = await compressImage(file, { maxSizeMB: 1, maxWidthOrHeight: 1200 });
+            } catch (e) {
+                console.warn('Image compression failed, uploading original:', e?.message);
+            }
+        }
         // Determin extension
         let extension = type === 'video' ? 'webm' : 'jpg';
-        if (file.name) {
-            const parts = file.name.split('.');
+        if (fileToUpload.name) {
+            const parts = fileToUpload.name.split('.');
             if (parts.length > 1) {
                 extension = parts.pop().toLowerCase();
             }
-        } else if (file.type) {
-            const ext = file.type.split('/')[1];
+        } else if (fileToUpload.type) {
+            const ext = fileToUpload.type.split('/')[1];
             if (ext) extension = ext.split(';')[0]; // handle 'webm;codecs=...'
         }
 
@@ -31,7 +51,7 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
 
         // Use resumable upload for better reliability
         const { uploadBytesResumable } = await import('firebase/storage');
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
 
         return new Promise((resolve, reject) => {
             uploadTask.on('state_changed',

@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { FaWhatsapp, FaTwitter, FaFacebook, FaTelegram, FaLink, FaShareAlt, FaInstagram, FaImage, FaDownload, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../context/ToastContext';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import InstagramStoryTemplate from './InstagramStoryTemplate';
 
 const ShareButtons = ({ title, description, url, storyData, type = 'invitation' }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [generatingCard, setGeneratingCard] = useState(false);
     const [generatingStory, setGeneratingStory] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
@@ -17,7 +19,7 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(`${shareText}\n${url}`).catch(() => { });
-        alert(t('link_copied_clipboard', 'Link copied!'));
+        showToast(t('link_copied_clipboard', 'Link copied!'), 'success');
     };
 
     const handleNativeShare = async () => {
@@ -40,17 +42,18 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
             if (!blob) throw new Error('No blob');
 
             const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
+            const textWithLink = `${shareText}\n\n🔗 ${url}`;
 
-            // Mobile: native file share (opens OS app picker directly)
+            // Mobile: native file share (opens OS app picker directly) — include URL in text so image + link appear together
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title, text: shareText });
+                await navigator.share({ files: [file], title, text: textWithLink, url });
             } else {
                 // Desktop: show preview with download button
                 setCardPreviewUrl(URL.createObjectURL(blob));
             }
         } catch (err) {
             console.error('Share card error:', err);
-            alert('Could not generate share card. Please try again.');
+            showToast('Could not generate share card. Please try again.', 'error');
         } finally {
             setGeneratingCard(false);
         }

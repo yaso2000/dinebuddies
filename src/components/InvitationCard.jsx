@@ -3,6 +3,7 @@ import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, F
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import ShareButtons from './ShareButtons';
 import NewReportModal from './NewReportModal';
@@ -15,8 +16,9 @@ import { generateShareCardBlob } from '../utils/shareCardCanvas';
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, toggleFollow, submitReport } = useInvitations();
+    const { currentUser, toggleFollow, submitReport, deleteInvitation } = useInvitations();
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     const [showReportModal, setShowReportModal] = useState(false);
     const [sharingCard, setSharingCard] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null); // desktop fallback
@@ -123,8 +125,9 @@ const InvitationCard = ({ invitation }) => {
             const blob = await generateShareCardBlob(storyData);
             if (!blob) throw new Error('No blob');
             const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
+            const textWithLink = `${description || title}\n\n🔗 ${shareUrl}`;
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title, text: description || title, url: shareUrl });
+                await navigator.share({ files: [file], title, text: textWithLink, url: shareUrl });
             } else {
                 // Desktop fallback: show preview
                 setCardPreviewUrl(URL.createObjectURL(blob));
@@ -223,7 +226,7 @@ const InvitationCard = ({ invitation }) => {
                                 border: '2px solid rgba(255,255,255,0.9)', objectFit: 'cover'
                             }}
                         />
-                        {!isHost && author?.accountType !== 'business' && (
+                        {!isHost && author?.role !== 'business' && userProfile?.role !== 'business' && (
                             <button
                                 onClick={handleFollowClick}
                                 style={{
@@ -309,7 +312,7 @@ const InvitationCard = ({ invitation }) => {
 
                     {/* ADMIN DELETE BUTTON */}
                     {(
-                        userProfile?.accountType === 'admin' ||
+                        userProfile?.role === 'admin' ||
                         userProfile?.email?.includes('admin') ||
                         userProfile?.email === 'info@dinebuddies.com.au' ||
                         currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33'
@@ -319,12 +322,9 @@ const InvitationCard = ({ invitation }) => {
                                     e.stopPropagation();
                                     if (window.confirm('🗑️ ADMIN ACTION: Delete this invitation permanently?')) {
                                         try {
-                                            const { deleteDoc, doc } = await import('firebase/firestore');
-                                            const { db } = await import('../firebase/config');
-                                            await deleteDoc(doc(db, 'invitations', id));
-                                            // Force refresh or remove from UI locally if possible, but context should handle it
+                                            await deleteInvitation(id);
                                         } catch (err) {
-                                            alert('Error deleting: ' + err.message);
+                                            showToast('Error deleting: ' + err.message, 'error');
                                         }
                                     }
                                 }}

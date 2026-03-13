@@ -164,6 +164,60 @@ export const SUBSCRIPTION_PLANS = {
 
         // API
         apiAccess: true
+    },
+
+    // Business-only tiers (single source: users.subscriptionTier). No legacy aliases.
+    professional: {
+        id: 'professional',
+        name: 'Professional',
+        displayName: 'Professional Business',
+        price: 29.99,
+        currency: 'USD',
+        interval: 'month',
+        maxMembers: Infinity,
+        maxPostsPerMonth: Infinity,
+        maxServices: Infinity,
+        canCreateOffers: true,
+        canCreateEvents: true,
+        priorityListing: true,
+        showInInvitations: true,
+        featuredListing: false,
+        offerSlots: 1,
+        offerHoursPerWeek: 50,
+        offerPerpetual: false,
+        analytics: 'advanced',
+        supportLevel: 'priority',
+        badge: 'professional',
+        removeBranding: true,
+        canRunAds: false,
+        socialMediaIntegration: true,
+        apiAccess: false
+    },
+    elite: {
+        id: 'elite',
+        name: 'Elite',
+        displayName: 'Elite Business',
+        price: 99.99,
+        currency: 'USD',
+        interval: 'month',
+        maxMembers: Infinity,
+        maxPostsPerMonth: Infinity,
+        maxServices: Infinity,
+        canCreateOffers: true,
+        canCreateEvents: true,
+        priorityListing: true,
+        showInInvitations: true,
+        featuredListing: true,
+        offerSlots: 1,
+        offerHoursPerWeek: Infinity,
+        offerPerpetual: true,
+        analytics: 'full',
+        supportLevel: 'dedicated',
+        badge: 'elite',
+        removeBranding: true,
+        canRunAds: true,
+        socialMediaIntegration: true,
+        apiAccess: true
     }
 };
 
@@ -213,7 +267,7 @@ export const comparePlans = (planId1, planId2) => {
 };
 
 /**
- * Get next tier plan
+ * Get next tier plan (user tiers: free→pro→premium; business tiers: free→professional→elite)
  */
 export const getNextTier = (currentPlanId) => {
     const tiers = ['free', 'basic', 'pro', 'premium'];
@@ -226,6 +280,15 @@ export const getNextTier = (currentPlanId) => {
     return tiers[currentIndex + 1];
 };
 
+/** Business tiers only: free → professional → elite */
+export const BUSINESS_TIERS = ['free', 'professional', 'elite'];
+
+export const getNextBusinessTier = (currentPlanId) => {
+    const idx = BUSINESS_TIERS.indexOf(currentPlanId);
+    if (idx === -1 || idx === BUSINESS_TIERS.length - 1) return null;
+    return BUSINESS_TIERS[idx + 1];
+};
+
 /**
  * Badge configurations
  */
@@ -233,17 +296,27 @@ export const PLAN_BADGES = {
     basic: {
         icon: '⭐',
         color: '#3b82f6',
-        label: 'Basic Partner'
+        label: 'Basic Business'
     },
     pro: {
         icon: '🌟',
         color: '#8b5cf6',
-        label: 'Pro Partner'
+        label: 'Pro Business'
     },
     premium: {
         icon: '👑',
         color: '#f59e0b',
-        label: 'Premium Partner'
+        label: 'Premium Business'
+    },
+    professional: {
+        icon: '⚡',
+        color: '#8b5cf6',
+        label: 'Professional Business'
+    },
+    elite: {
+        icon: '👑',
+        color: '#f59e0b',
+        label: 'Elite Business'
     }
 };
 

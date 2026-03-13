@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaStar, FaRegStar, FaEdit, FaReply, FaFilter, FaSortAmountDown, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import './EnhancedReviews.css';
@@ -23,6 +24,7 @@ const EnhancedReviews = ({
     theme
 }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const tc = theme?.colors || null;
     const th = (themed, fallback) => tc ? themed : fallback;
     const [showAll, setShowAll] = useState(false);
@@ -100,7 +102,7 @@ const EnhancedReviews = ({
             setReplyingTo(null);
         } catch (error) {
             console.error('Error posting reply:', error);
-            alert('Failed to post reply');
+            showToast('Failed to post reply', 'error');
         } finally {
             setSubmittingReply(false);
         }
@@ -113,7 +115,7 @@ const EnhancedReviews = ({
                 {[1, 2, 3, 4, 5].map(star => (
                     star <= rating
                         ? <FaStar key={star} className="star filled" style={{ color: starCol }} />
-                        : <FaRegStar key={star} className="star empty" style={{ color: 'rgba(255,255,255,0.2)' }} />
+                        : <FaRegStar key={star} className="star empty" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
                 ))}
             </div>
         );
@@ -124,8 +126,8 @@ const EnhancedReviews = ({
             {/* Header */}
             <div className="reviews-header">
                 <div className="header-left">
-                    <h3 style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                        <FaStar style={{ color: tc?.starColor || th(tc?.accent, '#fbbf24'), filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }} />
+                    <h3 style={{ color: 'var(--text-main)', textShadow: 'none' }}>
+                        <FaStar style={{ color: tc?.starColor || '#fbbf24' }} />
                         {t('reviews', 'Reviews')} ({totalReviews})
                     </h3>
                     {averageRating > 0 && (
@@ -135,7 +137,7 @@ const EnhancedReviews = ({
                         </div>
                     )}
                 </div>
-                {currentUser && userProfile?.accountType !== 'business' && (
+                {currentUser && userProfile?.role !== 'business' && (
                     <button
                         className="write-review-btn"
                         onClick={onWriteReview}
@@ -161,10 +163,10 @@ const EnhancedReviews = ({
                 }}>
                     {/* Big average number */}
                     <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: '900', lineHeight: 1, color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: '900', lineHeight: 1, color: 'var(--text-main)' }}>
                             {averageRating > 0 ? averageRating.toFixed(1) : '–'}
                         </div>
-                        <div style={{ fontSize: '0.6rem', color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'), marginTop: '2px' }}>/ 5</div>
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', marginTop: '2px' }}>/ 5</div>
                     </div>
                     {/* Mini bars */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
@@ -271,10 +273,24 @@ const EnhancedReviews = ({
                                             {!review.userPhoto && (review.userName?.charAt(0) || '?')}
                                         </div>
                                         <div className="user-details">
-                                            <div className="user-name" style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontWeight: '700' }}>
+                                            <div
+                                                className="user-name"
+                                                style={{
+                                                    color: 'var(--text-main)',
+                                                    textShadow: 'none',
+                                                    fontWeight: '700'
+                                                }}
+                                            >
                                                 {review.userName || 'Anonymous'}
                                             </div>
-                                            <div className="review-date" style={{ color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'), fontSize: '0.8rem', marginTop: '2px' }}>
+                                            <div
+                                                className="review-date"
+                                                style={{
+                                                    color: 'var(--text-secondary)',
+                                                    fontSize: '0.8rem',
+                                                    marginTop: '2px'
+                                                }}
+                                            >
                                                 {review.createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'}
                                             </div>
                                         </div>
@@ -283,7 +299,7 @@ const EnhancedReviews = ({
                                 </div>
 
                                 {/* Review Content */}
-                                <div className="review-content" style={{ color: th(tc?.badgeText, 'white'), textShadow: '0 1px 3px rgba(0,0,0,0.5)', marginTop: '10px', lineHeight: '1.5' }}>
+                                <div className="review-content" style={{ color: 'var(--text-main)', textShadow: '0 1px 3px rgba(0,0,0,0.5)', marginTop: '10px', lineHeight: '1.5' }}>
                                     {review.comment}
                                 </div>
 

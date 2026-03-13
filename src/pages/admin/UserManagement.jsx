@@ -1,11 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { FaSearch, FaUser, FaStore, FaBan, FaTrash, FaEye, FaCrown, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { FaSearch, FaUser, FaStore, FaBan, FaTrash, FaEye, FaCrown, FaCheckCircle, FaTimesCircle, FaMapMarkedAlt, FaList } from 'react-icons/fa';
+import { adminSecurityService } from '../../services/adminSecurityService';
+import { getSafeAvatar } from '../../utils/avatarUtils';
+import '../../components/MapStyles.css';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const isBusiness = (u) => u.role === 'business';
+
+const getCity = (u) =>
+    u.businessInfo?.city ||
+    u.location?.city ||
+    u.city ||
+    '';
+
+const getCountry = (u) =>
+    u.businessInfo?.country ||
+    u.location?.country ||
+    u.country ||
+    '';
+
+const getCoords = (u) => {
+    const lat = u.businessInfo?.lat ?? u.businessInfo?.location?.latitude ?? u.location?.latitude ?? null;
+    const lng = u.businessInfo?.lng ?? u.businessInfo?.location?.longitude ?? u.location?.longitude ?? null;
+    return lat != null && lng != null ? { lat: Number(lat), lng: Number(lng) } : null;
+};
 
 // User subscription tiers (individual users)
 const USER_TIERS = [
@@ -21,8 +42,8 @@ const BIZ_TIERS = [
     { value: 'elite', label: '👑 Elite', color: '#f59e0b' },
 ];
 
-// System roles
-const SYSTEM_ROLES = ['user', 'staff', 'support', 'admin'];
+// Canonical roles only (no accountType)
+const SYSTEM_ROLES = ['user', 'business', 'staff', 'support', 'admin'];
 
 const UserManagement = () => {
     const { currentUser } = useAuth();
@@ -30,15 +51,88 @@ const UserManagement = () => {
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterType, setFilterType] = useState('all');    // all | individual | business
-    const [filterRole, setFilterRole] = useState('all');    // all | user | staff | support | admin | tester
+    const [filterRole, setFilterRole] = useState('all');
+    const [filterCity, setFilterCity] = useState('all');
+    const [filterCountry, setFilterCountry] = useState('all');
+    const [viewMode, setViewMode] = useState('list'); // list | map
+    const mapRef = useRef(null);
+    const mapInstance = useRef(null);
     const [selectedUser, setSelectedUser] = useState(null);
     const [showUserModal, setShowUserModal] = useState(false);
     const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
     const [isDeletingAll, setIsDeletingAll] = useState(false);
 
+    const uniqueCities = useMemo(() => {
+        const set = new Set();
+        users.forEach(u => {
+            const c = getCity(u);
+            if (c?.trim()) set.add(c.trim());
+        });
+        return Array.from(set).sort();
+    }, [users]);
+
+    const uniqueCountries = useMemo(() => {
+        const set = new Set();
+        users.forEach(u => {
+            const c = getCountry(u);
+            if (c?.trim()) set.add(c.trim());
+        });
+        return Array.from(set).sort();
+    }, [users]);
+
+    const usersWithCoords = useMemo(() =>
+        filteredUsers
+            .map(u => {
+                const coords = getCoords(u);
+                if (!coords) return null;
+                return { ...u, lat: coords.lat, lng: coords.lng };
+            })
+            .filter(Boolean),
+        [filteredUsers]
+    );
+
     useEffect(() => { fetchUsers(); }, []);
-    useEffect(() => { filterUsers(); }, [users, searchQuery, filterType, filterRole]);
+    useEffect(() => { filterUsers(); }, [users, searchQuery, filterRole, filterCity, filterCountry]);
+
+    useEffect(() => {
+        if (viewMode !== 'map' || !mapRef.current || typeof window.L === 'undefined') return;
+        const L = window.L;
+        if (mapInstance.current) {
+            mapInstance.current.remove();
+            mapInstance.current = null;
+        }
+        const map = L.map(mapRef.current).setView([51.505, -0.09], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        mapInstance.current = map;
+        return () => {
+            if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
+        };
+    }, [viewMode]);
+
+    useEffect(() => {
+        if (viewMode !== 'map' || !mapInstance.current || typeof window.L === 'undefined') return;
+        const L = window.L;
+        const map = mapInstance.current;
+        const markers = [];
+        map.eachLayer(l => { if (l instanceof L.Marker) markers.push(l); });
+        markers.forEach(m => map.removeLayer(m));
+        const bounds = [];
+        usersWithCoords.forEach(u => {
+            const m = L.marker([u.lat, u.lng], {
+                icon: L.divIcon({
+                    className: 'admin-user-marker',
+                    html: `<div style="width:32px;height:32px;border-radius:50%;border:2px solid #6366f1;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);"><img src="${getSafeAvatar(u)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 32]
+                })
+            });
+            m.bindPopup(`<strong>${getUserName(u)}</strong><br/>${u.email}<br/>${u.businessInfo?.businessName || ''}`);
+            m.addTo(map);
+            bounds.push([u.lat, u.lng]);
+        });
+        if (bounds.length === 1) map.setView(bounds[0], 10);
+        else if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30] });
+    }, [viewMode, usersWithCoords]);
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
     const fetchUsers = async () => {
@@ -55,13 +149,8 @@ const UserManagement = () => {
     // ── Filter ────────────────────────────────────────────────────────────────
     const filterUsers = () => {
         let f = [...users];
-
-        if (filterType === 'business') f = f.filter(u => isBusiness(u));
-        if (filterType === 'individual') f = f.filter(u => !isBusiness(u));
-
         if (filterRole !== 'all') {
-            if (filterRole === 'tester') f = f.filter(u => u.isTester === true);
-            else f = f.filter(u => u.role === filterRole);
+            f = f.filter(u => (u.role || 'user') === filterRole);
         }
 
         if (searchQuery) {
@@ -70,8 +159,16 @@ const UserManagement = () => {
                 u.display_name?.toLowerCase().includes(q) ||
                 u.displayName?.toLowerCase().includes(q) ||
                 u.email?.toLowerCase().includes(q) ||
-                u.id.toLowerCase().includes(q)
+                u.id.toLowerCase().includes(q) ||
+                u.businessInfo?.businessName?.toLowerCase().includes(q)
             );
+        }
+
+        if (filterCity !== 'all') {
+            f = f.filter(u => (getCity(u) || '').toLowerCase() === filterCity.toLowerCase());
+        }
+        if (filterCountry !== 'all') {
+            f = f.filter(u => (getCountry(u) || '').toLowerCase() === filterCountry.toLowerCase());
         }
 
         setFilteredUsers(f);
@@ -81,10 +178,7 @@ const UserManagement = () => {
     const handleBanUser = async (userId, currentStatus) => {
         if (!window.confirm(`${currentStatus ? 'Unban' : 'Ban'} this user?`)) return;
         try {
-            await updateDoc(doc(db, 'users', userId), {
-                banned: !currentStatus,
-                bannedAt: !currentStatus ? new Date() : null
-            });
+            await adminSecurityService.setUserBanStatus(userId, !currentStatus);
             setUsers(users.map(u => u.id === userId ? { ...u, banned: !currentStatus } : u));
         } catch (err) { alert('Failed: ' + err.message); }
     };
@@ -92,19 +186,9 @@ const UserManagement = () => {
     const handleDeleteUser = async (userId) => {
         if (!window.confirm('Delete this user? This cannot be undone!')) return;
         try {
-            await deleteDoc(doc(db, 'users', userId));
+            const res = await adminSecurityService.deleteUser(userId);
             setUsers(users.filter(u => u.id !== userId));
-            // Cascade: posts, stories, invitations
-            let deleted = 0;
-            for (const col of ['communityPosts', 'stories', 'invitations']) {
-                const snap = await getDocs(collection(db, col));
-                for (const d of snap.docs) {
-                    const data = d.data();
-                    const aid = data.partnerId || data.author?.id || data.authorId || data.userId || data.uid;
-                    if (aid === userId) { await deleteDoc(doc(db, col, d.id)); deleted++; }
-                }
-            }
-            alert(`Deleted user + ${deleted} associated items.`);
+            alert(`Deleted user + ${res?.deletedItems || 0} associated items.`);
         } catch (err) { alert('Failed: ' + err.message); }
     };
 
@@ -112,19 +196,8 @@ const UserManagement = () => {
         if (!window.confirm('Scan and delete orphaned posts/stories?')) return;
         setIsCleaningOrphans(true);
         try {
-            const validIds = new Set((await getDocs(collection(db, 'users'))).docs.map(d => d.id));
-            let dp = 0, ds = 0;
-            for (const d of (await getDocs(collection(db, 'communityPosts'))).docs) {
-                const data = d.data();
-                const aid = data.partnerId || data.author?.id || data.authorId || data.userId || data.uid;
-                if (aid && !validIds.has(aid)) { await deleteDoc(doc(db, 'communityPosts', d.id)); dp++; }
-            }
-            for (const d of (await getDocs(collection(db, 'stories'))).docs) {
-                const data = d.data();
-                const aid = data.userId || data.uid || data.authorId || data.author?.id;
-                if (aid && !validIds.has(aid)) { await deleteDoc(doc(db, 'stories', d.id)); ds++; }
-            }
-            alert(`Cleaned ${dp} posts + ${ds} stories.`);
+            const res = await adminSecurityService.cleanOrphanContent();
+            alert(`Cleaned ${res?.deletedPosts || 0} posts + ${res?.deletedStories || 0} stories.`);
         } catch (err) { alert('Error: ' + err.message); }
         finally { setIsCleaningOrphans(false); }
     };
@@ -134,42 +207,31 @@ const UserManagement = () => {
         if (window.prompt('Type "DELETE ALL" to confirm') !== 'DELETE ALL') return;
         setIsDeletingAll(true);
         try {
-            let dp = 0, ds = 0;
-            for (const d of (await getDocs(collection(db, 'communityPosts'))).docs) { await deleteDoc(doc(db, 'communityPosts', d.id)); dp++; }
-            for (const d of (await getDocs(collection(db, 'stories'))).docs) { await deleteDoc(doc(db, 'stories', d.id)); ds++; }
-            alert(`Wiped: ${dp} posts + ${ds} stories.`);
+            const res = await adminSecurityService.wipeCommunityContent();
+            alert(`Wiped: ${res?.deletedPosts || 0} posts + ${res?.deletedStories || 0} stories.`);
         } catch (err) { alert('Error: ' + err.message); }
         finally { setIsDeletingAll(false); }
     };
 
     const handleUpdateSystemRole = async (userId, newRole) => {
+        const currentRole = users.find(u => u.id === userId)?.role || 'user';
+        // Cannot convert between regular user and business (account type is fixed)
+        if ((currentRole === 'user' && newRole === 'business') || (currentRole === 'business' && newRole === 'user')) {
+            alert('Account type cannot be changed: user and business accounts are separate. Cannot convert between them.');
+            return;
+        }
         if (!window.confirm(`Change role to "${newRole}"?`)) return;
         try {
-            await updateDoc(doc(db, 'users', userId), { role: newRole });
+            await adminSecurityService.setUserRole(userId, newRole);
             setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
         } catch (err) { alert('Failed: ' + err.message); }
     };
 
     const handleUpdateSubscription = async (userId, newTier, isBusinessUser) => {
         try {
+            await adminSecurityService.setUserSubscriptionTier(userId, newTier, isBusinessUser);
             const updates = { subscriptionTier: newTier };
-            // For individual users: update weeklyPrivateQuota
-            if (!isBusinessUser) {
-                const QUOTAS = { free: 0, pro: 2, vip: -1 };
-                updates.weeklyPrivateQuota = QUOTAS[newTier] ?? 0;
-                updates.usedPrivateCreditsThisWeek = 0;
-            }
-            await updateDoc(doc(db, 'users', userId), updates);
             setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
-        } catch (err) { alert('Failed: ' + err.message); }
-    };
-
-    const handleToggleTester = async (userId, current) => {
-        if (!window.confirm(`${current ? 'Remove' : 'Grant'} Tester access?`)) return;
-        try {
-            await updateDoc(doc(db, 'users', userId), { isTester: !current });
-            setUsers(users.map(u => u.id === userId ? { ...u, isTester: !current } : u));
-            if (selectedUser?.id === userId) setSelectedUser(s => ({ ...s, isTester: !current }));
         } catch (err) { alert('Failed: ' + err.message); }
     };
 
@@ -252,32 +314,76 @@ const UserManagement = () => {
                             className="admin-search-input" />
                     </div>
 
-                    {/* Account Type */}
+                    {/* Role (canonical: user | business | admin | staff | support) */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ACCOUNT TYPE</label>
-                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="admin-select" style={{ width: 160 }}>
-                            <option value="all">All Types</option>
-                            <option value="individual">👤 Individual</option>
-                            <option value="business">🏪 Business</option>
-                        </select>
-                    </div>
-
-                    {/* System Role */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>SYSTEM ROLE</label>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ROLE</label>
                         <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="admin-select" style={{ width: 160 }}>
                             <option value="all">All Roles</option>
                             <option value="user">User</option>
+                            <option value="business">Business</option>
                             <option value="staff">Staff</option>
                             <option value="support">Support</option>
                             <option value="admin">Admin</option>
-                            <option value="tester">🧪 Tester</option>
                         </select>
+                    </div>
+
+                    {/* Country */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>COUNTRY</label>
+                        <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)} className="admin-select" style={{ width: 160 }}>
+                            <option value="all">All Countries</option>
+                            {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+
+                    {/* City */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>CITY</label>
+                        <select value={filterCity} onChange={e => setFilterCity(e.target.value)} className="admin-select" style={{ width: 160 }}>
+                            <option value="all">All Cities</option>
+                            {uniqueCities.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+
+                    {/* View Mode */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>VIEW</label>
+                        <div style={{ display: 'flex', gap: 4, border: '1px solid #334155', borderRadius: 8, padding: 2, background: '#0f172a' }}>
+                            <button onClick={() => setViewMode('list')}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                    background: viewMode === 'list' ? '#6366f1' : 'transparent', color: viewMode === 'list' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: '0.875rem'
+                                }}>
+                                <FaList /> List
+                            </button>
+                            <button onClick={() => setViewMode('map')}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                    background: viewMode === 'map' ? '#6366f1' : 'transparent', color: viewMode === 'map' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: '0.875rem'
+                                }}>
+                                <FaMapMarkedAlt /> Map
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Table */}
+            {/* Map View */}
+            {viewMode === 'map' && (
+                <div className="admin-card" style={{ padding: 0, overflow: 'hidden', minHeight: 400, position: 'relative' }}>
+                    <div ref={mapRef} style={{ width: '100%', height: 450, borderRadius: 8 }} />
+                    {usersWithCoords.length === 0 && (
+                        <div style={{
+                            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(15,23,42,0.8)', borderRadius: 8, color: '#94a3b8', fontSize: '1rem'
+                        }}>
+                            No users with location data in current filters
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Table (List View) */}
             {filteredUsers.length === 0 ? (
                 <div className="admin-card">
                     <div className="admin-empty">
@@ -286,14 +392,14 @@ const UserManagement = () => {
                         <p className="admin-empty-text">{searchQuery ? 'Try a different search term' : 'No users in the system yet'}</p>
                     </div>
                 </div>
-            ) : (
+            ) : viewMode === 'list' ? (
                 <div className="admin-card" style={{ padding: 0, overflow: 'hidden' }}>
                     <table className="admin-table">
                         <thead>
                             <tr>
                                 <th>User</th>
-                                <th>Type</th>
-                                <th>System Role</th>
+                                <th>Role</th>
+                                <th>Change role</th>
                                 <th>Subscription</th>
                                 <th>Status</th>
                                 <th>Joined</th>
@@ -331,14 +437,15 @@ const UserManagement = () => {
                                             </div>
                                         </td>
 
-                                        {/* Type Badge */}
+                                        {/* Role badge */}
                                         <td><TypeBadge user={user} /></td>
 
-                                        {/* System Role — only for non-business */}
+                                        {/* Role (editable for non-business; business account type is fixed) */}
                                         <td>
                                             {!bizUser ? (
                                                 <select value={user.role || 'user'}
                                                     onChange={e => handleUpdateSystemRole(user.id, e.target.value)}
+                                                    title={isBusiness(user) ? 'Business account type cannot be changed to user' : (user.role || 'user') === 'user' ? 'User account type cannot be changed to business' : ''}
                                                     className="admin-select"
                                                     style={{
                                                         width: 110,
@@ -346,10 +453,15 @@ const UserManagement = () => {
                                                         color: user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : '#fff',
                                                         fontWeight: user.role !== 'user' ? 'bold' : 'normal'
                                                     }}>
-                                                    {SYSTEM_ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                                                    {SYSTEM_ROLES.filter(r => {
+                                                        const isBiz = isBusiness(user);
+                                                        if (r === 'user' && isBiz) return false; // business cannot become user
+                                                        if (r === 'business' && !isBiz && (user.role || 'user') === 'user') return false; // user cannot become business
+                                                        return true;
+                                                    }).map(r => <option key={r} value={r}>{r === 'business' ? 'Business' : r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
                                                 </select>
                                             ) : (
-                                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>N/A (Business)</span>
+                                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Business</span>
                                             )}
                                         </td>
 
@@ -374,9 +486,6 @@ const UserManagement = () => {
                                                 <span className={user.banned ? 'admin-badge admin-badge-danger' : 'admin-badge admin-badge-success'}>
                                                     {user.banned ? <><FaTimesCircle style={{ fontSize: '0.75rem' }} /> Banned</> : <><FaCheckCircle style={{ fontSize: '0.75rem' }} /> Active</>}
                                                 </span>
-                                                {user.isTester && (
-                                                    <span style={{ fontSize: '0.7rem', background: 'rgba(99,102,241,0.2)', color: '#818cf8', border: '1px solid #6366f1', borderRadius: 8, padding: '2px 8px', fontWeight: 700 }}>🧪 Tester</span>
-                                                )}
                                             </div>
                                         </td>
 
@@ -399,12 +508,6 @@ const UserManagement = () => {
                                                 <button onClick={() => { setSelectedUser(user); setShowUserModal(true); }}
                                                     className="admin-btn admin-btn-sm" style={{ background: '#3b82f6', color: '#fff', padding: '0.5rem' }} title="View Details">
                                                     <FaEye />
-                                                </button>
-                                                <button onClick={() => handleToggleTester(user.id, user.isTester)}
-                                                    className="admin-btn admin-btn-sm"
-                                                    style={{ background: user.isTester ? '#4f46e5' : 'rgba(99,102,241,0.15)', color: user.isTester ? '#fff' : '#818cf8', border: '1px solid #6366f1', padding: '0.5rem', fontSize: '0.8rem' }}
-                                                    title={user.isTester ? 'Remove Tester' : 'Make Tester'}>
-                                                    🧪
                                                 </button>
                                                 <button onClick={() => handleBanUser(user.id, user.banned)}
                                                     className={`admin-btn admin-btn-sm ${user.banned ? 'admin-btn-success' : 'admin-btn-danger'}`}
@@ -430,7 +533,7 @@ const UserManagement = () => {
                         </tbody>
                     </table>
                 </div>
-            )}
+            ) : null}
 
             {/* User Details Modal */}
             {showUserModal && selectedUser && (
@@ -446,11 +549,9 @@ const UserManagement = () => {
                                 { label: 'Name', value: getUserName(selectedUser) },
                                 { label: 'Email', value: selectedUser.email },
                                 { label: 'User ID', value: selectedUser.id, mono: true },
-                                { label: 'Account Type', value: isBusiness(selectedUser) ? '🏪 Business' : '👤 Individual' },
-                                { label: 'System Role', value: selectedUser.role || 'user' },
+                                { label: 'Role', value: isBusiness(selectedUser) ? 'Business' : (selectedUser.role || 'user') },
                                 { label: 'Subscription', value: selectedUser.subscriptionTier || 'free' },
                                 { label: 'Status', value: selectedUser.banned ? 'Banned' : 'Active', color: selectedUser.banned ? '#ef4444' : '#22c55e' },
-                                { label: 'Tester', value: selectedUser.isTester ? '✅ Yes' : '❌ No' },
                             ].map(f => (
                                 <div key={f.label}>
                                     <label className="admin-label">{f.label}</label>
@@ -474,10 +575,6 @@ const UserManagement = () => {
                         </div>
 
                         <div className="admin-flex admin-gap-2 admin-mt-4" style={{ flexWrap: 'wrap' }}>
-                            <button onClick={() => handleToggleTester(selectedUser.id, selectedUser.isTester)}
-                                className="admin-btn" style={{ flex: 1, background: selectedUser.isTester ? '#4f46e5' : 'rgba(99,102,241,0.15)', color: selectedUser.isTester ? '#fff' : '#818cf8', border: '1px solid #6366f1' }}>
-                                🧪 {selectedUser.isTester ? 'Remove Tester' : 'Grant Tester Access'}
-                            </button>
                             {!isBusiness(selectedUser) && (
                                 <button onClick={() => { handleUpdateSystemRole(selectedUser.id, selectedUser.role === 'admin' ? 'user' : 'admin'); setShowUserModal(false); }}
                                     className="admin-btn" style={{ flex: 1, background: '#a855f7', color: '#fff' }}>

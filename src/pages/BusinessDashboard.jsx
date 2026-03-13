@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe } from 'react-icons/fa';
 
 const BusinessDashboard = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile, loading: authLoading } = useAuth();
+    const { getCommunityMembers } = useInvitations();
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         memberCount: 0,
@@ -24,15 +28,17 @@ const BusinessDashboard = () => {
     });
     const [recentActivity, setRecentActivity] = useState([]);
     const [publishingOffer, setPublishingOffer] = useState(false);
+    const [publishingProfile, setPublishingProfile] = useState(false);
     const [offers, setOffers] = useState([]);
     const [offersLoading, setOffersLoading] = useState(false);
 
-    // Desktop redirect — if user opens this on a wide screen, send to Pro Dashboard
+    // Desktop redirect — only Elite can use the dedicated desktop dashboard. Single source: users.subscriptionTier (free, professional, elite only).
     useEffect(() => {
-        if (window.innerWidth >= 1024) {
+        const tier = (userProfile?.subscriptionTier || 'free').toLowerCase();
+        if (window.innerWidth >= 1024 && tier === 'elite') {
             navigate('/business-pro', { replace: true });
         }
-    }, [navigate]);
+    }, [navigate, userProfile?.subscriptionTier]);
 
 
     const fetchDashboardData = async () => {
@@ -41,13 +47,12 @@ const BusinessDashboard = () => {
             setLoading(true);
             console.log('🔄 Fetching dashboard data for:', currentUser.uid);
 
-            // Fetch community members count - FIXED: Read from users collection
-            const membersQuery = query(
-                collection(db, 'users'),
-                where('joinedCommunities', 'array-contains', currentUser.uid)
-            );
-            const membersSnapshot = await getDocs(membersQuery);
-            const memberCount = membersSnapshot.size;
+            // Fetch community members count via trusted backend path
+            const memberResult = await getCommunityMembers(currentUser.uid, {
+                includeMembers: false,
+                limit: 1
+            });
+            const memberCount = Number(memberResult?.memberCount || 0);
             console.log('👥 Community Members:', memberCount);
 
             // Fetch active invitations count - FIXED: use restaurantId instead of partnerId
@@ -176,10 +181,10 @@ const BusinessDashboard = () => {
             setPublishingOffer(true);
             if (offerId) {
                 await premiumOfferService.updateOffer(offerId, offerData, file);
-                alert('✅ Offer updated successfully!');
+                showToast('✅ Offer updated successfully!', 'success');
             } else {
                 await premiumOfferService.createOffer(offerData, file);
-                alert('✅ Offer published successfully!');
+                showToast('✅ Offer published successfully!', 'success');
             }
 
             // Refresh data
@@ -188,7 +193,7 @@ const BusinessDashboard = () => {
             fetchDashboardData();
         } catch (error) {
             console.error('Error in handlePublishOffer:', error);
-            alert(`❌ Failed to publish offer: ${error.message}`);
+            showToast(`❌ Failed to publish offer: ${error.message}`, 'error');
         } finally {
             setPublishingOffer(false);
         }
@@ -201,7 +206,7 @@ const BusinessDashboard = () => {
             const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
             setOffers(businessOffers);
         } catch (error) {
-            alert('Error freezing offer: ' + error.message);
+            showToast('Error freezing offer: ' + error.message, 'error');
         }
     };
 
@@ -212,7 +217,7 @@ const BusinessDashboard = () => {
             const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
             setOffers(businessOffers);
         } catch (error) {
-            alert('Could not republish: ' + error.message);
+            showToast('Could not republish: ' + error.message, 'error');
         }
     };
 
@@ -222,12 +227,44 @@ const BusinessDashboard = () => {
             await premiumOfferService.deleteOffer(offerId);
             setOffers(offers.filter(o => o.id !== offerId));
         } catch (error) {
-            alert('Error deleting offer: ' + error.message);
+            showToast('Error deleting offer: ' + error.message, 'error');
         }
     };
 
+    const handlePublishProfile = async () => {
+        if (!currentUser?.uid) return;
+        try {
+            setPublishingProfile(true);
+            const userRef = doc(db, 'users', currentUser.uid);
+            await updateDoc(userRef, { 'businessInfo.isPublished': true });
+            showToast(t('business_publish_success', 'Your business is now visible on the Partners page.'), 'success');
+        } catch (error) {
+            console.error('Error publishing profile:', error);
+            showToast(t('business_publish_error', 'Failed to publish profile: ') + error.message, 'error');
+        } finally {
+            setPublishingProfile(false);
+        }
+    };
+
+    const handleUnpublishProfile = async () => {
+        if (!currentUser?.uid) return;
+        const confirmMsg = t('business_unpublish_confirm', 'Hide your business from the Partners page? (e.g. temporarily closed) You can republish anytime.');
+        if (!window.confirm(confirmMsg)) return;
+        try {
+            setPublishingProfile(true);
+            const userRef = doc(db, 'users', currentUser.uid);
+            await updateDoc(userRef, { 'businessInfo.isPublished': false });
+            showToast(t('business_unpublish_success', 'Your business is now hidden from the Partners page.'), 'success');
+        } catch (error) {
+            console.error('Error unpublishing profile:', error);
+            showToast(t('business_unpublish_error', 'Failed to hide profile: ') + error.message, 'error');
+        } finally {
+            setPublishingProfile(false);
+        }
+    };
 
     const businessInfo = userProfile?.businessInfo || {};
+    const isPublished = businessInfo.isPublished === true;
 
     return (
         <div className="page-container" style={{ paddingBottom: '100px' }}>
@@ -237,7 +274,7 @@ const BusinessDashboard = () => {
                 <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
                     📊 Business Dashboard
                 </h3>
-                <button className="back-btn" onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}>
+                <button className="back-btn" onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}>
                     <FaEdit />
                 </button>
             </header>
@@ -270,7 +307,7 @@ const BusinessDashboard = () => {
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <span style={{
                                 padding: '4px 10px',
-                                background: userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'premium'
+                                background: userProfile?.subscriptionTier === 'elite'
                                     ? 'linear-gradient(135deg, #fbbf24, #d97706)'
                                     : userProfile?.subscriptionTier === 'professional'
                                         ? 'linear-gradient(135deg, #8b5cf6, #d946ef)'
@@ -280,7 +317,7 @@ const BusinessDashboard = () => {
                                 fontWeight: '700',
                                 color: 'white'
                             }}>
-                                {userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'premium'
+                                {userProfile?.subscriptionTier === 'elite'
                                     ? 'Elite Partner'
                                     : userProfile?.subscriptionTier === 'professional'
                                         ? 'Professional'
@@ -340,7 +377,7 @@ const BusinessDashboard = () => {
                                     Try Elite Partner FREE!
                                 </h4>
                                 <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>
-                                    Get a full month of premium features
+                                    Get a full month of Elite features
                                 </p>
                             </div>
                         </div>
@@ -357,10 +394,103 @@ const BusinessDashboard = () => {
                     </div>
                 )}
 
+                {/* Publish Profile banner */}
+                {isPublished ? (
+                    <div style={{
+                        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05))',
+                        border: '1px solid rgba(34, 197, 94, 0.4)',
+                        padding: '14px 20px',
+                        borderRadius: '16px',
+                        marginBottom: '1.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        color: 'var(--text-main)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <FaCheckCircle style={{ color: '#22c55e', fontSize: '1.25rem' }} />
+                            <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
+                                {t('business_visible_page', 'Your business is visible on the Businesses page.')}
+                            </span>
+                        </div>
+                        <button
+                            onClick={handleUnpublishProfile}
+                            disabled={publishingProfile}
+                            style={{
+                                alignSelf: 'flex-start',
+                                padding: '8px 16px',
+                                background: 'transparent',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                color: 'var(--text-muted)',
+                                fontWeight: '600',
+                                fontSize: '0.85rem',
+                                cursor: publishingProfile ? 'wait' : 'pointer',
+                                opacity: publishingProfile ? 0.7 : 1
+                            }}
+                        >
+                            {publishingProfile ? t('please_wait', 'Please wait...') : t('unpublish_profile', 'Hide from Partners (e.g. temporarily closed)')}
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{
+                        background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))',
+                        border: '1px solid rgba(139, 92, 246, 0.4)',
+                        padding: '14px 20px',
+                        borderRadius: '16px',
+                        marginBottom: '1.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-main)' }}>
+                            <FaGlobe style={{ color: 'var(--primary)', fontSize: '1.25rem' }} />
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700' }}>
+                                    {t('business_not_visible_title', 'Your business is not visible on the Partners page')}
+                                </h4>
+                                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    {t('business_not_visible_desc', 'Publish your profile to appear in the directory and be discoverable by users.')}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handlePublishProfile}
+                            disabled={publishingProfile}
+                            style={{
+                                alignSelf: 'flex-start',
+                                padding: '10px 20px',
+                                background: 'var(--primary)',
+                                border: 'none',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontWeight: '700',
+                                fontSize: '0.9rem',
+                                cursor: publishingProfile ? 'wait' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                opacity: publishingProfile ? 0.7 : 1
+                            }}
+                        >
+                            {publishingProfile ? (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.5)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                    {t('publishing', 'Publishing...')}
+                                </span>
+                            ) : (
+                                <>
+                                    <FaGlobe /> {t('publish_profile', 'Publish Profile')}
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
+
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
-                        onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}
+                        onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}
                         style={{
                             flex: '1 1 calc(50% - 5px)',
                             padding: '12px',
@@ -389,7 +519,7 @@ const BusinessDashboard = () => {
                         <FaEye /> View Profile
                     </button>
                     <button
-                        onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}
+                        onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}
                         style={{
                             flex: '1 1 calc(50% - 5px)',
                             padding: '12px',
@@ -718,7 +848,7 @@ const BusinessDashboard = () => {
 
             {/* Community Management */}
             <div style={{ marginTop: '1.5rem' }}>
-                <CommunityManagement partnerId={currentUser.uid} />
+                <CommunityManagement businessId={currentUser.uid} />
             </div>
         </div>
     );

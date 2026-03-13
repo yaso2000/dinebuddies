@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import { uploadImage } from '../utils/imageUpload';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -32,6 +33,7 @@ const CreatePost = () => {
     const location = useLocation();
     const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
 
     // State
     const [text, setText] = useState('');
@@ -114,7 +116,7 @@ const CreatePost = () => {
             videoEl.onloadedmetadata = () => {
                 window.URL.revokeObjectURL(videoEl.src);
                 if (videoEl.duration > 31) {
-                    alert("Video too long. Max 30s.");
+                    showToast('Video too long. Max 30s.', 'error');
                     e.target.value = null;
                     return;
                 }
@@ -191,7 +193,7 @@ const CreatePost = () => {
             navigate('/');
         } catch (error) {
             console.error("Error creating post:", error);
-            alert("Failed to post.");
+            showToast('Failed to post. Try again.', 'error');
         } finally {
             setLoading(false);
         }

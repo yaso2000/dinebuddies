@@ -1,11 +1,14 @@
+/* Global theme tokens: surfaces (--bg-*), text (--text-*), border (--border-color),
+   shadows (--shadow-*), focus (--shadow-focus-ring), semantic (--color-danger, etc.).
+   Override in [data-theme='light'] and [data-theme='dark'] for full theme coverage. */
 :root {
-  /* Brand Colors - DineBuddies Luxury Palette */
-  --primary: #fbbf24;
-  --primary-hover: #f59e0b;
-  --secondary: #eab308;
-  --accent: #d97706;
-  --luxury-gold: #fbbf24;
-  --premium-orange: #f97316;
+  /* Brand Colors - DineBuddies (logo orange #E86E2E) */
+  --primary: #E86E2E;
+  --primary-hover: #d85a20;
+  --secondary: #ea7a40;
+  --accent: #d85a20;
+  --luxury-gold: #E86E2E;
+  --premium-orange: #E86E2E;
 
   /* Backgrounds - Unified Luxury Dark (Burgundy Midnight) */
   --bg-body: #0b0812;
@@ -13,12 +16,33 @@
   --bg-card: rgba(22, 14, 35, 0.65);
   --card-bg: rgba(22, 14, 35, 0.65);
   --bg-input: rgba(18, 12, 28, 0.7);
+  --bg-secondary: rgba(30, 24, 50, 0.6);
   --bg-main: #0b0812;
   --hover-overlay: rgba(255, 255, 255, 0.05);
+  --bg-hover: rgba(255, 255, 255, 0.08);
   --glass-overlay: rgba(11, 8, 18, 0.88);
+
+  /* Transitions */
+  --transition-fast: 0.2s;
+
+  /* Stats/Semantic colors (Profile stats blocks) */
+  --stat-reviews: #fbbf24;
+  --stat-members: rgba(54, 179, 0, 1);
+  --stat-invites: #22c55e;
+
+  /* Generic semantic colors (Phase 1D-A, 1D-B) */
+  --color-danger: #ef4444;
+  --color-danger-hover: #b91c1c;
+  --color-info: #3b82f6;
+  --color-success: #10b981;
+  --color-rating-filled: var(--stat-reviews);
+  --color-rating-empty: #94a3b8;
+  --shadow-card-hover: 0 8px 20px rgba(0, 0, 0, 0.15);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 
   /* Text */
   --text-main: #ffffff;
+  --text-primary: #ffffff;
   --text-secondary: #e2e8f0;
   --text-muted: #cbd5e1;
   --text-white: #ffffff;
@@ -56,13 +80,131 @@
   --radius-btn: 8px;
 
   --shadow-premium: 0 4px 20px -5px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 15px rgba(251, 191, 36, 0.15);
-  --luxury-gradient: linear-gradient(135deg, var(--primary) 0%, #d97706 100%);
+  --shadow-glow: 0 0 15px rgba(232, 110, 46, 0.25);
+  --luxury-gradient: linear-gradient(135deg, var(--primary) 0%, #d85a20 100%);
 
   /* Layout */
   --header-height: 60px;
   --nav-height: 70px;
   --max-width: 500px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME - Explicit overrides for proper contrast
+   No disappearing elements, no low-contrast text
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme='light'] {
+  /* Backgrounds - Light surfaces */
+  --bg-body: #f8fafc;
+  --bg-body-gradient: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 60%, #f8fafc 100%);
+  --bg-card: #ffffff;
+  --card-bg: #ffffff;
+  --bg-input: #ffffff;
+  --bg-secondary: #f1f5f9;
+  --bg-main: #f8fafc;
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --bg-hover: rgba(0, 0, 0, 0.06);
+  --glass-overlay: rgba(255, 255, 255, 0.95);
+
+  /* Text - Dark on light for WCAG contrast */
+  --text-main: #0f172a;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-white: #ffffff;
+
+  /* Borders - Visible separation (strong enough so cards/surfaces don't blend) */
+  --border-color: rgba(15, 23, 42, 0.18);
+
+  /* Semantic colors - light theme */
+  --color-rating-empty: #cbd5e1;
+
+  /* Shadows - Softer for light; focus ring and card hover theme-aware */
+  --shadow-premium: 0 4px 20px -5px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px rgba(232, 110, 46, 0.25);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent);
+  --shadow-card-hover: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] html,
+[data-theme='light'] body {
+  background: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 60%, #f8fafc 100%) !important;
+}
+
+[data-theme='light'] .glass-card {
+  border-color: var(--border-color);
+}
+
+[data-theme='light'] .app-container,
+[data-theme='light'] .app-layout {
+  border-left-color: var(--border-color);
+  border-right-color: var(--border-color);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='light'] .app-header {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom-color: var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Header avatar and icons visible in day theme */
+[data-theme='light'] .header-profile-pic {
+  border: 2px solid rgba(15, 23, 42, 0.2) !important;
+  background: #f1f5f9 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+[data-theme='light'] .header-actions .notification-bell {
+  color: #334155;
+}
+[data-theme='light'] .header-actions .notification-bell:hover {
+  color: #0f172a;
+}
+
+[data-theme='light'] .smart-invitation-card {
+  border-color: var(--border-color);
+  box-shadow: 0 0 0 1px var(--border-color), 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .bottom-nav {
+  background: rgba(255, 255, 255, 0.95);
+  border-top-color: var(--border-color);
+  box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='light'] .sticky-header-glass {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme='light'] .chat-footer-glass {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Dark theme - Explicit (matches :root) */
+[data-theme='dark'] {
+  --bg-body: #0b0812;
+  --bg-body-gradient: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%);
+  --bg-card: rgba(22, 14, 35, 0.85);
+  --card-bg: rgba(22, 14, 35, 0.85);
+  --bg-input: rgba(18, 12, 28, 0.9);
+  --bg-secondary: rgba(30, 24, 50, 0.7);
+  --bg-main: #0b0812;
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --bg-hover: rgba(255, 255, 255, 0.1);
+  --glass-overlay: rgba(11, 8, 18, 0.92);
+
+  --text-main: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-white: #ffffff;
+
+  --border-color: rgba(255, 255, 255, 0.12);
+  --shadow-premium: 0 4px 20px -5px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 15px rgba(251, 191, 36, 0.15);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+  --shadow-card-hover: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 /* Reset & Base */
@@ -172,7 +314,17 @@ h4 {
   margin-bottom: 0.5rem;
 }
 
-/* Components Base */
+/* ==========================================================================
+   LEGACY BUTTONS (.btn, .btn-primary, .btn-block, etc.)
+   Phase 3B: Document overlap with ui-primitives.
+   --------------------------------------------------------------------------
+   .btn: Base layout (flex, padding, border-radius). No color.
+   .btn-primary: Primary gradient; overlaps with ui-btn--primary.
+   WHEN TO USE:
+   - New code: prefer ui-btn ui-btn--primary (see ui-primitives.css)
+   - Legacy pages (CreateInvitation, etc.): .btn still valid
+   MIGRATION: Gradually adopt ui-btn where safe; keep .btn until broad migration.
+   ========================================================================== */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -195,7 +347,7 @@ h4 {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+  box-shadow: var(--shadow-glow);
 }
 
 /* Layout constraints for Mobile-App feel on Desktop */
@@ -401,6 +553,35 @@ body {
   transform: scale(0.9);
 }
 
+/* Legacy submit button - central definition (Phase 6B); composes with ui-btn when both used */
+.submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 1rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  color: var(--text-white, white);
+  box-shadow: var(--shadow-glow);
+}
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+.submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .app-logo {
   font-size: 1.5rem;
   font-weight: 900;
@@ -423,13 +604,28 @@ body {
   filter: brightness(0) invert(1);
 }
 
+/* Light theme: logo stays original (dark) */
+[data-theme='light'] .app-logo-img {
+  filter: none;
+}
+
 .app-name {
   font-size: 1.2rem;
   font-weight: 800;
-  color: var(--text-main);
+  color: var(--primary);
   letter-spacing: -0.5px;
   display: inline-block;
   transform: translate(-2px, 4px);
+}
+
+/* Header: unify logo + app name — white on dark header, primary on light header */
+[data-theme='dark'] .app-header .app-name,
+html:not([data-theme='light']) .app-header .app-name {
+  color: #ffffff;
+}
+
+[data-theme='light'] .app-header .app-name {
+  color: var(--primary);
 }
 
 
@@ -871,7 +1067,18 @@ body {
 }
 
 
-/* Forms - Elegance & Precision */
+/* ==========================================================================
+   LEGACY FORM HELPERS (.form-group, .input-field)
+   Phase 3B: Document overlap with ui-primitives.
+   --------------------------------------------------------------------------
+   .form-group: Layout (flex column, gap). No ui-* equivalent for wrapper.
+   .input-field: Input styling; overlaps with ui-form-field.
+   WHEN TO USE:
+   - New forms: prefer ui-form-surface + ui-form-field + ui-form-label
+   - CreateInvitation, CreatePrivateInvitation: .form-group + .input-field still used
+   MIGRATION: ui-form-field for simple inputs; .form-group stays (structure). Keep
+   .input-field where elegant-label + icon pattern used (CreateInvitation).
+   ========================================================================== */
 .create-form {
   display: flex;
   flex-direction: column;
@@ -917,8 +1124,8 @@ body {
 
 .input-field:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
-  background: rgba(30, 41, 59, 0.8);
+  box-shadow: var(--shadow-focus-ring);
+  background: var(--bg-input);
 }
 
 .input-field::placeholder {
@@ -1603,7 +1810,22 @@ select.input-field {
   /* Firefox */
 }
 
-
+/* Auth / Login page inputs: visible text and placeholder in both themes */
+.auth-input {
+  color: var(--text-main) !important;
+}
+.auth-input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.auth-input::-webkit-input-placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.auth-input::-moz-placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
 
 /* --- New Component Classes --- */
 .premium-plan-card {
@@ -1623,9 +1845,17 @@ select.input-field {
 
 
 
-/* ========================================
-   ELEGANT LABELS FOR CREATE INVITATION
-   ======================================== */
+/* ==========================================================================
+   LEGACY ELEGANT LABELS (.elegant-label, .label-icon)
+   Phase 3B: Document role vs ui-form-label.
+   --------------------------------------------------------------------------
+   .elegant-label: Icon + label in a row; used in CreateInvitation, CreatePrivateInvitation.
+   .ui-form-label: Simpler block label; no icon slot.
+   WHEN TO USE:
+   - Icon + label pattern (CreateInvitation): keep .elegant-label
+   - Simple label-only: prefer ui-form-label
+   MIGRATION: Stay page-specific for CreateInvitation; do not broadly replace.
+   ========================================================================== */
 
 .elegant-label {
   display: flex !important;
@@ -1946,7 +2176,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     border: none;
     background: transparent;
     width: 100%;
-    text-align: start;
+    text-align: left;
     white-space: nowrap;
   }
 

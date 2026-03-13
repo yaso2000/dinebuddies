@@ -1,4 +1,4 @@
-import { db, storage } from '../firebase/config';
+import { auth, db, storage } from '../firebase/config';
 import { collection, doc, getDoc, addDoc, updateDoc, deleteDoc, increment, serverTimestamp, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -28,7 +28,7 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
         }
 
         // Check for elite plan or available credits
-        const isElite = data.subscriptionTier === 'elite' || data.subscriptionTier === 'premium' || data.plan === 'Elite';
+        const isElite = data.subscriptionTier === 'elite';
         const hasEnoughCredits = (data.offerCredits > 0) || isElite;
 
         if (!offerId && !hasEnoughCredits) {
@@ -39,7 +39,11 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
         let mediaUrl = "";
         if (file) {
             console.log("📤 Uploading media to storage...");
-            const storageRef = ref(storage, `offers/${restaurantId}_${Date.now()}`);
+            const currentUid = auth.currentUser?.uid;
+            if (!currentUid || currentUid !== restaurantId) {
+                throw new Error("Unauthorized media upload path for this offer.");
+            }
+            const storageRef = ref(storage, `offers/${currentUid}_${Date.now()}`);
             await uploadBytes(storageRef, file);
             mediaUrl = await getDownloadURL(storageRef);
             console.log("✅ Media uploaded:", mediaUrl);

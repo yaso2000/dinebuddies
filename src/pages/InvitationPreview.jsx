@@ -7,9 +7,11 @@ import { db } from '../firebase/config';
 import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
 import { FaVenusMars, FaBirthdayCake } from 'react-icons/fa';
 import { getTemplateStyle } from '../utils/invitationTemplates';
+import { useToast } from '../context/ToastContext';
 
 const InvitationPreview = () => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const { id: draftId } = useParams(); // Get draft ID from URL
 
@@ -36,7 +38,7 @@ const InvitationPreview = () => {
                 const invitationDoc = await getDoc(invitationRef);
 
                 if (!invitationDoc.exists()) {
-                    alert(t('invitation_not_found') || 'Draft not found');
+                    showToast(t('invitation_not_found') || 'Draft not found', 'error');
                     navigate('/create');
                     return;
                 }
@@ -53,7 +55,7 @@ const InvitationPreview = () => {
                 setInvitation({ id: draftId, ...data });
             } catch (error) {
                 console.error('Error fetching draft:', error);
-                alert(t('error_loading_draft') || 'Error loading draft');
+                showToast(t('error_loading_draft') || 'Error loading draft', 'error');
                 navigate('/create');
             } finally {
                 setLoading(false);
@@ -98,7 +100,7 @@ const InvitationPreview = () => {
             navigate(`/invitation/${draftId}`);
         } catch (error) {
             console.error('❌ Error publishing invitation:', error);
-            alert(t('failed_publish_invitation') || 'Failed to publish invitation');
+            showToast(t('failed_publish_invitation') || 'Failed to publish invitation', 'error');
         } finally {
             setIsPublishing(false);
         }
@@ -381,22 +383,15 @@ const InvitationPreview = () => {
             }}>
                 {/* Edit Button */}
                 <button
+                    type="button"
                     onClick={handleEdit}
                     disabled={isPublishing}
+                    className="ui-btn ui-btn--secondary"
                     style={{
+                        /* ui-btn ui-btn--secondary provides base; keep preview-specific overrides */
                         padding: '1.25rem',
                         borderRadius: '16px',
-                        border: '1px solid var(--border-color)',
-                        background: 'var(--bg-card)',
-                        color: 'var(--text-main)',
                         fontSize: '1rem',
-                        fontWeight: '700',
-                        cursor: isPublishing ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.75rem',
-                        transition: 'all 0.2s',
                         opacity: isPublishing ? 0.5 : 1,
                         boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
                     }}
@@ -419,8 +414,10 @@ const InvitationPreview = () => {
 
                 {/* Publish Button */}
                 <button
+                    type="button"
                     onClick={handlePublish}
                     disabled={isPublishing}
+                    className="ui-btn ui-btn--primary"
                     style={{
                         ...(templateStyles?.button || {}),
                         padding: '1.25rem',

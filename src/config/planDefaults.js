@@ -74,7 +74,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
     },
     {
         id: 'p4',
-        name: 'Professional Partner Plan',
+        name: 'Professional Business Plan',
         title: 'For Small Venues',
         description: 'Perfect solution for emerging businesses and venues',
         type: 'business',
@@ -96,7 +96,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
         features: [
             '1 Month FREE Trial ✨',
             'Full dashboard access',
-            'Listing in partner directory',
+            'Listing in business directory',
             'Services & Menu management',
             '1 offer slot (50 hours/week)',
             'Accept reservations',
@@ -142,7 +142,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
     },
     {
         id: 'p6',
-        name: 'Free Partner Plan',
+        name: 'Free Business Plan',
         title: 'For Basic Presence',
         description: 'Start listing your restaurant in the directory for free',
         type: 'business',
@@ -152,7 +152,7 @@ export const BASE_SUBSCRIPTION_PLANS = [
         invitationOffers: 0,
         tier: 'free',
         features: [
-            'Basic listing in partner directory',
+            'Basic listing in business directory',
             'Receive ratings and reviews',
             'View counts statistics only',
             'App-based technical support'

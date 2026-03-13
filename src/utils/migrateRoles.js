@@ -9,7 +9,14 @@
 import { collection, getDocs, doc, updateDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+const assertDevOnly = () => {
+    if (!import.meta.env.DEV) {
+        throw new Error('Migration tools are disabled outside development builds.');
+    }
+};
+
 const migrateRoles = async () => {
+    assertDevOnly();
     const results = { total: 0, updatedRole: 0, removedAccountType: 0, errors: 0 };
 
     try {

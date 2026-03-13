@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import { FaArrowLeft, FaDownload, FaUser, FaUsers } from 'react-icons/fa';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 import { BUSINESS_THEMES } from '../../utils/businessThemes';
-import html2canvas from 'html2canvas';
 
 // ─── Profile Card Template ──────────────────────────────────────────────────
 const ProfileCardTemplate = ({ userProfile, primaryColor, secondaryColor }) => {
@@ -117,6 +116,7 @@ const ExportAssets = ({ onBack }) => {
         if (!ref.current) return;
         setExporting(type);
         try {
+            const html2canvas = (await import('html2canvas')).default;
             const canvas = await html2canvas(ref.current, {
                 backgroundColor: null,
                 scale: 2,

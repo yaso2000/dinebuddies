@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../context/ToastContext';
 import {
     FaChevronLeft,
     FaBell,
@@ -22,6 +23,7 @@ import './NotificationsSettings.css';
 
 const NotificationsSettings = () => {
     const { t, i18n } = useTranslation();
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
     const [loading, setLoading] = useState(true);
@@ -98,10 +100,10 @@ const NotificationsSettings = () => {
             await setDoc(settingsRef, settings, { merge: true });
 
             // Show success message
-            alert(t('settings_saved', 'Settings saved successfully!'));
+            showToast(t('settings_saved', 'Settings saved successfully!'), 'success');
         } catch (error) {
             console.error('Error saving notification settings:', error);
-            alert(t('error_saving_settings', 'Failed to save settings. Please try again.'));
+            showToast(t('error_saving_settings', 'Failed to save settings. Please try again.'), 'error');
         } finally {
             setSaving(false);
         }

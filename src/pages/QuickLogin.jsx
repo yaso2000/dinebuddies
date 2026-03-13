@@ -4,12 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { FaMobileAlt, FaGoogle, FaFacebook, FaArrowRight, FaCheck, FaEnvelope, FaLock } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
-import { useTheme } from '../context/ThemeContext';
-
 const QuickLogin = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { themeMode, isDark } = useTheme();
     const {
         signInWithEmail,
         signUpWithEmail,
@@ -166,33 +163,24 @@ const QuickLogin = () => {
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                        <div
-                            aria-label="DineBuddies Logo"
+                        <img
+                            src="/db-logo.svg"
+                            alt="DineBuddies"
+                            className="app-logo-img"
                             style={{
                                 width: '80px',
                                 height: '80px',
-                                WebkitMaskImage: `url(${isDark ? "/logo-w.png" : "/logo.png"})`,
-                                WebkitMaskSize: 'contain',
-                                WebkitMaskPosition: 'center',
-                                WebkitMaskRepeat: 'no-repeat',
-                                maskImage: `url(${isDark ? "/logo-w.png" : "/logo.png"})`,
-                                maskSize: 'contain',
-                                maskPosition: 'center',
-                                maskRepeat: 'no-repeat',
-                                backgroundColor: isDark ? '#ffffff' : '#f97316',
-                                filter: isDark ? 'drop-shadow(0 0 10px rgba(139, 92, 246, 0.3))' : 'none',
-                                transition: 'all 0.3s ease'
+                                objectFit: 'contain',
+                                display: 'block'
                             }}
                         />
                     </div>
                     <h1
-                        className="app-name"
                         style={{
                             fontSize: '1.8rem',
                             fontWeight: '900',
                             margin: 0,
-                            color: isDark ? '#ffffff' : '#f97316',
-                            transition: 'color 0.3s ease',
+                            color: '#ffffff',
                             letterSpacing: '-1px'
                         }}
                     >
@@ -267,13 +255,14 @@ const QuickLogin = () => {
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
                                         required
+                                        className="auth-input"
                                         style={{
                                             width: '100%',
                                             padding: isRTL ? '12px 2.5rem 12px 1rem' : '12px 1rem 12px 2.5rem',
                                             borderRadius: '12px',
                                             background: 'var(--bg-input)',
                                             border: '1px solid var(--border-color)',
-                                            color: 'white',
+                                            color: 'var(--text-main)',
                                             fontSize: '1rem',
                                             outline: 'none',
                                             direction: 'ltr'
@@ -322,6 +311,7 @@ const QuickLogin = () => {
                                         maxLength="1"
                                         value={digit}
                                         onChange={(e) => handleOTPChange(index, e.target.value)}
+                                        className="auth-input"
                                         style={{
                                             width: '45px',
                                             height: '50px',
@@ -331,7 +321,7 @@ const QuickLogin = () => {
                                             borderRadius: '10px',
                                             background: 'var(--bg-input)',
                                             border: '2px solid var(--border-color)',
-                                            color: 'white',
+                                            color: 'var(--text-main)',
                                             outline: 'none'
                                         }}
                                     />
@@ -383,13 +373,15 @@ const QuickLogin = () => {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     required
+                                    className="auth-input"
                                     style={{
                                         width: '100%',
                                         padding: isRTL ? '12px 2.5rem 12px 1rem' : '12px 1rem 12px 2.5rem',
                                         borderRadius: '12px',
                                         background: 'var(--bg-input)',
                                         border: '1px solid var(--border-color)',
-                                        color: 'white',
+                                        color: 'var(--text-main)',
+                                        fontSize: '1rem',
                                         outline: 'none'
                                     }}
                                 />
@@ -404,13 +396,15 @@ const QuickLogin = () => {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
+                                    className="auth-input"
                                     style={{
                                         width: '100%',
                                         padding: isRTL ? '12px 2.5rem 12px 1rem' : '12px 1rem 12px 2.5rem',
                                         borderRadius: '12px',
                                         background: 'var(--bg-input)',
                                         border: '1px solid var(--border-color)',
-                                        color: 'white',
+                                        color: 'var(--text-main)',
+                                        fontSize: '1rem',
                                         outline: 'none'
                                     }}
                                 />

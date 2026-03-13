@@ -42,7 +42,7 @@ const ProMessages = () => {
             </div>
 
             {/* Messages Area */}
-            <div className="bpro-card" style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="ui-card" style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
                 {loading ? (
                     <div className="bpro-spinner" />
                 ) : messages.length === 0 ? (
@@ -89,6 +89,7 @@ const ProMessages = () => {
             <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                 <input
                     type="text"
+                    className="ui-form-field"
                     value={messageText}
                     onChange={e => setMessageText(e.target.value)}
                     placeholder="Message your community..."
@@ -98,18 +99,9 @@ const ProMessages = () => {
                             setMessageText('');
                         }
                     }}
-                    style={{
-                        flex: 1,
-                        padding: '12px 16px',
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 12,
-                        color: '#f1f5f9',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                    }}
+                    style={{ flex: 1 }}
                 />
-                <button className="bpro-btn-primary" style={{ padding: '12px 20px' }}>
+                <button type="button" className="ui-btn ui-btn--primary" style={{ padding: '12px 20px' }}>
                     <FaPaperPlane />
                 </button>
             </div>

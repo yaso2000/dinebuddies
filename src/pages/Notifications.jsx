@@ -153,22 +153,22 @@ const Notifications = () => {
                         <>
                             <button
                                 onClick={() => navigate('/settings/notifications')}
-                                className="settings-btn"
+                                className="settings-btn ui-btn ui-btn--secondary"
                                 title={t('notification_settings', 'Notification Settings')}
                             >
                                 <FaCog />
                             </button>
 
                             {unreadCount > 0 && (
-                                <button
-                                    onClick={markAllAsRead}
-                                    className="mark-all-btn"
-                                    title={t('mark_all_read', 'Mark all read')}
-                                >
+                            <button
+                                onClick={markAllAsRead}
+                                className="mark-all-btn ui-btn ui-btn--primary"
+                                title={t('mark_all_read', 'Mark all read')}
+                            >
                                     <FaCheckDouble />
                                 </button>
                             )}
-                            <button onClick={deleteAllNotifications} className="delete-all-btn" title={t('delete_all', 'Delete all')}>
+                            <button onClick={deleteAllNotifications} className="delete-all-btn ui-btn ui-btn--ghost" title={t('delete_all', 'Delete all')}>
                                 <FaTrash />
                             </button>
                         </>
@@ -191,17 +191,12 @@ const Notifications = () => {
                         }} />
                         <input
                             type="text"
+                            className="ui-form-field"
                             placeholder={t('search_notifications', 'Search notifications...')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{
-                                width: '100%',
-                                padding: '10px 12px 10px 38px',
-                                background: 'var(--bg-card)',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                color: 'var(--text-main)',
-                                fontSize: '0.9rem'
+                                paddingLeft: '38px'
                             }}
                         />
                     </div>
@@ -212,19 +207,8 @@ const Notifications = () => {
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
-                                style={{
-                                    flex: 1,
-                                    padding: '8px 12px',
-                                    background: filterStatus === status ? 'var(--primary)' : 'var(--bg-card)',
-                                    color: filterStatus === status ? 'white' : 'var(--text-main)',
-                                    border: `1px solid ${filterStatus === status ? 'var(--primary)' : 'var(--border-color)'}`,
-                                    borderRadius: '10px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: filterStatus === status ? '700' : '500',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    textTransform: 'capitalize'
-                                }}
+                                className={`ui-tab ui-tab--compact ${filterStatus === status ? 'ui-tab--active' : ''}`}
+                                style={{ flex: 1, textTransform: 'capitalize' }}
                             >
                                 {t(status, status)}
                             </button>
@@ -246,22 +230,8 @@ const Notifications = () => {
                             <button
                                 key={type.id}
                                 onClick={() => setFilterType(type.id)}
-                                style={{
-                                    flex: '0 0 auto',
-                                    padding: '6px 12px',
-                                    background: filterType === type.id ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                    color: filterType === type.id ? 'var(--primary)' : 'var(--text-muted)',
-                                    border: `1px solid ${filterType === type.id ? 'var(--primary)' : 'var(--border-color)'}`,
-                                    borderRadius: '8px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: filterType === type.id ? '600' : '500',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    whiteSpace: 'nowrap',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
+                                className={`ui-tab ui-tab--compact ${filterType === type.id ? 'ui-tab--active' : ''}`}
+                                style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}
                             >
                                 <span>{type.emoji}</span>{type.label}
                             </button>
@@ -290,7 +260,7 @@ const Notifications = () => {
                     filteredNotifications.map(notif => (
                         <div
                             key={notif.id}
-                            className={`notification-item ${!notif.read ? 'unread' : ''}`}
+                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}
                             onClick={() => handleNotificationClick(notif)}
                         >
                             {/* Unread Indicator */}
@@ -314,7 +284,7 @@ const Notifications = () => {
 
                             {/* Delete Button */}
                             <button
-                                className="delete-btn"
+                                className="delete-btn ui-btn--danger-outline"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     deleteNotification(notif.id);

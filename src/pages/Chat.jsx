@@ -1,20 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import {
     FaArrowLeft, FaCamera, FaMicrophone,
     FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile,
     FaDownload, FaStop, FaPlus, FaArrowDown
 } from 'react-icons/fa';
-import EmojiPicker from 'emoji-picker-react';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
 import NewReportModal from '../components/NewReportModal';
 import './Chat.css';
+
+const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const Chat = () => {
     const { userId } = useParams();
@@ -22,6 +24,7 @@ const Chat = () => {
     const { currentUser } = useAuth();
     const { isDark } = useTheme();
     const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
+    const { showToast } = useToast();
 
     const [conversationId, setConversationId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -33,6 +36,8 @@ const Chat = () => {
     const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
     const [replyTo, setReplyTo] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [conversationError, setConversationError] = useState(false);
+    const [retryTrigger, setRetryTrigger] = useState(0);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
 
     const handleScroll = (e) => {
@@ -60,11 +65,21 @@ const Chat = () => {
     const audioChunksRef = useRef([]);
     const recordingIntervalRef = useRef(null);
 
+    const initInFlightRef = useRef(false);
     useEffect(() => {
         const initConversation = async () => {
             if (!currentUser?.uid || !userId) return;
+            if (initInFlightRef.current) return; // avoid duplicate calls (Strict Mode / re-renders) → 429
+            initInFlightRef.current = true;
+            setConversationError(false);
             try {
                 const convId = await getOrCreateConversation(userId);
+                if (convId === null) {
+                    setConversationId(null);
+                    setConversationError(true);
+                    setLoading(false);
+                    return;
+                }
                 setConversationId(convId);
                 const userDoc = await getDoc(doc(db, 'users', userId));
                 if (userDoc.exists()) {
@@ -76,13 +91,26 @@ const Chat = () => {
                         isOnline: userData.isOnline || false,
                         lastSeen: userData.lastSeen || null
                     });
+                } else {
+                    setOtherUser({
+                        uid: userId,
+                        displayName: 'User',
+                        photoURL: null,
+                        isOnline: false,
+                        lastSeen: null
+                    });
                 }
             } catch (error) {
                 console.error('Error initializing conversation:', error);
+                setConversationId(null);
+                setConversationError(true);
+                setLoading(false);
+            } finally {
+                initInFlightRef.current = false;
             }
         };
         initConversation();
-    }, [userId, currentUser?.uid, getOrCreateConversation]);
+    }, [userId, currentUser?.uid, getOrCreateConversation, retryTrigger]);
 
     useEffect(() => {
         if (!conversationId) return;
@@ -155,11 +183,13 @@ const Chat = () => {
             replyTo: replyTo || null
         };
 
-        await sendMessage(conversationId, messageData);
-        setNewMessage('');
-        setReplyTo(null);
+        const messageId = await sendMessage(conversationId, messageData);
+        if (messageId) {
+            setNewMessage('');
+            setReplyTo(null);
+            setTimeout(() => inputRef.current?.focus(), 100);
+        }
         setTypingStatus(conversationId, false);
-        setTimeout(() => inputRef.current?.focus(), 100);
     };
 
     const handleTyping = (value) => {
@@ -191,10 +221,15 @@ const Chat = () => {
             const imageUrl = await uploadImage(file, currentUser.uid);
             setUploadProgress(80);
 
-            await sendMessage(conversationId, {
+            const messageId = await sendMessage(conversationId, {
                 type: 'image',
                 text: imageUrl
             });
+            if (!messageId) {
+                setUploading(false);
+                setUploadProgress(0);
+                return;
+            }
             setUploadProgress(100);
             setTimeout(() => {
                 setUploading(false);
@@ -202,9 +237,11 @@ const Chat = () => {
             }, 500);
         } catch (error) {
             console.error('Error uploading image:', error);
-            alert('Failed to upload image');
+            showToast('Failed to upload image. Try again.', 'error');
             setUploading(false);
             setUploadProgress(0);
+        } finally {
+            e.target.value = '';
         }
     };
 
@@ -228,15 +265,19 @@ const Chat = () => {
                 try {
                     setUploading(true);
                     const audioUrl = await uploadVoiceMessage(audioBlob, currentUser.uid);
-                    await sendMessage(conversationId, {
+                    const messageId = await sendMessage(conversationId, {
                         type: 'voice',
                         text: audioUrl,
                         duration: recordingDuration
                     });
+                    if (!messageId) {
+                        setUploading(false);
+                        return;
+                    }
                     setUploading(false);
                 } catch (error) {
                     console.error('Error uploading voice:', error);
-                    alert('Failed to send voice message');
+                    showToast('Failed to send voice message. Try again.', 'error');
                     setUploading(false);
                 }
             };
@@ -252,7 +293,7 @@ const Chat = () => {
 
         } catch (error) {
             console.error('Error starting recording:', error);
-            alert('Microphone access denied');
+            showToast('Could not access microphone.', 'error');
         }
     };
 
@@ -281,7 +322,13 @@ const Chat = () => {
         return date.toLocaleDateString();
     };
 
-    if (loading) {
+    const handleRetryConversation = () => {
+        setConversationError(false);
+        setLoading(true);
+        setRetryTrigger((t) => t + 1);
+    };
+
+    if (loading && !conversationError) {
         return (
             <div className="chat-container">
                 <div className="chat-header">
@@ -289,6 +336,36 @@ const Chat = () => {
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
                     <div className="header-info"><h3>Loading...</h3></div>
+                </div>
+            </div>
+        );
+    }
+
+    if (conversationError) {
+        return (
+            <div className="chat-container">
+                <div className="chat-header">
+                    <button className="back-btn" onClick={() => navigate('/messages')}>
+                        <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
+                    </button>
+                    <div className="header-info"><h3>Chat</h3></div>
+                </div>
+                <div style={{ padding: '2rem', textAlign: 'center' }}>
+                    <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>Couldn&apos;t start conversation.</p>
+                    <button
+                        onClick={handleRetryConversation}
+                        style={{
+                            background: 'var(--primary)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '0.95rem'
+                        }}
+                    >
+                        Retry
+                    </button>
                 </div>
             </div>
         );
@@ -434,17 +511,19 @@ const Chat = () => {
                                 {/* Extended Emoji Picker for Reactions */}
                                 {extendedReactionPicker === msg.id && (
                                     <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', left: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
-                                        <EmojiPicker
-                                            onEmojiClick={(emojiObject) => {
-                                                handleReaction(msg.id, emojiObject.emoji);
-                                                setExtendedReactionPicker(null);
-                                            }}
-                                            width="300px"
-                                            height="350px"
-                                            theme="dark"
-                                            searchDisabled={true}
-                                            previewConfig={{ showPreview: false }}
-                                        />
+                                        <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
+                                            <LazyEmojiPicker
+                                                onEmojiClick={(emojiObject) => {
+                                                    handleReaction(msg.id, emojiObject.emoji);
+                                                    setExtendedReactionPicker(null);
+                                                }}
+                                                width="300px"
+                                                height="350px"
+                                                theme="dark"
+                                                searchDisabled={true}
+                                                previewConfig={{ showPreview: false }}
+                                            />
+                                        </Suspense>
                                     </div>
                                 )}
                             </div>

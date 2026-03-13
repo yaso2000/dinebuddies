@@ -6,6 +6,7 @@ import {
     query,
     where,
     orderBy,
+    limit,
     onSnapshot,
     addDoc,
     updateDoc,
@@ -47,7 +48,8 @@ export const NotificationProvider = ({ children }) => {
         const q = query(
             notificationsRef,
             where('userId', '==', currentUser.uid),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
         );
 
 

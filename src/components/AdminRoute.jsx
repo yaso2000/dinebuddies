@@ -9,12 +9,11 @@ const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support',
         return <Navigate to="/login" />;
     }
 
-    // Master account and standard logic
+    // Canonical: only role. No accountType.
     const isSuperAdmin = currentUser.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33' ||
-        userProfile?.role === 'admin' ||
-        userProfile?.accountType === 'admin';
+        userProfile?.role === 'admin';
 
-    const userRole = userProfile?.role || userProfile?.accountType;
+    const userRole = userProfile?.role;
     const hasPermission = isSuperAdmin || allowedRoles.includes(userRole);
 
     if (!hasPermission) {

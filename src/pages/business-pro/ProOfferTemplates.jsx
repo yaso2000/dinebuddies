@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { premiumOfferService } from '../../services/premiumOfferService';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 import { FaImage, FaUpload, FaCheckCircle, FaTimes, FaPaperPlane, FaUtensils } from 'react-icons/fa';
+import { useToast } from '../../context/ToastContext';
 
 /* ══════════════════════════════════════════════════════════════════════════
    PREMIUM SVG ICON LIBRARY
@@ -401,6 +402,7 @@ function Swatch({ value, selected, onClick, title, size = 22 }) { return <button
 /* ─── Main ───────────────────────────────────────────────────────────────── */
 const ProOfferTemplates = ({ onBack, editOffer = null }) => {
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     // 7 basic text colors
     const TEXT_COLORS = [
         { name: 'White', v: '#ffffff' },
@@ -455,8 +457,8 @@ const ProOfferTemplates = ({ onBack, editOffer = null }) => {
         setImageFile(f); set('imageUrl', URL.createObjectURL(f));
     };
     const publish = async () => {
-        if (!selected) { alert('Please select a design'); return; }
-        if (!data.title.trim()) { alert('Please add a title'); return; }
+        if (!selected) { showToast('Please select a design', 'error'); return; }
+        if (!data.title.trim()) { showToast('Please add a title', 'error'); return; }
         try {
             setPublishing(true);
             const pd = { ...data, templateId: selected, imageUrl: data.imageUrl?.startsWith('blob:') ? null : data.imageUrl };
@@ -469,7 +471,7 @@ const ProOfferTemplates = ({ onBack, editOffer = null }) => {
             }
             setSuccess(true);
             setTimeout(() => { setSuccess(false); onBack?.(); }, 2000);
-        } catch (err) { alert(`Failed to publish: ${err.message}`); }
+        } catch (err) { showToast(`Failed to publish: ${err.message}`, 'error'); }
         finally { setPublishing(false); }
     };
 

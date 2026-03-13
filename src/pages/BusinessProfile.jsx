@@ -1,15 +1,15 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useInvitations } from '../context/InvitationContext';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
-import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart, FaSave } from 'react-icons/fa';
+import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart, FaSave, FaEnvelope } from 'react-icons/fa';
 
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { SiTiktok } from 'react-icons/si';
 import { useAuth } from '../context/AuthContext';
-import { updateSocialMetaTags, generatePartnerMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
+import { updateSocialMetaTags, generateBusinessMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import DeliveryLinksSection from '../components/DeliveryLinksSection';
@@ -28,16 +28,22 @@ import PremiumPaywallModal from '../components/PremiumPaywallModal';
 import DraftSavedModal from '../components/DraftSavedModal';
 import BrandKit from './business-pro/BrandKit';
 import PlanBadge from '../components/PlanBadge';
+import { useToast } from '../context/ToastContext';
 
+const BUSINESS_TYPES = [
+    'Restaurant', 'Cafe', 'Bar', 'Night Club', 'Food Truck', 'Fast Food'
+];
 
-
-const PartnerProfile = () => {
-    const { partnerId } = useParams();
+// Business profile page; route /business/:businessId (legacy /partner/:id redirects to /business/)
+const BusinessProfile = () => {
+    const { businessId, partnerId } = useParams();
+    const profileId = businessId ?? partnerId;
     const navigate = useNavigate();
     const location = useLocation();
     const { currentUser, userProfile, updateUserProfile, isGuest } = useAuth();
     const { joinCommunity, leaveCommunity } = useInvitations();
     const { t } = useTranslation();
+    const { showToast } = useToast();
 
     // Brand Kit preview mode — reads live state from localStorage when ?preview=1
     const isPreviewMode = new URLSearchParams(location.search).get('preview') === '1';
@@ -59,7 +65,7 @@ const PartnerProfile = () => {
     // Ref to prevent snapshot from overwriting optimistic join/leave state
     const joiningRef = React.useRef(false);
 
-    const [partner, setPartner] = useState(null);
+    const [business, setBusiness] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('about');
 
@@ -135,16 +141,16 @@ const PartnerProfile = () => {
 
 
 
-    const fetchPartner = async () => {
+    const fetchBusiness = async () => {
         try {
             setLoading(true);
-            const docRef = doc(db, 'users', partnerId);
+            const docRef = doc(db, 'users', profileId);
 
             // Use onSnapshot for real-time updates
             const unsubscribe = onSnapshot(docRef, (docSnap) => {
                 if (docSnap.exists() && (docSnap.data().role === 'business')) {
                     const data = docSnap.data();
-                    setPartner({ uid: docSnap.id, ...data });
+                    setBusiness({ uid: docSnap.id, ...data });
 
                     // Update member count and membership state in real-time
                     const memberIds = data.communityMembers || [];
@@ -155,18 +161,18 @@ const PartnerProfile = () => {
                     }
 
                 } else {
-                    console.error('Partner not found or not a business account');
+                    console.error('Business not found or not a business account');
                 }
                 setLoading(false);
             }, (error) => {
-                console.error('Error fetching partner:', error);
+                console.error('Error fetching business:', error);
                 setLoading(false);
             });
 
             // Return unsubscribe function
             return unsubscribe;
         } catch (error) {
-            console.error('Error fetching partner:', error);
+            console.error('Error fetching business:', error);
             setLoading(false);
         }
     };
@@ -177,7 +183,7 @@ const PartnerProfile = () => {
             const invitationsRef = collection(db, 'invitations');
             const q = query(
                 invitationsRef,
-                where('restaurantId', '==', partnerId)
+                where('restaurantId', '==', profileId)
             );
             const snapshot = await getDocs(q);
 
@@ -201,7 +207,7 @@ const PartnerProfile = () => {
             const reviewsRef = collection(db, 'reviews');
             const q = query(
                 reviewsRef,
-                where('partnerId', '==', partnerId)
+                where('profileId', '==', profileId)
             );
             const snapshot = await getDocs(q);
 
@@ -236,17 +242,17 @@ const PartnerProfile = () => {
     useEffect(() => {
         let unsubscribe;
         const setupListener = async () => {
-            unsubscribe = await fetchPartner();
+            unsubscribe = await fetchBusiness();
         };
         setupListener();
         return () => {
             if (unsubscribe) unsubscribe();
         };
-    }, [partnerId]);
+    }, [profileId]);
 
     useEffect(() => {
         const loadAllData = async () => {
-            if (partnerId) {
+            if (profileId) {
                 await Promise.all([
                     fetchActiveInvitations(),
                     fetchReviews()
@@ -254,12 +260,12 @@ const PartnerProfile = () => {
             }
         };
         loadAllData();
-    }, [currentUser, partnerId, partner?.uid]);
+    }, [currentUser, profileId, business?.uid]);
 
     // Load delivery links when partner data changes
     useEffect(() => {
-        if (partner?.businessInfo?.deliveryLinks) {
-            const links = partner.businessInfo.deliveryLinks;
+        if (business?.businessInfo?.deliveryLinks) {
+            const links = business.businessInfo.deliveryLinks;
             setDeliveryLinks({
                 uberEats: links.uberEats || '',
                 menulog: links.menulog || '',
@@ -273,18 +279,31 @@ const PartnerProfile = () => {
                 deliveroo: links.deliveroo || ''
             });
         }
-    }, [partner]);
+    }, [business]);
 
     // Load services when partner data changes
     useEffect(() => {
-        if (partner?.businessInfo?.services) {
-            setServices(partner.businessInfo.services);
+        if (business?.businessInfo?.services) {
+            setServices(business.businessInfo.services);
         }
-    }, [partner]);
+    }, [business]);
 
-    // Fetch avatars for last 5 community members (most recent)
+    // Keep activeTab valid when visible tabs change (visitor: some tabs hidden when empty)
+    const isOwnerProfile = !isPreviewMode && currentUser?.uid === profileId;
     useEffect(() => {
-        const memberIds = partner?.communityMembers || [];
+        const info = business?.businessInfo;
+        if (!info) return;
+        const hasContactInfo = !!(info.phone || info.email || info.address);
+        const visibleIds = ['about'];
+        if (isOwnerProfile || (info.menu?.length > 0)) visibleIds.push('menu');
+        if (isOwnerProfile || (services?.length > 0)) visibleIds.push('services');
+        if (isOwnerProfile || info.hours) visibleIds.push('hours');
+        if (isOwnerProfile || hasContactInfo) visibleIds.push('contact');
+        if (!visibleIds.includes(activeTab)) setActiveTab(visibleIds[0] || 'about');
+    }, [isOwnerProfile, business?.businessInfo?.menu?.length, business?.businessInfo?.hours, business?.businessInfo?.phone, business?.businessInfo?.email, business?.businessInfo?.address, services?.length, activeTab]);
+
+    useEffect(() => {
+        const memberIds = business?.communityMembers || [];
         if (memberIds.length === 0) { setMemberAvatars([]); return; }
         const last5 = memberIds.slice(-5).reverse(); // last 5, newest first
         Promise.all(
@@ -294,23 +313,23 @@ const PartnerProfile = () => {
                     .catch(() => null)
             )
         ).then(photos => setMemberAvatars(photos.filter(Boolean)));
-    }, [partner?.communityMembers?.length]);
+    }, [business?.communityMembers?.length]);
 
     const viewTracked = useRef(false);
     useEffect(() => {
         const trackProfileView = async () => {
-            if (viewTracked.current || currentUser?.uid === partnerId || !partner) return;
+            if (viewTracked.current || currentUser?.uid === profileId || !business) return;
 
-            const viewKey = `profile_view_${partnerId}`;
+            const viewKey = `profile_view_${profileId}`;
             const lastView = localStorage.getItem(viewKey);
             const now = Date.now();
 
             if (lastView && (now - parseInt(lastView)) < 24 * 60 * 60 * 1000) return;
 
             try {
-                const partnerRef = doc(db, 'users', partnerId);
-                const currentViews = partner?.businessInfo?.profileViews || 0;
-                await updateDoc(partnerRef, { 'businessInfo.profileViews': currentViews + 1 });
+                const businessRef = doc(db, 'users', profileId);
+                const currentViews = business?.businessInfo?.profileViews || 0;
+                await updateDoc(businessRef, { 'businessInfo.profileViews': currentViews + 1 });
                 localStorage.setItem(viewKey, now.toString());
                 viewTracked.current = true;
             } catch (error) {
@@ -318,19 +337,19 @@ const PartnerProfile = () => {
             }
         };
 
-        if (partnerId && partner && !viewTracked.current) {
+        if (profileId && business && !viewTracked.current) {
             trackProfileView();
         }
-    }, [partnerId, partner?.uid, currentUser?.uid]);
+    }, [profileId, business?.uid, currentUser?.uid]);
 
     // Update social meta tags
     useEffect(() => {
-        if (partner) {
-            const metaData = generatePartnerMetaTags(partner);
+        if (business) {
+            const metaData = generateBusinessMetaTags(business);
             updateSocialMetaTags(metaData);
         }
         return () => resetSocialMetaTags();
-    }, [partner]);
+    }, [business]);
 
     // Robust Loading State
     // Loading check moved below all hooks to prevent order mismatch
@@ -341,25 +360,24 @@ const PartnerProfile = () => {
 
     const handleSubmitReview = async () => {
         if (!currentUser) {
-            alert('Please login to submit a review');
+            showToast(t('login_to_submit_review'), 'error');
             return;
         }
 
-        // Check if user is a business account
         if (userProfile?.isBusiness) {
-            alert('Business accounts cannot submit reviews');
+            showToast(t('business_cannot_review'), 'error');
             return;
         }
 
         if (!newReview.comment.trim()) {
-            alert('Please write a comment');
+            showToast(t('please_write_comment'), 'error');
             return;
         }
 
         // Check if user already reviewed
         const existingReview = reviews.find(r => r.userId === currentUser.uid);
         if (existingReview) {
-            alert('You have already reviewed this business');
+            showToast(t('already_reviewed'), 'error');
             return;
         }
 
@@ -370,22 +388,22 @@ const PartnerProfile = () => {
             const reviewsRef = collection(db, 'reviews');
             const existingReviewQuery = query(
                 reviewsRef,
-                where('partnerId', '==', partnerId),
+                where('profileId', '==', profileId),
                 where('userId', '==', currentUser.uid)
             );
             const existingReviewSnapshot = await getDocs(existingReviewQuery);
 
             if (!existingReviewSnapshot.empty) {
-                alert('You have already reviewed this business');
+                showToast(t('already_reviewed'), 'error');
                 setSubmittingReview(false);
                 setShowReviewModal(false);
                 return;
             }
 
             await addDoc(reviewsRef, {
-                partnerId,
+                profileId,
                 userId: currentUser.uid,
-                userName: userProfile?.displayName || currentUser.displayName || 'Anonymous',
+                userName: userProfile?.displayName || userProfile?.display_name || currentUser.displayName || 'Anonymous',
                 userPhoto: getSafeAvatar(userProfile || currentUser),
                 rating: newReview.rating,
                 comment: newReview.comment.trim(),
@@ -403,10 +421,10 @@ const PartnerProfile = () => {
             setNewReview({ rating: 5, comment: '' });
             setShowReviewModal(false);
 
-            alert('Review submitted successfully!');
+            showToast(t('review_submitted_success'), 'success');
         } catch (error) {
             console.error('Error submitting review:', error);
-            alert('Failed to submit review');
+            showToast(t('review_submit_failed'), 'error');
         } finally {
             setSubmittingReview(false);
         }
@@ -422,7 +440,7 @@ const PartnerProfile = () => {
         }
 
         if (userProfile?.isBusiness) {
-            alert('Business accounts cannot join other communities.');
+            showToast(t('business_cannot_join_community'), 'error');
             return;
         }
 
@@ -437,9 +455,9 @@ const PartnerProfile = () => {
 
         try {
             if (wasJoined) {
-                await leaveCommunity(partnerId);
+                await leaveCommunity(profileId);
             } else {
-                await joinCommunity(partnerId);
+                await joinCommunity(profileId);
             }
         } catch (error) {
             console.error('Error toggling community membership:', error);
@@ -458,9 +476,9 @@ const PartnerProfile = () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        const currentGallery = partner?.businessInfo?.gallery || [];
+        const currentGallery = business?.businessInfo?.gallery || [];
         if (currentGallery.length >= 6) {
-            alert('Maximum 6 images allowed in gallery');
+            showToast(t('gallery_max_images'), 'error');
             return;
         }
 
@@ -469,7 +487,7 @@ const PartnerProfile = () => {
 
             // Upload to Firebase Storage using Utility
             const timestamp = Date.now();
-            const path = `gallery/${partnerId}/${timestamp}.jpg`;
+            const path = `gallery/${profileId}/${timestamp}.jpg`;
 
             const options = {
                 maxSizeMB: 0.5,
@@ -483,37 +501,37 @@ const PartnerProfile = () => {
 
             // Update Firestore
             const updatedGallery = [...currentGallery, downloadURL];
-            const partnerRef = doc(db, 'users', partnerId);
-            await updateDoc(partnerRef, {
+            const businessRef = doc(db, 'users', profileId);
+            await updateDoc(businessRef, {
                 'businessInfo.gallery': updatedGallery
             });
 
         } catch (error) {
             console.error('❌ Error uploading image:', error);
-            alert('Failed to upload image');
+            showToast(t('upload_image_failed'), 'error');
         } finally {
             setUploadingImage(false);
         }
     };
 
     const handleDeleteImage = async (imageUrl, index) => {
-        if (!confirm('Are you sure you want to delete this image?')) return;
+        if (!window.confirm(t('confirm_delete_image'))) return;
 
         try {
             // Delete from Storage using Utility
             await deleteImage(imageUrl);
 
             // Update Firestore
-            const currentGallery = partner?.businessInfo?.gallery || [];
+            const currentGallery = business?.businessInfo?.gallery || [];
             const updatedGallery = currentGallery.filter((_, i) => i !== index);
-            const partnerRef = doc(db, 'users', partnerId);
-            await updateDoc(partnerRef, {
+            const businessRef = doc(db, 'users', profileId);
+            await updateDoc(businessRef, {
                 'businessInfo.gallery': updatedGallery
             });
 
         } catch (error) {
             console.error('❌ Error deleting image:', error);
-            alert('Failed to delete image');
+            showToast(t('delete_image_failed'), 'error');
         }
     };
 
@@ -523,12 +541,12 @@ const PartnerProfile = () => {
             return;
         }
 
-        const businessInfo = partner.businessInfo || {};
+        const businessInfo = business.businessInfo || {};
 
         // Open selector with prefilled data
         setSelectorState({
             prefilledData: {
-                restaurantName: partner.display_name,
+                restaurantName: business.display_name,
                 restaurantImage: businessInfo.coverImage,
                 location: businessInfo.address,
                 city: businessInfo.city,
@@ -546,7 +564,7 @@ const PartnerProfile = () => {
         }
 
         // Navigate to partner's community/invitations page
-        navigate(`/partner/${partnerId}/invitations`);
+        navigate(`/business/${profileId}/invitations`);
     };
 
     const formatTime = (time) => {
@@ -558,7 +576,7 @@ const PartnerProfile = () => {
         return `${displayHour}:${minutes} ${ampm}`;
     };
 
-    const isFavorite = userProfile?.favoritePlaces?.some(p => p.businessId === partnerId);
+    const isFavorite = userProfile?.favoritePlaces?.some(p => p.businessId === profileId);
 
     const handleToggleFavorite = async () => {
         if (!currentUser || isGuest) {
@@ -571,15 +589,15 @@ const PartnerProfile = () => {
 
             if (isFavorite) {
                 // Remove from favorites
-                newFavorites = newFavorites.filter(p => p.businessId !== partnerId);
+                newFavorites = newFavorites.filter(p => p.businessId !== profileId);
             } else {
                 // Add to favorites
                 const favoritePlace = {
-                    businessId: partner.uid,
-                    name: partner.display_name,
-                    image: getSafeAvatar(partner),
-                    address: partner.businessInfo?.address || '',
-                    city: partner.businessInfo?.city || '',
+                    businessId: business.uid,
+                    name: business.display_name,
+                    image: getSafeAvatar(business),
+                    address: business.businessInfo?.address || '',
+                    city: business.businessInfo?.city || '',
                     source: 'business',
                     addedAt: new Date().toISOString()
                 };
@@ -605,14 +623,14 @@ const PartnerProfile = () => {
             let newFavorites = [...(userProfile.favoritePlaces || [])];
 
             if (isFavorite) {
-                newFavorites = newFavorites.filter(p => p.businessId !== partnerId);
+                newFavorites = newFavorites.filter(p => p.businessId !== profileId);
             } else {
                 const favoritePlace = {
-                    businessId: partner.uid,
-                    name: partner.display_name,
-                    image: getSafeAvatar(partner),
-                    address: partner.businessInfo?.address || '',
-                    city: partner.businessInfo?.city || '',
+                    businessId: business.uid,
+                    name: business.display_name,
+                    image: getSafeAvatar(business),
+                    address: business.businessInfo?.address || '',
+                    city: business.businessInfo?.city || '',
                     source: 'business',
                     addedAt: new Date().toISOString()
                 };
@@ -629,19 +647,19 @@ const PartnerProfile = () => {
 
 
     const handleShare = async () => {
-        if (!partner) return;
-        const shareTitle = partner.display_name || 'DineBuddies Partner';
+        if (!business) return;
+        const shareTitle = business.display_name || 'DineBuddies Business';
         const storyData = {
             title: shareTitle,
-            image: partner.businessInfo?.coverImage || getSafeAvatar(partner),
-            description: partner.businessInfo?.description,
-            location: partner.businessInfo?.address || partner.businessInfo?.city,
+            image: business.businessInfo?.coverImage || getSafeAvatar(business),
+            description: business.businessInfo?.description,
+            location: business.businessInfo?.address || business.businessInfo?.city,
             hostName: shareTitle,
-            hostImage: getSafeAvatar(partner),
+            hostImage: getSafeAvatar(business),
         };
         try {
             setIsSharing(true);
-            const blob = await generateShareCardBlob(storyData, 'partner');
+            const blob = await generateShareCardBlob(storyData, 'business');
             if (!blob) throw new Error('No blob');
             const file = new File([blob], 'business-card.png', { type: 'image/png' });
             // Always show the overlay — let the user share from fresh gesture
@@ -656,13 +674,14 @@ const PartnerProfile = () => {
 
     const handleShareFromOverlay = async () => {
         if (!headerCardFile) return;
-        const shareTitle = partner?.display_name || 'DineBuddies Partner';
-        const shareText = `Check out ${shareTitle} on DineBuddies!`;
+        const shareTitle = business?.display_name || 'DineBuddies Business';
+        const shareUrl = window.location.href;
+        const shareText = `Check out ${shareTitle} on DineBuddies!\n\n🔗 ${shareUrl}`;
         try {
             if (navigator.canShare && navigator.canShare({ files: [headerCardFile] })) {
-                await navigator.share({ files: [headerCardFile], title: shareTitle, text: shareText });
+                await navigator.share({ files: [headerCardFile], title: shareTitle, text: shareText, url: shareUrl });
             } else if (navigator.share) {
-                await navigator.share({ title: shareTitle, text: shareText, url: window.location.href });
+                await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
             }
         } catch (e) { /* cancelled */ }
     };
@@ -675,13 +694,13 @@ const PartnerProfile = () => {
 
     // Delivery Links Functions
     const handleSaveDeliveryLinks = async () => {
-        if (!currentUser || currentUser.uid !== partnerId) {
-            alert('Unauthorized');
+        if (!currentUser || currentUser.uid !== profileId) {
+            showToast(t('unauthorized'), 'error');
             return;
         }
 
         try {
-            const userRef = doc(db, 'users', partnerId);
+            const userRef = doc(db, 'users', profileId);
             await updateDoc(userRef, {
                 'businessInfo.deliveryLinks': tempDeliveryLinks
             });
@@ -689,7 +708,7 @@ const PartnerProfile = () => {
             setEditingDeliveryLinks(false);
         } catch (error) {
             console.error('❌ Error saving delivery links:', error);
-            alert('Error saving delivery links');
+            showToast(t('save_delivery_links_failed'), 'error');
         }
     };
 
@@ -704,7 +723,7 @@ const PartnerProfile = () => {
         if (editingService !== null) {
             const updated = services.map((s, i) => i === editingService ? serviceData : s);
             setServices(updated);
-            const userRef = doc(db, 'users', partnerId);
+            const userRef = doc(db, 'users', profileId);
             updateDoc(userRef, { 'businessInfo.services': updated }).catch(console.error);
             setShowServiceModal(false);
             setEditingService(null);
@@ -728,7 +747,7 @@ const PartnerProfile = () => {
         try {
             const updated = [...services, ...pendingServices];
             setServices(updated);
-            const userRef = doc(db, 'users', partnerId);
+            const userRef = doc(db, 'users', profileId);
             await updateDoc(userRef, { 'businessInfo.services': updated });
             setPendingServices([]);
             setShowServiceAddForm(false);
@@ -749,10 +768,10 @@ const PartnerProfile = () => {
     };
 
     const handleDeleteService = async (index) => {
-        if (!window.confirm('Delete this service?')) return;
+        if (!window.confirm(t('delete_service_confirm'))) return;
         const updated = services.filter((_, i) => i !== index);
         setServices(updated);
-        const userRef = doc(db, 'users', partnerId);
+        const userRef = doc(db, 'users', profileId);
         await updateDoc(userRef, { 'businessInfo.services': updated });
     };
 
@@ -761,9 +780,9 @@ const PartnerProfile = () => {
         if (!file) return;
         try {
             setCoverUploading(true);
-            const url = await uploadImage(file, `covers/${partnerId}/cover.jpg`, null, { maxSizeMB: 1, maxWidthOrHeight: 1600 });
-            await updateDoc(doc(db, 'users', partnerId), { 'businessInfo.coverImage': url });
-        } catch (err) { alert('Upload failed'); } finally { setCoverUploading(false); }
+            const url = await uploadImage(file, `covers/${profileId}/cover.jpg`, null, { maxSizeMB: 1, maxWidthOrHeight: 1600 });
+            await updateDoc(doc(db, 'users', profileId), { 'businessInfo.coverImage': url });
+        } catch (err) { showToast(t('cover_upload_failed'), 'error'); } finally { setCoverUploading(false); }
     };
 
     const handleLogoUpload = async (e) => {
@@ -771,16 +790,16 @@ const PartnerProfile = () => {
         if (!file) return;
         try {
             setLogoUploading(true);
-            const url = await uploadImage(file, `logos/${partnerId}/logo.jpg`, null, { maxSizeMB: 0.5, maxWidthOrHeight: 400 });
-            await updateDoc(doc(db, 'users', partnerId), { photo_url: url });
-        } catch (err) { alert('Upload failed'); } finally { setLogoUploading(false); }
+            const url = await uploadImage(file, `logos/${profileId}/logo.jpg`, null, { maxSizeMB: 0.5, maxWidthOrHeight: 400 });
+            await updateDoc(doc(db, 'users', profileId), { photo_url: url });
+        } catch (err) { showToast(t('logo_upload_failed'), 'error'); } finally { setLogoUploading(false); }
     };
 
     const openBasicInfoModal = () => {
         setBasicInfoForm({
-            businessName: partner.display_name || '',
+            businessName: business.display_name || '',
             tagline: businessInfo.tagline || '',
-            businessType: businessInfo.businessType || 'Restaurant',
+            businessType: BUSINESS_TYPES.includes(businessInfo.businessType) ? businessInfo.businessType : 'Restaurant',
             description: businessInfo.description || ''
         });
         setShowBasicInfoModal(true);
@@ -789,14 +808,14 @@ const PartnerProfile = () => {
     const saveBasicInfo = async () => {
         setSavingInfo(true);
         try {
-            await updateDoc(doc(db, 'users', partnerId), {
+            await updateDoc(doc(db, 'users', profileId), {
                 display_name: basicInfoForm.businessName,
                 'businessInfo.tagline': basicInfoForm.tagline,
                 'businessInfo.businessType': basicInfoForm.businessType,
                 'businessInfo.description': basicInfoForm.description
             });
             setShowBasicInfoModal(false);
-        } catch (err) { alert('Save failed'); } finally { setSavingInfo(false); }
+        } catch (err) { showToast(t('save_failed'), 'error'); } finally { setSavingInfo(false); }
     };
 
     const openContactModal = () => {
@@ -817,7 +836,7 @@ const PartnerProfile = () => {
     const saveContact = async () => {
         setSavingInfo(true);
         try {
-            await updateDoc(doc(db, 'users', partnerId), {
+            await updateDoc(doc(db, 'users', profileId), {
                 'businessInfo.phone': contactForm.phone,
                 'businessInfo.email': contactForm.email,
                 'businessInfo.website': contactForm.website,
@@ -841,13 +860,13 @@ const PartnerProfile = () => {
                 const filled = proFieldLabels.filter(f => contactForm[f.key]?.trim());
                 if (filled.length > 0) setProFieldsNotice(filled.map(f => f.label));
             }
-        } catch (err) { alert('Save failed'); } finally { setSavingInfo(false); }
-    };
+        } catch (err) { showToast(t('save_failed'), 'error'); } finally { setSavingInfo(false); }
+        };
 
 
 
 
-    if (loading || !partner) {
+    if (loading || !business) {
         return (
             <div className="page-container" style={{
                 display: 'flex',
@@ -860,19 +879,13 @@ const PartnerProfile = () => {
             }}>
                 <div className="loader-ring"></div>
                 <p style={{ marginTop: '20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    {!partner && !loading ? t('partner_not_found', 'Partner not found') : t('loading_partner', 'Finding partner...')}
+                    {!business && !loading ? t('business_not_found', 'Business not found') : t('loading_business', 'Finding business...')}
                 </p>
                 <button
+                    type="button"
+                    className="ui-btn ui-btn--secondary"
                     onClick={() => navigate('/')}
-                    style={{
-                        marginTop: '20px',
-                        padding: '10px 20px',
-                        borderRadius: '12px',
-                        background: 'rgba(139, 92, 246, 0.1)',
-                        border: '1px solid var(--primary)',
-                        color: 'var(--primary)',
-                        cursor: 'pointer'
-                    }}
+                    style={{ marginTop: '20px' }}
                 >
                     {t('back_to_home', 'Back to Home')}
                 </button>
@@ -880,9 +893,9 @@ const PartnerProfile = () => {
         );
     }
 
-    const rawBusinessInfo = partner.businessInfo || {};
+    const rawBusinessInfo = business.businessInfo || {};
     // In preview mode → show visitor view (no edit controls)
-    const isOwner = !isPreviewMode && currentUser?.uid === partnerId;
+    const isOwner = !isPreviewMode && currentUser?.uid === profileId;
 
     // Merge drafts dynamically if viewing as owner
     const businessInfo = isOwner && rawBusinessInfo.drafts
@@ -891,7 +904,7 @@ const PartnerProfile = () => {
 
     const hasDrafts = isOwner && rawBusinessInfo.drafts && Object.keys(rawBusinessInfo.drafts).length > 0;
 
-    const tier = partner.subscriptionTier || 'free';
+    const tier = business.subscriptionTier || 'free';
     const isPaid = tier === 'professional' || tier === 'elite';
     const isElite = tier === 'elite';
     const isPremium = isPaid;
@@ -960,23 +973,26 @@ const PartnerProfile = () => {
     const EditActionBtn = ({ onClick, icon = <FaEdit size={16} /> }) => (
         <button
             onClick={onClick}
-            title="Edit Section"
+            title={t('edit_section')}
             style={{
                 width: '40px', height: '40px', borderRadius: '50%',
-                background: tc?.accent ? `${tc.accent}22` : 'rgba(255,255,255,0.12)', cursor: 'pointer',
-                border: `1.5px solid ${tc?.accent || 'rgba(255,255,255,0.3)'}`,
-                color: tc?.accent || 'rgba(255,255,255,0.85)',
+                background: tc?.accent ? `${tc.accent}22` : 'var(--hover-overlay)',
+                cursor: 'pointer',
+                border: `1.5px solid ${tc?.accent || 'var(--border-color)'}`,
+                color: tc?.accent || 'var(--text-secondary)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: tc?.accent ? `0 4px 14px ${tc.accent}44` : '0 4px 12px rgba(0,0,0,0.3)',
+                boxShadow: tc?.accent ? `0 4px 14px ${tc.accent}44` : '0 2px 8px rgba(0,0,0,0.08)',
                 transition: 'all 0.2s'
             }}
             onMouseEnter={e => {
                 e.currentTarget.style.transform = 'scale(1.12)';
-                e.currentTarget.style.background = tc?.accent ? `${tc.accent}44` : 'rgba(255,255,255,0.22)';
+                e.currentTarget.style.background = tc?.accent ? `${tc.accent}44` : 'rgba(139, 92, 246, 0.12)';
+                e.currentTarget.style.borderColor = tc?.accent || 'var(--primary)';
             }}
             onMouseLeave={e => {
                 e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.background = tc?.accent ? `${tc.accent}22` : 'rgba(255,255,255,0.12)';
+                e.currentTarget.style.background = tc?.accent ? `${tc.accent}22` : 'var(--hover-overlay)';
+                e.currentTarget.style.borderColor = tc?.accent || 'var(--border-color)';
             }}
         >
             {icon}
@@ -1015,12 +1031,12 @@ const PartnerProfile = () => {
     const th = (themed, fallback) => (tc && themed !== undefined) ? themed : fallback;
 
     // Verified = profile has both cover image and logo
-    const isVerified = !!(businessInfo.coverImage && partner.photo_url);
+    const isVerified = !!(businessInfo.coverImage && business.photo_url);
     // ── Global Save: always saves directly (theme & all features are free) ──────────────────
     const handleGlobalSave = async () => {
-        if (!currentUser || currentUser.uid !== partnerId) return;
+        if (!currentUser || currentUser.uid !== profileId) return;
         setGlobalSaving(true);
-        const userRef = doc(db, 'users', partnerId);
+        const userRef = doc(db, 'users', profileId);
         try {
             const updates = {};
             // Always promote drafts to live — no paywall
@@ -1042,11 +1058,9 @@ const PartnerProfile = () => {
     };
 
     return (
-        <div className="page-container" style={{
+        <div className="profile-shell page-container" style={{
             paddingTop: '0',
-            paddingBottom: '100px',
             background: th(tc?.cardBg, undefined),
-            minHeight: '100vh',
             fontFamily: 'system-ui, sans-serif',
         }}>
 
@@ -1065,16 +1079,16 @@ const PartnerProfile = () => {
             )}
 
             {/* --- Hero Design --- */}
-            <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div className="profile-header">
 
                 {/* Cover & Top Nav */}
                 <div style={{
-                    width: '100%', height: '300px',
+                    width: '100%', flexShrink: 0, height: 300, minHeight: 300, maxHeight: 300,
                     background: businessInfo.coverImage ? `url(${businessInfo.coverImage})` : th(tc?.gradientFrom ? `linear-gradient(135deg, ${tc.gradientFrom}, ${tc.gradientTo})` : null, 'linear-gradient(135deg, #1e1e2e, #2d2b42)'),
-                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
                     borderBottomLeftRadius: '32px', borderBottomRightRadius: '32px',
                     boxShadow: tc?.headerGlow || '0 10px 40px rgba(0,0,0,0.3)',
-                    position: 'relative'
+                    position: 'relative', overflow: 'hidden'
                 }}>
                     {/* Overlay gradient */}
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.72) 100%)', borderRadius: 'inherit' }} />
@@ -1098,7 +1112,7 @@ const PartnerProfile = () => {
                             );
                             return (
                                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                    {partner.isOnline && badgePill('16,185,129', '16,185,129', 'Online')}
+                                    {business.isOnline && badgePill('16,185,129', '16,185,129', t('online'))}
                                     {badgePill(isOpen ? '74,222,128' : '248,113,113', isOpen ? '74,222,128' : '248,113,113', isOpen ? 'OPEN' : 'CLOSED')}
                                 </div>
                             );
@@ -1121,13 +1135,14 @@ const PartnerProfile = () => {
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                             <div style={{
                                 width: '90px', height: '90px', borderRadius: '22px',
-                                background: partner.photo_url ? `url(${partner.photo_url})` : tc?.swatchGradient || 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                                backgroundSize: 'cover', backgroundPosition: 'center',
+                                background: business.photo_url ? `url(${business.photo_url})` : tc?.swatchGradient || 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+                                overflow: 'hidden',
                                 border: `4px solid rgba(255,255,255,0.25)`,
                                 boxShadow: tc ? `0 8px 24px ${tc.accent}66` : '0 8px 24px rgba(0,0,0,0.5)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.4rem'
                             }}>
-                                {!partner.photo_url && '🏪'}
+                                {!business.photo_url && '🏪'}
                             </div>
                             {isOwner && (
                                 <label style={{ position: 'absolute', inset: 0, borderRadius: '22px', background: logoUploading ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '4px solid transparent' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = logoUploading ? 1 : 0}>
@@ -1137,19 +1152,51 @@ const PartnerProfile = () => {
                             )}
                             {/* Plan badge */}
                             {isPaid && !isOwner && (
-                                <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#000000', border: `2px solid ${isElite ? '#f59e0b' : '#8b5cf6'}`, borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 8px ${isElite ? 'rgba(245,158,11,0.5)' : 'rgba(139,92,246,0.5)'}`, fontSize: '0.85rem' }} title={isElite ? 'Elite Partner' : 'Professional Partner'}>{isElite ? '👑' : '⚡'}</div>
+                                <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#000000', border: `2px solid ${isElite ? '#f59e0b' : '#8b5cf6'}`, borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 8px ${isElite ? 'rgba(245,158,11,0.5)' : 'rgba(139,92,246,0.5)'}`, fontSize: '0.85rem' }} title={isElite ? t('elite_business', 'Elite Business') : t('professional_business', 'Professional Business')}>{isElite ? '👑' : '⚡'}</div>
                             )}
                         </div>
 
                         {/* Name + Category */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingBottom: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingBottom: '4px' }}>
                             <span style={{ color: 'white', fontWeight: '900', fontSize: '1.15rem', textShadow: '0 2px 8px rgba(0,0,0,0.9)', letterSpacing: '0.3px', lineHeight: 1.2 }}>
-                                {partner.display_name || 'Business'}
+                                {business.display_name || business.displayName || t('business')}
                             </span>
                             {(businessInfo.businessType || businessInfo.cuisineType) && (
-                                <span style={{ color: 'rgba(255,255,255,0.78)', fontSize: '0.82rem', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/restaurants?category=${encodeURIComponent(businessInfo.businessType || 'Venue')}`);
+                                    }}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        alignSelf: 'flex-start',
+                                        minHeight: '26px',
+                                        padding: '4px 12px',
+                                        fontSize: '0.82rem',
+                                        fontWeight: '600',
+                                        color: 'white',
+                                        background: 'rgba(0,0,0,0.5)',
+                                        backdropFilter: 'blur(8px)',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        borderRadius: '10px',
+                                        cursor: 'pointer',
+                                        textShadow: '0 1px 4px rgba(0,0,0,0.7)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = 'rgba(139,92,246,0.6)';
+                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'rgba(0,0,0,0.5)';
+                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                                    }}
+                                >
                                     {businessInfo.businessType}{businessInfo.cuisineType ? ` • ${businessInfo.cuisineType}` : ''}
-                                </span>
+                                </button>
                             )}
                         </div>
                     </div>
@@ -1164,21 +1211,82 @@ const PartnerProfile = () => {
                 </div>
 
 
-                {/* Glass Stats Box */}
-                <div style={{ display: 'flex', width: '100%', background: th(tc?.badgeBg, 'rgba(255,255,255,0.03)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.08)')}`, borderRadius: '24px', padding: '16px', boxShadow: th(tc?.cardShadow, '0 8px 32px rgba(0,0,0,0.2)'), backdropFilter: 'blur(12px)', marginBottom: '24px' }}>
-                    <div onClick={() => { if (currentUser && !userProfile?.isBusiness && !isGuest) setShowReviewModal(true); }} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: (currentUser && !userProfile?.isBusiness && !isGuest) ? 'pointer' : 'default' }}>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>⭐ {averageRating > 0 ? averageRating.toFixed(1) : '0.0'}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', marginTop: '4px' }}>{reviews.length} Reviews</div>
+                {/* Glass Stats Box - uses BrandKit when available */}
+                <div className="profile-stats" style={{
+                    background: th(tc?.badgeBg, 'rgba(15,23,42,0.7)'),
+                    border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
+                    borderRadius: '24px', padding: '18px 16px',
+                    boxShadow: th(tc?.cardShadow, '0 4px 24px rgba(0,0,0,0.25)'),
+                    backdropFilter: 'blur(12px)'
+                }}>
+                    <div className="profile-stat-item" style={{ color: 'var(--text-secondary)' }}>
+                        <div
+                            className="profile-stat-value"
+                            style={{
+                                fontSize: '1.35rem',
+                                color: 'var(--text-secondary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                boxShadow: 'none',
+                                borderWidth: 0,
+                                borderStyle: 'none',
+                                borderColor: 'rgba(0, 0, 0, 0)',
+                            }}
+                        >
+                            <FaUsers style={{ fontSize: '1.1rem', color: 'inherit' }} /> {memberCount}
+                        </div>
+                        <div className="profile-stat-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginTop: '6px' }}>Members</div>
                     </div>
-                    <div style={{ width: '1px', background: th(tc?.border, 'rgba(255,255,255,0.1)'), margin: '0 8px' }} />
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: th(tc?.badgeText || tc?.accent, '#a78bfa'), display: 'flex', alignItems: 'center', gap: '6px' }}>👥 {memberCount}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', marginTop: '4px' }}>Members</div>
+                    <div className="profile-stats-divider" />
+                    <div
+                        className="profile-stat-item"
+                        style={{
+                            cursor: (currentUser && !userProfile?.isBusiness && !isGuest) ? 'pointer' : 'default',
+                            color: 'var(--text-secondary)',
+                        }}
+                        onClick={() => { if (currentUser && !userProfile?.isBusiness && !isGuest) setShowReviewModal(true); }}
+                    >
+                        <div
+                            className="profile-stat-value"
+                            style={{
+                                fontSize: '1.35rem',
+                                color: 'var(--text-secondary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                boxShadow: 'none',
+                                borderWidth: 0,
+                                borderStyle: 'none',
+                                borderColor: 'rgba(0, 0, 0, 0)',
+                            }}
+                        >
+                            <FaStar style={{ fontSize: '1.1rem' }} /> {averageRating > 0 ? averageRating.toFixed(1) : '0.0'}
+                        </div>
+                        <div className="profile-stat-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginTop: '6px' }}>{reviews.length} Reviews</div>
                     </div>
-                    <div style={{ width: '1px', background: th(tc?.border, 'rgba(255,255,255,0.1)'), margin: '0 8px' }} />
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '6px' }}>📨 {activeInvitationsCount}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', marginTop: '4px' }}>Invites</div>
+                    <div className="profile-stats-divider" />
+                    <div className="profile-stat-item" style={{ color: 'var(--text-secondary)' }}>
+                        <div
+                            className="profile-stat-value"
+                            style={{
+                                fontSize: '1.35rem',
+                                color: 'var(--text-secondary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                boxShadow: 'none',
+                                borderWidth: 0,
+                                borderStyle: 'none',
+                                borderColor: 'rgba(0, 0, 0, 0)',
+                            }}
+                        >
+                            <FaEnvelope style={{ fontSize: '1.1rem' }} /> {activeInvitationsCount}
+                        </div>
+                        <div className="profile-stat-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginTop: '6px' }}>Invites</div>
                     </div>
                 </div>
 
@@ -1188,8 +1296,8 @@ const PartnerProfile = () => {
 
                 {/* Actions Row */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginBottom: '1rem' }}>
-                    {currentUser?.uid !== partnerId && !userProfile?.isBusiness && (
-                        <button onClick={() => { if (isGuest) { navigate('/login'); return; } handleJoinCommunity(); }} disabled={joiningCommunity} style={{ width: '100%', padding: '14px 16px', borderRadius: th(tc?.btnBorderRadius, '16px'), background: isMember ? 'rgba(255,255,255,0.1)' : th(tc?.joinBtnBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'), border: isMember ? `1px solid ${th(tc?.border, 'rgba(255,255,255,0.2)')}` : 'none', color: isMember ? 'white' : th(tc?.joinBtnTextColor, 'white'), fontWeight: '900', fontSize: '1.05rem', cursor: joiningCommunity ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: isMember ? 'none' : th(tc?.btnShadow, '0 8px 24px rgba(139,92,246,0.3)'), opacity: joiningCommunity ? 0.7 : 1 }}>
+                    {currentUser?.uid !== profileId && !userProfile?.isBusiness && (
+                        <button onClick={() => { if (isGuest) { navigate('/login'); return; } handleJoinCommunity(); }} disabled={joiningCommunity} style={{ width: '100%', padding: '14px 16px', borderRadius: th(tc?.btnBorderRadius, '16px'), background: isMember ? 'var(--hover-overlay)' : th(tc?.joinBtnBg, 'linear-gradient(135deg, #8b5cf6, #f97316)'), border: isMember ? `1px solid var(--border-color)` : 'none', color: isMember ? 'var(--text-main)' : th(tc?.joinBtnTextColor, 'white'), fontWeight: '900', fontSize: '1.05rem', cursor: joiningCommunity ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: isMember ? 'none' : th(tc?.btnShadow, '0 8px 24px rgba(139,92,246,0.3)'), opacity: joiningCommunity ? 0.7 : 1 }}>
                             {joiningCommunity ? '...' : (
                                 <>
                                     {/* Overlapping member avatars — always visible */}
@@ -1219,8 +1327,8 @@ const PartnerProfile = () => {
                             )}
                         </button>
                     )}
-                    {currentUser?.uid !== partnerId && !userProfile?.isBusiness && !currentUser?.isGuest && (
-                        <button onClick={handleCreateInvitation} style={{ width: '100%', padding: '16px', borderRadius: th(tc?.btnBorderRadius, '16px'), background: th(tc?.inviteBtnBg, 'rgba(255,255,255,0.05)'), border: `1px solid ${th(tc?.inviteBtnBg ? 'transparent' : (tc?.border || 'rgba(255,255,255,0.1)'), 'rgba(255,255,255,0.1)')}`, color: th(tc?.inviteBtnTextColor, 'white'), fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', backdropFilter: 'blur(8px)' }}>
+                    {currentUser?.uid !== profileId && !userProfile?.isBusiness && !currentUser?.isGuest && (
+                        <button onClick={handleCreateInvitation} style={{ width: '100%', padding: '16px', borderRadius: th(tc?.btnBorderRadius, '16px'), background: th(tc?.inviteBtnBg, 'var(--bg-card)'), border: `1px solid ${tc?.inviteBtnBg ? (tc?.tabBorderColor || 'var(--border-color)') : 'var(--border-color)'}`, color: th(tc?.inviteBtnTextColor, 'var(--text-main)'), fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                             <FaUserPlus style={{ fontSize: '1.2rem' }} /> Create Invitation
                         </button>
                     )}
@@ -1229,7 +1337,7 @@ const PartnerProfile = () => {
 
             {/* Delivery Links Section - Premium Feature */}
             <DeliveryLinksSection
-                partner={partner}
+                business={business}
                 isOwner={isOwner}
                 deliveryLinks={deliveryLinks}
                 tempDeliveryLinks={tempDeliveryLinks}
@@ -1240,43 +1348,43 @@ const PartnerProfile = () => {
                 onCancel={handleCancelDeliveryLinks}
             />
 
-            {/* Tabs Navigation */}
-            <div style={{
-                position: 'sticky', top: '10px', zIndex: 50,
-                display: 'flex',
-                flexWrap: 'wrap',
-                padding: 'clamp(4px, 1vw, 6px)',
-                margin: '0 clamp(4px, 2vw, 1rem) 1rem clamp(4px, 2vw, 1rem)',
-                background: th(tc?.cardBg ? tc.cardBg + 'cc' : 'rgba(255,255,255,0.05)', 'rgba(30, 30, 46, 0.85)'),
-                backdropFilter: 'blur(16px)',
-                border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.1)')}`,
-                borderRadius: '24px',
-                boxShadow: th(tc?.cardShadow, '0 8px 32px rgba(0,0,0,0.2)'),
-                gap: '4px',
-            }}>
-                {[
-                    { id: 'about', label: 'About', locked: false },
-                    { id: 'menu', label: 'Menu', locked: false, hide: !isOwner && (!isPaid || !(businessInfo.menu?.length > 0)) },
-                    { id: 'services', label: 'Services', locked: false, hide: !isOwner && (!isPaid || !(services?.length > 0)) },
-                    { id: 'hours', label: 'Hours', locked: false, hide: !isOwner && !businessInfo.hours },
-                    { id: 'contact', label: 'Contact', locked: false, hide: !isOwner && !(businessInfo.phone || businessInfo.email || businessInfo.address) },
-                ].filter(tab => !tab.hide).map(({ id, label, locked }) => (
+            {/* Tabs Navigation — scrollable on mobile, compact spacing */}
+            {(() => {
+                // Visitor: show only tabs that have content. Owner: sees all.
+                const info = businessInfo || {};
+                const hasContactInfo = !!(info.phone || info.email || info.address);
+                const tabs = [
+                    { id: 'about', label: t('tab_about'), locked: false },
+                    { id: 'menu', label: t('tab_menu'), locked: false, hide: !isOwner && !(info.menu?.length > 0) },
+                    { id: 'services', label: t('tab_services'), locked: false, hide: !isOwner && !(services?.length > 0) },
+                    { id: 'hours', label: t('tab_hours'), locked: false, hide: !isOwner && !info.hours },
+                    { id: 'contact', label: t('tab_contact'), locked: false, hide: !isOwner && !hasContactInfo },
+                ];
+                const visibleTabs = tabs.filter(tab => !tab.hide);
+                return (
+            <div
+                className="ui-tabs ui-tabs--horizontal hide-scrollbar"
+                style={{
+                    position: 'sticky', top: '10px', zIndex: 50,
+                    background: th(tc?.cardBg ? tc.cardBg + 'cc' : null, 'var(--bg-card)'),
+                    border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
+                    boxShadow: th(tc?.cardShadow, '0 4px 20px rgba(0,0,0,0.08)'),
+                }}
+            >
+                {visibleTabs.map(({ id, label, locked }) => (
                     <button
                         key={id}
+                        type="button"
+                        className={`ui-tab ui-tab--compact ${activeTab === id && !locked ? 'ui-tab--active' : ''}`}
                         onClick={() => {
                             if (locked) { navigate('/business/pricing'); return; }
                             setActiveTab(id);
                         }}
                         style={{
-                            padding: '8px 14px',
                             background: activeTab === id && !locked ? th(tc?.accent, 'var(--primary)') : 'transparent',
                             boxShadow: activeTab === id && !locked ? th(tc?.btnShadow, '0 4px 12px rgba(139,92,246,0.3)') : 'none',
-                            color: locked ? 'var(--text-muted)' : activeTab === id ? th(tc?.accentText || '#ffffff', 'white') : th(tc?.badgeText, 'var(--text-secondary)'),
-                            borderRadius: '16px', border: 'none', cursor: 'pointer',
-                            fontWeight: activeTab === id && !locked ? '800' : '600',
-                            fontSize: '13px', whiteSpace: 'nowrap',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', opacity: locked ? 0.75 : 1
+                            color: locked ? 'var(--text-muted)' : activeTab === id ? 'rgba(255, 255, 255, 1)' : 'var(--text-main)',
+                            opacity: locked ? 0.75 : 1
                         }}
                     >
                         {label}
@@ -1284,24 +1392,26 @@ const PartnerProfile = () => {
                     </button>
                 ))}
             </div>
+            );
+            })()}
 
             {/* Content Area */}
-            <div style={{ padding: '0 1rem 2rem 1rem', maxWidth: '100%', boxSizing: 'border-box' }}>
+            <div className="profile-content" style={{ padding: 'var(--profile-content-padding)' }}>
 
                 {/* About Tab */}
                 {activeTab === 'about' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div className="profile-section-content">
 
                         {/* About Card */}
-                        <div style={{
-                            background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`,
-                            borderRadius: '24px', padding: '24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)'),
+                        <div className="ui-card ui-card--lg" style={{
+                            background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
+                            boxShadow: th(tc?.cardShadow, '0 4px 20px rgba(0,0,0,0.08)'),
                             position: 'relative', overflow: 'hidden'
                         }}>
                             <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: th(tc?.accent, 'linear-gradient(to bottom, #8b5cf6, #ec4899)') }} />
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                                <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <h3 className="profile-section-header" style={{ fontSize: '1.3rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <span style={{ fontSize: '1.5rem' }}>📄</span> About Us
                                 </h3>
                                 {isOwner && (
@@ -1315,14 +1425,15 @@ const PartnerProfile = () => {
 
                             {businessInfo.description ? (
                                 <p style={{
-                                    color: th(tc?.badgeText, 'var(--text-secondary)'), lineHeight: '1.8', fontSize: '1rem', margin: 0,
-                                    opacity: 0.9, whiteSpace: 'pre-wrap'
+                                    color: 'var(--text-secondary)', lineHeight: '1.8', fontSize: '1rem', margin: 0,
+                                    whiteSpace: 'pre-wrap'
                                 }}>
                                     {businessInfo.description}
                                 </p>
                             ) : (
-                                <div style={{ padding: '20px', textAlign: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>No description available</p>
+                                <div style={{ padding: '24px', textAlign: 'center', background: 'var(--hover-overlay)', borderRadius: '16px', border: '1px dashed var(--border-color)' }}>
+                                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.95rem', fontWeight: '500' }}>No description available</p>
+                                    {isOwner && <p style={{ color: 'var(--text-muted)', margin: '8px 0 0', fontSize: '0.85rem', opacity: 0.9 }}>Click Edit to add one</p>}
                                 </div>
                             )}
                         </div>
@@ -1330,8 +1441,8 @@ const PartnerProfile = () => {
 
                         {/* Enhanced Gallery Section */}
                         <EnhancedGallery
-                            partnerId={partnerId}
-                            partner={partner}
+                            profileId={profileId}
+                            business={business}
                             isOwner={isOwner}
                             theme={{ colors: tc }}
                         />
@@ -1341,7 +1452,7 @@ const PartnerProfile = () => {
                         {/* Enhanced Reviews Section */}
                         <EnhancedReviews
                             reviews={reviews}
-                            partnerId={partnerId}
+                            profileId={profileId}
                             isOwner={isOwner}
                             currentUser={currentUser}
                             userProfile={userProfile}
@@ -1358,7 +1469,7 @@ const PartnerProfile = () => {
                 {/* Menu Tab */}
                 {activeTab === 'menu' && (
                     <MenuShowcase
-                        partnerId={partnerId}
+                        profileId={profileId}
                         menuData={businessInfo.menu || []}
                         isOwner={isOwner}
                         isPaid={isPaid}
@@ -1372,32 +1483,22 @@ const PartnerProfile = () => {
 
                         {/* Draft Banner - Free Plan */}
                         {showServiceDraftBanner && (
-                            <div style={{
-                                padding: '14px 18px', borderRadius: '14px',
-                                background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(239,68,68,0.08) 100%)',
-                                border: '1px solid rgba(245,158,11,0.35)',
-                                display: 'flex', alignItems: 'flex-start', gap: '12px',
-                            }}>
+                            <div className="ui-banner--warning">
                                 <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>⚠️</span>
                                 <div style={{ flex: 1 }}>
-                                    <p style={{ margin: '0 0 6px', fontWeight: '700', fontSize: '0.95rem', color: '#f59e0b' }}>Saved as Draft</p>
+                                    <p className="ui-banner--warning__title">Saved as Draft</p>
                                     <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                                         Your services were saved, but they <strong>won't appear on your public profile</strong> until you upgrade your plan.
                                     </p>
-                                    <a href="/pricing" style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                        padding: '6px 14px', borderRadius: '8px',
-                                        background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
-                                        color: '#f59e0b', fontSize: '0.85rem', fontWeight: '700', textDecoration: 'none',
-                                    }}>🚀 Upgrade Plan</a>
+                                    <a href="/pricing" className="ui-banner--warning__link">🚀 Upgrade Plan</a>
                                 </div>
-                                <button onClick={() => setShowServiceDraftBanner(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                                <button type="button" className="ui-btn ui-btn--ghost" onClick={() => setShowServiceDraftBanner(false)} style={{ padding: '4px', color: 'var(--text-muted)', fontSize: '1.1rem', flexShrink: 0 }}>✕</button>
                             </div>
                         )}
 
                         {/* Header */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '16px 24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
-                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '1.4rem' }}>✨</span> Business Services
                             </h3>
                             {isOwner && (
@@ -1406,12 +1507,12 @@ const PartnerProfile = () => {
                                     {/* ＋ Add button toggles inline form */}
                                     <button
                                         onClick={() => setShowServiceAddForm(v => !v)}
-                                        title={showServiceAddForm ? 'Close form' : 'Add service'}
+                                        title={showServiceAddForm ? t('close_form') : t('add_service')}
                                         style={{
                                             width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
-                                            border: `1px solid ${showServiceAddForm ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)'}`,
-                                            background: showServiceAddForm ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)',
-                                            color: showServiceAddForm ? '#ef4444' : '#10b981',
+                                            border: `1px solid ${showServiceAddForm ? 'var(--color-danger)' : 'var(--color-success)'}`,
+                                            background: showServiceAddForm ? 'color-mix(in srgb, var(--color-danger) 10%, transparent)' : 'color-mix(in srgb, var(--color-success) 10%, transparent)',
+                                            color: showServiceAddForm ? 'var(--color-danger)' : 'var(--color-success)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}
                                     >
@@ -1423,23 +1524,18 @@ const PartnerProfile = () => {
 
                         {/* ── Inline Add Form ── */}
                         {isOwner && showServiceAddForm && (
-                            <div style={{
-                                background: th(tc?.cardBg, 'var(--bg-card)'),
-                                border: '1px solid rgba(139,92,246,0.25)',
-                                borderRadius: '20px', padding: '1.5rem',
-                                display: 'flex', flexDirection: 'column', gap: '14px',
-                            }}>
+                            <div className="ui-form-surface" style={{ background: th(tc?.cardBg, 'var(--bg-card)') }}>
                                 <h4 style={{ margin: 0, fontWeight: '800', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <FaPlus style={{ color: '#10b981' }} /> Add Service
+                                    <FaPlus style={{ color: 'var(--color-success)' }} /> Add Service
                                 </h4>
 
                                 {/* Pending preview */}
                                 {pendingServices.length > 0 && (
                                     <div style={{
                                         padding: '0.75rem', borderRadius: '10px',
-                                        background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)',
+                                        background: 'color-mix(in srgb, var(--color-success) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-success) 25%, transparent)',
                                     }}>
-                                        <p style={{ margin: '0 0 6px', fontSize: '0.8rem', fontWeight: '700', color: '#10b981' }}>
+                                        <p style={{ margin: '0 0 6px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--color-success)' }}>
                                             ✅ {pendingServices.length} service{pendingServices.length > 1 ? 's' : ''} ready to save:
                                         </p>
                                         {pendingServices.map((s, i) => (
@@ -1454,7 +1550,7 @@ const PartnerProfile = () => {
                                 <div style={{ textAlign: 'center' }}>
                                     <div style={{
                                         width: '64px', height: '64px', borderRadius: '16px', fontSize: '2.4rem',
-                                        background: 'rgba(139,92,246,0.1)', border: '2px solid rgba(139,92,246,0.3)',
+                                        background: 'color-mix(in srgb, var(--primary) 10%, transparent)', border: '2px solid color-mix(in srgb, var(--primary) 30%, transparent)',
                                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px',
                                     }}>
                                         {serviceForm.icon}
@@ -1462,14 +1558,11 @@ const PartnerProfile = () => {
                                 </div>
                                 <input
                                     type="text"
+                                    className="ui-form-field"
                                     value={serviceIconSearch}
                                     onChange={e => setServiceIconSearch(e.target.value)}
-                                    placeholder="Search icons..."
-                                    style={{
-                                        width: '100%', padding: '8px 12px', boxSizing: 'border-box',
-                                        background: 'var(--bg-body)', border: '1px solid var(--border-color)',
-                                        borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem',
-                                    }}
+                                    placeholder={t('search_icons')}
+                                    style={{ padding: '8px 12px' }}
                                 />
                                 {/* Icon grid */}
                                 <div style={{
@@ -1487,7 +1580,7 @@ const PartnerProfile = () => {
                                             onClick={() => setServiceForm(f => ({ ...f, icon: s.icon }))}
                                             style={{
                                                 fontSize: '1.5rem', padding: '6px', borderRadius: '8px', border: 'none',
-                                                background: serviceForm.icon === s.icon ? 'rgba(139,92,246,0.25)' : 'transparent',
+                                                background: serviceForm.icon === s.icon ? 'color-mix(in srgb, var(--primary) 25%, transparent)' : 'transparent',
                                                 outline: serviceForm.icon === s.icon ? '2px solid var(--primary)' : 'none',
                                                 cursor: 'pointer',
                                             }}
@@ -1497,33 +1590,26 @@ const PartnerProfile = () => {
 
                                 {/* Name */}
                                 <div>
-                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Service Name *</label>
+                                    <label className="ui-form-label">Service Name *</label>
                                     <input
                                         type="text"
+                                        className="ui-form-field"
                                         value={serviceForm.name}
                                         onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))}
                                         placeholder="e.g., Home Delivery, Live DJ..."
-                                        style={{
-                                            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
-                                            background: 'var(--bg-body)', border: '1px solid var(--border-color)',
-                                            borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem',
-                                        }}
                                     />
                                 </div>
 
                                 {/* Description */}
                                 <div>
-                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Description (optional)</label>
+                                    <label className="ui-form-label">Description (optional)</label>
                                     <textarea
+                                        className="ui-form-field"
                                         value={serviceForm.description}
                                         onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))}
                                         rows={2}
-                                        placeholder="Brief info about this service..."
-                                        style={{
-                                            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
-                                            background: 'var(--bg-body)', border: '1px solid var(--border-color)',
-                                            borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', resize: 'vertical',
-                                        }}
+                                        placeholder={t('service_info_placeholder')}
+                                        style={{ resize: 'vertical' }}
                                     />
                                 </div>
 
@@ -1552,28 +1638,24 @@ const PartnerProfile = () => {
                                         disabled={savingServices || pendingServices.length === 0}
                                         style={{
                                             flex: 2, padding: '0.65rem 1rem', borderRadius: '10px',
-                                            border: '1px solid rgba(16,185,129,0.4)',
-                                            background: pendingServices.length > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
-                                            color: pendingServices.length > 0 ? '#10b981' : 'var(--text-muted)',
+                                            border: '1px solid color-mix(in srgb, var(--color-success) 40%, transparent)',
+                                            background: pendingServices.length > 0 ? 'color-mix(in srgb, var(--color-success) 15%, transparent)' : 'var(--hover-overlay)',
+                                            color: pendingServices.length > 0 ? 'var(--color-success)' : 'var(--text-muted)',
                                             fontWeight: '700', fontSize: '0.9rem',
                                             cursor: pendingServices.length > 0 ? 'pointer' : 'not-allowed',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                                         }}
                                     >
-                                        <FaSave size={13} /> {savingServices ? 'Saving...' : `Save (${pendingServices.length})`}
+                                        <FaSave size={13} /> {savingServices ? t('save_pending') : t('save_count', { count: pendingServices.length })}
                                     </button>
 
                                     {/* ✕ Discard */}
                                     <button
+                                        type="button"
+                                        className="ui-btn ui-btn--danger-outline"
                                         onClick={handleDiscardServices}
-                                        style={{
-                                            padding: '0.65rem 0.9rem', borderRadius: '10px',
-                                            border: '1px solid rgba(239,68,68,0.3)',
-                                            background: 'rgba(239,68,68,0.08)', color: '#ef4444',
-                                            fontWeight: '700', cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}
-                                        title="Discard all pending"
+                                        style={{ padding: '0.65rem 0.9rem' }}
+                                        title={t('discard_pending')}
                                     >
                                         <FaTimes size={14} />
                                     </button>
@@ -1591,12 +1673,12 @@ const PartnerProfile = () => {
                                         gap: '12px', position: 'relative', boxShadow: th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.15)'), transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                                     }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = th(tc?.btnShadow, '0 16px 40px rgba(139,92,246,0.3)'); }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.15)'); }}>
                                         <div style={{ fontSize: '3rem', filter: tc ? `drop-shadow(0 4px 8px ${tc.accent}55)` : 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>{service.icon || '⚙️'}</div>
-                                        <h4 style={{ fontSize: '0.95rem', fontWeight: '800', margin: 0, color: th(tc?.badgeText, 'white') }}>{service.name}</h4>
+                                        <h4 style={{ fontSize: '0.95rem', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>{service.name}</h4>
                                         {service.description && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{service.description}</p>}
                                         {isOwner && (
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '8px', opacity: 0.8 }} className="service-actions">
-                                                <button onClick={() => { setEditingService(index); setShowServiceModal(true); }} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}>Edit</button>
-                                                <button onClick={() => handleDeleteService(index)} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'rgba(239,68,68,0.15)', border: 'none', borderRadius: '8px', color: '#f87171', cursor: 'pointer' }}>Del</button>
+                                                <button onClick={() => { setEditingService(index); setShowServiceModal(true); }} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'var(--hover-overlay)', border: 'none', borderRadius: '8px', color: 'var(--text-main)', cursor: 'pointer' }}>Edit</button>
+                                                <button type="button" className="ui-btn ui-btn--danger-outline" onClick={() => handleDeleteService(index)} style={{ padding: '6px 12px', fontSize: '0.75rem' }}>Del</button>
                                             </div>
                                         )}
                                     </div>
@@ -1619,8 +1701,8 @@ const PartnerProfile = () => {
                 {/* Hours Tab - NEW Business Hours Component */}
                 {activeTab === 'hours' && (
                     <BusinessHours
-                        partnerId={partnerId}
-                        businessInfo={partner.businessInfo}
+                        businessId={profileId}
+                        businessInfo={business.businessInfo}
                         isOwner={isOwner}
                         theme={{ colors: tc }}
                     />
@@ -1630,7 +1712,7 @@ const PartnerProfile = () => {
                 {activeTab === 'contact' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '16px 24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
-                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '1.4rem' }}>📞</span> Contact Information
                             </h3>
                             {isOwner && (
@@ -1645,7 +1727,7 @@ const PartnerProfile = () => {
                             {businessInfo.phone && (
                                 <div style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.1)'), transition: 'transform 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'} onClick={() => window.location.href = `tel:${businessInfo.phone}`}>
                                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: th(tc?.badgeBg, 'rgba(34,197,94,0.15)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#22c55e'), fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaPhone /></div>
-                                    <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone</div><div style={{ fontWeight: '800', color: th(tc?.badgeText, 'white'), fontSize: '1.1rem' }}>{businessInfo.phone}</div></div>
+                                    <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem' }}>{businessInfo.phone}</div></div>
                                 </div>
                             )}
 
@@ -1653,7 +1735,7 @@ const PartnerProfile = () => {
                             {isPaid && businessInfo.website && (
                                 <div onClick={() => window.open(businessInfo.website.startsWith('http') ? businessInfo.website : `https://${businessInfo.website}`, '_blank')} style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: th(tc?.cardShadow, '0 8px 24px rgba(0,0,0,0.1)'), transition: 'all 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
                                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: th(tc?.badgeBg, 'rgba(59,130,246,0.15)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#3b82f6'), fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaGlobe /></div>
-                                    <div style={{ flex: 1 }}><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Website</div><div style={{ fontWeight: '800', color: th(tc?.badgeText, 'white'), fontSize: '1.1rem', wordBreak: 'break-all' }}>{businessInfo.website.replace(/^(https?:\/\/|\/\/)/, '')}</div></div>
+                                    <div style={{ flex: 1 }}><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Website</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem', wordBreak: 'break-all' }}>{businessInfo.website.replace(/^(https?:\/\/|\/\/)/, '')}</div></div>
                                     <FaExternalLinkAlt style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }} />
                                 </div>
                             )}
@@ -1663,13 +1745,13 @@ const PartnerProfile = () => {
                             <div style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
                                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: th(tc?.badgeBg, 'rgba(239,68,68,0.15)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: th(tc?.accent, '#ef4444'), fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaMapMarkerAlt /></div>
-                                    <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Address</div><div style={{ fontWeight: '800', color: th(tc?.badgeText, 'white'), fontSize: '1.1rem' }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
+                                    <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Address</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem' }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
                                 </div>
 
                                 <div style={{ height: '320px', borderRadius: '20px', overflow: 'hidden', border: `2px solid ${th(tc?.border, 'rgba(255,255,255,0.1)')}`, position: 'relative', boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.1)' }}>
                                     <iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : ''))}&output=embed`} style={{ width: '100%', height: '100%', border: 0 }} loading="lazy" allowFullScreen title="Business Location" />
                                     {!isPaid && (
-                                        <div onClick={() => { setPaywallFeature("Interactive Maps"); setShowPaywall(true); }} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(30,30,46,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }} title="Upgrade to interact with the map">
+                                        <div onClick={() => { setPaywallFeature("Interactive Maps"); setShowPaywall(true); }} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(30,30,46,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }} title={t('upgrade_map')}>
                                             <div style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', padding: '12px 24px', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
                                                 🔒 Map Interaction Locked
                                             </div>
@@ -1690,7 +1772,7 @@ const PartnerProfile = () => {
                         {/* Social Media — Pro only */}
                         {isPaid && (businessInfo.instagram || businessInfo.twitter || businessInfo.facebook) && (
                             <div style={{ background: th(tc?.cardBg, 'var(--bg-card)'), border: `1px solid ${th(tc?.border, 'rgba(255,255,255,0.05)')}`, borderRadius: '24px', padding: '24px', boxShadow: th(tc?.cardShadow, '0 10px 30px rgba(0,0,0,0.15)') }}>
-                                <h4 style={{ fontSize: '1.1rem', fontWeight: '900', margin: '0 0 20px 0', color: th(tc?.badgeText, 'white'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <h4 style={{ fontSize: '1.1rem', fontWeight: '900', margin: '0 0 20px 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <span style={{ fontSize: '1.3rem' }}>🌐</span> Follow Us
                                 </h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '16px' }}>
@@ -1742,7 +1824,13 @@ const PartnerProfile = () => {
                             width: '100%',
                             boxShadow: tc ? tc.headerGlow : undefined
                         }}>
-                            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: '800', color: th(tc?.badgeText, 'var(--text-main)') }}>
+                            <h2 style={{
+                                marginBottom: '1.5rem',
+                                fontSize: '1.5rem',
+                                fontWeight: '800',
+                                color: 'var(--text-main)',
+                                textShadow: 'none'
+                            }}>
                                 Write a Review
                             </h2>
 
@@ -1777,7 +1865,7 @@ const PartnerProfile = () => {
                                 <textarea
                                     value={newReview.comment}
                                     onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
-                                    placeholder="Share your experience..."
+                                    placeholder={t('share_experience')}
                                     style={{
                                         width: '100%',
                                         minHeight: '120px',
@@ -1795,20 +1883,13 @@ const PartnerProfile = () => {
                             {/* Buttons */}
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <button
+                                    type="button"
+                                    className="ui-btn ui-btn--ghost"
                                     onClick={() => {
                                         setShowReviewModal(false);
                                         setNewReview({ rating: 5, comment: '' });
                                     }}
-                                    style={{
-                                        flex: 1,
-                                        padding: '12px',
-                                        background: th(tc?.badgeBg, 'var(--bg-primary)'),
-                                        border: `1px solid ${th(tc?.border, 'var(--border-color)')}`,
-                                        borderRadius: '12px',
-                                        color: th(tc?.badgeText, 'var(--text-main)'),
-                                        fontWeight: '700',
-                                        cursor: 'pointer'
-                                    }}
+                                    style={{ flex: 1, padding: '12px' }}
                                 >
                                     Cancel
                                 </button>
@@ -1828,7 +1909,7 @@ const PartnerProfile = () => {
                                         opacity: submittingReview ? 0.6 : 1
                                     }}
                                 >
-                                    {submittingReview ? 'Submitting...' : 'Submit Review'}
+                                    {submittingReview ? t('submitting_review') : t('submit_review')}
                                 </button>
                             </div>
                         </div>
@@ -1883,7 +1964,7 @@ const PartnerProfile = () => {
 
                         {/* Image */}
                         <img
-                            src={(partner?.businessInfo?.gallery || [])[lightboxIndex]}
+                            src={(business?.businessInfo?.gallery || [])[lightboxIndex]}
                             alt="Gallery"
                             style={{
                                 maxWidth: '90%',
@@ -1895,13 +1976,13 @@ const PartnerProfile = () => {
                         />
 
                         {/* Navigation Arrows */}
-                        {(partner?.businessInfo?.gallery || []).length > 1 && (
+                        {(business?.businessInfo?.gallery || []).length > 1 && (
                             <>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setLightboxIndex((prev) =>
-                                            prev === 0 ? (partner?.businessInfo?.gallery || []).length - 1 : prev - 1
+                                            prev === 0 ? (business?.businessInfo?.gallery || []).length - 1 : prev - 1
                                         );
                                     }}
                                     style={{
@@ -1926,7 +2007,7 @@ const PartnerProfile = () => {
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setLightboxIndex((prev) =>
-                                            prev === (partner?.businessInfo?.gallery || []).length - 1 ? 0 : prev + 1
+                                            prev === (business?.businessInfo?.gallery || []).length - 1 ? 0 : prev + 1
                                         );
                                     }}
                                     style={{
@@ -1962,7 +2043,7 @@ const PartnerProfile = () => {
                             color: 'white',
                             fontWeight: '700'
                         }}>
-                            {lightboxIndex + 1} / {(partner?.businessInfo?.gallery || []).length}
+                            {lightboxIndex + 1} / {(business?.businessInfo?.gallery || []).length}
                         </div>
                     </div>
                 )
@@ -1981,21 +2062,23 @@ const PartnerProfile = () => {
                             <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_profile') || 'Share Profile'}</h3>
                             <ShareButtons
                                 url={window.location.href}
-                                title={partner.display_name}
-                                description={`Check out ${partner.display_name} on DineBuddies!`}
-                                type="partner"
+                                title={business.display_name}
+                                description={`Check out ${business.display_name} on DineBuddies!`}
+                                type="business"
                                 storyData={{
-                                    title: partner.display_name,
-                                    image: partner.businessInfo?.coverImage || getSafeAvatar(partner),
-                                    description: partner.businessInfo?.description,
-                                    location: partner.businessInfo?.address,
-                                    hostName: partner.display_name,
-                                    hostImage: getSafeAvatar(partner)
+                                    title: business.display_name,
+                                    image: business.businessInfo?.coverImage || getSafeAvatar(business),
+                                    description: business.businessInfo?.description,
+                                    location: business.businessInfo?.address,
+                                    hostName: business.display_name,
+                                    hostImage: getSafeAvatar(business)
                                 }}
                             />
                             <button
+                                type="button"
+                                className="ui-btn ui-btn--ghost"
                                 onClick={(e) => { e.stopPropagation(); setShowShareModal(false); }}
-                                style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}
+                                style={{ width: '100%', marginTop: '16px', padding: '10px' }}
                             >
                                 {t('close') || 'Close'}
                             </button>
@@ -2035,29 +2118,40 @@ const PartnerProfile = () => {
                     <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
                         <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>✏️ Edit Basic Info</h3>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-main)' }}>✏️ Edit Basic Info</h3>
                                 <button onClick={() => setShowBasicInfoModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
                             </div>
                             {[
-                                { label: 'Business Name *', key: 'businessName', type: 'text' },
-                                { label: 'Tagline', key: 'tagline', type: 'text' },
-                                { label: 'Business Type', key: 'businessType', type: 'text' },
+                                { label: t('business_name_label'), key: 'businessName', type: 'text' },
+                                { label: t('tagline_label'), key: 'tagline', type: 'text' },
                             ].map(({ label, key, type }) => (
                                 <div key={key} style={{ marginBottom: '1rem' }}>
-                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem', color: 'var(--text-main)' }}>{label}</label>
                                     <input type={type} value={basicInfoForm[key]} onChange={e => setBasicInfoForm(p => ({ ...p, [key]: e.target.value }))}
                                         style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem' }} />
                                 </div>
                             ))}
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem', color: 'var(--text-main)' }}>{t('business_type_label')}</label>
+                                <select
+                                    value={BUSINESS_TYPES.includes(basicInfoForm.businessType) ? basicInfoForm.businessType : 'Restaurant'}
+                                    onChange={e => setBasicInfoForm(p => ({ ...p, businessType: e.target.value }))}
+                                    style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', appearance: 'none' }}
+                                >
+                                    {BUSINESS_TYPES.map(type => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <div style={{ marginBottom: '1.25rem' }}>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>Description</label>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem', color: 'var(--text-main)' }}>Description</label>
                                 <textarea rows={4} value={basicInfoForm.description} onChange={e => setBasicInfoForm(p => ({ ...p, description: e.target.value }))}
                                     style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '0.9rem', resize: 'vertical' }} />
                             </div>
                             <div style={{ display: 'flex', gap: '1rem' }}>
-                                <button onClick={() => setShowBasicInfoModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                                <button onClick={() => setShowBasicInfoModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>{t('cancel_btn')}</button>
                                 <button onClick={saveBasicInfo} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
-                                    {savingInfo ? '💾 Saving...' : '💾 Save'}
+                                    {savingInfo ? `💾 ${t('save_pending')}` : `💾 ${t('save_btn')}`}
                                 </button>
                             </div>
                         </div>
@@ -2071,7 +2165,7 @@ const PartnerProfile = () => {
                     <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
                         <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem', width: '90%', maxWidth: '460px', border: '1px solid var(--border-color)', maxHeight: '90vh', overflowY: 'auto' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>📞 Edit Contact</h3>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-main)' }}>📞 Edit Contact</h3>
                                 <button onClick={() => setShowContactModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
                             </div>
                             {/* Free Fields Section Header */}
@@ -2083,7 +2177,7 @@ const PartnerProfile = () => {
                                 { label: '📞 Phone', key: 'phone', placeholder: '+61 400 000 000' },
                                 { label: '✉️ Email', key: 'email', placeholder: 'info@yourbusiness.com' },
                                 { label: '📍 Address', key: 'address', placeholder: '123 Main St' },
-                                { label: '🏙️ City', key: 'city', placeholder: 'Sydney' },
+                                { label: `🏙️ ${t('city_label')}`, key: 'city', placeholder: 'Sydney' },
                             ].map(({ label, key, placeholder }) => (
                                 <div key={key} style={{ marginBottom: '1rem' }}>
                                     <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{label}</label>
@@ -2098,11 +2192,11 @@ const PartnerProfile = () => {
                                 <span style={{ border: '1px solid #f59e0b', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#fbbf24', background: 'rgba(245,158,11,0.12)' }}>👑 Elite</span>
                             </div>
                             {[
-                                { icon: <FaGlobe color="#8b5cf6" />, label: 'Website', key: 'website', placeholder: 'https://yourbusiness.com' },
-                                { icon: <FaInstagram color="#E1306C" />, label: 'Instagram', key: 'instagram', placeholder: '@yourbusiness' },
-                                { icon: <FaFacebook color="#1877F2" />, label: 'Facebook', key: 'facebook', placeholder: 'facebook.com/yourbusiness' },
-                                { icon: <FaTwitter color="#1DA1F2" />, label: 'Twitter / X', key: 'twitter', placeholder: '@yourbusiness' },
-                                { icon: <SiTiktok color="#fff" />, label: 'TikTok', key: 'tiktok', placeholder: '@yourbusiness' },
+                                { icon: <FaGlobe color="#8b5cf6" />, label: t('website_label'), key: 'website', placeholder: 'https://yourbusiness.com' },
+                                { icon: <FaInstagram color="#E1306C" />, label: t('instagram_label'), key: 'instagram', placeholder: '@yourbusiness' },
+                                { icon: <FaFacebook color="#1877F2" />, label: t('facebook_label'), key: 'facebook', placeholder: 'facebook.com/yourbusiness' },
+                                { icon: <FaTwitter color="#1DA1F2" />, label: t('twitter_label'), key: 'twitter', placeholder: '@yourbusiness' },
+                                { icon: <SiTiktok color="#fff" />, label: t('tiktok_label'), key: 'tiktok', placeholder: '@yourbusiness' },
                             ].map(({ icon, label, key, placeholder }) => (
                                 <div key={key} style={{ marginBottom: '1rem' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>{icon} {label}</label>
@@ -2111,9 +2205,9 @@ const PartnerProfile = () => {
                                 </div>
                             ))}
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                                <button onClick={() => setShowContactModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                                <button onClick={() => setShowContactModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600' }}>{t('cancel_btn')}</button>
                                 <button onClick={saveContact} disabled={savingInfo} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #f97316)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>
-                                    {savingInfo ? '💾 Saving...' : '💾 Save'}
+                                    {savingInfo ? `💾 ${t('save_pending')}` : `💾 ${t('save_btn')}`}
                                 </button>
                             </div>
                         </div>
@@ -2172,4 +2266,4 @@ const PartnerProfile = () => {
     );
 };
 
-export default PartnerProfile;
+export default BusinessProfile;

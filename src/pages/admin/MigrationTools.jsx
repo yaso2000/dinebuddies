@@ -1,31 +1,14 @@
 import React, { useState } from 'react';
-import { migratePlansToFirestore } from '../../utils/migratePlans';
-import { FaDatabase, FaCheckCircle, FaExclamationTriangle, FaRocket } from 'react-icons/fa';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { FaRocket } from 'react-icons/fa';
 
 const MigrationTools = () => {
+    const isDevBuild = import.meta.env.DEV;
     const [migrating, setMigrating] = useState(false);
-    const [result, setResult] = useState(null);
-
-    const handleMigrate = async () => {
-        if (!window.confirm('This will migrate the 3 existing plans to Firestore.\n\nContinue?')) {
-            return;
-        }
-
-        setMigrating(true);
-        setResult(null);
-
-        try {
-            const migrationResult = await migratePlansToFirestore();
-            setResult(migrationResult);
-        } catch (error) {
-            setResult({
-                success: false,
-                message: error.message
-            });
-        } finally {
-            setMigrating(false);
-        }
-    };
+    const functions = getFunctions();
+    const adminCleanupLegacyUserProfiles = httpsCallable(functions, 'adminCleanupLegacyUserProfiles');
+    const adminRefreshPostsUserMetadata = httpsCallable(functions, 'adminRefreshPostsUserMetadata');
+    const adminMigratePartnerRoles = httpsCallable(functions, 'adminMigratePartnerRoles');
 
     return (
         <div>
@@ -57,6 +40,11 @@ const MigrationTools = () => {
                         <p style={{ fontSize: '0.9375rem', color: '#94a3b8', marginBottom: '1.5rem' }}>
                             <b>Priority Fix:</b> Convert all "User" names to real names (from email) and remove cartoon avatars.
                         </p>
+                        {!isDevBuild && (
+                            <p style={{ fontSize: '0.85rem', color: '#fca5a5', marginBottom: '1rem' }}>
+                                Disabled in non-development builds.
+                            </p>
+                        )}
 
                         <button
                             onClick={async () => {
@@ -64,52 +52,17 @@ const MigrationTools = () => {
 
                                 setMigrating(true);
                                 try {
-                                    const { collection, getDocs, updateDoc, doc } = await import('firebase/firestore');
-                                    const { db } = await import('../../firebase/config');
-
-                                    const usersRef = collection(db, 'users');
-                                    const snapshot = await getDocs(usersRef);
-
-                                    let updatedCount = 0;
-                                    let errors = [];
-
-                                    for (const userDoc of snapshot.docs) {
-                                        const data = userDoc.data();
-                                        let updates = {};
-
-                                        // Fix Name
-                                        if (!data.display_name || data.display_name === 'User') {
-                                            if (data.email) {
-                                                const emailName = data.email.split('@')[0];
-                                                updates.display_name = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-                                            } else {
-                                                updates.display_name = 'Member';
-                                            }
-                                        }
-
-                                        // Fix Avatar
-                                        if (data.photo_url && data.photo_url.includes('dicebear')) {
-                                            updates.photo_url = '';
-                                        }
-
-                                        if (Object.keys(updates).length > 0) {
-                                            try {
-                                                await updateDoc(doc(db, 'users', userDoc.id), updates);
-                                                updatedCount++;
-                                            } catch (err) {
-                                                errors.push(userDoc.id);
-                                            }
-                                        }
-                                    }
-
-                                    alert(`Migration Complete!\n\n✅ Updated: ${updatedCount} profiles`);
+                                    const res = await adminCleanupLegacyUserProfiles({ mode: 'basic', dryRun: false });
+                                    const updatedCount = Number(res?.data?.updated || 0);
+                                    const scanned = Number(res?.data?.scanned || 0);
+                                    alert(`Migration Complete!\n\n✅ Updated: ${updatedCount} profiles\n📦 Scanned: ${scanned}`);
                                 } catch (err) {
                                     alert('Failed: ' + err.message);
                                 } finally {
                                     setMigrating(false);
                                 }
                             }}
-                            disabled={migrating}
+                            disabled={migrating || !isDevBuild}
                             className="admin-btn admin-btn-primary"
                             style={{
                                 background: migrating ? '#64748b' : 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)',
@@ -118,7 +71,7 @@ const MigrationTools = () => {
                                 padding: '0.75rem 2rem'
                             }}
                         >
-                            {migrating ? 'Running...' : '🚀 Run Cleanup Now'}
+                            {!isDevBuild ? 'Disabled (Dev only)' : (migrating ? 'Running...' : '🚀 Run Cleanup Now')}
                         </button>
                     </div>
                 </div>
@@ -158,54 +111,17 @@ const MigrationTools = () => {
 
                                     setMigrating(true);
                                     try {
-                                        const { collection, getDocs, updateDoc, doc } = await import('firebase/firestore');
-                                        const { db } = await import('../../firebase/config');
-
-                                        const usersRef = collection(db, 'users');
-                                        const snapshot = await getDocs(usersRef);
-
-                                        let updatedCount = 0;
-                                        let errors = [];
-
-                                        for (const userDoc of snapshot.docs) {
-                                            const data = userDoc.data();
-                                            let updates = {};
-
-                                            // Fix Name (Robust Check)
-                                            const currentName = data.display_name ? data.display_name.toString().trim() : '';
-
-                                            if (!currentName || currentName.toLowerCase() === 'user') {
-                                                if (data.email) {
-                                                    const emailName = data.email.split('@')[0];
-                                                    updates.display_name = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-                                                } else {
-                                                    updates.display_name = 'Member';
-                                                }
-                                            }
-
-                                            // Fix Avatar
-                                            if (data.photo_url && (data.photo_url.includes('dicebear') || data.photo_url.includes('avataaars'))) {
-                                                updates.photo_url = '';
-                                            }
-
-                                            if (Object.keys(updates).length > 0) {
-                                                try {
-                                                    await updateDoc(doc(db, 'users', userDoc.id), updates);
-                                                    updatedCount++;
-                                                } catch (err) {
-                                                    errors.push(userDoc.id);
-                                                }
-                                            }
-                                        }
-
-                                        alert(`Migration Complete!\n\n✅ Updated: ${updatedCount} profiles`);
+                                        const res = await adminCleanupLegacyUserProfiles({ mode: 'robust', dryRun: false });
+                                        const updatedCount = Number(res?.data?.updated || 0);
+                                        const scanned = Number(res?.data?.scanned || 0);
+                                        alert(`Migration Complete!\n\n✅ Updated: ${updatedCount} profiles\n📦 Scanned: ${scanned}`);
                                     } catch (err) {
                                         alert('Failed: ' + err.message);
                                     } finally {
                                         setMigrating(false);
                                     }
                                 }}
-                                disabled={migrating}
+                                disabled={migrating || !isDevBuild}
                                 className="admin-btn admin-btn-primary"
                                 style={{
                                     background: migrating ? '#64748b' : 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)',
@@ -215,7 +131,7 @@ const MigrationTools = () => {
                                     flex: 1
                                 }}
                             >
-                                {migrating ? 'Working...' : '1. Fix Profiles First'}
+                                {!isDevBuild ? 'Disabled (Dev only)' : (migrating ? 'Working...' : '1. Fix Profiles First')}
                             </button>
 
                             <button
@@ -224,33 +140,10 @@ const MigrationTools = () => {
 
                                     setMigrating(true);
                                     try {
-                                        const { collection, getDocs, updateDoc, doc, getDoc } = await import('firebase/firestore');
-                                        const { db } = await import('../../firebase/config');
-
-                                        const postsRef = collection(db, 'posts');
-                                        const snapshot = await getDocs(postsRef);
-
-                                        let updatedCount = 0;
-
-                                        for (const postDoc of snapshot.docs) {
-                                            const post = postDoc.data();
-                                            if (!post.userId) continue;
-
-                                            // Fetch LATEST user data
-                                            const userSnap = await getDoc(doc(db, 'users', post.userId));
-                                            if (userSnap.exists()) {
-                                                const userData = userSnap.data();
-
-                                                // Update post with fresh data
-                                                await updateDoc(doc(db, 'posts', postDoc.id), {
-                                                    userName: userData.display_name || 'Member',
-                                                    userPhoto: userData.photo_url || userData.photoURL || ''
-                                                });
-                                                updatedCount++;
-                                            }
-                                        }
-
-                                        alert(`Posts Refreshed!\n\n✅ Updated: ${updatedCount} posts with new names/photos`);
+                                        const res = await adminRefreshPostsUserMetadata({ dryRun: false });
+                                        const updatedCount = Number(res?.data?.updated || 0);
+                                        const scanned = Number(res?.data?.scanned || 0);
+                                        alert(`Posts Refreshed!\n\n✅ Updated: ${updatedCount} posts\n📦 Scanned: ${scanned}`);
                                     } catch (err) {
                                         console.error(err);
                                         alert('Failed: ' + err.message);
@@ -258,7 +151,7 @@ const MigrationTools = () => {
                                         setMigrating(false);
                                     }
                                 }}
-                                disabled={migrating}
+                                disabled={migrating || !isDevBuild}
                                 className="admin-btn"
                                 style={{
                                     background: migrating ? '#64748b' : '#3b82f6',
@@ -272,7 +165,7 @@ const MigrationTools = () => {
                                     cursor: 'pointer'
                                 }}
                             >
-                                {migrating ? 'Working...' : '2. Update Old Posts'}
+                                {!isDevBuild ? 'Disabled (Dev only)' : (migrating ? 'Working...' : '2. Update Old Posts')}
                             </button>
                         </div>
                     </div>
@@ -304,35 +197,10 @@ const MigrationTools = () => {
 
                                 setMigrating(true);
                                 try {
-                                    const { collection, getDocs, updateDoc, doc, deleteField } = await import('firebase/firestore');
-                                    const { db } = await import('../../firebase/config');
-
-                                    const snapshot = await getDocs(collection(db, 'users'));
-                                    let updatedRole = 0, removedType = 0, errors = 0;
-
-                                    for (const userDoc of snapshot.docs) {
-                                        const data = userDoc.data();
-                                        const updates = {};
-
-                                        if (data.role === 'partner') {
-                                            updates.role = 'business';
-                                            updatedRole++;
-                                        }
-                                        if (data.accountType !== undefined) {
-                                            updates.accountType = deleteField();
-                                            removedType++;
-                                        }
-
-                                        if (Object.keys(updates).length > 0) {
-                                            try {
-                                                await updateDoc(doc(db, 'users', userDoc.id), updates);
-                                            } catch (e) {
-                                                errors++;
-                                            }
-                                        }
-                                    }
-
-                                    alert(`✅ Roles Migration Complete!\n\nrole updated: ${updatedRole}\naccountType removed: ${removedType}\nErrors: ${errors}`);
+                                    const res = await adminMigratePartnerRoles({});
+                                    const updatedRole = res?.data?.updatedRole || 0;
+                                    const removedType = res?.data?.removedType || 0;
+                                    alert(`✅ Roles Migration Complete!\n\nrole updated: ${updatedRole}\naccountType removed: ${removedType}\nErrors: 0`);
                                 } catch (err) {
                                     alert('Failed: ' + err.message);
                                 } finally {

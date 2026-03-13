@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, onSnapshot, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, limit, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import StoryCircle from './StoryCircle';
@@ -25,8 +25,12 @@ const StoriesBar = ({ onStoryClick }) => {
 
         const now = new Date();
 
-        // Real-time listener for stories
-        const q = query(collection(db, 'stories'));
+        // Real-time listener for stories — limit + filter non-expired to reduce reads
+        const q = query(
+            collection(db, 'stories'),
+            where('expiresAt', '>', now),
+            limit(50)
+        );
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
             try {
@@ -99,7 +103,7 @@ const StoriesBar = ({ onStoryClick }) => {
                             const profile = fetchedProfiles[userGroup.userId];
                             if (profile) {
                                 // STRICT FILTER: No guests, no generic 'User' with dummy avatars
-                                if (profile.isGuest || profile.accountType === 'guest') return null;
+                                if (profile.isGuest || profile.role === 'guest') return null;
 
                                 const pName = profile.displayName || profile.name || profile.businessInfo?.businessName || userGroup.partnerName || 'User';
                                 const pLogo = getSafeAvatar(profile);

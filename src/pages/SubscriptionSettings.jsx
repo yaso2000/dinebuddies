@@ -26,7 +26,7 @@ const SubscriptionSettings = () => {
         },
         {
             id: 'premium', name: 'Premium', price: '$15', period: 'per month', icon: '💎', color: '#fbbf24', popular: true,
-            features: ['10 Private Invitations/month', 'Unlimited Public Invites', 'Golden Badge', 'Maximum Priority', 'Partner Discounts', 'Priority Support']
+            features: ['10 Private Invitations/month', 'Unlimited Public Invites', 'Golden Badge', 'Maximum Priority', 'Business Discounts', 'Priority Support']
         }
     ];
 
@@ -64,7 +64,7 @@ const SubscriptionSettings = () => {
                     <h2>Current Plan</h2>
                     <p className="settings-description">
                         {isBusiness
-                            ? `You are on the ${isElite ? '👑 Elite Partner' : isProfessional ? '⚡ Professional Partner' : '🎁 Free Partner'} plan`
+                            ? `You are on the ${isElite ? '👑 Elite Business' : isProfessional ? '⚡ Professional Business' : '🎁 Free Business'} plan`
                             : <> You are currently on the <strong>{isPremium ? 'Premium' : subscriptionTier === 'pro' ? 'Pro' : 'Free'}</strong> plan</>
                         }
                     </p>
@@ -73,7 +73,7 @@ const SubscriptionSettings = () => {
                             background: isElite ? 'rgba(251,191,36,0.1)' : 'rgba(139,92,246,0.1)',
                             color: isElite ? '#fbbf24' : '#a78bfa'
                         }}>
-                            {isElite ? <FaCrown /> : <FaBolt />} {isElite ? 'Elite Partner' : 'Professional Partner'}
+                            {isElite ? <FaCrown /> : <FaBolt />} {isElite ? 'Elite Business' : 'Professional Business'}
                         </div>
                     )}
                     {!isBusiness && isPremium && (

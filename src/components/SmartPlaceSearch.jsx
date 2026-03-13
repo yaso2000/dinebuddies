@@ -4,6 +4,7 @@ import { db } from '../firebase/config';
 import { FaSearch, FaMapMarkerAlt, FaStore, FaGoogle } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
 
 const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishment', cityBias = null }) => {
     const { t } = useTranslation();
@@ -18,12 +19,20 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
     const wrapperRef = useRef(null);
 
     useEffect(() => {
-        if (window.google && window.google.maps && window.google.maps.places) {
-            autocompleteService.current = new window.google.maps.places.AutocompleteService();
-            // Dummy div for PlacesService if needed for details (optional if we trust basic info)
-            const dummyDiv = document.createElement('div');
-            placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-        }
+        let cancelled = false;
+        loadGoogleMapsScript()
+            .then(() => {
+                if (cancelled || typeof window === 'undefined') return;
+                if (window.google?.maps?.places) {
+                    autocompleteService.current = new window.google.maps.places.AutocompleteService();
+                    const dummyDiv = document.createElement('div');
+                    placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) console.warn('Google Maps API not available. Place search will show partners only.');
+            });
+        return () => { cancelled = true; };
     }, []);
 
     // Handle click outside to close
@@ -53,11 +62,13 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
             let partnersPromise = Promise.resolve({ docs: [] });
 
             if (searchType !== '(cities)' && searchType !== 'geocode') {
+                const normalizedText = text.trim().toLowerCase();
                 const partnersQuery = query(
-                    collection(db, 'users'),
-                    where('role', 'in', ['business', 'partner']),
-                    where('display_name', '>=', text),
-                    where('display_name', '<=', text + '\uf8ff'),
+                    collection(db, 'public_profiles'),
+                    where('profileType', '==', 'business'),
+                    where('businessPublic.isPublished', '==', true),
+                    where('search.displayNameLower', '>=', normalizedText),
+                    where('search.displayNameLower', '<=', normalizedText + '\uf8ff'),
                     limit(3)
                 );
                 partnersPromise = getDocs(partnersQuery);
@@ -103,11 +114,12 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
             const partners = partnersSnapshot.docs
                 .map(doc => {
                     const data = doc.data();
+                    const business = data.businessPublic || {};
                     return {
                         id: doc.id,
-                        name: data.display_name,
-                        address: data.businessInfo?.address || data.businessInfo?.city || '',
-                        image: getSafeAvatar(data),
+                        name: data.displayName || 'Business',
+                        address: business.address || business.city || '',
+                        image: data.avatarUrl || getSafeAvatar({}),
                         source: 'business',
                         businessId: doc.id
                     };
@@ -167,6 +179,13 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
         setShowResults(false);
     };
 
+    const skeletonStyle = {
+        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.5s infinite',
+        borderRadius: '8px'
+    };
+
     return (
         <div ref={wrapperRef} style={{ position: 'relative', width: '100%' }}>
             <div style={{ position: 'relative' }}>
@@ -209,7 +228,8 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                 )}
             </div>
 
-            {showResults && (results.partners.length > 0 || results.google.length > 0) && (
+            {/* Dropdown: show when results are visible OR while loading (skeleton rows) */}
+            {showResults && (loading || results.partners.length > 0 || results.google.length > 0) && (
                 <div style={{
                     position: 'absolute',
                     top: '100%',
@@ -224,8 +244,37 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                     maxHeight: '400px',
                     overflowY: 'auto'
                 }}>
+                    {/* Skeleton rows while loading */}
+                    {loading && (
+                        <div style={{ padding: '12px' }}>
+                            {[1, 2, 3, 4].map((i) => (
+                                <div
+                                    key={`skeleton-${i}`}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        padding: '10px 0',
+                                        borderBottom: i < 4 ? '1px solid var(--border-color)' : 'none'
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '8px',
+                                        ...skeletonStyle
+                                    }} />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ width: '70%', height: '14px', marginBottom: '6px', ...skeletonStyle }} />
+                                        <div style={{ width: '50%', height: '12px', ...skeletonStyle }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Partners Section */}
-                    {results.partners.length > 0 && (
+                    {!loading && results.partners.length > 0 && (
                         <div style={{ padding: '8px 0' }}>
                             <div style={{
                                 padding: '4px 12px',
@@ -273,7 +322,7 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                     )}
 
                     {/* Google Section */}
-                    {results.google.length > 0 && (
+                    {!loading && results.google.length > 0 && (
                         <div style={{ padding: '8px 0', borderTop: results.partners.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
                             <div style={{
                                 padding: '4px 12px',

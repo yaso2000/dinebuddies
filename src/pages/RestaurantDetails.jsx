@@ -85,7 +85,7 @@ const RestaurantDetails = () => {
                     <div>
                         <h1 style={{ fontSize: '1.8rem', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {name}
-                            {restaurant.isVerified && <FaCheckCircle style={{ color: '#3b82f6', fontSize: '1.2rem' }} title="Verified Partner" />}
+                            {restaurant.isVerified && <FaCheckCircle style={{ color: '#3b82f6', fontSize: '1.2rem' }} title="Verified Business" />}
                         </h1>
                         <span style={{ color: 'var(--luxury-gold)', fontWeight: '800' }}>{type} • {restaurant.businessInfo?.priceLevel || '$$'}</span>
                     </div>

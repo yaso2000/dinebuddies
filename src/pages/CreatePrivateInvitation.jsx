@@ -7,6 +7,7 @@ import {
     FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import MediaSelector from '../components/Invitations/MediaSelector';
@@ -17,13 +18,15 @@ import { db } from '../firebase/config';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { fetchIpLocation } from '../utils/locationUtils';
+import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
 import './PrivateInvitation.css';
 
 const CreatePrivateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
-    const { addPrivateInvitation, currentUser, canCreatePrivateInvitation, deductPrivateInvitationCredit } = useInvitations();
+    const { addPrivateInvitation, currentUser, canCreatePrivateInvitation } = useInvitations();
+    const { showToast } = useToast();
     const { currentUser: authUser, userProfile } = useAuth();
 
     const quotaInfo = canCreatePrivateInvitation();
@@ -36,6 +39,7 @@ const CreatePrivateInvitation = () => {
     const [friendSearchQuery, setFriendSearchQuery] = useState('');
     const [friendsLoading, setFriendsLoading] = useState(false);
     const [suggestedImages, setSuggestedImages] = useState([]); // Venue images from Google
+    const [suggestedImagesLoading, setSuggestedImagesLoading] = useState(false);
     const [existingDraftId, setExistingDraftId] = useState(null);
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
@@ -253,12 +257,12 @@ const CreatePrivateInvitation = () => {
         e.preventDefault();
 
         if (!formData.title.trim() || !formData.date || !formData.time || !formData.location.trim()) {
-            alert(t('please_fill_required_fields') || 'Please fill in all required fields');
+            showToast(t('please_fill_required_fields') || 'Please fill in all required fields', 'error');
             return;
         }
 
         if (formData.invitedFriends.length === 0) {
-            alert(t('please_invite_at_least_one_guest') || 'Please invite at least one guest for a private invitation');
+            showToast(t('please_invite_at_least_one_guest') || 'Please invite at least one guest for a private invitation', 'error');
             return;
         }
 
@@ -266,8 +270,14 @@ const CreatePrivateInvitation = () => {
         try {
             let mediaFields = {};
             if (mediaData) {
-                const userId = currentUser?.id || authUser?.uid;
-                mediaFields = await processInvitationMedia(mediaData, userId);
+                try {
+                    const userId = currentUser?.id || authUser?.uid;
+                    mediaFields = await processInvitationMedia(mediaData, userId);
+                } catch (mediaError) {
+                    console.error('❌ Media processing failed:', mediaError);
+                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
+                    return;
+                }
             }
 
             // Initialize RSVPs as 'pending' for all invited friends
@@ -300,92 +310,86 @@ const CreatePrivateInvitation = () => {
                 console.log('📋 Draft result:', draftId);
                 if (draftId) {
                     navigate(`/invitation/private/preview/${draftId}`);
-                } else {
-                    alert(t('failed_create_invitation') || 'Failed to create invitation. Please check your connection and try again.');
                 }
             }
         } catch (error) {
             console.error('Error creating private draft:', error);
-            alert(t('failed_create_invitation'));
+            showToast(t('failed_create_invitation'), 'error');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // Restore Google Images when editing
+    // Restore Google Images when editing (wait for Maps script before using)
     useEffect(() => {
-        const restoreImages = () => {
-            // Only attempt restore if:
-            // 1. We have a location
-            // 2. We DON'T have suggested images already
-            // 3. We DON'T have a specific restaurant (which provides its own photos)
-            if (formData.location &&
-                (!suggestedImages || suggestedImages.length === 0) &&
-                !formData.restaurantId &&
-                window.google?.maps?.places) {
+        if (!formData.location || suggestedImages?.length > 0 || formData.restaurantId) return;
 
-                const searchQuery = formData.location + (formData.city ? ` ${formData.city}` : '');
-                console.log('🔄 Restoring Google Images for:', searchQuery);
+        let cancelled = false;
+        const searchQuery = formData.location + (formData.city ? ` ${formData.city}` : '');
+        setSuggestedImagesLoading(true);
+
+        loadGoogleMapsScript()
+            .then(() => {
+                if (cancelled || typeof window === 'undefined' || !window.google?.maps?.places) {
+                    if (!cancelled) setSuggestedImagesLoading(false);
+                    return;
+                }
 
                 try {
                     const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-                    service.findPlaceFromQuery({
-                        query: searchQuery,
-                        fields: ['place_id']
-                    }, (results, status) => {
+                    service.findPlaceFromQuery({ query: searchQuery, fields: ['place_id'] }, (results, status) => {
+                        if (cancelled) return;
                         if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.[0]) {
-                            service.getDetails({
-                                placeId: results[0].place_id,
-                                fields: ['photos']
-                            }, (details, dStatus) => {
-                                if (dStatus === window.google.maps.places.PlacesServiceStatus.OK && details.photos) {
+                            service.getDetails({ placeId: results[0].place_id, fields: ['photos'] }, (details, dStatus) => {
+                                if (cancelled) return;
+                                setSuggestedImagesLoading(false);
+                                if (dStatus === window.google.maps.places.PlacesServiceStatus.OK && details?.photos) {
                                     const urls = details.photos.slice(0, 5).map(p => p.getUrl({ maxWidth: 800 }));
                                     setSuggestedImages(urls);
                                 }
                             });
+                        } else {
+                            setSuggestedImagesLoading(false);
                         }
                     });
                 } catch (err) {
-                    console.error('❌ Photo restore error:', err);
+                    if (!cancelled) {
+                        console.error('❌ Photo restore error:', err);
+                        setSuggestedImagesLoading(false);
+                    }
                 }
-            }
-        };
+            })
+            .catch(() => setSuggestedImagesLoading(false));
 
-        const timer = setTimeout(restoreImages, 2000); // Slightly longer delay to allow autocomplete to finish
-        return () => clearTimeout(timer);
+        return () => {
+            cancelled = true;
+            setSuggestedImagesLoading(false);
+        };
     }, [formData.location]);
 
     if (!quotaInfo.canCreate && !editInvitation) {
         const isDesktop = window.innerWidth >= 1024;
         return (
             <div className="private-create-wrapper private-theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
-                <div style={{
-                    background: 'var(--bg-dark)',
-                    borderRadius: '24px',
-                    padding: '30px',
-                    textAlign: 'center',
-                    border: '1px solid var(--border-color)',
-                    maxWidth: '400px',
-                    width: '100%',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-                }}>
+                <div className="ui-card ui-card--lg" style={{ maxWidth: '400px', width: '100%', textAlign: 'center', padding: '30px' }}>
                     <div style={{ fontSize: '3.5rem', marginBottom: '20px' }}>🔐</div>
-                    <h2 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '12px', color: 'var(--luxury-gold)' }}>
+                    <h2 className="ui-prompt__title" style={{ fontSize: '1.6rem', color: 'var(--luxury-gold)', marginBottom: '12px' }}>
                         {t('insufficient_credits')}
                     </h2>
-                    <p style={{ color: 'var(--text-muted)', marginBottom: '25px', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                    <p className="ui-prompt__desc" style={{ marginBottom: '25px' }}>
                         {t('insufficient_credits_desc')}
                     </p>
                     <button
                         onClick={() => navigate(isDesktop ? '/pricing' : '/pricing')}
-                        className="btn-primary"
-                        style={{ width: '100%', padding: '16px', borderRadius: '14px', fontWeight: '800', marginBottom: '12px', background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', color: 'white', cursor: 'pointer' }}
+                        className="ui-btn ui-btn--primary"
+                        style={{ width: '100%', marginBottom: '12px' }}
                     >
                         {t('upgrade_now')}
                     </button>
                     <button
                         onClick={() => navigate(-1)}
-                        style={{ width: '100%', padding: '12px', borderRadius: '12px', color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border-color)', cursor: 'pointer', fontWeight: '600' }}
+                        className="ui-btn ui-btn--ghost"
+                        style={{ width: '100%' }}
                     >
                         {t('go_back')}
                     </button>
@@ -396,7 +400,7 @@ const CreatePrivateInvitation = () => {
 
     // Quota display helpers
     const quota = quotaInfo.quota;
-    const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1 || quotaInfo.isTester;
+    const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
     const usedThisWeek = userProfile?.usedPrivateCreditsThisWeek || 0;
     const weeklyLimit = userProfile?.weeklyPrivateQuota || 0;
 
@@ -559,6 +563,7 @@ const CreatePrivateInvitation = () => {
                                 name: formData.restaurantName
                             }}
                             suggestedImages={suggestedImages}
+                            suggestedImagesLoading={suggestedImagesLoading}
                             onMediaSelect={(data) => setMediaData(data)}
                             initialData={mediaData}
                         />
@@ -706,20 +711,8 @@ const CreatePrivateInvitation = () => {
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="btn-primary"
-                        style={{
-                            width: '100%',
-                            padding: '16px',
-                            borderRadius: '14px',
-                            fontSize: '1.1rem',
-                            fontWeight: '800',
-                            marginTop: '10px',
-                            background: 'var(--primary)',
-                            color: 'white',
-                            border: 'none',
-                            cursor: 'pointer',
-                            opacity: isSubmitting ? 0.7 : 1
-                        }}
+                        className="ui-btn ui-btn--primary"
+                        style={{ width: '100%', marginTop: '10px', fontSize: '1.1rem', opacity: isSubmitting ? 0.7 : 1 }}
                     >
                         {isSubmitting ? t('processing') : t('preview_invitation')}
                     </button>

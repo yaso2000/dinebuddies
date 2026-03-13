@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { getContrastText } from '../utils/colorUtils';
@@ -123,8 +124,8 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                     }}>
                                         <div style={{ position: 'relative' }}>
                                             <img
-                                                src={getSafeAvatar(member)}
-                                                alt={member.display_name}
+                                                src={getSafeAvatar({ photo_url: member.avatarUrl, avatar_url: member.avatar_url })}
+                                                alt={member.displayName || member.display_name || member.name}
                                                 style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
                                             />
                                             {isMe && <div style={{
@@ -137,10 +138,10 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
 
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.95rem' }}>
-                                                {member.display_name || member.name}
+                                                {member.displayName || member.display_name || member.name}
                                             </div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                {member.bio ? (member.bio.length > 30 ? member.bio.substring(0, 30) + '...' : member.bio) : 'Dining Enthusiast'}
+                                                {member.city || member.country || 'Dining Enthusiast'}
                                             </div>
                                         </div>
 
@@ -195,6 +196,7 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
 const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const navigate = useNavigate();
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const { userProfile, updateUserProfile } = useAuth();
     const context = useInvitations();
     const { isDark } = useTheme();
@@ -215,7 +217,10 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     // null when no Brand Kit → card uses default styling
     const tc = _p ? {
         accent: _p,
-        accentText: getContrastText(_p),  // WCAG auto: white on dark, dark on light
+        // Prefer explicit Brand Kit text color; remap pure white to var(--bg-main) to keep buttons readable
+        accentText: bk.btnTextColor
+            ? (bk.btnTextColor.toLowerCase() === '#ffffff' ? 'var(--bg-main)' : bk.btnTextColor)
+            : getContrastText(_p),
         border: `${_p}55`,
         badgeBg: `${_p}22`,
         badgeText: _p,
@@ -268,13 +273,8 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
     const [reviewCount, setReviewCount] = useState(0);
     const [averageRating, setAverageRating] = useState(0);
-    // Use global users to find community members (Real-time sync)
-    // This allows the current user to see themselves immediately after joining
-    const communityMembers = useMemo(() => {
-        const users = context?.allUsers || [];
-        // Filter users who have joined this community by checking both restaurant ID and owner ID
-        return users.filter(u => u.joinedCommunities && u.joinedCommunities.some(id => id === res.id || id === res.ownerId));
-    }, [context?.allUsers, res.id, res.ownerId]);
+    const [communityMembers, setCommunityMembers] = useState([]);
+    const [memberCount, setMemberCount] = useState(0);
 
     useEffect(() => {
         // Priority 1: Use direct props if available (from optimized context)
@@ -284,33 +284,50 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
             return;
         }
 
-        // Priority 2: Fetch from Firestore (Fallback for legacy/missing data)
+        // Priority 2: Fetch from Firestore (one-time read, no listener — reviews don't need real-time)
         if (!res?.id) return;
 
+        let cancelled = false;
         const reviewsRef = collection(db, 'reviews');
-        const q = query(reviewsRef, where('partnerId', '==', res.id));
+        const q = query(
+            reviewsRef,
+            where('partnerId', '==', res.id),
+            limit(50)
+        );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const reviews = snapshot.docs.map(doc => doc.data());
-            const count = reviews.length;
+        getDocs(q).then((snapshot) => {
+            if (cancelled) return;
+            const reviews = snapshot.docs.map(d => d.data());
+            const count = snapshot.size;
             const total = reviews.reduce((acc, curr) => acc + (curr.rating || 0), 0);
             const avg = count > 0 ? total / count : 0.0;
-
             setReviewCount(count);
             setAverageRating(avg);
-        });
+        }).catch(() => {});
 
-        return () => unsubscribe();
+        return () => { cancelled = true; };
     }, [res.id, res.averageRating, res.reviewCount]);
 
-    const memberCount = communityMembers.length;
+    useEffect(() => {
+        let cancelled = false;
+        const loadCommunityPreview = async () => {
+            if (!context?.getCommunityMembers || !currentUser?.uid) return;
+            const communityId = res.ownerId || res.id;
+            const result = await context.getCommunityMembers(communityId, { includeMembers: true, limit: 5 });
+            if (cancelled) return;
+            setCommunityMembers(result?.members || []);
+            setMemberCount(Number(result?.memberCount || 0));
+        };
+        loadCommunityPreview();
+        return () => { cancelled = true; };
+    }, [context, currentUser?.uid, res.id, res.ownerId]);
 
     const handleShare = async (e) => {
         e.stopPropagation();
         const shareData = {
             title: res.name,
             text: `Check out ${res.name} on DineBuddies!`,
-            url: `${window.location.origin}/partner/${res.id}`
+            url: `${window.location.origin}/business/${res.id}`
         };
 
         if (navigator.share) {
@@ -321,7 +338,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
             }
         } else {
             navigator.clipboard.writeText(shareData.url);
-            alert(t('link_copied_clipboard'));
+            showToast(t('link_copied_clipboard', 'Link copied!'), 'success');
         }
     };
 
@@ -334,7 +351,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     return (
         <div
             className="restaurant-card"
-            onClick={() => navigate(`/partner/${res.id}`)}
+            onClick={() => navigate(`/business/${res.id}`)}
             style={{
                 background: tc?.cardBg || '#0f172a',
                 borderRadius: '24px',
@@ -382,19 +399,44 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
                 {/* Top Badges (Absolute) */}
                 <div style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
-                    <span style={{
-                        background: 'rgba(55, 7, 74, 0.85)',
-                        backdropFilter: 'blur(8px)',
-                        padding: '6px 14px',
-                        borderRadius: '50px',
-                        color: '#e9d5ff',
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        border: '1px solid rgba(178, 148, 217, 0.2)',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                    }}>
-                        {res.type}
-                    </span>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/restaurants?category=${encodeURIComponent(res.type || 'Venue')}`);
+                        }}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: '26px',
+                            background: tc ? (tc.badgeBg || `${tc.accent}33`) : 'rgba(15, 23, 42, 0.85)',
+                            backdropFilter: 'blur(8px)',
+                            padding: '4px 12px',
+                            borderRadius: '50px',
+                            color: tc ? (tc.accentText || 'var(--text-main)') : '#e9d5ff',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.4)',
+                            boxShadow: tc?.btnShadow || '0 4px 12px rgba(0,0,0,0.2)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            if (tc) {
+                                e.currentTarget.style.background = tc.accent;
+                                e.currentTarget.style.color = tc.accentText || '#ffffff';
+                            }
+                            e.currentTarget.style.transform = 'scale(1.03)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = tc ? (tc.badgeBg || `${tc.accent}33`) : 'rgba(15, 23, 42, 0.85)';
+                            e.currentTarget.style.color = tc ? (tc.accentText || 'var(--text-main)') : '#e9d5ff';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                    >
+                        {res.type || 'Venue'}
+                    </button>
 
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button
@@ -403,9 +445,9 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                 width: '40px',
                                 height: '40px',
                                 borderRadius: '50%',
-                                background: 'rgba(55, 7, 74, 0.4)',
+                                background: tc ? `${tc.accent}33` : 'rgba(15, 23, 42, 0.6)',
                                 backdropFilter: 'blur(8px)',
-                                border: '1px solid rgba(55, 7, 74, 0.5)',
+                                border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.5)',
                                 color: isFavorite ? '#ef4444' : 'white',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -424,9 +466,9 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                 width: '40px',
                                 height: '40px',
                                 borderRadius: '50%',
-                                background: 'rgba(55, 7, 74, 0.4)',
+                                background: tc ? `${tc.accent}33` : 'rgba(15, 23, 42, 0.6)',
                                 backdropFilter: 'blur(8px)',
-                                border: '1px solid rgba(55, 7, 74, 0.5)',
+                                border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.5)',
                                 color: 'white',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -474,7 +516,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                         <div
                             onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/partner/${res.id}`);
+                                navigate(`/business/${res.id}`);
                             }}
                             style={{
                                 background: 'rgba(255, 255, 255, 0.1)',
@@ -559,7 +601,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                         {/* Avatars */}
-                        {communityMembers && communityMembers.length > 0 ? (
+                        {memberCount > 0 ? (
                             <div
                                 onClick={(e) => { e.stopPropagation(); onViewMembers && onViewMembers(res.id); }}
                                 style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', minWidth: 0, flex: 1 }}
@@ -582,7 +624,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                     />
                                 ))}
                                 <span style={{ marginLeft: '8px', fontSize: '0.82rem', color: 'white', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                                    {communityMembers.length} {t('members')}
+                                    {memberCount} {t('members')}
                                 </span>
                             </div>
                         ) : (
@@ -594,13 +636,13 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
                     {isOwner ? (
                         <span style={{
-                            background: 'var(--bg-input)',
-                            color: 'var(--luxury-gold)',
+                            background: tc ? 'rgba(255,255,255,0.92)' : 'var(--bg-input)',
+                            color: tc ? tc.accent : 'var(--luxury-gold)',
                             padding: '4px 12px',
                             borderRadius: '8px',
                             fontSize: '0.75rem',
                             fontWeight: 'bold',
-                            border: '1px solid var(--border-color)'
+                            border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid var(--border-color)'
                         }}>
                             {t('owner')}
                         </span>
@@ -653,9 +695,10 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     return R * c; // Distance in km
 };
 
-const RestaurantDirectory = () => {
+const BusinessesDirectory = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { currentUser, userProfile, isGuest } = useAuth();
     const context = useInvitations();
     const { isDark } = useTheme();
@@ -665,30 +708,46 @@ const RestaurantDirectory = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [locationFilter, setLocationFilter] = useState('All');
-    const [activeFilter, setActiveFilter] = useState('All'); // Category filter
+    const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
     const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
     const [viewMode, setViewMode] = useState('list');
     const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
     const [userLocation, setUserLocation] = useState(null);
     const [selectedCommunityId, setSelectedCommunityId] = useState(null);
+    const [selectedCommunityMembers, setSelectedCommunityMembers] = useState([]);
+    const [membersLoading, setMembersLoading] = useState(false);
 
-    // Derived members list for the modal
-    const selectedCommunityMembers = useMemo(() => {
-        if (!selectedCommunityId) return [];
-        const users = context?.allUsers || [];
-        return users.filter(u => u.joinedCommunities && u.joinedCommunities.includes(selectedCommunityId));
-    }, [selectedCommunityId, context?.allUsers]);
-
-    const handleViewMembers = (id) => {
+    const handleViewMembers = async (id) => {
+        setMembersLoading(true);
+        setSelectedCommunityMembers([]);
         setSelectedCommunityId(id);
+        try {
+            const result = await context.getCommunityMembers(id, { includeMembers: true, limit: 200 });
+            setSelectedCommunityMembers(result?.members || []);
+        } catch (error) {
+            console.error('Error loading community members modal:', error);
+        } finally {
+            setMembersLoading(false);
+        }
     };
 
     const handleCloseMembers = () => {
         setSelectedCommunityId(null);
+        setSelectedCommunityMembers([]);
+        setMembersLoading(false);
     };
 
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
+
+    // Sync category filter from URL (e.g. when navigating from BusinessCard category click)
+    useEffect(() => {
+        const category = searchParams.get('category');
+        if (category) {
+            setActiveFilter(category);
+            setShowFilters(true); // Show filter bar when landing with category
+        }
+    }, [searchParams]);
 
     // Get user's location
     useEffect(() => {
@@ -723,7 +782,8 @@ const RestaurantDirectory = () => {
         { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
         { id: 'Bar', label: 'Bar', icon: '🍺' },
         { id: 'Night Club', label: 'Night Club', icon: '🎵' },
-        { id: 'BBQ', label: 'BBQ', icon: '🔥' }
+        { id: 'Food Truck', label: 'Food Truck', icon: '🚚' },
+        { id: 'Fast Food', label: 'Fast Food', icon: '🍟' }
     ];
 
     const filteredRestaurants = useMemo(() => {
@@ -878,7 +938,7 @@ const RestaurantDirectory = () => {
                     .bindPopup(`<strong style="color: #8b5cf6;">📍 ${t('your_location')}</strong>`);
             }
 
-            // Add restaurant markers
+            // Add restaurant / partner markers
             restaurantsWithCoords.forEach(res => {
                 if (!res.lat || !res.lng) return;
 
@@ -890,10 +950,14 @@ const RestaurantDirectory = () => {
                     travelTime = Math.round((distance / 40) * 60);
                 }
 
-                // Get restaurant logo
-                const logo = res.logoImage ||
-                    res.image ||
+                // Get profile logo/avatar for marker (prefer real profile over header image)
+                const logo = res.photo_url ||
+                    res.avatar ||
+                    res.logoImage ||
+                    res.businessInfo?.logo ||
                     res.businessInfo?.logoImage ||
+                    res.businessInfo?.photo_url ||
+                    res.image ||
                     res.businessInfo?.image ||
                     `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name || 'Restaurant')}&background=fbbf24&color=fff&size=200&bold=true&rounded=true&font-size=0.4`;
 
@@ -941,7 +1005,7 @@ const RestaurantDirectory = () => {
                                 </div>
                             ` : ''}
                             <div>
-                                <button onclick="window.location.href='/partner/${res.id}'" class="compact-popup-btn" style="background: ${markerColor}; color: black;">
+                                <button onclick="window.location.href='/business/${res.id}'" class="compact-popup-btn" style="background: ${markerColor}; color: black;">
                                     ${t('view_details')}
                                 </button>
                             </div>
@@ -1051,10 +1115,32 @@ const RestaurantDirectory = () => {
 
             <div style={{ padding: '1rem 1.5rem 0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <h1 style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('partner_directory')}</h1>
+                    <h1 style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business directory')}</h1>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
-                        <button onClick={() => setViewMode('list')} style={{ padding: '6px 16px', borderRadius: '50px', background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent', color: viewMode === 'list' ? 'black' : 'var(--text-main)', border: 'none' }}>{t('list')}</button>
-                        <button onClick={() => setViewMode('map')} style={{ padding: '6px 16px', borderRadius: '50px', background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent', color: viewMode === 'map' ? 'black' : 'var(--text-main)', border: 'none' }}>{t('map')}</button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            style={{
+                                padding: '6px 16px',
+                                borderRadius: '50px',
+                                background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent',
+                                color: viewMode === 'list' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
+                                border: 'none'
+                            }}
+                        >
+                            {t('list')}
+                        </button>
+                        <button
+                            onClick={() => setViewMode('map')}
+                            style={{
+                                padding: '6px 16px',
+                                borderRadius: '50px',
+                                background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent',
+                                color: viewMode === 'map' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
+                                border: 'none'
+                            }}
+                        >
+                            {t('map')}
+                        </button>
                     </div>
                 </div>
 
@@ -1167,7 +1253,13 @@ const RestaurantDirectory = () => {
                             {categories.map(cat => (
                                 <button
                                     key={cat.id}
-                                    onClick={() => setActiveFilter(cat.id)}
+                                    onClick={() => {
+                                        setActiveFilter(cat.id);
+                                        const next = new URLSearchParams(searchParams);
+                                        if (cat.id === 'All') next.delete('category');
+                                        else next.set('category', cat.id);
+                                        setSearchParams(next);
+                                    }}
                                     style={{
                                         flex: '0 0 auto',
                                         padding: '8px 12px',
@@ -1265,7 +1357,7 @@ const RestaurantDirectory = () => {
 
                         <div className="map-discovery-badge" style={{ top: 'auto', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
                             <div className="pulse-dot"></div>
-                            <span>{restaurantsWithCoords.length} {t('active_partners', { defaultValue: 'Active Partners' })}</span>
+                            <span>{restaurantsWithCoords.length} {t('active_businesses', { defaultValue: 'Active Businesses' })}</span>
                         </div>
                     </div>
                 </div>
@@ -1292,7 +1384,7 @@ const RestaurantDirectory = () => {
             {/* Members Modal */}
             {selectedCommunityId && (
                 <MembersModal
-                    members={selectedCommunityMembers}
+                    members={membersLoading ? [] : selectedCommunityMembers}
                     onClose={handleCloseMembers}
                     currentUser={context.currentUser}
                     onToggleFollow={context.toggleFollow}
@@ -1304,4 +1396,4 @@ const RestaurantDirectory = () => {
     );
 };
 
-export default RestaurantDirectory;
+export default BusinessesDirectory;

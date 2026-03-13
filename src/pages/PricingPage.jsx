@@ -7,16 +7,18 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCheck, FaStar, FaCrown, FaFire } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
 
 const PricingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { currentUser, userProfile } = useAuth();
     const { creditPacks, subscriptionPlans: contextPlans } = useInvitations();
+    const { showToast } = useToast();
 
     // Determine page type from URL
     const isBusinessPage = location.pathname.includes('/business/pricing');
-    const [selectedPlanType, setSelectedPlanType] = useState(isBusinessPage ? 'partner' : 'user');
+    const [selectedPlanType, setSelectedPlanType] = useState(isBusinessPage ? 'business' : 'user');
     const [loading, setLoading] = useState(null);
     const [selectedCreditPack, setSelectedCreditPack] = useState(null);
     const { t, i18n } = useTranslation();
@@ -30,12 +32,12 @@ const PricingPage = () => {
 
     // Auto-detect and sync
     useEffect(() => {
-        const pageType = isBusinessPage ? 'partner' : 'user';
+        const pageType = isBusinessPage ? 'business' : 'user';
         setSelectedPlanType(pageType);
 
         // Auto-redirect logged in users to their correct pricing page if they land on wrong one
         if (userProfile) {
-            const userType = userProfile.role === 'business' ? 'partner' : 'user';
+            const userType = userProfile.role === 'business' ? 'business' : 'user';
 
             if (userType === 'business' && !isBusinessPage) {
                 console.log('🔄 Redirecting partner to business pricing');
@@ -64,20 +66,20 @@ const PricingPage = () => {
 
     const handleSubscribe = async (plan) => {
         if (!currentUser) {
-            alert('Please login first to subscribe.');
+            showToast('Please login first to subscribe.', 'error');
             navigate('/login');
             return;
         }
 
         // Free plan
         if (plan.price === 0) {
-            alert('You are already on a free plan or this plan is free.');
+            showToast('You are already on a free plan or this plan is free.', 'info');
             return;
         }
 
         // Check for stripePriceId
         if (!plan.stripePriceId || plan.stripePriceId.includes('REPLACE')) {
-            alert('⚠️ Please add Stripe Price ID in the code first.\n\nTo get Price ID:\n1. Go to Stripe Dashboard → Products\n2. Create a new product or choose existing\n3. Copy Price ID\n4. Add it in InvitationContext.jsx');
+            showToast('⚠️ Please add Stripe Price ID in the code first.\n\nTo get Price ID:\n1. Go to Stripe Dashboard → Products\n2. Create a new product or choose existing\n3. Copy Price ID\n4. Add it in InvitationContext.jsx', 'warning');
             return;
         }
 
@@ -99,7 +101,7 @@ const PricingPage = () => {
             window.location.href = result.data.url;
         } catch (error) {
             console.error('Payment Error:', error);
-            alert('Payment Error: ' + error.message + '\n\nMake sure:\n1. Cloud Functions are deployed\n2. Stripe Keys are correct in .env');
+            showToast('Payment Error: ' + error.message + '\n\nMake sure:\n1. Cloud Functions are deployed\n2. Stripe Keys are correct in .env', 'error');
         } finally {
             setLoading(null);
         }
@@ -141,7 +143,7 @@ const PricingPage = () => {
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text-main)' }}>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '0.5rem', textShadow: 'var(--shadow-premium)' }}>
-                        {isBusinessPage ? 'Partner Plans' : 'Choose Your Plan'}
+                        {isBusinessPage ? 'Business Plans' : 'Choose Your Plan'}
                     </h1>
                     <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>
                         {isBusinessPage ? 'Professional solutions to grow your business' : 'Flexible plans to suit your needs'}
@@ -490,7 +492,7 @@ const PricingPage = () => {
                     </div>
                 )}
 
-                {/* Offer Slot Packs - ONLY for Business/Partner pricing */}
+                {/* Offer Slot Packs - ONLY for Business pricing */}
                 {isBusinessPage && offerSlotPacks.length > 0 && (
                     <div style={{ marginTop: '4rem', textAlign: 'center' }}>
                         <h2 style={{ color: 'var(--text-main)', fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem' }}>

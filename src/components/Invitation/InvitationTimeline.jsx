@@ -110,9 +110,10 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
                 <div className="timeline-actions" style={{ marginTop: '2rem', display: 'flex', gap: '10px' }}>
                     {myStatus === 'planning' && (
                         <button
+                            type="button"
                             onClick={() => onUpdateStatus('on_way')}
                             disabled={isUpdatingStatus}
-                            className="btn btn-primary"
+                            className="ui-btn ui-btn--primary"
                             style={{
                                 ...(templateStyles?.button || {}),
                                 flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', opacity: isUpdatingStatus ? 0.7 : 1,
@@ -125,12 +126,13 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
 
                     {myStatus === 'on_way' && (
                         <button
+                            type="button"
                             onClick={() => onUpdateStatus('arrived')}
                             disabled={isUpdatingStatus}
-                            className="btn btn-secondary"
+                            className="ui-btn ui-btn--secondary"
                             style={{
                                 flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
-                                background: 'var(--success)', border: 'none', color: 'white',
+                                background: 'var(--color-success)', border: 'none', color: 'white',
                                 opacity: isUpdatingStatus ? 0.7 : 1, height: 'auto'
                             }}
                         >
@@ -140,8 +142,10 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
 
                     {myStatus === 'arrived' && isHost && (
                         <button
+                            type="button"
                             onClick={onComplete}
                             disabled={isUpdatingStatus}
+                            className="ui-btn ui-btn--primary"
                             style={{
                                 ...(templateStyles?.button || {}),
                                 flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',

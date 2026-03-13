@@ -235,6 +235,11 @@
     animation: pulse 1.5s ease-in-out infinite;
 }
 
+.plan-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
 /* Loading & No Results */
 .loading-container,
 .no-results {

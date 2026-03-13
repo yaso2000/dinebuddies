@@ -194,7 +194,10 @@ const BrandKit = ({ onBack }) => {
     const defaultPrimary = currentTheme?.colors?.accent || '#a78bfa';
     const brandKit = userProfile?.businessInfo?.brandKit || {};
 
-    const isPaid = userProfile?.businessInfo?.subscription?.status === 'active' || userProfile?.businessInfo?.subscription?.tier === 'elite' || userProfile?.businessInfo?.tier === 'premium' || userProfile?.businessInfo?.tier === 'elite';
+    const isPaid = (() => {
+        const t = (userProfile?.subscriptionTier || 'free').toLowerCase();
+        return t === 'professional' || t === 'elite';
+    })();
     const [primaryColor, setPrimaryColor] = useState(brandKit.primaryColor || defaultPrimary);
     const [secondaryColor, setSecondaryColor] = useState(brandKit.secondaryColor || '#f97316');
     const [textColor, setTextColor] = useState(brandKit.textColor || '#e2e8f0');
@@ -241,7 +244,7 @@ const BrandKit = ({ onBack }) => {
         setSaving(true);
         try {
             const userRef = doc(db, 'users', currentUser.uid);
-            // Always save directly — brand kit is free for all partners
+            // Always save directly — brand kit is free for all businesses
             // Force sans-serif font regardless of template selection
             await updateDoc(userRef, {
                 'businessInfo.brandKit': { ...allProps, fontFamily: 'system-ui, sans-serif' }
@@ -272,7 +275,7 @@ const BrandKit = ({ onBack }) => {
                 <input type="color" value={value} onChange={e => onChange(e.target.value)}
                     style={{ width: 36, height: 28, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'transparent' }} />
                 <div style={{ width: 20, height: 20, borderRadius: '50%', background: value, border: '2px solid rgba(255,255,255,0.2)' }} />
-                <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>{value}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{value}</span>
             </div>
         </div>
     );
@@ -282,11 +285,11 @@ const BrandKit = ({ onBack }) => {
             {/* Breadcrumb */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
                 <button onClick={onBack}
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.85rem', fontWeight: 600 }}>
+                    style={{ background: 'var(--hover-overlay)', border: '1px solid var(--border-color)', borderRadius: 10, color: 'var(--text-main)', padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.85rem', fontWeight: 600 }}>
                     <FaArrowLeft /> Design Studio
                 </button>
-                <span style={{ color: 'rgba(255,255,255,0.3)' }}>/</span>
-                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f1f5f9' }}>Brand Kit</span>
+                <span style={{ color: 'var(--text-muted)' }}>/</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>Brand Kit</span>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                     <button onClick={handleReset} title="Reset to defaults"
                         style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, color: '#f87171', padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', fontWeight: 700 }}>
@@ -294,8 +297,8 @@ const BrandKit = ({ onBack }) => {
                     </button>
                     <button onClick={() => {
                         onBack();
-                        if (currentUser?.uid && window.location.pathname !== `/partner/${currentUser.uid}`) {
-                            navigate(`/partner/${currentUser.uid}`);
+                        if (currentUser?.uid && window.location.pathname !== `/business/${currentUser.uid}`) {
+                            navigate(`/business/${currentUser.uid}`);
                         }
                         window.scrollTo(0, 0);
                     }}
@@ -313,8 +316,8 @@ const BrandKit = ({ onBack }) => {
                     {/* ── 12 Templates ── */}
                     <div className="bpro-stat-card" style={{ padding: 20 }}>
                         <div style={{ marginBottom: 18 }}>
-                            <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.95rem', marginBottom: 4 }}>🎨 Design Templates</div>
-                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>Applies a complete style — colors, fonts, buttons, text & more</div>
+                            <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: 4 }}>🎨 Design Templates</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Applies a complete style — colors, fonts, buttons, text & more</div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 10 }}>
                             {BRAND_TEMPLATES.map(tpl => {
@@ -325,10 +328,10 @@ const BrandKit = ({ onBack }) => {
                                         onClick={() => applyTemplate(tpl)}
                                         style={{
                                             padding: '12px 10px', borderRadius: 14,
-                                            border: isActive ? `2px solid ${tpl.kit.primaryColor}` : '2px solid rgba(255,255,255,0.07)',
+                                            border: isActive ? `2px solid ${tpl.kit.primaryColor}` : '1px solid var(--border-color)',
                                             background: isActive
                                                 ? `linear-gradient(135deg, ${tpl.kit.primaryColor}22, ${tpl.kit.secondaryColor}18)`
-                                                : 'rgba(255,255,255,0.03)',
+                                                : 'var(--hover-overlay)',
                                             cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 7,
                                             textAlign: 'left', transition: 'all 0.18s',
                                             boxShadow: isActive ? `0 0 18px ${tpl.kit.primaryColor}55` : 'none',
@@ -341,14 +344,14 @@ const BrandKit = ({ onBack }) => {
                                             <div style={{ flex: 1, background: tpl.kit.textColor }} />
                                         </div>
                                         {/* Mini button */}
-                                        <div style={{ height: 18, borderRadius: tpl.kit.buttonStyle, background: `linear - gradient(135deg, ${tpl.kit.primaryColor}, ${tpl.kit.secondaryColor})` }} />
+                                        <div style={{ height: 18, borderRadius: tpl.kit.buttonStyle, background: `linear-gradient(135deg, ${tpl.kit.primaryColor}, ${tpl.kit.secondaryColor})` }} />
                                         {/* Name + check */}
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div>
-                                                <div style={{ fontWeight: 800, fontSize: '0.8rem', color: isActive ? tpl.kit.textColor : '#f1f5f9' }}>
+                                                <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--text-main)' }}>
                                                     {tpl.emoji} {tpl.name}
                                                 </div>
-                                                <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{tpl.desc}</div>
+                                                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: 2 }}>{tpl.desc}</div>
                                             </div>
                                             {isActive && (
                                                 <div style={{ width: 18, height: 18, borderRadius: '50%', background: tpl.kit.primaryColor, border: '2px solid rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.65rem', flexShrink: 0 }}>✓</div>
@@ -384,9 +387,9 @@ const BrandKit = ({ onBack }) => {
                 {!isMobile && (
                     <div style={{ position: 'sticky', top: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Preview</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Preview</div>
                             <button onClick={() => iframeRef.current?.contentWindow.location.reload()} title="Reload preview"
-                                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: 'rgba(255,255,255,0.5)', padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem' }}>
+                                style={{ background: 'var(--hover-overlay)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-main)', padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem' }}>
                                 ↺ Reload
                             </button>
                         </div>
@@ -395,7 +398,7 @@ const BrandKit = ({ onBack }) => {
                                 <div style={{ width: 80, height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.15)' }} />
                             </div>
                             {currentUser?.uid ? (
-                                <iframe ref={iframeRef} src={`/partner/${currentUser.uid}?preview=1`}
+                                <iframe ref={iframeRef} src={`/business/${currentUser.uid}?preview=1`}
                                     style={{ width: '100%', height: 620, border: 'none', display: 'block' }} title="Profile Preview" />
                             ) : (
                                 <div style={{ height: 620, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }}>
@@ -406,7 +409,7 @@ const BrandKit = ({ onBack }) => {
                                 <div style={{ width: 100, height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.2)' }} />
                             </div>
                         </div>
-                        <div style={{ textAlign: 'center', marginTop: 10, fontSize: '0.72rem', color: 'rgba(255,255,255,0.25)' }}>Changes reflect without saving</div>
+                        <div style={{ textAlign: 'center', marginTop: 10, fontSize: '0.72rem', color: 'var(--text-muted)' }}>Changes reflect without saving</div>
                     </div>
                 )}
             </div>

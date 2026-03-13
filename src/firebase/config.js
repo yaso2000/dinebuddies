@@ -3,19 +3,31 @@ import { getAuth, RecaptchaVerifier } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Firebase configuration
-// IMPORTANT: Replace these with your actual Firebase project credentials
-// Get these from: Firebase Console > Project Settings > General > Your apps
+// Firebase configuration from environment variables
+// Create .env from .env.example and add your Firebase credentials
+// NEVER commit .env or hardcode credentials
 const firebaseConfig = {
-    apiKey: "AIzaSyAK3IC3LrrbBBcDahT3hGlhVQ6oHhf289g",
-    authDomain: "dinebuddies.firebaseapp.com",
-    projectId: "dinebuddies",
-    storageBucket: "dinebuddies.firebasestorage.app",
-    messagingSenderId: "686703042572",
-    appId: "1:686703042572:web:065789445262a44642ce29"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
+// Validate required config in development to catch missing .env early
+if (import.meta.env.DEV) {
+    const missing = Object.entries(firebaseConfig)
+        .filter(([, v]) => !v || v === 'your-api-key-here' || v === 'your-project-id.firebaseapp.com')
+        .map(([k]) => k);
+    if (missing.length > 0) {
+        console.error(
+            'Firebase config missing. Copy .env.example to .env and add your credentials.\n' +
+            'Missing or placeholder: ' + missing.join(', ')
+        );
+    }
+}
+
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services

@@ -20,10 +20,49 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
     
+    // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
     function isPartner() {
       return isSignedIn() && 
              (request.auth.token.partner == true || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
+    }
+
+    function isCommunityMember(partnerId) {
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
+      let joined = me.get('joinedCommunities', []);
+      let members = partner.get('communityMembers', []);
+      return request.auth.uid == partnerId ||
+             request.auth.uid in members ||
+             partnerId in joined;
+    }
+
+    function isChatParticipant(chatId) {
+      let chat = get(/databases/$(database)/documents/chats/$(chatId)).data;
+      return request.auth.uid in chat.participants;
+    }
+    
+    // Invitation chat: only host or joined participants (public invitations)
+    function isPublicInvitationChatParticipant(invitationId) {
+      let inv = get(/databases/$(database)/documents/invitations/$(invitationId)).data;
+      let isHost = inv.get(['author', 'id'], '') == request.auth.uid || inv.get('authorId', '') == request.auth.uid;
+      let joined = inv.get('joined', []);
+      let isJoined = request.auth.uid in joined;
+      return isHost || isJoined;
+    }
+    
+    // Invitation chat: only host or accepted invitees (private invitations).
+    // LEGACY-DATA RISK: If rsvps is missing or a user has no rsvps entry, they will be denied;
+    // ensure the app sets rsvps when users accept, and consider migrating old docs if needed.
+    function isPrivateInvitationChatParticipant(invitationId) {
+      let inv = get(/databases/$(database)/documents/private_invitations/$(invitationId)).data;
+      let isHost = inv.get(['author', 'id'], '') == request.auth.uid || inv.get('authorId', '') == request.auth.uid;
+      let invitedFriends = inv.get('invitedFriends', []);
+      let rsvps = inv.get('rsvps', {});
+      let invited = request.auth.uid in invitedFriends;
+      let accepted = rsvps[request.auth.uid] == 'accepted';
+      return isHost || (invited && accepted);
     }
     
     // ============================================
@@ -31,8 +70,10 @@ service cloud.firestore {
     // ============================================
     
     match /users/{userId} {
-      allow get: if true; // Allow reading individual user documents (public profiles)
-      allow list: if true; // Allow querying/listing users collection (for partner directory)
+      allow get: if true; // Keep temporarily until remaining cross-user reads are migrated
+      allow list: if isAdmin() &&
+                   request.query.limit != null &&
+                   request.query.limit <= 200;
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
@@ -58,10 +99,10 @@ service cloud.firestore {
          request.auth.uid == 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') ||
          
         // Case 2: Admin deleting a non-admin user
-        (isAdmin() && resource.data.role != 'admin' && resource.data.accountType != 'admin') ||
+        (isAdmin() && resource.data.role != 'admin') ||
         
         // Case 3: Regular user deleting themselves (if not admin)
-        (isOwner(userId) && resource.data.role != 'admin' && resource.data.accountType != 'admin');
+        (isOwner(userId) && resource.data.role != 'admin');
       
       // USER REVIEWS SUBCOLLECTION
       match /reviews/{reviewId} {
@@ -91,24 +132,18 @@ service cloud.firestore {
     }
     
     // ============================================
-    // COMMUNITY POSTS COLLECTION
+    // PUBLIC PROFILES (READ-ONLY PROJECTION)
     // ============================================
-    
-    match /communityPosts/{postId} {
-      // Anyone can read posts (public feed)
-      allow read: if true;
-      
-      // Signed-in users can create posts (includes reposts)
-      allow create: if isSignedIn();
-      
-      // Signed-in users can update any post (likes, comments, reposts arrays)
-      allow update: if isSignedIn();
-      
-      // Only the post author can delete their post (admins override)
-      allow delete: if isSignedIn() && 
-                       (resource.data.author.id == request.auth.uid || isAdmin());
+
+    match /public_profiles/{uid} {
+      // Public-facing display/search projection
+      allow get: if true;
+      allow list: if request.query.limit != null && request.query.limit <= 20;
+
+      // Backend-synced only (Cloud Functions trigger/callables)
+      allow create, update, delete: if false;
     }
-    
+
     // ============================================
     // INVITATIONS COLLECTION
     // ============================================
@@ -139,21 +174,15 @@ service cloud.firestore {
       allow delete: if isSignedIn() && 
                        (resource.data.author.id == request.auth.uid || isAdmin());
       
-      // MESSAGES SUBCOLLECTION (Community Chat)
+      // MESSAGES SUBCOLLECTION (Community Chat) — only host or joined participants
       match /messages/{messageId} {
-        // Anyone signed in can read messages
-        allow read: if isSignedIn();
-        
-        // Anyone signed in can create messages
-        allow create: if isSignedIn() && 
-                         request.resource.data.senderId == request.auth.uid;
-        
-        // Sender can update their own message
-        allow update: if isSignedIn() && 
+        allow read: if isSignedIn() && isPublicInvitationChatParticipant(invitationId);
+        allow create: if isSignedIn() &&
+                         request.resource.data.senderId == request.auth.uid &&
+                         isPublicInvitationChatParticipant(invitationId);
+        allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
-        
-        // Sender or admin can delete message
-        allow delete: if isSignedIn() && 
+        allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
@@ -163,13 +192,14 @@ service cloud.firestore {
     // ============================================
 
     match /private_invitations/{invitationId} {
-      // Allow list (queries) for any signed-in user — app always filters by authorId or invitedFriends
-      allow list: if isSignedIn();
-
-      // Single document read: only host or invited friends
-      allow get: if isSignedIn() &&
-                    (resource.data.authorId == request.auth.uid ||
-                     request.auth.uid in resource.data.invitedFriends);
+      // Read/list only for host or invited users (server-enforced)
+      allow get, list: if isSignedIn() &&
+                         (
+                           resource.data.authorId == request.auth.uid ||
+                           (resource.data.author != null &&
+                            resource.data.author.id == request.auth.uid) ||
+                           request.auth.uid in resource.data.invitedFriends
+                         );
 
       // Any signed-in user can create (author must be self)
       allow create: if isSignedIn() &&
@@ -179,31 +209,27 @@ service cloud.firestore {
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
                        (resource.data.authorId == request.auth.uid ||
-                        resource.data.author.id == request.auth.uid ||
+                        (resource.data.author != null &&
+                         resource.data.author.id == request.auth.uid) ||
                         (request.auth.uid in resource.data.invitedFriends &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps'])));
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
+                         request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
 
       // Only host or admin can delete
       allow delete: if isSignedIn() &&
                        (resource.data.authorId == request.auth.uid ||
-                        resource.data.author.id == request.auth.uid ||
+                        (resource.data.author != null &&
+                         resource.data.author.id == request.auth.uid) ||
                         isAdmin());
 
-      // MESSAGES SUBCOLLECTION (Private Group Chat)
+      // MESSAGES SUBCOLLECTION (Private Group Chat) — only host or accepted invitees
       match /messages/{messageId} {
-        // Only host or RSVP-accepted invitees can read/write messages
-        allow read: if isSignedIn() &&
-                       (get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.authorId == request.auth.uid ||
-                        request.auth.uid in get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.invitedFriends);
-
+        allow read: if isSignedIn() && isPrivateInvitationChatParticipant(invitationId);
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
-                         (get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.authorId == request.auth.uid ||
-                          request.auth.uid in get(/databases/$(database)/documents/private_invitations/$(invitationId)).data.invitedFriends);
-
+                         isPrivateInvitationChatParticipant(invitationId);
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
-
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
@@ -215,26 +241,30 @@ service cloud.firestore {
 
     
     match /chats/{chatId} {
-      // Anyone signed in can read (we'll filter in app)
-      allow read: if isSignedIn();
+      // Only chat participants or admins
+      allow read: if isSignedIn() &&
+                    (request.auth.uid in resource.data.participants || isAdmin());
       
-      // Anyone can create chat
-      allow create: if isSignedIn();
+      // Creator must be a participant
+      allow create: if isSignedIn() &&
+                      request.auth.uid in request.resource.data.participants;
       
-      // Anyone can update chat
-      allow update: if isSignedIn();
+      // Only participants/admin can update
+      allow update: if isSignedIn() &&
+                      (request.auth.uid in resource.data.participants || isAdmin());
       
       // Only admin can delete
       allow delete: if isAdmin();
       
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {
-        // Anyone signed in can read messages
-        allow read: if isSignedIn();
+        // Only chat participants/admin can read messages
+        allow read: if isSignedIn() && (isChatParticipant(chatId) || isAdmin());
         
-        // Anyone can create messages
+        // Sender must be a participant/admin
         allow create: if isSignedIn() && 
-                         request.resource.data.senderId == request.auth.uid;
+                         request.resource.data.senderId == request.auth.uid &&
+                         (isChatParticipant(chatId) || isAdmin());
         
         // Sender can update their own message
         allow update: if isSignedIn() && 
@@ -254,8 +284,11 @@ service cloud.firestore {
       // Only participants can read the conversation document
       allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
       
-      // Anyone signed in can create a conversation (initial creation)
-      allow create: if isSignedIn();
+      // Security: enforce strict 1:1 participant shape to prevent forged conversation graphs
+      allow create: if isSignedIn() &&
+                      request.resource.data.participants is list &&
+                      request.resource.data.participants.size() == 2 &&
+                      request.auth.uid in request.resource.data.participants;
       
       // Only participants can update (lastMessage, unreadBy, typing)
       allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
@@ -266,8 +299,10 @@ service cloud.firestore {
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        // Security: constrain message create schema and sender ownership
         allow create: if isSignedIn() && 
                          request.resource.data.senderId == request.auth.uid &&
+                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration']) &&
                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow update: if isSignedIn() && 
                          resource.data.senderId == request.auth.uid;
@@ -292,7 +327,10 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      // Security: bind report ownership/status to authenticated reporter
+      allow create: if isSignedIn() &&
+                      request.resource.data.reporterId == request.auth.uid &&
+                      request.resource.data.status == 'pending';
       allow update, delete: if isAdmin();
     }
 
@@ -304,7 +342,10 @@ service cloud.firestore {
 
     match /partner_notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
+      // Client-side create is self-only; cross-user partner notifications must use trusted backend callable.
+      allow create: if isSignedIn() &&
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.restaurantId == request.auth.uid;
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
@@ -316,7 +357,14 @@ service cloud.firestore {
       // Anyone can read posts
       allow read: if true;
       // Any signed in user can create a post
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() &&
+        (
+          request.resource.data.userId == request.auth.uid ||
+          request.resource.data.authorId == request.auth.uid ||
+          request.resource.data.partnerId == request.auth.uid ||
+          (request.resource.data.author != null &&
+           request.resource.data.author.id == request.auth.uid)
+        );
       // Only the author or an admin can update/delete their post
       allow update, delete: if isSignedIn() && (
         resource.data.authorId == request.auth.uid || 
@@ -330,8 +378,13 @@ service cloud.firestore {
     match /stories/{storyId} {
       // Anyone can read stories
       allow read: if true;
-      // Any signed in user can create a story
-      allow create: if isSignedIn();
+      // Security: enforce ownership on story creation (prevent impersonation)
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.authorId == request.auth.uid ||
+        request.resource.data.partnerId == request.auth.uid ||
+        (request.resource.data.author != null && request.resource.data.author.id == request.auth.uid)
+      );
       // Only the author or an admin can fully update/delete their story
       allow update, delete: if isSignedIn() && (
         resource.data.userId == request.auth.uid || 
@@ -360,7 +413,11 @@ service cloud.firestore {
 
     match /notifications/{notifId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn();
+      // Client-side create is limited to self-only notifications to block cross-user spoofing.
+      // Cross-user/system notifications must be created via trusted backend callables.
+      allow create: if isSignedIn() &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.fromUserId == request.auth.uid;
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
@@ -423,7 +480,8 @@ service cloud.firestore {
 
     match /special_offers/{offerId} {
       allow read: if true;
-      allow create: if isPartner();
+      // Security: bind created special offer to authenticated partner owner
+      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
       allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
@@ -433,8 +491,8 @@ service cloud.firestore {
     // ============================================
 
     match /communities/{partnerId} {
-      // Any signed-in user can read community info
-      allow read: if isSignedIn();
+      // Only members, partner owner, or admins can read community info
+      allow read: if isSignedIn() && (isCommunityMember(partnerId) || isAdmin());
 
       // Only the partner (owner) can create/update the community document
       allow create, update: if isOwner(partnerId) || isAdmin();
@@ -442,19 +500,21 @@ service cloud.firestore {
 
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {
-        // Any signed-in user can read (membership check done in app)
-        allow read: if isSignedIn();
+        // Only community members/owner/admin can read
+        allow read: if isSignedIn() && (isCommunityMember(partnerId) || isAdmin());
 
-        // Any signed-in user who is the sender can create messages
+        // Only community members/owner/admin can send
         allow create: if isSignedIn() &&
-                         request.resource.data.senderId == request.auth.uid;
+                         request.resource.data.senderId == request.auth.uid &&
+                         (isCommunityMember(partnerId) || isAdmin());
 
         // Sender can update their own message (edit text, etc.)
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
 
-        // Any member can add/change their own reaction
+        // Community members can update reactions only
         allow update: if isSignedIn() &&
+                         (isCommunityMember(partnerId) || isAdmin()) &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
 
         // Admin can update anything

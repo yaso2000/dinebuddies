@@ -1,9 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar, FaTrash } from 'react-icons/fa';
+import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar, FaTrash, FaShare, FaGripVertical } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
+import { useToast } from '../context/ToastContext';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    rectSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import './EnhancedGallery.css';
 
 const CATEGORIES = [
@@ -13,8 +30,114 @@ const CATEGORIES = [
     { id: 'events', label: 'Events', icon: FaCalendar, color: '#8b5cf6' }
 ];
 
-const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
+function SortableGalleryItem({
+    id, image, actualIndex, category, Icon, tc, th, t, isEditMode, captionEdit, setCaptionEdit,
+    handleUpdateCaption, handleDeleteImage, handleMoveToCategory, moveMenuForIndex, setMoveMenuForIndex,
+    moveMenuRef, moveButtonRef, moveMenuPosition, CATEGORIES, setLightboxIndex, setLightboxOpen
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const style = { transform: CSS.Transform.toString(transform), transition };
+    return (
+        <div
+            ref={setNodeRef}
+            className="gallery-item"
+            style={{
+                ...(tc ? { background: tc.badgeBg, border: `1px solid ${tc.border}`, boxShadow: tc.cardShadow } : {}),
+                ...style,
+                opacity: isDragging ? 0.8 : 1,
+            }}
+        >
+            {isEditMode && (
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="gallery-drag-handle"
+                    title={t('drag_to_reorder', 'Drag to reorder')}
+                >
+                    <FaGripVertical size={14} />
+                </div>
+            )}
+            <div className="gallery-img-container" style={{ position: 'relative', overflow: 'hidden' }}>
+                <img
+                    src={image.url}
+                    alt={image.caption || `${category?.label} ${actualIndex + 1}`}
+                    onClick={() => {
+                        if (!isEditMode) {
+                            setLightboxIndex(actualIndex);
+                            setLightboxOpen(true);
+                        }
+                    }}
+                    style={{ display: 'block', width: '100%', cursor: isEditMode ? 'default' : 'pointer' }}
+                />
+                {tc && (
+                    <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to bottom, transparent 50%, ${tc.accent}55 100%)`, pointerEvents: 'none' }} />
+                )}
+                {isEditMode && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 2 }} />
+                )}
+            </div>
+            {(image.caption || captionEdit === actualIndex) && (
+                <div className="image-caption" style={{ color: th(tc?.accent, undefined), zIndex: 4 }}>
+                    {captionEdit === actualIndex ? (
+                        <div className="caption-edit">
+                            <input
+                                type="text"
+                                defaultValue={image.caption}
+                                onBlur={(e) => handleUpdateCaption(actualIndex, e.target.value)}
+                                onKeyPress={(e) => { if (e.key === 'Enter') handleUpdateCaption(actualIndex, e.target.value); }}
+                                autoFocus
+                                placeholder={t('add_caption', 'Add caption...')}
+                            />
+                        </div>
+                    ) : (
+                        <p onClick={() => isEditMode && setCaptionEdit(actualIndex)}>{image.caption}</p>
+                    )}
+                </div>
+            )}
+            {isEditMode && (
+                <div className="image-actions-container">
+                    <button className="gallery-action-btn gallery-caption-btn" onClick={(e) => { e.stopPropagation(); setCaptionEdit(actualIndex); }} title={t('edit_caption', 'Edit caption')}>
+                        <FaEdit size={16} />
+                    </button>
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            ref={moveMenuForIndex === actualIndex ? moveButtonRef : null}
+                            className="gallery-action-btn"
+                            onClick={(e) => { e.stopPropagation(); setMoveMenuForIndex(prev => prev === actualIndex ? null : actualIndex); }}
+                            title={t('move_to_category', 'Move to category')}
+                            style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.5)', color: '#3b82f6', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                        >
+                            <FaShare size={14} />
+                        </button>
+                        {moveMenuForIndex === actualIndex && createPortal(
+                            <ul ref={moveMenuRef} className="gallery-move-menu" style={{ position: 'fixed', top: moveMenuPosition.top, left: moveMenuPosition.left, margin: 0, padding: '6px 0', listStyle: 'none', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.25)', minWidth: 140, zIndex: 10000 }}>
+                                {CATEGORIES.filter(c => c.id !== (image.category || 'venue')).map(cat => {
+                                    const CatIcon = cat.icon;
+                                    return (
+                                        <li key={cat.id}>
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); handleMoveToCategory(actualIndex, cat.id); }} style={{ width: '100%', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '0.9rem', cursor: 'pointer', textAlign: 'left' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-input)'; }} onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
+                                                <CatIcon style={{ color: cat.color, flexShrink: 0 }} size={16} /> {t(cat.id, cat.label)}
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>,
+                            document.body
+                        )}
+                    </div>
+                    <button className="gallery-action-btn gallery-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteImage(actualIndex); }} title={t('delete', 'Delete')}>
+                        <FaTrash size={15} />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
+    const partnerId = profileId;
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const tc = theme?.colors || null;
     const th = (themed, fallback) => tc ? themed : fallback;
     const [isEditMode, setIsEditMode] = useState(false);
@@ -23,19 +146,43 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
     const [lightboxIndex, setLightboxIndex] = useState(0);
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [captionEdit, setCaptionEdit] = useState(null);
+    const [moveMenuForIndex, setMoveMenuForIndex] = useState(null);
+    const [moveMenuPosition, setMoveMenuPosition] = useState({ top: 0, left: 0 });
+    const moveMenuRef = useRef(null);
+    const moveButtonRef = useRef(null);
 
-    const gallery = partner?.businessInfo?.galleryEnhanced || [];
+    const gallery = business?.businessInfo?.galleryEnhanced || [];
+
+    useEffect(() => {
+        if (moveMenuForIndex === null) return;
+        const updatePosition = () => {
+            if (moveButtonRef.current) {
+                const rect = moveButtonRef.current.getBoundingClientRect();
+                setMoveMenuPosition({ top: rect.bottom + 4, left: rect.left });
+            }
+        };
+        updatePosition();
+        const handleClickOutside = (e) => {
+            if (moveMenuRef.current && !moveMenuRef.current.contains(e.target) && !moveButtonRef.current?.contains(e.target)) setMoveMenuForIndex(null);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', updatePosition, true);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [moveMenuForIndex]);
 
     // Tier-based limits
-    const tier = partner?.subscriptionTier || 'free';
-    const MAX_IMAGES = tier === 'elite' || tier === 'premium' ? 20 : tier === 'professional' ? 6 : 1;
+    const tier = business?.subscriptionTier || 'free';
+    const MAX_IMAGES = tier === 'elite' ? 20 : tier === 'professional' ? 6 : 20;
 
     const handleImageUpload = async (e, category) => {
         const file = e.target.files[0];
         if (!file) return;
 
         if (gallery.length >= MAX_IMAGES) {
-            alert(t('gallery_max_reached', `Your current plan allows up to ${MAX_IMAGES} images. Upgrade to add more.`));
+            showToast(t('gallery_max_reached', `Your current plan allows up to ${MAX_IMAGES} images. Upgrade to add more.`), 'error');
             return;
         }
 
@@ -70,7 +217,7 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
 
         } catch (error) {
             console.error('Error uploading image:', error);
-            alert(t('upload_error', 'Failed to upload image'));
+            showToast(t('upload_error', 'Failed to upload image'), 'error');
         } finally {
             setUploadingImage(false);
         }
@@ -98,7 +245,7 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
 
         } catch (error) {
             console.error('Error deleting image:', error);
-            alert(t('delete_error', 'Failed to delete image'));
+            showToast(t('delete_error', 'Failed to delete image'), 'error');
         }
     };
 
@@ -115,9 +262,45 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
             setCaptionEdit(null);
         } catch (error) {
             console.error('Error updating caption:', error);
-            alert(t('update_error', 'Failed to update caption'));
+            showToast(t('update_error', 'Failed to update caption'), 'error');
         }
     };
+
+    const handleMoveToCategory = async (index, newCategoryId) => {
+        try {
+            const updatedGallery = [...gallery];
+            updatedGallery[index] = { ...updatedGallery[index], category: newCategoryId };
+
+            const partnerRef = doc(db, 'users', partnerId);
+            await updateDoc(partnerRef, {
+                'businessInfo.galleryEnhanced': updatedGallery
+            });
+
+            setMoveMenuForIndex(null);
+            showToast(t('image_moved', 'Image moved'), 'success');
+        } catch (error) {
+            console.error('Error moving image:', error);
+            showToast(t('move_error', 'Failed to move image'), 'error');
+        }
+    };
+
+    const handleReorder = async (oldIndex, newIndex) => {
+        if (oldIndex === newIndex) return;
+        try {
+            const updatedGallery = arrayMove(gallery, oldIndex, newIndex);
+            const partnerRef = doc(db, 'users', partnerId);
+            await updateDoc(partnerRef, { 'businessInfo.galleryEnhanced': updatedGallery });
+            showToast(t('order_updated', 'Order updated'), 'success');
+        } catch (error) {
+            console.error('Error reordering:', error);
+            showToast(t('update_error', 'Failed to update'), 'error');
+        }
+    };
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(KeyboardSensor)
+    );
 
     const filteredGallery = selectedCategory === 'all'
         ? gallery
@@ -140,13 +323,13 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
         <div className="enhanced-gallery-section" style={{ background: th(tc?.cardBg, undefined), position: 'relative' }}>
             {/* Header */}
             <div className="gallery-header">
-                <h3 style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                    <FaImages style={{ color: th(tc?.accent, '#f59e0b'), marginRight: '0.5rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }} />
+                <h3 style={{ color: 'var(--text-main)', textShadow: 'none' }}>
+                    <FaImages style={{ color: th(tc?.accent, '#8b5cf6'), marginRight: '0.5rem' }} />
                     {t('gallery', 'Gallery')}
                     <span style={{
                         fontSize: '0.9rem',
-                        fontWeight: '500',
-                        color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'),
+                        fontWeight: '600',
+                        color: 'var(--text-secondary)',
                         marginLeft: '0.5rem'
                     }}>
                         ({gallery.length}/{MAX_IMAGES})
@@ -172,15 +355,7 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
             </div>
 
             {/* Category Filter - Icon Mode */}
-            <div className="category-filter" style={{
-                display: 'flex',
-                flexWrap: 'nowrap',
-                overflowX: 'auto',
-                gap: '6px',
-                paddingBottom: '4px',
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-            }}>
+            <div className="category-filter">
                 <button
                     className={`category-btn ${selectedCategory === 'all' ? 'active' : ''}`}
                     onClick={() => setSelectedCategory('all')}
@@ -243,22 +418,28 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                 })}
             </div>
 
-            {/* Upload Buttons (Edit Mode) - Icon-First Design */}
-            {isEditMode && gallery.length < MAX_IMAGES && (
+            {/* Upload Buttons (Edit Mode) - always visible so owner can add more until limit */}
+            {isEditMode && (
                 <div className="upload-section">
                     <div className="upload-hint">
                         <FaPlus style={{ fontSize: '0.9rem' }} />
                         <span>{t('add_images_above', 'Add images by category:')}</span>
+                        {gallery.length >= MAX_IMAGES && (
+                            <span className="upload-limit-hint" style={{ marginLeft: '0.5rem', opacity: 0.85, fontSize: '0.85rem' }}>
+                                ({t('gallery_limit_reached', 'Limit reached')} {gallery.length}/{MAX_IMAGES})
+                            </span>
+                        )}
                     </div>
                     <div className="upload-grid">
                         {CATEGORIES.map(cat => {
                             const Icon = cat.icon;
+                            const atLimit = gallery.length >= MAX_IMAGES;
                             return (
                                 <label
                                     key={cat.id}
-                                    className="upload-btn"
-                                    style={{ borderColor: cat.color }}
-                                    title={`${t('add', 'Add')} ${t(cat.id, cat.label)}`}
+                                    className={`upload-btn ${atLimit ? 'upload-btn-disabled' : ''}`}
+                                    style={{ borderColor: cat.color, opacity: atLimit ? 0.7 : 1 }}
+                                    title={atLimit ? t('gallery_max_reached', `Max ${MAX_IMAGES} images`) : `${t('add', 'Add')} ${t(cat.id, cat.label)}`}
                                 >
                                     <Icon style={{ color: cat.color, fontSize: '1.8rem' }} />
                                     <span className="upload-label">{t(cat.id, cat.label)}</span>
@@ -266,7 +447,7 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                                         type="file"
                                         accept="image/*"
                                         onChange={(e) => handleImageUpload(e, cat.id)}
-                                        disabled={uploadingImage}
+                                        disabled={uploadingImage || atLimit}
                                         style={{ display: 'none' }}
                                     />
                                 </label>
@@ -294,8 +475,56 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                     )}
                 </div>
             ) : (
-                <div className="gallery-grid">
-                    {filteredGallery.map((image, index) => {
+                <div className="gallery-grid-wrapper">
+                <div className={`gallery-grid ${isEditMode && selectedCategory === 'all' ? 'gallery-grid-sortable' : ''}`}>
+                    {isEditMode && selectedCategory === 'all' && gallery.length > 1 ? (
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={(event) => {
+                                const { active, over } = event;
+                                if (!over || active.id === over.id) return;
+                                const oldIndex = Number(active.id);
+                                const newIndex = Number(over.id);
+                                if (!isNaN(oldIndex) && !isNaN(newIndex)) handleReorder(oldIndex, newIndex);
+                            }}
+                        >
+                            <SortableContext items={gallery.map((_, i) => i)} strategy={rectSortingStrategy}>
+                                {gallery.map((image, actualIndex) => {
+                                    const category = CATEGORIES.find(c => c.id === image.category);
+                                    const Icon = category?.icon || FaImages;
+                                    return (
+                                        <SortableGalleryItem
+                                            key={actualIndex}
+                                            id={actualIndex}
+                                            image={image}
+                                            actualIndex={actualIndex}
+                                            category={category}
+                                            Icon={Icon}
+                                            tc={tc}
+                                            th={th}
+                                            t={t}
+                                            isEditMode={isEditMode}
+                                            captionEdit={captionEdit}
+                                            setCaptionEdit={setCaptionEdit}
+                                            handleUpdateCaption={handleUpdateCaption}
+                                            handleDeleteImage={handleDeleteImage}
+                                            handleMoveToCategory={handleMoveToCategory}
+                                            moveMenuForIndex={moveMenuForIndex}
+                                            setMoveMenuForIndex={setMoveMenuForIndex}
+                                            moveMenuRef={moveMenuRef}
+                                            moveButtonRef={moveButtonRef}
+                                            moveMenuPosition={moveMenuPosition}
+                                            CATEGORIES={CATEGORIES}
+                                            setLightboxIndex={setLightboxIndex}
+                                            setLightboxOpen={setLightboxOpen}
+                                        />
+                                    );
+                                })}
+                            </SortableContext>
+                        </DndContext>
+                    ) : (
+                        filteredGallery.map((image, index) => {
                         const actualIndex = gallery.indexOf(image);
                         const category = CATEGORIES.find(c => c.id === image.category);
                         const Icon = category?.icon || FaImages;
@@ -382,6 +611,91 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                                             <FaEdit size={16} />
                                         </button>
 
+                                        <div style={{ position: 'relative' }}>
+                                            <button
+                                                ref={moveMenuForIndex === actualIndex ? moveButtonRef : null}
+                                                className="gallery-action-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setMoveMenuForIndex(prev => prev === actualIndex ? null : actualIndex);
+                                                }}
+                                                title={t('move_to_category', 'Move to category')}
+                                                style={{
+                                                    background: 'rgba(59, 130, 246, 0.2)',
+                                                    border: '1px solid rgba(59, 130, 246, 0.5)',
+                                                    color: '#3b82f6',
+                                                    width: 36,
+                                                    height: 36,
+                                                    borderRadius: 8,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                <FaShare size={14} />
+                                            </button>
+                                            {moveMenuForIndex === actualIndex && createPortal(
+                                                <ul
+                                                    ref={moveMenuRef}
+                                                    className="gallery-move-menu"
+                                                    style={{
+                                                        position: 'fixed',
+                                                        top: moveMenuPosition.top,
+                                                        left: moveMenuPosition.left,
+                                                        margin: 0,
+                                                        padding: '6px 0',
+                                                        listStyle: 'none',
+                                                        background: 'var(--bg-card)',
+                                                        border: '1px solid var(--border-color)',
+                                                        borderRadius: 10,
+                                                        boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                                                        minWidth: 140,
+                                                        zIndex: 10000,
+                                                    }}
+                                                >
+                                                    {CATEGORIES.filter(c => c.id !== (image.category || 'venue')).map(cat => {
+                                                        const CatIcon = cat.icon;
+                                                        return (
+                                                            <li key={cat.id}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleMoveToCategory(actualIndex, cat.id);
+                                                                    }}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        padding: '8px 14px',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 8,
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        color: 'var(--text-main)',
+                                                                        fontSize: '0.9rem',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => {
+                                                                        e.currentTarget.style.background = 'var(--bg-input)';
+                                                                    }}
+                                                                    onMouseLeave={(e) => {
+                                                                        e.currentTarget.style.background = 'none';
+                                                                    }}
+                                                                >
+                                                                    <CatIcon style={{ color: cat.color, flexShrink: 0 }} size={16} />
+                                                                    {t(cat.id, cat.label)}
+                                                                </button>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>,
+                                                document.body
+                                            )}
+                                        </div>
+
                                         <button
                                             className="gallery-action-btn gallery-delete-btn"
                                             onClick={(e) => { e.stopPropagation(); handleDeleteImage(actualIndex); }}
@@ -393,7 +707,8 @@ const EnhancedGallery = ({ partnerId, partner, isOwner, theme }) => {
                                 )}
                             </div>
                         );
-                    })}
+                    }))}
+                </div>
                 </div>
             )}
 

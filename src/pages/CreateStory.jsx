@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaCamera } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
 
@@ -39,6 +40,7 @@ const MOOD_EMOJIS = [
 const CreateStory = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile, loading: authLoading } = useAuth();
+    const { showToast } = useToast();
 
     // State — only GRADIENT or IMAGE (no VIDEO)
     const [backgroundType, setBackgroundType] = useState('GRADIENT'); // 'GRADIENT' | 'IMAGE'
@@ -86,7 +88,7 @@ const CreateStory = () => {
             const role = (userProfile.role || '').toLowerCase();
             const isGuest = role === 'guest' || userProfile.isGuest;
             if (isGuest) {
-                alert("Guests cannot post stories. Please sign up.");
+                showToast('Guests cannot post stories. Please sign up.', 'error');
                 navigate('/');
             }
         }
@@ -100,7 +102,7 @@ const CreateStory = () => {
 
         // Only accept images
         if (!file.type.startsWith('image/')) {
-            alert("Only image files are supported for stories.");
+            showToast('Only image files are supported for stories.', 'error');
             e.target.value = "";
             return;
         }
@@ -172,7 +174,7 @@ const CreateStory = () => {
             navigate('/');
         } catch (error) {
             console.error("Error creating story:", error);
-            alert("Failed to share story: " + error.message);
+            showToast('Failed to share story. Try again.', 'error');
         } finally {
             setLoading(false);
         }

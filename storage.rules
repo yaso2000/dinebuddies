@@ -11,24 +11,154 @@ service firebase.storage {
       return request.resource.contentType.matches('image/.*');
     }
 
-    // Allow access to all files for authenticated users (Temporary fix)
-    match /{allPaths=**} {
-      allow read, write: if isSignedIn();
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
     }
-    
-    // Specific rules for chat images
-    match /chat-images/{userId}/{fileName} {
+
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+
+    function uidPrefixed(fileName) {
+      return fileName.matches('^' + request.auth.uid + '(_.*)?(\\..+)?$');
+    }
+
+    // Chat images (current app path: chat_images/{uid}/{fileName})
+    match /chat_images/{userId}/{fileName} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() 
                    && request.auth.uid == userId
                    && isImage()
                    && request.resource.size < 5 * 1024 * 1024; // Max 5MB
     }
+
+    // Legacy chat-images path (kept for backward compatibility)
+    match /chat-images/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Voice messages
+    match /voice_messages/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isAudio()
+                   && request.resource.size < 15 * 1024 * 1024; // Max 15MB
+    }
+
+    // Generic chat file uploads
+    match /chat_files/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && request.resource.size < 20 * 1024 * 1024; // Max 20MB
+    }
     
-    // User avatars
-    match /avatars/{userId} {
+    // User avatars (flat naming pattern: avatars/{uid}_{timestamp}.jpg)
+    match /avatars/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == userId && isImage();
+      allow write: if isSignedIn()
+                   && uidPrefixed(fileName)
+                   && isImage()
+                   && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // User avatars (folder naming pattern: avatars/{uid}/{fileName})
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Covers (flat naming pattern: covers/{uid}_{timestamp}.jpg)
+    match /covers/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && uidPrefixed(fileName)
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // Covers (folder naming pattern: covers/{uid}/cover.jpg)
+    match /covers/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // Partner gallery
+    match /gallery/{partnerId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == partnerId
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // Partner menu images
+    match /menus/{partnerId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == partnerId
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // User stories
+    match /stories/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && (isImage() || isVideo())
+                   && request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // Premium offers media (flat naming: premium_offers/{uid}_{timestamp})
+    match /premium_offers/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && uidPrefixed(fileName)
+                   && (isImage() || isVideo())
+                   && request.resource.size < 30 * 1024 * 1024;
+    }
+
+    // Offer media (flat naming: offers/{uid}_{timestamp})
+    match /offers/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && uidPrefixed(fileName)
+                   && (isImage() || isVideo())
+                   && request.resource.size < 30 * 1024 * 1024;
+    }
+
+    // Invitation media (public/private flows stay separate in Firestore; media path remains invitation-id based)
+    match /invitations/{invitationId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && (isImage() || isVideo())
+                   && request.resource.size < 100 * 1024 * 1024;
+    }
+
+    // User place images
+    match /users/{userId}/places/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // Deny everything else by default
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

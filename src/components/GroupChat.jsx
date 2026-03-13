@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown, FaPause, FaPlay, FaArrowLeft } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import EmojiPicker from 'emoji-picker-react';
 import EmojiPickerPortal, { isMobile } from './EmojiPickerPortal';
 import '../pages/CommunityChatRoom.css';
 
@@ -103,7 +103,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
             }, 1000);
         } catch (error) {
             console.error("Failed to start recording:", error);
-            alert("Could not access microphone.");
+            showToast('Could not access microphone.', 'error');
         }
     };
 
@@ -134,8 +134,10 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                 type: 'audio',
                 duration: recordingDuration
             });
+            scrollToBottom();
         } catch (error) {
             console.error("Error sending voice:", error);
+            showToast('Failed to send voice message. Try again.', 'error');
         }
     };
 
@@ -155,15 +157,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
         if (e && e.preventDefault) e.preventDefault();
         if (!newMessage.trim()) return;
 
-        const messageToSend = newMessage.trim(); // Capture before clearing
-        setNewMessage(''); // Clear immediately for better UX
-
-        // Refocus immediately to keep keyboard open on mobile
-        setTimeout(() => {
-            if (inputRef.current) {
-                inputRef.current.focus();
-            }
-        }, 10);
+        const messageToSend = newMessage.trim();
 
         try {
             await addDoc(collection(db, collectionPath), {
@@ -174,12 +168,12 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                 createdAt: serverTimestamp(),
                 type: 'text'
             });
+            setNewMessage('');
             scrollToBottom();
         } catch (error) {
             console.error("Error sending message:", error);
-            setNewMessage(messageToSend); // Restore if failed
+            showToast('Failed to send message. Try again.', 'error');
         } finally {
-            // Ensure focus is kept/restored to keep keyboard open
             setTimeout(() => inputRef.current?.focus(), 10);
         }
     };

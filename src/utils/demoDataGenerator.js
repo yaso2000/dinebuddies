@@ -2,6 +2,12 @@ import { fakerEN_AU as faker } from '@faker-js/faker';
 import { doc, collection, writeBatch, GeoPoint, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+const assertDevOnly = () => {
+    if (!import.meta.env.DEV) {
+        throw new Error('Demo data tools are disabled outside development builds.');
+    }
+};
+
 // --- Configuration ---
 const DEMO_USER_COUNT = 15;
 const DEMO_BUSINESS_COUNT = 5;
@@ -94,7 +100,7 @@ const generateDemoUser = (index) => {
         password: password,
         photo_url: avatar,
         role: 'user',
-        accountType: 'individual',
+        role: 'user',
         isDemo: true,
         city: 'Bundaberg',
         country: 'Australia',
@@ -115,8 +121,8 @@ const generateDemoBusiness = (index) => {
     const bizData = REAL_RESTAURANTS[index % REAL_RESTAURANTS.length];
     const location = generateRandomLocation();
 
-    const isPremium = Math.random() < 0.6; // High premium rate for demos
-    const tier = isPremium ? 'premium' : 'free';
+    const isPremium = Math.random() < 0.6; // High elite rate for demos
+    const tier = isPremium ? 'elite' : 'free';
 
     return {
         uid: `demo_biz_${faker.string.uuid()}`,
@@ -124,12 +130,12 @@ const generateDemoBusiness = (index) => {
         email: `b${index + 1}@d.c`,
         photo_url: bizData.logo,
         role: 'business',
-        accountType: 'business',
+        role: 'business',
         isDemo: true,
         password: '123',
         subscriptionTier: tier,
-        isVerified: isPremium,
-        reputation: isPremium ? faker.number.int({ min: 300, max: 1000 }) : faker.number.int({ min: 50, max: 200 }),
+        isVerified: tier === 'elite',
+        reputation: tier === 'elite' ? faker.number.int({ min: 300, max: 1000 }) : faker.number.int({ min: 50, max: 200 }),
 
         businessInfo: {
             businessType: bizData.type,
@@ -146,19 +152,19 @@ const generateDemoBusiness = (index) => {
             coverImage: bizData.image,
             menu: bizData.menu,
             gallery: bizData.gallery,
-            rating: isPremium ? (4.5 + Math.random() * 0.5).toFixed(1) : (3.5 + Math.random()).toFixed(1),
-            website: isPremium ? `www.${bizData.name.replace(/\s+/g, '').toLowerCase()}.com.au` : '',
-            features: isPremium ? ['Outdoor Seating', 'Live Music', 'WiFi', 'Parking'] : ['Outdoor Seating']
+            rating: tier === 'elite' ? (4.5 + Math.random() * 0.5).toFixed(1) : (3.5 + Math.random()).toFixed(1),
+            website: tier === 'elite' ? `www.${bizData.name.replace(/\s+/g, '').toLowerCase()}.com.au` : '',
+            features: tier === 'elite' ? ['Outdoor Seating', 'Live Music', 'WiFi', 'Parking'] : ['Outdoor Seating']
         },
         created_at: serverTimestamp(),
         last_active_time: serverTimestamp(),
-        followersCount: isPremium ? faker.number.int({ min: 100, max: 500 }) : faker.number.int({ min: 5, max: 50 }),
+        followersCount: tier === 'elite' ? faker.number.int({ min: 100, max: 500 }) : faker.number.int({ min: 5, max: 50 }),
         ownedCommunities: []
     };
 };
 
 const generateDemoInvitation = (creator) => {
-    const isBusiness = creator.accountType === 'business';
+    const isBusiness = creator.role === 'business';
 
     const location = isBusiness ?
         { lat: creator.businessInfo.lat, lng: creator.businessInfo.lng, address: creator.businessInfo.address } :
@@ -194,7 +200,7 @@ const generateDemoInvitation = (creator) => {
             id: creator.uid,
             name: creator.display_name,
             avatar: creator.photo_url || '',
-            isPartner: isBusiness
+            isBusiness: isBusiness
         },
         guestsNeeded: faker.number.int({ min: 2, max: 6 }),
         joined: [],
@@ -212,6 +218,7 @@ const generateDemoInvitation = (creator) => {
 };
 
 export const createDemoData = async () => {
+    assertDevOnly();
     console.log("🚀 Starting Demo Data Generation (Bundaberg Edition)...");
     const batch = writeBatch(db);
     let opCount = 0;
@@ -255,6 +262,7 @@ export const createDemoData = async () => {
 };
 
 export const wipeAllData = async () => {
+    assertDevOnly();
     console.log("🧹 Deleting ALL Demo Data...");
     let totalDeleted = 0;
     const usersSnapshot = await getDocs(query(collection(db, 'users'), where('isDemo', '==', true)));

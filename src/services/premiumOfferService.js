@@ -2,6 +2,7 @@ import { db, auth, storage } from '../firebase/config';
 import { collection, query, where, getDocs, addDoc, setDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { consumeOfferCredit } from './adminSecurityService';
 
 /**
  * PremiumOfferService 
@@ -71,7 +72,7 @@ export const premiumOfferService = {
         // Professional → needs offerCredits (future Stripe credit product)
         // Others → not allowed
         if (!isElite && !isProfessional) {
-            throw new Error('Publishing premium offers requires an Elite or Professional Partner subscription.');
+            throw new Error('Publishing premium offers requires an Elite or Professional Business subscription.');
         }
         if (!isElite && isProfessional) {
             const credits = userData.offerCredits || 0;
@@ -124,10 +125,7 @@ export const premiumOfferService = {
 
             // Deduct 1 credit for Professional after successful publish
             if (!isElite) {
-                const { updateDoc, increment } = await import('firebase/firestore');
-                await updateDoc(doc(db, 'users', currentUser.uid), {
-                    offerCredits: increment(-1)
-                });
+                await consumeOfferCredit();
             }
 
             return offerRef.id;

@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
+import './Settings.css';
 
 const Settings = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile, deleteUserAccount } = useAuth();
+    const { showToast } = useToast();
     const { t, i18n } = useTranslation();
     const { isDark, toggleTheme } = useTheme();
 
@@ -20,12 +23,7 @@ const Settings = () => {
 
     const isBusiness = userProfile?.role === 'business';
 
-    // Desktop: redirect business accounts to the Pro Dashboard instead of showing mobile Settings
-    useEffect(() => {
-        if (isBusiness && window.innerWidth >= 1024) {
-            navigate('/business-pro', { replace: true });
-        }
-    }, [isBusiness, navigate]);
+    // No redirect: show same Settings page on desktop (responsive); business uses dashboard for other things
 
 
     const handleLogout = async () => {
@@ -34,7 +32,7 @@ const Settings = () => {
             navigate('/login');
         } catch (error) {
             console.error('Error logging out:', error);
-            alert('Failed to logout. Please try again.');
+            showToast('Failed to logout. Please try again.', 'error');
         }
     };
 
@@ -50,7 +48,7 @@ const Settings = () => {
             navigate('/login');
         } catch (error) {
             console.error('Error deleting account:', error);
-            alert('Failed to delete account. Please try again.');
+            showToast('Failed to delete account. Please try again.', 'error');
             setDeleting(false);
             setShowDeleteConfirm(false);
         }
@@ -128,6 +126,18 @@ const Settings = () => {
                     label: t('terms_of_service', 'Terms of Service'),
                     onClick: () => navigate('/terms'),
                     color: '#3b82f6'
+                },
+                {
+                    icon: <FaUsers />,
+                    label: t('community_guidelines', 'Community Guidelines'),
+                    onClick: () => navigate('/guidelines'),
+                    color: '#8b5cf6'
+                },
+                {
+                    icon: <FaTrash />,
+                    label: t('account_deletion_request', 'Account Deletion Request'),
+                    onClick: () => navigate('/account-deletion'),
+                    color: '#ef4444'
                 }
             ]
         }
@@ -142,7 +152,7 @@ const Settings = () => {
                     icon: <FaStore />,
                     label: 'My Business Profile',
                     value: 'View & edit inline',
-                    onClick: () => navigate(`/partner/${currentUser?.uid}`),
+                    onClick: () => navigate(`/business/${currentUser?.uid}`),
                     color: '#f97316'
                 }
             ]
@@ -150,30 +160,32 @@ const Settings = () => {
     }
 
 
-    // Add Subscription section for business accounts
+    // Add Subscription section for business accounts (business tiers: free, professional, elite only)
     if (isBusiness) {
-        const subscriptionTier = userProfile?.subscriptionTier || 'free';
-        const isPremium = subscriptionTier === 'premium';
+        const subscriptionTier = (userProfile?.subscriptionTier || 'free').toLowerCase();
+        const isElite = subscriptionTier === 'elite';
+        const isProfessional = subscriptionTier === 'professional';
+        const isPaidBusiness = isElite || isProfessional;
 
         settingsSections.unshift({
             title: 'Subscription & Billing',
             items: [
                 {
-                    icon: isPremium ? '💎' : '📦',
+                    icon: isElite ? '👑' : isProfessional ? '⚡' : '📦',
                     label: 'Current Plan',
-                    value: isPremium ? 'Premium' : 'Free',
+                    value: isElite ? 'Elite' : isProfessional ? 'Professional' : 'Free',
                     onClick: () => navigate('/settings/subscription'),
-                    color: isPremium ? '#fbbf24' : '#6b7280',
-                    badge: isPremium ? null : 'Upgrade Available'
+                    color: isElite ? '#f59e0b' : isProfessional ? '#8b5cf6' : '#6b7280',
+                    badge: isPaidBusiness ? null : 'Upgrade Available'
                 },
-                ...(isPremium ? [{
+                ...(isPaidBusiness ? [{
                     icon: '💳',
                     label: 'Payment Method',
                     value: userProfile?.paymentMethod || 'Not set',
                     onClick: () => navigate('/settings/payment'),
                     color: '#8b5cf6'
                 }] : []),
-                ...(isPremium ? [{
+                ...(isPaidBusiness ? [{
                     icon: '📄',
                     label: 'Billing History',
                     value: '',
@@ -212,62 +224,30 @@ const Settings = () => {
                     minHeight: '60vh',
                     padding: '2rem'
                 }}>
-                    <div style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        borderRadius: '20px',
-                        padding: '2.5rem',
-                        textAlign: 'center',
-                        maxWidth: '400px',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+                    <div className="ui-prompt ui-prompt--standalone" style={{
+                        background: 'linear-gradient(135deg, var(--primary), var(--luxury-gold))',
+                        border: 'none',
+                        boxShadow: 'var(--shadow-premium)',
+                        padding: '2.5rem'
                     }}>
                         <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>👤</div>
-                        <h2 style={{
-                            color: 'white',
-                            fontSize: '1.5rem',
-                            fontWeight: '800',
-                            marginBottom: '0.75rem'
-                        }}>
+                        <h2 className="ui-prompt__title" style={{ color: 'white', fontSize: '1.5rem' }}>
                             Guest Mode
                         </h2>
-                        <p style={{
-                            color: 'rgba(255,255,255,0.9)',
-                            fontSize: '1rem',
-                            lineHeight: '1.6',
-                            marginBottom: '2rem'
-                        }}>
+                        <p className="ui-prompt__desc" style={{ color: 'rgba(255,255,255,0.9)', marginBottom: '2rem' }}>
                             You're browsing as a guest. Sign in to access all settings and personalize your experience!
                         </p>
                         <button
                             onClick={() => navigate('/login')}
-                            style={{
-                                background: 'white',
-                                color: '#667eea',
-                                border: 'none',
-                                padding: '14px 32px',
-                                borderRadius: '12px',
-                                fontWeight: '700',
-                                fontSize: '1rem',
-                                cursor: 'pointer',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                width: '100%',
-                                marginBottom: '0.75rem'
-                            }}
+                            className="ui-btn ui-btn--primary"
+                            style={{ width: '100%', marginBottom: '0.75rem', background: 'white', color: 'var(--primary)' }}
                         >
                             Sign In / Sign Up
                         </button>
                         <button
                             onClick={() => navigate('/')}
-                            style={{
-                                background: 'transparent',
-                                color: 'white',
-                                border: '2px solid white',
-                                padding: '12px 32px',
-                                borderRadius: '12px',
-                                fontWeight: '600',
-                                fontSize: '0.95rem',
-                                cursor: 'pointer',
-                                width: '100%'
-                            }}
+                            className="ui-btn ui-btn--ghost"
+                            style={{ width: '100%', borderColor: 'white', color: 'white' }}
                         >
                             Continue Browsing
                         </button>
@@ -322,38 +302,23 @@ const Settings = () => {
     }
 
     return (
-        <div className="page-container" style={{ paddingBottom: '100px' }}>
+        <div className="page-container settings-page-responsive" style={{ paddingBottom: '100px' }}>
+            {/* Responsive wrapper: same layout as mobile, centered on desktop with max-width */}
+            <div className="settings-page-inner">
             {/* Minimal Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 12px 2px' }}>
+            <div className="settings-header">
                 <button
                     onClick={() => navigate(-1)}
-                    style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        fontSize: '1.1rem',
-                        cursor: 'pointer',
-                        padding: '4px'
-                    }}
+                    className="settings-back-btn"
+                    aria-label={t('back', 'Back')}
                 >
                     <FaArrowLeft />
                 </button>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>Settings</h2>
+                <h2 className="settings-title">Settings</h2>
             </div>
 
             {/* User Info Card */}
-            <div style={{
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1))',
-                border: '2px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '20px',
-                padding: '1.5rem',
-                margin: '1rem 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem'
-            }}>
+            <div className="settings-user-card">
                 <div style={{
                     width: '60px',
                     height: '60px',
@@ -397,18 +362,20 @@ const Settings = () => {
                                 Business Account
                             </div>
                         )}
-                        {isBusiness && userProfile?.subscriptionTier === 'premium' && (
+                        {isBusiness && (userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'professional') && (
                             <div style={{
                                 display: 'inline-block',
                                 padding: '4px 10px',
-                                background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(249, 115, 22, 0.2))',
-                                border: '1px solid rgba(251, 191, 36, 0.4)',
+                                background: userProfile?.subscriptionTier === 'elite'
+                                    ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(249, 115, 22, 0.2))'
+                                    : 'rgba(139, 92, 246, 0.2)',
+                                border: `1px solid ${userProfile?.subscriptionTier === 'elite' ? 'rgba(251, 191, 36, 0.4)' : 'rgba(139, 92, 246, 0.4)'}`,
                                 borderRadius: '12px',
                                 fontSize: '0.7rem',
                                 fontWeight: '700',
-                                color: '#fbbf24'
+                                color: userProfile?.subscriptionTier === 'elite' ? '#fbbf24' : 'var(--primary)'
                             }}>
-                                💎 Premium
+                                {userProfile?.subscriptionTier === 'elite' ? '👑 Elite' : '⚡ Professional'}
                             </div>
                         )}
                     </div>
@@ -417,25 +384,9 @@ const Settings = () => {
 
             {/* Settings Sections */}
             {settingsSections.map((section, sectionIndex) => (
-                <div key={sectionIndex} style={{ marginBottom: '1.5rem' }}>
-                    <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: '700',
-                        color: 'var(--text-muted)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        padding: '0 12px',
-                        marginBottom: '0.75rem'
-                    }}>
-                        {section.title}
-                    </h3>
-                    <div style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '16px',
-                        margin: '0 12px',
-                        overflow: 'hidden'
-                    }}>
+                <div key={sectionIndex} className="settings-section">
+                    <h3 className="settings-section-title">{section.title}</h3>
+                    <div className="settings-section-card ui-card">
                         {section.items.map((item, itemIndex) => (
                             <div
                                 key={itemIndex}
@@ -508,25 +459,9 @@ const Settings = () => {
             ))}
 
             {/* Danger Zone */}
-            <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{
-                    fontSize: '0.85rem',
-                    fontWeight: '700',
-                    color: '#ef4444',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    padding: '0 12px',
-                    marginBottom: '0.75rem'
-                }}>
-                    Danger Zone
-                </h3>
-                <div style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '16px',
-                    margin: '0 12px',
-                    overflow: 'hidden'
-                }}>
+                <div className="settings-section">
+                    <h3 className="settings-section-title settings-section-title--danger">Danger Zone</h3>
+                    <div className="settings-section-card ui-card">
                     {/* Logout */}
                     <div
                         onClick={handleLogout}
@@ -623,13 +558,7 @@ const Settings = () => {
             </div>
 
             {/* App Version */}
-            <div style={{
-                textAlign: 'center',
-                padding: '1rem',
-                color: 'var(--text-muted)',
-                fontSize: '0.85rem'
-            }}>
-                DineBuddies v1.0.0
+            <div className="settings-version">DineBuddies v1.0.0</div>
             </div>
         </div>
     );

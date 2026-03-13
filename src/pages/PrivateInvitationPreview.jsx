@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaLock, FaArrowLeft } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, updateDoc, deleteField, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
-import { getSafeAvatar } from '../utils/avatarUtils';
 import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
+import { adminSecurityService } from '../services/adminSecurityService';
 import './PrivateInvitation.css';
 
 import Lottie from 'lottie-react';
@@ -15,9 +16,10 @@ import { OCCASION_PRESETS } from '../utils/invitationTemplates';
 
 const PrivateInvitationPreview = () => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const { id: draftId } = useParams();
-    const { deductPrivateInvitationCredit } = useInvitations();
+    const { publishPrivateInvitationDraft } = useInvitations();
 
     const [invitation, setInvitation] = useState(null);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -36,7 +38,7 @@ const PrivateInvitationPreview = () => {
                 const invitationDoc = await getDoc(invitationRef);
 
                 if (!invitationDoc.exists()) {
-                    alert(t('invitation_not_found') || 'Draft not found');
+                    showToast(t('invitation_not_found') || 'Draft not found', 'error');
                     navigate('/create-private');
                     return;
                 }
@@ -73,19 +75,17 @@ const PrivateInvitationPreview = () => {
     const handlePublish = async () => {
         setIsPublishing(true);
         try {
-            const invitationRef = doc(db, 'private_invitations', draftId);
-            await updateDoc(invitationRef, {
-                status: deleteField(),
-                publishedAt: serverTimestamp()
-            });
-
-            // Deduct private invitation credit upon publishing (not at draft creation)
-            await deductPrivateInvitationCredit();
+            const publishResult = await publishPrivateInvitationDraft(draftId);
+            if (!publishResult?.success) return;
+            if (publishResult.alreadyPublished) {
+                navigate(`/invitation/private/${draftId}`);
+                return;
+            }
 
             // Send notifications to invited guests
             if (invitation.invitedFriends?.length > 0) {
                 const notificationsBatch = invitation.invitedFriends.map(friendId => {
-                    return addDoc(collection(db, 'notifications'), {
+                    return adminSecurityService.createNotification({
                         userId: friendId,
                         type: 'private_invitation',
                         title: t('notification_private_invitation_title'),
@@ -95,11 +95,6 @@ const PrivateInvitationPreview = () => {
                         }),
                         invitationId: draftId,
                         actionUrl: `/invitation/private/${draftId}`, // ENFORCE PRIVATE ROUTE
-                        createdAt: serverTimestamp(),
-                        read: false,
-                        fromUserId: invitation.author?.id,
-                        fromUserName: invitation.author?.name,
-                        fromUserAvatar: getSafeAvatar(invitation.author)
                     });
                 });
                 await Promise.all(notificationsBatch);
@@ -108,7 +103,7 @@ const PrivateInvitationPreview = () => {
             navigate(`/invitation/private/${draftId}`);
         } catch (error) {
             console.error('Error publishing private invitation:', error);
-            alert(t('failed_publish_invitation'));
+            showToast(t('failed_publish_invitation'), 'error');
         } finally {
             setIsPublishing(false);
         }
@@ -214,17 +209,19 @@ const PrivateInvitationPreview = () => {
             {/* Bottom Controls */}
             <div className="preview-action-bar" style={{ margin: '30px 15px 20px', maxWidth: '640px', marginInline: 'auto', background: 'var(--bg-secondary)', padding: '20px', display: 'flex', gap: '12px', borderRadius: '24px', border: '1px solid var(--border-color)', backdropFilter: 'blur(10px)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
                 <button
+                    type="button"
+                    className="ui-btn ui-btn--secondary"
                     onClick={() => navigate(`/create-private`, { state: { editInvitation: invitation } })}
-                    className="action-btn-outline"
-                    style={{ flex: 1, height: '50px', borderRadius: '15px', border: '1px solid var(--border-color)', background: 'transparent', color: 'white', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    style={{ flex: 1, height: '50px', borderRadius: 15 }}
                     disabled={isPublishing}
                 >
                     <FaEdit /> {t('edit')}
                 </button>
                 <button
+                    type="button"
+                    className="ui-btn ui-btn--primary"
                     onClick={handlePublish}
-                    className="action-btn-primary"
-                    style={{ flex: 2, height: '50px', borderRadius: '15px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 8px 16px rgba(139, 92, 246, 0.3)' }}
+                    style={{ flex: 2, height: '50px', borderRadius: 15 }}
                     disabled={isPublishing}
                 >
                     {isPublishing ? t('publishing') : (

@@ -1,7 +1,6 @@
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { sendNotification } from './notificationHelpers';
-import { getSafeAvatar } from './avatarUtils';
 
 /**
  * Check if user has already created an invitation today
@@ -114,10 +113,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
                 title: 'Invitation time updated',
                 message: `The time for "${invitation.title}" has been changed from ${oldDate} ${oldTime} to ${newDate} ${newTime}. Please confirm your attendance again.`,
                 actionUrl: `/invitation/${invitationId}`,
-                invitationId,
-                fromUserId: currentUser.uid,
-                fromUserName: currentUser.name || currentUser.displayName,
-                fromUserAvatar: getSafeAvatar(currentUser)
+                invitationId
             });
         }
 

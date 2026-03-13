@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { FaCamera, FaTrash, FaTimes, FaCheck } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 import './ImageUpload.css';
 
 const ImageUpload = ({
@@ -12,6 +13,7 @@ const ImageUpload = ({
     showPreview = true,
     allowRemove = true
 }) => {
+    const { showToast } = useToast();
     const [preview, setPreview] = useState(currentImage);
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef(null);
@@ -22,13 +24,13 @@ const ImageUpload = ({
         // Validate file type
         const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         if (!validTypes.includes(file.type)) {
-            alert('Only JPG, PNG, and WebP images are allowed');
+            showToast('Only JPG, PNG, and WebP images are allowed', 'error');
             return;
         }
 
         // Validate file size (5MB)
         if (file.size > 5 * 1024 * 1024) {
-            alert('Image size must be less than 5MB');
+            showToast('Image size must be less than 5MB', 'error');
             return;
         }
 

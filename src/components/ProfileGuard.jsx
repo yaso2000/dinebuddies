@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ProfileGuard = ({ children }) => {
-    const { userProfile, loading, isGuest } = useAuth();
+    const { userProfile, loading, isGuest, isBusiness } = useAuth();
     const location = useLocation();
 
     if (loading) {
@@ -15,8 +15,7 @@ const ProfileGuard = ({ children }) => {
         return <Navigate to="/auth" state={{ from: location }} replace />;
     }
 
-    // Business accounts bypass individual profile checks
-    const { isBusiness } = useAuth();
+    // Business is a ROLE — bypass gender/age profile completion for business accounts
     if (isBusiness) {
         return children;
     }

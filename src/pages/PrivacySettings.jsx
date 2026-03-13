@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { FaArrowLeft, FaShieldAlt } from 'react-icons/fa';
@@ -9,6 +10,7 @@ import './SettingsPages.css';
 const PrivacySettings = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
 
@@ -56,7 +58,7 @@ const PrivacySettings = () => {
             }, 3000);
         } catch (error) {
             console.error('Error updating privacy settings:', error);
-            alert('Failed to update settings. Please try again.');
+            showToast('Failed to update settings. Please try again.', 'error');
         } finally {
             setLoading(false);
         }
@@ -75,7 +77,7 @@ const PrivacySettings = () => {
 
             {/* Content */}
             <div className="settings-content">
-                <div className="settings-card">
+                <div className="settings-card ui-card">
                     <div className="settings-icon-wrapper" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
                         <FaShieldAlt style={{ color: '#ef4444', fontSize: '1.5rem' }} />
                     </div>
@@ -217,7 +219,7 @@ const PrivacySettings = () => {
 
                     <button
                         onClick={handleSave}
-                        className="submit-btn"
+                        className="submit-btn ui-btn ui-btn--primary"
                         disabled={loading}
                     >
                         {loading ? 'Saving...' : 'Save Changes'}

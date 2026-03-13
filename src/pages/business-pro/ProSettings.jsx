@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import {
     FaUser, FaBell, FaLock, FaCreditCard, FaSignOutAlt, FaChevronRight,
-    FaStore, FaGlobe, FaMoon, FaSun, FaShieldAlt, FaFileContract, FaTrash, FaExternalLinkAlt
+    FaStore, FaGlobe, FaMoon, FaSun, FaShieldAlt, FaFileContract, FaTrash, FaExternalLinkAlt, FaUsers
 } from 'react-icons/fa';
 
 // Import inline settings panels (desktop-optimised)
@@ -37,7 +37,7 @@ const BusinessPanel = ({ navigate, userId }) => (
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <button
-                onClick={() => navigate(`/partner/${userId}`)}
+                onClick={() => navigate(`/business/${userId}`)}
                 style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '13px 20px', borderRadius: 12,
@@ -130,19 +130,15 @@ const LegalPanel = ({ navigate }) => (
             {[
                 { label: 'Privacy Policy', icon: <FaShieldAlt />, path: '/privacy' },
                 { label: 'License Agreement & Terms of Use', icon: <FaFileContract />, path: '/terms' },
+                { label: 'Community Guidelines', icon: <FaUsers />, path: '/guidelines' },
+                { label: 'Account Deletion Request', icon: <FaTrash />, path: '/account-deletion' },
             ].map(item => (
                 <button
                     key={item.path}
+                    type="button"
+                    className="ui-btn ui-btn--ghost"
                     onClick={() => navigate(item.path)}
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '13px 18px', borderRadius: 12,
-                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-                        color: '#f1f5f9', fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer',
-                        transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                    style={{ width: '100%', justifyContent: 'flex-start', padding: '13px 18px', gap: 12 }}
                 >
                     <span style={{ color: '#10b981' }}>{item.icon}</span>
                     {item.label}
@@ -256,16 +252,10 @@ const ProSettings = () => {
                 <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {/* Sign Out */}
                     <button
+                        type="button"
+                        className="ui-btn ui-btn--danger-outline"
                         onClick={handleSignOut}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            padding: '12px 14px', width: '100%',
-                            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)',
-                            borderRadius: 12, cursor: 'pointer',
-                            color: '#ef4444', fontSize: '0.875rem', fontWeight: 600, transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                        style={{ width: '100%', justifyContent: 'flex-start', padding: '12px 14px', gap: 12, fontSize: '0.875rem' }}
                     >
                         <FaSignOutAlt />
                         Sign Out
@@ -273,19 +263,16 @@ const ProSettings = () => {
 
                     {/* Delete Account */}
                     <button
+                        type="button"
+                        className="ui-btn ui-btn--danger-outline"
                         onClick={handleDeleteAccount}
                         disabled={deleting}
                         style={{
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            padding: '12px 14px', width: '100%',
-                            background: showDeleteConfirm ? 'rgba(239,68,68,0.2)' : 'transparent',
-                            border: '1px solid rgba(239,68,68,0.1)',
-                            borderRadius: 12, cursor: deleting ? 'not-allowed' : 'pointer',
-                            color: '#ef4444', fontSize: '0.8rem', fontWeight: 500, transition: 'all 0.2s',
+                            width: '100%', justifyContent: 'flex-start', padding: '12px 14px', gap: 12, fontSize: '0.8rem',
+                            background: showDeleteConfirm ? 'rgba(239,68,68,0.2)' : undefined,
                             opacity: deleting ? 0.6 : 1,
+                            cursor: deleting ? 'not-allowed' : 'pointer',
                         }}
-                        onMouseEnter={e => { if (!deleting) e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = showDeleteConfirm ? 'rgba(239,68,68,0.2)' : 'transparent'; }}
                     >
                         <FaTrash style={{ fontSize: '0.8rem' }} />
                         {deleting ? 'Deleting…' : showDeleteConfirm ? 'Tap again to confirm' : 'Delete Account'}

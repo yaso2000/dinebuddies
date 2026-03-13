@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaTimes, FaFlag } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onSubmit }) => {
     const { t, i18n } = useTranslation();
+    const { showToast } = useToast();
     const [selectedReason, setSelectedReason] = useState('');
     const [details, setDetails] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +41,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedReason) {
-            alert(t('please_select_reason'));
+            showToast(t('please_select_reason'), 'error');
             return;
         }
 

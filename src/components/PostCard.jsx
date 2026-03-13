@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { FaRegCommentDots, FaTrash, FaEllipsisH } from 'react-icons/fa';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { BiRepost } from 'react-icons/bi';
@@ -16,6 +17,7 @@ const PostCard = ({ post, showInChat = false }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
 
     const [showComments, setShowComments] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
@@ -98,10 +100,10 @@ const PostCard = ({ post, showInChat = false }) => {
             const originalRef = doc(db, 'communityPosts', targetPost.id);
             await updateDoc(originalRef, { reposts: arrayUnion(currentUser.uid) });
 
-            alert("Reposted to your feed!");
+            showToast("Reposted to your feed!", 'success');
         } catch (error) {
             console.error('Error reposting:', error);
-            alert("Failed to repost.");
+            showToast("Failed to repost.", 'error');
         }
     };
 
@@ -114,7 +116,7 @@ const PostCard = ({ post, showInChat = false }) => {
             // UI should update automatically if parent is listening to snapshots
         } catch (error) {
             console.error("Error deleting post:", error);
-            alert("Failed to delete post.");
+            showToast("Failed to delete post.", 'error');
         }
     };
 
@@ -272,7 +274,7 @@ const PostCard = ({ post, showInChat = false }) => {
                     style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
                     onClick={(e) => {
                         e.stopPropagation();
-                        if (displayPost.partnerId) navigate(`/partner/${displayPost.partnerId}`);
+                        if (displayPost.partnerId) navigate(`/business/${displayPost.partnerId}`);
                         else if (displayAuthorId) navigate(`/profile/${displayAuthorId}`);
                     }}
                 />
@@ -328,7 +330,7 @@ const PostCard = ({ post, showInChat = false }) => {
                                 </button>
                             ) : (
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); alert("Reported."); setShowMenu(false); }}
+                                    onClick={(e) => { e.stopPropagation(); showToast("Reported.", 'success'); setShowMenu(false); }}
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: '8px',
                                         padding: '10px 16px', width: '100%', border: 'none',

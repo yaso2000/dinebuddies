@@ -3,6 +3,7 @@ import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore'
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useToast } from '../../context/ToastContext';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 import {
     FaSearch, FaPaperPlane, FaCommentDots, FaCamera, FaArrowDown
@@ -42,9 +43,12 @@ const ConvoList = ({ conversations, activeId, onSelect, search, setSearch, loadi
             <div style={{ position: 'relative' }}>
                 <FaSearch style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }} />
                 <input
-                    value={search} onChange={e => setSearch(e.target.value)}
+                    type="text"
+                    className="ui-form-field"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
                     placeholder="Search conversations…"
-                    style={{ width: '100%', padding: '8px 10px 8px 32px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, color: '#f1f5f9', fontSize: '0.8rem', outline: 'none' }}
+                    style={{ paddingLeft: 32 }}
                 />
             </div>
         </div>
@@ -106,6 +110,7 @@ const ConvoList = ({ conversations, activeId, onSelect, search, setSearch, loadi
 
 const ChatWindow = ({ convo, currentUser }) => {
     const { sendMessage, markAsRead, setTypingStatus } = useChat();
+    const { showToast } = useToast();
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState('');
     const [otherTyping, setOtherTyping] = useState(false);
@@ -138,8 +143,8 @@ const ChatWindow = ({ convo, currentUser }) => {
         e?.preventDefault();
         if (!text.trim() || !convo?.id) return;
         const t = text.trim();
-        setText('');
-        await sendMessage(convo.id, { type: 'text', text: t });
+        const messageId = await sendMessage(convo.id, { type: 'text', text: t });
+        if (messageId) setText('');
         setTypingStatus(convo.id, false);
     };
 
@@ -156,9 +161,17 @@ const ChatWindow = ({ convo, currentUser }) => {
         setUploading(true);
         try {
             const url = await uploadImage(file, currentUser.uid);
-            await sendMessage(convo.id, { type: 'image', text: url });
-        } catch (_) { alert('Failed to upload image'); }
-        finally { setUploading(false); }
+            const messageId = await sendMessage(convo.id, { type: 'image', text: url });
+            if (!messageId) {
+                setUploading(false);
+                return;
+            }
+        } catch (_) {
+            showToast('Failed to upload image. Try again.', 'error');
+        } finally {
+            setUploading(false);
+            e.target.value = '';
+        }
     };
 
     if (!convo) return (
@@ -232,16 +245,19 @@ const ChatWindow = ({ convo, currentUser }) => {
             {/* Input */}
             <input ref={imageRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImage} />
             <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                <button onClick={() => imageRef.current?.click()}
-                    style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', padding: 6, fontSize: '1rem' }}>
+                <button type="button" className="ui-btn ui-btn--ghost" onClick={() => imageRef.current?.click()}
+                    style={{ padding: 6, color: 'rgba(255,255,255,0.3)' }}>
                     <FaCamera />
                 </button>
                 <input
-                    value={text} onChange={e => handleTyping(e.target.value)}
+                    type="text"
+                    className="ui-form-field"
+                    value={text}
+                    onChange={e => handleTyping(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSend(e)}
                     placeholder={uploading ? 'Uploading…' : 'Message…'}
                     disabled={uploading}
-                    style={{ flex: 1, padding: '9px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 22, color: '#f1f5f9', fontSize: '0.875rem', outline: 'none' }}
+                    style={{ flex: 1, borderRadius: 22 }}
                 />
                 <button onClick={handleSend} disabled={!text.trim() || uploading}
                     style={{ width: 38, height: 38, borderRadius: '50%', background: text.trim() ? '#7c3aed' : 'rgba(255,255,255,0.06)', color: '#fff', border: 'none', cursor: text.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>

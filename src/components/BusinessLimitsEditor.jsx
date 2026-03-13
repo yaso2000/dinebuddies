@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { getPlanById, getNextTier } from '../config/subscriptionPlans';
+import { getPlanById, getNextBusinessTier } from '../config/subscriptionPlans';
 import { FaTimes, FaSave, FaUndo, FaClock, FaInfinity } from 'react-icons/fa';
+import { adminSecurityService } from '../services/adminSecurityService';
 
 const BusinessLimitsEditor = ({ business, onClose, onSave }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const planId = business.businessInfo?.subscriptionPlan || 'free';
+    const planId = (() => {
+        const t = (business.subscriptionTier || 'free').toLowerCase();
+        return ['free', 'professional', 'elite'].includes(t) ? t : 'free';
+    })();
     const defaultLimits = getPlanById(planId);
 
     // Form state
@@ -77,7 +79,7 @@ const BusinessLimitsEditor = ({ business, onClose, onSave }) => {
     };
 
     const handleQuickAction = (action) => {
-        const nextTier = getNextTier(planId);
+        const nextTier = getNextBusinessTier(planId);
         const nextPlan = nextTier ? getPlanById(nextTier) : null;
 
         switch (action) {
@@ -199,13 +201,12 @@ const BusinessLimitsEditor = ({ business, onClose, onSave }) => {
                 }
             });
 
-            // Update Firestore
-            await updateDoc(doc(db, 'users', business.uid), {
-                'businessInfo.customLimits': finalCustomLimits,
-                'businessInfo.customLimitsExpiry': finalExpiry,
-                'businessInfo.adminNotes': adminNotes,
-                'businessInfo.lastAdminUpdate': serverTimestamp()
-            });
+            await adminSecurityService.updateBusinessLimits(
+                business.uid,
+                finalCustomLimits,
+                finalExpiry,
+                adminNotes
+            );
 
             if (onSave) onSave();
             onClose();

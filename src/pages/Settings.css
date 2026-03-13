@@ -1,0 +1,127 @@
+/* Settings page: same layout as mobile, responsive on desktop */
+
+.settings-page-responsive {
+    min-height: 100%;
+}
+
+.settings-page-inner {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0 12px;
+}
+
+@media (min-width: 768px) {
+    .settings-page-inner {
+        max-width: 560px;
+        padding: 0 24px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+@media (min-width: 1024px) {
+    .settings-page-inner {
+        max-width: 600px;
+        padding: 0 32px;
+    }
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0 2px;
+}
+
+@media (min-width: 768px) {
+    .settings-header {
+        padding: 20px 0 16px;
+    }
+}
+
+.settings-back-btn {
+    background: none;
+    border: none;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    transition: background 0.2s;
+}
+
+.settings-back-btn:hover {
+    background: var(--bg-input);
+}
+
+.settings-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-main);
+}
+
+@media (min-width: 768px) {
+    .settings-title {
+        font-size: 1.35rem;
+    }
+}
+
+.settings-user-card {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    border-radius: 20px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .settings-user-card {
+        margin: 1.5rem 0;
+        padding: 1.75rem;
+    }
+}
+
+.settings-section {
+    margin-bottom: 1.5rem;
+}
+
+.settings-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0;
+    margin-bottom: 0.75rem;
+}
+
+.settings-section-title--danger {
+    color: #ef4444;
+}
+
+.settings-section-card {
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 0;
+}
+
+.settings-version {
+    text-align: center;
+    padding: 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+@media (min-width: 768px) {
+    .settings-version {
+        padding: 1.5rem 1rem;
+    }
+}

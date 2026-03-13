@@ -82,6 +82,26 @@ const BusinessProDashboard = () => {
         }
     }, [userProfile, navigate]);
 
+    // Guard: only Elite can use the dedicated desktop dashboard. Single source: users.subscriptionTier (free, professional, elite only).
+    const tier = (userProfile?.subscriptionTier || 'free').toLowerCase();
+    const isElite = tier === 'elite';
+    useEffect(() => {
+        if (!currentUser || !userProfile) return;
+        if (!userProfile.isBusiness) return;
+        if (!isElite) {
+            navigate('/business-dashboard', { replace: true });
+        }
+    }, [currentUser, userProfile, isElite, navigate]);
+
+    // Don't render desktop dashboard for Free/Pro (redirect in progress)
+    if (userProfile?.isBusiness && currentUser && !isElite) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+                <div style={{ width: 40, height: 40, border: '4px solid var(--border-color)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            </div>
+        );
+    }
+
     // Guard: redirect to mobile dashboard on small screens
     useEffect(() => {
         const handleResize = () => {
@@ -134,7 +154,7 @@ const BusinessProDashboard = () => {
                 <button
                     className="bpro-nav-item"
                     style={{ marginBottom: 8, background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}
-                    onClick={() => currentUser && navigate(`/partner/${currentUser.uid}`)}
+                    onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}
                 >
                     <span className="bpro-nav-icon"><FaStore /></span>
                     My Profile

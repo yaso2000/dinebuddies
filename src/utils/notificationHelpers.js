@@ -1,7 +1,5 @@
 // Notification helpers for creating notifications on specific events
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { getSafeAvatar } from './avatarUtils';
+import { adminSecurityService } from '../services/adminSecurityService';
 
 /**
  * Create a notification for a user
@@ -12,9 +10,6 @@ export const createNotification = async ({
     title,
     message,
     actionUrl = null,
-    fromUserId = null,
-    fromUserName = null,
-    fromUserAvatar = null,
     metadata = {}
 }) => {
     if (!userId) {
@@ -23,19 +18,13 @@ export const createNotification = async ({
     }
 
     try {
-        const notificationsRef = collection(db, 'notifications');
-        await addDoc(notificationsRef, {
+        await adminSecurityService.createNotification({
             userId,
             type,
             title,
             message,
             actionUrl,
-            fromUserId,
-            fromUserName,
-            fromUserAvatar,
-            metadata,
-            read: false,
-            createdAt: serverTimestamp()
+            metadata
         });
     } catch (error) {
         console.error('Error creating notification:', error);
@@ -56,10 +45,7 @@ export const notifyNewFollower = async (followedUserId, followerUser) => {
         type: 'follow',
         title: 'New Follower',
         message: `${followerUser.name || 'Someone'} started following you`,
-        actionUrl: `/profile/${followerUser.id}`,
-        fromUserId: followerUser.id,
-        fromUserName: followerUser.name,
-        fromUserAvatar: getSafeAvatar(followerUser)
+        actionUrl: `/profile/${followerUser.id}`
     });
 };
 
@@ -73,9 +59,6 @@ export const notifyInvitationAccepted = async (hostUserId, guestUser, invitation
         title: 'Invitation Accepted',
         message: `${guestUser.name || 'Someone'} accepted your invitation`,
         actionUrl: `/invitation/${invitationId}`,
-        fromUserId: guestUser.id,
-        fromUserName: guestUser.name,
-        fromUserAvatar: getSafeAvatar(guestUser),
         metadata: { invitationId }
     });
 };
@@ -90,9 +73,6 @@ export const notifyInvitationRejected = async (hostUserId, guestUser, invitation
         title: 'Invitation Declined',
         message: `${guestUser.name || 'Someone'} declined your invitation`,
         actionUrl: `/invitation/${invitationId}`,
-        fromUserId: guestUser.id,
-        fromUserName: guestUser.name,
-        fromUserAvatar: getSafeAvatar(guestUser),
         metadata: { invitationId }
     });
 };
@@ -106,10 +86,7 @@ export const notifyNewMessage = async (recipientUserId, senderUser, messagePrevi
         type: 'message',
         title: 'New Message',
         message: `${senderUser.name || 'Someone'}: ${messagePreview}`,
-        actionUrl: `/chat/${senderUser.id}`,
-        fromUserId: senderUser.id,
-        fromUserName: senderUser.name,
-        fromUserAvatar: getSafeAvatar(senderUser)
+        actionUrl: `/chat/${senderUser.id}`
     });
 };
 
@@ -137,9 +114,6 @@ export const notifyInvitationLiked = async (invitationOwnerId, likerUser, invita
         title: 'Invitation Liked',
         message: `${likerUser.name || 'Someone'} liked your invitation`,
         actionUrl: `/invitation/${invitationId}`,
-        fromUserId: likerUser.id,
-        fromUserName: likerUser.name,
-        fromUserAvatar: getSafeAvatar(likerUser),
         metadata: { invitationId }
     });
 };
@@ -154,9 +128,6 @@ export const notifyNewComment = async (invitationOwnerId, commenterUser, invitat
         title: 'New Comment',
         message: `${commenterUser.name || 'Someone'} commented: ${comment.substring(0, 50)}...`,
         actionUrl: `/invitation/${invitationId}`,
-        fromUserId: commenterUser.id,
-        fromUserName: commenterUser.name,
-        fromUserAvatar: getSafeAvatar(commenterUser),
         metadata: { invitationId, commentId: comment.id }
     });
 };

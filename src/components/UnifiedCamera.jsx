@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { FaTimes, FaCircle, FaSyncAlt, FaFileUpload, FaPlay, FaPause, FaTrash, FaCheck } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 /**
  * Unified Camera Component used across Posts, Stories, and Invitations.
@@ -19,6 +20,7 @@ const UnifiedCamera = ({
     maxDuration = 30,      // Max recording duration in seconds
     mode = 'video',        // 'video' or 'photo' or 'both' (default 'video') in UI
 }) => {
+    const { showToast } = useToast();
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const mediaRecorderRef = useRef(null);
@@ -122,7 +124,7 @@ const UnifiedCamera = ({
             }, 1000);
         } catch (err) {
             console.error("Recording error:", err);
-            alert("Failed to start recording.");
+            showToast("Failed to start recording.", 'error');
         }
     };
 

@@ -5,6 +5,7 @@ import PremiumOfferCard from '../../components/PremiumOfferCard';
 import { FaPlus, FaEdit, FaTrash, FaBolt, FaSnowflake, FaPlay, FaClock } from 'react-icons/fa';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { BASE_CREDIT_PACKS } from '../../config/planDefaults';
+import { useToast } from '../../context/ToastContext';
 
 const OFFER_SLOT_PACK = BASE_CREDIT_PACKS.find(p => p.type === 'offer_slot');
 
@@ -44,6 +45,7 @@ const TimeLeft = ({ expiresAt }) => {
 /* ================================================================== */
 const ProOffers = ({ onNavigate }) => {
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
     const [offers, setOffers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState({});     // offerId → true while action runs
@@ -131,7 +133,7 @@ const ProOffers = ({ onNavigate }) => {
     /* ---- buy slot ------------------------------------------------ */
     const handleBuySlot = async () => {
         if (!OFFER_SLOT_PACK?.stripePriceId) {
-            alert('Offer slot pack is not configured yet.');
+            showToast('Offer slot pack is not configured yet.', 'warning');
             return;
         }
         setBuyingSlot(true);
@@ -148,7 +150,7 @@ const ProOffers = ({ onNavigate }) => {
             window.location.href = result.data.url;
         } catch (e) {
             console.error('Checkout error:', e);
-            alert('Could not start checkout: ' + e.message);
+            showToast('Could not start checkout: ' + e.message, 'error');
         } finally {
             setBuyingSlot(false);
         }
@@ -298,7 +300,7 @@ const ProOffers = ({ onNavigate }) => {
                     </div>
                 </div>
                 {canPublish && (
-                    <button className="bpro-btn-primary" onClick={() => onNavigate?.('design')}>
+                    <button type="button" className="ui-btn ui-btn--primary" onClick={() => onNavigate?.('design')}>
                         <FaPlus /> New Offer
                     </button>
                 )}
@@ -316,23 +318,23 @@ const ProOffers = ({ onNavigate }) => {
                 </div>
             ) : !canPublish ? (
                 /* Locked state — only show if no offers at all */
-                <div className="bpro-card" style={{ textAlign: 'center', padding: '2rem' }}>
+                <div className="ui-card" style={{ textAlign: 'center', padding: '2rem', marginBottom: 20 }}>
                     <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔒</div>
                     <h3 style={{ color: '#f1f5f9', marginBottom: 8 }}>Premium Offers Require Elite or Professional Plan</h3>
                     <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>
                         Upgrade your plan to publish exclusive offers in the app's banner carousel.
                     </p>
-                    <button className="bpro-btn-primary" onClick={() => onNavigate?.('subscription')}>
+                    <button type="button" className="ui-btn ui-btn--primary" onClick={() => onNavigate?.('subscription')}>
                         View Plans
                     </button>
                 </div>
             ) : (
-                <div className="bpro-card">
+                <div className="ui-card" style={{ marginBottom: 20 }}>
                     <div className="bpro-empty">
                         <div className="bpro-empty-icon">🎁</div>
                         <h3>No offers yet</h3>
                         <p>Create your first offer to appear in the app's banner</p>
-                        <button className="bpro-btn-primary" onClick={() => onNavigate?.('design')}>
+                        <button type="button" className="ui-btn ui-btn--primary" onClick={() => onNavigate?.('design')}>
                             <FaPlus /> Create First Offer
                         </button>
                     </div>

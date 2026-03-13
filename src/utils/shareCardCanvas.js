@@ -498,7 +498,7 @@ export async function generateShareCard({
 
 /** Returns a PNG blob — pass type='partner' for business card */
 export const generateShareCardBlob = async (data, type = 'invitation') => {
-    const canvas = type === 'partner'
+    const canvas = type === 'business'
         ? await generateBusinessShareCard(data)
         : await generateShareCard(data);
     return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -506,7 +506,7 @@ export const generateShareCardBlob = async (data, type = 'invitation') => {
 
 /** Returns a PNG data URL — pass type='partner' for business card */
 export const generateShareCardDataUrl = async (data, type = 'invitation') => {
-    const canvas = type === 'partner'
+    const canvas = type === 'business'
         ? await generateBusinessShareCard(data)
         : await generateShareCard(data);
     return canvas.toDataURL('image/png');

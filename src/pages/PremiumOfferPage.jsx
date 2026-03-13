@@ -5,12 +5,14 @@ import { premiumOfferService } from '../services/premiumOfferService';
 import PremiumOfferEditor from '../components/PremiumOfferEditor';
 import { useTranslation } from 'react-i18next';
 import { FaChevronLeft } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 const PremiumOfferPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { currentUser, userProfile, loading: authLoading } = useAuth();
     const { t } = useTranslation();
+    const { showToast } = useToast();
 
     const [loading, setLoading] = useState(id ? true : false);
     const [offerData, setOfferData] = useState(null);
@@ -37,12 +39,12 @@ const PremiumOfferPage = () => {
             if (found) {
                 setOfferData(found);
             } else {
-                alert('Offer not found or unauthorized');
+                showToast('Offer not found or unauthorized', 'error');
                 navigate('/business-dashboard');
             }
         } catch (error) {
             console.error('Error fetching offer:', error);
-            alert('Failed to load offer data');
+            showToast('Failed to load offer data', 'error');
         } finally {
             setLoading(false);
         }
@@ -59,7 +61,7 @@ const PremiumOfferPage = () => {
             navigate('/business-dashboard');
         } catch (error) {
             console.error('Error publishing offer:', error);
-            alert(`Failed to publish: ${error.message}`);
+            showToast(`Failed to publish: ${error.message}`, 'error');
         } finally {
             setPublishing(false);
         }

@@ -1,10 +1,115 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaUtensils, FaEdit, FaTimes, FaPlus, FaSave, FaTrash, FaFileImage } from 'react-icons/fa';
+import { FaUtensils, FaEdit, FaTimes, FaPlus, FaSave, FaTrash, FaFileImage, FaGripVertical } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage } from '../utils/imageUpload';
+import { useToast } from '../context/ToastContext';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import './MenuShowcase.css';
+
+function SortableMenuItem({ item, category, isOwner, tc, th, t, editingId, editForm, setEditForm, uploadingEdit, openEdit, setEditingId, handleSaveEdit, handleDelete, uploadMenuImage, setUploadingEdit }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+    const style = { transform: CSS.Transform.toString(transform), transition };
+    const isEditing = editingId === item.id;
+    return (
+        <div
+            ref={setNodeRef}
+            className="menu-item-card"
+            style={{
+                ...(tc ? { background: tc.badgeBg, border: `1px solid ${tc.border}`, boxShadow: tc.cardShadow } : {}),
+                ...style,
+                opacity: isDragging ? 0.9 : 1,
+            }}
+        >
+            {isOwner && (
+                <div {...attributes} {...listeners} className="menu-drag-handle" title={t('drag_to_reorder', 'Drag to reorder')}>
+                    <FaGripVertical size={12} />
+                </div>
+            )}
+            {item.imageUrl && (
+                <div className="item-image">
+                    <img src={item.imageUrl} alt={item.name} />
+                    <div className="category-badge" style={{ background: tc ? tc.accent : category?.color }}>{category?.icon}</div>
+                </div>
+            )}
+            <div className="item-content">
+                <div className="item-header">
+                    <h4 style={{ color: th(tc?.accent, 'var(--text-main)') }}>{item.name}</h4>
+                    <div className="item-price" style={tc ? { color: tc.accent, textShadow: `0 0 8px ${tc.accent}66`, background: tc.badgeBg, border: `1px solid ${tc.border}`, borderRadius: '8px', padding: '2px 8px' } : {}}>
+                        {typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : item.price?.toString().startsWith('$') ? item.price : `$${item.price}`}
+                    </div>
+                </div>
+                {item.description && <p className="item-description">{item.description}</p>}
+                {!item.imageUrl && (
+                    <div className="category-tag" style={{ background: tc ? tc.accent : category?.color, color: tc ? tc.accentText : '#fff' }}>
+                        {category?.icon} {t(category?.id, category?.label)}
+                    </div>
+                )}
+            </div>
+            {isOwner && (
+                <div className="item-action-bar">
+                    <button className="item-action-btn item-edit-action" onClick={() => isEditing ? setEditingId(null) : openEdit(item)}>
+                        {isEditing ? <FaTimes size={13} /> : <FaEdit size={13} />}
+                        {isEditing ? t('cancel', 'Cancel') : t('edit', 'Edit')}
+                    </button>
+                    <button className="item-action-btn item-delete-action" onClick={() => handleDelete(item.id)}>
+                        <FaTrash size={13} /> {t('delete', 'Delete')}
+                    </button>
+                </div>
+            )}
+            {isEditing && (
+                <div className="item-edit-form">
+                    <div className="item-edit-grid">
+                        <div className="form-group">
+                            <label>{t('item_name', 'Item Name')}</label>
+                            <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+                        </div>
+                        <div className="form-group">
+                            <label>{t('price', 'Price')} (AUD)</label>
+                            <input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))} />
+                        </div>
+                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                            <label>{t('description', 'Description')}</label>
+                            <textarea rows={2} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+                        </div>
+                        <div className="form-group">
+                            <label>{t('category', 'Category')}</label>
+                            <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
+                                {MENU_CATEGORIES.map(cat => (
+                                    <option key={cat.id} value={cat.id}>{cat.icon} {t(cat.id, cat.label)}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label>{t('image', 'Image')} ({t('optional', 'Optional')})</label>
+                            <label className="image-upload-btn">
+                                <FaFileImage />
+                                {editForm.image ? editForm.image.name : t('change_image', 'Change Image')}
+                                <input type="file" accept="image/*" onChange={e => setEditForm(f => ({ ...f, image: e.target.files[0] }))} style={{ display: 'none' }} />
+                            </label>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        <button className="add-item-btn" style={{ flex: 1, padding: '8px' }} disabled={uploadingEdit} onClick={() => handleSaveEdit(item.id)}>
+                            <FaSave /> {uploadingEdit ? t('saving', 'Saving...') : t('save', 'Save')}
+                        </button>
+                        <button onClick={() => setEditingId(null)} style={{ padding: '8px 14px', borderRadius: 8, cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('cancel', 'Cancel')}</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 const MENU_CATEGORIES = [
     { id: 'starters', label: 'Starters', icon: '🥗', color: '#10b981' },
@@ -22,8 +127,10 @@ const EMPTY_FORM = {
     imageUrl: ''
 };
 
-const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme }) => {
+const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = true, theme }) => {
+    const businessId = partnerId ?? profileId;
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const tc = theme?.colors || null;
     const th = (themed, fallback) => tc ? themed : fallback;
 
@@ -80,21 +187,38 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
         );
 
     const saveToFirestore = async (updatedMenu) => {
-        const ref = doc(db, 'users', partnerId);
+        const ref = doc(db, 'users', businessId);
         await updateDoc(ref, { 'businessInfo.menu': updatedMenu });
     };
+
+    const handleReorder = async (oldIndex, newIndex) => {
+        if (oldIndex === newIndex) return;
+        try {
+            const updated = arrayMove(menuItems, oldIndex, newIndex);
+            setMenuItems(updated);
+            await saveToFirestore(updated);
+            showToast(t('order_updated', 'Order updated'), 'success');
+        } catch {
+            showToast(t('update_error', 'Update failed'), 'error');
+        }
+    };
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(KeyboardSensor)
+    );
 
     const uploadMenuImage = async (file, itemId, setUploading) => {
         if (!file) return null;
         setUploading(true);
         try {
-            const path = `menus/${partnerId}/${itemId || 'new'}_${Date.now()}.jpg`;
+            const path = `menus/${businessId}/${itemId || 'new'}_${Date.now()}.jpg`;
             return await uploadImage(file, path, null, {
                 maxSizeMB: 0.5, maxWidthOrHeight: 800,
                 useWebWorker: true, fileType: 'image/jpeg', initialQuality: 0.85
             });
         } catch {
-            alert(t('upload_error', 'Failed to upload image'));
+            showToast(t('upload_error', 'Failed to upload image'), 'error');
             return null;
         } finally {
             setUploading(false);
@@ -104,7 +228,7 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
     /* ---- add (local only) ----------------------------------------- */
     const handleAdd = async () => {
         if (!addForm.name.trim() || !addForm.price) {
-            alert(t('fill_required_fields', 'Please fill in required fields'));
+            showToast(t('fill_required_fields', 'Please fill in required fields'), 'error');
             return;
         }
         let imageUrl = addForm.imageUrl;
@@ -147,7 +271,7 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
                 setTimeout(() => setShowDraftBanner(false), 30000);
             }
         } catch (err) {
-            alert('Save failed');
+            showToast('Save failed', 'error');
         } finally {
             setSavingAll(false);
         }
@@ -255,7 +379,7 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
 
                 {/* ── Header ── */}
                 <div className="menu-header">
-                    <h3 style={{ color: th(tc?.accent, undefined) }}>
+                    <h3 style={{ color: th(tc?.accent, 'var(--text-main)') }}>
                         <FaUtensils style={{ color: th(tc?.accent, '#f59e0b') }} />
                         {t('menu', 'Menu')} ({menuItems.length})
                     </h3>
@@ -501,7 +625,44 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
                     </div>
                 ) : (
                     <div className="menu-grid">
-                        {filteredItems.map(item => {
+                        {isOwner && selectedCategory === 'all' && filteredItems.length > 1 ? (
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={(event) => {
+                                    const { active, over } = event;
+                                    if (!over || active.id === over.id) return;
+                                    const oldIndex = menuItems.findIndex(i => i.id === active.id);
+                                    const newIndex = menuItems.findIndex(i => i.id === over.id);
+                                    if (oldIndex >= 0 && newIndex >= 0) handleReorder(oldIndex, newIndex);
+                                }}
+                            >
+                                <SortableContext items={menuItems.map(i => i.id)} strategy={rectSortingStrategy}>
+                                    {menuItems.map(item => (
+                                        <SortableMenuItem
+                                            key={item.id}
+                                            item={item}
+                                            category={MENU_CATEGORIES.find(c => c.id === item.category)}
+                                            isOwner={isOwner}
+                                            tc={tc}
+                                            th={th}
+                                            t={t}
+                                            editingId={editingId}
+                                            editForm={editForm}
+                                            setEditForm={setEditForm}
+                                            uploadingEdit={uploadingEdit}
+                                            openEdit={openEdit}
+                                            setEditingId={setEditingId}
+                                            handleSaveEdit={handleSaveEdit}
+                                            handleDelete={handleDelete}
+                                            uploadMenuImage={uploadMenuImage}
+                                            setUploadingEdit={setUploadingEdit}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
+                        ) : (
+                        filteredItems.map(item => {
                             const category = MENU_CATEGORIES.find(c => c.id === item.category);
                             const isEditing = editingId === item.id;
 
@@ -526,7 +687,7 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
                                     {/* Content */}
                                     <div className="item-content">
                                         <div className="item-header">
-                                            <h4 style={{ color: th(tc?.accent, undefined) }}>{item.name}</h4>
+                                            <h4 style={{ color: th(tc?.accent, 'var(--text-main)') }}>{item.name}</h4>
                                             <div className="item-price" style={tc ? {
                                                 color: tc.accent,
                                                 textShadow: `0 0 8px ${tc.accent}66`,
@@ -653,7 +814,8 @@ const MenuShowcase = ({ partnerId, menuData = [], isOwner, isPaid = true, theme 
 
                                 </div>
                             );
-                        })}
+                        })
+                        )}
                     </div>
                 )}
             </div>

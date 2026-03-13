@@ -24,7 +24,7 @@ const AuthBlockedRoute = ({ children }) => {
     }
 
     // Check if user is fully logged in (not null AND not a guest)
-    const isActuallyLoggedIn = currentUser && !isGuest && userProfile?.accountType !== 'guest';
+    const isActuallyLoggedIn = currentUser && !isGuest && userProfile?.role !== 'guest';
 
     if (isActuallyLoggedIn) {
         // Redirect to home if already logged in

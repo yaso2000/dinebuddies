@@ -11,7 +11,7 @@ const StaffBlockedRoute = ({ children }) => {
     const { userProfile } = useAuth();
 
     const staffRoles = ['moderator', 'support', 'staff'];
-    const userRole = userProfile?.role || userProfile?.accountType;
+    const userRole = userProfile?.role;
 
     if (staffRoles.includes(userRole)) {
         console.warn(`Access denied for ${userRole} to public activity route`);

@@ -61,6 +61,8 @@ export const uploadVoiceMessage = async (audioBlob, userId) => {
     }
 };
 
+const MAX_FILE_MB = 20;
+
 /**
  * Upload file attachment to Firebase Storage
  * @param {File} file - File to upload
@@ -69,6 +71,10 @@ export const uploadVoiceMessage = async (audioBlob, userId) => {
  */
 export const uploadFile = async (file, userId) => {
     try {
+        const sizeMB = file.size / (1024 * 1024);
+        if (sizeMB > MAX_FILE_MB) {
+            throw new Error(`File must be under ${MAX_FILE_MB}MB (current: ${sizeMB.toFixed(1)}MB)`);
+        }
         const timestamp = Date.now();
         const fileName = `${userId}_${timestamp}_${file.name}`;
         const storageRef = ref(storage, `chat_files/${userId}/${fileName}`);

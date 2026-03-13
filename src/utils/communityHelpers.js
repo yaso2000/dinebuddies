@@ -1,5 +1,6 @@
 // Community Management Functions
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../firebase/config';
 
 /**
@@ -7,20 +8,9 @@ import { db } from '../firebase/config';
  */
 export const joinCommunity = async (userId, partnerId) => {
     try {
-        const userRef = doc(db, 'users', userId);
-        const partnerRef = doc(db, 'users', partnerId);
-
-        // Add partner to user's joined communities
-        await updateDoc(userRef, {
-            joinedCommunities: arrayUnion(partnerId),
-            updatedAt: serverTimestamp()
-        });
-
-        // Add user to partner's community members
-        await updateDoc(partnerRef, {
-            'communityMembers': arrayUnion(userId),
-            updatedAt: serverTimestamp()
-        });
+        const functions = getFunctions();
+        const setCommunityMembership = httpsCallable(functions, 'setCommunityMembership');
+        await setCommunityMembership({ partnerId, action: 'join' });
 
         return { success: true };
     } catch (error) {
@@ -34,20 +24,9 @@ export const joinCommunity = async (userId, partnerId) => {
  */
 export const leaveCommunity = async (userId, partnerId) => {
     try {
-        const userRef = doc(db, 'users', userId);
-        const partnerRef = doc(db, 'users', partnerId);
-
-        // Remove partner from user's joined communities
-        await updateDoc(userRef, {
-            joinedCommunities: arrayRemove(partnerId),
-            updatedAt: serverTimestamp()
-        });
-
-        // Remove user from partner's community members
-        await updateDoc(partnerRef, {
-            'communityMembers': arrayRemove(userId),
-            updatedAt: serverTimestamp()
-        });
+        const functions = getFunctions();
+        const setCommunityMembership = httpsCallable(functions, 'setCommunityMembership');
+        await setCommunityMembership({ partnerId, action: 'leave' });
 
         return { success: true };
     } catch (error) {

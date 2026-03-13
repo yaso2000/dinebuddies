@@ -1,0 +1,368 @@
+/* ==========================================================================
+   PROFILE SHARED LAYER — Phase 1B
+   Semantic classes for Profile.jsx and BusinessProfile.jsx
+   Do not redesign; unify high-level wrapper structure only.
+   ========================================================================== */
+
+/* Profile tokens (extend index.css :root) */
+:root {
+  --profile-shell-padding: 0 1rem 1rem;
+  --profile-shell-padding-bottom: 100px;
+  --profile-content-padding: 0 1rem 2rem 1rem;
+  --profile-section-gap: 1.5rem;
+  --profile-section-gap-lg: 24px;
+  --profile-card-radius: 20px;
+  --profile-card-radius-lg: 24px;
+  --profile-card-padding: 1rem;
+  --profile-card-padding-lg: 24px;
+  --profile-stats-gap: 12px;
+  --profile-actions-gap: 12px;
+  --profile-section-header-size: 1.25rem;
+  --profile-section-header-weight: 900;
+}
+
+/* profile-shell — outermost page wrapper for profile pages */
+.profile-shell {
+  padding-bottom: var(--profile-shell-padding-bottom);
+  background: var(--bg-body);
+  min-height: 100vh;
+}
+
+/* profile-content — main content area with horizontal padding */
+.profile-content {
+  padding: var(--profile-shell-padding);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* profile-header — hero/cover area (structure only; visuals stay page-specific) */
+.profile-header {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* profile-identity — avatar + name + metadata block */
+.profile-identity {
+  text-align: center;
+  margin-bottom: var(--profile-section-gap);
+}
+
+/* profile-stats — stats row (Reviews/Members/Invites or Followers/Following) */
+.profile-stats {
+  display: flex;
+  width: 100%;
+  align-items: stretch;
+  gap: var(--profile-stats-gap);
+  margin-bottom: var(--profile-section-gap-lg);
+}
+
+.profile-stats-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.profile-stats-value {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--primary);
+}
+
+.profile-stats-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* profile-actions — action buttons row */
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--profile-actions-gap);
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.profile-actions-row {
+  display: flex;
+  gap: var(--profile-actions-gap);
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+/* profile-section — section wrapper with vertical spacing */
+.profile-section {
+  margin-bottom: var(--profile-section-gap);
+}
+
+.profile-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--profile-section-gap-lg);
+}
+
+/* profile-section-header — section title */
+.profile-section-header {
+  font-size: var(--profile-section-header-size);
+  font-weight: var(--profile-section-header-weight);
+  color: var(--text-main);
+  margin: 0 0 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* profile-card, profile-card-lg → aliased in ui-primitives.css (.ui-card, .ui-card--lg)
+   DEPRECATION: Keep alias until Profile/BusinessProfile migrate to ui-card. */
+
+/* ==========================================================================
+   PHASE 1C — Child-level profile patterns
+   ========================================================================== */
+
+/* profile-stat-item, profile-stat-value, profile-stat-label — semantic aliases */
+.profile-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.profile-stat-value {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--primary);
+}
+
+.profile-stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* profile-stats-divider — vertical divider between stat items */
+.profile-stats-divider {
+  width: 1px;
+  background: var(--border-color);
+  margin: 0 4px;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+/* profile-action-btn variants → aliased in ui-primitives.css (.ui-btn, .ui-btn--primary, etc.)
+   DEPRECATION: Keep until profile pages adopt ui-btn. */
+
+/* profile-section-body — inner content area of section cards */
+.profile-section-body {
+  min-height: 100px;
+}
+
+.profile-section-body--pad {
+  padding: 0 0.25rem;
+}
+
+/* profile-meta-row — info/metadata row pattern */
+.profile-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.profile-meta-row--sm {
+  margin-bottom: 0.5rem;
+}
+
+/* profile-tabs, profile-tab, profile-tab--active, profile-tab--compact, profile-card-header → see ui-primitives.css */
+
+/* ==========================================================================
+   PHASE 1D-B — Profile-scoped child components
+   InvitationListItem, subscription cards, guest prompt, theme toggle,
+   draft banner, add service form, Clear All, Add Story
+   ========================================================================== */
+
+/* profile-invitation-item — list item in profile invitation tabs */
+.profile-invitation-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s);
+  background: var(--hover-overlay);
+}
+
+.profile-invitation-item:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border-color: var(--primary);
+}
+
+.profile-invitation-item__thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.profile-invitation-item--lg .profile-invitation-item__thumb {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+}
+
+.profile-invitation-item--lg {
+  gap: 15px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.profile-invitation-item--lg .profile-invitation-item__title {
+  font-size: 0.9rem;
+}
+
+.profile-invitation-item__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-invitation-item__title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.profile-invitation-item__title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.profile-invitation-item__badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 900;
+}
+
+.profile-invitation-item__badge--private {
+  background: color-mix(in srgb, var(--color-rating-filled) 20%, transparent);
+  color: var(--luxury-gold);
+  border: 1px solid color-mix(in srgb, var(--color-rating-filled) 30%, transparent);
+}
+
+.profile-invitation-item__badge--public {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.profile-invitation-item__date {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* profile-theme-toggle — theme switch button in profile header */
+.profile-theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--primary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-premium);
+}
+
+.profile-theme-toggle:hover {
+  transform: scale(1.1);
+  border-color: var(--primary);
+}
+
+/* profile-subscription-card — subscription & credits wrapper */
+.profile-subscription-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--color-rating-filled) 4%, transparent));
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 1rem;
+}
+
+.profile-subscription-quota-card {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--hover-overlay);
+  border: 1px solid var(--border-color);
+}
+
+.profile-subscription-trial-banner {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
+  border: 1px dashed var(--color-success);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-success);
+  text-align: center;
+}
+
+.profile-subscription-upgrade-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-rating-filled), var(--primary));
+  border: none;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow-glow);
+}
+
+/* profile-guest-prompt, profile-banner-warning, profile-clear-btn
+   → aliased in ui-primitives.css. Keep until migration to ui-prompt, ui-banner, ui-btn. */
+
+/* profile-add-story-btn — Add Story floating button */
+.profile-add-story-btn {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  color: white;
+  border: 3px solid var(--bg-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-premium);
+}
+
+/* profile-form-surface, profile-form-field, profile-form-label
+   → aliased in ui-primitives.css. Keep until migration to ui-form-*. */

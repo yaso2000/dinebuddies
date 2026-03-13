@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { FaSearch, FaFilter, FaCheckCircle, FaTimesCircle, FaCreditCard, FaCalendar, FaDollarSign, FaUser } from 'react-icons/fa';
+import { adminSecurityService } from '../../services/adminSecurityService';
 
 const SubscriptionManagement = () => {
     const [subscriptions, setSubscriptions] = useState([]);
@@ -29,7 +30,7 @@ const SubscriptionManagement = () => {
                     userName: doc.data().displayName || 'No Name',
                     userEmail: doc.data().email,
                     subscription: doc.data().subscription,
-                    accountType: doc.data().accountType
+                    role: doc.data().role
                 }))
                 .filter(user => user.subscription && user.subscription.active);
 
@@ -67,11 +68,7 @@ const SubscriptionManagement = () => {
         if (!window.confirm(`Cancel subscription for ${userName}?`)) return;
 
         try {
-            await updateDoc(doc(db, 'users', userId), {
-                'subscription.active': false,
-                'subscription.status': 'canceled',
-                'subscription.canceledAt': new Date()
-            });
+            await adminSecurityService.cancelUserSubscription(userId);
 
             setSubscriptions(subscriptions.map(sub =>
                 sub.userId === userId

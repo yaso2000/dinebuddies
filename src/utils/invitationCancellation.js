@@ -1,8 +1,12 @@
-import { doc, deleteDoc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { sendNotification } from './notificationHelpers';
-import { recordCancellation, getPenaltyInfo } from './cancellationPolicy';
-import { getSafeAvatar } from './avatarUtils';
+import { recordCancellation } from './cancellationPolicy';
+import { deleteInvitationAndStorage } from './storageCleanup';
+
+const functions = getFunctions();
+const lookupBusinessByPlaceIdCallable = httpsCallable(functions, 'lookupBusinessByPlaceId');
 
 /**
  * Predefined cancellation reasons
@@ -65,10 +69,7 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
                 message: `The invitation "${title}" has been cancelled. Reason: ${reasonMessage}`,
                 actionUrl: `/`,
                 invitationId,
-                fromUserId: currentUser.id,
-                fromUserName: currentUser.display_name || currentUser.name,
-                fromUserAvatar: getSafeAvatar(currentUser),
-                cancellationReason: reasonMessage
+                metadata: { cancellationReason: reasonMessage }
             })
         );
 
@@ -77,19 +78,10 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
         // If venue has a placeId, check if it's a registered business and notify
         if (placeId) {
             try {
-                // Search for business account with this placeId
-                const usersRef = collection(db, 'users');
-                const businessQuery = query(
-                    usersRef,
-                    where('isBusiness', '==', true),
-                    where('businessInfo.placeId', '==', placeId)
-                );
+                const lookup = await lookupBusinessByPlaceIdCallable({ placeId });
+                const businessId = lookup?.data?.businessId || null;
 
-                const businessSnapshot = await getDocs(businessQuery);
-
-                if (!businessSnapshot.empty) {
-                    const businessDoc = businessSnapshot.docs[0];
-                    const businessId = businessDoc.id;
+                if (businessId) {
 
                     // Send notification to business
                     await sendNotification(businessId, {
@@ -98,10 +90,7 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
                         message: `A booking for "${title}" at your venue has been cancelled. Reason: ${reasonMessage}`,
                         actionUrl: `/user/${currentUser.id}`,
                         invitationId,
-                        fromUserId: currentUser.id,
-                        fromUserName: currentUser.display_name || currentUser.name,
-                        fromUserAvatar: getSafeAvatar(currentUser),
-                        cancellationReason: reasonMessage
+                        metadata: { cancellationReason: reasonMessage }
                     });
                 }
             } catch (error) {
@@ -110,24 +99,8 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
             }
         }
 
-        // Delete the group chat messages if exists
-        if (invitation.groupChatId) {
-            try {
-                const messagesRef = collection(db, 'invitations', invitationId, 'messages');
-                const messagesSnapshot = await getDocs(messagesRef);
-
-                const deleteMessagesPromises = messagesSnapshot.docs.map(doc =>
-                    deleteDoc(doc.ref)
-                );
-
-                await Promise.all(deleteMessagesPromises);
-            } catch (error) {
-                console.error('Error deleting messages:', error);
-            }
-        }
-
-        // Finally, delete the invitation
-        await deleteDoc(invitationRef);
+        // Delete invitation, its chat messages, and all associated Storage files (cost-efficient: by path, no list)
+        await deleteInvitationAndStorage(invitationId, 'invitations');
 
         return {
             success: true,

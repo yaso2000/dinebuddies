@@ -1,23 +1,26 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
     FaArrowLeft, FaPaperPlane, FaMicrophone, FaTrash,
     FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers
 } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import EmojiPicker from 'emoji-picker-react';
 import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
 import './CommunityChatRoom.css';
+
+const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const InvitationChatRoom = () => {
     const { id: invitationId } = useParams();
     const navigate = useNavigate();
     const { currentUser, userProfile, isGuest } = useAuth();
+    const { showToast } = useToast();
 
     const [loading, setLoading] = useState(true);
     const [messages, setMessages] = useState([]);
@@ -83,12 +86,11 @@ const InvitationChatRoom = () => {
                     const isParticipant = members.includes(currentUser.uid) || isPrivateAccepted;
 
                     if (!isHost && !isParticipant) {
-                        alert("You are not a member of this invitation group chat.");
+                        showToast("You are not a member of this invitation group chat.", 'error');
                         navigate(resolvedCollection === 'private_invitations' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`);
                     }
                 } else {
-                    alert("Invitation not found");
-                    navigate('/');
+                    navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
                 }
             } catch (error) {
                 console.error("Error fetching invitation:", error);
@@ -99,6 +101,19 @@ const InvitationChatRoom = () => {
         fetchInvitation();
     }, [invitationId, currentUser?.uid, navigate]);
 
+    // Resilience: if invitation is deleted while in chat (e.g. by Cloud Function), redirect to home
+    useEffect(() => {
+        if (!invitationId || !collectionName || !invitation) return;
+        const invRef = doc(db, collectionName, invitationId);
+        const unsubscribe = onSnapshot(invRef, (snapshot) => {
+            if (!snapshot.exists()) {
+                navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
+            }
+        }, (err) => {
+            console.error('Invitation snapshot error:', err);
+        });
+        return () => unsubscribe();
+    }, [invitationId, collectionName, invitation, navigate]);
 
     // Click Outside Handling
     useEffect(() => {
@@ -180,7 +195,9 @@ const InvitationChatRoom = () => {
             scrollToBottom();
         } catch (error) {
             console.error("Error uploading image:", error);
-            alert("Failed to upload image.");
+            showToast('Failed to send image. Try again.', 'error');
+        } finally {
+            e.target.value = '';
         }
     };
 
@@ -222,7 +239,7 @@ const InvitationChatRoom = () => {
             }, 1000);
         } catch (error) {
             console.error("Mic Error:", error);
-            alert("Could not access microphone.");
+            showToast('Could not access microphone.', 'error');
         }
     };
 
@@ -253,8 +270,10 @@ const InvitationChatRoom = () => {
                 type: 'audio',
                 duration: recordingDuration
             });
+            scrollToBottom();
         } catch (error) {
             console.error("Error sending voice:", error);
+            showToast('Failed to send voice message. Try again.', 'error');
         }
     };
 
@@ -276,10 +295,6 @@ const InvitationChatRoom = () => {
         if (!newMessage.trim()) return;
 
         const text = newMessage.trim();
-        setNewMessage('');
-
-        // Use timeout to maintain focus
-        setTimeout(() => inputRef.current?.focus(), 10);
 
         try {
             await addDoc(collection(db, collectionName, invitationId, 'messages'), {
@@ -290,10 +305,12 @@ const InvitationChatRoom = () => {
                 createdAt: serverTimestamp(),
                 type: 'text'
             });
+            setNewMessage('');
             scrollToBottom();
+            setTimeout(() => inputRef.current?.focus(), 10);
         } catch (error) {
             console.error("Error sending:", error);
-            setNewMessage(text);
+            showToast('Failed to send message. Try again.', 'error');
         }
     };
 
@@ -568,17 +585,19 @@ const InvitationChatRoom = () => {
                             {/* Extended Emoji Picker */}
                             {extendedReactionPicker === msg.id && (
                                 <div className="extended-reaction-picker" style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
-                                    <EmojiPicker
-                                        onEmojiClick={(emojiObject) => {
-                                            handleReact(msg.id, emojiObject.emoji);
-                                            setExtendedReactionPicker(null);
-                                        }}
-                                        width="300px"
-                                        height="350px"
-                                        theme="dark"
-                                        searchDisabled={true}
-                                        previewConfig={{ showPreview: false }}
-                                    />
+                                    <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
+                                        <LazyEmojiPicker
+                                            onEmojiClick={(emojiObject) => {
+                                                handleReact(msg.id, emojiObject.emoji);
+                                                setExtendedReactionPicker(null);
+                                            }}
+                                            width="300px"
+                                            height="350px"
+                                            theme="dark"
+                                            searchDisabled={true}
+                                            previewConfig={{ showPreview: false }}
+                                        />
+                                    </Suspense>
                                 </div>
                             )}
                         </div>

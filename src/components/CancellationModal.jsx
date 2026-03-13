@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaTimes, FaExclamationTriangle } from 'react-icons/fa';
 import { CANCELLATION_REASONS } from '../utils/invitationCancellation';
+import { useToast } from '../context/ToastContext';
 
 const CancellationModal = ({ isOpen, onClose, onConfirm, invitationTitle }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [selectedReason, setSelectedReason] = useState('');
     const [customReason, setCustomReason] = useState('');
     const [loading, setLoading] = useState(false);
@@ -13,12 +15,12 @@ const CancellationModal = ({ isOpen, onClose, onConfirm, invitationTitle }) => {
 
     const handleConfirm = async () => {
         if (!selectedReason) {
-            alert('Please select a reason');
+            showToast('Please select a reason', 'error');
             return;
         }
 
         if (selectedReason === 'other' && !customReason.trim()) {
-            alert(t('enter_custom_reason'));
+            showToast(t('enter_custom_reason'), 'error');
             return;
         }
 

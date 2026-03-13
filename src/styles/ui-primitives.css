@@ -1,0 +1,275 @@
+/* ==========================================================================
+   UI PRIMITIVES — Phase 2A (Phase 3B: documentation expanded)
+   Global reusable primitives for cards, forms, buttons, tabs, banners, prompts.
+   ==========================================================================
+   ROLE:
+   - Single source of truth for common surface/button/form/tab styles
+   - Consumed via .ui-* classes; .profile-* aliases kept for compatibility
+
+   PROFILE-* ALIASES (Phase 5E: complete):
+   - No profile-* aliases remain in this file. GuestLoginPrompt.jsx was migrated to ui-prompt*
+     and the last aliases (profile-guest-prompt*) were removed.
+   - Structural profile-* (shell, content, stats, invitation-item, etc.) live in profile-shared.css
+     only and are not part of ui-primitives alias cleanup.
+
+   TOKEN OWNERSHIP (Phase 6A):
+   - All visual values (color, background, border, box-shadow) use global tokens from
+     index.css only (var(--bg-*), var(--text-*), var(--border-color), var(--primary),
+     var(--shadow-*), var(--color-danger), etc.). No hardcoded hex/rgba in this file.
+   WHEN TO USE:
+   - New code: use .ui-* (e.g. ui-btn ui-btn--primary)
+   - See docs/THEMING_MIGRATION_GUIDE.md for adoption patterns
+   ========================================================================== */
+
+/* --- Card --- */
+.ui-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--profile-card-radius, 20px);
+  padding: var(--profile-card-padding, 1rem);
+  box-shadow: var(--shadow-premium);
+}
+
+.ui-card--lg {
+  border-radius: var(--profile-card-radius-lg, 24px);
+  padding: var(--profile-card-padding-lg, 24px);
+}
+
+/* --- Form --- */
+.ui-form-surface {
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-radius: 20px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ui-form-field {
+  width: 100%;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-main);
+  font-size: 0.9rem;
+}
+
+.ui-form-field:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.ui-form-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+/* --- Buttons --- */
+.ui-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s);
+  border: 1px solid transparent;
+}
+
+.ui-btn--primary {
+  background: linear-gradient(135deg, var(--primary), var(--luxury-gold));
+  color: white;
+  border: none;
+}
+
+.ui-btn--secondary {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.ui-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.ui-btn--danger-outline {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* --- Tabs --- */
+.ui-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+  gap: 2px;
+}
+
+.ui-tabs--horizontal {
+  border-bottom: none;
+  flex-direction: row;
+  padding: 6px 8px;
+  margin: 0 0.5rem 0.75rem 0.5rem;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  box-shadow: var(--shadow-premium);
+}
+
+.ui-tab {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 800;
+  font-size: 0.85rem;
+  transition: all var(--transition-fast, 0.2s);
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.ui-tab--active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.ui-tab--compact {
+  flex: 0 1 auto;
+  padding: 6px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: none;
+  flex-direction: row;
+}
+
+.ui-tab--compact.ui-tab--active {
+  background: var(--primary);
+  color: white;
+  border-bottom-color: transparent;
+}
+
+.ui-card-header {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ui-card-header::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- Banner --- */
+.ui-banner--warning {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-rating-filled) 12%, transparent), color-mix(in srgb, var(--color-danger) 8%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-rating-filled) 35%, transparent);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ui-banner--warning__title {
+  margin: 0 0 6px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-rating-filled);
+}
+
+.ui-banner--warning__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-rating-filled) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-rating-filled) 40%, transparent);
+  color: var(--color-rating-filled);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* --- Prompt / Empty state --- */
+.ui-prompt {
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px dashed var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.ui-prompt--standalone {
+  padding: 2rem;
+  border-radius: 15px;
+  border: 1px solid var(--border-color);
+  background: var(--hover-overlay);
+  margin: 2rem auto;
+  max-width: 400px;
+}
+
+.ui-prompt__title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+  color: var(--text-main);
+}
+
+.ui-prompt__desc {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.ui-prompt__btn {
+  background: linear-gradient(135deg, var(--primary), var(--luxury-gold));
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-glow);
+}
+
+.ui-prompt__btn:hover {
+  transform: translateY(-2px);
+}

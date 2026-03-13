@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
     FaCamera,
     FaCog,
@@ -27,6 +28,7 @@ import './ProfileEnhancements.css';
 // ================================
 export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [uploading, setUploading] = useState(false);
     const [hovered, setHovered] = useState(false);
 
@@ -36,12 +38,12 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
 
         // Validate file
         if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
+            showToast('Please select an image file', 'error');
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            alert('File too large. Max 5MB');
+            showToast('File too large. Max 5MB', 'error');
             return;
         }
 
@@ -61,7 +63,7 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
             onUpdate && onUpdate(downloadURL);
         } catch (error) {
             console.error('Error uploading cover:', error);
-            alert('Failed to upload cover photo');
+            showToast('Failed to upload cover photo', 'error');
         } finally {
             setUploading(false);
         }

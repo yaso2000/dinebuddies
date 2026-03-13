@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { FaSearch, FaUserMinus } from 'react-icons/fa';
+import { useInvitations } from '../../context/InvitationContext';
+import { FaSearch } from 'react-icons/fa';
 
 const ProMembers = () => {
     const { currentUser } = useAuth();
+    const { getCommunityMembers } = useInvitations();
     const [members, setMembers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -14,11 +14,15 @@ const ProMembers = () => {
         if (!currentUser?.uid) return;
         const fetch = async () => {
             try {
-                const snap = await getDocs(query(
-                    collection(db, 'users'),
-                    where('joinedCommunities', 'array-contains', currentUser.uid)
-                ));
-                setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const result = await getCommunityMembers(currentUser.uid, { includeMembers: true, limit: 200 });
+                setMembers((result?.members || []).map((m) => ({
+                    id: m.id,
+                    display_name: m.displayName || 'User',
+                    profileType: m.profileType || 'user',
+                    city: m.city || '',
+                    country: m.country || '',
+                    avatar_url: m.avatarUrl || ''
+                })));
             } catch (e) {
                 console.error('ProMembers error:', e);
             } finally {
@@ -47,26 +51,18 @@ const ProMembers = () => {
                 <FaSearch style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }} />
                 <input
                     type="text"
+                    className="ui-form-field"
                     placeholder="Search members..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '11px 14px 11px 38px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 10,
-                        color: '#f1f5f9',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                    }}
+                    style={{ paddingLeft: 38 }}
                 />
             </div>
 
             {loading ? (
                 <div className="bpro-spinner" />
             ) : filtered.length === 0 ? (
-                <div className="bpro-card">
+                <div className="ui-card" style={{ marginBottom: 20 }}>
                     <div className="bpro-empty">
                         <div className="bpro-empty-icon">👥</div>
                         <h3>{search ? 'No results found' : 'No members yet'}</h3>
@@ -74,7 +70,7 @@ const ProMembers = () => {
                     </div>
                 </div>
             ) : (
-                <div className="bpro-card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="ui-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
                     <table className="bpro-table">
                         <thead>
                             <tr>
@@ -96,21 +92,21 @@ const ProMembers = () => {
                                             />
                                             <div>
                                                 <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.875rem' }}>{m.display_name || m.name || 'User'}</div>
-                                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>{m.email || ''}</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>@{m.id?.slice(0, 8) || 'user'}</div>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
                                         <span style={{
-                                            background: m.subscriptionPlan === 'premium' ? 'rgba(249,115,22,0.15)' : 'rgba(167,139,250,0.1)',
-                                            color: m.subscriptionPlan === 'premium' ? '#f97316' : '#a78bfa',
+                                            background: m.profileType === 'business' ? 'rgba(249,115,22,0.15)' : 'rgba(167,139,250,0.1)',
+                                            color: m.profileType === 'business' ? '#f97316' : '#a78bfa',
                                             borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize'
                                         }}>
-                                            {m.subscriptionPlan || m.accountType || 'free'}
+                                            {m.profileType || 'user'}
                                         </span>
                                     </td>
-                                    <td>{m.city || m.location || '—'}</td>
-                                    <td>{m.joinedCommunities?.length || 1}</td>
+                                    <td>{m.city || m.country || '—'}</td>
+                                    <td>—</td>
                                 </tr>
                             ))}
                         </tbody>

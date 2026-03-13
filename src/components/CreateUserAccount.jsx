@@ -65,7 +65,6 @@ const CreateUserAccount = ({ onClose, onSuccess }) => {
             await setDoc(doc(db, 'users', user.uid), {
                 email: formData.email,
                 display_name: formData.displayName,
-                accountType: 'user',
                 role: 'user',
                 created_at: serverTimestamp(),
                 last_active_time: serverTimestamp(),

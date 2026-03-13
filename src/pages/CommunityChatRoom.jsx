@@ -1,23 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDoc, doc, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
     FaArrowLeft, FaEllipsisV, FaImage, FaPaperPlane,
     FaCamera, FaMicrophone, FaPlus, FaStop,
     FaPlay, FaPause, FaTrash, FaArrowDown
 } from 'react-icons/fa';
-import EmojiPicker from 'emoji-picker-react';
 import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
 import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import './CommunityChatRoom.css';
 
+const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
+
 const CommunityChatRoom = () => {
     const { partnerId } = useParams();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
 
     // Real Data State
     const [messages, setMessages] = useState([]);
@@ -193,7 +196,7 @@ const CommunityChatRoom = () => {
             }, 1000);
         } catch (error) {
             console.error("Failed to start recording:", error);
-            alert("Could not access microphone.");
+            showToast('Could not access microphone.', 'error');
         }
     };
 
@@ -224,8 +227,10 @@ const CommunityChatRoom = () => {
                 type: 'audio',
                 duration: recordingDuration
             });
+            scrollToBottom();
         } catch (error) {
             console.error("Error sending voice:", error);
+            showToast('Failed to send voice message. Try again.', 'error');
         }
     };
 
@@ -256,8 +261,6 @@ const CommunityChatRoom = () => {
         try {
             const messagesRef = collection(db, 'communities', partnerId, 'messages');
 
-            // Check for single emoji (big emoji logic)
-            // Reuse the logic or a simple check
             const isAvgEmoji = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component}){1,3}$/u.test(newMessage.trim());
 
             await addDoc(messagesRef, {
@@ -266,13 +269,14 @@ const CommunityChatRoom = () => {
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
                 senderAvatar: getSafeAvatar(userProfile || currentUser),
                 createdAt: serverTimestamp(),
-                type: isAvgEmoji ? 'emoji-big' : 'text' // Auto-detect big emoji
+                type: isAvgEmoji ? 'emoji-big' : 'text'
             });
 
             setNewMessage('');
             setTimeout(() => inputRef.current?.focus(), 100);
         } catch (error) {
             console.error("Error sending message:", error);
+            showToast('Failed to send message. Try again.', 'error');
         }
     };
 
@@ -288,7 +292,7 @@ const CommunityChatRoom = () => {
 
             await addDoc(messagesRef, {
                 text: imageUrl,
-                caption: '', // Optional caption
+                caption: '',
                 senderId: currentUser.uid,
                 senderName: userProfile?.display_name || currentUser.displayName || 'User',
                 senderAvatar: getSafeAvatar(userProfile || currentUser),
@@ -297,7 +301,9 @@ const CommunityChatRoom = () => {
             });
         } catch (error) {
             console.error("Error uploading image:", error);
-            alert("Failed to upload image");
+            showToast('Failed to send image. Try again.', 'error');
+        } finally {
+            e.target.value = '';
         }
     };
 
@@ -534,17 +540,19 @@ const CommunityChatRoom = () => {
                             {/* Extended Emoji Picker for Reactions */}
                             {extendedReactionPicker === msg.id && (
                                 <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', left: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
-                                    <EmojiPicker
-                                        onEmojiClick={(emojiObject) => {
-                                            handleReact(msg.id, emojiObject.emoji);
-                                            setExtendedReactionPicker(null);
-                                        }}
-                                        width="300px"
-                                        height="350px"
-                                        theme="dark"
-                                        searchDisabled={true}
-                                        previewConfig={{ showPreview: false }}
-                                    />
+                                    <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
+                                        <LazyEmojiPicker
+                                            onEmojiClick={(emojiObject) => {
+                                                handleReact(msg.id, emojiObject.emoji);
+                                                setExtendedReactionPicker(null);
+                                            }}
+                                            width="300px"
+                                            height="350px"
+                                            theme="dark"
+                                            searchDisabled={true}
+                                            previewConfig={{ showPreview: false }}
+                                        />
+                                    </Suspense>
                                 </div>
                             )}
                         </div>

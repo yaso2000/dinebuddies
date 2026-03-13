@@ -1,0 +1,133 @@
+/* My Community page: responsive on desktop (same layout as mobile, centered) */
+
+.my-community-page {
+    padding-bottom: 100px;
+}
+
+.my-community-inner {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+    .my-community-page {
+        padding-bottom: 2rem;
+    }
+    .my-community-inner {
+        max-width: 640px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 0 24px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .my-community-inner {
+        max-width: 680px;
+        padding: 0 32px;
+    }
+}
+
+.my-community-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.my-community-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 1.5rem 0;
+}
+
+.my-community-actions {
+    display: flex;
+    gap: 10px;
+    padding: 0 0 1rem;
+}
+
+.my-community-section {
+    padding: 0;
+}
+
+.my-community-section h3 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    color: var(--text-main);
+}
+
+.my-community-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.my-community-stat-card {
+    /* ui-card provides base surface */
+    text-align: center;
+}
+
+.my-community-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 14px;
+    color: white;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.my-community-btn--story {
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+.my-community-btn--post {
+    background: linear-gradient(135deg, var(--primary), #f97316);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+.my-community-btn--chat {
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.my-community-btn:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+}
+
+.my-community-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.my-community-member-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.my-community-member-item:last-child {
+    border-bottom: none;
+}
+
+@media (min-width: 768px) {
+    .my-community-stats {
+        padding: 1.75rem 0;
+    }
+    .my-community-stat-card h4 {
+        font-size: 1.75rem;
+    }
+}

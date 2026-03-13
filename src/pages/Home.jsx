@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import InvitationCard from '../components/InvitationCard';
 import InvitationSkeleton from '../components/InvitationSkeleton';
 import { useInvitations } from '../context/InvitationContext';
@@ -20,16 +20,43 @@ import OffersBanner from '../components/OffersBanner';
 const Home = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { invitations, restaurants, currentUser, loading } = useInvitations();
+    const location = useLocation();
+    const invContext = useInvitations();
+    const {
+        invitations = [],
+        restaurants = [],
+        currentUser = null,
+        loadingInvitations: loading = true,
+        loadMoreInvitations = () => {},
+        hasMoreInvitations = false,
+        loadingMoreInvitations = false
+    } = invContext || {};
     const { userProfile } = useAuth();
     const { isDark } = useTheme();
     const isBusinessAccount = userProfile?.role === 'business';
+
+    const [redirectMessage, setRedirectMessage] = useState(null);
 
     // Debugging to ensure we don't have posts mixing in
     useEffect(() => {
         console.log("Home Component Loaded - Enforcing Invitations Display");
         console.log("currentUser:", currentUser);
     }, [currentUser]);
+
+    // Show redirect message (e.g. after invitation was deleted) and clear location state
+    useEffect(() => {
+        const message = location.state?.message;
+        if (message) {
+            setRedirectMessage(message);
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state?.message, location.pathname, navigate]);
+
+    useEffect(() => {
+        if (!redirectMessage) return;
+        const t = setTimeout(() => setRedirectMessage(null), 6000);
+        return () => clearTimeout(t);
+    }, [redirectMessage]);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [geoFilter, setGeoFilter] = useState('global'); // 'city', 'country', 'global'
@@ -105,7 +132,8 @@ const Home = () => {
         { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
         { id: 'Bar', label: 'Bar', icon: '🍺' },
         { id: 'Night Club', label: 'Night Club', icon: '🎵' },
-        { id: 'BBQ', label: 'BBQ', icon: '🔥' },
+        { id: 'Food Truck', label: 'Food Truck', icon: '🚚' },
+        { id: 'Fast Food', label: 'Fast Food', icon: '🍟' },
         { id: 'Directory', label: t('directory'), icon: '📖' },
     ];
 
@@ -568,7 +596,7 @@ const Home = () => {
                 </div>
 
                 {/* --- 2. MEDIA (Full Background) --- */}
-                < div className="card-media" style={{
+                <div className="card-media" style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 1
                 }}>
@@ -581,10 +609,10 @@ const Home = () => {
                         position: 'absolute', inset: 0,
                         background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 30%, transparent 100%)'
                     }} />
-                </div >
+                </div>
 
                 {/* --- 3. FOOTER (Actions) --- */}
-                < div className="card-footer" style={{
+                <div className="card-footer" style={{
                     position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
                     padding: '20px',
                     display: 'flex', flexDirection: 'column', gap: '10px',
@@ -617,8 +645,8 @@ const Home = () => {
                             {t('view_profile', { defaultValue: 'View Profile' })}
                         </button>
                     </div>
-                </div >
-            </div >
+                </div>
+            </div>
         );
     };
 
@@ -902,6 +930,31 @@ const Home = () => {
                 }}
             >
 
+                {redirectMessage && (
+                    <div
+                        role="alert"
+                        style={{
+                            margin: '8px 12px',
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            background: 'var(--primary)',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px'
+                        }}
+                    >
+                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{redirectMessage}</span>
+                        <button
+                            onClick={() => setRedirectMessage(null)}
+                            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontWeight: '600' }}
+                        >
+                            {t('close', { defaultValue: 'Close' })}
+                        </button>
+                    </div>
+                )}
+
                 {premiumAds.length > 0 && (
                     <div className="promo-banner" onClick={() => navigate(`/restaurant/${premiumAds[0].id}`)}>
                         <span className="promo-badge">HOT DEAL</span>
@@ -937,6 +990,25 @@ const Home = () => {
                                     </React.Fragment>
                                 );
                             })}
+                            {hasMoreInvitations && (
+                                <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}>
+                                    <button
+                                        onClick={loadMoreInvitations}
+                                        disabled={loadingMoreInvitations}
+                                        style={{
+                                            padding: '0.75rem 1.5rem',
+                                            borderRadius: '12px',
+                                            border: '2px solid var(--primary)',
+                                            background: loadingMoreInvitations ? 'var(--bg-card)' : 'transparent',
+                                            color: 'var(--primary)',
+                                            fontWeight: '700',
+                                            cursor: loadingMoreInvitations ? 'wait' : 'pointer'
+                                        }}
+                                    >
+                                        {loadingMoreInvitations ? 'Loading…' : 'Load more'}
+                                    </button>
+                                </div>
+                            )}
                         </>
                     ) : (
                         <div className="empty-state" style={{

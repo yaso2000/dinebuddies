@@ -1,27 +1,41 @@
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, increment, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, increment, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewFollower } from './notificationHelpers';
 import { getSafeAvatar } from './avatarUtils';
+
+const functions = getFunctions();
+const listUserNetworkCallable = httpsCallable(functions, 'listUserNetwork');
+const getFollowerCountCallable = httpsCallable(functions, 'getFollowerCount');
+
+const mapNetworkUser = (user) => ({
+    id: user?.id || user?.uid || '',
+    uid: user?.uid || user?.id || '',
+    name: user?.displayName || user?.display_name || 'User',
+    display_name: user?.displayName || user?.display_name || 'User',
+    avatar_url: user?.avatarUrl || user?.avatar_url || '',
+    photo_url: user?.avatarUrl || user?.avatar_url || '',
+    bio: '',
+    city: user?.city || '',
+    country: user?.country || '',
+    following: []
+});
 
 /**
  * Get users who follow a specific user
  */
 export const getFollowers = async (userId) => {
     try {
-        const usersRef = collection(db, 'users');
-        const q = query(
-            usersRef,
-            where('following', 'array-contains', userId)
-        );
-
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const result = await listUserNetworkCallable({
+            userId,
+            includeFollowers: true,
+            includeFollowing: false,
+            limit: 200
+        });
+        const followers = Array.isArray(result?.data?.followers) ? result.data.followers : [];
+        return followers.map(mapNetworkUser);
     } catch (error) {
         console.error('Error getting followers for user:', userId, error);
-        console.log('Ensure "following" field exists and is an array in users collection');
         return [];
     }
 };
@@ -36,32 +50,27 @@ export const getFollowing = async (userId, followingIds = []) => {
             return [];
         }
 
-        // Firestore 'in' query limit is 10
-        const chunks = [];
-        for (let i = 0; i < followingIds.length; i += 10) {
-            chunks.push(followingIds.slice(i, i + 10));
-        }
-
-        const allUsers = [];
-        for (const chunk of chunks) {
-            const usersRef = collection(db, 'users');
-            const q = query(
-                usersRef,
-                where('__name__', 'in', chunk)
-            );
-
-            const snapshot = await getDocs(q);
-            const users = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            allUsers.push(...users);
-        }
-
-        return allUsers;
+        const result = await listUserNetworkCallable({
+            userId,
+            includeFollowers: false,
+            includeFollowing: true,
+            limit: Math.min(200, followingIds.length)
+        });
+        const following = Array.isArray(result?.data?.following) ? result.data.following : [];
+        return following.map(mapNetworkUser);
     } catch (error) {
         console.error('Error getting following:', error);
         return [];
+    }
+};
+
+export const getFollowersCount = async (userId) => {
+    try {
+        const result = await getFollowerCountCallable({ userId });
+        return Number(result?.data?.followersCount || 0);
+    } catch (error) {
+        console.error('Error getting followers count:', error);
+        return 0;
     }
 };
 

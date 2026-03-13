@@ -3,17 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { FaGlobe, FaLock, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import './CreateInvitationSelector.css';
 
 const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const { showToast } = useToast();
+    const { userProfile } = useAuth();
+    const isBusiness = userProfile?.role === 'business';
 
     const { canCreatePrivateInvitation } = useInvitations();
 
     if (!isOpen) return null;
 
     const handleSelect = (type) => {
+        if (isBusiness) {
+            showToast(t('business_cannot_create_invitation', 'Business accounts cannot create or publish invitations.'), 'error');
+            onClose();
+            return;
+        }
         if (type === 'public') {
             navigate('/create', { state: navigationState });
         } else {
@@ -21,7 +31,7 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
             if (quotaInfo.canCreate) {
                 navigate('/create-private', { state: navigationState });
             } else {
-                alert(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'));
+                showToast(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'), 'error');
                 navigate('/pricing');
             }
         }

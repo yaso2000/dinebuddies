@@ -53,8 +53,9 @@ const FriendsFeed = () => {
                                 : 'No public posts yet. Be the first to post!'}
                         </p>
                         <button
+                            type="button"
                             onClick={() => navigate('/restaurants')}
-                            className="btn btn-primary"
+                            className="ui-btn ui-btn--primary"
                             style={{ borderRadius: '15px', padding: '12px 25px' }}
                         >
                             {t('browse_partners')}

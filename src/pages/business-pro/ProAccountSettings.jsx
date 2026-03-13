@@ -123,11 +123,11 @@ const EmailSection = ({ currentUser }) => {
                 Current: <strong style={{ color: '#f1f5f9' }}>{currentUser?.email}</strong>
                 {currentUser?.emailVerified && <span style={{ marginLeft: 8, color: '#10b981', fontSize: '0.75rem' }}>✓ Verified</span>}
             </div>
-            <label style={labelStyle}>New Email Address</label>
-            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Enter new email" style={inputStyle} required />
+            <label className="ui-form-label" style={{ ...labelStyle, marginBottom: 6 }}>New Email Address</label>
+            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Enter new email" className="ui-form-field" style={{ marginTop: 6 }} required />
             {error && <div style={errStyle}>{error}</div>}
             {success && <div style={okStyle}><FaCheckCircle /> Email updated! Check your inbox to verify.</div>}
-            <button type="submit" disabled={loading || !newEmail} className="bpro-btn-primary" style={{ marginTop: 14 }}>
+            <button type="submit" disabled={loading || !newEmail} className="ui-btn ui-btn--primary" style={{ marginTop: 14, width: '100%' }}>
                 {loading ? 'Updating...' : 'Update Email'}
             </button>
         </form>
@@ -161,9 +161,9 @@ const PasswordSection = ({ currentUser }) => {
     };
 
     const pwInput = (val, setVal, show, setShow, placeholder) => (
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', marginTop: 6 }}>
             <input type={show ? 'text' : 'password'} value={val} onChange={e => setVal(e.target.value)} placeholder={placeholder}
-                style={{ ...inputStyle, paddingRight: 40 }} />
+                className="ui-form-field" style={{ paddingRight: 40 }} />
             <button type="button" onClick={() => setShow(s => !s)}
                 style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', paddingTop: 6 }}>
                 {show ? <FaEyeSlash /> : <FaEye />}
@@ -173,15 +173,15 @@ const PasswordSection = ({ currentUser }) => {
 
     return (
         <form onSubmit={handleUpdate} style={{ marginTop: 14 }}>
-            <label style={labelStyle}>Current Password</label>
+            <label className="ui-form-label" style={{ ...labelStyle, marginBottom: 6 }}>Current Password</label>
             {pwInput(cur, setCur, showCur, setShowCur, 'Enter current password')}
-            <label style={labelStyle}>New Password</label>
+            <label className="ui-form-label" style={{ ...labelStyle, marginBottom: 6 }}>New Password</label>
             {pwInput(nw, setNw, showNw, setShowNw, 'Enter new password')}
-            <label style={labelStyle}>Confirm New Password</label>
+            <label className="ui-form-label" style={{ ...labelStyle, marginBottom: 6 }}>Confirm New Password</label>
             {pwInput(conf, setConf, false, () => { }, 'Confirm new password')}
             {error && <div style={errStyle}>{error}</div>}
             {success && <div style={okStyle}><FaCheckCircle /> Password updated!</div>}
-            <button type="submit" disabled={loading || !cur || !nw || !conf} className="bpro-btn-primary" style={{ marginTop: 14 }}>
+            <button type="submit" disabled={loading || !cur || !nw || !conf} className="ui-btn ui-btn--primary" style={{ marginTop: 14, width: '100%' }}>
                 {loading ? 'Updating...' : 'Update Password'}
             </button>
         </form>
@@ -221,7 +221,7 @@ const NotificationsSection = ({ currentUser }) => {
             {row('Push Notifications', 'pushEnabled')}
             {row('Email Notifications', 'emailEnabled')}
             {row('Sound', 'soundEnabled')}
-            <button className="bpro-btn-primary" style={{ marginTop: 14 }} onClick={save} disabled={saving}>
+            <button type="button" className="ui-btn ui-btn--primary" style={{ marginTop: 14 }} onClick={save} disabled={saving}>
                 {saving ? 'Saving...' : 'Save'}
             </button>
         </div>

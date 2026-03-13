@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FaMobileAlt, FaFacebook, FaTwitter, FaApple, FaCheck, FaArrowRight } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { getAuthErrorMessage } from '../utils/errorMessages';
 import { useTranslation } from 'react-i18next';
 
 const AuthPage = () => {
@@ -18,6 +20,7 @@ const AuthPage = () => {
         currentUser,
         continueAsGuest
     } = useAuth();
+    const { showToast } = useToast();
     const { t } = useTranslation();
 
     const [phone, setPhone] = useState('');
@@ -52,7 +55,9 @@ const AuthPage = () => {
             setOtpSent(true);
         } catch (error) {
             console.error('Error sending OTP:', error);
-            setError(t('failed_send_code'));
+            const msg = getAuthErrorMessage(error);
+            setError(msg || t('failed_send_code'));
+            if (msg) showToast(msg, 'error');
         } finally {
             setLoading(false);
         }
@@ -83,7 +88,9 @@ const AuthPage = () => {
                 navigate('/');
             } catch (error) {
                 console.error('Error verifying OTP:', error);
-                setError(t('invalid_verification_code'));
+                const msg = getAuthErrorMessage(error);
+                setError(msg || t('invalid_verification_code'));
+                if (msg) showToast(msg, 'error');
             } finally {
                 setLoading(false);
             }
@@ -111,10 +118,12 @@ const AuthPage = () => {
             }
         } catch (error) {
             console.error(`Error with ${provider} login:`, error);
-            if (error.code === 'auth/popup-closed-by-user') {
+            if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
                 setError(t('login_cancelled'));
             } else {
-                setError(t('login_error'));
+                const msg = getAuthErrorMessage(error);
+                setError(msg || t('login_error'));
+                if (msg) showToast(msg, 'error');
             }
         } finally {
             setLoading(false);

@@ -2,19 +2,40 @@
  * Unified utility for IP-based geolocation with fallbacks
  * This avoids dependency on a single service that might block/rate-limit.
  */
+
+// Names that are states/regions, not cities — do not use as "city" when from IP/reverse-geocode
+const STATE_NAMES = new Set([
+    'queensland', 'new south wales', 'victoria', 'western australia', 'south australia',
+    'tasmania', 'northern territory', 'australian capital territory', 'act',
+    'england', 'scotland', 'wales', 'northern ireland', 'ontario', 'quebec', 'british columbia',
+    'california', 'texas', 'new york', 'florida', 'washington', 'alberta', 'bavaria'
+]);
+
+function isLikelyStateOrRegion(name) {
+    if (!name || typeof name !== 'string') return true;
+    const n = name.trim().toLowerCase();
+    return STATE_NAMES.has(n) || n.includes('region') || n.includes('state') || n.length > 20;
+}
+
 export const fetchIpLocation = async () => {
     // List of free services to try in order
     const services = [
         {
             name: 'bigdatacloud',
             url: 'https://api.bigdatacloud.net/data/reverse-geocode-client',
-            map: (d) => ({
-                success: !!d.city || !!d.locality,
-                city: d.city || d.locality || d.principalSubdivision || '',
-                country_code: d.countryCode,
-                latitude: d.latitude,
-                longitude: d.longitude
-            })
+            map: (d) => {
+                let city = d.city || d.locality || '';
+                if (!city && d.principalSubdivision && !isLikelyStateOrRegion(d.principalSubdivision)) {
+                    city = d.principalSubdivision;
+                }
+                return {
+                    success: !!city,
+                    city,
+                    country_code: d.countryCode,
+                    latitude: d.latitude,
+                    longitude: d.longitude
+                };
+            }
         },
         {
             name: 'ipapi.co',

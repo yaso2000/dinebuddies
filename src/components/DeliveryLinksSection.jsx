@@ -6,7 +6,7 @@ import { getPlatformsForCountry } from '../config/deliveryPlatforms';
 
 
 const DeliveryLinksSection = ({
-    partner,
+    business,
     isOwner,
     deliveryLinks,
     tempDeliveryLinks,
@@ -17,11 +17,11 @@ const DeliveryLinksSection = ({
     onCancel
 }) => {
     // Business is "paid" only if on professional or elite plan
-    const isPaid = partner?.subscriptionTier === 'professional' || partner?.subscriptionTier === 'elite';
+    const isPaid = business?.subscriptionTier === 'professional' || business?.subscriptionTier === 'elite';
 
-    // Get the right platforms for this partner's country
-    const partnerCountry = partner?.businessInfo?.country || '';
-    const deliveryPlatforms = getPlatformsForCountry(partnerCountry);
+    // Get the right platforms for this business's country
+    const businessCountry = business?.businessInfo?.country || '';
+    const deliveryPlatforms = getPlatformsForCountry(businessCountry);
 
     // Has any link saved for any known platform?
     const hasAnyLink = deliveryPlatforms.some(p => deliveryLinks[p.key]);
@@ -50,8 +50,8 @@ const DeliveryLinksSection = ({
             }}>
                 <h3 style={{
                     fontSize: '1.25rem',
-                    fontWeight: '700',
-                    color: 'var(--text-primary)',
+                    fontWeight: '800',
+                    color: 'var(--text-main)',
                     margin: 0,
                     display: 'flex',
                     alignItems: 'center',
@@ -113,7 +113,7 @@ const DeliveryLinksSection = ({
                                     gap: '10px',
                                     marginBottom: '0.5rem',
                                     fontWeight: '600',
-                                    color: 'var(--text-primary)',
+                                    color: 'var(--text-main)',
                                     fontSize: '0.9rem'
                                 }}>
                                     <div style={{
@@ -154,7 +154,7 @@ const DeliveryLinksSection = ({
                                         borderRadius: '10px',
                                         border: '2px solid var(--border-color)',
                                         background: 'var(--bg-secondary)',
-                                        color: 'var(--text-primary)',
+                                        color: 'var(--text-main)',
                                         fontSize: '0.9rem',
                                         fontFamily: 'inherit',
                                         boxSizing: 'border-box',
@@ -173,7 +173,7 @@ const DeliveryLinksSection = ({
                             onClick={onCancel}
                             style={{
                                 background: 'var(--bg-secondary)',
-                                color: 'var(--text-primary)',
+                                color: 'var(--text-main)',
                                 border: '1px solid var(--border-color)',
                                 borderRadius: '10px',
                                 padding: '10px 20px',

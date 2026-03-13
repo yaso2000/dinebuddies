@@ -4,11 +4,13 @@ import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCrown, FaBolt, FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
 import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
+import { useToast } from '../../context/ToastContext';
 
 const PARTNER_PLANS = BASE_SUBSCRIPTION_PLANS.filter(p => p.type === 'business' && p.price > 0);
 
 const ProSubscription = () => {
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(null);
 
     const tier = userProfile?.subscriptionTier || 'free';
@@ -17,7 +19,7 @@ const ProSubscription = () => {
 
     const handleUpgrade = async (plan) => {
         if (!plan.stripePriceId) {
-            alert('Please contact support to upgrade your plan.');
+            showToast('Please contact support to upgrade your plan.', 'warning');
             return;
         }
         setLoading(plan.id);
@@ -34,7 +36,7 @@ const ProSubscription = () => {
             window.location.href = result.data.url;
         } catch (e) {
             console.error('Checkout error:', e);
-            alert('Could not start checkout: ' + e.message);
+            showToast('Could not start checkout: ' + e.message, 'error');
         } finally {
             setLoading(null);
         }
@@ -44,18 +46,18 @@ const ProSubscription = () => {
         window.open('https://billing.stripe.com/p/login/test_...', '_blank');
     };
 
-    const currentPlanLabel = isElite ? '👑 Elite Partner' : isProfessional ? '⚡ Professional Partner' : '🎁 Free Partner';
+    const currentPlanLabel = isElite ? '👑 Elite Business' : isProfessional ? '⚡ Professional Business' : '🎁 Free Business';
 
     return (
         <div>
-            {/* Current Plan Banner */}
+            {/* Current Plan Banner - uses theme tokens for light/dark */}
             <div style={{
                 background: isElite
-                    ? 'linear-gradient(135deg, rgba(251,191,36,0.15), rgba(245,158,11,0.08))'
+                    ? 'linear-gradient(135deg, color-mix(in srgb, var(--stat-reviews) 18%, transparent), color-mix(in srgb, var(--stat-reviews) 10%, transparent))'
                     : isProfessional
-                        ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(109,40,217,0.08))'
-                        : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${isElite ? 'rgba(251,191,36,0.35)' : isProfessional ? 'rgba(139,92,246,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                        ? 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, transparent), color-mix(in srgb, var(--primary) 10%, transparent))'
+                        : 'var(--hover-overlay)',
+                border: `1px solid ${isElite ? 'color-mix(in srgb, var(--stat-reviews) 40%, transparent)' : isProfessional ? 'color-mix(in srgb, var(--primary) 35%, transparent)' : 'var(--border-color)'}`,
                 borderRadius: 16,
                 padding: '24px 28px',
                 marginBottom: 28,
@@ -66,14 +68,14 @@ const ProSubscription = () => {
                 gap: 16
             }}>
                 <div>
-                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                         Current Plan
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isElite ? '#fbbf24' : isProfessional ? '#a78bfa' : '#94a3b8' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isElite ? 'var(--stat-reviews)' : isProfessional ? 'var(--primary)' : 'var(--text-muted)' }}>
                         {currentPlanLabel}
                     </div>
                     {(isElite || isProfessional) && (
-                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6 }}>
                             {isElite
                                 ? '1 permanent offer slot • Unlimited display time • Priority placement'
                                 : '1 offer slot × 50h/week • Buy extra hours or slots as needed'}
@@ -82,23 +84,18 @@ const ProSubscription = () => {
                 </div>
                 {(isElite || isProfessional) && (
                     <button
+                        type="button"
+                        className="ui-btn ui-btn--secondary"
                         onClick={handleManageBilling}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '10px 18px', borderRadius: 10,
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            background: 'rgba(255,255,255,0.06)',
-                            color: 'rgba(255,255,255,0.7)',
-                            fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer'
-                        }}
+                        style={{ padding: '10px 18px', gap: 8, fontSize: '0.875rem' }}
                     >
                         <FaExternalLinkAlt size={12} /> Manage Billing
                     </button>
                 )}
             </div>
 
-            {/* Plans Comparison */}
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', marginBottom: 20, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            {/* Plans Comparison - theme tokens for text/surfaces */}
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 20, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 {isElite ? 'Plan Overview' : 'Available Plans'}
             </h3>
 
@@ -109,8 +106,8 @@ const ProSubscription = () => {
 
                     return (
                         <div key={plan.id} style={{
-                            background: isCurrent ? 'rgba(251,191,36,0.07)' : 'rgba(255,255,255,0.04)',
-                            border: `1px solid ${isCurrent ? 'rgba(251,191,36,0.4)' : isRecommended ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                            background: isCurrent ? 'color-mix(in srgb, var(--stat-reviews) 12%, var(--bg-card))' : 'var(--bg-card)',
+                            border: `1px solid ${isCurrent ? 'color-mix(in srgb, var(--stat-reviews) 45%, transparent)' : isRecommended ? 'color-mix(in srgb, var(--primary) 35%, transparent)' : 'var(--border-color)'}`,
                             borderRadius: 16,
                             padding: '24px',
                             position: 'relative',
@@ -120,8 +117,8 @@ const ProSubscription = () => {
                             {isCurrent && (
                                 <div style={{
                                     position: 'absolute', top: -10, right: 16,
-                                    background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                                    color: '#1a1a1a', padding: '3px 12px', borderRadius: 8,
+                                    background: 'linear-gradient(135deg, var(--stat-reviews), var(--primary-hover))',
+                                    color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
                                     fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em'
                                 }}>
                                     CURRENT
@@ -130,8 +127,8 @@ const ProSubscription = () => {
                             {isRecommended && !isCurrent && (
                                 <div style={{
                                     position: 'absolute', top: -10, right: 16,
-                                    background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
-                                    color: 'white', padding: '3px 12px', borderRadius: 8,
+                                    background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))',
+                                    color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
                                     fontSize: '0.7rem', fontWeight: 800
                                 }}>
                                     RECOMMENDED
@@ -140,22 +137,22 @@ const ProSubscription = () => {
 
                             {/* Plan header */}
                             <div style={{ marginBottom: 16 }}>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
                                     {plan.name}
                                 </div>
-                                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                     {plan.description}
                                 </div>
                             </div>
 
                             {/* Price */}
                             <div style={{ marginBottom: 20 }}>
-                                <span style={{ fontSize: '2.2rem', fontWeight: 900, color: isCurrent ? '#fbbf24' : '#f1f5f9' }}>
+                                <span style={{ fontSize: '2.2rem', fontWeight: 900, color: isCurrent ? 'var(--stat-reviews)' : 'var(--text-main)' }}>
                                     ${Math.round(plan.price * 1.53)} AUD
                                 </span>
-                                <span style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>/ month</span>
+                                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginLeft: 6 }}>/ month</span>
                                 {plan.discount > 0 && (
-                                    <div style={{ fontSize: '0.8rem', color: '#4ade80', marginTop: 4 }}>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-success)', marginTop: 4 }}>
                                         ✨ First month FREE
                                     </div>
                                 )}
@@ -164,8 +161,8 @@ const ProSubscription = () => {
                             {/* Features */}
                             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {(plan.features || []).map((f, i) => (
-                                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)' }}>
-                                        <FaCheck style={{ color: '#4ade80', flexShrink: 0, marginTop: 2 }} />
+                                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                        <FaCheck style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: 2 }} />
                                         {f}
                                     </li>
                                 ))}
@@ -173,27 +170,20 @@ const ProSubscription = () => {
 
                             {/* CTA */}
                             {isCurrent ? (
-                                <button disabled style={{
-                                    padding: '12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)',
-                                    background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.3)',
-                                    fontWeight: 700, cursor: 'default', fontSize: '0.875rem'
-                                }}>
+                                <button type="button" className="ui-btn ui-btn--secondary" disabled style={{ padding: '12px', fontSize: '0.875rem', cursor: 'default', opacity: 0.8 }}>
                                     Current Plan
                                 </button>
                             ) : (
                                 <button
+                                    type="button"
                                     onClick={() => handleUpgrade(plan)}
                                     disabled={loading === plan.id}
+                                    className="ui-btn ui-btn--primary"
                                     style={{
-                                        padding: '12px', borderRadius: 10, border: 'none',
-                                        background: isRecommended
-                                            ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
-                                            : 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
-                                        color: isRecommended ? '#1a1a1a' : 'white',
-                                        fontWeight: 700, cursor: loading === plan.id ? 'not-allowed' : 'pointer',
-                                        fontSize: '0.875rem',
+                                        padding: '12px', borderRadius: 10, fontSize: '0.875rem',
                                         opacity: loading === plan.id ? 0.6 : 1,
-                                        transition: 'all 0.2s'
+                                        background: isRecommended ? 'linear-gradient(135deg, var(--stat-reviews), var(--primary-hover))' : undefined,
+                                        color: isRecommended ? 'var(--text-white)' : undefined
                                     }}
                                 >
                                     {loading === plan.id ? 'Loading...' : plan.tier === 'elite' ? 'Upgrade to Elite →' : 'Start with Professional →'}

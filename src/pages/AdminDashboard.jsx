@@ -27,22 +27,20 @@ const AdminDashboard = () => {
 
         console.log('🔍 Admin Check:', {
             role: userProfile.role,
-            accountType: userProfile.accountType,
             email: userProfile.email,
             uid: userProfile.uid
         });
 
-        // Auto-fix admin account if missing accountType or role
+        // Auto-fix admin account if missing role
         const fixAdminAccount = async () => {
-            if (!userProfile.accountType || !userProfile.role) {
-                console.log('⚠️ Missing accountType or role, attempting to fix...');
+            if (!userProfile.role || userProfile.role !== 'admin') {
+                console.log('⚠️ Missing role, attempting to fix...');
 
                 try {
                     const { doc, updateDoc } = await import('firebase/firestore');
                     const userRef = doc(db, 'users', userProfile.uid);
 
                     await updateDoc(userRef, {
-                        accountType: 'admin',
                         role: 'admin'
                     });
 
@@ -58,7 +56,7 @@ const AdminDashboard = () => {
 
         fixAdminAccount();
 
-        if (userProfile.role !== 'admin' && userProfile.accountType !== 'admin') {
+        if (userProfile.role !== 'admin') {
             console.log('❌ Not admin, redirecting...');
             navigate('/');
         } else {
@@ -73,7 +71,7 @@ const AdminDashboard = () => {
                 setLoading(true);
                 const q = query(
                     collection(db, 'users'),
-                    where('accountType', '==', 'business'),
+                    where('role', '==', 'business'),
                     orderBy('created_at', 'desc')
                 );
 
@@ -92,7 +90,7 @@ const AdminDashboard = () => {
             }
         };
 
-        if (userProfile?.role === 'admin' || userProfile?.accountType === 'admin') {
+        if (userProfile?.role === 'admin') {
             fetchBusinesses();
         }
     }, [userProfile]);
@@ -111,10 +109,10 @@ const AdminDashboard = () => {
             });
         }
 
-        // Plan filter
+        // Plan filter (business: only free, professional, elite from users.subscriptionTier)
         if (filterPlan !== 'all') {
             filtered = filtered.filter(business => {
-                const plan = business.businessInfo?.subscriptionPlan || 'free';
+                const plan = (business.subscriptionTier || 'free').toLowerCase();
                 return plan === filterPlan;
             });
         }
@@ -160,8 +158,8 @@ const AdminDashboard = () => {
     };
 
     const BusinessCard = ({ business }) => {
-        const planId = business.businessInfo?.subscriptionPlan || 'free';
-        const plan = getPlanById(planId);
+        const planId = (business.subscriptionTier || 'free').toLowerCase();
+        const plan = getPlanById(['free', 'professional', 'elite'].includes(planId) ? planId : 'free');
         const hasCustomLimits = business.businessInfo?.customLimits &&
             Object.keys(business.businessInfo.customLimits).length > 0;
 
@@ -352,7 +350,7 @@ const AdminDashboard = () => {
                         </button>
 
                         <button
-                            onClick={() => navigate(`/partner/${business.uid}`)}
+                            onClick={() => navigate(`/business/${business.uid}`)}
                             style={{
                                 padding: '0.5rem 1rem',
                                 background: 'var(--bg-body)',
@@ -419,7 +417,7 @@ const AdminDashboard = () => {
                             Business Partners Management
                         </h1>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
-                            Manage subscription limits and features for business partners
+                            Manage subscription limits and features for businesses
                         </p>
                     </div>
 
@@ -500,8 +498,8 @@ const AdminDashboard = () => {
                         </div>
                         <p style={{ fontSize: '2rem', fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>
                             {businesses.filter(b => {
-                                const plan = b.businessInfo?.subscriptionPlan || 'free';
-                                return plan === 'pro' || plan === 'premium';
+                                const plan = (b.subscriptionTier || 'free').toLowerCase();
+                                return plan === 'professional' || plan === 'elite';
                             }).length}
                         </p>
                     </div>
@@ -563,9 +561,8 @@ const AdminDashboard = () => {
                         >
                             <option value="all">All Plans</option>
                             <option value="free">Free</option>
-                            <option value="basic">Basic</option>
-                            <option value="pro">Pro</option>
-                            <option value="premium">Premium</option>
+                            <option value="professional">Professional</option>
+                            <option value="elite">Elite</option>
                         </select>
 
                         {/* Custom Limits Filter */}
@@ -636,7 +633,7 @@ const AdminDashboard = () => {
                         const fetchBusinesses = async () => {
                             const q = query(
                                 collection(db, 'users'),
-                                where('accountType', '==', 'business'),
+                                where('role', '==', 'business'),
                                 orderBy('created_at', 'desc')
                             );
                             const snapshot = await getDocs(q);

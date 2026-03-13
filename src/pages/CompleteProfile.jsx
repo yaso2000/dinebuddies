@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { doc, setDoc, getDoc } from 'firebase/firestore'; // keep setDoc for fallback
 import { db } from '../firebase/config';
@@ -14,6 +15,7 @@ import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 
 const CompleteProfile = () => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     // Destructure updateProfile from context
     const { currentUser, userProfile, loading, updateProfile } = useAuth();
     const { isDark } = useTheme();
@@ -59,12 +61,12 @@ const CompleteProfile = () => {
 
         // Photo is optional — only name, age category, and gender are required
         if (!formData.displayName || !formData.ageCategory || !formData.gender) {
-            alert(t('fill_required_fields', 'Please fill in your name, age group, and gender.'));
+            showToast(t('fill_required_fields', 'Please fill in your name, age group, and gender.'), 'error');
             return;
         }
 
         if (!currentUser?.uid) {
-            alert("User authentication error. Please try logging in again.");
+            showToast("User authentication error. Please try logging in again.", 'error');
             return;
         }
 
@@ -132,7 +134,7 @@ const CompleteProfile = () => {
 
         } catch (error) {
             console.error("❌ Error updating profile:", error);
-            alert(`Failed to save profile: ${error.message}`);
+            showToast(`Failed to save profile: ${error.message}`, 'error');
             setIsSubmitting(false);
         }
     };
@@ -154,7 +156,7 @@ const CompleteProfile = () => {
     const handleImageSelect = async (file) => {
         const validation = validateImageFile(file);
         if (!validation.valid) {
-            alert(validation.error);
+            showToast(validation.error, 'error');
             return;
         }
 
@@ -168,7 +170,7 @@ const CompleteProfile = () => {
             console.log("📸 Photo uploaded:", url);
         } catch (error) {
             console.error("❌ Photo upload failed:", error);
-            alert("Failed to upload photo. Please try again.");
+            showToast("Failed to upload photo. Please try again.", 'error');
             setUploadProgress(0);
         }
     };
@@ -384,7 +386,7 @@ const CompleteProfile = () => {
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="btn btn-primary btn-block"
+                        className="ui-btn ui-btn--primary"
                         style={{
                             height: '56px',
                             fontSize: '1.1rem',

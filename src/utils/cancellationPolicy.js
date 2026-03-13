@@ -108,9 +108,6 @@ export const canCreateInvitation = async (userId) => {
 
         const userData = userDoc.data();
 
-        // Tester bypass — immune to cancellation bans
-        if (userData.isTester) return { canCreate: true, reason: null };
-
         const restriction = userData.invitationRestriction;
 
         // Check if user has active restriction

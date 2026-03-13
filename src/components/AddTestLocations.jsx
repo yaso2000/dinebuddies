@@ -1,70 +1,22 @@
 import React, { useState } from 'react';
-import { collection, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaMapMarkerAlt, FaCheck } from 'react-icons/fa';
 
 const AddTestLocations = () => {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState('');
 
-    // Sample locations in Saudi Arabia (major cities)
-    const sampleLocations = [
-        { city: 'Riyadh', lat: 24.7136, lng: 46.6753 },
-        { city: 'Jeddah', lat: 21.5433, lng: 39.1728 },
-        { city: 'Mecca', lat: 21.3891, lng: 39.8579 },
-        { city: 'Medina', lat: 24.5247, lng: 39.5692 },
-        { city: 'Dammam', lat: 26.4207, lng: 50.0888 },
-        { city: 'Khobar', lat: 26.2172, lng: 50.1971 },
-        { city: 'Taif', lat: 21.2703, lng: 40.4150 },
-        { city: 'Tabuk', lat: 28.3838, lng: 36.5550 },
-        { city: 'Abha', lat: 18.2164, lng: 42.5053 },
-        { city: 'Buraidah', lat: 26.3260, lng: 43.9750 }
-    ];
-
     const addLocationsToBusinesses = async () => {
         setLoading(true);
         setResult('');
 
         try {
-            // Get all business accounts
-            const q = query(collection(db, 'users'), where('accountType', '==', 'business'));
-            const snapshot = await getDocs(q);
-
-            let updated = 0;
-            const businesses = snapshot.docs;
-
-            for (let i = 0; i < businesses.length; i++) {
-                const business = businesses[i];
-                const businessData = business.data();
-
-                // Skip if already has location
-                if (businessData.location?.latitude && businessData.location?.longitude) {
-                    continue;
-                }
-
-                // Assign a random location from the list
-                const randomLocation = sampleLocations[i % sampleLocations.length];
-
-                // Add some randomness to avoid exact duplicates
-                const lat = randomLocation.lat + (Math.random() - 0.5) * 0.1;
-                const lng = randomLocation.lng + (Math.random() - 0.5) * 0.1;
-
-                // Update the business document
-                await updateDoc(doc(db, 'users', business.id), {
-                    location: {
-                        latitude: lat,
-                        longitude: lng,
-                        city: randomLocation.city,
-                        country: 'Saudi Arabia'
-                    },
-                    'businessInfo.city': randomLocation.city,
-                    'businessInfo.country': 'Saudi Arabia'
-                });
-
-                updated++;
-            }
-
-            setResult(`✅ Successfully added locations to ${updated} businesses!`);
+            const functions = getFunctions();
+            const callable = httpsCallable(functions, 'adminAddTestLocationsToBusinesses');
+            const response = await callable({ dryRun: false });
+            const updated = Number(response?.data?.updated || 0);
+            const scanned = Number(response?.data?.scanned || 0);
+            setResult(`✅ Successfully added locations to ${updated} businesses (scanned ${scanned})!`);
         } catch (error) {
             console.error('Error adding locations:', error);
             setResult(`❌ Error: ${error.message}`);

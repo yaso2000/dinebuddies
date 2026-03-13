@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
+import { useInvitations } from '../../context/InvitationContext';
 import { FaUsers, FaCalendar, FaStar, FaEye, FaArrowUp } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
 
@@ -21,6 +22,7 @@ const StatCard = ({ icon, iconClass, value, label, trend }) => (
 
 const ProOverview = () => {
     const { currentUser } = useAuth();
+    const { getCommunityMembers } = useInvitations();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [recentMembers, setRecentMembers] = useState([]);
@@ -29,11 +31,12 @@ const ProOverview = () => {
         if (!currentUser?.uid) return;
         const fetch = async () => {
             try {
-                // Members
-                const membersSnap = await getDocs(query(
-                    collection(db, 'users'),
-                    where('joinedCommunities', 'array-contains', currentUser.uid)
-                ));
+                // Members (trusted backend + public projection)
+                const membersResult = await getCommunityMembers(currentUser.uid, {
+                    includeMembers: true,
+                    limit: 200
+                });
+                const members = membersResult?.members || [];
 
                 // Invitations
                 const invSnap = await getDocs(query(
@@ -61,7 +64,7 @@ const ProOverview = () => {
                 } catch (_) { /* reviews optional */ }
 
                 setStats({
-                    memberCount: membersSnap.size,
+                    memberCount: Number(membersResult?.memberCount || 0),
                     activeInvitations: activeInv,
                     totalInvitations: invSnap.size,
                     rating,
@@ -69,8 +72,16 @@ const ProOverview = () => {
                 });
 
                 // Recent members (last 5)
-                const members = membersSnap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() }));
-                setRecentMembers(members);
+                setRecentMembers(
+                    members.slice(0, 5).map((m) => ({
+                        id: m.id,
+                        display_name: m.displayName || 'User',
+                        avatar_url: m.avatarUrl || '',
+                        role: m.role || m.profileType || 'user',
+                        city: m.city || '',
+                        country: m.country || ''
+                    }))
+                );
             } catch (e) {
                 console.error('ProOverview fetch error:', e);
             } finally {
@@ -78,7 +89,7 @@ const ProOverview = () => {
             }
         };
         fetch();
-    }, [currentUser?.uid]);
+    }, [currentUser?.uid, getCommunityMembers]);
 
     if (loading) return <div className="bpro-spinner" />;
 
@@ -93,7 +104,7 @@ const ProOverview = () => {
             </div>
 
             {/* Recent Members */}
-            <div className="bpro-card">
+            <div className="ui-card" style={{ marginBottom: 20, padding: 24, borderRadius: 16 }}>
                 <div className="bpro-card-header">
                     <div>
                         <div className="bpro-card-title">Recent Members</div>
@@ -111,7 +122,7 @@ const ProOverview = () => {
                         <thead>
                             <tr>
                                 <th>Member</th>
-                                <th>Account Type</th>
+                                <th>Role</th>
                                 <th>Location</th>
                             </tr>
                         </thead>
@@ -128,7 +139,7 @@ const ProOverview = () => {
                                             <span style={{ color: '#f1f5f9', fontWeight: 500 }}>{m.display_name || m.name || 'User'}</span>
                                         </div>
                                     </td>
-                                    <td style={{ textTransform: 'capitalize' }}>{m.accountType || 'user'}</td>
+                                    <td style={{ textTransform: 'capitalize' }}>{m.role === 'business' ? 'Business' : (m.role || 'user')}</td>
                                     <td>{m.city || m.location || '—'}</td>
                                 </tr>
                             ))}

@@ -1,7 +1,10 @@
-import { doc, updateDoc, serverTimestamp, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { sendNotification } from './notificationHelpers';
-import { getSafeAvatar } from './avatarUtils';
+
+const functions = getFunctions();
+const lookupBusinessByPlaceIdCallable = httpsCallable(functions, 'lookupBusinessByPlaceId');
 
 /**
  * Update invitation guest count
@@ -48,10 +51,7 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
                     title: 'Invitation Complete',
                     message: `Great news! The invitation "${title}" is now complete with all ${newGuestCount} guests confirmed.`,
                     actionUrl: `/invitation/${invitationId}`,
-                    invitationId,
-                    fromUserId: currentUser.id,
-                    fromUserName: currentUser.display_name || currentUser.name,
-                    fromUserAvatar: getSafeAvatar(currentUser)
+                    invitationId
                 })
             );
 
@@ -60,18 +60,10 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
             // If venue has a placeId, check if it's a registered business and notify
             if (placeId) {
                 try {
-                    const usersRef = collection(db, 'users');
-                    const businessQuery = query(
-                        usersRef,
-                        where('isBusiness', '==', true),
-                        where('businessInfo.placeId', '==', placeId)
-                    );
+                    const lookup = await lookupBusinessByPlaceIdCallable({ placeId });
+                    const businessId = lookup?.data?.businessId || null;
 
-                    const businessSnapshot = await getDocs(businessQuery);
-
-                    if (!businessSnapshot.empty) {
-                        const businessDoc = businessSnapshot.docs[0];
-                        const businessId = businessDoc.id;
+                    if (businessId) {
 
                         // Send notification to business
                         await sendNotification(businessId, {
@@ -80,10 +72,7 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
                             message: `A booking for "${title}" at your venue is now confirmed with ${newGuestCount} guests.`,
                             actionUrl: `/invitation/${invitationId}`,
                             invitationId,
-                            fromUserId: currentUser.id,
-                            fromUserName: currentUser.display_name || currentUser.name,
-                            fromUserAvatar: getSafeAvatar(currentUser),
-                            guestCount: newGuestCount
+                            metadata: { guestCount: newGuestCount }
                         });
                     }
                 } catch (error) {

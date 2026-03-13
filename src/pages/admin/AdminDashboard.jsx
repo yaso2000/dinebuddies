@@ -1,454 +1,282 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../firebase/config';
-import { FaUsers, FaStore, FaCreditCard, FaEnvelope, FaExclamationTriangle, FaArrowUp, FaArrowDown, FaPlus, FaUserPlus } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
-import CreateUserAccount from '../../components/CreateUserAccount';
-import CreateBusinessAccount from '../../components/CreateBusinessAccount';
+import { collection, getDocs, query, where, orderBy, limit as firestoreLimit } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import {
+    FaUsers,
+    FaUtensils,
+    FaEnvelope,
+    FaComment,
+    FaStore,
+    FaExclamationTriangle,
+    FaCreditCard,
+    FaChartLine,
+    FaRss,
+    FaUserPlus,
+    FaCalendarPlus,
+    FaFlag,
+} from 'react-icons/fa';
+
+const todayStart = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+};
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const [stats, setStats] = useState({
-        totalUsers: 0,
-        totalPartners: 0,
-        activeSubscriptions: 0,
-        individuals: 0,
-        businesses: 0,
-        teamMembers: 0,
-        paidBusinesses: 0,    // professional + elite
-        paidUsers: 0,         // pro + vip
-        pendingInvitations: 0,
-        pendingReports: 0
-    });
     const [loading, setLoading] = useState(true);
-    const [showCreateUser, setShowCreateUser] = useState(false);
-    const [showCreateBusiness, setShowCreateBusiness] = useState(false);
+    const [stats, setStats] = useState({
+        usersToday: 0,
+        usersTotal: 0,
+        invitationsToday: 0,
+        invitationsTotal: 0,
+        messagesToday: 0,
+        messagesTotal: 0,
+        restaurantsTotal: 0,
+        reportsPending: 0,
+        activeSubscriptions: 0,
+    });
+    const [activity, setActivity] = useState([]);
 
     useEffect(() => {
-        console.log('🎯 Admin Dashboard loaded with Create buttons');
-        fetchStats();
+        loadDashboard();
     }, []);
 
-    const fetchStats = async () => {
+    const loadDashboard = async () => {
         try {
             setLoading(true);
-            const usersSnapshot = await getDocs(collection(db, 'users'));
-            const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const since = todayStart();
+            const sinceMillis = since.getTime();
 
-            const businesses = users.filter(u => u.role === 'business');
-            const team = users.filter(u => ['admin', 'staff', 'support'].includes(u.role));
-            const individuals = users.filter(u => !['business', 'admin', 'staff', 'support'].includes(u.role));
+            const [usersSnap, invitationsSnap, privateInvSnap, partnersSnap, reportsSnap] = await Promise.all([
+                getDocs(collection(db, 'users')),
+                getDocs(collection(db, 'invitations')),
+                getDocs(collection(db, 'private_invitations')),
+                getDocs(query(collection(db, 'users'), where('role', '==', 'business'))),
+                getDocs(query(collection(db, 'reports'), where('status', '==', 'pending'))).catch(() => ({ docs: [], size: 0 })),
+            ]);
 
-            const paidBusinesses = businesses.filter(u =>
-                u.subscriptionTier === 'professional' || u.subscriptionTier === 'elite'
-            ).length;
+            const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const invitations = invitationsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const privateInvs = privateInvSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-            const paidUsers = individuals.filter(u =>
-                u.subscriptionTier === 'pro' || u.subscriptionTier === 'vip'
-            ).length;
+            const toMillis = (v) => {
+                if (!v) return 0;
+                if (v.toMillis) return v.toMillis();
+                if (v.seconds) return v.seconds * 1000;
+                if (typeof v === 'number') return v;
+                return 0;
+            };
 
-            const invitationsSnapshot = await getDocs(collection(db, 'invitations'));
+            const usersToday = users.filter((u) => toMillis(u.created_time) >= sinceMillis).length;
+            const invToday = invitations.filter((i) => toMillis(i.createdAt) >= sinceMillis).length;
+            const privateToday = privateInvs.filter((i) => toMillis(i.createdAt) >= sinceMillis).length;
+            const invitationsToday = invToday + privateToday;
 
-            let pendingReports = 0;
+            let messagesTotal = 0;
+            let messagesToday = 0;
             try {
-                const reportsSnapshot = await getDocs(
-                    query(collection(db, 'reports'), where('status', '==', 'pending'))
-                );
-                pendingReports = reportsSnapshot.size;
-            } catch { /* collection may not exist */ }
+                const convSnap = await getDocs(query(collection(db, 'conversations'), firestoreLimit(50)));
+                for (const conv of convSnap.docs) {
+                    const msgsSnap = await getDocs(query(collection(db, 'conversations', conv.id, 'messages'), firestoreLimit(200)));
+                    messagesTotal += msgsSnap.size;
+                    msgsSnap.docs.forEach((m) => {
+                        if (toMillis(m.data().createdAt) >= sinceMillis) messagesToday += 1;
+                    });
+                }
+            } catch {
+                messagesTotal = 0;
+                messagesToday = 0;
+            }
+
+            const activeSubs = users.filter(
+                (u) => ['pro', 'vip', 'professional', 'elite'].includes(u.subscriptionTier)
+            ).length;
 
             setStats({
-                totalUsers: users.length,
-                individuals: individuals.length,
-                businesses: businesses.length,
-                teamMembers: team.length,
-                paidBusinesses,
-                paidUsers,
-                pendingInvitations: invitationsSnapshot.size,
-                pendingReports
+                usersToday,
+                usersTotal: users.length,
+                invitationsToday,
+                invitationsTotal: invitations.length + privateInvs.length,
+                messagesToday,
+                messagesTotal: messagesTotal > 0 ? messagesTotal : '-',
+                restaurantsTotal: partnersSnap.size,
+                reportsPending: reportsSnap.docs ? reportsSnap.docs.length : reportsSnap.size || 0,
+                activeSubscriptions: activeSubs,
             });
-        } catch (error) {
-            console.error('Error fetching stats:', error);
+
+            const events = [];
+            users
+                .filter((u) => toMillis(u.created_time) > 0)
+                .sort((a, b) => toMillis(b.created_time) - toMillis(a.created_time))
+                .slice(0, 15)
+                .forEach((u) => {
+                    events.push({
+                        type: 'user_joined',
+                        label: 'User joined',
+                        detail: u.display_name || u.displayName || u.email || u.id,
+                        time: toMillis(u.created_time),
+                        id: u.id,
+                    });
+                });
+            [...invitations, ...privateInvs]
+                .filter((i) => toMillis(i.createdAt) > 0)
+                .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+                .slice(0, 10)
+                .forEach((i) => {
+                    events.push({
+                        type: 'invitation_created',
+                        label: 'Invitation created',
+                        detail: i.title || i.id,
+                        time: toMillis(i.createdAt),
+                        id: i.id,
+                    });
+                });
+            try {
+                const repSnap = await getDocs(query(collection(db, 'reports'), orderBy('createdAt', 'desc'), firestoreLimit(5)));
+                repSnap.docs.forEach((d) => {
+                    const r = d.data();
+                    events.push({
+                        type: 'report_submitted',
+                        label: 'Report submitted',
+                        detail: r.reason || d.id,
+                        time: toMillis(r.createdAt),
+                        id: d.id,
+                    });
+                });
+            } catch {}
+            partnersSnap.docs.forEach((d) => {
+                const p = d.data();
+                const t = toMillis(p.created_time);
+                if (t > 0)
+                    events.push({
+                        type: 'business_registered',
+                        label: 'Business registered',
+                        detail: p.businessInfo?.businessName || p.email || d.id,
+                        time: t,
+                        id: d.id,
+                    });
+            });
+            events.sort((a, b) => b.time - a.time);
+            setActivity(events.slice(0, 25));
+        } catch (e) {
+            console.error(e);
         } finally {
             setLoading(false);
         }
     };
 
-    const StatCard = ({ icon: Icon, label, value, change, color, bgColor, onClick }) => (
-        <div className="admin-stat-card" onClick={onClick} style={{ borderColor: '#334155' }}>
-            <div className="admin-flex-between admin-mb-2">
-                <div className="admin-stat-icon" style={{ backgroundColor: bgColor }}>
-                    <Icon style={{ color: color }} />
-                </div>
-                {change && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                        fontSize: '0.875rem',
-                        fontWeight: '600',
-                        color: change > 0 ? '#22c55e' : '#ef4444'
-                    }}>
-                        {change > 0 ? <FaArrowUp /> : <FaArrowDown />}
-                        {Math.abs(change)}%
-                    </div>
-                )}
-            </div>
-            <div>
-                <p className="admin-stat-label">{label}</p>
-                <p className="admin-stat-value">{typeof value === 'number' ? value.toLocaleString() : value}</p>
-            </div>
-        </div>
-    );
+    const formatTime = (ms) => {
+        if (!ms) return '';
+        const d = new Date(ms);
+        const now = Date.now();
+        const diff = now - ms;
+        if (diff < 60000) return 'Just now';
+        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+        return d.toLocaleDateString();
+    };
 
-    const QuickAction = ({ icon: Icon, label, description, color, onClick }) => (
-        <button
-            onClick={onClick}
-            className="admin-card"
-            style={{
-                textAlign: 'left',
-                cursor: 'pointer',
-                border: '1px solid #334155',
-                background: '#1e293b',
-                width: '100%'
-            }}
-        >
-            <div className="admin-flex admin-gap-2" style={{ alignItems: 'center' }}>
-                <div style={{
-                    width: '2.5rem',
-                    height: '2.5rem',
-                    borderRadius: '0.5rem',
-                    backgroundColor: `${color}20`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}>
-                    <Icon style={{ fontSize: '1.25rem', color: color }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '1rem', fontWeight: '600', color: '#ffffff', marginBottom: '0.25rem' }}>
-                        {label}
-                    </p>
-                    <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>
-                        {description}
-                    </p>
-                </div>
-            </div>
-        </button>
-    );
+    const statCards = [
+        { key: 'users', label: 'Users', sub: 'today / total', value: `${stats.usersToday} / ${stats.usersTotal}`, icon: FaUsers, path: '/admin/users', color: '#6366f1' },
+        { key: 'invitations', label: 'Invitations created', sub: 'today', value: stats.invitationsToday, extra: `Total: ${stats.invitationsTotal}`, icon: FaUtensils, path: '/admin/invitations', color: '#10b981' },
+        { key: 'messages', label: 'Messages', sub: 'today', value: stats.messagesToday, extra: stats.messagesTotal !== '-' ? `Total: ${stats.messagesTotal}` : null, icon: FaComment, path: '/admin/chat-community', color: '#8b5cf6' },
+        { key: 'restaurants', label: 'Businesses', value: stats.restaurantsTotal, icon: FaStore, path: '/admin/businesses', color: '#f59e0b' },
+        { key: 'reports', label: 'Reports pending', value: stats.reportsPending, icon: FaExclamationTriangle, path: '/admin/reports', color: '#ef4444' },
+        { key: 'subscriptions', label: 'Active subscriptions', value: stats.activeSubscriptions, icon: FaCreditCard, path: '/admin/subscriptions', color: '#22c55e' },
+    ];
 
     if (loading) {
         return (
             <div className="admin-loading">
-                <div style={{ textAlign: 'center' }}>
-                    <div className="admin-spinner" />
-                    <p style={{ color: '#94a3b8', fontSize: '1rem', marginTop: '1rem' }}>Loading dashboard...</p>
-                </div>
+                <div className="admin-spinner" />
+                <p style={{ color: 'var(--admin-text-secondary)', marginTop: '1rem' }}>Loading dashboard…</p>
             </div>
         );
     }
 
     return (
         <div>
-            {/* Header */}
             <div className="admin-page-header">
                 <h1 className="admin-page-title">Dashboard</h1>
-                <p className="admin-page-subtitle">
-                    Welcome back! Here's what's happening with your platform.
-                </p>
+                <p className="admin-page-subtitle">Overview and live activity</p>
             </div>
 
-            {/* Stats Grid */}
-            <div className="admin-grid admin-grid-4 admin-mb-4">
-                <StatCard
-                    icon={FaUsers}
-                    label="Total Users"
-                    value={stats.totalUsers}
-                    color="#6366f1"
-                    bgColor="rgba(99, 102, 241, 0.1)"
-                    onClick={() => navigate('/admin/users')}
-                />
-                <StatCard
-                    icon={FaUsers}
-                    label="Individuals"
-                    value={stats.individuals}
-                    color="#60a5fa"
-                    bgColor="rgba(96, 165, 250, 0.1)"
-                    onClick={() => navigate('/admin/users')}
-                />
-                <StatCard
-                    icon={FaStore}
-                    label="Businesses"
-                    value={stats.businesses}
-                    color="#c084fc"
-                    bgColor="rgba(192, 132, 252, 0.1)"
-                    onClick={() => navigate('/admin/partners')}
-                />
-                <StatCard
-                    icon={FaCreditCard}
-                    label="Paid Businesses"
-                    value={stats.paidBusinesses}
-                    color="#22c55e"
-                    bgColor="rgba(34, 197, 94, 0.1)"
-                    onClick={() => navigate('/admin/subscriptions')}
-                />
-                <StatCard
-                    icon={FaCreditCard}
-                    label="Paid Users (Pro/VIP)"
-                    value={stats.paidUsers}
-                    color="#f59e0b"
-                    bgColor="rgba(245, 158, 11, 0.1)"
-                    onClick={() => navigate('/admin/users')}
-                />
-                <StatCard
-                    icon={FaUsers}
-                    label="Team Members"
-                    value={stats.teamMembers}
-                    color="#fbbf24"
-                    bgColor="rgba(251, 191, 36, 0.1)"
-                    onClick={() => navigate('/admin/users')}
-                />
-                <StatCard
-                    icon={FaEnvelope}
-                    label="Total Invitations"
-                    value={stats.pendingInvitations}
-                    color="#34d399"
-                    bgColor="rgba(52, 211, 153, 0.1)"
-                    onClick={() => navigate('/admin/invitations')}
-                />
-                <StatCard
-                    icon={FaExclamationTriangle}
-                    label="Pending Reports"
-                    value={stats.pendingReports}
-                    color="#ef4444"
-                    bgColor="rgba(239, 68, 68, 0.1)"
-                    onClick={() => navigate('/admin/reports')}
-                />
-            </div>
-
-            {/* Quick Actions */}
-            <div className="admin-mb-4">
-                <h2 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: '#ffffff',
-                    marginBottom: '1rem',
-                    letterSpacing: '-0.025em'
-                }}>
-                    Quick Actions
-                </h2>
-                <div className="admin-grid admin-grid-3">
-                    <QuickAction
-                        icon={FaUsers}
-                        label="Manage Users"
-                        description="View and manage all users"
-                        color="#6366f1"
-                        onClick={() => navigate('/admin/users')}
-                    />
-                    <QuickAction
-                        icon={FaCreditCard}
-                        label="Manage Plans"
-                        description="Create and edit subscription plans"
-                        color="#8b5cf6"
-                        onClick={() => navigate('/admin/plans')}
-                    />
-                    <QuickAction
-                        icon={FaStore}
-                        label="Business Limits"
-                        description="Manage business subscription limits"
-                        color="#22c55e"
-                        onClick={() => navigate('/admin/business-limits')}
-                    />
-                    <QuickAction
-                        icon={FaExclamationTriangle}
-                        label="Review Reports"
-                        description={`${stats.pendingReports} pending reports`}
-                        color="#ef4444"
-                        onClick={() => navigate('/admin/reports')}
-                    />
+            <section className="admin-mb-4">
+                <h2 className="admin-section-title">Statistics</h2>
+                <div className="admin-kpi-strip">
+                    {statCards.map((c) => (
+                        <div
+                            key={c.key}
+                            className="admin-kpi-item"
+                            onClick={() => navigate(c.path)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === 'Enter' && navigate(c.path)}
+                        >
+                            <div className="admin-kpi-label">{c.label}</div>
+                            <div className="admin-kpi-value">{c.value}</div>
+                            {(c.sub || c.extra) && <div className="admin-kpi-sub" style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', marginTop: '0.25rem' }}>{c.extra || c.sub}</div>}
+                        </div>
+                    ))}
                 </div>
-            </div>
+            </section>
 
-            {/* Demo Data Management */}
-            <div className="admin-mb-4" style={{ marginTop: '2rem', borderTop: '1px solid #334155', paddingTop: '2rem' }}>
-                <h2 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: '#ffffff',
-                    marginBottom: '1rem',
-                    letterSpacing: '-0.025em',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                }}>
-                    🧪 Demo Data Management (Internal Use)
-                </h2>
-                <div className="admin-grid admin-grid-3">
-                    <button
-                        onClick={async () => {
-                            if (window.confirm('🧨 DANGER: This will delete ALL users and invitations from the database. Are you absolutely sure?')) {
-                                if (window.confirm('Type YES to confirm wipe.')) { // Simple double check
-                                    setLoading(true);
-                                    try {
-                                        const { wipeAllData } = await import('../../utils/demoDataGenerator');
-                                        const count = await wipeAllData();
-                                        alert(`🧨 Wiped ${count} documents. Database is clean.`);
-                                        fetchStats();
-                                    } catch (err) {
-                                        alert('Error: ' + err.message);
-                                    } finally {
-                                        setLoading(false);
-                                    }
-                                }
-                            }
-                        }}
-                        className="admin-card"
-                        style={{
-                            background: '#7f1d1d', // Dark red
-                            color: 'white',
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            fontWeight: 'bold',
-                            border: '1px solid #ef4444'
-                        }}
-                    >
-                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>💀</div>
-                        WIPE EVERYTHING
-                    </button>
-                    <button
-                        onClick={async () => {
-                            if (window.confirm('Generate 20+ demo accounts and invitations for Bundaberg? This might take a few seconds.')) {
-                                setLoading(true);
-                                try {
-                                    const { createDemoData } = await import('../../utils/demoDataGenerator');
-                                    const result = await createDemoData();
-                                    alert(`✅ Generated: ${result.users} Users, ${result.businesses} Businesses, ${result.invitations} Invitations in Bundaberg`);
-                                    fetchStats();
-                                } catch (err) {
-                                    alert('Error: ' + err.message);
-                                } finally {
-                                    setLoading(false);
-                                }
-                            }
-                        }}
-                        className="admin-card"
-                        style={{
-                            background: '#10b981',
-                            color: 'white',
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            fontWeight: 'bold',
-                            border: 'none'
-                        }}
-                    >
-                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🚀</div>
-                        Generate Demo Data (Bundaberg)
-                    </button>
-
-                    <button
-                        onClick={async () => {
-                            if (window.confirm('⚠️ DELETE ALL DEMO DATA? This cannot be undone.')) {
-                                setLoading(true);
-                                try {
-                                    const { deleteAllDemoData } = await import('../../utils/demoDataGenerator');
-                                    const count = await deleteAllDemoData();
-                                    alert(`🗑️ Deleted ${count} demo records.`);
-                                    fetchStats();
-                                } catch (err) {
-                                    alert('Error: ' + err.message);
-                                } finally {
-                                    setLoading(false);
-                                }
-                            }
-                        }}
-                        className="admin-card"
-                        style={{
-                            background: '#ef4444',
-                            color: 'white',
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            fontWeight: 'bold',
-                            border: 'none'
-                        }}
-                    >
-                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🗑️</div>
-                        Delete All Demo Data
-                    </button>
-                </div>
-            </div>
-
-            {/* Create New */}
-            <div className="admin-mb-4">
-                <h2 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: '#ffffff',
-                    marginBottom: '1rem',
-                    letterSpacing: '-0.025em'
-                }}>
-                    Create New
-                </h2>
+            <section className="admin-mb-4">
+                <h2 className="admin-section-title">Charts</h2>
                 <div className="admin-grid admin-grid-2">
-                    <QuickAction
-                        icon={FaUserPlus}
-                        label="Create User Account"
-                        description="Add a new regular user"
-                        color="#6366f1"
-                        onClick={() => setShowCreateUser(true)}
-                    />
-                    <QuickAction
-                        icon={FaStore}
-                        label="Create Business Account"
-                        description="Add a new business partner"
-                        color="#22c55e"
-                        onClick={() => setShowCreateBusiness(true)}
-                    />
+                    {[
+                        { title: 'Invitations per day', icon: FaChartLine },
+                        { title: 'New users per day', icon: FaUsers },
+                        { title: 'Messages volume', icon: FaComment },
+                        { title: 'Revenue / subscriptions', icon: FaCreditCard },
+                    ].map((chart) => (
+                        <div key={chart.title} className="admin-card admin-chart-placeholder">
+                            <chart.icon style={{ fontSize: '2rem', color: 'var(--admin-text-muted)', marginBottom: '0.5rem' }} />
+                            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--admin-text-primary)', marginBottom: '0.25rem' }}>{chart.title}</h3>
+                            <p style={{ fontSize: '0.875rem', color: 'var(--admin-text-muted)' }}>Chart placeholder — connect to analytics when ready.</p>
+                        </div>
+                    ))}
                 </div>
-            </div>
+            </section>
 
-            {/* Recent Activity */}
-            <div>
-                <h2 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: '#ffffff',
-                    marginBottom: '1rem',
-                    letterSpacing: '-0.025em'
-                }}>
-                    Recent Activity
-                </h2>
-                <div className="admin-card">
-                    <div className="admin-empty">
-                        <div className="admin-empty-icon">📊</div>
-                        <h3 className="admin-empty-title">Activity Tracking</h3>
-                        <p className="admin-empty-text">
-                            Activity tracking coming soon...
-                        </p>
-                    </div>
+            <section>
+                <h2 className="admin-section-title">Live activity</h2>
+                <div className="admin-card" style={{ padding: 0, overflow: 'hidden' }}>
+                    {activity.length === 0 ? (
+                        <div className="admin-empty">
+                            <FaRss style={{ fontSize: '2rem', color: 'var(--admin-text-muted)' }} />
+                            <p className="admin-empty-text">No recent activity</p>
+                        </div>
+                    ) : (
+                        <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: '400px', overflowY: 'auto' }}>
+                            {activity.map((ev, i) => (
+                                <li
+                                    key={`${ev.type}-${ev.id}-${i}`}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.75rem 1rem',
+                                        borderBottom: i < activity.length - 1 ? '1px solid var(--admin-border)' : 'none',
+                                    }}
+                                >
+                                    {ev.type === 'user_joined' && <FaUserPlus style={{ color: '#6366f1', flexShrink: 0 }} />}
+                                    {ev.type === 'invitation_created' && <FaCalendarPlus style={{ color: '#10b981', flexShrink: 0 }} />}
+                                    {ev.type === 'report_submitted' && <FaFlag style={{ color: '#ef4444', flexShrink: 0 }} />}
+                                    {ev.type === 'business_registered' && <FaStore style={{ color: '#f59e0b', flexShrink: 0 }} />}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ fontWeight: '600', color: 'var(--admin-text-primary)' }}>{ev.label}</span>
+                                        <span style={{ color: 'var(--admin-text-secondary)', marginLeft: '0.5rem' }}>{ev.detail}</span>
+                                    </div>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', flexShrink: 0 }}>{formatTime(ev.time)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
-            </div>
-
-            {/* Create User Modal */}
-            {showCreateUser && (
-                <CreateUserAccount
-                    onClose={() => setShowCreateUser(false)}
-                    onSuccess={() => {
-                        setShowCreateUser(false);
-                        fetchStats(); // Refresh stats
-                    }}
-                />
-            )}
-
-            {/* Create Business Modal */}
-            {showCreateBusiness && (
-                <CreateBusinessAccount
-                    onClose={() => setShowCreateBusiness(false)}
-                    onSuccess={() => {
-                        setShowCreateBusiness(false);
-                        fetchStats(); // Refresh stats
-                    }}
-                />
-            )}
+            </section>
         </div>
     );
 };

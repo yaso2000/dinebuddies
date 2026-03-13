@@ -76,8 +76,10 @@ const ProDesignStudio = ({ editOffer = null }) => {
                 {/* Breadcrumb */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                     <button
+                        type="button"
+                        className="ui-btn ui-btn--secondary"
                         onClick={() => { setActiveTool(null); setCurrentEditOffer(null); }}
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.85rem', fontWeight: 600 }}
+                        style={{ padding: '6px 12px', gap: 7, fontSize: '0.85rem' }}
                     >
                         <FaArrowLeft /> Design Studio
                     </button>
@@ -104,8 +106,10 @@ const ProDesignStudio = ({ editOffer = null }) => {
             <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                     <button
+                        type="button"
+                        className="ui-btn ui-btn--secondary"
                         onClick={() => setActiveTool(null)}
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.85rem', fontWeight: 600 }}
+                        style={{ padding: '6px 12px', gap: 7, fontSize: '0.85rem' }}
                     >
                         <FaArrowLeft /> Design Studio
                     </button>
@@ -155,7 +159,8 @@ const ProDesignStudio = ({ editOffer = null }) => {
 
                         {!tool.comingSoon && (
                             <button
-                                className="bpro-btn-secondary"
+                                type="button"
+                                className="ui-btn ui-btn--secondary"
                                 style={{ marginTop: 4, width: '100%', justifyContent: 'center' }}
                                 onClick={e => { e.stopPropagation(); setActiveTool(tool.key); }}
                             >

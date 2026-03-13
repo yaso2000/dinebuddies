@@ -28,7 +28,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
         lng: null,
         userLat: null,
         userLng: null,
-        subscriptionPlan: 'free'
+        subscriptionTier: 'free'
     });
 
     // Get user's location and detect city/country automatically
@@ -172,12 +172,12 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
 
             const user = userCredential.user;
 
-            // Create Firestore document
+            // Create Firestore document — business plan tier on users.subscriptionTier only
             await setDoc(doc(db, 'users', user.uid), {
                 email: formData.email,
                 display_name: formData.businessName,
-                accountType: 'business',
                 role: 'business',
+                subscriptionTier: formData.subscriptionTier,
                 created_at: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 location: formData.lat && formData.lng ? {
@@ -193,7 +193,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                     city: formData.city,
                     country: formData.country,
                     address: formData.location,
-                    subscriptionPlan: formData.subscriptionPlan,
                     memberCount: 0,
                     postsThisMonth: 0,
                     createdBy: 'admin',
@@ -476,9 +475,9 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     <option value="Restaurant">Restaurant</option>
                                     <option value="Cafe">Cafe</option>
                                     <option value="Bar">Bar</option>
+                                    <option value="Night Club">Night Club</option>
+                                    <option value="Food Truck">Food Truck</option>
                                     <option value="Fast Food">Fast Food</option>
-                                    <option value="Fine Dining">Fine Dining</option>
-                                    <option value="Other">Other</option>
                                 </select>
                             </div>
 
@@ -601,8 +600,8 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     Initial Plan
                                 </label>
                                 <select
-                                    name="subscriptionPlan"
-                                    value={formData.subscriptionPlan}
+                                    name="subscriptionTier"
+                                    value={formData.subscriptionTier}
                                     onChange={handleChange}
                                     style={{
                                         width: '100%',
@@ -616,9 +615,8 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     }}
                                 >
                                     <option value="free">Free</option>
-                                    <option value="basic">Basic</option>
-                                    <option value="pro">Pro</option>
-                                    <option value="premium">Premium</option>
+                                    <option value="professional">Professional</option>
+                                    <option value="elite">Elite</option>
                                 </select>
                             </div>
                         </>

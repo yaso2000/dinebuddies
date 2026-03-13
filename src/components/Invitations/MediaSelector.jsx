@@ -5,7 +5,7 @@ import UnifiedCamera from '../UnifiedCamera';
 
 import './MediaSelector.css';
 
-const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, initialData = null, className = '' }) => {
+const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoading = false, onMediaSelect, initialData = null, className = '' }) => {
 
     const [source, setSource] = useState(initialData?.source || null); // 'venue' | 'custom_image' | 'custom_video'
     const [videoMode, setVideoMode] = useState(null); // 'upload' | 'record'
@@ -91,12 +91,12 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, initia
         onMediaSelect(mediaData);
     };
 
-    // Auto-select 'venue' source when images are available (e.g. after location select)
+    // Auto-select 'venue' source when images are available (e.g. after location select) or when loading
     useEffect(() => {
         const hasRestaurantImage = restaurant && (restaurant.image || restaurant.restaurantImage);
         const hasSuggested = suggestedImages && suggestedImages.length > 0;
 
-        if (hasRestaurantImage || hasSuggested) {
+        if (hasRestaurantImage || hasSuggested || suggestedImagesLoading) {
             // Only set source to venue if no source is selected yet
             if (!source) {
                 setSource('venue');
@@ -127,7 +127,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, initia
                 }
             }
         }
-    }, [suggestedImages, restaurant]);
+    }, [suggestedImages, restaurant, suggestedImagesLoading]);
 
     const resetSelection = () => {
         setSource(null);
@@ -137,10 +137,10 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, initia
         onMediaSelect(null);
     };
 
-    // Determine if we have any venue images available
+    // Determine if we have any venue images available (or are loading suggested ones)
     const hasRestaurantImage = restaurant && (restaurant.image || restaurant.restaurantImage);
     const hasSuggestedImages = suggestedImages && suggestedImages.length > 0;
-    const hasVenueImages = hasRestaurantImage || hasSuggestedImages;
+    const hasVenueImages = hasRestaurantImage || hasSuggestedImages || suggestedImagesLoading;
 
     return (
         <div className={`media-selector ${className}`}>
@@ -257,7 +257,25 @@ const MediaSelector = ({ restaurant, suggestedImages = [], onMediaSelect, initia
                                         />
                                     </div>
                                 )}
-                                {suggestedImages.map((url, idx) => (
+                                {/* Skeleton tiles while suggested images are loading */}
+                                {suggestedImagesLoading && (
+                                    <>
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div
+                                                key={`skeleton-${i}`}
+                                                className="venue-image-skeleton"
+                                                style={{
+                                                    height: '90px',
+                                                    borderRadius: '12px',
+                                                    background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%)',
+                                                    backgroundSize: '200% 100%',
+                                                    animation: 'shimmer 1.5s infinite'
+                                                }}
+                                            />
+                                        ))}
+                                    </>
+                                )}
+                                {!suggestedImagesLoading && suggestedImages.map((url, idx) => (
                                     <div
                                         key={idx}
                                         onClick={() => handleVenueImageSelect(url)}

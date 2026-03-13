@@ -91,27 +91,27 @@ export const generateInvitationMetaTags = (invitation) => {
 };
 
 /**
- * Generate meta tags for a partner/restaurant profile
- * @param {Object} partner - The partner object
+ * Generate meta tags for a business profile
+ * @param {Object} business - The business (user with role business) object
  * @returns {Object} Meta tags data
  */
-export const generatePartnerMetaTags = (partner) => {
-    if (!partner) return {};
-
-    const { businessInfo } = partner;
-    const name = businessInfo?.businessName || partner.name || 'Restaurant';
+export const generateBusinessMetaTags = (business) => {
+    if (!business) return {};
+    const { businessInfo } = business;
+    const name = businessInfo?.businessName || business.name || 'Restaurant';
     const description = businessInfo?.description || `Discover ${name} on DineBuddies`;
-    const image = getSafeAvatar(partner);
     const location = businessInfo?.location || '';
-
     return {
         title: `${name} - DineBuddies`,
         description: `${description}${location ? `\n📍 ${location}` : ''}`,
-        image: getSafeAvatar(partner),
+        image: getSafeAvatar(business),
         url: window.location.href,
         type: 'profile'
     };
 };
+
+/** @deprecated Use generateBusinessMetaTags */
+export const generatePartnerMetaTags = generateBusinessMetaTags;
 
 /**
  * Reset meta tags to default

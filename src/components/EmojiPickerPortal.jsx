@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import EmojiPicker from 'emoji-picker-react';
+const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 // Emoji picker is for DESKTOP only.
 // Mobile users have native emoji keyboard built-in.
@@ -75,16 +75,18 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
                 >✕</button>
             </div>
 
-            <EmojiPicker
-                onEmojiClick={(emojiData) => {
-                    onEmojiClick(emojiData);
-                    // Stay open — user can pick multiple emojis
-                }}
-                theme="dark"
-                width={300}
-                height={380}
-                previewConfig={{ showPreview: false }}
-            />
+            <Suspense fallback={<div style={{ width: 300, height: 380, background: '#111827' }} />}>
+                <LazyEmojiPicker
+                    onEmojiClick={(emojiData) => {
+                        onEmojiClick(emojiData);
+                        // Stay open — user can pick multiple emojis
+                    }}
+                    theme="dark"
+                    width={300}
+                    height={380}
+                    previewConfig={{ showPreview: false }}
+                />
+            </Suspense>
         </div>,
         document.body
     );

@@ -18,7 +18,8 @@ const Layout = ({ children }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { t, i18n } = useTranslation();
-    const { invitations, getFollowingInvitations, currentUser } = useInvitations();
+    const invContext = useInvitations();
+    const { invitations = [], getFollowingInvitations = () => [], currentUser = null } = invContext || {};
     const { unreadCount: chatUnreadCount } = useChat();
     const { unreadCount } = useNotifications();
     const { userProfile, isGuest } = useAuth();
@@ -31,6 +32,9 @@ const Layout = ({ children }) => {
 
     const isActive = (path) => location.pathname === path;
     const isBusinessAccount = userProfile?.role === 'business';
+    // Business plan: only users/{userId}.subscriptionTier; valid tiers: free, professional, elite (no legacy aliases).
+    const businessTier = (userProfile?.subscriptionTier || 'free').toLowerCase();
+    const canAccessDesktopDashboard = isBusinessAccount && (businessTier === 'elite');
 
     // Route type detection
     const isChatRoute = location.pathname.startsWith('/chat/') ||
@@ -69,7 +73,7 @@ const Layout = ({ children }) => {
                     const snap = await getDoc(doc(db, 'users', partnerId));
                     if (!snap.exists()) return null;
                     const d = snap.data();
-                    if (!['business', 'partner'].includes(d.accountType) && d.role !== 'business') return null;
+                    if (d.role !== 'business') return null;
                     const bi = d.businessInfo || {};
                     return {
                         id: partnerId,
@@ -243,7 +247,7 @@ const Layout = ({ children }) => {
                 <div className="ds-widget-card">
                     <div className="ds-widget-header">
                         <FaFire size={14} style={{ color: '#f97316' }} />
-                        <span>{t('trending_partners', 'Trending Partners')}</span>
+                        <span>{t('trending_partners', 'Trending Businesses')}</span>
                         <Link to="/restaurants" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
                     </div>
                     {trendingPartners.map(r => (
@@ -314,7 +318,7 @@ const Layout = ({ children }) => {
                     <span className="app-name">DineBuddies</span>
                 </div>
                 <div className="header-actions">
-                    {!isGuest && userProfile?.accountType !== 'guest' ? (
+                    {!isGuest && userProfile?.role !== 'guest' ? (
                         <>
                             <Link to="/messages" className="notification-bell">
                                 <FaComments />
@@ -330,7 +334,7 @@ const Layout = ({ children }) => {
 
                             <div
                                 className="header-profile-pic"
-                                onClick={() => navigate(isBusinessAccount ? (window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard') : '/profile')}
+                                onClick={() => navigate(isBusinessAccount ? (window.innerWidth >= 1024 && canAccessDesktopDashboard ? '/business-pro' : '/business-dashboard') : '/profile')}
                                 style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'pointer', position: 'relative', background: 'var(--hover-overlay)' }}
                             >
                                 {!imgLoaded && (
@@ -370,9 +374,9 @@ const Layout = ({ children }) => {
                             <FaEnvelope /><span>{t('nav_invitations', 'Invitations')}</span>
                         </Link>
                         <Link to="/restaurants" className={`ds-nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
-                            <FaStore /><span>{t('nav_partners', 'Partners')}</span>
+                            <FaStore /><span>{t('nav_partners', 'Businesses')}</span>
                         </Link>
-                        {!isBusinessAccount && !isGuest && userProfile?.accountType !== 'guest' && (
+                        {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' && (
                             <Link to="/communities" className={`ds-nav-item ${isActive('/communities') ? 'active' : ''}`}>
                                 <FaUsers /><span>{t('communities')}</span>
                             </Link>
@@ -393,15 +397,23 @@ const Layout = ({ children }) => {
                                         </Link>
                                     </>
                                 )}
-                                <Link to={isBusinessAccount ? '/business-pro' : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-pro') ? 'active' : ''}`}>
-                                    <FaUser /><span>{isBusinessAccount ? 'Dashboard' : t('profile', 'Profile')}</span>
+                                <Link to={isBusinessAccount ? (canAccessDesktopDashboard ? '/business-pro' : '/business-dashboard') : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-pro') || isActive('/business-dashboard') ? 'active' : ''}`}>
+                                    <FaUser /><span>{isBusinessAccount ? t('dashboard', 'Dashboard') : t('profile', 'Profile')}</span>
                                 </Link>
                                 {isBusinessAccount && currentUser && (
                                     <Link
-                                        to={`/partner/${currentUser.uid}`}
-                                        className={`ds-nav-item ${location.pathname === `/partner/${currentUser.uid}` ? 'active' : ''}`}
+                                        to={`/business/${currentUser.uid}`}
+                                        className={`ds-nav-item ${location.pathname === `/business/${currentUser.uid}` ? 'active' : ''}`}
                                     >
                                         <FaStore /><span>My Profile</span>
+                                    </Link>
+                                )}
+                                {isBusinessAccount && currentUser && (
+                                    <Link
+                                        to="/my-community"
+                                        className={`ds-nav-item ${isActive('/my-community') ? 'active' : ''}`}
+                                    >
+                                        <FaUsers /><span>{t('my_community', 'My Community')}</span>
                                     </Link>
                                 )}
                             </>
@@ -458,9 +470,9 @@ const Layout = ({ children }) => {
                     )}
                     <Link to="/restaurants" className={`nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
                         <FaStore className="nav-icon" />
-                        <span>{t('nav_partners', 'Partners')}</span>
+                        <span>{t('nav_partners', 'Businesses')}</span>
                     </Link>
-                    {!isBusinessAccount && !isGuest && userProfile?.accountType !== 'guest' && (
+                    {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' && (
                         <Link to="/communities" className={`nav-item ${isActive('/communities') ? 'active' : ''}`}>
                             <div className="friend-nav-icon-container"><FaUsers className="nav-icon" /></div>
                             <span>{t('communities')}</span>

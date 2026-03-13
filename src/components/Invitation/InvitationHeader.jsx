@@ -25,10 +25,21 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800'; }}
             />
-            <div className="overlay" style={{
-                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 60%, var(--bg-body) 100%)'
-            }}></div>
+            <div
+                className="overlay"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background:
+                        'linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.6) 85%, rgba(16, 185, 129, 0.63) 100%)',
+                    borderStyle: 'solid',
+                    borderWidth: '1px',
+                    borderColor: 'rgba(0, 0, 0, 1)',
+                }}
+            ></div>
 
             {/* Action Buttons (Top Right) */}
             <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10, display: 'flex', gap: '10px' }}>

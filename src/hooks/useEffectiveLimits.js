@@ -17,56 +17,43 @@ export const useEffectiveLimits = (businessId, userProfile = null) => {
             try {
                 setLoading(true);
 
-                // Get business data
-                let businessData = null;
-
-                if (userProfile?.businessInfo) {
-                    businessData = userProfile.businessInfo;
+                let userData = null;
+                if (userProfile && userProfile.role === 'business') {
+                    userData = userProfile;
                 } else if (businessId) {
-                    const businessDoc = await getDoc(doc(db, 'users', businessId));
-                    if (businessDoc.exists()) {
-                        businessData = businessDoc.data().businessInfo;
-                    }
+                    const userDoc = await getDoc(doc(db, 'users', businessId));
+                    if (userDoc.exists()) userData = userDoc.data();
                 }
 
-                if (!businessData) {
+                if (!userData) {
                     throw new Error('Business data not found');
                 }
 
-                // Get plan and default limits
-                const planId = businessData.subscriptionPlan || 'free';
+                const businessInfo = userData.businessInfo || {};
+                const planId = (() => {
+                    const t = (userData.subscriptionTier || 'free').toLowerCase();
+                    return ['free', 'professional', 'elite'].includes(t) ? t : 'free';
+                })();
                 const defaultLimits = getPlanById(planId);
-
-                // Get custom limits and expiry dates
-                const customLimits = businessData.customLimits || {};
-                const customLimitsExpiry = businessData.customLimitsExpiry || {};
-
-                // Calculate effective limits
+                const customLimits = businessInfo.customLimits || {};
+                const customLimitsExpiry = businessInfo.customLimitsExpiry || {};
                 const now = new Date();
 
-                // SOFT LAUNCH: UNLOCK EVERYTHING
-                // Force all businesses to have 'premium' plan features regardless of actual plan
-                const premiumPlan = getPlanById('premium');
-                const effectiveLimits = { ...premiumPlan };
-
-                // Override with custom limits if they exist and haven't expired
+                const effectiveLimits = { ...defaultLimits };
                 Object.keys(customLimits).forEach(key => {
                     const expiryDate = customLimitsExpiry[key];
-
-                    // Check if custom limit is still valid
                     if (!expiryDate || new Date(expiryDate) > now) {
                         effectiveLimits[key] = customLimits[key];
                     }
                 });
 
-                // Add metadata
                 effectiveLimits._meta = {
-                    planId: 'premium', // Force premium ID for UI
-                    planName: 'Premium (Launch Promo)', // Custom name
+                    planId,
+                    planName: defaultLimits.displayName || defaultLimits.name || planId,
                     hasCustomLimits: Object.keys(customLimits).length > 0,
                     customLimits,
                     customLimitsExpiry,
-                    adminNotes: businessData.adminNotes || null
+                    adminNotes: businessInfo.adminNotes || null
                 };
 
                 setLimits(effectiveLimits);
@@ -74,8 +61,6 @@ export const useEffectiveLimits = (businessId, userProfile = null) => {
             } catch (err) {
                 console.error('Error calculating effective limits:', err);
                 setError(err.message);
-
-                // Fallback to free plan
                 const freePlan = getPlanById('free');
                 setLimits({
                     ...freePlan,

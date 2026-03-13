@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FaMapMarkerAlt, FaSearch, FaStar, FaPlus, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { geocode } from '../utils/locationUtils';
+import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
 
 const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, userLat, userLng, className = '' }) => {
     const { t, i18n } = useTranslation();
@@ -12,17 +13,22 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
     const autocompleteService = useRef(null);
     const placesService = useRef(null);
 
-    // Initialize Google Places API
+    // Initialize Google Places API (wait for script to load to avoid race condition)
     useEffect(() => {
-        if (window.google && window.google.maps && window.google.maps.places) {
-            autocompleteService.current = new window.google.maps.places.AutocompleteService();
-
-            // Create a dummy div for PlacesService (required by Google API)
-            const dummyDiv = document.createElement('div');
-            placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-        } else {
-            console.warn('Google Maps API not loaded. Add script to index.html');
-        }
+        let cancelled = false;
+        loadGoogleMapsScript()
+            .then(() => {
+                if (cancelled || typeof window === 'undefined') return;
+                if (window.google?.maps?.places) {
+                    autocompleteService.current = new window.google.maps.places.AutocompleteService();
+                    const dummyDiv = document.createElement('div');
+                    placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) console.warn('Google Maps API not available. Place search will use fallback.');
+            });
+        return () => { cancelled = true; };
     }, []);
 
     // Determine language based on country code

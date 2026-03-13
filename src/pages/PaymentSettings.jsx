@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaCreditCard, FaPlus, FaTrash } from 'react-icons/fa';
 import './SettingsPages.css';
 
 const PaymentSettings = () => {
     const navigate = useNavigate();
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
 
     // Mock payment methods (in real app, fetch from Stripe)
@@ -24,7 +26,7 @@ const PaymentSettings = () => {
 
     const handleAddPaymentMethod = () => {
         // In real app, open Stripe payment method form
-        alert('Add payment method functionality will be integrated with Stripe');
+        showToast('Add payment method functionality will be integrated with Stripe', 'info');
     };
 
     const handleRemovePaymentMethod = (id) => {

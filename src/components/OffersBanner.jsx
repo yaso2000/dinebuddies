@@ -101,7 +101,7 @@ const OffersBanner = ({ onHasOffers } = {}) => {
             <div
                 key={`${currentIndex}-${effectIdx}`}
                 className={`ob-slide ob-slide--${effect} ob-slide--${phase}`}
-                onClick={() => offer?.partnerId && navigate(`/partner/${offer.partnerId}`)}
+                onClick={() => offer?.partnerId && navigate(`/business/${offer.partnerId}`)}
                 style={{ cursor: offer?.partnerId ? 'pointer' : 'default' }}
             >
                 <PremiumOfferCard offer={offer} compactHeight={true} />

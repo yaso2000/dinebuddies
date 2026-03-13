@@ -1,6 +1,12 @@
 import { collection, getDocs, updateDoc, doc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+const assertDevOnly = () => {
+    if (!import.meta.env.DEV) {
+        throw new Error('Migration tools are disabled outside development builds.');
+    }
+};
+
 /**
  * Migration Script: Business Account Restructure
  * 
@@ -11,6 +17,7 @@ import { db } from '../firebase/config';
  */
 
 async function migrateBusinessAccounts() {
+    assertDevOnly();
     console.log('🚀 Starting Business Accounts Migration...\n');
 
     try {
@@ -26,7 +33,7 @@ async function migrateBusinessAccounts() {
             const data = userDoc.data();
 
             // فقط حسابات Business
-            if (data.accountType === 'business' && data.businessInfo) {
+            if ((data.role === 'business' || data.accountType === 'business') && data.businessInfo) {
                 total++;
                 const updates = {};
                 let needsUpdate = false;
@@ -122,7 +129,7 @@ async function migrateBusinessAccounts() {
 }
 
 // إذا كنت تريد تشغيل السكريبت مباشرة
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
     window.migrateBusinessAccounts = migrateBusinessAccounts;
     console.log('💡 Migration function loaded!');
     console.log('   Run: migrateBusinessAccounts()');

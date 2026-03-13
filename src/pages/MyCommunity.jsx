@@ -1,159 +1,153 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { FaArrowLeft, FaUsers, FaChartLine, FaTrash, FaEdit, FaComments, FaHeart, FaPlus } from 'react-icons/fa';
+import { useInvitations } from '../context/InvitationContext';
+import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
+import './MyCommunity.css';
 
 
 const MyCommunity = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
-    const [posts, setPosts] = useState([]);
+    const { getCommunityMembers } = useInvitations();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         members: 0,
-        posts: 0
+        invitations: 0,
+        engagement: 0
     });
+    const [topMembers, setTopMembers] = useState([]);
 
     // Check if user is a business account (unified flag)
     const isBusinessAccount = userProfile?.isBusiness || false;
 
 
     useEffect(() => {
-        if (!isBusinessAccount) {
-            navigate('/');
+        if (!isBusinessAccount || !currentUser?.uid) {
+            if (!isBusinessAccount) navigate('/');
             return;
         }
 
-        const unsubscribePosts = subscribeToPosts();
-        const unsubscribeMembers = subscribeToMembers();
+        const unsubInvitations = subscribeToInvitations();
+        const unsubMembers = subscribeToMembers();
+        const unsubEngagement = subscribeToEngagement();
 
         return () => {
-            if (unsubscribePosts) unsubscribePosts();
-            if (unsubscribeMembers) unsubscribeMembers();
+            if (unsubInvitations) unsubInvitations();
+            if (unsubMembers) unsubMembers();
+            if (unsubEngagement) unsubEngagement();
         };
-    }, [currentUser, isBusinessAccount]);
+    }, [currentUser?.uid, isBusinessAccount]);
+
+    useEffect(() => {
+        if (!isBusinessAccount || !currentUser?.uid) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const result = await getCommunityMembers(currentUser.uid, { includeMembers: true, limit: 10 });
+                const list = result?.members || [];
+                if (!cancelled) setTopMembers(list.slice(0, 3));
+            } catch (e) {
+                if (!cancelled) setTopMembers([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [currentUser?.uid, isBusinessAccount, getCommunityMembers]);
 
     const subscribeToMembers = () => {
         try {
-            // Source of Truth: Users who have this partner in their joinedCommunities
-            const q = query(
-                collection(db, 'users'),
-                where('joinedCommunities', 'array-contains', currentUser.uid)
-            );
-
-            return onSnapshot(q, async (snapshot) => {
-                const realCount = snapshot.size;
-                const memberIds = snapshot.docs.map(doc => doc.id);
-
+            const refreshMemberCount = async () => {
+                const result = await getCommunityMembers(currentUser.uid, {
+                    includeMembers: false,
+                    limit: 1
+                });
                 setStats(prev => ({
                     ...prev,
-                    members: realCount
+                    members: Number(result?.memberCount || 0)
                 }));
+            };
 
-                // Self-healing: Ensure partner's communityMembers array matches reality
-                if (currentUser.uid) {
-                    try {
-                        const partnerRef = doc(db, 'users', currentUser.uid);
-                        const partnerSnap = await getDoc(partnerRef);
-                        const currentMembers = partnerSnap.data()?.communityMembers || [];
-
-                        // Check if we need to update
-                        const missingMembers = memberIds.filter(id => !currentMembers.includes(id));
-
-                        if (missingMembers.length > 0) {
-                            console.log('🔄 Syncing community members...', missingMembers);
-                            const { updateDoc, arrayUnion } = await import('firebase/firestore');
-                            await updateDoc(partnerRef, {
-                                communityMembers: arrayUnion(...missingMembers)
-                            });
-                        }
-                    } catch (err) {
-                        console.error("Auto-sync error:", err);
-                    }
-                }
-            }, (error) => {
-                console.error("Error fetching members:", error);
-            });
+            refreshMemberCount();
+            const intervalId = setInterval(refreshMemberCount, 30000);
+            return () => clearInterval(intervalId);
         } catch (error) {
             console.error("Error in subscribeToMembers:", error);
             return () => { };
         }
     };
 
-    const subscribeToPosts = () => {
+    const invitationIdsByRestaurant = useRef(new Set());
+    const invitationIdsByHost = useRef(new Set());
+
+    const subscribeToInvitations = () => {
+        try {
+            // Count invitations for this business: at this venue (restaurantId) OR created by partner (hostId)
+            const qRestaurant = query(
+                collection(db, 'invitations'),
+                where('restaurantId', '==', currentUser.uid)
+            );
+            const qHost = query(
+                collection(db, 'invitations'),
+                where('hostId', '==', currentUser.uid)
+            );
+            const applyCount = () => {
+                const merged = new Set([...invitationIdsByRestaurant.current, ...invitationIdsByHost.current]);
+                setStats(prev => ({ ...prev, invitations: merged.size }));
+                setLoading(false);
+            };
+            const unsub1 = onSnapshot(qRestaurant, (snapshot) => {
+                invitationIdsByRestaurant.current = new Set(snapshot.docs.map(d => d.id));
+                applyCount();
+            }, (error) => {
+                console.error('Error subscribing to invitations (restaurantId):', error);
+                setLoading(false);
+            });
+            const unsub2 = onSnapshot(qHost, (snapshot) => {
+                invitationIdsByHost.current = new Set(snapshot.docs.map(d => d.id));
+                applyCount();
+            }, (error) => {
+                console.error('Error subscribing to invitations (hostId):', error);
+                setLoading(false);
+            });
+            return () => {
+                unsub1();
+                unsub2();
+            };
+        } catch (error) {
+            console.error('Error subscribing to invitations:', error);
+            setLoading(false);
+            return () => { };
+        }
+    };
+
+    const subscribeToEngagement = () => {
         try {
             const q = query(
                 collection(db, 'communityPosts'),
                 where('partnerId', '==', currentUser.uid),
                 orderBy('createdAt', 'asc')
             );
-
-            return onSnapshot(
-                q,
-                (snapshot) => {
-                    const postsList = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-
-                    const postsCount = postsList.length;
-
-                    // Calculate total engagement (likes + comments) from all posts
-                    const totalEngagement = postsList.reduce((sum, post) => {
-                        const likes = post.likes?.length || 0;
-                        const comments = post.comments?.length || 0;
-                        return sum + likes + comments;
-                    }, 0);
-
-                    // Reverse to show newest first
-                    setPosts(postsList.reverse());
-                    setStats(prev => ({
-                        ...prev,
-                        posts: postsCount,
-                        engagement: totalEngagement
-                    }));
-                    setLoading(false);
-                },
-                (error) => {
-                    console.error('Error subscribing to posts:', error);
-                    setLoading(false);
-                    setPosts([]);
-                    setStats(prev => ({ ...prev, posts: 0, engagement: 0 }));
-                }
-            );
+            return onSnapshot(q, (snapshot) => {
+                const postsList = snapshot.docs.map(d => ({ ...d.data() }));
+                const totalEngagement = postsList.reduce((sum, post) => {
+                    const likes = post.likes?.length || 0;
+                    const comments = post.comments?.length || 0;
+                    return sum + likes + comments;
+                }, 0);
+                setStats(prev => ({ ...prev, engagement: totalEngagement }));
+            }, (error) => {
+                console.error('Error subscribing to engagement:', error);
+            });
         } catch (error) {
-            console.error('Error subscribing to posts:', error);
-            setLoading(false);
             return () => { };
         }
     };
 
 
-
-    const handleDeletePost = async (postId) => {
-        if (!window.confirm('Are you sure you want to delete this post?')) return;
-
-        try {
-            await deleteDoc(doc(db, 'communityPosts', postId));
-            alert('Post deleted successfully!');
-        } catch (error) {
-            console.error('Error deleting post:', error);
-            alert('Failed to delete post.');
-        }
-    };
-
-    const formatDate = (timestamp) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate();
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
 
     if (!isBusinessAccount) {
         return null;
@@ -177,7 +171,8 @@ const MyCommunity = () => {
     }
 
     return (
-        <div className="page-container" style={{ paddingBottom: '100px' }}>
+        <div className="page-container my-community-page">
+            <div className="my-community-inner">
             {/* Header */}
             <header className="app-header sticky-header-glass">
                 <button className="back-btn" onClick={() => navigate('/')}>
@@ -185,223 +180,120 @@ const MyCommunity = () => {
                 </button>
                 <div style={{ flex: 1, textAlign: 'center' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                        My Community
+                        {t('my_community', 'My Community')}
                     </h3>
                 </div>
                 <button
                     className="back-btn"
-                    onClick={() => navigate(`/partner/${currentUser.uid}`)}
+                    onClick={() => navigate(`/business/${currentUser.uid}`)}
                 >
                     <FaUsers />
                 </button>
             </header>
 
             {/* Stats Cards */}
-            <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                <div style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '16px',
-                    padding: '1rem',
-                    textAlign: 'center'
-                }}>
+            <div className="my-community-stats">
+                <div className="my-community-stat-card ui-card">
                     <FaUsers style={{ fontSize: '1.5rem', color: 'var(--primary)', marginBottom: '8px' }} />
                     <h4 style={{ fontSize: '1.5rem', fontWeight: '800', margin: '4px 0' }}>{stats.members}</h4>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Members</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>{t('members', 'Members')}</p>
                 </div>
-                <div style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '16px',
-                    padding: '1rem',
-                    textAlign: 'center'
-                }}>
-                    <FaEdit style={{ fontSize: '1.5rem', color: '#f97316', marginBottom: '8px' }} />
-                    <h4 style={{ fontSize: '1.5rem', fontWeight: '800', margin: '4px 0' }}>{stats.posts}</h4>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Posts</p>
+                <div className="my-community-stat-card ui-card">
+                    <FaEnvelope style={{ fontSize: '1.5rem', color: 'var(--primary)', marginBottom: '8px' }} />
+                    <h4 style={{ fontSize: '1.5rem', fontWeight: '800', margin: '4px 0' }}>{stats.invitations}</h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>{t('invitations', 'Invitations')}</p>
                 </div>
-                <div style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '16px',
-                    padding: '1rem',
-                    textAlign: 'center'
-                }}>
+                <div className="my-community-stat-card ui-card" title={t('engagement_tooltip', 'Likes and comments on your community posts')}>
                     <FaHeart style={{ fontSize: '1.5rem', color: '#ef4444', marginBottom: '8px' }} />
                     <h4 style={{ fontSize: '1.5rem', fontWeight: '800', margin: '4px 0' }}>{stats.engagement}</h4>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Engagement</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>{t('engagement', 'Engagement')}</p>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '2px 0 0', opacity: 0.9 }}>{t('engagement_hint', 'Likes + comments')}</p>
                 </div>
             </div>
 
             {/* Action Buttons */}
-            <div style={{ padding: '0 1.5rem 1rem', display: 'flex', gap: '10px' }}>
+            <div className="my-community-actions">
                 <button
                     onClick={() => navigate('/create-story')}
-                    style={{
-                        flex: 1,
-                        padding: '10px 12px',
-                        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                        border: 'none',
-                        borderRadius: '14px',
-                        color: 'white',
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
-                    }}
+                    className="my-community-btn my-community-btn--story"
                 >
                     <FaPlus style={{ fontSize: '0.8rem' }} />
                     Story
                 </button>
-
                 <button
                     onClick={() => navigate('/create-post')}
-                    style={{
-                        flex: 1,
-                        padding: '10px 12px',
-                        background: 'linear-gradient(135deg, var(--primary), #f97316)',
-                        border: 'none',
-                        borderRadius: '14px',
-                        color: 'white',
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
-                    }}
+                    className="my-community-btn my-community-btn--post"
                 >
                     <FaEdit style={{ fontSize: '0.8rem' }} />
                     Post
                 </button>
-
                 <button
                     onClick={() => navigate(`/community/${currentUser.uid}`)}
-                    style={{
-                        flex: 1,
-                        padding: '10px 12px',
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        border: 'none',
-                        borderRadius: '14px',
-                        color: 'white',
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
-                    }}
+                    className="my-community-btn my-community-btn--chat"
                 >
                     <FaComments style={{ fontSize: '0.8rem' }} />
                     Chat
                 </button>
             </div>
 
-
-
-            {/* Posts List */}
-            <div style={{ padding: '0 1.5rem' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '1rem' }}>
-                    Your Posts
-                </h3>
-
-                {posts.length === 0 ? (
-                    <div style={{
-                        textAlign: 'center',
-                        padding: '3rem 1rem',
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '16px',
-                        color: 'var(--text-muted)'
-                    }}>
-                        <FaEdit style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.3 }} />
-                        <p>No posts yet. Create your first post!</p>
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        {posts.map(post => (
-                            <div
-                                key={post.id}
-                                style={{
-                                    background: 'var(--bg-card)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '16px',
-                                    padding: '1.5rem',
-                                    position: 'relative'
-                                }}
-                            >
-                                {/* Post Header */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                                    <div>
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-                                            {formatDate(post.createdAt)}
-                                        </p>
+            {/* Top members */}
+            <div className="my-community-section">
+                <h3>{t('top_members', 'Top members')}</h3>
+                <div className="my-community-card">
+                    {topMembers.length === 0 ? (
+                        <div className="my-community-empty ui-prompt__desc">
+                            {t('no_members_yet', 'No members yet. Share your community to grow.')}
+                        </div>
+                    ) : (
+                        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                            {topMembers.map((member, index) => (
+                                <li key={member.id || index} className="my-community-member-item">
+                                    <div style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '50%',
+                                        background: 'var(--hover-overlay)',
+                                        overflow: 'hidden',
+                                        flexShrink: 0
+                                    }}>
+                                        {member.avatarUrl ? (
+                                            <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontSize: '1rem', fontWeight: '700' }}>
+                                                {(member.displayName || member.name || '?')[0].toUpperCase()}
+                                            </div>
+                                        )}
                                     </div>
-                                    <button
-                                        onClick={() => handleDeletePost(post.id)}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: '#ef4444',
-                                            cursor: 'pointer',
-                                            fontSize: '1.1rem',
-                                            padding: '4px'
-                                        }}
-                                    >
-                                        <FaTrash />
-                                    </button>
-                                </div>
-
-                                {/* Post Content */}
-                                {post.content && (
-                                    <p style={{ fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '12px' }}>
-                                        {post.content}
-                                    </p>
-                                )}
-
-                                {/* Post Image */}
-                                {post.image && (
-                                    <img
-                                        src={post.image}
-                                        alt="Post"
-                                        style={{
-                                            width: '100%',
-                                            borderRadius: '12px',
-                                            marginBottom: '12px'
-                                        }}
-                                    />
-                                )}
-
-                                {/* Post Stats */}
-                                <div style={{
-                                    display: 'flex',
-                                    gap: '16px',
-                                    paddingTop: '12px',
-                                    borderTop: '1px solid var(--border-color)',
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-muted)'
-                                }}>
-                                    <span>❤️ {post.likes?.length || 0} likes</span>
-                                    <span>💬 {post.comments?.length || 0} comments</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                                            {member.displayName || member.name || t('member', 'Member')}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                            {t('community_member', 'Community member')}
+                                        </div>
+                                    </div>
+                                    <span style={{
+                                        width: '28px',
+                                        height: '28px',
+                                        borderRadius: '50%',
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '800'
+                                    }}>
+                                        {index + 1}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
             </div>
 
-
+            </div>
         </div>
     );
 };

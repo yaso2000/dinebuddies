@@ -4,6 +4,7 @@ import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle
 import { IoMale, IoFemale, IoMaleFemale, IoPeople } from 'react-icons/io5';
 import { HiUserGroup, HiUser } from 'react-icons/hi2';
 import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import ImageUpload from '../components/ImageUpload';
@@ -17,12 +18,14 @@ import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchIpLocation } from '../utils/locationUtils';
+import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
 
 const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
-    const { addInvitation, allUsers, currentUser } = useInvitations(); // Get currentUser from InvitationContext
+    const { addInvitation, allUsers, currentUser } = useInvitations();
+    const { showToast } = useToast();
     const { currentUser: authUser, userProfile } = useAuth(); // Get userProfile for guest check
 
     // Redirect guests to login immediately
@@ -43,9 +46,10 @@ const CreateInvitation = () => {
 
     const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
     const [suggestedImages, setSuggestedImages] = useState([]); // Suggested venue images
+    const [suggestedImagesLoading, setSuggestedImagesLoading] = useState(false); // Loading skeleton for Google Places fetch
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
-    const prefilledData = location.state?.prefilledData; // From PartnerProfile
+    const prefilledData = location.state?.prefilledData; // From BusinessProfile
     const offerData = location.state?.offerData; // From Special Offer
     const fromRestaurant = location.state?.fromRestaurant || !!restaurantData;
     const editingDraft = location.state?.editingDraft; // Editing draft from preview
@@ -171,6 +175,13 @@ const CreateInvitation = () => {
         }
     }, [i18n.language, restaurantData]);
 
+    const ALLOWED_INVITATION_TYPES = ['Restaurant', 'Cafe', 'Bar', 'Night Club', 'Food Truck', 'Fast Food'];
+    useEffect(() => {
+        if (formData.type && !ALLOWED_INVITATION_TYPES.includes(formData.type)) {
+            setFormData(prev => ({ ...prev, type: 'Restaurant' }));
+        }
+    }, [formData.type]);
+
     // Handle image selection
     const handleImageSelect = (file) => {
         setImageFile(file);
@@ -200,7 +211,7 @@ const CreateInvitation = () => {
         // Check if user is guest
         if (!currentUser || currentUser.id === 'guest' || !authUser) {
             console.error('❌ Guest user cannot create invitations');
-            alert(t('login_to_create') || 'Please login to create an invitation');
+            showToast(t('login_to_create') || 'Please login to create an invitation', 'error');
             navigate('/login');
             return;
         }
@@ -213,19 +224,19 @@ const CreateInvitation = () => {
         // Validation
         if (!formData.title.trim()) {
             console.log('❌ Title validation failed');
-            alert(t('please_enter_title'));
+            showToast(t('please_enter_title'), 'error');
             return;
         }
 
         if (!formData.date || !formData.time) {
             console.log('❌ Date/Time validation failed');
-            alert(t('please_set_datetime'));
+            showToast(t('please_set_datetime'), 'error');
             return;
         }
 
         if (!formData.location.trim()) {
             console.log('❌ Location validation failed');
-            alert(t('please_enter_location'));
+            showToast(t('please_enter_location'), 'error');
             return;
         }
 
@@ -233,13 +244,13 @@ const CreateInvitation = () => {
 
         // Validate Gender Groups (Must have at least one)
         if (!formData.genderGroups || formData.genderGroups.length === 0) {
-            alert(t('please_select_gender_group', { defaultValue: 'Please select at least one gender group' }));
+            showToast(t('please_select_gender_group', { defaultValue: 'Please select at least one gender group' }), 'error');
             return;
         }
 
         // Validate Age Groups (Must have at least one)
         if (!formData.ageGroups || formData.ageGroups.length === 0) {
-            alert(t('please_select_age_group', { defaultValue: 'Please select at least one age group' }));
+            showToast(t('please_select_age_group', { defaultValue: 'Please select at least one age group' }), 'error');
             return;
         }
 
@@ -247,9 +258,9 @@ const CreateInvitation = () => {
         // Check for cancellation restrictions
         if (restrictionInfo && !restrictionInfo.canCreate) {
             console.log('❌ Restriction check failed');
-            alert(t('cannot_create_restricted', {
+            showToast(t('cannot_create_restricted', {
                 date: restrictionInfo.until?.toLocaleDateString()
-            }));
+            }), 'error');
             return;
         }
 
@@ -257,7 +268,7 @@ const CreateInvitation = () => {
         console.log('✅ Starting validation check...');
         const userId = currentUser?.id || authUser?.uid;
         if (!userId) {
-            alert(t('login_required') || 'Authentication required');
+            showToast(t('login_required') || 'Authentication required', 'error');
             return;
         }
 
@@ -315,7 +326,10 @@ const CreateInvitation = () => {
 
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    throw new Error(t('media_upload_failed') || 'Failed to upload media');
+                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
+                    setIsSubmitting(false);
+                    setUploadProgress(0);
+                    return;
                 }
 
                 setUploadProgress(60);
@@ -358,16 +372,12 @@ const CreateInvitation = () => {
             }
 
             if (finalDraftId) {
-                // Navigate to preview with draft ID
                 console.log('🚀 Navigating to preview:', `/invitation/preview/${finalDraftId}`);
                 navigate(`/invitation/preview/${finalDraftId}`);
-            } else {
-                console.error('❌ No draft ID returned!');
-                alert(t('failed_create_invitation') || 'Failed to create invitation. Please try again.');
             }
         } catch (error) {
             console.error('❌ Error creating draft:', error);
-            alert(error.message || t('failed_create_invitation'));
+            showToast(error.message || t('failed_create_invitation'), 'error');
         } finally {
             setIsSubmitting(false);
             setUploadProgress(0);
@@ -384,24 +394,24 @@ const CreateInvitation = () => {
         // Check if user is guest
         if (!currentUser || currentUser.id === 'guest' || !authUser) {
             console.error('❌ Guest user cannot create invitations');
-            alert(t('login_to_create') || 'Please login to create an invitation');
+            showToast(t('login_to_create') || 'Please login to create an invitation', 'error');
             navigate('/login');
             return;
         }
 
         // Validation (This part is now handled by handlePreview, but keeping it here for direct submission if needed)
         if (!formData.title.trim()) {
-            alert(t('please_enter_title'));
+            showToast(t('please_enter_title'), 'error');
             return;
         }
 
         if (!formData.date || !formData.time) {
-            alert(t('please_set_datetime'));
+            showToast(t('please_set_datetime'), 'error');
             return;
         }
 
         if (!formData.location.trim()) {
-            alert(t('please_enter_location'));
+            showToast(t('please_enter_location'), 'error');
             return;
         }
 
@@ -409,9 +419,9 @@ const CreateInvitation = () => {
 
         // Check for cancellation restrictions
         if (restrictionInfo && !restrictionInfo.canCreate) {
-            alert(t('cannot_create_restricted', {
+            showToast(t('cannot_create_restricted', {
                 date: restrictionInfo.until?.toLocaleDateString()
-            }));
+            }), 'error');
             return;
         }
 
@@ -467,7 +477,7 @@ const CreateInvitation = () => {
                     }
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    alert(t('media_upload_failed') || 'Failed to upload media');
+                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
                     setIsSubmitting(false);
                     return;
                 }
@@ -515,7 +525,7 @@ const CreateInvitation = () => {
 
                 await updateDoc(invitationRef, cleanData);
                 console.log('✅ Invitation updated');
-                alert(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }));
+                showToast(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }), 'success');
                 navigate(`/invitation/${editingInvitation.id}`);
             } else {
                 // This path is usually handled by handlePreview -> Draft -> Publish, but logic remains
@@ -527,7 +537,7 @@ const CreateInvitation = () => {
             }
         } catch (error) {
             console.error('❌ Error creating/updating invitation:', error);
-            alert(t('failed_create_invitation'));
+            showToast(t('failed_create_invitation'), 'error');
         } finally {
             setIsSubmitting(false);
             setUploadProgress(0);
@@ -640,58 +650,57 @@ const CreateInvitation = () => {
 
     // Restore Google Images when editing (Address User Issue: Images missing in Edit Mode)
     useEffect(() => {
-        const restoreImages = () => {
-            if (editingInvitation &&
-                (!suggestedImages || suggestedImages.length === 0) &&
-                !fromRestaurant &&
-                window.google &&
-                window.google.maps &&
-                window.google.maps.places) {
+        if (!editingInvitation || suggestedImages?.length > 0 || fromRestaurant) return;
 
-                // Use location name for search
-                const queryName = editingInvitation.location || editingInvitation.restaurantName;
-                if (!queryName) return;
+        const queryName = editingInvitation.location || editingInvitation.restaurantName;
+        if (!queryName) return;
 
-                const searchQuery = queryName + (editingInvitation.city ? ` ${editingInvitation.city}` : '');
-                console.log('🔄 Restoring Google Images for:', searchQuery);
+        let cancelled = false;
+        const searchQuery = queryName + (editingInvitation.city ? ` ${editingInvitation.city}` : '');
+        setSuggestedImagesLoading(true);
+
+        loadGoogleMapsScript()
+            .then(() => {
+                if (cancelled || typeof window === 'undefined' || !window.google?.maps?.places) {
+                    if (!cancelled) setSuggestedImagesLoading(false);
+                    return;
+                }
 
                 try {
                     const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-                    const request = {
-                        query: searchQuery,
-                        fields: ['place_id'] // Fetch ID first
-                    };
+                    const request = { query: searchQuery, fields: ['place_id'] };
 
                     service.findPlaceFromQuery(request, (results, status) => {
-                        if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+                        if (cancelled) return;
+                        if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.length > 0) {
                             const placeId = results[0].place_id;
-
-                            // Get full details to ensure we get ALL photos
-                            service.getDetails({
-                                placeId: placeId,
-                                fields: ['photos']
-                            }, (placeDetails, detailStatus) => {
-                                if (detailStatus === window.google.maps.places.PlacesServiceStatus.OK && placeDetails.photos) {
+                            service.getDetails({ placeId, fields: ['photos'] }, (placeDetails, detailStatus) => {
+                                if (cancelled) return;
+                                setSuggestedImagesLoading(false);
+                                if (detailStatus === window.google.maps.places.PlacesServiceStatus.OK && placeDetails?.photos) {
                                     const urls = placeDetails.photos.slice(0, 5).map(p => p.getUrl({ maxWidth: 800 }));
-                                    console.log('✅ Successfully restored', urls.length, 'images via getDetails');
                                     setSuggestedImages(urls);
-                                } else {
-                                    console.log('⚠️ Place found but getDetails returned no photos');
                                 }
                             });
                         } else {
-                            console.log('⚠️ Could not find place to restore images:', status);
+                            setSuggestedImagesLoading(false);
                         }
                     });
                 } catch (err) {
-                    console.error('❌ Error restoring images:', err);
+                    if (!cancelled) {
+                        console.error('❌ Error restoring images:', err);
+                        setSuggestedImagesLoading(false);
+                    }
                 }
-            }
-        };
+            })
+            .catch(() => {
+                setSuggestedImagesLoading(false);
+            });
 
-        // Attempt restore after short delay to ensure Google API loaded
-        const timer = setTimeout(restoreImages, 1000);
-        return () => clearTimeout(timer);
+        return () => {
+            cancelled = true;
+            setSuggestedImagesLoading(false);
+        };
     }, [editingInvitation, fromRestaurant]);
 
     // Check for cancellation restrictions
@@ -719,7 +728,7 @@ const CreateInvitation = () => {
                 {editingInvitation ? t('edit_invitation', { defaultValue: 'Edit Invitation' }) : t('create_invitation_title')}
             </h2>
 
-            {/* Restriction Warning Banner */}
+            {/* Restriction Warning Banner — page-specific red theme preserved */}
             {restrictionInfo && !restrictionInfo.canCreate && (
                 <div style={{
                     background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2))',
@@ -830,13 +839,7 @@ const CreateInvitation = () => {
 
                 {/* 1. Location Search - FIRST STEP - Hidden when editing */}
                 {!editingInvitation && (
-                    <div style={{
-                        background: 'var(--card-bg)',
-                        padding: '1rem', // Condensed padding
-                        borderRadius: '16px',
-                        border: '1px solid var(--border-color)',
-                        marginBottom: '1rem' // Condensed margin
-                    }}>
+                    <div className="ui-card" style={{ marginBottom: '1rem' }}>
                         <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             📍 {t('search_venue') || 'Search for a Venue'}
                         </h3>
@@ -892,6 +895,7 @@ const CreateInvitation = () => {
                     <MediaSelector
                         restaurant={restaurantData || prefilledData}
                         suggestedImages={suggestedImages}
+                        suggestedImagesLoading={suggestedImagesLoading}
                         onMediaSelect={setMediaData}
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
@@ -969,13 +973,13 @@ const CreateInvitation = () => {
                 <div className="form-grid">
                     <div className="form-group">
                         <label>{t('form_type_label')}</label>
-                        <select name="type" value={formData.type} onChange={handleChange} className="input-field">
+                        <select name="type" value={ALLOWED_INVITATION_TYPES.includes(formData.type) ? formData.type : 'Restaurant'} onChange={handleChange} className="input-field">
                             <option value="Restaurant">{t('type_restaurant')}</option>
                             <option value="Cafe">{t('type_cafe')}</option>
                             <option value="Bar">Bar</option>
                             <option value="Night Club">Night Club</option>
-                            <option value="BBQ">BBQ</option>
-                            <option value="Other">{t('type_other')}</option>
+                            <option value="Food Truck">Food Truck</option>
+                            <option value="Fast Food">Fast Food</option>
                         </select>
                     </div>
 
@@ -1079,7 +1083,7 @@ const CreateInvitation = () => {
                                         if (isSelected) {
                                             // PREVENT REMOVAL if it was in the original invitation (Normalized)
                                             if (originalGenderGroups.includes(option.value)) {
-                                                alert(t('cannot_remove_gender_group', { defaultValue: 'Cannot remove a previously selected group. You can only add more.' }));
+                                                showToast(t('cannot_remove_gender_group', { defaultValue: 'Cannot remove a previously selected group. You can only add more.' }), 'error');
                                                 return;
                                             }
                                             newGroups = newGroups.filter(g => g !== option.value);
@@ -1157,7 +1161,7 @@ const CreateInvitation = () => {
                                         if (isSelected) {
                                             // PREVENT REMOVAL if it was in the original invitation (Normalized)
                                             if (originalAgeGroups.includes(option.value)) {
-                                                alert(t('cannot_remove_age_group', { defaultValue: 'Cannot remove a previously selected age group. You can only add more.' }));
+                                                showToast(t('cannot_remove_age_group', { defaultValue: 'Cannot remove a previously selected age group. You can only add more.' }), 'error');
                                                 return;
                                             }
                                             newGroups = newGroups.filter(g => g !== option.value);
@@ -1213,7 +1217,7 @@ const CreateInvitation = () => {
                 </div>
 
                 {/* Privacy Settings */}
-                <div className="form-group" style={{ marginTop: '1.5rem', background: 'var(--hover-overlay)', padding: '1.25rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem' }}>
                     <label className="elegant-label" style={{ marginBottom: '1rem' }}>
                         <span className="label-icon"><FaLock /></span>
                         {t('privacy_settings') || 'Privacy Settings'}
@@ -1254,7 +1258,7 @@ const CreateInvitation = () => {
 
 
 
-                <button type="submit" className="btn btn-primary btn-block" style={{ height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
+                <button type="submit" className="ui-btn ui-btn--primary" style={{ width: '100%', height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
                     {isSubmitting ? t('loading') : (editingInvitation ? (t('save_changes') || '💾 Save Changes') : (t('preview_invitation') || '📋 Preview Invitation'))}
                 </button>
             </form >

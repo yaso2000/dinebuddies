@@ -4,6 +4,7 @@ import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/fi
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { adminSecurityService } from '../services/adminSecurityService';
 import { FaArrowLeft, FaUser, FaStore, FaCrown, FaSearch } from 'react-icons/fa';
 import './AdminPanel.css';
 
@@ -46,7 +47,7 @@ const AdminPanel = () => {
         }
     };
 
-    // Map tier → weeklyPrivateQuota (matches planDefaults.js)
+    // Map tier → weeklyPrivateQuota for regular user plans only (matches planDefaults.js)
     const TIER_QUOTAS = {
         free: 0,
         pro: 2,     // Pro: 2 private invitations/week
@@ -81,22 +82,23 @@ const AdminPanel = () => {
         }
     };
 
-    const toggleTester = async (userId, currentIsTester) => {
+    const updateBusinessSubscription = async (userId, newTier) => {
         try {
-            setUpdating(userId + '_tester');
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, { isTester: !currentIsTester });
-            setUsers(users.map(u =>
-                u.id === userId ? { ...u, isTester: !currentIsTester } : u
+            setUpdating(userId);
+            await adminSecurityService.setUserSubscriptionTier(userId, newTier, true);
+
+            setUsers(users.map(user =>
+                user.id === userId ? { ...user, subscriptionTier: newTier } : user
             ));
+
+            console.log(`✅ Updated business ${userId} to ${newTier}`);
         } catch (error) {
-            console.error('Error toggling tester:', error);
-            alert('Failed to update tester status');
+            console.error('Error updating business subscription:', error);
+            alert('Failed to update business subscription');
         } finally {
             setUpdating(null);
         }
     };
-
 
     const filteredUsers = users.filter(user => {
         const matchesSearch =
@@ -106,7 +108,8 @@ const AdminPanel = () => {
 
         const matchesFilter =
             filterType === 'all' ||
-            user.accountType === filterType;
+            (filterType === 'business' && user.role === 'business') ||
+            (filterType === 'individual' && user.role !== 'business');
 
         return matchesSearch && matchesFilter;
     });
@@ -159,13 +162,13 @@ const AdminPanel = () => {
                             className={filterType === 'individual' ? 'active' : ''}
                             onClick={() => setFilterType('individual')}
                         >
-                            <FaUser /> Users ({users.filter(u => u.accountType === 'individual').length})
+                            <FaUser /> Users ({users.filter(u => u.role !== 'business').length})
                         </button>
                         <button
                             className={filterType === 'business' ? 'active' : ''}
                             onClick={() => setFilterType('business')}
                         >
-                            <FaStore /> Partners ({users.filter(u => u.accountType === 'business').length})
+                            <FaStore /> Businesses ({users.filter(u => u.role === 'business').length})
                         </button>
                     </div>
                 </div>
@@ -187,25 +190,20 @@ const AdminPanel = () => {
 
                                     <div className="user-details">
                                         <h3>
-                                            {user.accountType === 'business'
+                                            {user.role === 'business'
                                                 ? user.businessInfo?.businessName || user.display_name
                                                 : user.display_name
                                             }
                                         </h3>
                                         <p className="user-email">{user.email}</p>
                                         <div className="user-badges">
-                                            <span className={`badge ${user.accountType}`}>
-                                                {user.accountType === 'business' ? <FaStore /> : <FaUser />}
-                                                {user.accountType}
+                                            <span className={`badge ${user.role === 'business' ? 'business' : 'user'}`}>
+                                                {user.role === 'business' ? <FaStore /> : <FaUser />}
+                                                {user.role === 'business' ? 'Business' : 'User'}
                                             </span>
                                             {user.role === 'admin' && (
                                                 <span className="badge admin">
                                                     👑 Admin
-                                                </span>
-                                            )}
-                                            {user.isTester && (
-                                                <span className="badge" style={{ background: 'rgba(99,102,241,0.2)', color: '#818cf8', border: '1px solid #6366f1', borderRadius: '20px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: '700' }}>
-                                                    🧪 Tester
                                                 </span>
                                             )}
                                         </div>
@@ -215,36 +213,36 @@ const AdminPanel = () => {
                                 {/* Subscription Control */}
                                 <div className="subscription-control">
                                     <label>Subscription Plan:</label>
-                                    <select
-                                        value={user.subscriptionTier || 'free'}
-                                        onChange={(e) => updateSubscription(user.id, e.target.value)}
-                                        disabled={updating === user.id}
-                                    >
-                                        <option value="free">🆓 Free</option>
-                                        <option value="pro">⚡ Pro</option>
-                                        <option value="vip">👑 Premium</option>
-                                    </select>
+                                    {user.role === 'business' ? (
+                                        <>
+                                            <select
+                                                value={(() => {
+                                                    const raw = (user.subscriptionTier || 'free').toLowerCase();
+                                                    return ['free', 'professional', 'elite'].includes(raw) ? raw : 'free';
+                                                })()}
+                                                onChange={(e) => updateBusinessSubscription(user.id, e.target.value)}
+                                                disabled={updating === user.id}
+                                            >
+                                                <option value="free">🆓 Free</option>
+                                                <option value="professional">⚡ Professional</option>
+                                                <option value="elite">👑 Elite</option>
+                                            </select>
+                                            <span className="plan-hint">Business plan</span>
+                                        </>
+                                    ) : (
+                                        <select
+                                            value={user.subscriptionTier || 'free'}
+                                            onChange={(e) => updateSubscription(user.id, e.target.value)}
+                                            disabled={updating === user.id}
+                                        >
+                                            <option value="free">🆓 Free</option>
+                                            <option value="pro">⚡ Pro</option>
+                                            <option value="vip">👑 Premium</option>
+                                        </select>
+                                    )}
                                     {updating === user.id && (
                                         <span className="updating">Updating...</span>
                                     )}
-                                    <button
-                                        onClick={() => toggleTester(user.id, user.isTester)}
-                                        disabled={updating === user.id + '_tester'}
-                                        style={{
-                                            marginTop: '8px',
-                                            padding: '6px 14px',
-                                            borderRadius: '10px',
-                                            border: '1px solid #6366f1',
-                                            background: user.isTester ? '#4f46e5' : 'rgba(99,102,241,0.15)',
-                                            color: user.isTester ? '#fff' : '#818cf8',
-                                            fontWeight: '700',
-                                            fontSize: '0.8rem',
-                                            cursor: 'pointer',
-                                            width: '100%'
-                                        }}
-                                    >
-                                        {updating === user.id + '_tester' ? 'Updating...' : user.isTester ? '🧪 Remove Tester' : '🧪 Make Tester'}
-                                    </button>
                                 </div>
                             </div>
                         ))

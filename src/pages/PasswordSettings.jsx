@@ -81,7 +81,7 @@ const PasswordSettings = () => {
 
             {/* Content */}
             <div className="settings-content">
-                <div className="settings-card">
+                <div className="settings-card ui-card">
                     <div className="settings-icon-wrapper" style={{ background: 'rgba(139, 92, 246, 0.1)' }}>
                         <FaLock style={{ color: '#8b5cf6', fontSize: '1.5rem' }} />
                     </div>
@@ -171,7 +171,7 @@ const PasswordSettings = () => {
 
                         <button
                             type="submit"
-                            className="submit-btn"
+                            className="submit-btn ui-btn ui-btn--primary"
                             disabled={loading || !currentPassword || !newPassword || !confirmPassword}
                         >
                             {loading ? 'Updating...' : 'Update Password'}

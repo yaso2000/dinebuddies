@@ -69,7 +69,7 @@ const PrivateInvitationDetails = () => {
                     setInvitedUsers(users);
                 }
             } else {
-                navigate('/');
+                navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
             }
             setLoading(false);
         });
@@ -91,7 +91,8 @@ const PrivateInvitationDetails = () => {
     const handleRSVP = async (status) => {
         setIsResponding(true);
         try {
-            await respondToPrivateInvitation(id, status);
+            const ok = await respondToPrivateInvitation(id, status);
+            if (!ok) return;
         } finally {
             setIsResponding(false);
         }

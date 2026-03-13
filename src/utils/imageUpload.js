@@ -36,9 +36,16 @@ export const compressImage = async (file, options = {}) => {
  * @param {Object} compressionOptions - Options for image compression
  * @returns {Promise<string>} Download URL
  */
+const MAX_IMAGE_MB = 15;
+
 export const uploadImage = (file, path, onProgress = null, compressionOptions = {}) => {
     return new Promise(async (resolve, reject) => {
         try {
+            const sizeMB = file.size / (1024 * 1024);
+            if (sizeMB > MAX_IMAGE_MB) {
+                reject(new Error(`Image must be under ${MAX_IMAGE_MB}MB (current: ${sizeMB.toFixed(1)}MB)`));
+                return;
+            }
             // Compress image before upload
             let uploadFile = file;
             if (file.type.startsWith('image/')) {

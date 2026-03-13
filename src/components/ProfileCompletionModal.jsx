@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -11,6 +12,7 @@ import { updateProfile as updateAuthProfile } from 'firebase/auth';
 
 const ProfileCompletionModal = () => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const location = useLocation();
     const { currentUser, userProfile, isGuest, loading } = useAuth();
     const { isDark } = useTheme();
@@ -23,8 +25,10 @@ const ProfileCompletionModal = () => {
     });
 
     // Check for missing fields and open modal if necessary
+    // Canonical: only role. Business/partner skip gender/age.
+    const isBusinessRole = userProfile?.role === 'business' || userProfile?.isBusiness;
     useEffect(() => {
-        if (loading || !userProfile || isGuest || userProfile.accountType === 'business' || userProfile.accountType === 'guest') {
+        if (loading || !userProfile || isGuest || isBusinessRole || userProfile?.role === 'guest') {
             setIsOpen(false);
             return;
         }
@@ -55,14 +59,14 @@ const ProfileCompletionModal = () => {
         } else {
             setIsOpen(false);
         }
-    }, [userProfile, loading, isGuest]);
+    }, [userProfile, loading, isGuest, isBusinessRole]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!formData.displayName || !formData.ageCategory || !formData.gender) {
             // Shake effect or simple alert
-            alert(t('fill_all_fields', 'Please fill all required fields'));
+            showToast(t('fill_all_fields', 'Please fill all required fields'), 'error');
             return;
         }
 
@@ -120,7 +124,7 @@ const ProfileCompletionModal = () => {
 
         } catch (error) {
             console.error("Error saving profile:", error);
-            alert(t('error_saving_profile', 'Error saving profile. Please try again.'));
+            showToast(t('error_saving_profile', 'Error saving profile. Please try again.'), 'error');
         } finally {
             setIsSubmitting(false);
         }

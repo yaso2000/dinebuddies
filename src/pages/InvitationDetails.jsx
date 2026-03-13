@@ -5,6 +5,7 @@ import VideoPlayer from '../components/Shared/VideoPlayer';
 
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import ShareButtons from '../components/ShareButtons';
 import CancellationModal from '../components/CancellationModal';
@@ -31,6 +32,7 @@ const InvitationDetails = () => {
 
     const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
     const { userProfile } = useAuth(); // Get userProfile for accountType check
+    const { showToast } = useToast();
     const [userLocation, setUserLocation] = useState(null);
     const [requestersData, setRequestersData] = useState({});
     const [showCancellationModal, setShowCancellationModal] = useState(false);
@@ -98,7 +100,21 @@ const InvitationDetails = () => {
             }
         };
         fetchInvitation();
-    }, [id, invitation, loadingInvitations]);
+    }, [id, invitation, loadingInvitations, navigate]);
+
+    // Resilience: if invitation is deleted while viewing (e.g. by Cloud Function), redirect to home
+    useEffect(() => {
+        if (!id) return;
+        const invRef = doc(db, 'invitations', id);
+        const unsubscribe = onSnapshot(invRef, (snapshot) => {
+            if (!snapshot.exists()) {
+                navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
+            }
+        }, (err) => {
+            console.error('Invitation snapshot error:', err);
+        });
+        return () => unsubscribe();
+    }, [id, navigate]);
 
     // Calculate distance between two points (Haversine formula)
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -254,8 +270,9 @@ const InvitationDetails = () => {
             const blob = await generateShareCardBlob(storyData);
             if (!blob) throw new Error('No blob');
             const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
+            const shareTextWithLink = `${invitation?.title || 'Invitation'}${invitation?.description ? `\n\n${invitation.description}` : ''}\n\n🔗 ${shareUrl}`;
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: invitation.title, url: shareUrl });
+                await navigator.share({ files: [file], title: invitation.title, text: shareTextWithLink, url: shareUrl });
             } else {
                 setCardPreviewUrl(URL.createObjectURL(blob));
             }
@@ -298,14 +315,14 @@ const InvitationDetails = () => {
                     }
                 }
 
-                alert(message);
+                showToast(t('invitation_cancelled_success', { count: result.notifiedUsers }), 'success');
                 navigate('/');
             } else {
-                alert(result.error);
+                showToast(result.error, 'error');
             }
         } catch (error) {
             console.error('Error cancelling invitation:', error);
-            alert('Failed to cancel invitation');
+            showToast('Failed to cancel invitation', 'error');
         }
     };
 
@@ -316,7 +333,7 @@ const InvitationDetails = () => {
         // Check if can complete
         const check = canCompleteInvitation(invitation, currentUser);
         if (!check.canComplete) {
-            alert(check.reason);
+            showToast(check.reason, 'error');
             return;
         }
 
@@ -332,7 +349,7 @@ const InvitationDetails = () => {
             const result = await completeInvitation(id, invitation, currentUser);
 
             if (result.success) {
-                alert('🎉 Invitation completed successfully!\n\nThank you! Hope you had a great time!');
+                showToast(t('invitation_completed_success', { defaultValue: 'Invitation completed successfully!' }), 'success');
                 setLocationStatus('');
 
                 // Refresh page or navigate
@@ -349,12 +366,12 @@ const InvitationDetails = () => {
                     errorMessage = 'Sorry, something went wrong. Please try again';
                 }
 
-                alert(errorMessage);
+                showToast(errorMessage, 'error');
                 setLocationStatus('');
             }
         } catch (error) {
             console.error('Error completing invitation:', error);
-            alert('Sorry, something went wrong. Please try again');
+            showToast('Sorry, something went wrong. Please try again', 'error');
             setLocationStatus('');
         } finally {
             setIsCompleting(false);
@@ -388,12 +405,13 @@ const InvitationDetails = () => {
         );
     }
 
-    // After loading, if invitation is not found, show error
+    // After loading, if invitation is not found, show error or redirect with message
     if (!invitation) {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
                 <h2 style={{ marginBottom: '1rem' }}>{t('invitation_not_found')}</h2>
-                <button onClick={() => navigate('/')} className="btn btn-primary">{t('nav_home')}</button>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('invitation_ended_hint', { defaultValue: 'This invitation may have ended or been removed.' })}</p>
+                <button type="button" onClick={() => navigate('/')} className="ui-btn ui-btn--primary">{t('nav_home')}</button>
             </div>
         );
     }
@@ -443,14 +461,14 @@ const InvitationDetails = () => {
                 if (check.eligible) {
                     await handleRequestToJoin();
                 } else {
-                    alert(check.reason);
+                    showToast(check.reason, 'error');
                 }
                 setPendingJoin(false);
             }
 
         } catch (error) {
             console.error("Error updating age category:", error);
-            alert("Failed to update profile. Please try again.");
+            showToast("Failed to update profile. Please try again.", 'error');
         } finally {
             setIsUpdatingStatus(false);
         }
@@ -532,11 +550,10 @@ const InvitationDetails = () => {
             cancelRequest(id);
         } else {
             console.log('🟢 Requesting to join invitation:', id);
-            await requestToJoin(id);
+            const ok = await requestToJoin(id);
+            if (!ok) return;
             console.log('✅ Request sent successfully');
-            alert(t('join_request_sent'));
-            // Force a full page reload to ensure the home page renders correctly
-            window.location.href = '/';
+            navigate('/', { replace: true });
         }
     };
 
@@ -580,7 +597,7 @@ const InvitationDetails = () => {
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('host')}</div>
                         </div>
                         <div style={{ marginLeft: 'auto' }}>
-                            {currentUser?.id !== author.id && (
+                            {currentUser?.id !== author.id && userProfile?.role !== 'business' && (
                                 <button
                                     onClick={() => toggleFollow(author.id)}
                                     style={{
@@ -636,9 +653,10 @@ const InvitationDetails = () => {
                     <div style={{ display: 'flex', gap: '8px', marginTop: '1rem', flexWrap: 'wrap' }}>
                         {((isAccepted || isHost) && myStatus === 'planning') && (
                             <button
+                                type="button"
                                 onClick={() => handleUpdateStatus('on_way')}
                                 disabled={isUpdatingStatus}
-                                className="btn btn-primary"
+                                className="ui-btn ui-btn--primary"
                                 style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', opacity: isUpdatingStatus ? 0.7 : 1, cursor: isUpdatingStatus ? 'not-allowed' : 'pointer' }}
                             >
                                 {isUpdatingStatus ? '...' : t('im_on_way')}
@@ -646,9 +664,10 @@ const InvitationDetails = () => {
                         )}
                         {((isAccepted || isHost) && myStatus === 'on_way') && (
                             <button
+                                type="button"
                                 onClick={() => handleUpdateStatus('arrived')}
                                 disabled={isUpdatingStatus}
-                                className="btn btn-secondary"
+                                className="ui-btn ui-btn--secondary"
                                 style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', opacity: isUpdatingStatus ? 0.7 : 1, cursor: isUpdatingStatus ? 'not-allowed' : 'pointer' }}
                             >
                                 {isUpdatingStatus ? '...' : t('ive_arrived')}
@@ -659,9 +678,10 @@ const InvitationDetails = () => {
                                 {/* Complete Meeting Button with Location Verification */}
                                 {myStatus !== 'completed' && (
                                     <button
+                                        type="button"
                                         onClick={handleCompleteInvitation}
                                         disabled={isCompleting}
-                                        className="btn btn-primary"
+                                        className="ui-btn ui-btn--primary"
                                         style={{
                                             flex: 1,
                                             padding: '8px',
@@ -683,10 +703,12 @@ const InvitationDetails = () => {
                         {!isHost && !isAccepted && (
                             <div style={{ marginTop: '1.5rem' }}>
                                 <button
-                                    className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
+                                    type="button"
+                                    className={`ui-btn ${!eligibility.eligible ? 'ui-btn--secondary' : (isPending ? 'ui-btn--secondary' : 'ui-btn--primary')}`}
                                     onClick={handleRequestToJoin}
                                     disabled={!eligibility.eligible && !currentUser?.isGuest}
                                     style={{
+                                        width: '100%',
                                         height: '60px',
                                         fontSize: '1.1rem',
                                         background: !eligibility.eligible && !currentUser?.isGuest ? 'var(--bg-input)' : undefined,
@@ -719,12 +741,16 @@ const InvitationDetails = () => {
                             {(isAccepted || isHost) && (
                                 <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', opacity: meetingStatus === 'completed' ? 0.6 : 1, pointerEvents: meetingStatus === 'completed' ? 'none' : 'auto' }}>
                                     <button
+                                        type="button"
                                         onClick={() => navigate(`/invitation/${id}/chat`)}
-                                        className="btn btn-block glass-card"
+                                        className="ui-btn ui-btn--ghost"
                                         style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-                                            padding: '1rem', background: 'var(--hover-overlay)',
-                                            border: '1px solid var(--border-color)', textAlign: 'left'
+                                            width: '100%',
+                                            justifyContent: 'flex-start',
+                                            gap: '12px',
+                                            padding: '1rem',
+                                            background: 'var(--hover-overlay)',
+                                            textAlign: 'left'
                                         }}
                                     >
                                         <div style={{
@@ -758,7 +784,7 @@ const InvitationDetails = () => {
                                         {requests.map(userId => {
                                             const requester = requestersData[userId] || { name: t('loading'), avatar: '' };
                                             return (
-                                                <div key={userId} style={{ padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                                                <div key={userId} className="ui-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                         <img
                                                             src={requester.avatar}
@@ -768,8 +794,8 @@ const InvitationDetails = () => {
                                                         <span style={{ fontWeight: '700' }}>{requester.name}</span>
                                                     </div>
                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        <button onClick={() => approveUser(id, userId)} className="btn btn-primary btn-sm">{t('accept')}</button>
-                                                        <button onClick={() => rejectUser(id, userId)} className="btn btn-outline btn-sm">{t('reject')}</button>
+                                                        <button type="button" onClick={() => approveUser(id, userId)} className="ui-btn ui-btn--primary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>{t('accept')}</button>
+                                                        <button type="button" onClick={() => rejectUser(id, userId)} className="ui-btn ui-btn--secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>{t('reject')}</button>
                                                     </div>
                                                 </div>
                                             );

@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { FaClock, FaEdit, FaSave, FaTimes, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { useToast } from '../context/ToastContext';
 import './BusinessHours.css';
 
-const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
+const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const tc = theme?.colors || null;
     const th = (themed, fallback) => tc ? themed : fallback;
     const [isEditing, setIsEditing] = useState(false);
@@ -104,17 +106,20 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
 
     const status = getCurrentStatus();
 
+    // Visitor: do not show section at all if hours were never set
+    if (!isOwner && !businessInfo?.hours) return null;
+
     const handleSave = async () => {
         setSaving(true);
         try {
-            const partnerRef = doc(db, 'users', partnerId);
-            await updateDoc(partnerRef, {
+            const businessRef = doc(db, 'users', businessId);
+            await updateDoc(businessRef, {
                 'businessInfo.hours': hours
             });
             setIsEditing(false);
         } catch (error) {
             console.error('Error saving hours:', error);
-            alert(t('save_error', 'Failed to save hours'));
+            showToast(t('save_error', 'Failed to save hours'), 'error');
         } finally {
             setSaving(false);
         }
@@ -148,8 +153,8 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
     return (
         <div className="business-hours-section" style={{ background: th(tc?.cardBg, undefined) }}>
             <div className="section-header">
-                <h3 style={{ color: th(tc?.badgeText || tc?.safeText, 'white'), textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                    <FaClock style={{ color: th(tc?.accent, '#3b82f6'), marginRight: '0.5rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }} />
+                <h3 style={{ color: 'var(--text-main)' }}>
+                    <FaClock style={{ color: 'var(--primary)', marginRight: '0.5rem' }} />
                     {t('business_hours', 'Business Hours')}
                 </h3>
                 {isOwner && !isEditing && (
@@ -281,21 +286,21 @@ const BusinessHours = ({ partnerId, businessInfo, isOwner, theme }) => {
                             <div
                                 key={day}
                                 className="day-row"
-                                style={tc ? {
-                                    background: isToday ? tc.badgeBg : 'transparent',
-                                    borderLeft: isToday ? `3px solid ${tc.accent}` : '3px solid transparent',
-                                    borderRadius: isToday ? '8px' : undefined,
+                                style={isToday && tc ? {
+                                    background: tc.badgeBg || 'var(--hover-overlay)',
+                                    borderLeft: `3px solid ${tc.accent || 'var(--primary)'}`,
+                                    borderRadius: '8px',
                                     paddingLeft: '8px'
                                 } : {}}
                             >
-                                <div className="day-name" style={{ color: isToday && tc ? (tc?.badgeText || tc?.accent || 'white') : th(tc?.badgeText, 'white'), fontWeight: isToday ? '800' : '600', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
+                                <div className="day-name" style={{ color: 'var(--text-main)', fontWeight: isToday ? '800' : '600' }}>
                                     {t(day, day.charAt(0).toUpperCase() + day.slice(1))}
                                 </div>
-                                <div className="day-hours" style={{ color: th(tc?.badgeText ? tc.badgeText + 'cc' : 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.7)'), textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                                <div className="day-hours" style={{ color: 'var(--text-secondary)' }}>
                                     {dayHours?.closed ? (
                                         <span className="closed-text">{t('closed', 'Closed')}</span>
                                     ) : (
-                                        <span style={{ color: th(tc?.badgeText || tc?.safeText, 'white') }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
+                                        <span style={{ color: 'var(--text-main)' }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
                                     )}
                                 </div>
                             </div>

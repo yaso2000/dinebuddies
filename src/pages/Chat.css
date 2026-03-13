@@ -14,6 +14,91 @@
     --border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Day theme: chat uses same light theme as rest of app */
+[data-theme='light'] {
+    --bg-dark: #f8fafc;
+    --bg-darker: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --accent-color: var(--primary);
+    --incoming-bg: #e2e8f0;
+    --outgoing-bg: var(--primary);
+    --header-bg: rgba(255, 255, 255, 0.95);
+    --composer-bg: #ffffff;
+    --border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='light'] .chat-container::before {
+    opacity: 0.02;
+}
+
+[data-theme='light'] .messages-area::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.2);
+    border-radius: 4px;
+}
+
+[data-theme='light'] .message-avatar,
+[data-theme='light'] .header-avatar img {
+    border-color: var(--border-color);
+}
+
+[data-theme='light'] .online-dot {
+    border-color: var(--bg-dark);
+}
+
+[data-theme='light'] .reaction-menu {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='light'] .quick-reactions-popup {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='light'] .quick-emoji-more {
+    background: var(--hover-overlay);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .typing-dots span {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+[data-theme='light'] .file-message {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='light'] .reply-bar {
+    background: var(--bg-darker);
+    border-top-color: var(--border-color);
+}
+
+[data-theme='light'] .input-wrapper {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme='light'] .upload-progress-bar {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .message-input::placeholder {
+    color: var(--text-muted);
+}
+
+[data-theme='light'] .emoji-picker-container,
+[data-theme='light'] .extended-reaction-picker {
+    --epr-bg-color: #ffffff;
+    --epr-category-label-bg-color: #f8fafc;
+    --epr-picker-border-color: var(--border-color);
+    --epr-text-color: #0f172a;
+    --epr-hover-bg-color: rgba(0, 0, 0, 0.06);
+    --epr-focus-bg-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
 
 
 body,
@@ -69,26 +154,10 @@ html {
     flex-shrink: 0;
 }
 
-.back-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: var(--bg-dark);
-    /* Using local var for theme compatibility */
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    font-size: 1.2rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* .back-btn: use global definition from index.css (layout override below if needed) */
+.chat-header .back-btn {
     margin-right: 8px;
-    transition: all 0.2s;
-}
-
-.back-btn:hover {
-    background: var(--border-color);
-    transform: scale(1.1);
+    font-size: 1.2rem;
 }
 
 .header-avatar {

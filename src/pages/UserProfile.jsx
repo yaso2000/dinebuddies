@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../context/AuthContext';
 import NewReportModal from '../components/NewReportModal';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -10,48 +11,25 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 
 const InvitationListItem = ({ inv, navigate, t }) => (
     <div
+        className="profile-invitation-item profile-invitation-item--lg"
         onClick={() => navigate(inv.privacy === 'private' ? `/invitation/private/${inv.id}` : `/invitation/${inv.id}`)}
-        style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '15px',
-            padding: '12px',
-            border: '1px solid var(--border-color)',
-            borderRadius: '15px',
-            marginBottom: '10px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            background: 'var(--bg-body)'
-        }}
-        onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
-            e.currentTarget.style.borderColor = 'var(--primary)';
-        }}
-        onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'var(--bg-body)';
-            e.currentTarget.style.borderColor = 'var(--border-color)';
-        }}
     >
         <img
+            className="profile-invitation-item__thumb"
             src={inv.customImage || inv.restaurantImage || inv.videoThumbnail || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}
             onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'; }}
-            style={{ width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
             alt={inv.title}
         />
-        <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{inv.title}</h4>
+        <div className="profile-invitation-item__content">
+            <div className="profile-invitation-item__title-row">
+                <h4 className="profile-invitation-item__title">{inv.title}</h4>
                 {inv.privacy === 'private' ? (
-                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(251, 191, 36, 0.2)', color: 'var(--luxury-gold)', border: '1px solid rgba(251, 191, 36, 0.3)', fontWeight: '900' }}>
-                        {t('type_private')}
-                    </span>
+                    <span className="profile-invitation-item__badge profile-invitation-item__badge--private">{t('type_private')}</span>
                 ) : (
-                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(139, 92, 246, 0.2)', color: 'var(--primary)', border: '1px solid rgba(139, 92, 246, 0.3)', fontWeight: '900' }}>
-                        {t('type_public', 'Public')}
-                    </span>
+                    <span className="profile-invitation-item__badge profile-invitation-item__badge--public">{t('type_public', 'Public')}</span>
                 )}
             </div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{inv.date ? inv.date.split('T')[0] : t('soon')}</span>
+            <span className="profile-invitation-item__date">{inv.date ? inv.date.split('T')[0] : t('soon')}</span>
         </div>
         <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />
     </div>
@@ -62,6 +40,7 @@ const UserProfile = () => {
     const { userId } = useParams();
     const navigate = useNavigate();
     const { invitations, currentUser, toggleFollow, submitReport } = useInvitations();
+    const { userProfile } = useAuth();
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -239,6 +218,8 @@ const UserProfile = () => {
 
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '500px', margin: '0 auto' }}>
+                        {/* Business accounts cannot follow regular users */}
+                        {userProfile?.role !== 'business' && (
                         <button
                             onClick={() => {
                                 if (currentUser?.isGuest || !currentUser) {
@@ -277,6 +258,7 @@ const UserProfile = () => {
                                 </>
                             )}
                         </button>
+                        )}
 
                         <button
                             onClick={() => {

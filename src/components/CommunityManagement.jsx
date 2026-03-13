@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { FaUsers, FaTrash, FaEnvelope, FaUserShield, FaBan, FaCheck } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { collection, query, where, getDocs, doc, updateDoc, arrayRemove } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { createNotification } from '../utils/notificationHelpers';
+import { useToast } from '../context/ToastContext';
+import { useInvitations } from '../context/InvitationContext';
 
 /**
  * Community Management Panel for Business Partners
- * Allows partners to manage their community members
+ * Allows business accounts to manage their community members
  */
-const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
+const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
+    const profileId = businessId;
+    const { showToast } = useToast();
+    const { getCommunityMembers } = useInvitations();
     const [members, setMembers] = useState([]);
     const [selectedMembers, setSelectedMembers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -20,36 +24,24 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
     // Load community members
     useEffect(() => {
         loadMembers();
-    }, [partnerId]);
+    }, [profileId]);
 
     const loadMembers = async () => {
         setLoading(true);
         try {
-            console.log('🔍 Loading members for partnerId:', partnerId);
+            const result = await getCommunityMembers(profileId, { includeMembers: true, limit: 200 });
+            const membersList = (result?.members || []).map((member) => ({
+                id: member.id,
+                uid: member.uid || member.id,
+                profileType: member.profileType || 'user',
+                displayName: member.displayName || 'Member',
+                name: member.displayName || 'Member',
+                city: member.city || '',
+                country: member.country || '',
+                email: '',
+                avatar: getSafeAvatar({ photo_url: member.avatarUrl })
+            }));
 
-            const usersRef = collection(db, 'users');
-            const q = query(
-                usersRef,
-                where('joinedCommunities', 'array-contains', partnerId)
-            );
-
-            const snapshot = await getDocs(q);
-            console.log('📊 Query returned', snapshot.docs.length, 'documents');
-
-            const membersList = snapshot.docs.map(doc => {
-                const data = doc.data();
-                // Normalize data fields
-                const displayName = data.display_name || data.displayName || data.name || data.email?.split('@')[0] || 'Member';
-
-                return {
-                    id: doc.id,
-                    ...data,
-                    name: displayName,
-                    avatar: getSafeAvatar(data)
-                };
-            });
-
-            console.log('✅ Total members loaded:', membersList.length);
             setMembers(membersList);
         } catch (error) {
             console.error('❌ Error loading members:', error);
@@ -84,41 +76,38 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
         }
 
         try {
-            const userRef = doc(db, 'users', memberId);
-            await updateDoc(userRef, {
-                joinedCommunities: arrayRemove(partnerId)
-            });
+            const functions = getFunctions();
+            const setCommunityMembership = httpsCallable(functions, 'setCommunityMembership');
+            await setCommunityMembership({ partnerId: profileId, action: 'removeMember', memberId });
 
             // Send notification
             await createNotification({
                 userId: memberId,
                 type: 'community_removed',
                 title: 'Removed from Community',
-                message: `You have been removed from ${partnerName}'s community`,
-                actionUrl: `/partner/${partnerId}`,
-                fromUserId: currentUserId,
-                fromUserName: partnerName,
-                fromUserAvatar: getSafeAvatar({ id: currentUserId, name: partnerName }) // Minimal object for fallback
+                message: `You have been removed from ${businessName || 'this business'}'s community`,
+                actionUrl: `/business/${profileId}`,
+                metadata: { partnerId: profileId }
             });
 
             // Reload members
             loadMembers();
-            alert('Member removed successfully');
+            showToast('Member removed successfully', 'success');
         } catch (error) {
             console.error('Error removing member:', error);
-            alert('Failed to remove member');
+            showToast('Failed to remove member', 'error');
         }
     };
 
     // Send message to selected members
     const sendMessageToMembers = async () => {
         if (!message.trim()) {
-            alert('Please enter a message');
+            showToast('Please enter a message', 'error');
             return;
         }
 
         if (selectedMembers.length === 0) {
-            alert('Please select at least one member');
+            showToast('Please select at least one member', 'error');
             return;
         }
 
@@ -129,23 +118,20 @@ const CommunityManagement = ({ partnerId, partnerName, currentUserId }) => {
                 await createNotification({
                     userId: memberId,
                     type: 'community_message',
-                    title: `Message from ${partnerName}`,
+                    title: `Message from ${businessName || 'Business'}`,
                     message: message.substring(0, 100),
-                    actionUrl: `/partner/${partnerId}`,
-                    fromUserId: currentUserId,
-                    fromUserName: partnerName,
-                    fromUserAvatar: getSafeAvatar({ id: currentUserId, name: partnerName }),
-                    metadata: { fullMessage: message }
+                    actionUrl: `/business/${profileId}`,
+                    metadata: { partnerId: profileId, fullMessage: message }
                 });
             }
 
-            alert(`Message sent to ${selectedMembers.length} member(s)`);
+            showToast(`Message sent to ${selectedMembers.length} member(s)`, 'success');
             setMessage('');
             setShowMessageModal(false);
             deselectAll();
         } catch (error) {
             console.error('Error sending messages:', error);
-            alert('Failed to send messages');
+            showToast('Failed to send messages', 'error');
         } finally {
             setSending(false);
         }

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../context/AuthContext';
 import { FaArrowRight, FaComments, FaUserPlus, FaUserCheck, FaUsers, FaHeart } from 'react-icons/fa';
-import { getFollowers, getFollowing, getMutualFollowers, getMutualFollowersCount } from '../utils/followHelpers';
+import { getFollowers, getFollowing, getMutualFollowersCount } from '../utils/followHelpers';
 import { getSafeAvatar } from '../utils/avatarUtils';
 
 const FollowersList = () => {
@@ -11,6 +12,7 @@ const FollowersList = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { currentUser, toggleFollow } = useInvitations();
+    const { userProfile } = useAuth();
     // Use state from location if available, otherwise default to 'mutual' or 'following' if mutual is empty? 
     // Sticking to 'mutual' as default is safer, but let's respect the user's entry point.
     const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'mutual');
@@ -297,7 +299,6 @@ const FollowersList = () => {
                                             gap: '8px'
                                         }}>
                                             {user.name}
-                                            {user.name}
                                         </div>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
                                             {user.bio || t('no_bio')}
@@ -333,8 +334,9 @@ const FollowersList = () => {
                                             </button>
                                         )}
 
-                                        {/* Follow/Unfollow Button */}
-                                        {!user.isFollowedByMe ? (
+                                        {/* Follow/Unfollow Button - Business accounts cannot follow regular users */}
+                                        {userProfile?.role !== 'business' && (
+                                        !user.isFollowedByMe ? (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -379,6 +381,7 @@ const FollowersList = () => {
                                             >
                                                 <FaUserCheck /> {t('following')}
                                             </button>
+                                        )
                                         )}
                                     </div>
                                 </div>

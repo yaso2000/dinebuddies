@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -6,22 +6,7 @@ import Home from './pages/Home';
 // User Pages
 import CreateInvitation from './pages/CreateInvitation';
 import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
-import PrivateInvitationPreview from './pages/PrivateInvitationPreview';
-import PrivateInvitationDetails from './pages/PrivateInvitationDetails';
 import CreatePost from './pages/CreatePost';
-import CreateStory from './pages/CreateStory';
-import InvitationDetails from './pages/InvitationDetails';
-import InvitationPreview from './pages/InvitationPreview';
-import InvitationChatRoom from './pages/InvitationChatRoom';
-import Profile from './pages/Profile';
-import UserProfile from './pages/UserProfile';
-import Notifications from './pages/Notifications';
-import FriendsFeed from './pages/FriendsFeed';
-import RestaurantDirectory from './pages/RestaurantDirectory';
-import RestaurantDetails from './pages/RestaurantDetails';
-import FollowersList from './pages/FollowersList';
-import ChatList from './pages/ChatList';
-import Chat from './pages/Chat';
 import PricingPage from './pages/PricingPage';
 import AuthPage from './pages/AuthPage';
 import QuickLogin from './pages/QuickLogin';
@@ -39,42 +24,23 @@ import BillingSettings from './pages/BillingSettings';
 import PaymentSuccess from './pages/PaymentSuccess';
 import BusinessSignup from './pages/BusinessSignup';
 
-import PartnerProfile from './pages/PartnerProfile';
-import PremiumOfferPage from './pages/PremiumOfferPage';
 import BusinessDashboard from './pages/BusinessDashboard';
-import BusinessProDashboard from './pages/BusinessProDashboard';
-import MyCommunities from './pages/MyCommunities';
-import MyCommunity from './pages/MyCommunity';
-import CommunityChatRoom from './pages/CommunityChatRoom';
 import PostsFeed from './pages/PostsFeed';
 import BusinessLimitsManager from './pages/AdminDashboard';
-import AdminPanel from './pages/AdminPanel';
-import MigrationPage from './pages/MigrationPage';
 import LegalPrivacy from './pages/PrivacyPolicy';
 import LegalTerms from './pages/TermsOfService';
+import CommunityGuidelines from './pages/CommunityGuidelines';
+import AccountDeletionRequest from './pages/AccountDeletionRequest';
 import PrivateInvitationOverlay from './components/Invitation/PrivateInvitationOverlay';
-// ── Social Creator (isolated feature — delete folder + this line to remove) ──
-import SocialCreator from './features/social-creator/index.jsx';
 
 // Admin Pages
-import AdminLayout from './pages/admin/AdminLayout';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import UserManagement from './pages/admin/UserManagement';
-import PlanManagement from './pages/admin/PlanManagement';
-import PlanEditor from './pages/admin/PlanEditor';
-import SubscriptionManagement from './pages/admin/SubscriptionManagement';
-import PartnerManagement from './pages/admin/PartnerManagement';
-import InvitationManagement from './pages/admin/InvitationManagement';
-import ReportsAnalytics from './pages/admin/ReportsAnalytics';
-import MigrationTools from './pages/admin/MigrationTools';
-import AdminSettings from './pages/admin/AdminSettings';
-import CodeBackups from './pages/admin/CodeBackups';
 import AdminRoute from './components/AdminRoute';
 
 import BusinessBlockedRoute from './components/BusinessBlockedRoute';
 import GuestBlockedRoute from './components/GuestBlockedRoute';
 
 // Contexts
+import { ToastProvider } from './context/ToastContext';
 import { InvitationProvider } from './context/InvitationContext';
 import { AuthProvider } from './context/AuthContext';
 import { StripeProvider } from './context/StripeContext';
@@ -88,16 +54,58 @@ import ProfileGuard from './components/ProfileGuard';
 import OfflineNotice from './components/OfflineNotice';
 import AuthBlockedRoute from './components/AuthBlockedRoute';
 import { usePresence } from './hooks/usePresence';
-import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { useParams, useNavigate } from 'react-router-dom';
 
-// Smart profile router: shows PartnerProfile for business accounts, UserProfile for regular users
+const BusinessProDashboard = lazy(() => import('./pages/BusinessProDashboard'));
+const SocialCreator = lazy(() => import('./features/social-creator/index.jsx'));
+const CreateStory = lazy(() => import('./pages/CreateStory'));
+const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
+const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
+const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
+const PrivateInvitationPreview = lazy(() => import('./pages/PrivateInvitationPreview'));
+const PrivateInvitationDetails = lazy(() => import('./pages/PrivateInvitationDetails'));
+const Profile = lazy(() => import('./pages/Profile'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const FriendsFeed = lazy(() => import('./pages/FriendsFeed'));
+const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
+const RestaurantDetails = lazy(() => import('./pages/RestaurantDetails'));
+const FollowersList = lazy(() => import('./pages/FollowersList'));
+const ChatList = lazy(() => import('./pages/ChatList'));
+const Chat = lazy(() => import('./pages/Chat'));
+const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
+const PremiumOfferPage = lazy(() => import('./pages/PremiumOfferPage'));
+const MyCommunities = lazy(() => import('./pages/MyCommunities'));
+const MyCommunity = lazy(() => import('./pages/MyCommunity'));
+const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const AdminHome = lazy(() => import('./pages/admin/AdminHome'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const Plans = lazy(() => import('./pages/admin/Plans'));
+const SubscriptionManagement = lazy(() => import('./pages/admin/SubscriptionManagement'));
+const BusinessManagement = lazy(() => import('./pages/admin/BusinessManagement'));
+const InvitationManagement = lazy(() => import('./pages/admin/InvitationManagement'));
+const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'));
+const MigrationTools = lazy(() => import('./pages/admin/MigrationTools'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const CodeBackups = lazy(() => import('./pages/admin/CodeBackups'));
+const AdminChatCommunity = lazy(() => import('./pages/admin/AdminChatCommunity'));
+const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
+const AdminSystemTools = lazy(() => import('./pages/admin/AdminSystemTools'));
+const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
+
+const RedirectPartnerToBusiness = () => {
+    const { partnerId } = useParams();
+    return <Navigate to={`/business/${partnerId || ''}`} replace />;
+};
+
+// Smart profile router: by role only. role business → BusinessProfile, else UserProfile.
 const SmartProfileRoute = () => {
     const { userId } = useParams();
     const navigate = useNavigate();
-    const [accountType, setAccountType] = useState(null);
+    const [profileRole, setProfileRole] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -106,23 +114,23 @@ const SmartProfileRoute = () => {
             .then(snap => {
                 if (snap.exists()) {
                     const d = snap.data();
-                    setAccountType(d.role || 'user');
+                    setProfileRole(d.role || 'user');
                 } else {
-                    setAccountType('user');
+                    setProfileRole('user');
                 }
             })
-            .catch(() => setAccountType('user'))
+            .catch(() => setProfileRole('user'))
             .finally(() => setLoading(false));
     }, [userId]);
 
     useEffect(() => {
-        if (accountType === null) return;
-        if (accountType === 'business') {
-            navigate(`/partner/${userId}`, { replace: true });
+        if (profileRole === null) return;
+        if (profileRole === 'business') {
+            navigate(`/business/${userId}`, { replace: true });
         }
-    }, [accountType, userId, navigate]);
+    }, [profileRole, userId, navigate]);
 
-    if (loading || accountType === 'business') {
+    if (loading || profileRole === 'business') {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
                 <div style={{ width: 40, height: 40, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
@@ -139,8 +147,9 @@ const PresenceManager = () => { usePresence(); return null; };
 function App() {
     return (
         <ThemeProvider>
-            <AuthProvider>
-                <InvitationProvider>
+            <ToastProvider>
+                <AuthProvider>
+                    <InvitationProvider>
                     <NotificationProvider>
                         <ChatProvider>
                             <StripeProvider>
@@ -148,8 +157,12 @@ function App() {
                                     <PresenceManager />
                                     <OfflineNotice />
                                     <PrivateInvitationOverlay />
-
-                                    <Routes>
+                                    <Suspense fallback={
+                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+                                            <div style={{ width: 38, height: 38, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                        </div>
+                                    }>
+                                        <Routes>
                                         {/* Auth Routes */}
                                         <Route path="/login" element={<AuthBlockedRoute><QuickLogin /></AuthBlockedRoute>} />
                                         <Route path="/auth" element={<AuthBlockedRoute><AuthPage /></AuthBlockedRoute>} />
@@ -172,7 +185,7 @@ function App() {
                                             <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
                                             <Route path="/invitation/:id" element={<InvitationDetails />} />
                                             <Route path="/invitation/:id/chat" element={<InvitationChatRoom />} />
-                                            <Route path="/restaurants" element={<RestaurantDirectory />} />
+                                            <Route path="/restaurants" element={<BusinessesDirectory />} />
                                             <Route path="/restaurant/:id" element={<RestaurantDetails />} />
                                             <Route path="/friends" element={<GuestBlockedRoute><FriendsFeed /></GuestBlockedRoute>} />
                                             <Route path="/followers" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
@@ -194,30 +207,33 @@ function App() {
                                             <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
                                             <Route path="/settings/billing" element={<GuestBlockedRoute><BillingSettings /></GuestBlockedRoute>} />
                                             <Route path="/business-dashboard" element={<BusinessDashboard />} />
-                                            <Route path="/migration" element={<MigrationPage />} />
                                             <Route path="/partners" element={<Navigate to="/restaurants" replace />} />
-                                            <Route path="/partner/:partnerId" element={<PartnerProfile />} />
+                                            <Route path="/business/:businessId" element={<BusinessProfile />} />
+                                            <Route path="/partner/:partnerId" element={<RedirectPartnerToBusiness />} />
                                             <Route path="/offer/new" element={<GuestBlockedRoute><PremiumOfferPage /></GuestBlockedRoute>} />
                                             <Route path="/offer/edit/:id" element={<GuestBlockedRoute><PremiumOfferPage /></GuestBlockedRoute>} />
                                             <Route path="/communities" element={<GuestBlockedRoute><MyCommunities /></GuestBlockedRoute>} />
                                             <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
                                             <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                             <Route path="/posts-feed" element={<PostsFeed />} />
-                                            <Route path="/admin-panel" element={<AdminPanel />} />
+                                            <Route path="/admin-panel" element={<Navigate to="/admin" replace />} />
                                         </Route>
 
                                         {/* Admin Routes */}
                                         <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                                            <Route path="dashboard" element={<AdminDashboard />} />
-                                            <Route path="business-limits" element={<BusinessLimitsManager />} />
+                                            <Route path="dashboard" element={<AdminHome />} />
                                             <Route path="users" element={<UserManagement />} />
-                                            <Route path="plans" element={<PlanManagement />} />
-                                            <Route path="plans/new" element={<PlanEditor />} />
-                                            <Route path="plans/edit/:id" element={<PlanEditor />} />
-                                            <Route path="subscriptions" element={<SubscriptionManagement />} />
-                                            <Route path="partners" element={<PartnerManagement />} />
                                             <Route path="invitations" element={<InvitationManagement />} />
+                                            <Route path="chat-community" element={<AdminChatCommunity />} />
+                                            <Route path="businesses" element={<BusinessManagement />} />
+                                            <Route path="partners" element={<Navigate to="/admin/businesses" replace />} />
                                             <Route path="reports" element={<ReportsAnalytics />} />
+                                            <Route path="notifications" element={<AdminNotifications />} />
+                                            <Route path="subscriptions" element={<SubscriptionManagement />} />
+                                            <Route path="plans" element={<Plans />} />
+                                            <Route path="system-tools" element={<AdminSystemTools />} />
+                                            <Route path="audit-log" element={<AdminAuditLog />} />
+                                            <Route path="business-limits" element={<BusinessLimitsManager />} />
                                             <Route path="migration" element={<MigrationTools />} />
                                             <Route path="settings" element={<AdminSettings />} />
                                             <Route path="backups" element={<CodeBackups />} />
@@ -227,13 +243,17 @@ function App() {
                                         {/* Public Legal Pages */}
                                         <Route path="/privacy" element={<LegalPrivacy />} />
                                         <Route path="/terms" element={<LegalTerms />} />
-                                    </Routes>
+                                        <Route path="/guidelines" element={<CommunityGuidelines />} />
+                                        <Route path="/account-deletion" element={<AccountDeletionRequest />} />
+                                        </Routes>
+                                    </Suspense>
                                 </Router>
                             </StripeProvider>
                         </ChatProvider>
                     </NotificationProvider>
-                </InvitationProvider>
-            </AuthProvider>
+                    </InvitationProvider>
+                </AuthProvider>
+            </ToastProvider>
         </ThemeProvider>
     );
 }

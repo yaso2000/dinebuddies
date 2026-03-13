@@ -88,14 +88,14 @@ const ProNotifications = () => {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     {unreadCount > 0 && (
-                        <button onClick={markAllAsRead} title="Mark all read"
-                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#10b981', padding: '6px 10px', cursor: 'pointer' }}>
+                        <button type="button" className="ui-btn ui-btn--secondary" onClick={markAllAsRead} title="Mark all read"
+                            style={{ padding: '6px 10px', color: '#10b981' }}>
                             <FaCheckDouble />
                         </button>
                     )}
                     {notifications.length > 0 && (
-                        <button onClick={deleteAllNotifications} title="Delete all"
-                            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, color: '#ef4444', padding: '6px 10px', cursor: 'pointer' }}>
+                        <button type="button" className="ui-btn ui-btn--danger-outline" onClick={deleteAllNotifications} title="Delete all"
+                            style={{ padding: '6px 10px' }}>
                             <FaTrash />
                         </button>
                     )}
@@ -106,9 +106,12 @@ const ProNotifications = () => {
             <div style={{ position: 'relative', marginBottom: 12 }}>
                 <FaSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }} />
                 <input
-                    type="text" value={search} onChange={e => setSearch(e.target.value)}
+                    type="text"
+                    className="ui-form-field"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
                     placeholder="Search notifications…"
-                    style={{ width: '100%', padding: '9px 12px 9px 36px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, color: '#f1f5f9', fontSize: '0.875rem', outline: 'none' }}
+                    style={{ paddingLeft: 36 }}
                 />
             </div>
 

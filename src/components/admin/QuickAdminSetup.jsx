@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '../../context/AuthContext';
 import { FaCrown, FaCheckCircle } from 'react-icons/fa';
 
@@ -19,9 +18,9 @@ const QuickAdminSetup = () => {
 
         try {
             setLoading(true);
-            await updateDoc(doc(db, 'users', currentUser.uid), {
-                role: 'admin'
-            });
+            const functions = getFunctions();
+            const grantAdminRole = httpsCallable(functions, 'grantAdminRole');
+            await grantAdminRole({ targetUid: currentUser.uid });
             setSuccess(true);
             alert('Success! You are now an admin. Please refresh the page.');
             setTimeout(() => {

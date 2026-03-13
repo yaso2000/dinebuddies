@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useToast } from './ToastContext';
+import { getAuthErrorMessage } from '../utils/errorMessages';
+import { adminSecurityService } from '../services/adminSecurityService';
 import {
     auth,
     db
@@ -24,13 +27,8 @@ import {
     getDoc,
     updateDoc,
     deleteDoc,
-    addDoc,
     serverTimestamp,
     onSnapshot,
-    collection,
-    query,
-    where,
-    getDocs
 } from 'firebase/firestore';
 
 const AuthContext = createContext();
@@ -67,9 +65,7 @@ export const AuthProvider = ({ children }) => {
         shortDescription: ''
     };
 
-    // Normalization helper
-    // isBusiness = role === 'business'
-    // isGuest    = role === 'guest'
+    // Canonical: only role. user | business | admin | staff | support | guest. Use "business" for partners (no "partner" value).
     const normalizeProfile = (data) => {
         if (!data) return null;
         const isBusiness = data.role === 'business';
@@ -265,6 +261,8 @@ export const AuthProvider = ({ children }) => {
     };
 
 
+    const { showToast } = useToast();
+
     // Fetch user profile from Firestore
     const fetchUserProfile = async (userId) => {
         try {
@@ -276,6 +274,7 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error('Error fetching user profile:', error);
+            showToast(getAuthErrorMessage(error) || 'Failed to load profile.', 'error');
         }
     };
 
@@ -352,35 +351,6 @@ export const AuthProvider = ({ children }) => {
             const result = await signInWithEmailAndPassword(auth, email, password);
             return result.user;
         } catch (error) {
-            // DEMO LOGIN BYPASS: If email ends with @d.c and user not found, 
-            // check Firestore for a demo account and auto-register it.
-            if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && email.endsWith('@d.c')) {
-                try {
-                    const q = query(collection(db, 'users'), where('email', '==', email), where('isDemo', '==', true));
-                    const snapshot = await getDocs(q);
-
-                    if (!snapshot.empty) {
-                        const demoData = snapshot.docs[0].data();
-                        console.log('🧪 Demo user detected in Firestore. Auto-registering in Auth...');
-
-                        // Attempt to register with the provided password
-                        const signupResult = await createUserWithEmailAndPassword(auth, email, password);
-
-                        // Sync UID if needed
-                        const oldDocRef = snapshot.docs[0].ref;
-                        const newDocRef = doc(db, 'users', signupResult.user.uid);
-
-                        if (oldDocRef.id !== signupResult.user.uid) {
-                            await setDoc(newDocRef, { ...demoData, uid: signupResult.user.uid });
-                            await deleteDoc(oldDocRef);
-                        }
-
-                        return signupResult.user;
-                    }
-                } catch (bypassError) {
-                    console.error('Demo auto-reg failed:', bypassError);
-                }
-            }
             console.error('Error signing in with email:', error);
             throw error;
         }
@@ -574,14 +544,12 @@ export const AuthProvider = ({ children }) => {
                 isProfileComplete: false
             }, { merge: true });
 
-            await addDoc(collection(db, 'notifications'), {
-                userId: userId,
+            await adminSecurityService.createNotification({
+                userId,
                 type: 'system_announcement',
                 title: '🎁 Welcome Gift!',
-                message: `Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!`,
-                style: 'success',
-                createdAt: serverTimestamp(),
-                read: false
+                message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
+                style: 'success'
             });
 
             await fetchUserProfile(userId);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../context/ToastContext';
 import {
     FaMapMarkerAlt,
     FaInstagram,
@@ -25,6 +26,7 @@ import { Country } from 'country-state-city';
 // ================================
 export const FavoritePlaces = ({ userId }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [places, setPlaces] = useState([]);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
@@ -104,7 +106,7 @@ export const FavoritePlaces = ({ userId }) => {
     const handleSelectPlace = (place) => {
         // Check if already exists
         if (places.some(p => p.id === place.id || p.businessId === place.id)) {
-            alert(t('place_already_added', 'Place already in favorites'));
+            showToast(t('place_already_added', 'Place already in favorites'), 'error');
             return;
         }
         setPendingPlace(place);
@@ -195,7 +197,7 @@ export const FavoritePlaces = ({ userId }) => {
             setUploadProgress(0);
         } catch (error) {
             console.error('Error adding place:', error);
-            alert('Failed to add place');
+            showToast('Failed to add place', 'error');
             setUploadProgress(0);
         }
     };
@@ -536,6 +538,7 @@ export const ReviewsSection = ({ userId }) => {
 // ================================
 export const SocialLinks = ({ userId }) => {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [links, setLinks] = useState({
         instagram: '',
         twitter: '',
@@ -580,7 +583,7 @@ export const SocialLinks = ({ userId }) => {
         // Validate all links
         for (const [type, value] of Object.entries(tempLinks)) {
             if (value && !validateLink(type, value)) {
-                alert(`Invalid ${type} format`);
+                showToast(`Invalid ${type} format`, 'error');
                 return;
             }
         }
@@ -595,7 +598,7 @@ export const SocialLinks = ({ userId }) => {
             setEditing(false);
         } catch (error) {
             console.error('Error saving social links:', error);
-            alert('Failed to save links');
+            showToast('Failed to save links', 'error');
         }
     };
 
