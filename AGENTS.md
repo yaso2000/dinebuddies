@@ -28,3 +28,9 @@ DineBuddies is a React 18 + Vite SPA (social dining platform) backed entirely by
 See `.env.example` for the full list. Required for Firebase connectivity:
 `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`.
 Optional: `VITE_GOOGLE_MAPS_API_KEY`, `VITE_STRIPE_PUBLISHABLE_KEY`.
+
+### Guest mode and auth gates
+Without Firebase credentials, the app renders the full UI shell and supports guest browsing of Home, Invitations (list view), and Partners (Business Directory). Features that require authentication (creating invitations, accessing Communities, Settings, Profile) redirect to the login page, which offers a "Continue as Guest" option to return to the public pages. This means UI-only changes to public pages can be tested without credentials.
+
+### Automated tests
+There are no automated test suites (no `test` script in `package.json`, no test framework installed). Validation is limited to `npm run build` (catches compile/import errors) and manual browser testing via the dev server.
