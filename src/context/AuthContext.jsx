@@ -349,6 +349,22 @@ export const AuthProvider = ({ children }) => {
     const signInWithEmail = async (email, password) => {
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
+            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+            const userRole = userDoc.exists() ? userDoc.data()?.role : 'user';
+
+            // Email/password login is reserved for non-regular accounts only.
+            if (!userRole || userRole === 'user') {
+                try {
+                    await firebaseSignOut(auth);
+                } catch (signOutError) {
+                    console.warn('Failed to sign out blocked email-login user:', signOutError);
+                }
+
+                const error = new Error('Email login is disabled for regular accounts.');
+                error.code = 'auth/email-login-disabled-for-regular-account';
+                throw error;
+            }
+
             return result.user;
         } catch (error) {
             console.error('Error signing in with email:', error);

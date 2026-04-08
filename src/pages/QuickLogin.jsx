@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { FaMobileAlt, FaGoogle, FaFacebook, FaArrowRight, FaCheck, FaEnvelope, FaLock } from 'react-icons/fa';
+import { FaMobileAlt, FaFacebook, FaArrowRight, FaCheck, FaEnvelope, FaLock } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 const QuickLogin = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const {
         signInWithEmail,
-        signUpWithEmail,
         signInWithGoogle,
         signInWithFacebook,
         continueAsGuest,
@@ -22,12 +21,10 @@ const QuickLogin = () => {
     const [loginMethod, setLoginMethod] = useState('phone'); // 'phone', 'email', 'social'
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [otpSent, setOtpSent] = useState(false);
     const [confirmationResult, setConfirmationResult] = useState(null);
-    const [isSignUp, setIsSignUp] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [justLoggedIn, setJustLoggedIn] = useState(false);
@@ -56,14 +53,10 @@ const QuickLogin = () => {
         setError('');
 
         try {
-            if (isSignUp) {
-                await signUpWithEmail(email, password, name);
-            } else {
-                await signInWithEmail(email, password);
-            }
+            await signInWithEmail(email, password);
             setJustLoggedIn(true);
         } catch (err) {
-            setError(err.message);
+            setError(err.message || t('login_error', 'Login failed. Please try again.'));
         } finally {
             setLoading(false);
         }
@@ -222,18 +215,21 @@ const QuickLogin = () => {
                     <button
                         onClick={() => { setLoginMethod('phone'); setOtpSent(false); }}
                         className={`auth-tab-btn ${loginMethod === 'phone' ? 'active' : ''}`}
+                        style={{ width: '33.3333%' }}
                     >
                         {t('phone', 'Phone')}
                     </button>
                     <button
                         onClick={() => setLoginMethod('email')}
                         className={`auth-tab-btn ${loginMethod === 'email' ? 'active' : ''}`}
+                        style={{ width: '33.3333%' }}
                     >
                         {t('email', 'Email')}
                     </button>
                     <button
                         onClick={() => setLoginMethod('social')}
                         className={`auth-tab-btn ${loginMethod === 'social' ? 'active' : ''}`}
+                        style={{ width: '33.3333%' }}
                     >
                         {t('social', 'Social')}
                     </button>
@@ -361,7 +357,7 @@ const QuickLogin = () => {
                     )
                 )}
 
-                {/* Email Login */}
+                {/* Email Login (business/admin only) */}
                 {loginMethod === 'email' && (
                     <form onSubmit={handleEmailSubmit}>
                         <div style={{ marginBottom: '1rem' }}>
@@ -425,17 +421,11 @@ const QuickLogin = () => {
                                 fontSize: '1rem'
                             }}
                         >
-                            {loading ? t('loading', 'Loading...') : (isSignUp ? t('create_account', 'Create Account') : t('login', 'Login'))}
+                            {loading ? t('loading', 'Loading...') : t('login', 'Login')}
                         </button>
-                        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-                            <button
-                                type="button"
-                                onClick={() => setIsSignUp(!isSignUp)}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontWeight: '600', textDecoration: 'underline' }}
-                            >
-                                {isSignUp ? t('have_account', 'Already have an account? Login') : t('no_account', "Don't have an account? Sign up")}
-                            </button>
-                        </div>
+                        <p style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                            {t('email_login_limited_note', 'Email login is available for business/admin accounts only.')}
+                        </p>
                     </form>
                 )}
 

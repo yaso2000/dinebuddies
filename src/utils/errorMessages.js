@@ -19,7 +19,8 @@ const AUTH_ERROR_MAP = {
     'auth/requires-recent-login': 'Please sign in again to continue.',
     'auth/account-exists-with-different-credential': 'An account already exists with the same email.',
     'auth/operation-not-allowed': 'This sign-in method is not enabled.',
-    'auth/configuration-not-found': 'Sign-in configuration error. Please try again.'
+    'auth/configuration-not-found': 'Sign-in configuration error. Please try again.',
+    'auth/email-login-disabled-for-regular-account': 'Email login is disabled for regular accounts. Please use phone or social login.'
 };
 
 const FALLBACK = 'Something went wrong. Please try again.';
