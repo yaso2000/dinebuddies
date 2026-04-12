@@ -586,7 +586,7 @@ const inputStyle = {
     border: '1px solid var(--border-color)',
     background: 'var(--bg-body)',
     color: 'var(--text-primary)',
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: 'sans-serif',
     fontSize: '0.95rem',
     outline: 'none',
     transition: 'border-color 0.2s',

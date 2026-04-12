@@ -121,7 +121,7 @@ const InvitationManagement = () => {
                                 <table className="admin-table">
                                     <thead>
                                         <tr>
-                                            <th>Title / Restaurant</th>
+                                            <th>Title / Venue</th>
                                             <th>Creator</th>
                                             <th>Created</th>
                                             <th>Status</th>

@@ -8,10 +8,25 @@ import { useNavigate } from 'react-router-dom';
 import ShareButtons from './ShareButtons';
 import NewReportModal from './NewReportModal';
 import VideoPlayer from './Shared/VideoPlayer';
-import { getTemplateStyle } from '../utils/invitationTemplates';
+import { getTemplateStyle, COLOR_SCHEMES } from '../utils/invitationTemplates';
 import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
+
+const hexToRgba = (hex, opacity) => {
+    if (!hex || !hex.startsWith('#')) return hex;
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+        r = parseInt(hex[1] + hex[1], 16);
+        g = parseInt(hex[2] + hex[2], 16);
+        b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) {
+        r = parseInt(hex.substring(1, 3), 16);
+        g = parseInt(hex.substring(3, 5), 16);
+        b = parseInt(hex.substring(5, 7), 16);
+    }
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
 
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
@@ -25,6 +40,7 @@ const InvitationCard = ({ invitation }) => {
     const [isPlayingVideo, setIsPlayingVideo] = useState(false);
     const [isMuted, setIsMuted] = useState(true);
 
+    const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar');
 
     const {
         id, author, title, type, location, paymentType,
@@ -41,6 +57,8 @@ const InvitationCard = ({ invitation }) => {
         invitation.colorScheme || 'oceanBlue',
         invitation.occasionType
     );
+
+    const themeColors = COLOR_SCHEMES[invitation.colorScheme || 'oceanBlue'] || COLOR_SCHEMES.oceanBlue;
 
     const isHost = author?.id === currentUser?.id;
     const isPending = (requests || []).includes(currentUser?.id);
@@ -170,178 +188,43 @@ const InvitationCard = ({ invitation }) => {
                 position: 'relative',
                 cursor: 'pointer',
                 overflow: 'hidden',
-                boxShadow: templateStyles.card.boxShadow || '0 8px 32px rgba(0,0,0,0.4)',
-                transition: 'all 0.3s ease',
+                boxShadow: templateStyles.card.boxShadow || '0 10px 30px rgba(0,0,0,0.15)',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                 display: 'flex',
                 flexDirection: 'column',
-                border: templateStyles.card.border || '1px solid rgba(255,255,255,0.1)',
                 height: (templateStyles.card.minHeight || 'auto'),
-                minHeight: '450px',
-                background: 'var(--bg-card)'
+                minHeight: 'auto',
+                transformOrigin: 'center bottom',
+                marginBottom: '16px', // spacing between cards in feed
+                padding: 0,
+                border: `2px solid ${themeColors.primary}`,
+                background: hexToRgba(themeColors.primary, 0.25),
+                borderRadius: '24px',
             }}
             onMouseEnter={(e) => {
                 if (window.innerWidth > 768) {
-                    e.currentTarget.style.transform = 'translateY(-5px) scale(1.01)';
-                    e.currentTarget.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)';
+                    e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)';
+                    e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.2)';
                 }
             }}
             onMouseLeave={(e) => {
                 if (window.innerWidth > 768) {
                     e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                    e.currentTarget.style.boxShadow = templateStyles.card.boxShadow || '0 8px 32px rgba(0,0,0,0.4)';
+                    e.currentTarget.style.boxShadow = templateStyles.card.boxShadow || '0 10px 30px rgba(0,0,0,0.15)';
                 }
             }}
         >
             {/* --- BACKGROUND PATTERN OVERLAY --- */}
             {templateStyles.layout?.backgroundOverlay && (
                 <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    zIndex: 1,
-                    backgroundImage: templateStyles.layout.backgroundOverlay,
-                    opacity: 0.4,
-                    pointerEvents: 'none'
+                    position: 'absolute', inset: 0, zIndex: 1, backgroundImage: templateStyles.layout.backgroundOverlay,
+                    opacity: 0.1, pointerEvents: 'none'
                 }} />
             )}
-            {/* --- 1. HEADER (User Info & Top Actions) --- */}
-            <div className="card-header" style={{
-                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
-                padding: '16px',
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                pointerEvents: 'none'
-            }}>
-                {/* Host Profile */}
-                <div className="header-host-info" style={{ display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto' }} onClick={handleAvatarClick}>
-                    <div style={{ position: 'relative' }}>
-                        <img
-                            src={getSafeAvatar(author)}
-                            onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = getSafeAvatar(null);
-                            }}
-                            alt={author?.name}
-                            style={{
-                                width: '40px', height: '40px', borderRadius: '50%',
-                                border: '2px solid rgba(255,255,255,0.9)', objectFit: 'cover'
-                            }}
-                        />
-                        {!isHost && author?.role !== 'business' && userProfile?.role !== 'business' && (
-                            <button
-                                onClick={handleFollowClick}
-                                style={{
-                                    position: 'absolute', bottom: '-2px', right: '-2px',
-                                    width: '18px', height: '18px', borderRadius: '50%',
-                                    background: isFollowing ? '#10b981' : '#ef4444', border: '1.5px solid white',
-                                    color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', padding: 0,
-                                    cursor: 'pointer'
-                                }}>
-                                {isFollowing ? <FaCheck /> : <FaPlus />}
-                            </button>
-                        )}
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'white', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
-                            {author?.name}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '6px' }}>
-                                {t(`type_${type?.toLowerCase().replace(/ /g, '_')}`, { defaultValue: type })}
-                            </span>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Top Actions */}
-                <div className="header-actions" style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: '8px',
-                    pointerEvents: 'auto',
-                    position: 'absolute',
-                    right: '16px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    zIndex: 30,
-                    margin: 0,
-                    padding: 0
-                }}>
-                    {/* Audio toggle */}
-                    {cardMedia.type === 'video' && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const video = window[`video_${id}`];
-                                if (video) {
-                                    video.muted = !video.muted;
-                                    setIsMuted(video.muted);
-                                }
-                            }}
-                            className="audio-btn"
-                            style={actionBtnStyle}
-                        >
-                            {isMuted ? <FaVolumeMute size={15} /> : <FaVolumeUp size={15} />}
-                        </button>
-                    )}
-
-                    {/* Share - Keep for guests to promote viral loop */}
-                    <button onClick={handleShare} className="share-btn" style={actionBtnStyle}>
-                        <FaShareAlt size={15} />
-                    </button>
-
-                    {/* Promote to Feed (New Feature) */}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            navigate('/create-post', { state: { attachedInvitation: invitation } });
-                        }}
-                        className="promote-btn"
-                        style={actionBtnStyle}
-                        title={t('share_to_feed', { defaultValue: 'Share to Feed' })}
-                    >
-                        <FaBullhorn size={15} />
-                    </button>
-
-                    {/* Report - Hide for guest */}
-                    {!isHost && userProfile?.role !== 'guest' && !userProfile?.isGuest && (
-                        <button onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }} className="report-btn" style={actionBtnStyle}>
-                            <FaFlag size={14} />
-                        </button>
-                    )}
-
-                    {/* ADMIN DELETE BUTTON */}
-                    {(
-                        userProfile?.role === 'admin' ||
-                        userProfile?.email?.includes('admin') ||
-                        userProfile?.email === 'info@dinebuddies.com.au' ||
-                        currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33'
-                    ) && (
-                            <button
-                                onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (window.confirm('🗑️ ADMIN ACTION: Delete this invitation permanently?')) {
-                                        try {
-                                            await deleteInvitation(id);
-                                        } catch (err) {
-                                            showToast('Error deleting: ' + err.message, 'error');
-                                        }
-                                    }
-                                }}
-                                className="delete-btn"
-                                style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}
-                                title="Delete Invitation (Admin)"
-                            >
-                                <span style={{ fontWeight: 'bold', fontSize: '18px' }}>×</span>
-                            </button>
-                        )}
-                </div>
-            </div>
-
-            {/* --- 2. MEDIA (Background on Desktop, Middle on Mobile) --- */}
-            <div className="card-media" style={{
-                position: 'absolute', inset: 0, zIndex: 0,
-                background: '#000'
+            {/* --- SECTION 1: TICKET ARTWORK (Top 180px) --- */}
+            <div className="ticket-artwork" style={{
+                position: 'relative', height: '180px', flexShrink: 0, overflow: 'hidden', zIndex: 2
             }}>
                 {cardMedia.type === 'video' ? (
                     <video
@@ -351,12 +234,8 @@ const InvitationCard = ({ invitation }) => {
                                 window[`video_${id}`] = el;
                             }
                         }}
-                        src={cardMedia.url}
-                        poster={cardMedia.thumbnail || cardMedia.url}
-                        playsInline
-                        loop
-                        autoPlay
-                        muted={isMuted}
+                        src={cardMedia.url} poster={cardMedia.thumbnail || cardMedia.url}
+                        playsInline loop autoPlay muted={isMuted}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onClick={(e) => {
                             e.stopPropagation();
@@ -365,181 +244,202 @@ const InvitationCard = ({ invitation }) => {
                         }}
                     />
                 ) : (
-                    <img
-                        src={cardMedia.url}
-                        alt={title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }}
-                    />
+                    <img src={cardMedia.url} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 )}
-                {/* Overlay Gradient */}
-                <div className="media-overlay" style={{
-                    position: 'absolute', inset: 0,
-                    background: templateStyles.card.background?.includes('rgba(0,0,0')
-                        ? 'linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.8) 70%, rgba(0,0,0,0.95) 100%)'
-                        : 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0.95) 100%)',
+
+                {/* Subtile top gradient for button readability */}
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, height: '80px',
+                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)',
                     pointerEvents: 'none'
                 }} />
-            </div>
 
-            {/* --- 3. FOOTER / BODY (Info & Main Actions) --- */}
-            <div className="card-footer" style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
-                padding: '24px',
-                display: 'flex', flexDirection: 'column', gap: '12px',
-                pointerEvents: 'none',
-                textAlign: templateStyles.layout?.textAlign || 'left',
-                alignItems: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start'
-            }}>
-                {/* Title & Info */}
-                <div className="footer-info" style={{ pointerEvents: 'auto', width: '100%' }}>
-                    {/* Decorative Header (Optional) */}
-                    {templateStyles.layout?.decorativeElement && (
-                        <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>
-                            {templateStyles.layout.decorativeElement}
-                        </div>
+                {/* Top Left: Type Badge */}
+                <div style={{
+                    position: 'absolute', top: '16px', ...(isRTL ? { right: '16px' } : { left: '16px' }), zIndex: 10,
+                    background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)',
+                    padding: '4px 12px', borderRadius: '12px', color: 'white',
+                    fontSize: '0.75rem', fontWeight: '800', border: '1px solid rgba(255,255,255,0.3)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                }}>
+                    {t(`type_${type?.toLowerCase().replace(/ /g, '')}`, { defaultValue: type })}
+                </div>
+
+                {/* Top Right: Actions */}
+                <div className="header-actions" style={{
+                    position: 'absolute', top: '16px', ...(isRTL ? { left: '16px' } : { right: '16px' }), zIndex: 10,
+                    display: 'flex', gap: '8px'
+                }}>
+                    {cardMedia.type === 'video' && (
+                        <button onClick={(e) => { e.stopPropagation(); const video = window[`video_${id}`]; if (video) { video.muted = !video.muted; setIsMuted(video.muted); } }} style={actionBtnStyle}>
+                            {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} />}
+                        </button>
                     )}
-
-                    {/* Date & Time Row - More prominent */}
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
-                        alignItems: 'center',
-                        gap: '10px',
-                        marginBottom: '8px'
-                    }}>
-                        <span className="meta-badge" style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
-                            borderRadius: '10px', fontSize: '0.85rem', color: 'white',
-                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
-                        }}>
-                            <FaCalendarAlt style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} />
-                            {(() => {
-                                if (!date) return 'TBD';
-                                const d = new Date(date);
-                                return d.toLocaleDateString(i18n.language === 'ar' ? 'ar-EG' : undefined, { month: 'short', day: 'numeric' });
-                            })()}
-                        </span>
-                        <span className="meta-badge" style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
-                            borderRadius: '10px', fontSize: '0.85rem', color: 'white',
-                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
-                        }}>
-                            <FaClock style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} /> {time}
-                        </span>
-                        {occasionType && (
-                            <span className="meta-badge" style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
-                                borderRadius: '10px', fontSize: '0.85rem', color: 'white',
-                                fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
-                            }}>
-                                {occasionType === 'romantic' ? <FaHeart style={{ color: '#ec4899' }} /> :
-                                    occasionType === 'family' ? <FaUsers style={{ color: '#10b981' }} /> :
-                                        occasionType === 'business' ? <FaBriefcase style={{ color: '#a855f7' }} /> :
-                                            <FaSmile style={{ color: '#f59e0b' }} />}
-                                {t(`occasion_${occasionType?.toLowerCase?.()}`, { defaultValue: occasionType })}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Title */}
-                    <h3 style={{
-                        fontSize: templateStyles.layout?.titleSize || '1.4rem',
-                        fontWeight: '900',
-                        color: 'white',
-                        margin: '0 0 10px 0',
-                        lineHeight: 1.2,
-                        textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                        fontFamily: templateStyles.layout?.fontFamily || 'inherit',
-                        maxWidth: '100%'
-                    }}>
-                        {title}
-                    </h3>
-
-                    {/* Message / Description (New) */}
-                    {templateStyles.layout?.displayDescription && description && (
-                        <p style={{
-                            fontSize: '0.9rem',
-                            color: 'rgba(255,255,255,0.9)',
-                            margin: '0 0 15px 0',
-                            lineHeight: '1.4',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            ...templateStyles.layout.messageStyle
-                        }}>
-                            {description}
-                        </p>
+                    <button onClick={handleShare} style={actionBtnStyle} title={t('share')}>
+                        <FaShareAlt size={14} />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); navigate('/create-post', { state: { attachedInvitation: invitation } }); }} style={actionBtnStyle} title={t('share_to_feed')}>
+                        <FaBullhorn size={14} />
+                    </button>
+                    {!isHost && userProfile?.role !== 'guest' && !userProfile?.isGuest && (
+                        <button onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }} style={actionBtnStyle}>
+                            <FaFlag size={14} />
+                        </button>
                     )}
-
-                    {/* Location / Restaurant */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
-                        gap: '6px',
-                        fontSize: '0.95rem',
-                        color: 'white',
-                        fontWeight: '700',
-                        marginBottom: '10px'
-                    }}>
-                        <FaMapMarkerAlt style={{ color: '#f87171' }} />
-                        <span style={{
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            maxWidth: '280px',
-                            textDecoration: 'underline',
-                            textUnderlineOffset: '3px'
-                        }}>
-                            {location || t('venue_selected')}
-                        </span>
-                    </div>
-
-                    {/* Secondary Info Row (Distance, Spots, etc.) */}
-                    {templateStyles.layout?.showSecondaryInfo && (
-                        <div style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
-                            alignItems: 'center',
-                            gap: '8px',
-                            marginBottom: '12px',
-                            opacity: 0.85
-                        }}>
-                            {invitation.distance !== null && invitation.distance !== undefined && (
-                                <span style={{ fontSize: '0.8rem', color: '#6ee7b7', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <FaMapMarkerAlt /> {invitation.distance.toFixed(1)} km
-                                </span>
-                            )}
-                            <span style={{ fontSize: '0.8rem', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <FaUserFriends /> {spotsLeft}
-                            </span>
-                        </div>
+                    {(userProfile?.role === 'admin' || userProfile?.email?.includes('admin') || userProfile?.email === 'info@dinebuddies.com.au' || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') && (
+                        <button onClick={async (e) => { e.stopPropagation(); if (window.confirm(t('confirm_delete'))) await deleteInvitation(id); }} style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
+                            <FaTimes size={16} />
+                        </button>
                     )}
                 </div>
 
-                {/* Primary Action Button */}
+                {/* Subtile bottom gradient for host info readability */}
+                <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0, height: '100px',
+                    background: `linear-gradient(to top, ${hexToRgba(themeColors.primary, 0.85)} 0%, rgba(0,0,0,0.5) 70%, transparent 100%)`,
+                    pointerEvents: 'none', zIndex: 5
+                }} />
+
+                {/* Host Info - Bottom Left of Ticket Artwork */}
+                <div style={{ position: 'absolute', bottom: '12px', ...(isRTL ? { right: '16px' } : { left: '16px' }), zIndex: 25, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={handleAvatarClick}>
+                    <div style={{ position: 'relative' }}>
+                        <img
+                            src={getSafeAvatar(author)}
+                            onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                            alt={author?.name}
+                            style={{
+                                width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover',
+                                border: '2px solid white',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                background: 'white'
+                            }}
+                        />
+                        {!isHost && !isFollowing && author?.role !== 'business' && userProfile?.role !== 'business' && (
+                            <button
+                                onClick={handleFollowClick}
+                                style={{
+                                    position: 'absolute', bottom: '-2px', ...(isRTL ? { left: '-2px' } : { right: '-2px' }),
+                                    width: '16px', height: '16px', borderRadius: '50%',
+                                    background: 'var(--primary)',
+                                    border: '2px solid white', color: 'white',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '8px', padding: 0, cursor: 'pointer', zIndex: 26,
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                                }}>
+                                <FaPlus />
+                            </button>
+                        )}
+                    </div>
+                    {/* Host Name over the image right next to avatar */}
+                    <div style={{ color: 'white', fontWeight: '800', fontSize: '0.95rem', textShadow: '0 2px 4px rgba(0,0,0,0.8)', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingInlineEnd: '8px' }}>
+                        {author?.name}
+                    </div>
+                </div>
+            </div>
+
+            {/* --- SECTION 3: TICKET PAPER BODY (White/Dark Slate base) --- */}
+            <div className="ticket-body" style={{
+                background: 'transparent', flex: 1,
+                padding: '20px',
+                display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 5,
+                position: 'relative'
+            }}>
+
+                {/* Title */}
+                <h3 style={{
+                    fontSize: templateStyles.layout?.titleSize || '1.35rem',
+                    fontWeight: '900', color: 'var(--text-main)', margin: '0',
+                    lineHeight: 1.25, textAlign: 'center',
+                    fontFamily: templateStyles.layout?.fontFamily || 'inherit'
+                }}>
+                    {title}
+                </h3>
+
+                {/* Description directly below Title */}
+                {templateStyles.layout?.displayDescription !== false && description && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                        <p style={{
+                            margin: 0, fontSize: '0.85rem', lineHeight: '1.4',
+                            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                        }}>
+                            {description}
+                        </p>
+                    </div>
+                )}
+
+                {/* Quick Details Badges (Date / Time / Occasion) */}
+                <div style={{
+                    display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '6px'
+                }}>
+                    <span style={{
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        background: 'var(--bg-input)', padding: '4px 10px',
+                        borderRadius: '16px', fontSize: '0.8rem', color: 'var(--text-main)',
+                        fontWeight: '700', border: '1px solid var(--border-color)'
+                    }}>
+                        <FaCalendarAlt style={{ color: 'var(--primary)' }} />
+                        {(() => {
+                            if (!date) return 'TBD';
+                            const d = new Date(date);
+                            return d.toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { month: 'short', day: 'numeric' });
+                        })()}
+                    </span>
+                    <span style={{
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        background: 'var(--bg-input)', padding: '4px 10px',
+                        borderRadius: '16px', fontSize: '0.8rem', color: 'var(--text-main)',
+                        fontWeight: '700', border: '1px solid var(--border-color)'
+                    }}>
+                        <FaClock style={{ color: 'var(--primary)' }} /> {time}
+                    </span>
+                    {occasionType && (
+                        <span style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            background: 'var(--bg-input)', padding: '4px 10px',
+                            borderRadius: '16px', fontSize: '0.8rem', color: 'var(--text-main)',
+                            fontWeight: '700', border: '1px solid var(--border-color)'
+                        }}>
+                            {occasionType === 'romantic' ? <FaHeart style={{ color: '#ec4899' }} /> :
+                                occasionType === 'family' ? <FaUsers style={{ color: '#10b981' }} /> :
+                                    occasionType === 'business' ? <FaBriefcase style={{ color: '#a855f7' }} /> :
+                                        <FaSmile style={{ color: '#f59e0b' }} />}
+                            {t(`occasion_${occasionType?.toLowerCase?.()}`, { defaultValue: occasionType })}
+                        </span>
+                    )}
+                </div>
+
+                <div style={{ flex: 1 }}></div>
+
+                {/* Sub Metadata (Distance, Spots Needed) */}
+                <div style={{
+                    display: 'flex', justifyContent: 'center', gap: '16px', marginTop: 'auto', marginBottom: '4px'
+                }}>
+                    {invitation.distance !== null && invitation.distance !== undefined && (
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
+                            <FaMapMarkerAlt /> {invitation.distance.toFixed(1)} {t('km', { defaultValue: 'km' })}
+                        </span>
+                    )}
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
+                        <FaUserFriends style={{ color: '#3b82f6' }} /> {spotsLeft} {t('spots_left', { defaultValue: 'Spots Left' })}
+                    </span>
+                </div>
+
+                {/* Primary Join / Manage Button */}
                 {userProfile?.role !== 'business' && (
-                    <div className="footer-actions" style={{ pointerEvents: 'auto', width: '100%' }}>
+                    <div style={{ marginTop: 'auto', paddingTop: '4px' }}>
                         <button
                             onClick={handleAction}
                             style={{
-                                width: '100%', padding: '14px', borderRadius: '14px', border: 'none',
+                                width: '100%', padding: '12px', borderRadius: '12px', border: 'none',
                                 background: invitation.meetingStatus === 'completed'
                                     ? '#10b981'
-                                    : !eligibility.eligible ? '#374151' : (templateStyles.button?.background || 'var(--premium-orange, #f97316)'),
-                                color: invitation.meetingStatus === 'completed' ? 'white' : !eligibility.eligible ? '#9ca3af' : 'white',
-                                fontWeight: '900', fontSize: '1rem', cursor: 'pointer',
-                                display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
-                                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                                    : !eligibility.eligible ? 'var(--bg-input)' : (templateStyles.button?.background || 'linear-gradient(135deg, var(--premium-orange), #eab308)'),
+                                color: invitation.meetingStatus === 'completed' ? 'white' : !eligibility.eligible ? 'var(--text-muted)' : 'white',
+                                fontWeight: '900', fontSize: '1.05rem', cursor: !eligibility.eligible && !isHost && invitation.meetingStatus !== 'completed' ? 'not-allowed' : 'pointer',
+                                display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px',
+                                boxShadow: (!eligibility.eligible || invitation.meetingStatus === 'completed') ? 'none' : '0 8px 20px rgba(249, 115, 22, 0.25)',
                                 transition: 'all 0.3s ease',
-                                textTransform: templateStyles.button?.textTransform || 'none',
-                                letterSpacing: templateStyles.button?.letterSpacing || 'normal'
+                                textTransform: 'uppercase', letterSpacing: '1px'
                             }}
                             disabled={!eligibility.eligible && !isHost && invitation.meetingStatus !== 'completed'}
                         >
@@ -551,7 +451,6 @@ const InvitationCard = ({ invitation }) => {
                     </div>
                 )}
             </div>
-
 
             {/* Desktop fallback: card preview + download */}
             {cardPreviewUrl && (
@@ -582,7 +481,6 @@ const InvitationCard = ({ invitation }) => {
                     </div>
                 </div>
             )}
-
 
             {/* Report Modal */}
             {showReportModal && (

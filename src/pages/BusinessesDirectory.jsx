@@ -4,13 +4,16 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount } from '../services/businessLikeService';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import { getContrastText } from '../utils/colorUtils';
 import '../components/MapStyles.css';
+import { goToLogin } from '../utils/goToLogin';
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
     if (!members) return null;
@@ -123,10 +126,11 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                         border: '1px solid rgba(255,255,255,0.05)'
                                     }}>
                                         <div style={{ position: 'relative' }}>
-                                            <img
+                                            <UserAvatar
                                                 src={getSafeAvatar({ photo_url: member.avatarUrl, avatar_url: member.avatar_url })}
+                                                user={member}
                                                 alt={member.displayName || member.display_name || member.name}
-                                                style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
+                                                style={{ width: '48px', height: '48px', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
                                             />
                                             {isMe && <div style={{
                                                 position: 'absolute', bottom: -2, right: -2,
@@ -164,22 +168,24 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                                     <FaComments size={14} />
                                                 </button>
 
-                                                <button
-                                                    onClick={() => handleToggle(member.id)}
-                                                    style={{
-                                                        background: isFollowing ? 'transparent' : 'var(--primary)',
-                                                        color: isFollowing ? 'var(--text-muted)' : 'white',
-                                                        border: isFollowing ? '1px solid var(--border-color)' : 'none',
-                                                        padding: '6px 12px',
-                                                        borderRadius: '10px',
-                                                        fontWeight: '700',
-                                                        fontSize: '0.75rem',
-                                                        cursor: 'pointer',
-                                                        minWidth: '80px'
-                                                    }}
-                                                >
-                                                    {isFollowing ? 'Following' : 'Follow'}
-                                                </button>
+                                                {!(currentUser?.role === 'business' || currentUser?.isBusiness) && (
+                                                    <button
+                                                        onClick={() => handleToggle(member.id)}
+                                                        style={{
+                                                            background: isFollowing ? 'transparent' : 'var(--primary)',
+                                                            color: isFollowing ? 'var(--text-muted)' : 'white',
+                                                            border: isFollowing ? '1px solid var(--border-color)' : 'none',
+                                                            padding: '6px 12px',
+                                                            borderRadius: '10px',
+                                                            fontWeight: '700',
+                                                            fontSize: '0.75rem',
+                                                            cursor: 'pointer',
+                                                            minWidth: '80px'
+                                                        }}
+                                                    >
+                                                        {isFollowing ? 'Following' : 'Follow'}
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -197,10 +203,12 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const { showToast } = useToast();
-    const { userProfile, updateUserProfile } = useAuth();
+    const { userProfile, updateUserProfile, currentUser: authCurrentUser } = useAuth();
     const context = useInvitations();
     const { isDark } = useTheme();
     const currentUser = context?.currentUser || {};
+    // Use Auth for like flow so heart works consistently (context.currentUser can be stale or missing .uid)
+    const likeUser = authCurrentUser || currentUser;
     const toggleCommunity = context?.toggleCommunity || (() => { });
 
     if (!res) return null;
@@ -212,7 +220,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const _p = bk.primaryColor;   // undefined → no brand kit
     const _s = bk.secondaryColor || _p;
     const _br = bk.buttonStyle || '14px';
-    const _ff = bk.fontFamily || undefined;
+    const _ff = bk.fontFamily || 'sans-serif';
 
     // null when no Brand Kit → card uses default styling
     const tc = _p ? {
@@ -230,7 +238,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
         footerBg: `linear-gradient(135deg, ${_p}cc, ${_s}88)`,
         btnShadow: `0 8px 24px ${_p}44`,
         btnBorderRadius: _br,
-        fontFamily: _ff,
+        fontFamily: _ff || 'sans-serif',
     } : null;
 
 
@@ -238,89 +246,71 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
     const isBusinessAccount = userProfile?.isBusiness || false;
 
-    const isFavorite = userProfile?.favoritePlaces?.some(p => p.businessId === res.id);
+    const [cardLiked, setCardLiked] = useState(false);
+    const [likeInProgress, setLikeInProgress] = useState(false);
+    useEffect(() => {
+        if (!res.id || !likeUser?.uid) {
+            setCardLiked(false);
+            return () => {};
+        }
+        return subscribeBusinessLiked(res.id, likeUser.uid, setCardLiked);
+    }, [res.id, likeUser?.uid]);
 
-    const handleToggleFavorite = async (e) => {
+    const handleToggleLike = async (e) => {
         e.stopPropagation();
-        // Redirect guest/unauthenticated users to login
-        if (!currentUser?.id || currentUser?.isGuest) {
-            navigate('/login');
+        e.preventDefault();
+        if (likeInProgress) return;
+        if (!likeUser?.uid || likeUser?.isGuest) {
+            goToLogin();
             return;
         }
-
+        const businessId = res.id;
+        const userId = likeUser.uid;
+        setLikeInProgress(true);
         try {
-            let newFavorites = [...(userProfile.favoritePlaces || [])];
-
-            if (isFavorite) {
-                newFavorites = newFavorites.filter(p => p.businessId !== res.id);
-            } else {
-                const favoritePlace = {
-                    businessId: res.id,
-                    name: res.name,
-                    image: res.image,
-                    address: res.location || '',
-                    source: 'business',
-                    addedAt: new Date().toISOString()
-                };
-                newFavorites.push(favoritePlace);
-            }
-
-            await updateUserProfile({ favoritePlaces: newFavorites });
-        } catch (error) {
-            console.error('Error toggling favorite:', error);
+            const businessInfoForFavorite = !cardLiked ? {
+                businessId: res.id,
+                name: res.name || '',
+                image: res.image,
+                address: res.location || '',
+                city: ''
+            } : undefined;
+            await toggleBusinessLike(businessId, userId, cardLiked, businessInfoForFavorite);
+        } catch (err) {
+            console.warn('[like] card toggle failed', { businessId, userId, err });
+            showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
+        } finally {
+            setLikeInProgress(false);
         }
     };
 
-    const [reviewCount, setReviewCount] = useState(0);
-    const [averageRating, setAverageRating] = useState(0);
     const [communityMembers, setCommunityMembers] = useState([]);
     const [memberCount, setMemberCount] = useState(0);
 
+    // Use ref to avoid triggering effect on every context re-render
+    const getMembersRef = useRef(context?.getCommunityMembers);
     useEffect(() => {
-        // Priority 1: Use direct props if available (from optimized context)
-        if (res.averageRating !== undefined) {
-            setAverageRating(res.averageRating);
-            setReviewCount(res.reviewCount || 0);
-            return;
-        }
-
-        // Priority 2: Fetch from Firestore (one-time read, no listener — reviews don't need real-time)
-        if (!res?.id) return;
-
-        let cancelled = false;
-        const reviewsRef = collection(db, 'reviews');
-        const q = query(
-            reviewsRef,
-            where('partnerId', '==', res.id),
-            limit(50)
-        );
-
-        getDocs(q).then((snapshot) => {
-            if (cancelled) return;
-            const reviews = snapshot.docs.map(d => d.data());
-            const count = snapshot.size;
-            const total = reviews.reduce((acc, curr) => acc + (curr.rating || 0), 0);
-            const avg = count > 0 ? total / count : 0.0;
-            setReviewCount(count);
-            setAverageRating(avg);
-        }).catch(() => {});
-
-        return () => { cancelled = true; };
-    }, [res.id, res.averageRating, res.reviewCount]);
+        getMembersRef.current = context?.getCommunityMembers;
+    }, [context?.getCommunityMembers]);
 
     useEffect(() => {
         let cancelled = false;
         const loadCommunityPreview = async () => {
-            if (!context?.getCommunityMembers || !currentUser?.uid) return;
+            if (!getMembersRef.current || !likeUser?.uid) return;
             const communityId = res.ownerId || res.id;
-            const result = await context.getCommunityMembers(communityId, { includeMembers: true, limit: 5 });
-            if (cancelled) return;
-            setCommunityMembers(result?.members || []);
-            setMemberCount(Number(result?.memberCount || 0));
+            try {
+                const result = await getMembersRef.current(communityId, { includeMembers: true, limit: 5 });
+                if (cancelled) return;
+                setCommunityMembers(result?.members || []);
+                setMemberCount(Number(result?.memberCount || 0));
+            } catch (err) { }
         };
-        loadCommunityPreview();
-        return () => { cancelled = true; };
-    }, [context, currentUser?.uid, res.id, res.ownerId]);
+        // Add a tiny delay to debounce rapid mounts
+        const timer = setTimeout(() => {
+            loadCommunityPreview();
+        }, 100);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [likeUser?.uid, res.id, res.ownerId]);
 
     const handleShare = async (e) => {
         e.stopPropagation();
@@ -333,12 +323,14 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
         if (navigator.share) {
             try {
                 await navigator.share(shareData);
+                incrementBusinessShareCount(res.id);
             } catch (err) {
-                console.log('Error sharing:', err);
+                if (err?.name !== 'AbortError') console.log('Error sharing:', err);
             }
         } else {
             navigator.clipboard.writeText(shareData.url);
             showToast(t('link_copied_clipboard', 'Link copied!'), 'success');
+            incrementBusinessShareCount(res.id);
         }
     };
 
@@ -414,7 +406,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                             backdropFilter: 'blur(8px)',
                             padding: '4px 12px',
                             borderRadius: '50px',
-                            color: tc ? (tc.accentText || 'var(--text-main)') : '#e9d5ff',
+                            color: '#ffffff',
                             fontSize: '0.75rem',
                             fontWeight: '700',
                             border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.4)',
@@ -425,39 +417,71 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                         onMouseEnter={(e) => {
                             if (tc) {
                                 e.currentTarget.style.background = tc.accent;
-                                e.currentTarget.style.color = tc.accentText || '#ffffff';
+                                e.currentTarget.style.color = '#ffffff';
                             }
                             e.currentTarget.style.transform = 'scale(1.03)';
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.background = tc ? (tc.badgeBg || `${tc.accent}33`) : 'rgba(15, 23, 42, 0.85)';
-                            e.currentTarget.style.color = tc ? (tc.accentText || 'var(--text-main)') : '#e9d5ff';
+                            e.currentTarget.style.color = '#ffffff';
                             e.currentTarget.style.transform = 'scale(1)';
                         }}
                     >
-                        {res.type || 'Venue'}
+                        {res.type ? t(`type_${res.type.toLowerCase().replace(' ', '')}`, res.type) : t('venue', 'Venue')}
                     </button>
-
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                            onClick={handleToggleFavorite}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Rating badge */}
+                        <div
                             style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexDirection: 'column',
+                                minHeight: '36px',
+                                padding: '4px 10px',
+                                background: tc ? (tc.badgeBg || `${tc.accent}33`) : 'rgba(15, 23, 42, 0.85)',
+                                backdropFilter: 'blur(8px)',
+                                borderRadius: '50px',
+                                color: '#ffffff',
+                                fontSize: '0.7rem',
+                                fontWeight: '700',
+                                border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.4)',
+                                boxShadow: tc?.btnShadow || '0 4px 12px rgba(0,0,0,0.2)',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fbbf24' }}>
+                                <FaStar style={{ fontSize: '0.7rem' }} />
+                                {(res.averageRating != null ? Number(res.averageRating) : 0).toFixed(1)}
+                            </span>
+                            <span style={{ fontSize: '0.6rem', opacity: 0.9 }}>
+                                {res.reviewCount != null ? res.reviewCount : 0} {t('reviews', 'reviews')}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            aria-label={cardLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
+                            disabled={likeInProgress}
+                            onClick={handleToggleLike}
+                            style={{
+                                position: 'relative',
+                                zIndex: 11,
                                 width: '40px',
                                 height: '40px',
                                 borderRadius: '50%',
                                 background: tc ? `${tc.accent}33` : 'rgba(15, 23, 42, 0.6)',
                                 backdropFilter: 'blur(8px)',
                                 border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.5)',
-                                color: isFavorite ? '#ef4444' : 'white',
+                                color: cardLiked ? '#ef4444' : 'white',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
+                                cursor: likeInProgress ? 'wait' : 'pointer',
                                 fontSize: '1.2rem',
                                 transition: 'all 0.2s'
                             }}
                         >
-                            {isFavorite ? <FaHeart /> : <FaRegHeart />}
+                            {likeInProgress ? <span style={{ fontSize: '0.9rem' }}>⋯</span> : (cardLiked ? <FaHeart /> : <FaRegHeart />)}
                         </button>
 
                         <button
@@ -486,65 +510,29 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                 {/* Content Overlay */}
                 <div style={{ position: 'relative', zIndex: 10, padding: '20px 20px 10px 20px' }}>
 
-                    {/* Title, Location & Rating */}
-                    <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                        <div>
-                            <h2 style={{
-                                fontSize: '1.8rem',
-                                fontWeight: '900',
-                                color: 'white',
-                                marginBottom: '4px',
-                                textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-                                lineHeight: '1.1'
-                            }}>
-                                {res.name}
-                            </h2>
-                            <p style={{
-                                fontSize: '0.95rem',
-                                color: 'rgba(255,255,255,0.9)',
-                                fontWeight: '500',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                marginTop: '4px'
-                            }}>
-                                <FaMapMarkedAlt size={14} style={{ color: '#fbbf24' }} /> {res.location}
-                            </p>
-                        </div>
-
-                        {/* Rating Badge */}
-                        <div
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/business/${res.id}`);
-                            }}
-                            style={{
-                                background: 'rgba(255, 255, 255, 0.1)',
-                                backdropFilter: 'blur(10px)',
-                                borderRadius: '12px',
-                                padding: '6px 10px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                cursor: 'pointer',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                transition: 'transform 0.2s',
-                                minWidth: '60px',
-                                justifyContent: 'center'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                        >
-                            <FaStar style={{ color: '#fbbf24', fontSize: '1rem' }} />
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'white' }}>
-                                    {averageRating > 0 ? averageRating.toFixed(1) : '0.0'}
-                                </span>
-                                <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.7)' }}>
-                                    {reviewCount} reviews
-                                </span>
-                            </div>
-                        </div>
+                    {/* Title & Location */}
+                    <div style={{ marginBottom: '16px' }}>
+                        <h2 style={{
+                            fontSize: '1.8rem',
+                            fontWeight: '900',
+                            color: 'white',
+                            marginBottom: '4px',
+                            textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                            lineHeight: '1.1'
+                        }}>
+                            {res.name}
+                        </h2>
+                        <p style={{
+                            fontSize: '0.95rem',
+                            color: 'rgba(255,255,255,0.9)',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            marginTop: '4px'
+                        }}>
+                            <FaMapMarkedAlt size={14} style={{ color: '#fbbf24' }} /> {res.location}
+                        </p>
                     </div>
 
                     {/* Host Invitation Button */}
@@ -617,13 +605,13 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                             borderRadius: '50%',
                                             border: '2px solid rgba(255,255,255,0.5)',
                                             objectFit: 'cover',
-                                            marginLeft: index === 0 ? '0' : '-9px',
+                                            marginInlineStart: index === 0 ? '0' : '-9px',
                                             zIndex: 10 - index,
                                             flexShrink: 0
                                         }}
                                     />
                                 ))}
-                                <span style={{ marginLeft: '8px', fontSize: '0.82rem', color: 'white', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                                <span style={{ marginInlineStart: '8px', fontSize: '0.82rem', color: 'white', fontWeight: '700', whiteSpace: 'nowrap' }}>
                                     {memberCount} {t('members')}
                                 </span>
                             </div>
@@ -653,7 +641,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                 e.stopPropagation();
                                 e.preventDefault();
                                 if (!currentUser?.uid && !currentUser?.id && !currentUser?.isGuest) {
-                                    navigate('/login');
+                                    goToLogin();
                                 } else {
                                     toggleCommunity(res.ownerId || res.id);
                                 }
@@ -780,10 +768,10 @@ const BusinessesDirectory = () => {
         { id: 'All', label: t('filter_all'), icon: null },
         { id: 'Restaurant', label: t('type_restaurant'), icon: '🍴' },
         { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
-        { id: 'Bar', label: 'Bar', icon: '🍺' },
-        { id: 'Night Club', label: 'Night Club', icon: '🎵' },
-        { id: 'Food Truck', label: 'Food Truck', icon: '🚚' },
-        { id: 'Fast Food', label: 'Fast Food', icon: '🍟' }
+        { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
+        { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
+        { id: 'Food Truck', label: t('type_foodtruck', 'Food Truck'), icon: '🚚' },
+        { id: 'Fast Food', label: t('type_fastfood', 'Fast Food'), icon: '🍟' }
     ];
 
     const filteredRestaurants = useMemo(() => {
@@ -990,7 +978,7 @@ const BusinessesDirectory = () => {
                         <div style="position: relative;">
                             <img src="${res.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}" class="compact-popup-image" />
                             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 4px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);">
-                                <span style="background: ${markerColor}; color: black; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${res.type || 'Restaurant'}</span>
+                                <span style="background: ${markerColor}; color: black; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${res.type || t('venue', 'Venue')}</span>
                             </div>
                         </div>
                         <div class="compact-popup-body">
@@ -1115,7 +1103,18 @@ const BusinessesDirectory = () => {
 
             <div style={{ padding: '1rem 1.5rem 0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <h1 style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business directory')}</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <h1 style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business')}</h1>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/rankings')}
+                            title={t('rankings_title', 'Rankings')}
+                            aria-label={t('rankings_title', 'Rankings')}
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, color: 'var(--luxury-gold)', background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+                        >
+                            <FaTrophy style={{ fontSize: '1.25rem' }} />
+                        </button>
+                    </div>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
                         <button
                             onClick={() => setViewMode('list')}
@@ -1148,9 +1147,9 @@ const BusinessesDirectory = () => {
                     .filter-select {
                         appearance: none !important;
                         -webkit-appearance: none !important;
-                        background-color: var(--bg-card, #ffffff) !important;
+                        background-color: 'var(--bg-card, #ffffff)' !important;
                         border: 1px solid var(--border-color, #e2e8f0) !important;
-                        color: var(--text-main, #333333) !important;
+                        color: 'var(--text-main, #333333)' !important;
                         padding: 0 24px 0 10px !important;
                         borderRadius: 10px !important;
                         fontSize: 12px !important;

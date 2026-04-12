@@ -1,98 +1,204 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { FaSearch, FaUser, FaStore, FaBan, FaTrash, FaEye, FaCrown, FaCheckCircle, FaTimesCircle, FaMapMarkedAlt, FaList } from 'react-icons/fa';
+import { FaSearch, FaBan, FaTrash, FaEye, FaCrown, FaCheckCircle, FaTimesCircle, FaMapMarkedAlt, FaList, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { adminSecurityService } from '../../services/adminSecurityService';
 import { getSafeAvatar } from '../../utils/avatarUtils';
+import {
+    ADMIN_USERS_PAGE_SIZE,
+    buildUsersBrowseQuery,
+    buildUsersBrowseQueryPrev,
+    searchUsers,
+    fetchUserStats,
+} from '../../utils/adminUserQueries';
+import { getUserDocLatLng } from '../../utils/userDocCoords';
 import '../../components/MapStyles.css';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 const isBusiness = (u) => u.role === 'business';
 
-const getCity = (u) =>
-    u.businessInfo?.city ||
-    u.location?.city ||
-    u.city ||
-    '';
-
-const getCountry = (u) =>
-    u.businessInfo?.country ||
-    u.location?.country ||
-    u.country ||
-    '';
-
-const getCoords = (u) => {
-    const lat = u.businessInfo?.lat ?? u.businessInfo?.location?.latitude ?? u.location?.latitude ?? null;
-    const lng = u.businessInfo?.lng ?? u.businessInfo?.location?.longitude ?? u.location?.longitude ?? null;
-    return lat != null && lng != null ? { lat: Number(lat), lng: Number(lng) } : null;
-};
-
-// User subscription tiers (individual users)
 const USER_TIERS = [
     { value: 'free', label: '🆓 Free', color: '#64748b' },
     { value: 'pro', label: '⚡ Pro', color: '#22c55e' },
     { value: 'vip', label: '👑 VIP', color: '#f59e0b' },
 ];
 
-// Business subscription tiers
 const BIZ_TIERS = [
     { value: 'free', label: '🆓 Free', color: '#64748b' },
     { value: 'professional', label: '⚡ Professional', color: '#8b5cf6' },
     { value: 'elite', label: '👑 Elite', color: '#f59e0b' },
 ];
 
-// Canonical roles only (no accountType)
 const SYSTEM_ROLES = ['user', 'business', 'staff', 'support', 'admin'];
 
 const UserManagement = () => {
     const { currentUser } = useAuth();
-    const [users, setUsers] = useState([]);
-    const [filteredUsers, setFilteredUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+
+    const [listUsers, setListUsers] = useState([]);
+    const [searchMode, setSearchMode] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
     const [filterRole, setFilterRole] = useState('all');
-    const [filterCity, setFilterCity] = useState('all');
-    const [filterCountry, setFilterCountry] = useState('all');
-    const [viewMode, setViewMode] = useState('list'); // list | map
+
+    const [loading, setLoading] = useState(true);
+    const [pageLoading, setPageLoading] = useState(false);
+
+    const [firstVisible, setFirstVisible] = useState(null);
+    const [lastVisible, setLastVisible] = useState(null);
+    const [hasNext, setHasNext] = useState(false);
+    const [pageIndex, setPageIndex] = useState(0);
+
+    const [stats, setStats] = useState({
+        total: 0,
+        businesses: 0,
+        team: 0,
+        usersRoleUser: 0,
+    });
+
+    const [viewMode, setViewMode] = useState('list');
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
     const [selectedUser, setSelectedUser] = useState(null);
     const [showUserModal, setShowUserModal] = useState(false);
-    const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
-    const [isDeletingAll, setIsDeletingAll] = useState(false);
 
-    const uniqueCities = useMemo(() => {
-        const set = new Set();
-        users.forEach(u => {
-            const c = getCity(u);
-            if (c?.trim()) set.add(c.trim());
-        });
-        return Array.from(set).sort();
-    }, [users]);
+    const refreshStats = useCallback(async () => {
+        try {
+            const s = await fetchUserStats(db);
+            setStats(s);
+        } catch (e) {
+            console.warn('User stats count failed', e);
+        }
+    }, []);
 
-    const uniqueCountries = useMemo(() => {
-        const set = new Set();
-        users.forEach(u => {
-            const c = getCountry(u);
-            if (c?.trim()) set.add(c.trim());
-        });
-        return Array.from(set).sort();
-    }, [users]);
+    const processBrowseSnap = useCallback((snap) => {
+        const all = snap.docs;
+        const hasMore = all.length > ADMIN_USERS_PAGE_SIZE;
+        const take = hasMore ? ADMIN_USERS_PAGE_SIZE : all.length;
+        const pageDocs = all.slice(0, take);
+        const rows = pageDocs.map((d) => ({ id: d.id, ...d.data() }));
+        setListUsers(rows);
+        setHasNext(hasMore);
+        if (pageDocs.length) {
+            setFirstVisible(pageDocs[0]);
+            setLastVisible(pageDocs[pageDocs.length - 1]);
+        } else {
+            setFirstVisible(null);
+            setLastVisible(null);
+        }
+    }, []);
 
-    const usersWithCoords = useMemo(() =>
-        filteredUsers
-            .map(u => {
-                const coords = getCoords(u);
-                if (!coords) return null;
-                return { ...u, lat: coords.lat, lng: coords.lng };
-            })
-            .filter(Boolean),
-        [filteredUsers]
+    const loadBrowseFirst = useCallback(async () => {
+        setPageLoading(true);
+        setSearchMode(false);
+        setPageIndex(0);
+        try {
+            const q = buildUsersBrowseQuery(db, { roleFilter: filterRole, cursorLast: null });
+            const snap = await getDocs(q);
+            processBrowseSnap(snap);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to load users: ' + (err.message || err));
+        } finally {
+            setPageLoading(false);
+        }
+    }, [filterRole, processBrowseSnap]);
+
+    const skipFilterEffectOnce = useRef(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                await refreshStats();
+                if (cancelled) return;
+                await loadBrowseFirst();
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    useEffect(() => {
+        if (skipFilterEffectOnce.current) {
+            skipFilterEffectOnce.current = false;
+            return;
+        }
+        if (searchMode) return;
+        loadBrowseFirst();
+    }, [filterRole, searchMode, loadBrowseFirst]);
+
+    const loadNext = async () => {
+        if (!lastVisible || !hasNext || searchMode) return;
+        setPageLoading(true);
+        try {
+            const q = buildUsersBrowseQuery(db, { roleFilter: filterRole, cursorLast: lastVisible });
+            const snap = await getDocs(q);
+            processBrowseSnap(snap);
+            setPageIndex((p) => p + 1);
+        } catch (err) {
+            console.error(err);
+            alert('Failed: ' + (err.message || err));
+        } finally {
+            setPageLoading(false);
+        }
+    };
+
+    const loadPrev = async () => {
+        if (!firstVisible || pageIndex === 0 || searchMode) return;
+        setPageLoading(true);
+        try {
+            const q = buildUsersBrowseQueryPrev(db, { roleFilter: filterRole, firstVisible });
+            const snap = await getDocs(q);
+            processBrowseSnap(snap);
+            setPageIndex((p) => Math.max(0, p - 1));
+        } catch (err) {
+            console.error(err);
+            alert('Failed: ' + (err.message || err));
+        } finally {
+            setPageLoading(false);
+        }
+    };
+
+    const handleSearchSubmit = async (e) => {
+        e.preventDefault();
+        const q = searchInput.trim();
+        if (!q) return;
+        setPageLoading(true);
+        setSearchMode(true);
+        try {
+            const rows = await searchUsers(db, q);
+            setListUsers(rows);
+            setPageIndex(0);
+            setHasNext(false);
+            setFirstVisible(null);
+            setLastVisible(null);
+        } catch (err) {
+            console.error(err);
+            alert('Search failed: ' + (err.message || err));
+        } finally {
+            setPageLoading(false);
+        }
+    };
+
+    const clearSearch = () => {
+        setSearchInput('');
+        setSearchMode(false);
+        loadBrowseFirst();
+    };
+
+    const usersWithCoords = useMemo(
+        () =>
+            listUsers
+                .map((u) => {
+                    const coords = getUserDocLatLng(u);
+                    if (!coords) return null;
+                    return { ...u, lat: coords.lat, lng: coords.lng };
+                })
+                .filter(Boolean),
+        [listUsers]
     );
-
-    useEffect(() => { fetchUsers(); }, []);
-    useEffect(() => { filterUsers(); }, [users, searchQuery, filterRole, filterCity, filterCountry]);
 
     useEffect(() => {
         if (viewMode !== 'map' || !mapRef.current || typeof window.L === 'undefined') return;
@@ -105,7 +211,10 @@ const UserManagement = () => {
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
         mapInstance.current = map;
         return () => {
-            if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
+            if (mapInstance.current) {
+                mapInstance.current.remove();
+                mapInstance.current = null;
+            }
         };
     }, [viewMode]);
 
@@ -114,17 +223,19 @@ const UserManagement = () => {
         const L = window.L;
         const map = mapInstance.current;
         const markers = [];
-        map.eachLayer(l => { if (l instanceof L.Marker) markers.push(l); });
-        markers.forEach(m => map.removeLayer(m));
+        map.eachLayer((l) => {
+            if (l instanceof L.Marker) markers.push(l);
+        });
+        markers.forEach((m) => map.removeLayer(m));
         const bounds = [];
-        usersWithCoords.forEach(u => {
+        usersWithCoords.forEach((u) => {
             const m = L.marker([u.lat, u.lng], {
                 icon: L.divIcon({
                     className: 'admin-user-marker',
                     html: `<div style="width:32px;height:32px;border-radius:50%;border:2px solid #6366f1;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);"><img src="${getSafeAvatar(u)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>`,
                     iconSize: [32, 32],
-                    iconAnchor: [16, 32]
-                })
+                    iconAnchor: [16, 32],
+                }),
             });
             m.bindPopup(`<strong>${getUserName(u)}</strong><br/>${u.email}<br/>${u.businessInfo?.businessName || ''}`);
             m.addTo(map);
@@ -134,88 +245,39 @@ const UserManagement = () => {
         else if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30] });
     }, [viewMode, usersWithCoords]);
 
-    // ── Fetch ─────────────────────────────────────────────────────────────────
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
-            const snap = await getDocs(collection(db, 'users'));
-            setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err) {
-            console.error(err);
-            alert('Failed to fetch users: ' + err.message);
-        } finally { setLoading(false); }
+    const patchUserInList = (userId, patch) => {
+        setListUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
     };
 
-    // ── Filter ────────────────────────────────────────────────────────────────
-    const filterUsers = () => {
-        let f = [...users];
-        if (filterRole !== 'all') {
-            f = f.filter(u => (u.role || 'user') === filterRole);
-        }
-
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            f = f.filter(u =>
-                u.display_name?.toLowerCase().includes(q) ||
-                u.displayName?.toLowerCase().includes(q) ||
-                u.email?.toLowerCase().includes(q) ||
-                u.id.toLowerCase().includes(q) ||
-                u.businessInfo?.businessName?.toLowerCase().includes(q)
-            );
-        }
-
-        if (filterCity !== 'all') {
-            f = f.filter(u => (getCity(u) || '').toLowerCase() === filterCity.toLowerCase());
-        }
-        if (filterCountry !== 'all') {
-            f = f.filter(u => (getCountry(u) || '').toLowerCase() === filterCountry.toLowerCase());
-        }
-
-        setFilteredUsers(f);
+    const removeUserFromList = (userId) => {
+        setListUsers((prev) => prev.filter((u) => u.id !== userId));
     };
 
-    // ── Actions ───────────────────────────────────────────────────────────────
     const handleBanUser = async (userId, currentStatus) => {
         if (!window.confirm(`${currentStatus ? 'Unban' : 'Ban'} this user?`)) return;
         try {
             await adminSecurityService.setUserBanStatus(userId, !currentStatus);
-            setUsers(users.map(u => u.id === userId ? { ...u, banned: !currentStatus } : u));
-        } catch (err) { alert('Failed: ' + err.message); }
+            patchUserInList(userId, { banned: !currentStatus });
+            refreshStats();
+        } catch (err) {
+            alert('Failed: ' + err.message);
+        }
     };
 
     const handleDeleteUser = async (userId) => {
         if (!window.confirm('Delete this user? This cannot be undone!')) return;
         try {
             const res = await adminSecurityService.deleteUser(userId);
-            setUsers(users.filter(u => u.id !== userId));
+            removeUserFromList(userId);
+            refreshStats();
             alert(`Deleted user + ${res?.deletedItems || 0} associated items.`);
-        } catch (err) { alert('Failed: ' + err.message); }
-    };
-
-    const handleCleanOrphans = async () => {
-        if (!window.confirm('Scan and delete orphaned posts/stories?')) return;
-        setIsCleaningOrphans(true);
-        try {
-            const res = await adminSecurityService.cleanOrphanContent();
-            alert(`Cleaned ${res?.deletedPosts || 0} posts + ${res?.deletedStories || 0} stories.`);
-        } catch (err) { alert('Error: ' + err.message); }
-        finally { setIsCleaningOrphans(false); }
-    };
-
-    const handleDeleteAllPosts = async () => {
-        if (!window.confirm('⚠️ Delete ALL posts and stories? Irreversible!')) return;
-        if (window.prompt('Type "DELETE ALL" to confirm') !== 'DELETE ALL') return;
-        setIsDeletingAll(true);
-        try {
-            const res = await adminSecurityService.wipeCommunityContent();
-            alert(`Wiped: ${res?.deletedPosts || 0} posts + ${res?.deletedStories || 0} stories.`);
-        } catch (err) { alert('Error: ' + err.message); }
-        finally { setIsDeletingAll(false); }
+        } catch (err) {
+            alert('Failed: ' + err.message);
+        }
     };
 
     const handleUpdateSystemRole = async (userId, newRole) => {
-        const currentRole = users.find(u => u.id === userId)?.role || 'user';
-        // Cannot convert between regular user and business (account type is fixed)
+        const currentRole = listUsers.find((u) => u.id === userId)?.role || 'user';
         if ((currentRole === 'user' && newRole === 'business') || (currentRole === 'business' && newRole === 'user')) {
             alert('Account type cannot be changed: user and business accounts are separate. Cannot convert between them.');
             return;
@@ -223,27 +285,22 @@ const UserManagement = () => {
         if (!window.confirm(`Change role to "${newRole}"?`)) return;
         try {
             await adminSecurityService.setUserRole(userId, newRole);
-            setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
-        } catch (err) { alert('Failed: ' + err.message); }
+            patchUserInList(userId, { role: newRole });
+            refreshStats();
+        } catch (err) {
+            alert('Failed: ' + err.message);
+        }
     };
 
     const handleUpdateSubscription = async (userId, newTier, isBusinessUser) => {
         try {
             await adminSecurityService.setUserSubscriptionTier(userId, newTier, isBusinessUser);
-            const updates = { subscriptionTier: newTier };
-            setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
-        } catch (err) { alert('Failed: ' + err.message); }
+            patchUserInList(userId, { subscriptionTier: newTier });
+        } catch (err) {
+            alert('Failed: ' + err.message);
+        }
     };
 
-    // ── Computed Stats ────────────────────────────────────────────────────────
-    const stats = {
-        total: users.length,
-        individuals: users.filter(u => !isBusiness(u) && !['admin', 'staff', 'support'].includes(u.role)).length,
-        businesses: users.filter(u => isBusiness(u)).length,
-        team: users.filter(u => ['admin', 'staff', 'support'].includes(u.role)).length,
-    };
-
-    // ── Render helpers ────────────────────────────────────────────────────────
     const getUserName = (u) => u.display_name || u.displayName || 'No Name';
     const getInitial = (u) => (getUserName(u).charAt(0) || u.email?.charAt(0) || '?').toUpperCase();
 
@@ -255,47 +312,44 @@ const UserManagement = () => {
         return <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.15)', padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(96,165,250,0.3)' }}>👤 User</span>;
     };
 
-    if (loading) return (
-        <div className="admin-loading">
-            <div style={{ textAlign: 'center' }}>
-                <div className="admin-spinner" />
-                <p style={{ color: '#94a3b8', marginTop: '1rem' }}>Loading users...</p>
+    if (loading) {
+        return (
+            <div className="admin-loading">
+                <div style={{ textAlign: 'center' }}>
+                    <div className="admin-spinner" />
+                    <p style={{ color: '#94a3b8', marginTop: '1rem' }}>Loading users...</p>
+                </div>
             </div>
-        </div>
-    );
+        );
+    }
+
+    const individualsApprox = Math.max(0, stats.total - stats.businesses - stats.team);
 
     return (
         <div>
-            {/* Header */}
             <div className="admin-flex-between admin-mb-4">
                 <div className="admin-page-header" style={{ marginBottom: 0 }}>
                     <h1 className="admin-page-title">User Management</h1>
-                    <p className="admin-page-subtitle">Manage all users, businesses, and team members</p>
+                    <p className="admin-page-subtitle">
+                        Paginated browse (no full collection load). Search: exact email, user ID, or prefix on <code>display_name</code>. Business limits:{' '}
+                        <Link to="/admin/business-limits" style={{ color: 'var(--admin-accent)' }}>Business limits</Link>
+                        . Feed tools:{' '}
+                        <Link to="/admin/system-tools" style={{ color: 'var(--admin-accent)' }}>System tools</Link>.
+                    </p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button onClick={handleDeleteAllPosts} disabled={isDeletingAll || isCleaningOrphans}
-                        className="admin-btn" style={{ padding: '8px 16px', fontWeight: 'bold', background: '#dc2626', color: 'white', border: 'none' }}>
-                        {isDeletingAll ? 'Wiping...' : 'Delete ALL Posts & Stories'}
-                    </button>
-                    <button onClick={handleCleanOrphans} disabled={isCleaningOrphans || isDeletingAll}
-                        className="admin-btn admin-btn-danger" style={{ padding: '8px 16px', fontWeight: 'bold' }}>
-                        {isCleaningOrphans ? 'Cleaning...' : 'Clean Orphaned Posts'}
-                    </button>
-                    <div style={{ marginLeft: 12, textAlign: 'right' }}>
-                        <div style={{ fontSize: '2rem', fontWeight: 800, color: '#6366f1' }}>{filteredUsers.length}</div>
-                        <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Showing</div>
-                    </div>
+                <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 800, color: '#6366f1' }}>{searchMode ? listUsers.length : listUsers.length}</div>
+                    <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>{searchMode ? 'Matches' : 'On page'}</div>
                 </div>
             </div>
 
-            {/* Stats */}
             <div className="admin-grid admin-grid-4 admin-mb-4">
                 {[
-                    { label: 'Total', value: stats.total, color: '#ffffff' },
-                    { label: 'Individuals', value: stats.individuals, color: '#60a5fa' },
+                    { label: 'Total (accounts)', value: stats.total, color: '#ffffff' },
                     { label: 'Businesses', value: stats.businesses, color: '#c084fc' },
-                    { label: 'Team Members', value: stats.team, color: '#fbbf24' },
-                ].map(s => (
+                    { label: 'Team (admin/staff/support)', value: stats.team, color: '#fbbf24' },
+                    { label: 'Individuals (approx.)', value: individualsApprox, color: '#60a5fa' },
+                ].map((s) => (
                     <div key={s.label} className="admin-card">
                         <div style={{ fontSize: '2rem', fontWeight: 800, color: s.color }}>{s.value}</div>
                         <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>{s.label}</div>
@@ -303,22 +357,38 @@ const UserManagement = () => {
                 ))}
             </div>
 
-            {/* Filters */}
-            <div className="admin-card admin-mb-4">
-                <div className="admin-flex admin-gap-2" style={{ flexWrap: 'wrap' }}>
-                    {/* Search */}
-                    <div className="admin-search" style={{ flex: 1, minWidth: 280 }}>
-                        <FaSearch className="admin-search-icon" />
-                        <input type="text" placeholder="Search by name, email, or ID..."
-                            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                            className="admin-search-input" />
-                    </div>
+            <form onSubmit={handleSearchSubmit} className="admin-card admin-mb-4" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-end' }}>
+                <div className="admin-search" style={{ flex: 1, minWidth: 260 }}>
+                    <FaSearch className="admin-search-icon" />
+                    <input
+                        className="admin-search-input"
+                        placeholder="Email (exact), Firebase UID, or start of display name..."
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                    />
+                </div>
+                <button type="submit" className="admin-btn admin-btn-primary" disabled={pageLoading}>
+                    Search
+                </button>
+                {searchMode && (
+                    <button type="button" className="admin-btn admin-btn-secondary" onClick={clearSearch}>
+                        Clear search
+                    </button>
+                )}
+            </form>
 
-                    {/* Role (canonical: user | business | admin | staff | support) */}
+            <div className="admin-card admin-mb-4">
+                <div className="admin-flex admin-gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ROLE</label>
-                        <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="admin-select" style={{ width: 160 }}>
-                            <option value="all">All Roles</option>
+                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ROLE (browse)</label>
+                        <select
+                            value={filterRole}
+                            onChange={(e) => setFilterRole(e.target.value)}
+                            className="admin-select"
+                            style={{ width: 160 }}
+                            disabled={searchMode}
+                        >
+                            <option value="all">All roles</option>
                             <option value="user">User</option>
                             <option value="business">Business</option>
                             <option value="staff">Staff</option>
@@ -327,69 +397,112 @@ const UserManagement = () => {
                         </select>
                     </div>
 
-                    {/* Country */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>COUNTRY</label>
-                        <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)} className="admin-select" style={{ width: 160 }}>
-                            <option value="all">All Countries</option>
-                            {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
+                    {!searchMode && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                className="admin-btn admin-btn-secondary"
+                                disabled={pageLoading || pageIndex === 0}
+                                onClick={loadPrev}
+                            >
+                                <FaChevronLeft /> Prev
+                            </button>
+                            <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+                                Page {pageIndex + 1}
+                                {hasNext ? ' · more ahead' : ''}
+                            </span>
+                            <button
+                                type="button"
+                                className="admin-btn admin-btn-secondary"
+                                disabled={pageLoading || !hasNext}
+                                onClick={loadNext}
+                            >
+                                Next <FaChevronRight />
+                            </button>
+                            {pageLoading && <span style={{ color: '#94a3b8' }}>Loading…</span>}
+                        </div>
+                    )}
 
-                    {/* City */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>CITY</label>
-                        <select value={filterCity} onChange={e => setFilterCity(e.target.value)} className="admin-select" style={{ width: 160 }}>
-                            <option value="all">All Cities</option>
-                            {uniqueCities.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-
-                    {/* View Mode */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: searchMode ? 0 : undefined }}>
                         <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>VIEW</label>
                         <div style={{ display: 'flex', gap: 4, border: '1px solid #334155', borderRadius: 8, padding: 2, background: '#0f172a' }}>
-                            <button onClick={() => setViewMode('list')}
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('list')}
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                    background: viewMode === 'list' ? '#6366f1' : 'transparent', color: viewMode === 'list' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: '0.875rem'
-                                }}>
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '8px 14px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    background: viewMode === 'list' ? '#6366f1' : 'transparent',
+                                    color: viewMode === 'list' ? '#fff' : '#94a3b8',
+                                    fontWeight: 600,
+                                    fontSize: '0.875rem',
+                                }}
+                            >
                                 <FaList /> List
                             </button>
-                            <button onClick={() => setViewMode('map')}
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('map')}
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                    background: viewMode === 'map' ? '#6366f1' : 'transparent', color: viewMode === 'map' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: '0.875rem'
-                                }}>
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '8px 14px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    background: viewMode === 'map' ? '#6366f1' : 'transparent',
+                                    color: viewMode === 'map' ? '#fff' : '#94a3b8',
+                                    fontWeight: 600,
+                                    fontSize: '0.875rem',
+                                }}
+                            >
                                 <FaMapMarkedAlt /> Map
                             </button>
                         </div>
                     </div>
                 </div>
+                {viewMode === 'map' && (
+                    <p style={{ margin: '0.75rem 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        Pins use each account’s stored location (<code>coordinates</code>, GeoPoint <code>location</code>, or business address). Same scope as the table: current page or search results (max {ADMIN_USERS_PAGE_SIZE} rows in browse).
+                    </p>
+                )}
             </div>
 
-            {/* Map View */}
             {viewMode === 'map' && (
                 <div className="admin-card" style={{ padding: 0, overflow: 'hidden', minHeight: 400, position: 'relative' }}>
                     <div ref={mapRef} style={{ width: '100%', height: 450, borderRadius: 8 }} />
                     {usersWithCoords.length === 0 && (
-                        <div style={{
-                            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: 'rgba(15,23,42,0.8)', borderRadius: 8, color: '#94a3b8', fontSize: '1rem'
-                        }}>
-                            No users with location data in current filters
+                        <div
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: 'rgba(15,23,42,0.8)',
+                                borderRadius: 8,
+                                color: '#94a3b8',
+                                fontSize: '1rem',
+                            }}
+                        >
+                            No users with location data in current list
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Table (List View) */}
-            {filteredUsers.length === 0 ? (
+            {listUsers.length === 0 ? (
                 <div className="admin-card">
                     <div className="admin-empty">
                         <div className="admin-empty-icon">👥</div>
                         <h3 className="admin-empty-title">No Users Found</h3>
-                        <p className="admin-empty-text">{searchQuery ? 'Try a different search term' : 'No users in the system yet'}</p>
+                        <p className="admin-empty-text">{searchMode ? 'Try email, UID, or display name prefix' : 'End of list or empty'}</p>
                     </div>
                 </div>
             ) : viewMode === 'list' ? (
@@ -407,25 +520,35 @@ const UserManagement = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredUsers.map(user => {
+                            {listUsers.map((user) => {
                                 const bizUser = isBusiness(user);
                                 const tiers = bizUser ? BIZ_TIERS : USER_TIERS;
-                                const currentTier = tiers.find(t => t.value === (user.subscriptionTier || 'free')) || tiers[0];
+                                const currentTier = tiers.find((t) => t.value === (user.subscriptionTier || 'free')) || tiers[0];
 
                                 return (
                                     <tr key={user.id}>
-                                        {/* User */}
                                         <td>
                                             <div className="admin-flex admin-gap-2" style={{ alignItems: 'center' }}>
-                                                <div style={{
-                                                    width: 40, height: 40, borderRadius: '50%',
-                                                    background: bizUser ? '#7c3aed' : '#6366f1',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    color: '#fff', fontWeight: 700, fontSize: '1rem', flexShrink: 0
-                                                }}>
-                                                    {user.photo_url
-                                                        ? <img src={user.photo_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
-                                                        : getInitial(user)}
+                                                <div
+                                                    style={{
+                                                        width: 40,
+                                                        height: 40,
+                                                        borderRadius: '50%',
+                                                        background: bizUser ? '#7c3aed' : '#6366f1',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: '#fff',
+                                                        fontWeight: 700,
+                                                        fontSize: '1rem',
+                                                        flexShrink: 0,
+                                                    }}
+                                                >
+                                                    {user.photo_url ? (
+                                                        <img src={user.photo_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                                                    ) : (
+                                                        getInitial(user)
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <div className="admin-flex admin-gap-1" style={{ alignItems: 'center', fontWeight: 600, color: '#fff' }}>
@@ -436,60 +559,89 @@ const UserManagement = () => {
                                                 </div>
                                             </div>
                                         </td>
-
-                                        {/* Role badge */}
-                                        <td><TypeBadge user={user} /></td>
-
-                                        {/* Role (editable for non-business; business account type is fixed) */}
+                                        <td>
+                                            <TypeBadge user={user} />
+                                        </td>
                                         <td>
                                             {!bizUser ? (
-                                                <select value={user.role || 'user'}
-                                                    onChange={e => handleUpdateSystemRole(user.id, e.target.value)}
-                                                    title={isBusiness(user) ? 'Business account type cannot be changed to user' : (user.role || 'user') === 'user' ? 'User account type cannot be changed to business' : ''}
+                                                <select
+                                                    value={user.role || 'user'}
+                                                    onChange={(e) => handleUpdateSystemRole(user.id, e.target.value)}
                                                     className="admin-select"
                                                     style={{
                                                         width: 110,
-                                                        borderColor: user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                                                        color: user.role === 'admin' ? '#fbbf24' : user.role === 'staff' ? '#a855f7' : user.role === 'support' ? '#3b82f6' : '#fff',
-                                                        fontWeight: user.role !== 'user' ? 'bold' : 'normal'
-                                                    }}>
-                                                    {SYSTEM_ROLES.filter(r => {
+                                                        borderColor:
+                                                            user.role === 'admin'
+                                                                ? '#fbbf24'
+                                                                : user.role === 'staff'
+                                                                  ? '#a855f7'
+                                                                  : user.role === 'support'
+                                                                    ? '#3b82f6'
+                                                                    : 'rgba(255,255,255,0.1)',
+                                                        color:
+                                                            user.role === 'admin'
+                                                                ? '#fbbf24'
+                                                                : user.role === 'staff'
+                                                                  ? '#a855f7'
+                                                                  : user.role === 'support'
+                                                                    ? '#3b82f6'
+                                                                    : '#fff',
+                                                        fontWeight: user.role !== 'user' ? 'bold' : 'normal',
+                                                    }}
+                                                >
+                                                    {SYSTEM_ROLES.filter((r) => {
                                                         const isBiz = isBusiness(user);
-                                                        if (r === 'user' && isBiz) return false; // business cannot become user
-                                                        if (r === 'business' && !isBiz && (user.role || 'user') === 'user') return false; // user cannot become business
+                                                        if (r === 'user' && isBiz) return false;
+                                                        if (r === 'business' && !isBiz && (user.role || 'user') === 'user') return false;
                                                         return true;
-                                                    }).map(r => <option key={r} value={r}>{r === 'business' ? 'Business' : r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                                                    }).map((r) => (
+                                                        <option key={r} value={r}>
+                                                            {r === 'business' ? 'Business' : r.charAt(0).toUpperCase() + r.slice(1)}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             ) : (
                                                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Business</span>
                                             )}
                                         </td>
-
-                                        {/* Subscription — different options for business vs user */}
                                         <td>
                                             <select
                                                 value={user.subscriptionTier || 'free'}
-                                                onChange={e => handleUpdateSubscription(user.id, e.target.value, bizUser)}
+                                                onChange={(e) => handleUpdateSubscription(user.id, e.target.value, bizUser)}
                                                 style={{
-                                                    background: '#1e293b', border: '1px solid #334155',
-                                                    borderRadius: 6, color: currentTier.color,
-                                                    padding: '6px 10px', fontSize: '0.875rem',
-                                                    fontWeight: 600, cursor: 'pointer', width: 150
-                                                }}>
-                                                {tiers.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                                    background: '#1e293b',
+                                                    border: '1px solid #334155',
+                                                    borderRadius: 6,
+                                                    color: currentTier.color,
+                                                    padding: '6px 10px',
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    width: 150,
+                                                }}
+                                            >
+                                                {tiers.map((t) => (
+                                                    <option key={t.value} value={t.value}>
+                                                        {t.label}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </td>
-
-                                        {/* Status */}
                                         <td>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                 <span className={user.banned ? 'admin-badge admin-badge-danger' : 'admin-badge admin-badge-success'}>
-                                                    {user.banned ? <><FaTimesCircle style={{ fontSize: '0.75rem' }} /> Banned</> : <><FaCheckCircle style={{ fontSize: '0.75rem' }} /> Active</>}
+                                                    {user.banned ? (
+                                                        <>
+                                                            <FaTimesCircle style={{ fontSize: '0.75rem' }} /> Banned
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FaCheckCircle style={{ fontSize: '0.75rem' }} /> Active
+                                                        </>
+                                                    )}
                                                 </span>
                                             </div>
                                         </td>
-
-                                        {/* Joined */}
                                         <td>
                                             <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
                                                 {(() => {
@@ -497,32 +649,49 @@ const UserManagement = () => {
                                                     try {
                                                         const d = user.createdAt?.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
                                                         return isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString();
-                                                    } catch { return 'N/A'; }
+                                                    } catch {
+                                                        return 'N/A';
+                                                    }
                                                 })()}
                                             </div>
                                         </td>
-
-                                        {/* Actions */}
                                         <td>
                                             <div className="admin-flex admin-gap-1">
-                                                <button onClick={() => { setSelectedUser(user); setShowUserModal(true); }}
-                                                    className="admin-btn admin-btn-sm" style={{ background: '#3b82f6', color: '#fff', padding: '0.5rem' }} title="View Details">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedUser(user);
+                                                        setShowUserModal(true);
+                                                    }}
+                                                    className="admin-btn admin-btn-sm"
+                                                    style={{ background: '#3b82f6', color: '#fff', padding: '0.5rem' }}
+                                                    title="View Details"
+                                                >
                                                     <FaEye />
                                                 </button>
-                                                <button onClick={() => handleBanUser(user.id, user.banned)}
+                                                <button
+                                                    onClick={() => handleBanUser(user.id, user.banned)}
                                                     className={`admin-btn admin-btn-sm ${user.banned ? 'admin-btn-success' : 'admin-btn-danger'}`}
-                                                    style={{ padding: '0.5rem' }} title={user.banned ? 'Unban' : 'Ban'}>
+                                                    style={{ padding: '0.5rem' }}
+                                                    title={user.banned ? 'Unban' : 'Ban'}
+                                                >
                                                     <FaBan />
                                                 </button>
                                                 {(() => {
-                                                    const isSuperOwner = ['admin@dinebuddies.com', 'y.abohamed@gmail.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au'].includes(currentUser?.email?.toLowerCase()) || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33';
-                                                    if (user.role !== 'admin' || isSuperOwner) return (
-                                                        <button onClick={() => handleDeleteUser(user.id)}
-                                                            className="admin-btn admin-btn-sm admin-btn-danger"
-                                                            style={{ padding: '0.5rem' }} title="Delete User">
-                                                            <FaTrash />
-                                                        </button>
-                                                    );
+                                                    const isSuperOwner = ['admin@dinebuddies.com', 'y.abohamed@gmail.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au'].includes(
+                                                        currentUser?.email?.toLowerCase()
+                                                    ) || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33';
+                                                    if (user.role !== 'admin' || isSuperOwner) {
+                                                        return (
+                                                            <button
+                                                                onClick={() => handleDeleteUser(user.id)}
+                                                                className="admin-btn admin-btn-sm admin-btn-danger"
+                                                                style={{ padding: '0.5rem' }}
+                                                                title="Delete User"
+                                                            >
+                                                                <FaTrash />
+                                                            </button>
+                                                        );
+                                                    }
                                                     return null;
                                                 })()}
                                             </div>
@@ -535,13 +704,17 @@ const UserManagement = () => {
                 </div>
             ) : null}
 
-            {/* User Details Modal */}
             {showUserModal && selectedUser && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
                     <div className="admin-card" style={{ maxWidth: 620, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div className="admin-flex-between admin-mb-4">
                             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>User Details</h2>
-                            <button onClick={() => setShowUserModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '2rem', cursor: 'pointer', padding: 0 }}>×</button>
+                            <button
+                                onClick={() => setShowUserModal(false)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '2rem', cursor: 'pointer', padding: 0 }}
+                            >
+                                ×
+                            </button>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -549,10 +722,10 @@ const UserManagement = () => {
                                 { label: 'Name', value: getUserName(selectedUser) },
                                 { label: 'Email', value: selectedUser.email },
                                 { label: 'User ID', value: selectedUser.id, mono: true },
-                                { label: 'Role', value: isBusiness(selectedUser) ? 'Business' : (selectedUser.role || 'user') },
+                                { label: 'Role', value: isBusiness(selectedUser) ? 'Business' : selectedUser.role || 'user' },
                                 { label: 'Subscription', value: selectedUser.subscriptionTier || 'free' },
                                 { label: 'Status', value: selectedUser.banned ? 'Banned' : 'Active', color: selectedUser.banned ? '#ef4444' : '#22c55e' },
-                            ].map(f => (
+                            ].map((f) => (
                                 <div key={f.label}>
                                     <label className="admin-label">{f.label}</label>
                                     <div style={{ color: f.color || '#fff', fontFamily: f.mono ? 'monospace' : undefined, fontSize: f.mono ? '0.8rem' : undefined, wordBreak: 'break-all' }}>{f.value}</div>
@@ -562,7 +735,14 @@ const UserManagement = () => {
                                 <div style={{ gridColumn: '1 / -1' }}>
                                     <label className="admin-label">Joined</label>
                                     <div style={{ color: '#fff' }}>
-                                        {(() => { try { const d = selectedUser.createdAt?.toDate ? selectedUser.createdAt.toDate() : new Date(selectedUser.createdAt); return isNaN(d.getTime()) ? 'N/A' : d.toLocaleString(); } catch { return 'N/A'; } })()}
+                                        {(() => {
+                                            try {
+                                                const d = selectedUser.createdAt?.toDate ? selectedUser.createdAt.toDate() : new Date(selectedUser.createdAt);
+                                                return isNaN(d.getTime()) ? 'N/A' : d.toLocaleString();
+                                            } catch {
+                                                return 'N/A';
+                                            }
+                                        })()}
                                     </div>
                                 </div>
                             )}
@@ -576,13 +756,25 @@ const UserManagement = () => {
 
                         <div className="admin-flex admin-gap-2 admin-mt-4" style={{ flexWrap: 'wrap' }}>
                             {!isBusiness(selectedUser) && (
-                                <button onClick={() => { handleUpdateSystemRole(selectedUser.id, selectedUser.role === 'admin' ? 'user' : 'admin'); setShowUserModal(false); }}
-                                    className="admin-btn" style={{ flex: 1, background: '#a855f7', color: '#fff' }}>
+                                <button
+                                    onClick={() => {
+                                        handleUpdateSystemRole(selectedUser.id, selectedUser.role === 'admin' ? 'user' : 'admin');
+                                        setShowUserModal(false);
+                                    }}
+                                    className="admin-btn"
+                                    style={{ flex: 1, background: '#a855f7', color: '#fff' }}
+                                >
                                     {selectedUser.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
                                 </button>
                             )}
-                            <button onClick={() => { handleBanUser(selectedUser.id, selectedUser.banned); setShowUserModal(false); }}
-                                className={`admin-btn ${selectedUser.banned ? 'admin-btn-success' : 'admin-btn-danger'}`} style={{ flex: 1 }}>
+                            <button
+                                onClick={() => {
+                                    handleBanUser(selectedUser.id, selectedUser.banned);
+                                    setShowUserModal(false);
+                                }}
+                                className={`admin-btn ${selectedUser.banned ? 'admin-btn-success' : 'admin-btn-danger'}`}
+                                style={{ flex: 1 }}
+                            >
                                 {selectedUser.banned ? 'Unban User' : 'Ban User'}
                             </button>
                         </div>

@@ -95,6 +95,9 @@ const PrivateInvitationPreview = () => {
                         }),
                         invitationId: draftId,
                         actionUrl: `/invitation/private/${draftId}`, // ENFORCE PRIVATE ROUTE
+                        metadata: {
+                            occasionType: invitation.occasionType || 'Social'
+                        }
                     });
                 });
                 await Promise.all(notificationsBatch);
@@ -158,7 +161,7 @@ const PrivateInvitationPreview = () => {
             <div className="private-mock-details" style={{ padding: '0 15px' }}>
                 <div className="private-hero-section" style={{ position: 'relative', width: '100%', height: '240px', overflow: 'hidden', borderRadius: '30px', marginBottom: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
                     {(invitation.customImage || invitation.restaurantImage || invitation.image) ? (
-                        <img src={invitation.customImage || invitation.restaurantImage || invitation.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={invitation.customImage || invitation.restaurantImage || invitation.image} alt="" className="private-hero-img-animated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                         <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #1e1b4b, #312e81)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <FaLock size={40} color="rgba(255,255,255,0.2)" />
@@ -167,7 +170,7 @@ const PrivateInvitationPreview = () => {
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 40%, #0a0a0f 100%)' }} />
                 </div>
 
-                <div className="reveal-text" style={{ transitionDelay: '0.2s', textAlign: 'center' }}>
+                <div className="reveal-text private-title-heavy reveal-delay-1" style={{ textAlign: 'center' }}>
                     <h1 style={{
                         fontFamily: templateStyles?.layout?.fontFamily || 'inherit',
                         fontSize: '2rem',
@@ -195,22 +198,22 @@ const PrivateInvitationPreview = () => {
                     )}
                 </div>
 
-                <div className="reveal-text" style={{ transitionDelay: '0.4s' }}>
+                <div className="reveal-text reveal-delay-2">
                     <PrivateInvitationInfoGrid invitation={invitation} t={t} />
                 </div>
 
                 {invitation.description && (
-                    <div className="reveal-text" style={{ transitionDelay: '0.5s', marginBottom: '2rem', background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.05rem', lineHeight: '1.6' }}>{invitation.description}</p>
+                    <div className="reveal-text premium-glass-card reveal-delay-3" style={{ marginBottom: '2rem', padding: '1.5rem', borderRadius: '24px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.95)', fontSize: '1.05rem', lineHeight: '1.6' }}>{invitation.description}</p>
                     </div>
                 )}
             </div>
 
             {/* Bottom Controls */}
-            <div className="preview-action-bar" style={{ margin: '30px 15px 20px', maxWidth: '640px', marginInline: 'auto', background: 'var(--bg-secondary)', padding: '20px', display: 'flex', gap: '12px', borderRadius: '24px', border: '1px solid var(--border-color)', backdropFilter: 'blur(10px)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+            <div className="preview-action-bar premium-glass-card" style={{ margin: '30px 15px 20px', maxWidth: '640px', marginInline: 'auto', padding: '20px', display: 'flex', gap: '12px', borderRadius: '24px' }}>
                 <button
                     type="button"
-                    className="ui-btn ui-btn--secondary"
+                    className="vip-btn ui-btn ui-btn--secondary"
                     onClick={() => navigate(`/create-private`, { state: { editInvitation: invitation } })}
                     style={{ flex: 1, height: '50px', borderRadius: 15 }}
                     disabled={isPublishing}
@@ -219,7 +222,7 @@ const PrivateInvitationPreview = () => {
                 </button>
                 <button
                     type="button"
-                    className="ui-btn ui-btn--primary"
+                    className="vip-btn vip-btn-primary ui-btn ui-btn--primary"
                     onClick={handlePublish}
                     style={{ flex: 2, height: '50px', borderRadius: 15 }}
                     disabled={isPublishing}

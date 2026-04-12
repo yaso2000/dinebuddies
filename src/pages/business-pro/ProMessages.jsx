@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 import { FaPaperPlane } from 'react-icons/fa';
+import { useToast } from '../../context/ToastContext';
 
 const ProMessages = () => {
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [messageText, setMessageText] = useState('');
+    const [sending, setSending] = useState(false);
 
     useEffect(() => {
         if (!currentUser?.uid) return;
@@ -30,6 +33,29 @@ const ProMessages = () => {
         if (!ts) return '';
         const date = ts.toDate?.() || new Date(ts);
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    };
+
+    const handleSend = async () => {
+        const text = messageText.trim();
+        if (!text || !currentUser?.uid || sending) return;
+        setSending(true);
+        try {
+            const messagesRef = collection(db, 'communities', currentUser.uid, 'messages');
+            await addDoc(messagesRef, {
+                text,
+                senderId: currentUser.uid,
+                senderName: userProfile?.display_name || userProfile?.businessInfo?.businessName || currentUser.displayName || 'Business',
+                senderAvatar: getSafeAvatar(userProfile),
+                createdAt: serverTimestamp(),
+                type: 'text',
+            });
+            setMessageText('');
+        } catch (err) {
+            console.warn('ProMessages send error:', err);
+            showToast('Failed to send message. Try again.', 'error');
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
@@ -94,14 +120,15 @@ const ProMessages = () => {
                     onChange={e => setMessageText(e.target.value)}
                     placeholder="Message your community..."
                     onKeyDown={e => {
-                        if (e.key === 'Enter' && messageText.trim()) {
-                            // Sending handled via CommunityChat functionality
-                            setMessageText('');
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
                         }
                     }}
                     style={{ flex: 1 }}
+                    disabled={sending}
                 />
-                <button type="button" className="ui-btn ui-btn--primary" style={{ padding: '12px 20px' }}>
+                <button type="button" className="ui-btn ui-btn--primary" style={{ padding: '12px 20px' }} onClick={handleSend} disabled={sending || !messageText.trim()}>
                     <FaPaperPlane />
                 </button>
             </div>

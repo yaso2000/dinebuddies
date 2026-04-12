@@ -1,12 +1,16 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import { FaArrowLeft, FaSearch, FaEllipsisV } from 'react-icons/fa';
 import './ChatList.css';
+import { goToLogin } from '../utils/goToLogin';
 
 const ChatList = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { conversations, loading, unreadCount } = useChat();
     const { currentUser, userProfile } = useAuth();
@@ -15,7 +19,7 @@ const ChatList = () => {
     // Redirect guests to login
     useEffect(() => {
         if (userProfile?.isGuest || userProfile?.role === 'guest') {
-            navigate('/login');
+            goToLogin();
         }
     }, [userProfile, navigate]);
 
@@ -59,10 +63,10 @@ const ChatList = () => {
                     <button className="back-btn" onClick={() => navigate('/')}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
-                    <h1>Messages</h1>
+                    <h1>{t("messages")}</h1>
                 </header>
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    Loading conversations...
+                    {t("loading_conversations")}
                 </div>
             </div>
         );
@@ -75,7 +79,7 @@ const ChatList = () => {
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                     <div style={{ fontSize: '3rem', marginBottom: '12px' }}>💬</div>
                     <h3 style={{ fontWeight: '700', marginBottom: '6px', color: 'var(--text-main)' }}>Your Messages</h3>
-                    <p style={{ fontSize: '0.9rem' }}>Select a conversation from the left sidebar to start chatting</p>
+                    <p style={{ fontSize: '0.9rem' }}>{t("select_conversation_prompt")}</p>
                 </div>
             </div>
 
@@ -86,7 +90,7 @@ const ChatList = () => {
                     <button className="back-btn" onClick={() => navigate('/')}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
-                    <h1>Messages</h1>
+                    <h1>{t("messages")}</h1>
                     <button className="options-btn">
                         <FaEllipsisV />
                     </button>
@@ -97,7 +101,7 @@ const ChatList = () => {
                     <FaSearch className="search-icon" />
                     <input
                         type="text"
-                        placeholder="Search conversations..."
+                        placeholder={t("search_conversations")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -108,8 +112,8 @@ const ChatList = () => {
                     {filteredConversations.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-icon">💬</div>
-                            <h3>No conversations yet</h3>
-                            <p>Start chatting with your friends!</p>
+                            <h3>{t("no_conversations")}</h3>
+                            <p>{t("start_chatting_friends")}</p>
                         </div>
                     ) : (
                         filteredConversations.map((convo) => {
@@ -124,15 +128,7 @@ const ChatList = () => {
                                 >
                                     {/* Avatar */}
                                     <div className="conversation-avatar">
-                                        <img
-                                            src={getSafeAvatar(otherUser)}
-                                            alt={otherUser.displayName}
-                                            onError={(e) => {
-                                                e.target.onerror = null;
-                                                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                                            }}
-                                            style={{ objectFit: 'cover' }}
-                                        />
+                                        <UserAvatar user={otherUser} alt={otherUser.displayName} style={{ objectFit: 'cover' }} />
                                         {otherUser.isOnline && <div className="online-indicator" />}
                                     </div>
 
@@ -146,7 +142,9 @@ const ChatList = () => {
                                         </div>
                                         <div className="conversation-bottom">
                                             <p className="last-message">
-                                                {convo.lastMessage || 'No messages yet'}
+                                                {convo.lastMessage === 'shared_content'
+                                                    ? `🔗 ${t('shared_content_preview', 'Shared content')}`
+                                                    : (convo.lastMessage || t("no_messages_yet"))}
                                             </p>
                                             {convo.isUnread && <div className="unread-badge"></div>}
                                         </div>
@@ -162,3 +160,7 @@ const ChatList = () => {
 };
 
 export default ChatList;
+
+
+
+

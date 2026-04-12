@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import RestaurantRating from '../components/RestaurantRating';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import { goToLogin } from '../utils/goToLogin';
 
 const RestaurantDetails = () => {
     const { t, i18n } = useTranslation();
@@ -134,7 +135,7 @@ const RestaurantDetails = () => {
                             <button
                                 onClick={() => {
                                     if (isGuest || !currentUser?.id) {
-                                        navigate('/login');
+                                        goToLogin();
                                         return;
                                     }
                                     toggleCommunity(restaurant?.ownerId || id);
@@ -206,7 +207,7 @@ const RestaurantDetails = () => {
                         <button
                             onClick={() => {
                                 if (isGuest || !currentUser?.id) {
-                                    navigate('/login');
+                                    goToLogin();
                                     return;
                                 }
                                 setIsSelectorOpen(true);

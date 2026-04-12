@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -7,15 +7,16 @@ import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
+import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe } from 'react-icons/fa';
-
+import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe, FaSearch } from 'react-icons/fa';
 const BusinessDashboard = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, userProfile, loading: authLoading } = useAuth();
+    const location = useLocation();
+    const { currentUser, userProfile, loading: authLoading, isBusiness } = useAuth();
     const { getCommunityMembers } = useInvitations();
     const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
@@ -32,13 +33,25 @@ const BusinessDashboard = () => {
     const [offers, setOffers] = useState([]);
     const [offersLoading, setOffersLoading] = useState(false);
 
-    // Desktop redirect — only Elite can use the dedicated desktop dashboard. Single source: users.subscriptionTier (free, professional, elite only).
+    // Desktop redirect — Elite uses /business-pro once published. Keep unpublished users here so they can use "Publish Profile".
     useEffect(() => {
         const tier = (userProfile?.subscriptionTier || 'free').toLowerCase();
-        if (window.innerWidth >= 1024 && tier === 'elite') {
+        const published = userProfile?.businessInfo?.isPublished === true;
+        if (window.innerWidth >= 1024 && tier === 'elite' && published) {
             navigate('/business-pro', { replace: true });
         }
-    }, [navigate, userProfile?.subscriptionTier]);
+    }, [navigate, userProfile?.subscriptionTier, userProfile?.businessInfo?.isPublished]);
+
+    const PUBLISH_ANCHOR = 'business-publish-profile';
+    useEffect(() => {
+        if (location.hash !== `#${PUBLISH_ANCHOR}`) return;
+        const el = document.getElementById(PUBLISH_ANCHOR);
+        if (!el) return;
+        const t = requestAnimationFrame(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        return () => cancelAnimationFrame(t);
+    }, [location.pathname, location.hash, loading]);
 
 
     const fetchDashboardData = async () => {
@@ -136,25 +149,23 @@ const BusinessDashboard = () => {
 
     // Initial loading state and redirection
     useEffect(() => {
-        // Wait for auth and profile listener to finish
         if (authLoading) return;
+        if (!currentUser) {
+            navigate('/posts-feed', { replace: true });
+            return;
+        }
+        // Never redirect while Firestore profile is still loading — null userProfile caused navigate('/') and felt like "profile → home".
+        if (!userProfile) return;
 
-        // If no user or not a business account, redirect
-        if (!currentUser || !userProfile || userProfile.role !== 'business') {
-            console.log('🚫 Unauthorized or missing business profile, redirecting...');
-            navigate('/');
+        if (!isBusiness) {
+            navigate('/posts-feed', { replace: true });
             return;
         }
 
-        // Only fetch data if we are surely a business user
-        if (userProfile.role === 'business') {
-            fetchDashboardData();
-        } else {
-            setLoading(false);
-        }
-    }, [currentUser, userProfile, authLoading, navigate]);
+        fetchDashboardData();
+    }, [currentUser, userProfile, authLoading, navigate, isBusiness]);
 
-    if (authLoading || (loading && userProfile?.role === 'business')) {
+    if (authLoading || (loading && isBusiness)) {
         return (
             <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{
@@ -171,8 +182,28 @@ const BusinessDashboard = () => {
         );
     }
 
-    if (!currentUser || !userProfile || userProfile.role !== 'business') {
-        return null;
+    if (currentUser && !authLoading && !userProfile) {
+        return (
+            <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '4px solid var(--border-color)',
+                    borderTop: '4px solid var(--primary)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto 1rem'
+                }} />
+                <p style={{ color: 'var(--text-muted)' }}>{t('loading_dashboard', 'Loading dashboard...')}</p>
+            </div>
+        );
+    }
+
+    if (!currentUser || !userProfile || !isBusiness) {
+        if (!currentUser) {
+            return <Navigate to="/business/login" replace />;
+        }
+        return <Navigate to="/posts-feed" replace />;
     }
 
 
@@ -181,10 +212,10 @@ const BusinessDashboard = () => {
             setPublishingOffer(true);
             if (offerId) {
                 await premiumOfferService.updateOffer(offerId, offerData, file);
-                showToast('✅ Offer updated successfully!', 'success');
+                showToast(t('offer_updated', '✅ Offer updated successfully!'), 'success');
             } else {
                 await premiumOfferService.createOffer(offerData, file);
-                showToast('✅ Offer published successfully!', 'success');
+                showToast(t('offer_published', '✅ Offer published successfully!'), 'success');
             }
 
             // Refresh data
@@ -193,46 +224,53 @@ const BusinessDashboard = () => {
             fetchDashboardData();
         } catch (error) {
             console.error('Error in handlePublishOffer:', error);
-            showToast(`❌ Failed to publish offer: ${error.message}`, 'error');
+            showToast(`❌ ${t('offer_published_err', 'Failed to publish offer:')} ${error.message}`, 'error');
         } finally {
             setPublishingOffer(false);
         }
     };
 
     const handleFreezeOffer = async (offerId) => {
-        if (!window.confirm('Are you sure you want to freeze this offer? It will be removed from the active carousel.')) return;
+        if (!window.confirm(t('offer_freeze_confirm', 'Are you sure you want to freeze this offer? It will be removed from the active carousel.'))) return;
         try {
             await premiumOfferService.freezeOffer(offerId);
             const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
             setOffers(businessOffers);
         } catch (error) {
-            showToast('Error freezing offer: ' + error.message, 'error');
+            showToast(t('offer_freeze_err', 'Error freezing offer: ') + error.message, 'error');
         }
     };
 
     const handleRepublishOffer = async (offerId, offerData) => {
-        if (!window.confirm('Are you sure you want to republish this offer?')) return;
+        if (!window.confirm(t('offer_republish_confirm', 'Are you sure you want to republish this offer?'))) return;
         try {
             await premiumOfferService.republishOffer(offerId, currentUser.uid, offerData);
             const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
             setOffers(businessOffers);
         } catch (error) {
-            showToast('Could not republish: ' + error.message, 'error');
+            showToast(t('offer_republish_err', 'Could not republish: ') + error.message, 'error');
         }
     };
 
     const handleDeleteOffer = async (offerId) => {
-        if (!window.confirm('Are you sure you want to delete this offer permanently?')) return;
+        if (!window.confirm(t('offer_delete_confirm', 'Are you sure you want to delete this offer permanently?'))) return;
         try {
             await premiumOfferService.deleteOffer(offerId);
             setOffers(offers.filter(o => o.id !== offerId));
         } catch (error) {
-            showToast('Error deleting offer: ' + error.message, 'error');
+            showToast(t('offer_delete_err', 'Error deleting offer: ') + error.message, 'error');
         }
     };
 
     const handlePublishProfile = async () => {
         if (!currentUser?.uid) return;
+        if (!currentUser.emailVerified) {
+            showToast(
+                t('business_publish_verify_email_first', 'Verify your email before publishing to the Partners page.'),
+                'error'
+            );
+            return;
+        }
         try {
             setPublishingProfile(true);
             const userRef = doc(db, 'users', currentUser.uid);
@@ -265,6 +303,8 @@ const BusinessDashboard = () => {
 
     const businessInfo = userProfile?.businessInfo || {};
     const isPublished = businessInfo.isPublished === true;
+    const emailVerified = currentUser?.emailVerified === true;
+    const canAppearPublic = emailVerified && isPublished;
 
     return (
         <div className="page-container" style={{ paddingBottom: '100px' }}>
@@ -272,11 +312,21 @@ const BusinessDashboard = () => {
             <header className="app-header sticky-header-glass">
                 <div style={{ width: '40px' }}></div>
                 <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                    📊 Business Dashboard
+                    📊 {t('business_dashboard', 'Business Dashboard')}
                 </h3>
-                <button className="back-btn" onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}>
-                    <FaEdit />
-                </button>
+                <div style={{ display: 'flex', align: 'center', gap: '4px' }}>
+                    <button
+                        className="back-btn"
+                        onClick={() => navigate('/search')}
+                        aria-label="Search"
+                        title="Search"
+                    >
+                        <FaSearch />
+                    </button>
+                    <button className="back-btn" onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}>
+                        <FaEdit />
+                    </button>
+                </div>
             </header>
 
             {/* Business Info Card */}
@@ -302,7 +352,7 @@ const BusinessDashboard = () => {
                     />
                     <div style={{ flex: 1 }}>
                         <h2 style={{ fontSize: '1.3rem', fontWeight: '800', marginBottom: '0.25rem' }}>
-                            {userProfile?.display_name || 'Your Business'}
+                            {userProfile?.display_name || t('your_business', 'Your Business')}
                         </h2>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <span style={{
@@ -318,10 +368,10 @@ const BusinessDashboard = () => {
                                 color: 'white'
                             }}>
                                 {userProfile?.subscriptionTier === 'elite'
-                                    ? 'Elite Partner'
+                                    ? t('elite_partner', 'Elite Partner')
                                     : userProfile?.subscriptionTier === 'professional'
-                                        ? 'Professional'
-                                        : 'Free Plan'}
+                                        ? t('professional_tier', 'Professional')
+                                        : t('free_plan', 'Free Plan')}
                             </span>
                             {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
                                 <button
@@ -347,7 +397,7 @@ const BusinessDashboard = () => {
                             )}
                         </div>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-                            {businessInfo.businessType || 'Business'} • {businessInfo.city || 'Location'}
+                            {t((businessInfo.businessType || 'business').toLowerCase(), businessInfo.businessType || 'Business')} • {businessInfo.city || t('location', 'Location')}
                         </p>
                     </div>
                 </div>
@@ -374,10 +424,10 @@ const BusinessDashboard = () => {
                             <div style={{ fontSize: '1.5rem' }}>🎁</div>
                             <div>
                                 <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800' }}>
-                                    Try Elite Partner FREE!
+                                    {t('try_elite_free', 'Try Elite Partner FREE!')}
                                 </h4>
                                 <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>
-                                    Get a full month of Elite features
+                                    {t('get_elite_features_promo', 'Get a full month of Elite features')}
                                 </p>
                             </div>
                         </div>
@@ -394,8 +444,8 @@ const BusinessDashboard = () => {
                     </div>
                 )}
 
-                {/* Publish Profile banner */}
-                {isPublished ? (
+                {/* Publish Profile banner — public listing needs verified email + opt-in publish */}
+                {canAppearPublic ? (
                     <div style={{
                         background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05))',
                         border: '1px solid rgba(34, 197, 94, 0.4)',
@@ -432,8 +482,26 @@ const BusinessDashboard = () => {
                             {publishingProfile ? t('please_wait', 'Please wait...') : t('unpublish_profile', 'Hide from Partners (e.g. temporarily closed)')}
                         </button>
                     </div>
-                ) : (
+                ) : !emailVerified ? (
                     <div style={{
+                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.06))',
+                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                        padding: '14px 20px',
+                        borderRadius: '16px',
+                        marginBottom: '1.5rem',
+                        color: 'var(--text-main)',
+                    }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', fontWeight: '700' }}>
+                            {t('business_publish_need_verify_title', 'Verify your email to publish')}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                            {t('business_publish_need_verify_desc', 'After you verify, you can publish your profile below or hide it anytime (e.g. vacation).')}
+                        </p>
+                    </div>
+                ) : (
+                    <div
+                        id={PUBLISH_ANCHOR}
+                        style={{
                         background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))',
                         border: '1px solid rgba(139, 92, 246, 0.4)',
                         padding: '14px 20px',
@@ -442,7 +510,8 @@ const BusinessDashboard = () => {
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '12px'
-                    }}>
+                    }}
+                    >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-main)' }}>
                             <FaGlobe style={{ color: 'var(--primary)', fontSize: '1.25rem' }} />
                             <div>
@@ -490,7 +559,7 @@ const BusinessDashboard = () => {
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
-                        onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}
+                        onClick={() => currentUser && navigate(`/business/${currentUser.uid}?preview=1`)}
                         style={{
                             flex: '1 1 calc(50% - 5px)',
                             padding: '12px',
@@ -516,7 +585,7 @@ const BusinessDashboard = () => {
                             e.currentTarget.style.borderColor = 'var(--border-color)';
                         }}
                     >
-                        <FaEye /> View Profile
+                        <FaEye /> {t('btn_view_profile', 'View Profile')}
                     </button>
                     <button
                         onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}
@@ -545,7 +614,7 @@ const BusinessDashboard = () => {
                             e.currentTarget.style.borderColor = 'var(--border-color)';
                         }}
                     >
-                        <FaEdit /> Edit Profile
+                        <FaEdit /> {t('btn_edit_profile', 'Edit Profile')}
                     </button>
                     <button
                         onClick={() => navigate('/settings')}
@@ -574,7 +643,7 @@ const BusinessDashboard = () => {
                             e.currentTarget.style.borderColor = 'var(--border-color)';
                         }}
                     >
-                        <FaCog /> Settings
+                        <FaCog /> {t('btn_settings', 'Settings')}
                     </button>
 
                 </div>
@@ -613,7 +682,7 @@ const BusinessDashboard = () => {
                         {stats.memberCount}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Community Members
+                        {t('stat_cmty_members', 'Community Members')}
                     </div>
                 </div>
 
@@ -643,7 +712,7 @@ const BusinessDashboard = () => {
                         {stats.activeInvitations}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Active Invitations
+                        {t('stat_active_invites', 'Active Invitations')}
                     </div>
                 </div>
 
@@ -673,7 +742,7 @@ const BusinessDashboard = () => {
                         {stats.profileViews}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Profile Views
+                        {t('stat_profile_views', 'Profile Views')}
                     </div>
                 </div>
 
@@ -703,67 +772,9 @@ const BusinessDashboard = () => {
                         {stats.rating.toFixed(1)}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Rating ({stats.reviewCount} reviews)
+                        {t('stat_rating_reviews', 'Rating')} ({stats.reviewCount} {t('stat_reviews', 'reviews')})
                     </div>
                 </div>
-            </div>
-
-            {/* Special Offers Management */}
-            <div style={{
-                marginTop: '1.5rem',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '16px',
-                padding: '1.5rem'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{
-                        fontSize: '1.1rem',
-                        fontWeight: '800',
-                        margin: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                    }}>
-                        <FaStore style={{ color: '#ff6b00' }} />
-                        My Special Offers
-                    </h3>
-                    <button
-                        onClick={() => navigate('/business-pro', { state: { openDesign: true } })}
-                        style={{
-                            background: 'var(--primary)',
-                            color: 'white',
-                            border: 'none',
-                            padding: '6px 14px',
-                            borderRadius: '12px',
-                            fontSize: '0.8rem',
-                            fontWeight: '700',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        + New
-                    </button>
-                </div>
-
-                {offersLoading ? (
-                    <div style={{ textAlign: 'center', padding: '1rem' }}>Loading offers...</div>
-                ) : offers.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>No offers created yet.</p>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {offers.map((offer) => (
-                            <PremiumOfferCard
-                                key={offer.id}
-                                offer={offer}
-                                isOwnerView={true}
-                                onEdit={(o) => navigate('/business-pro', { state: { openDesign: true, editOffer: o } })}
-                                onFreeze={(o) => handleFreezeOffer(o.id)}
-                                onRepublish={(o) => handleRepublishOffer(o.id, o)}
-                                onDelete={(o) => handleDeleteOffer(o.id)}
-                            />
-                        ))}
-                    </div>
-                )}
             </div>
 
             {/* Recent Activity */}
@@ -782,7 +793,7 @@ const BusinessDashboard = () => {
                     gap: '8px'
                 }}>
                     <FaCalendar style={{ color: 'var(--primary)' }} />
-                    Recent Activity
+                    {t('recent_activity', 'Recent Activity')}
                 </h3>
 
                 {recentActivity.length === 0 ? (
@@ -792,7 +803,7 @@ const BusinessDashboard = () => {
                         color: 'var(--text-muted)'
                     }}>
                         <FaUserPlus style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.3 }} />
-                        <p>No recent activity</p>
+                        <p>{t('no_recent_activity', 'No recent activity')}</p>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -833,10 +844,10 @@ const BusinessDashboard = () => {
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', marginBottom: '4px' }}>
-                                            New Invitation
+                                            {t('new_invitation', 'New Invitation')}
                                         </div>
                                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                            {activity.createdAt?.toDate?.()?.toLocaleDateString() || 'Recent'}
+                                            {activity.createdAt?.toDate?.()?.toLocaleDateString() || t('recent', 'Recent')}
                                         </div>
                                     </div>
                                 </div>
@@ -846,8 +857,33 @@ const BusinessDashboard = () => {
                 )}
             </div>
 
+            {/* Feedback Inbox */}
+            <div style={{
+                marginTop: '1.5rem',
+                marginBottom: '1.5rem',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '1.5rem'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h3 style={{
+                        fontSize: '1.2rem',
+                        fontWeight: '800',
+                        margin: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        <span style={{ fontSize: '1.4rem' }}>📥</span>
+                        {t('feedback_box_title', 'Feedback & Complaints Inbox')}
+                    </h3>
+                </div>
+                <BusinessFeedbackInbox />
+            </div>
+
             {/* Community Management */}
-            <div style={{ marginTop: '1.5rem' }}>
+            <div style={{ marginTop: '2rem' }}>
                 <CommunityManagement businessId={currentUser.uid} />
             </div>
         </div>

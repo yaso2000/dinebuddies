@@ -12,9 +12,25 @@
     width: 100vw;
     overflow: hidden;
     background: #0a0a14;
-    font-family: 'Inter', 'Outfit', sans-serif;
+    font-family: sans-serif;
     color: #f1f5f9;
+
+    /* ── Force dark-mode CSS variables inside the dashboard ──
+       Prevents global light/dark theme from mixing with the
+       always-dark Business Pro Dashboard design.              */
+    --bg-base:        #0a0a14;
+    --bg-elevated:    #161625;
+    --bg-card:        #1a1a2e;
+    --card-bg:        #1a1a2e;
+    --border:         rgba(255, 255, 255, 0.09);
+    --border-color:   rgba(255, 255, 255, 0.09);
+    --text-main:      #f1f5f9;
+    --text-secondary: rgba(255, 255, 255, 0.65);
+    --text-muted:     rgba(255, 255, 255, 0.4);
+    --primary:        #a78bfa;
+    --input-bg:       #1e1e32;
 }
+
 
 /* =========================================
    SIDEBAR
@@ -349,6 +365,11 @@
 .bpro-stat-icon.blue {
     background: rgba(59, 130, 246, 0.15);
     color: #3b82f6;
+}
+
+.bpro-stat-icon.gold {
+    background: rgba(212, 175, 55, 0.2);
+    color: #d4af37;
 }
 
 .bpro-stat-value {

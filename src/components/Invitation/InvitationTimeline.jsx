@@ -120,7 +120,7 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
                                 height: 'auto', border: templateStyles?.button?.border || 'none'
                             }}
                         >
-                            {isUpdatingStatus ? 'Updating...' : t('im_on_way')}
+                            {isUpdatingStatus ? t('updating_progress', { defaultValue: 'Updating...' }) : t('im_on_way')}
                         </button>
                     )}
 
@@ -136,7 +136,7 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
                                 opacity: isUpdatingStatus ? 0.7 : 1, height: 'auto'
                             }}
                         >
-                            {isUpdatingStatus ? 'Updating...' : t('ive_arrived')}
+                            {isUpdatingStatus ? t('updating_progress', { defaultValue: 'Updating...' }) : t('ive_arrived')}
                         </button>
                     )}
 

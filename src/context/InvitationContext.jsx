@@ -31,6 +31,7 @@ import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../config/planDefaul
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
+import { incrementBusinessInvitationCount } from '../services/businessLikeService';
 
 const InvitationContext = createContext(null);
 
@@ -41,9 +42,10 @@ export const useInvitations = () => useContext(InvitationContext);
 // Key = subscriptionTier value stored in Firestore users/{id}.subscriptionTier
 // ───────────────────────────────────────────────────────────
 const MONTHLY_PRIVATE_QUOTAS = {
-    pro: 4,   // Pro plan     —  4 private invitations per month
+    free: 2,      // Free plan    —  2 private invitations per month
+    pro: 4,       // Pro plan     —  4 private invitations per month
     premium: 10,  // Premium plan — 10 private invitations per month
-    vip: 10,  // legacy tier alias for premium
+    vip: 10,      // legacy tier alias for premium
 };
 const INVITATIONS_PAGE_SIZE = 20;
 
@@ -164,6 +166,33 @@ export const InvitationProvider = ({ children }) => {
     }, [currentUser?.id]);
 
     // --- 2. Sync Businesses (directory - visible to everyone including guests) ---
+    // Enrich with ratings so directory cards show same rating as profile/dashboard
+    const fetchRatingsForBusinessIds = async (ids) => {
+        if (!ids.length) return {};
+        const reviewsRef = collection(db, 'reviews');
+        const BATCH = 10;
+        const byDocId = new Map();
+        for (let i = 0; i < ids.length; i += BATCH) {
+            const chunk = ids.slice(i, i + BATCH);
+            const [sp, sf, sr] = await Promise.all([
+                getDocs(query(reviewsRef, where('partnerId', 'in', chunk), limit(100))),
+                getDocs(query(reviewsRef, where('profileId', 'in', chunk), limit(100))),
+                getDocs(query(reviewsRef, where('restaurantId', 'in', chunk), limit(100)))
+            ]);
+            [sp.docs, sf.docs, sr.docs].flat().forEach(d => byDocId.set(d.id, d.data()));
+        }
+        const byBusinessId = {};
+        ids.forEach(id => {
+            const reviews = [...byDocId.values()].filter(
+                r => r.partnerId === id || r.profileId === id || r.restaurantId === id
+            );
+            const count = reviews.length;
+            const total = reviews.reduce((s, r) => s + (r.rating || 0), 0);
+            byBusinessId[id] = { averageRating: count > 0 ? total / count : 0, reviewCount: count };
+        });
+        return byBusinessId;
+    };
+
     useEffect(() => {
         const q = query(
             collection(db, 'public_profiles'),
@@ -199,7 +228,28 @@ export const InvitationProvider = ({ children }) => {
                     ...info
                 });
             });
-            setRestaurants(businessList);
+
+            // Preserve existing ratings when snapshot updates (so we don't flash 0.0)
+            setRestaurants(prev => {
+                const prevById = new Map((prev || []).map(b => [b.id, b]));
+                return businessList.map(b => ({
+                    ...b,
+                    averageRating: typeof prevById.get(b.id)?.averageRating === 'number' ? prevById.get(b.id).averageRating : 0,
+                    reviewCount: typeof prevById.get(b.id)?.reviewCount === 'number' ? prevById.get(b.id).reviewCount : 0
+                }));
+            });
+
+            const ids = businessList.map(b => b.id);
+            fetchRatingsForBusinessIds(ids).then((ratingsById) => {
+                setRestaurants(prev => (prev || []).map(b => {
+                    const r = ratingsById[b.id];
+                    return {
+                        ...b,
+                        averageRating: typeof r?.averageRating === 'number' ? r.averageRating : 0,
+                        reviewCount: typeof r?.reviewCount === 'number' ? r.reviewCount : 0
+                    };
+                }));
+            }).catch(() => { });
         }, (error) => {
             console.error("Error fetching businesses:", error);
         });
@@ -223,7 +273,6 @@ export const InvitationProvider = ({ children }) => {
                     // Map country code to full name for the converter
                     const countryName = data.country || 'United States';
                     setDetectedCountry(countryName);
-                    console.log('🌍 Country detected via IP:', countryName);
                 }
             } catch (error) {
                 console.error('❌ IP Location Error:', error);
@@ -301,7 +350,6 @@ export const InvitationProvider = ({ children }) => {
                     features: data.features?.map(f => typeof f === 'object' ? f.text : (f.text || f)) || []
                 };
             });
-            console.log('📦 Dynamic plans synced:', plansData.length);
             setDbPlans(plansData);
         }, (error) => {
             console.error("Error syncing dynamic plans:", error);
@@ -317,7 +365,6 @@ export const InvitationProvider = ({ children }) => {
                 id: doc.id,
                 ...doc.data()
             }));
-            console.log('💎 Dynamic credit packs synced:', packsData.length);
             setDbCreditPacks(packsData);
         }, (error) => {
             console.error("Error syncing credit packs:", error);
@@ -345,7 +392,6 @@ export const InvitationProvider = ({ children }) => {
         dbPlans.forEach(dbPlan => {
             // IGNORE any plan that has Arabic in the name - this is the "mess" removal
             if (hasArabic(dbPlan.name || '') || hasArabic(dbPlan.title || '')) {
-                console.log('🚫 Filtered out Arabic plan from DB:', dbPlan.name);
                 return;
             }
 
@@ -495,7 +541,9 @@ export const InvitationProvider = ({ children }) => {
 
     const addInvitation = async (newInvite) => {
         if (isGuest) return false;
-        if (currentUser.role === 'business') {
+        // AuthContext's `currentUser` is the Firebase user (no `role`); role lives on `firebaseProfile`.
+        const isBusinessAccount = firebaseProfile?.role === 'business' || firebaseProfile?.isBusiness === true;
+        if (isBusinessAccount) {
             showToast('Business accounts cannot create or publish invitations.', 'error');
             return false;
         }
@@ -508,7 +556,7 @@ export const InvitationProvider = ({ children }) => {
                     id: currentUser.id,
                     name: currentUser.name || 'User',
                     avatar: getSafeAvatar(currentUser),
-                    isBusiness: currentUser.role === 'business'
+                    isBusiness: isBusinessAccount
                 },
                 requests: [], joined: [], chat: [], meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
@@ -520,22 +568,28 @@ export const InvitationProvider = ({ children }) => {
             };
 
             const docRef = await addDoc(collection(db, 'invitations'), inviteData);
-            addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
+            
+            // Only notify if it's not a draft
+            if (inviteData.status !== 'draft') {
+                addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
 
-            if (newInvite.restaurantId) {
-                const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
-                if (restaurant) {
-                    addBusinessNotification(restaurant.id, {
-                        type: 'new_booking',
-                        title: '🎉 New Booking!',
-                        message: `${currentUser.name} booked a table for ${inviteData.guestsNeeded} people at ${restaurant.name}`,
-                        invitationId: docRef.id,
-                        date: inviteData.date,
-                        time: inviteData.time,
-                        guestsNeeded: inviteData.guestsNeeded
-                    });
+                if (newInvite.restaurantId) {
+                    incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
+                    const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
+                    if (restaurant) {
+                        addBusinessNotification(restaurant.id, {
+                            type: 'new_booking',
+                            title: '🎉 New Booking!',
+                            message: `${currentUser.name} booked a table for ${inviteData.guestsNeeded} people at ${restaurant.name}`,
+                            invitationId: docRef.id,
+                            date: inviteData.date,
+                            time: inviteData.time,
+                            guestsNeeded: inviteData.guestsNeeded
+                        });
+                    }
                 }
             }
+            
             return docRef.id;
         } catch (err) {
             console.error("Error adding invitation:", err);
@@ -547,7 +601,7 @@ export const InvitationProvider = ({ children }) => {
     // --- Private Invitation: separate collection ---
     const addPrivateInvitation = async (newInvite) => {
         if (isGuest) return false;
-        if (currentUser.role === 'business') {
+        if (firebaseProfile?.role === 'business' || firebaseProfile?.isBusiness === true) {
             showToast('Business accounts cannot create or publish invitations.', 'error');
             return false;
         }
@@ -575,6 +629,7 @@ export const InvitationProvider = ({ children }) => {
                 createdAt: serverTimestamp()
             });
             const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
+            if (newInvite.restaurantId) incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
             return docRef.id;
         } catch (err) {
             console.error("Error adding private invitation:", err);
@@ -620,6 +675,10 @@ export const InvitationProvider = ({ children }) => {
 
     const requestToJoin = async (invId) => {
         if (isGuest) return false;
+        if (currentUser?.role === 'business' || currentUser?.isBusiness) {
+            showToast('Business accounts cannot join invitations.', 'error');
+            return false;
+        }
         try {
             const invRef = doc(db, 'invitations', invId);
             const invDoc = await getDoc(invRef);
@@ -681,6 +740,25 @@ export const InvitationProvider = ({ children }) => {
                 requests: arrayRemove(userId),
                 joined: arrayUnion(userId)
             });
+
+            // System chat broadcast for user joining
+            try {
+                const userDoc = await getDoc(doc(db, 'users', userId));
+                const userData = userDoc.exists() ? userDoc.data() : {};
+                const userName = userData.display_name || userData.displayName || userData.name || 'A guest';
+                const collectionName = invData.privacy === 'private' ? 'private_invitations' : 'invitations';
+                
+                await addDoc(collection(db, collectionName, invId, 'messages'), {
+                    text: `🎉 ${userName} has been approved to join the invitation!`,
+                    senderId: 'system',
+                    senderName: 'System',
+                    isSystemMessage: true,
+                    createdAt: serverTimestamp(),
+                    type: 'status_update'
+                });
+            } catch (chatErr) {
+                console.error("Failed to send approval chat message:", chatErr);
+            }
 
             const newJoinedCount = (invData.joined?.length || 0) + 1;
             const isFull = newJoinedCount >= invData.guestsNeeded;
@@ -775,6 +853,10 @@ export const InvitationProvider = ({ children }) => {
 
     const respondToPrivateInvitation = async (invId, status) => {
         if (!currentUser || currentUser.id === 'guest') return false;
+        if (currentUser?.role === 'business' || currentUser?.isBusiness) {
+            showToast('Business accounts cannot respond to invitations.', 'error');
+            return false;
+        }
         try {
             const invRef = doc(db, 'private_invitations', invId);
             const invDoc = await getDoc(invRef);
@@ -881,31 +963,35 @@ export const InvitationProvider = ({ children }) => {
 
     const toggleFollow = async (userId) => {
         if (isGuest || !userId || userId === currentUser.id) return;
-        const isCurrentlyFollowing = (currentUser.following || []).includes(userId);
+        
+        // Absolute block: Business accounts cannot follow ANYONE
+        if (currentUser?.role === 'business' || currentUser?.isBusiness || firebaseProfile?.role === 'business') {
+            showToast('Business accounts cannot follow other accounts.', 'error');
+            return;
+        }
+
+        const isCurrentlyFollowing = (firebaseProfile?.following || []).includes(userId);
         try {
             const targetUserDoc = await getDoc(doc(db, 'users', userId));
             if (!targetUserDoc.exists()) return;
             const targetRole = targetUserDoc.data()?.role || 'user';
-            if (targetRole === 'business') return; // no one follows business accounts
-            // Business accounts cannot follow regular (user) accounts
-            if (currentUser.role === 'business' && targetRole === 'user') {
-                showToast('Business accounts cannot follow regular users.', 'error');
-                return;
-            }
+            
+            // Absolute block: No one can follow a Business account (they use Communities instead)
+            if (targetRole === 'business') return; 
 
-            const currentUserRef = doc(db, 'users', currentUser.id);
+            const currentUserRef = doc(db, 'users', currentUser.uid || currentUser.id);
 
             if (isCurrentlyFollowing) {
                 // Atomic remove — no race condition
                 await updateDoc(currentUserRef, { following: arrayRemove(userId) });
-                await unfollowUser(currentUser.id, userId);
+                await unfollowUser(currentUser.uid || currentUser.id, userId);
             } else {
                 // Atomic add — no race condition
                 await updateDoc(currentUserRef, { following: arrayUnion(userId) });
-                await followUser(currentUser.id, userId, {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    avatar: getSafeAvatar(currentUser)
+                await followUser(currentUser.uid || currentUser.id, userId, {
+                    id: currentUser.uid || currentUser.id,
+                    name: firebaseProfile?.display_name || currentUser.displayName,
+                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
                 });
             }
         } catch (error) {

@@ -109,7 +109,7 @@ const EnhancedReviews = ({
     };
 
     const renderStars = (rating) => {
-        const starCol = tc?.starColor || '#f59e0b';
+        const starCol = 'var(--stat-reviews)';
         return (
             <div className="stars">
                 {[1, 2, 3, 4, 5].map(star => (
@@ -122,17 +122,17 @@ const EnhancedReviews = ({
     };
 
     return (
-        <div className="enhanced-reviews-section" style={{ background: th(tc?.cardBg, undefined) }}>
+        <div className="enhanced-reviews-section" style={{ background: 'var(--bg-card)' }}>
             {/* Header */}
             <div className="reviews-header">
                 <div className="header-left">
                     <h3 style={{ color: 'var(--text-main)', textShadow: 'none' }}>
-                        <FaStar style={{ color: tc?.starColor || '#fbbf24' }} />
+                        <FaStar style={{ color: 'var(--stat-reviews)' }} />
                         {t('reviews', 'Reviews')} ({totalReviews})
                     </h3>
                     {averageRating > 0 && (
                         <div className="average-rating">
-                            <span className="rating-number" style={{ color: tc?.starColor || th(tc?.accent, undefined) }}>{averageRating.toFixed(1)}</span>
+                            <span className="rating-number" style={{ color: 'var(--brand-primary)' }}>{averageRating.toFixed(1)}</span>
                             {renderStars(Math.round(averageRating))}
                         </div>
                     )}
@@ -180,14 +180,14 @@ const EnhancedReviews = ({
                                     style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
                                 >
                                     <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: '10px', textAlign: 'right' }}>{rating}</span>
-                                    <FaStar style={{ fontSize: '0.55rem', color: th(tc?.accent, '#fbbf24'), flexShrink: 0 }} />
+                                    <FaStar style={{ fontSize: '0.55rem', color: 'var(--brand-primary)', flexShrink: 0 }} />
                                     <div style={{
                                         flex: 1, height: '5px', borderRadius: '3px',
                                         background: 'var(--border-color)', overflow: 'hidden'
                                     }}>
                                         <div style={{
                                             width: `${percentage}%`, height: '100%',
-                                            background: th(tc?.accent, '#fbbf24'),
+                                            background: 'var(--brand-primary)',
                                             opacity: filterRating === 0 || filterRating === rating ? 1 : 0.3,
                                             borderRadius: '3px', transition: 'width 0.3s'
                                         }} />
@@ -243,7 +243,7 @@ const EnhancedReviews = ({
                 <div className="reviews-empty">
                     <div className="empty-icon">📝</div>
                     <p>{filterRating > 0
-                        ? t('no_reviews_filter', `No ${filterRating}-star reviews yet`)
+                        ? t('no_reviews_filter', 'No reviews for this rating yet')
                         : t('no_reviews', 'No reviews yet. Be the first to review!')
                     }</p>
                 </div>
@@ -375,7 +375,7 @@ const EnhancedReviews = ({
                                         setCurrentPage(1);
                                     }}
                                 >
-                                    {t('show_all_reviews', `Show All ${filteredReviews.length} Reviews`)}
+                                    {t('show_all_reviews', 'Show All Reviews')}
                                 </button>
                             ) : (
                                 <>

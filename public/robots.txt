@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /business/signup
+Disallow: /settings
+Disallow: /privacy-settings
+Disallow: /profile
+Disallow: /notifications
+Disallow: /auth

@@ -1,33 +1,61 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Higher Order Component to block authenticated users from accessing specific routes
- * (e.g., Login, Signup, Auth pages)
+ * Blocks auth routes from flashing global spinner; lets login shells mount while Firestore resolves.
  */
 const AuthBlockedRoute = ({ children }) => {
-    const { currentUser, isGuest, loading, userProfile } = useAuth();
+    const { currentUser, isGuest, loading, userProfile, isBusiness } = useAuth();
+    const location = useLocation();
+    const path = location.pathname;
 
-    if (loading) {
+    const isAuthShell =
+        path === '/login' ||
+        path === '/business/login' ||
+        path === '/business/signup';
+
+    if (loading && !isAuthShell) {
         return (
-            <div style={{
-                height: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--bg-body)'
-            }}>
-                <div className="spinner"></div>
+            <div
+                style={{
+                    height: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'var(--bg-body)',
+                }}
+            >
+                <div className="spinner" />
             </div>
         );
     }
 
-    // Check if user is fully logged in (not null AND not a guest)
-    const isActuallyLoggedIn = currentUser && !isGuest && userProfile?.role !== 'guest';
+    if (isAuthShell) {
+        return children;
+    }
 
-    if (isActuallyLoggedIn) {
-        // Redirect to home if already logged in
+    const guestModeActive =
+        typeof localStorage !== 'undefined' && localStorage.getItem('guestMode') === 'true';
+
+    const roleLc = String(userProfile?.role || '').toLowerCase();
+    const profileLooksGuest =
+        userProfile?.isGuest === true ||
+        roleLc === 'guest' ||
+        userProfile?.uid === 'guest' ||
+        userProfile?.id === 'guest';
+
+    const isFullyLoggedInNonGuest =
+        Boolean(currentUser) &&
+        !isGuest &&
+        Boolean(userProfile) &&
+        !profileLooksGuest &&
+        !guestModeActive;
+
+    if (isFullyLoggedInNonGuest) {
+        if (isBusiness || userProfile?.pendingBusinessRegistration) {
+            return <Navigate to={`/business/${currentUser.uid}`} replace />;
+        }
         return <Navigate to="/" replace />;
     }
 

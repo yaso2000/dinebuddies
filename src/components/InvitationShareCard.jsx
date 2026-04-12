@@ -1,5 +1,5 @@
 /**
- * InvitationShareCard — rendered off-screen, captured by html2canvas, then shared.
+ * InvitationShareCard — rendered off-screen, captured by html2canvasen shared.
  * Dimensions: 1080 × 1080 (square — best for WhatsApp, Instagram posts, etc.)
  *
  * The hero image is preloaded as a blob URL so html2canvas can capture it
@@ -67,7 +67,7 @@ const InvitationShareCard = forwardRef(({ data }, ref) => {
                 width: `${CARD_SIZE}px`,
                 height: `${CARD_SIZE}px`,
                 background: '#0d1117',
-                fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
+                fontFamily: 'sans-serif',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',

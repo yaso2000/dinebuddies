@@ -9,11 +9,37 @@ const CARD_H = 1080;
 const HERO_H = 595;
 const PADDING = 56;
 
-/** Load image via fetch→blob URL (no canvas taint), falls back to crossOrigin Image() */
+/** Shorten URL for bottom bar: show path or domain+path, max length */
+function shortenUrlForBar(url, maxLen = 48) {
+    if (!url || typeof url !== 'string') return '';
+    try {
+        const u = new URL(url);
+        const path = u.pathname + u.search;
+        const short = path.length > maxLen ? path.slice(0, maxLen - 3) + '…' : path;
+        return short.startsWith('/') ? u.host + short : short;
+    } catch (_) {
+        return url.length > maxLen ? url.slice(0, maxLen - 3) + '…' : url;
+    }
+}
+
+/** Proxy endpoint for images that fail CORS */
+const getProxyImageUrl = (imageUrl) => {
+    if (!imageUrl || typeof imageUrl !== 'string') return null;
+    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return null;
+    try {
+        const base = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        const endpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
+        return `${base}${endpoint}?url=${encodeURIComponent(imageUrl)}`;
+    } catch (_) {
+        return null;
+    }
+};
+
+/** Load image: direct (CORS) → crossOrigin Image → proxy → null (gradient fallback) */
 const loadImg = async (src) => {
     if (!src) return null;
 
-    // Strategy 1: fetch → blob URL (same-origin blob, no taint)
+    // Strategy 1: fetch direct (works when server allows CORS)
     try {
         const resp = await fetch(src, { mode: 'cors' });
         if (resp.ok) {
@@ -29,13 +55,34 @@ const loadImg = async (src) => {
     } catch (_) { /* fall through */ }
 
     // Strategy 2: crossOrigin Image() (works if server sends CORS headers)
-    return new Promise((resolve) => {
+    const imgDirect = await new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
-        img.onerror = () => resolve(null); // resolve null → gradient fallback
+        img.onerror = () => resolve(null);
         img.src = src;
     });
+    if (imgDirect) return imgDirect;
+
+    // Strategy 3: load via our proxy (server fetches image, no CORS)
+    const proxyUrl = getProxyImageUrl(src);
+    if (proxyUrl) {
+        try {
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) {
+                const blob = await resp.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                return await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img); };
+                    img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
+                    img.src = blobUrl;
+                });
+            }
+        } catch (_) { /* fall through */ }
+    }
+
+    return null;
 };
 
 /** Draw a rounded rectangle path */
@@ -73,6 +120,9 @@ export async function generateBusinessShareCard({
     description,
     hostName,
     hostImage,
+    shareUrl,
+    averageRating,
+    reviewCount,
 } = {}) {
     const canvas = document.createElement('canvas');
     canvas.width = CARD_W;
@@ -224,6 +274,17 @@ export async function generateBusinessShareCard({
         curY += PILL_H + 24;
     }
 
+    // ── Rating (if provided)
+    if (averageRating != null || reviewCount != null) {
+        const rating = Number(averageRating) || 0;
+        const count = Number(reviewCount) || 0;
+        const ratingText = count > 0 ? `⭐ ${rating.toFixed(1)} · ${count} ${count === 1 ? 'review' : 'reviews'}` : '⭐ —';
+        ctx.font = 'bold 24px "Arial", sans-serif';
+        ctx.fillStyle = 'rgba(253,224,71,0.95)';
+        ctx.fillText(ratingText, PADDING, curY + 28);
+        curY += 44;
+    }
+
     // ── Divider
     const DIV_Y = CARD_H - 130;
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
@@ -272,6 +333,22 @@ export async function generateBusinessShareCard({
     ctx.fillStyle = 'white';
     ctx.fillText(CTA, ctaX + 32, FY + 43);
 
+    // ── Bottom bar: link in a compact box under the image (same width as card, not larger)
+    const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (title && String(title).trim());
+    if (linkBarLabel) {
+        const LINK_BAR_H = 52;
+        const linkY = CARD_H - LINK_BAR_H;
+        ctx.fillStyle = 'rgba(0,0,0,0.9)';
+        ctx.fillRect(0, linkY, CARD_W, LINK_BAR_H);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '20px "Arial", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(linkBarLabel, CARD_W / 2, linkY + LINK_BAR_H / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+    }
+
     return canvas;
 }
 
@@ -288,6 +365,7 @@ export async function generateShareCard({
     maxGuests,
     hostName,
     hostImage,
+    shareUrl,
 } = {}) {
     const canvas = document.createElement('canvas');
     canvas.width = CARD_W;
@@ -492,6 +570,22 @@ export async function generateShareCard({
     ctx.fill();
     ctx.fillStyle = 'white';
     ctx.fillText(CTA, ctaX + 32, FY + 43);
+
+    // ── Bottom bar: link in a compact box under the image (same width as card, not larger)
+    const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (title && String(title).trim());
+    if (linkBarLabel) {
+        const LINK_BAR_H = 52;
+        const linkY = CARD_H - LINK_BAR_H;
+        ctx.fillStyle = 'rgba(0,0,0,0.9)';
+        ctx.fillRect(0, linkY, CARD_W, LINK_BAR_H);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '20px "Arial", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(linkBarLabel, CARD_W / 2, linkY + LINK_BAR_H / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+    }
 
     return canvas;
 }

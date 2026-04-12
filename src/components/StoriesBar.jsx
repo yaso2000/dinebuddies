@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, where, limit, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import StoryCircle from './StoryCircle';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { FaPlus, FaCamera } from 'react-icons/fa';
 
 const StoriesBar = ({ onStoryClick }) => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
     const [stories, setStories] = useState([]);
@@ -148,14 +151,15 @@ const StoriesBar = ({ onStoryClick }) => {
 
                 if (uniqueIdsToFetch.length > 0) {
                     try {
-                        const fetchPromises = uniqueIdsToFetch.map(id => getDoc(doc(db, 'users', id)));
+                        // public_profiles is readable by everyone; users/{id} is not (guests).
+                        const fetchPromises = uniqueIdsToFetch.map(id => getDoc(doc(db, 'public_profiles', id)));
                         const snapshots = await Promise.all(fetchPromises);
                         const profilesMap = {};
                         snapshots.forEach(snap => {
                             if (snap.exists()) {
-                                profilesMap[snap.id] = snap.data();
+                                const mapped = mapPublicProfileDocToUserShape(snap.data());
+                                if (mapped) profilesMap[snap.id] = mapped;
                             }
-                            // If snap doesn't exist, we just don't add it to profilesMap.
                         });
                         setFinalStories(profilesMap);
                     } catch (err) {
@@ -241,7 +245,7 @@ const StoriesBar = ({ onStoryClick }) => {
                                 <FaCamera />
                             </div>
                             <span style={{ fontSize: '0.75rem', maxWidth: '75px', textAlign: 'center', color: 'var(--text-main)' }}>
-                                New
+                                {t('new', { defaultValue: 'New' })}
                             </span>
                         </div>
 
@@ -270,7 +274,7 @@ const StoriesBar = ({ onStoryClick }) => {
                                 }} />
                             </div>
                             <span style={{ fontSize: '0.75rem', maxWidth: '75px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', color: 'var(--text-main)' }}>
-                                Your Story
+                                {t('your_story', { defaultValue: 'Your Story' })}
                             </span>
                         </div>
                     </>
@@ -301,7 +305,7 @@ const StoriesBar = ({ onStoryClick }) => {
                             </div>
                         </div>
                         <span style={{ fontSize: '0.75rem', maxWidth: '75px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', color: 'var(--text-main)' }}>
-                            Your Story
+                            {t('your_story', { defaultValue: 'Your Story' })}
                         </span>
                     </div>
                 )}

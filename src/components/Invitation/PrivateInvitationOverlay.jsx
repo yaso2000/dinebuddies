@@ -1,30 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNotifications } from '../../context/NotificationContext';
 import { useTranslation } from 'react-i18next';
 import { FaEnvelopeOpen, FaArrowRight, FaTimes, FaLock, FaCalendarAlt, FaClock, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { getTemplateStyle, OCCASION_PRESETS } from '../../utils/invitationTemplates';
-import { getSafeAvatar } from '../../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../../utils/avatarUtils';
 import PrivateInvitationInfoGrid from './PrivateInvitationInfoGrid';
 import Lottie from 'lottie-react';
+import DatingInvitationSplash from './DatingInvitationSplash';
 import './PrivateInvitationOverlay.css';
 
 const CATEGORY_ICONS = {
-    Dating: ['❤️', '💖', '🌹', '✨', '💍'],
-    Birthday: ['🎂', '🎉', '🎈', '🎁', '🎊'],
-    Social: ['🥳', '🥂', '🍹', '✨', '🎈'],
-    Work: ['💼', '📈', '✍️', '🤝', '🏢'],
-    Nightlife: ['🎸', '🍸', '🎧', '🌌', '🕺'],
-    Dining: ['🍽️', '🍷', '🥗', '🍕', '🍰'],
-    Café: ['☕', '🥐', '🍪', '🍵', '🍩'],
-    Gaming: ['🎮', '👾', '🎯', '⚔️', '🛡️']
+    Dating:      ['❤️', '💖', '🌹', '✨', '💍'],
+    Birthday:    ['🎂', '🎉', '🎈', '🎁', '🎊'],
+    Social:      ['🥳', '🥂', '🍹', '✨', '🎈'],
+    Work:        ['💼', '📈', '✍️', '🤝', '🏢'],
+    Nightlife:   ['🎸', '🍸', '🎧', '🌌', '🕺'],
+    Dining:      ['🍽️', '🍷', '🥗', '🍕', '🍰'],
+    Café:        ['☕', '🥐', '🍪', '🍵', '🍩'],
+    Gaming:      ['🎮', '👾', '🎯', '⚔️', '🛡️'],
+    Family:      ['👨‍👩‍👧', '🏡', '💛', '🌻', '🤗'],
+    Celebration: ['🎉', '✨', '🥂', '🎊', '🌟'],
 };
 
 const PrivateInvitationOverlay = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const location = useLocation();
     const { activePrivateInvitation, markAsRead, setActivePrivateInvitation, dismissNotification, unreadPrivateInvitations } = useNotifications();
     const [invitation, setInvitation] = useState(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -38,6 +42,9 @@ const PrivateInvitationOverlay = () => {
 
     const occasionKey = invitation ? (invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase() : 'Social';
     const backgroundIcons = CATEGORY_ICONS[occasionKey] || CATEGORY_ICONS.Social;
+    const heroImageUrl = invitation
+        ? pickSafeDisplayImageUrl(invitation.customImage, invitation.restaurantImage, invitation.image)
+        : null;
 
     useEffect(() => {
         const fetchInvitation = async () => {
@@ -128,9 +135,12 @@ const PrivateInvitationOverlay = () => {
         fetchHostData();
     }, [invitation, activePrivateInvitation]);
 
-    if (!activePrivateInvitation || !invitation || isTransitioning) return null;
+    const hideFullScreenInvite = ['/login', '/auth', '/business/login', '/business/signup'].some(
+        (p) => location.pathname === p || location.pathname.startsWith(`${p}/`)
+    );
+    if (hideFullScreenInvite) return null;
 
-    const handleOpen = () => setIsOpen(true);
+    if (!activePrivateInvitation || !invitation || isTransitioning) return null;
 
     const handleViewDetails = async () => {
         setIsTransitioning(true);
@@ -144,6 +154,25 @@ const PrivateInvitationOverlay = () => {
         dismissNotification(activePrivateInvitation.id);
         setActivePrivateInvitation(null);
     };
+
+    const handleOpen = (e) => {
+        if (e) e.stopPropagation();
+        setIsOpen(true);
+    };
+
+    // ── Dating Invitation → video splash ───────────────────────
+    const isDatingInvitation = (invitation.occasionType || invitation.type || '').toLowerCase() === 'dating';
+    if (isDatingInvitation) {
+        return (
+            <DatingInvitationSplash
+                invitation={invitation}
+                hostInfo={hostInfo}
+                onView={handleViewDetails}
+                onClose={handleClose}
+            />
+        );
+    }
+
 
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
@@ -358,6 +387,35 @@ const PrivateInvitationOverlay = () => {
                                         {invitation.occasionType ? OCCASION_PRESETS[(invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase()]?.emoji || '🍽️' : '🍽️'}
                                     </span>
                                 </div>
+
+                                {pickSafeDisplayImageUrl(
+                                    invitation.customImage,
+                                    invitation.restaurantImage,
+                                    invitation.image
+                                ) && (
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            maxWidth: 340,
+                                            margin: '0 auto 18px',
+                                            borderRadius: 16,
+                                            overflow: 'hidden',
+                                            boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+                                            position: 'relative',
+                                            zIndex: 3
+                                        }}
+                                    >
+                                        <img
+                                            src={pickSafeDisplayImageUrl(
+                                                invitation.customImage,
+                                                invitation.restaurantImage,
+                                                invitation.image
+                                            )}
+                                            alt=""
+                                            style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }}
+                                        />
+                                    </div>
+                                )}
 
                                 <div className="host-identity-section reveal-text reveal-delay-3" style={{ zIndex: 3, textAlign: 'center', marginBottom: '35px' }}>
                                     <div className="host-avatar-wrapper">

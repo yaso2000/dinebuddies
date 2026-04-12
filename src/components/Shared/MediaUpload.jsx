@@ -5,11 +5,13 @@ import { generateThumbnailURL } from '../../utils/thumbnailGenerator';
 import './MediaUpload.css';
 
 const MediaUpload = ({
-    type = 'image', // 'image' | 'video'
-    maxDuration = 60, // for videos (seconds)
-    maxSize = 100, // MB
+    type = 'image', // 'image', 'video', or 'both'
     onMediaSelect,
     onCancel,
+    maxSize = 25, // MB
+    maxDuration = 15, // for videos (seconds)
+    aspectRatio = null, // e.g., 1 for square, 16/9 for wide
+    title = 'Upload Media',
     className = ''
 }) => {
     const [uploading, setUploading] = useState(false);

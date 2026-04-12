@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { initNotifications, removeFcmToken } from '../services/notificationService';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import {
@@ -109,6 +110,26 @@ const NotificationsSettings = () => {
         }
     };
 
+    const handlePushToggle = async (e) => {
+        const isChecked = e.target.checked;
+        if (isChecked) {
+            setSaving(true);
+            const token = await initNotifications(currentUser.uid);
+            setSaving(false);
+            if (token) {
+                setSettings(prev => ({ ...prev, pushEnabled: true }));
+                showToast(t('push_enabled_success', 'Push notifications enabled for this device.'), 'success');
+            } else {
+                setSettings(prev => ({ ...prev, pushEnabled: false }));
+                showToast(t('push_enable_failed', 'Please allow notifications in your browser settings.'), 'error');
+            }
+        } else {
+            setSettings(prev => ({ ...prev, pushEnabled: false }));
+            // Optional: remove FCM token from this device so it stops receiving them
+            await removeFcmToken(currentUser.uid);
+        }
+    };
+
     const togglePushType = (type) => {
         setSettings(prev => ({
             ...prev,
@@ -179,7 +200,7 @@ const NotificationsSettings = () => {
                             <input
                                 type="checkbox"
                                 checked={settings.pushEnabled}
-                                onChange={(e) => setSettings({ ...settings, pushEnabled: e.target.checked })}
+                                onChange={handlePushToggle}
                             />
                             <span className="toggle-slider"></span>
                         </label>
@@ -352,6 +373,52 @@ const NotificationsSettings = () => {
                         </div>
                     )}
                 </div>
+
+                <div style={{ marginTop: '40px', padding: '20px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                        <h4 style={{ color: '#ef4444', margin: '0 0 10px 0' }}>{t('push_diagnostics', '⚙️ Push Diagnostics')}</h4>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                            {t('push_diagnostics_desc', "If you aren't receiving notifications, use this tool to debug your device's connection.")}
+                        </p>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    alert("1. Checking permissions...");
+                                    const perm = Notification.permission;
+                                    alert("Permission: " + perm);
+                                    
+                                    alert("2. Checking Service Worker...");
+                                    const sw = await navigator.serviceWorker.getRegistration('/');
+                                    if (!sw) {
+                                        alert("No Service Worker found. Attempting to register...");
+                                        await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                                    }
+                                    alert("SW Status: Active");
+
+                                    alert("3. Fetching FCM Token...");
+                                    const { getMessaging, getToken } = await import('firebase/messaging');
+                                    const app = (await import('../firebase/config')).default;
+                                    const messaging = getMessaging(app);
+                                    
+                                    const token = await getToken(messaging, {
+                                        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+                                    });
+                                    alert("SUCCESS! Token is: " + (token ? token.substring(0, 15) + "..." : "EMPTY"));
+                                } catch(e) {
+                                    alert("[ERROR]: " + e.message);
+                                }
+                            }}
+                            style={{
+                                padding: '10px 20px',
+                                background: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {t('run_device_diagnostics', 'Run Device Diagnostics')}
+                        </button>
+                    </div>
 
                 {/* Save Button */}
                 <div className="save-button-container">

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
@@ -88,7 +88,169 @@ async function validateProxyUrl(targetUrl) {
 const devOperations = () => ({
     name: 'dev-operations',
     configureServer(server) {
+        function parseAddressComponents(components) {
+            let city = ''
+            let country = ''
+            let countryCode = ''
+            if (Array.isArray(components)) {
+                for (const c of components) {
+                    if (c.types?.includes('locality')) city = c.long_name || ''
+                    if (c.types?.includes('administrative_area_level_1') && !city) city = c.long_name || ''
+                    if (c.types?.includes('country')) {
+                        country = c.long_name || ''
+                        countryCode = (c.short_name || '').toUpperCase().slice(0, 2)
+                    }
+                }
+            }
+            return { city, country, countryCode }
+        }
+
         server.middlewares.use(async (req, res, next) => {
+            if (req.method === 'GET') {
+                let url
+                try {
+                    url = new URL(req.url, `http://${req.headers.host}`)
+                } catch {
+                    url = null
+                }
+                if (url && url.pathname === '/api/place-photo') {
+                    res.statusCode = 302
+                    res.setHeader('Location', `/__dev/place-photo${url.search || ''}`)
+                    res.end()
+                    return
+                }
+                const env = loadEnv(process.env.MODE || 'development', process.cwd(), '')
+                const key = process.env.VITE_GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY
+
+                if (url && url.pathname === '/api/place-autocomplete') {
+                    const input = url.searchParams.get('input')
+                    const countryCode = url.searchParams.get('countryCode')
+                    const lat = url.searchParams.get('lat')
+                    const lng = url.searchParams.get('lng')
+                    if (!input || typeof input !== 'string' || input.trim().length < 2 || !key) {
+                        res.statusCode = 400
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Missing input (min 2 chars) or API key' }))
+                        return
+                    }
+                    try {
+                        const params = new URLSearchParams({
+                            input: input.trim(),
+                            types: 'establishment',
+                            language: 'en',
+                            key,
+                        })
+                        if (countryCode && typeof countryCode === 'string') {
+                            params.set('components', `country:${countryCode.toLowerCase().slice(0, 2)}`)
+                        }
+                        const numLat = parseFloat(lat)
+                        const numLng = parseFloat(lng)
+                        if (!isNaN(numLat) && !isNaN(numLng)) {
+                            params.set('location', `${numLat},${numLng}`)
+                            params.set('radius', '50000')
+                        }
+                        const gurl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
+                        const response = await fetch(gurl)
+                        const data = await response.json()
+                        res.setHeader('Content-Type', 'application/json')
+                        res.setHeader('Access-Control-Allow-Origin', '*')
+                        if (data.status === 'OK' && Array.isArray(data.predictions)) {
+                            res.end(JSON.stringify({
+                                status: 'OK',
+                                predictions: data.predictions.map((p) => ({
+                                    place_id: p.place_id,
+                                    description: p.description,
+                                    structured_formatting: p.structured_formatting,
+                                })),
+                            }))
+                            return
+                        }
+                        if (data.status === 'ZERO_RESULTS') {
+                            res.end(JSON.stringify({ status: 'ZERO_RESULTS', predictions: [] }))
+                            return
+                        }
+                        res.end(JSON.stringify({ status: data.status || 'ERROR', predictions: [] }))
+                        return
+                    } catch (err) {
+                        console.error('Dev place-autocomplete error:', err)
+                        res.statusCode = 500
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Internal server error' }))
+                        return
+                    }
+                }
+
+                if (url && url.pathname === '/api/place-details') {
+                    const placeId = url.searchParams.get('placeId')
+                    if (!placeId || !key) {
+                        res.statusCode = 400
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Missing placeId or API key' }))
+                        return
+                    }
+                    const fields = 'name,formatted_address,address_components,geometry,place_id,formatted_phone_number,international_phone_number,website,url,photos,opening_hours,types'
+                    try {
+                        const durl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=${fields}&key=${key}`
+                        const response = await fetch(durl)
+                        const data = await response.json()
+                        res.setHeader('Content-Type', 'application/json')
+                        res.setHeader('Access-Control-Allow-Origin', '*')
+                        if (data.status !== 'OK' || !data.result) {
+                            res.statusCode = data.status === 'ZERO_RESULTS' ? 404 : 400
+                            res.end(JSON.stringify({ error: data.status || 'Not found' }))
+                            return
+                        }
+                        const place = data.result
+                        const { city, country, countryCode } = parseAddressComponents(place.address_components || [])
+                        const loc = place.geometry?.location || {}
+                        const plat = typeof loc.lat === 'number' ? loc.lat : null
+                        const plng = typeof loc.lng === 'number' ? loc.lng : null
+                        const photoUrls = []
+                        if (place.photos?.length) {
+                            for (let i = 0; i < Math.min(place.photos.length, 10); i++) {
+                                photoUrls.push(`/api/place-photo?placeId=${encodeURIComponent(placeId)}&index=${i}`)
+                            }
+                        }
+                        let workingHours = null
+                        if (place.opening_hours?.weekday_text?.length) {
+                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                            workingHours = {}
+                            place.opening_hours.weekday_text.forEach((text, i) => {
+                                workingHours[days[i]] = {
+                                    isOpen: !String(text || '').toLowerCase().includes('closed'),
+                                    text: String(text || ''),
+                                }
+                            })
+                        }
+                        res.end(JSON.stringify({
+                            businessName: place.name || '',
+                            address: place.formatted_address || '',
+                            city,
+                            country,
+                            countryCode: countryCode || 'AU',
+                            lat: plat,
+                            lng: plng,
+                            placeId: place.place_id || placeId,
+                            phone: place.formatted_phone_number || place.international_phone_number || '',
+                            website: place.website || place.url || '',
+                            description: '',
+                            coverImage: photoUrls[0] || null,
+                            logo: photoUrls[0] || null,
+                            gallery: photoUrls,
+                            workingHours,
+                            types: place.types || [],
+                        }))
+                        return
+                    } catch (err) {
+                        console.error('Dev place-details error:', err)
+                        res.statusCode = 500
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Internal server error' }))
+                        return
+                    }
+                }
+            }
+
             if (req.url.startsWith('/__dev/')) {
                 const url = new URL(req.url, `http://${req.headers.host}`)
                 const action = url.pathname.replace('/__dev/', '')
@@ -178,6 +340,52 @@ const devOperations = () => ({
                         console.error('Proxy Exception:', error);
                         res.statusCode = 500;
                         res.end('Proxy Exception: ' + error.message);
+                    }
+                    return;
+                }
+
+                if (req.method === 'GET' && action === 'place-photo') {
+                    const placeId = url.searchParams.get('placeId');
+                    const index = url.searchParams.get('index') || '0';
+                    const env = loadEnv(process.env.MODE || 'development', process.cwd(), '');
+                    const key = process.env.VITE_GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY;
+                    if (!placeId || !key) {
+                        res.statusCode = 400;
+                        res.end(JSON.stringify({ error: 'Missing placeId or VITE_GOOGLE_MAPS_API_KEY' }));
+                        return;
+                    }
+                    try {
+                        const detailsRes = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=photos&key=${key}`);
+                        const details = await detailsRes.json();
+                        if (details.status !== 'OK' || !details.result?.photos?.length) {
+                            res.statusCode = 404;
+                            res.end(JSON.stringify({ error: 'No photos' }));
+                            return;
+                        }
+                        const idx = Math.max(0, parseInt(index, 10) || 0);
+                        const photo = details.result.photos[idx] || details.result.photos[0];
+                        const ref = photo?.photo_reference;
+                        if (!ref) {
+                            res.statusCode = 404;
+                            res.end(JSON.stringify({ error: 'No photo reference' }));
+                            return;
+                        }
+                        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1200&photo_reference=${encodeURIComponent(ref)}&key=${key}`;
+                        const imgRes = await fetch(photoUrl, { redirect: 'follow' });
+                        if (!imgRes.ok) {
+                            res.statusCode = 502;
+                            res.end(JSON.stringify({ error: 'Google photo fetch failed' }));
+                            return;
+                        }
+                        res.setHeader('Content-Type', imgRes.headers.get('content-type') || 'image/jpeg');
+                        res.setHeader('Access-Control-Allow-Origin', '*');
+                        res.setHeader('Cache-Control', 'public, max-age=3600');
+                        const buf = await imgRes.arrayBuffer();
+                        res.end(Buffer.from(buf));
+                    } catch (e) {
+                        console.error('place-photo dev error:', e);
+                        res.statusCode = 500;
+                        res.end(JSON.stringify({ error: String(e?.message || 'Unknown error') }));
                     }
                     return;
                 }
@@ -304,6 +512,8 @@ const devOperations = () => ({
 export default defineConfig({
     plugins: [react(), devOperations()],
     build: {
+        // Default 500 kB triggers noisy warnings; main app chunk is intentionally large until further code-splitting.
+        chunkSizeWarningLimit: 2000,
         rollupOptions: {
             output: {
                 manualChunks(id) {
@@ -319,7 +529,8 @@ export default defineConfig({
         }
     },
     server: {
-        host: '0.0.0.0', // Listen on all network interfaces
-        port: 5176
+        host: '0.0.0.0',
+        port: 5176,
+        strictPort: false,
     }
 })

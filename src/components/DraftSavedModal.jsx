@@ -95,7 +95,7 @@ const DraftSavedModal = ({ isOpen, onClose, featureName = "feature" }) => {
                         fontSize: '1.05rem', color: 'rgba(255,255,255,0.7)',
                         lineHeight: 1.6, marginBottom: 32, padding: '0 10px'
                     }}>
-                        {t('draft_modal_description', "Don't worry, we've safely saved everything you did as a draft so your work isn't lost. Take your time, and once you join as a partner, this new look will be published instantly for your customers!")}
+                        {t('draft_modal_description', "Don't worry, we've safely saved everything you did as a draft so your work isn't lost. Take your time, and once you join as a partneris new look will be published instantly for your customers!")}
                     </p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>

@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import ImageUpload from '../components/ImageUpload';
 import MediaSelector from '../components/Invitations/MediaSelector';
-import LocationAutocomplete from '../components/LocationAutocomplete';
+import VenueLocationPicker from '../components/VenueLocationPicker';
 import { Country, State, City } from 'country-state-city';
 import { uploadInvitationPhoto } from '../utils/imageUpload';
 import { processInvitationMedia } from '../services/mediaService';
@@ -19,7 +19,10 @@ import { doc, getDoc, updateDoc, serverTimestamp, deleteField, collection, query
 import { db } from '../firebase/config';
 import { fetchIpLocation } from '../utils/locationUtils';
 import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
-
+import { placePhotoProxyUrls } from '../utils/placePhotoUrls';
+import { COLOR_SCHEMES } from '../utils/invitationTemplates';
+import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
+import { goToLogin } from '../utils/goToLogin';
 const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
@@ -31,7 +34,7 @@ const CreateInvitation = () => {
     // Redirect guests to login immediately
     useEffect(() => {
         if (userProfile?.isGuest || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
-            navigate('/login');
+            goToLogin();
         }
     }, [userProfile, currentUser, navigate]);
 
@@ -42,6 +45,7 @@ const CreateInvitation = () => {
     const [mediaData, setMediaData] = useState(null); // NEW: For MediaSelector
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isGeneratingBio, setIsGeneratingBio] = useState(false);
     const [friendsLoading, setFriendsLoading] = useState(false);
 
     const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
@@ -115,6 +119,8 @@ const CreateInvitation = () => {
         maxDate: offerData?.endDate || null,
         lastLocationUpdate: serverTimestamp(),
         occasionType: editingInvitation?.occasionType || 'Social',
+        colorScheme: editingInvitation?.colorScheme || prefilledData?.colorScheme || 'oceanBlue',
+        templateType: editingInvitation?.templateType || prefilledData?.templateType || 'classic',
         // Override with editingInvitation data if present
         ...(editingInvitation ? {
             ...editingInvitation,
@@ -125,6 +131,8 @@ const CreateInvitation = () => {
             guestsNeeded: editingInvitation.guestsNeeded,
             genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
             ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
+            colorScheme: editingInvitation.colorScheme || 'oceanBlue',
+            templateType: editingInvitation.templateType || 'classic',
             image: editingInvitation.image, // Keep existing image URL
             location: editingInvitation.location,
             lat: editingInvitation.lat,
@@ -185,7 +193,6 @@ const CreateInvitation = () => {
     // Handle image selection
     const handleImageSelect = (file) => {
         setImageFile(file);
-        // Create preview
         const reader = new FileReader();
         reader.onload = () => {
             setFormData(prev => ({ ...prev, image: reader.result }));
@@ -204,6 +211,96 @@ const CreateInvitation = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    /** Fills description from form fields only (no external AI). */
+    const generateSmartBio = async () => {
+        setIsGeneratingBio(true);
+        try {
+            const {
+                restaurantName,
+                location,
+                time,
+                date,
+                paymentType,
+                city,
+                type,
+                genderGroups,
+                ageGroups,
+                guestsNeeded,
+                title
+            } = formData;
+
+            const hostName = (
+                userProfile?.display_name
+                || userProfile?.displayName
+                || currentUser?.name
+                || currentUser?.displayName
+                || ''
+            ).trim() || t('host', 'Host');
+
+            const genderLabels = (genderGroups || [])
+                .map((g) => {
+                    if (g === 'male') return t('male');
+                    if (g === 'female') return t('female');
+                    if (g === 'unspecified') return t('non_binary', { defaultValue: 'Non-binary' });
+                    return g;
+                })
+                .filter(Boolean);
+
+            const inviteesGenderSummary = genderLabels.length
+                ? genderLabels.join(i18n.language?.startsWith('ar') ? '، ' : ', ')
+                : t('not_set', 'not set yet');
+
+            const ageSummary = formatAgeGroupsSmart(ageGroups || [], t);
+
+            const venueDisplay = (restaurantName || '').trim()
+                || (location || '').trim().split(',')[0]?.trim()
+                || t('venue_tbd', 'the venue');
+
+            const whenLine = date && time ? `${date} ${time}` : (date || time || t('datetime_tbd', 'TBD'));
+
+            const ar = i18n.language?.startsWith('ar');
+            let text;
+            if (ar) {
+                text = [
+                    `${hostName} يدعوكم إلى ${venueDisplay}`,
+                    (city || '').trim() && `${t('city')}: ${city}`,
+                    whenLine && whenLine !== t('datetime_tbd', 'TBD') ? `${whenLine}` : '',
+                    `${type || 'Restaurant'}`,
+                    inviteesGenderSummary,
+                    ageSummary || '',
+                    guestsNeeded != null ? String(guestsNeeded) : '',
+                    paymentType ? t(paymentType.toLowerCase().replace(' ', '_')) : '',
+                    (title || '').trim()
+                ]
+                    .filter(Boolean)
+                    .join(' · ');
+            } else {
+                text = [
+                    `${hostName} invites you to ${venueDisplay}`,
+                    (city || '').trim() && `City: ${city}`,
+                    whenLine && whenLine !== t('datetime_tbd', 'TBD') ? `When: ${whenLine}` : '',
+                    `Type: ${type || 'Restaurant'}`,
+                    `Looking for: ${inviteesGenderSummary}`,
+                    ageSummary && `Ages: ${ageSummary}`,
+                    guestsNeeded != null && `Spots: ${guestsNeeded}`,
+                    paymentType && `Payment: ${paymentType}`,
+                    (title || '').trim() && `Title: ${title}`
+                ]
+                    .filter(Boolean)
+                    .join(' · ');
+            }
+
+            const trimmed = text.substring(0, 300);
+            if (trimmed.length < 10) {
+                showToast(t('failed_generate_bio'), 'error');
+                return;
+            }
+            setFormData((prev) => ({ ...prev, description: trimmed }));
+        } finally {
+            setIsGeneratingBio(false);
+        }
+    };
+
     const handlePreview = async (e) => {
         e.preventDefault();
         console.log('🔍 handlePreview called');
@@ -212,7 +309,7 @@ const CreateInvitation = () => {
         if (!currentUser || currentUser.id === 'guest' || !authUser) {
             console.error('❌ Guest user cannot create invitations');
             showToast(t('login_to_create') || 'Please login to create an invitation', 'error');
-            navigate('/login');
+            goToLogin();
             return;
         }
 
@@ -272,7 +369,12 @@ const CreateInvitation = () => {
             return;
         }
 
-        const validation = await validateInvitationCreation(userId);
+        const isUpdate = (editingDraft && draftId) || editingInvitation;
+        let validation = { valid: true };
+        
+        if (!isUpdate) {
+            validation = await validateInvitationCreation(userId);
+        }
         if (!validation.valid) {
             console.log('❌ Daily limit validation failed:', validation.error);
             const confirmMessage = `${validation.error}\n\nDo you want to go to your current invitation?`;
@@ -342,12 +444,29 @@ const CreateInvitation = () => {
                 };
             }
 
-            const draftData = {
+            // Helper to deeply remove undefined values
+            const stripUndefined = (obj) => {
+                if (obj === undefined) return obj;
+                const newObj = { ...obj };
+                Object.keys(newObj).forEach(key => {
+                    if (newObj[key] === undefined) {
+                        delete newObj[key];
+                    } else if (newObj[key] !== null && typeof newObj[key] === 'object' && !Array.isArray(newObj[key]) && typeof newObj[key].toDate !== 'function' && typeof newObj[key].isEqual !== 'function') {
+                        // Skip FieldValue instances (which have isEqual method)
+                        newObj[key] = stripUndefined(newObj[key]);
+                    }
+                });
+                return newObj;
+            };
+
+            let draftData = {
                 ...formData,
                 ...mediaFields, // Merge media fields
                 isFollowersOnly: formData.privacy === 'followers',
                 status: 'draft' // Mark as draft
             };
+
+            draftData = stripUndefined(draftData);
 
             // Remove old image field if exists
             if (draftData.image) {
@@ -374,6 +493,11 @@ const CreateInvitation = () => {
             if (finalDraftId) {
                 console.log('🚀 Navigating to preview:', `/invitation/preview/${finalDraftId}`);
                 navigate(`/invitation/preview/${finalDraftId}`);
+            } else {
+                showToast(
+                    t('failed_save_draft', 'Could not save draft. Try again, or sign in with a personal account (business accounts cannot create public invitations).'),
+                    'error'
+                );
             }
         } catch (error) {
             console.error('❌ Error creating draft:', error);
@@ -395,7 +519,7 @@ const CreateInvitation = () => {
         if (!currentUser || currentUser.id === 'guest' || !authUser) {
             console.error('❌ Guest user cannot create invitations');
             showToast(t('login_to_create') || 'Please login to create an invitation', 'error');
-            navigate('/login');
+            goToLogin();
             return;
         }
 
@@ -477,7 +601,9 @@ const CreateInvitation = () => {
                     }
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
+                    let errMsg = mediaError?.message || 'Failed to upload media. Try again.';
+                    // Show exact error on screen instead of generic translation key for debugging
+                    showToast(`Media Error: ${errMsg}`, 'error');
                     setIsSubmitting(false);
                     return;
                 }
@@ -490,6 +616,7 @@ const CreateInvitation = () => {
                 const url = await uploadInvitationPhoto(
                     imageFile,
                     invitationId,
+                    currentUser?.id || authUser?.uid,
                     0,
                     (progress) => setUploadProgress(progress)
                 );
@@ -504,12 +631,28 @@ const CreateInvitation = () => {
                 };
             }
 
-            const cleanData = {
+            // Helper to deeply remove undefined values
+            const stripUndefined = (obj) => {
+                if (obj === undefined) return obj;
+                const newObj = { ...obj };
+                Object.keys(newObj).forEach(key => {
+                    if (newObj[key] === undefined) {
+                        delete newObj[key];
+                    } else if (newObj[key] !== null && typeof newObj[key] === 'object' && !Array.isArray(newObj[key]) && typeof newObj[key].toDate !== 'function' && typeof newObj[key].isEqual !== 'function') {
+                        newObj[key] = stripUndefined(newObj[key]);
+                    }
+                });
+                return newObj;
+            };
+
+            let cleanData = {
                 ...formData,
                 ...mediaFields, // Merge new media fields
-                image: finalImageUrl, // Ensure backward compatibility for views using 'image'
+                image: finalImageUrl !== undefined ? finalImageUrl : null, // Ensure backward compatibility for views using 'image'
                 isFollowersOnly: formData.privacy === 'followers'
             };
+
+            cleanData = stripUndefined(cleanData);
 
             // Remove purely UI fields if strictly necessary, but Firestore ignores undefined usually.
             // If mediaFields provided a video, ensure we don't accidentally keep old image as primary if unnecessary
@@ -674,14 +817,10 @@ const CreateInvitation = () => {
                         if (cancelled) return;
                         if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.length > 0) {
                             const placeId = results[0].place_id;
-                            service.getDetails({ placeId, fields: ['photos'] }, (placeDetails, detailStatus) => {
-                                if (cancelled) return;
-                                setSuggestedImagesLoading(false);
-                                if (detailStatus === window.google.maps.places.PlacesServiceStatus.OK && placeDetails?.photos) {
-                                    const urls = placeDetails.photos.slice(0, 5).map(p => p.getUrl({ maxWidth: 800 }));
-                                    setSuggestedImages(urls);
-                                }
-                            });
+                            if (cancelled) return;
+                            setSuggestedImagesLoading(false);
+                            // Do not call getDetails with 'photos' — it triggers PhotoService.GetPhoto 403 on localhost.
+                            setSuggestedImages(placePhotoProxyUrls(placeId, 5));
                         } else {
                             setSuggestedImagesLoading(false);
                         }
@@ -723,7 +862,7 @@ const CreateInvitation = () => {
     const today = new Date().toISOString().split('T')[0];
 
     return (
-        <div className="page-container">
+        <div className="page-container form-page">
             <h2 style={{ marginBottom: '1rem', fontSize: '1.5rem', fontWeight: '900' }}>
                 {editingInvitation ? t('edit_invitation', { defaultValue: 'Edit Invitation' }) : t('create_invitation_title')}
             </h2>
@@ -862,17 +1001,17 @@ const CreateInvitation = () => {
                                     </span>
                                 )}
                             </label>
-                            <LocationAutocomplete
+                            <VenueLocationPicker
                                 value={formData.location}
                                 onChange={handleChange}
                                 onSelect={handleLocationSelect}
                                 city={formData.city}
-                                countryCode={formData.country}
+                                countryCode={formData.countryCode || formData.country}
                                 userLat={formData.userLat}
                                 userLng={formData.userLng}
                             />
                             <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
-                                {t('location_helper_text') || 'Search for restaurants, cafes, or venues near you'}
+                                {t('location_helper_text') || 'Search for venues, cafes, or restaurants near you'}
                             </small>
                         </div>
                     </div>
@@ -896,7 +1035,7 @@ const CreateInvitation = () => {
                         restaurant={restaurantData || prefilledData}
                         suggestedImages={suggestedImages}
                         suggestedImagesLoading={suggestedImagesLoading}
-                        onMediaSelect={setMediaData}
+                        onMediaSelect={(data) => setMediaData(data)}
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
                         <div style={{
@@ -951,24 +1090,6 @@ const CreateInvitation = () => {
                     />
                 </div>
 
-                {/* 4. Message Area (Moved from bottom) */}
-                <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label>{t('form_message_label', 'Message')}</label>
-                        <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) > 180 ? '#f87171' : 'var(--text-muted)' }}>
-                            {(formData.description?.length || 0)}/200
-                        </span>
-                    </div>
-                    <textarea
-                        name="description"
-                        rows="4"
-                        placeholder={t('form_message_placeholder', 'Write your message to the invitees here...')}
-                        value={formData.description}
-                        onChange={handleChange}
-                        className="input-field text-area"
-                        maxLength="200"
-                    ></textarea>
-                </div>
 
                 <div className="form-grid">
                     <div className="form-group">
@@ -976,10 +1097,10 @@ const CreateInvitation = () => {
                         <select name="type" value={ALLOWED_INVITATION_TYPES.includes(formData.type) ? formData.type : 'Restaurant'} onChange={handleChange} className="input-field">
                             <option value="Restaurant">{t('type_restaurant')}</option>
                             <option value="Cafe">{t('type_cafe')}</option>
-                            <option value="Bar">Bar</option>
-                            <option value="Night Club">Night Club</option>
-                            <option value="Food Truck">Food Truck</option>
-                            <option value="Fast Food">Fast Food</option>
+                            <option value="Bar">{t('type_bar', 'Bar')}</option>
+                            <option value="Night Club">{t('type_nightclub', 'Night Club')}</option>
+                            <option value="Food Truck">{t('type_foodtruck', 'Food Truck')}</option>
+                            <option value="Fast Food">{t('type_fastfood', 'Fast Food')}</option>
                         </select>
                     </div>
 
@@ -1040,7 +1161,7 @@ const CreateInvitation = () => {
                         <span className="label-icon">
                             <FaUserFriends />
                         </span>
-                        {t('guests_needed')}
+                        {t('guests_needed_label', { defaultValue: 'Guests Needed' })}
                     </label>
                     <input
                         type="number"
@@ -1216,6 +1337,49 @@ const CreateInvitation = () => {
                     )}
                 </div>
 
+                {/* 4. Message Area (Moved to bottom) */}
+                <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <label style={{ marginBottom: 0 }}>{t('form_message_label', 'Message')}</label>
+                            <button 
+                                type="button" 
+                                onClick={generateSmartBio}
+                                disabled={isGeneratingBio || isSubmitting}
+                                style={{
+                                    background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '4px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 'bold',
+                                    cursor: (isGeneratingBio || isSubmitting) ? 'wait' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    opacity: (isGeneratingBio || isSubmitting) ? 0.7 : 1,
+                                    boxShadow: '0 2px 4px rgba(236, 72, 153, 0.3)'
+                                }}
+                            >
+                                ✨ {isGeneratingBio ? t('generating') : t('smart_bio')}
+                            </button>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= 300 ? '#f87171' : 'var(--text-muted)' }}>
+                            {(formData.description?.length || 0)}/300
+                        </span>
+                    </div>
+                    <textarea
+                        name="description"
+                        rows="4"
+                        placeholder={t('form_message_placeholder', 'Write your message to the invitees here...')}
+                        value={formData.description}
+                        onChange={handleChange}
+                        className="input-field text-area"
+                        maxLength={300}
+                    ></textarea>
+                </div>
+
                 {/* Privacy Settings */}
                 <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem' }}>
                     <label className="elegant-label" style={{ marginBottom: '1rem' }}>
@@ -1255,8 +1419,62 @@ const CreateInvitation = () => {
                     </div>
                 </div >
 
+                {/* Color Theme Horizontal Picker */}
+                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
+                    <label className="elegant-label" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🎨</span>
+                        {t('choose_color_theme', { defaultValue: 'Choose Color Theme' })}
+                    </label>
 
-
+                    <div style={{
+                        display: 'flex',
+                        overflowX: 'auto',
+                        gap: '12px',
+                        padding: '10px 4px',
+                        scrollbarWidth: 'none', // Firefox
+                        msOverflowStyle: 'none', // IE/Edge
+                    }} className="hide-scroll-bar">
+                        {Object.entries(COLOR_SCHEMES).map(([key, color]) => {
+                            const isSelected = formData.colorScheme === key;
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, colorScheme: key })}
+                                    style={{
+                                        minWidth: '70px',
+                                        height: '70px',
+                                        borderRadius: '50%',
+                                        background: color.gradient,
+                                        border: isSelected ? '4px solid var(--text-main)' : '2px solid transparent',
+                                        cursor: 'pointer',
+                                        flexShrink: 0,
+                                        position: 'relative',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                                        boxShadow: isSelected ? `0 8px 20px ${color.shadow}` : `0 4px 10px rgba(0,0,0,0.1)`
+                                    }}
+                                >
+                                    {isSelected && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            color: 'white',
+                                            fontSize: '1.5rem',
+                                            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                                        }}>
+                                            <FaCheckCircle />
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {/* Inject a tiny bit of CSS to hide webkit scrollbars for this specific row */}
+                    <style>{`.hide-scroll-bar::-webkit-scrollbar { display: none; }`}</style>
+                </div>
 
                 <button type="submit" className="ui-btn ui-btn--primary" style={{ width: '100%', height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
                     {isSubmitting ? t('loading') : (editingInvitation ? (t('save_changes') || '💾 Save Changes') : (t('preview_invitation') || '📋 Preview Invitation'))}

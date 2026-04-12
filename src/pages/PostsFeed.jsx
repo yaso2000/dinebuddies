@@ -1,21 +1,62 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { collection, query, orderBy, onSnapshot, getDocs, limit, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, addDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import StoriesBar from '../components/StoriesBar';
 import StoryViewer from '../components/StoryViewer';
+import FeaturedPostSlideCard from '../components/FeaturedPostSlideCard';
+import InlinePostEditor from '../components/InlinePostEditor';
+import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
+import { FaRegCommentDots } from 'react-icons/fa';
+import { IoShareSocialOutline } from 'react-icons/io5';
+import { getSafeAvatar } from '../utils/avatarUtils';
+import { createNotification } from '../utils/notificationHelpers';
 import { useTranslation } from 'react-i18next';
+
+// Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 
 const PostsFeed = () => {
     const { t } = useTranslation();
-    const { userProfile } = useAuth();
+    const navigate = useNavigate();
+    const { userProfile, currentUser } = useAuth();
+    const menuRef = useRef({});
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewingStory, setViewingStory] = useState(null);
     const [geoFilter, setGeoFilter] = useState('global');
     const [isSearchActive, setIsSearchActive] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Featured posts (elite slides from business partners)
+    const [featuredPosts, setFeaturedPosts] = useState([]);
+    const [openMenuId, setOpenMenuId] = useState(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+    const toggleMenu = useCallback((id) => setOpenMenuId(prev => prev === id ? null : id), []);
+
+    const hidePost = useCallback(async (post) => {
+        const newStatus = post.status === 'draft' ? 'published' : 'draft';
+        await updateDoc(doc(db, 'featured_posts', post.id), { status: newStatus, updatedAt: serverTimestamp() });
+        setOpenMenuId(null);
+    }, []);
+
+    const deletePost = useCallback(async (id) => {
+        await deleteDoc(doc(db, 'featured_posts', id));
+        setConfirmDeleteId(null);
+    }, []);
+
+    // Close menu on outside click
+    useEffect(() => {
+        const handler = (e) => {
+            const isInsideAny = Object.values(menuRef.current).some(el => el && el.contains(e.target));
+            if (!isInsideAny) setOpenMenuId(null);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
 
     useEffect(() => {
         const q = query(collection(db, 'communityPosts'), orderBy('createdAt', 'asc'));
@@ -24,6 +65,29 @@ const PostsFeed = () => {
             setLoading(false);
         }, () => setLoading(false));
         return () => unsub();
+    }, []);
+
+    // Fetch elite featured posts with live updates so likes/reposts refresh
+    useEffect(() => {
+        let unsub;
+        const load = async () => {
+            try {
+                const q = query(
+                    collection(db, 'featured_posts'),
+                    limit(20)
+                );
+                unsub = onSnapshot(q, (snap) => {
+                    const fp = snap.docs
+                        .map(d => ({ id: d.id, ...d.data(), _isFeatured: true }))
+                        .filter(p => (!p.type || p.type === 'elite_slide') && (p.status === 'published' || !p.status));
+                    setFeaturedPosts(fp);
+                }, err => console.error('[PostsFeed] featured_posts error:', err));
+            } catch (e) {
+                console.error('[PostsFeed] featured_posts load error:', e);
+            }
+        };
+        load();
+        return () => unsub?.();
     }, []);
 
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -35,7 +99,7 @@ const PostsFeed = () => {
     };
 
     const filteredPosts = useMemo(() => {
-        let result = posts;
+        let result = posts.filter(p => p.status !== 'draft');
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             result = result.filter(p => p.content?.toLowerCase().includes(q) || p.author?.name?.toLowerCase().includes(q));
@@ -43,6 +107,9 @@ const PostsFeed = () => {
         if (userProfile?.coordinates && geoFilter !== 'global') {
             const { lat: uLat, lng: uLng } = userProfile.coordinates;
             result = result.filter(p => {
+                // Bypass distance filter for events so they are visible everywhere
+                if (p.type === 'event') return true;
+
                 const pLat = p.coordinates?.lat || p.attachedInvitation?.lat || p.lat;
                 const pLng = p.coordinates?.lng || p.attachedInvitation?.lng || p.lng;
                 if (!pLat || !pLng) return false;
@@ -52,6 +119,21 @@ const PostsFeed = () => {
         }
         return result;
     }, [posts, geoFilter, userProfile, searchQuery]);
+
+    // Helper: extract a comparable timestamp number from any post
+    const getTimestamp = (p) => {
+        const ts = p.publishedAt || p.updatedAt || p.createdAt;
+        if (!ts) return 0;
+        return typeof ts.toDate === 'function' ? ts.toDate().getTime() : new Date(ts).getTime();
+    };
+
+    // Merge featured + regular posts into one feed sorted newest-first
+    const mergedFeed = useMemo(() => {
+        return [
+            ...featuredPosts.map(p => ({ ...p, _isFeatured: true })),
+            ...filteredPosts.map(p => ({ ...p, _isFeatured: false }))
+        ].sort((a, b) => getTimestamp(b) - getTimestamp(a));
+    }, [featuredPosts, filteredPosts]);
 
     if (loading) {
         return (
@@ -116,18 +198,39 @@ const PostsFeed = () => {
                 </div>
             </div>
 
-            {/* Posts */}
-            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '100px' }}>
-                {filteredPosts.length === 0 ? (
+            {/* Unified Feed — featured + regular merged by date */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '100px', maxWidth: '680px', width: '100%', margin: '0 auto', paddingTop: '12px' }}>
+                
+                {/* Real Inline Post Creator */}
+                <InlinePostEditor />
+
+                {mergedFeed.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
                         {searchQuery.trim() ? t('no_results', 'No results found.') : t('no_posts_yet', 'No posts yet.')}
                     </div>
                 ) : (
-                    filteredPosts.map(post => <PostCard key={post.id} post={post} showInChat={false} />)
+                    mergedFeed.map((post, idx) => (
+                        <PostCard key={post.id} post={post} showInChat={false} />
+                    ))
                 )}
             </div>
 
             {viewingStory && <StoryViewer partnerStories={viewingStory} onClose={() => setViewingStory(null)} />}
+
+            {/* Delete confirmation modal */}
+            {confirmDeleteId && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 24 }}>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%', border: '1px solid var(--border-color)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+                        <div style={{ fontSize: '1.5rem', textAlign: 'center', marginBottom: 10 }}>🗑️</div>
+                        <h3 style={{ margin: '0 0 8px', textAlign: 'center', fontSize: '1rem' }}>Delete this post?</h3>
+                        <p style={{ margin: '0 0 20px', textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>This action is permanent and cannot be undone.</p>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: 600, color: 'var(--text-muted)' }}>Cancel</button>
+                            <button onClick={() => deletePost(confirmDeleteId)} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

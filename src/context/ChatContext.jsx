@@ -19,6 +19,7 @@ import { db } from '../firebase/config';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { notifyNewMessage } from '../utils/notificationHelpers';
 
 const ChatContext = createContext();
 
@@ -31,13 +32,14 @@ export const useChat = () => {
 };
 
 export const ChatProvider = ({ children }) => {
-    const { currentUser } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
     const createOrGetConversationCallableRef = useRef(null);
     if (!createOrGetConversationCallableRef.current) {
         createOrGetConversationCallableRef.current = httpsCallable(getFunctions(), 'createOrGetConversation');
     }
     const [conversations, setConversations] = useState([]);
+    const conversationsRef = useRef([]);
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
     const userProfileCache = useRef(new Map()); // Cache otherUser profiles to avoid N getDocs per snapshot
@@ -104,6 +106,7 @@ export const ChatProvider = ({ children }) => {
                 }
 
                 setConversations(convos);
+                conversationsRef.current = convos;
                 setUnreadCount(totalUnread);
                 setLoading(false);
             },
@@ -121,6 +124,15 @@ export const ChatProvider = ({ children }) => {
     const getOrCreateConversation = useCallback(async (otherUserId) => {
         if (!currentUser?.uid) return null;
 
+        // 1. FAST PATH: Check local cache first to avoid slow Cloud Function cold starts
+        const existing = conversationsRef.current.find(c => 
+            c.participants && c.participants.includes(otherUserId)
+        );
+        if (existing) {
+            return existing.id;
+        }
+
+        // 2. SLOW PATH: Fallback to Cloud Function securely
         try {
             const result = await createOrGetConversationCallableRef.current({ otherUserId });
             return result?.data?.conversationId || null;
@@ -166,6 +178,22 @@ export const ChatProvider = ({ children }) => {
                 lastMessageTime: serverTimestamp(),
                 unreadBy: arrayUnion(otherUserId)
             });
+
+            // Send push notification to the recipient (fire-and-forget)
+            // (Creates a notification doc, which then triggers the single onNotificationCreated Cloud Function
+            // that correctly extracts the sender's avatar and respects user preferences)
+            if (otherUserId) {
+                const senderName = userProfile?.display_name || userProfile?.displayName || 'Someone';
+                const preview = messageData.type === 'text'
+                    ? (messageData.text || '').slice(0, 80)
+                    : '📎 Media';
+                
+                notifyNewMessage(
+                    otherUserId,
+                    { name: senderName, id: currentUser.uid },
+                    preview
+                ).catch(() => { });
+            }
 
             return messageRef.id;
         } catch (error) {

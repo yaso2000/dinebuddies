@@ -7,14 +7,17 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar, FaCheck, FaPlus, FaExpand, FaCompress } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
-import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import '../components/MapStyles.css';
 import './HomeMobileFeed.css';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { useTheme } from '../context/ThemeContext';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import OffersBanner from '../components/OffersBanner';
+import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
+import { goToLogin } from '../utils/goToLogin';
+
 
 
 const Home = () => {
@@ -27,13 +30,13 @@ const Home = () => {
         restaurants = [],
         currentUser = null,
         loadingInvitations: loading = true,
-        loadMoreInvitations = () => {},
+        loadMoreInvitations = () => { },
         hasMoreInvitations = false,
         loadingMoreInvitations = false
     } = invContext || {};
-    const { userProfile } = useAuth();
+    const { userProfile, isBusiness } = useAuth();
     const { isDark } = useTheme();
-    const isBusinessAccount = userProfile?.role === 'business';
+    const isBusinessAccount = isBusiness;
 
     const [redirectMessage, setRedirectMessage] = useState(null);
 
@@ -130,10 +133,10 @@ const Home = () => {
         { id: 'All', label: t('filter_all'), icon: null },
         { id: 'Restaurant', label: t('type_restaurant'), icon: '🍴' },
         { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
-        { id: 'Bar', label: 'Bar', icon: '🍺' },
-        { id: 'Night Club', label: 'Night Club', icon: '🎵' },
-        { id: 'Food Truck', label: 'Food Truck', icon: '🚚' },
-        { id: 'Fast Food', label: 'Fast Food', icon: '🍟' },
+        { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
+        { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
+        { id: 'Food Truck', label: t('type_foodtruck', 'Food Truck'), icon: '🚚' },
+        { id: 'Fast Food', label: t('type_fastfood', 'Fast Food'), icon: '🍟' },
         { id: 'Directory', label: t('directory'), icon: '📖' },
     ];
 
@@ -197,12 +200,9 @@ const Home = () => {
 
         if (geoFilter !== 'global' && geoFilter !== 'All' && userLocation && !isStaff) {
             filtered = filtered.filter(inv => {
-                let distance = null;
-                if (inv.lat && inv.lng) {
-                    distance = calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng);
-                }
-
-                if (distance === null) return false;
+                const coords = getInvitationLatLng(inv);
+                if (!coords) return false;
+                const distance = calculateDistance(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
 
                 switch (geoFilter) {
                     case 'nearby': return distance < 10;
@@ -213,18 +213,21 @@ const Home = () => {
             });
         }
 
-        // Add distance property
+        // Add distance property (use normalized coords so nested/legacy shapes work)
         if (userLocation) {
-            filtered = filtered.map(inv => ({
-                ...inv,
-                distance: (inv.lat && inv.lng)
-                    ? calculateDistance(userLocation.lat, userLocation.lng, inv.lat, inv.lng)
-                    : null
-            }));
+            filtered = filtered.map(inv => {
+                const coords = getInvitationLatLng(inv);
+                return {
+                    ...inv,
+                    distance: coords
+                        ? calculateDistance(userLocation.lat, userLocation.lng, coords.lat, coords.lng)
+                        : null
+                };
+            });
         }
 
         return filtered;
-    }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser]);
+    }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser, userProfile?.role]);
 
     // Legacy filtering logic removed.
 
@@ -232,7 +235,13 @@ const Home = () => {
     const inFeedAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 2), [safeRestaurants]);
 
     const invitationsWithCoords = useMemo(() => {
-        return filteredInvitations.filter(inv => inv.lat && inv.lng);
+        const out = [];
+        for (const inv of filteredInvitations) {
+            const coords = getInvitationLatLng(inv);
+            if (!coords) continue;
+            out.push(enrichInvitationCoords(inv));
+        }
+        return out;
     }, [filteredInvitations]);
 
     // Map control functions
@@ -344,12 +353,9 @@ const Home = () => {
                     .bindPopup(`<strong style="color: #8b5cf6;">📍 ${t('your_location')}</strong>`);
             }
 
-            // Add invitation markers
-            // Add invitation markers
+            // Add invitation markers (coords already normalized on inv)
             invitationsWithCoords.forEach(inv => {
                 try {
-                    if (!inv.lat || !inv.lng) return;
-
                     const eligibility = typeof checkEligibility === 'function' ? checkEligibility(inv) : { eligible: true, reason: '' };
                     const isOwn = inv.author?.id === currentUser?.id;
 
@@ -380,7 +386,7 @@ const Home = () => {
                                 box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                             ">
                                 <img src="${profilePic}" 
-                                     style="width: 100%; height: 100%; object-fit: cover;" 
+                                     style="width: 100%; height: 100%; object-fit: cover; box-shadow: inset 0 0 0 2px ${getGenderBorderColor(inv.author)};" 
                                      onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=${inv.author?.id || 'default'}'" />
                             </div>
                         `,
@@ -399,7 +405,7 @@ const Home = () => {
                             <div style="position: relative;">
                                 <img src="${displayImage}" class="compact-popup-image" onerror="this.src='https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'" />
                                 <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 4px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);">
-                                    <span style="background: ${markerColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${inv.type || 'Event'}</span>
+                                    <span style="background: ${markerColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${inv.type ? t(`type_${inv.type.toLowerCase().replace(' ', '')}`, inv.type) : t('venue', 'Venue')}</span>
                                 </div>
                             </div>
                             <div class="compact-popup-body">
@@ -666,9 +672,9 @@ const Home = () => {
                 .filter-select {
                     appearance: none !important;
                     -webkit-appearance: none !important;
-                    background-color: var(--bg-card, #ffffff) !important;
+                    background-color: 'var(--bg-card, #ffffff)' !important;
                     border: 1px solid var(--border-color, #e2e8f0) !important;
-                    color: var(--text-main, #333333) !important;
+                    color: 'var(--text-main, #333333)' !important;
                     padding: 0 24px 0 10px !important;
                     border-radius: 10px !important;
                     font-size: 12px !important;
@@ -747,9 +753,9 @@ const Home = () => {
                         .filter-select {
                             appearance: none !important;
                             -webkit-appearance: none !important;
-                            background-color: var(--bg-card, #ffffff) !important;
+                            background-color: 'var(--bg-card, #ffffff)' !important;
                             border: 1px solid var(--border-color, #e2e8f0) !important;
-                            color: var(--text-main, #333333) !important;
+                            color: 'var(--text-main, #333333)' !important;
                             padding: 0 24px 0 10px !important;
                             border-radius: 10px !important;
                             font-size: 12px !important;
@@ -769,7 +775,7 @@ const Home = () => {
 
                     {/* Search Input - Always Visible */}
                     <div style={{ position: 'relative', flex: '1 1 auto' }}>
-                        <FaSearch className="search-icon" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
+                        <FaSearch className="search-icon" style={{ position: 'absolute', ...(i18n.dir() === 'rtl' ? { right: '12px' } : { left: '12px' }), top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
                         <input
                             type="text"
                             placeholder={t('search_placeholder')}
@@ -779,7 +785,7 @@ const Home = () => {
                             className="search-input"
                             style={{
                                 width: '100%',
-                                padding: '8px 10px 8px 36px',
+                                padding: i18n.dir() === 'rtl' ? '8px 36px 8px 10px' : '8px 10px 8px 36px',
                                 border: '1px solid var(--border-color)',
                                 borderRadius: '12px',
                                 fontSize: '0.85rem',
@@ -972,7 +978,6 @@ const Home = () => {
 
                 <div className="feed-list">
                     {loading ? (
-                        // Show skeleton while loading
                         <>
                             {[1, 2, 3, 4, 5].map(i => (
                                 <InvitationSkeleton key={i} />
@@ -1142,7 +1147,7 @@ const Home = () => {
                         onClick={() => {
                             if (userProfile?.isGuest) {
                                 if (window.confirm('You need to sign in to create an invitation. Sign up now?')) {
-                                    navigate('/login');
+                                    goToLogin();
                                 }
                             } else {
                                 setShowSelector(true);
@@ -1150,25 +1155,26 @@ const Home = () => {
                         }}
                         style={{
                             position: 'fixed',
-                            bottom: '100px',
-                            right: '25px',
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '18px', // More modern shape
-                            background: '#ef4444',
+                            bottom: '5px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            width: '60px',
+                            height: '60px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #ef4444, #dc2626)',
                             color: 'white',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            boxShadow: '0 8px 16px rgba(239, 68, 68, 0.4)',
+                            boxShadow: '0 4px 20px rgba(239, 68, 68, 0.5)',
                             cursor: 'pointer',
-                            zIndex: 1000,
-                            border: '2px solid rgba(255,255,255,0.2)'
+                            zIndex: 100000,
+                            border: '3px solid var(--bg-main)'
                         }}
                         role="button"
                         className="home-fab-btn"
                     >
-                        <FaPlus size={24} />
+                        <FaPlus size={22} />
                     </div>
                 )
             }

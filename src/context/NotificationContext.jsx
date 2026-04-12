@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
+import { useTranslation } from 'react-i18next';
 import { db } from '../firebase/config';
 import {
     collection,
@@ -29,11 +32,18 @@ export const useNotifications = () => {
 
 export const NotificationProvider = ({ children }) => {
     const { currentUser } = useAuth();
+    const { t, i18n } = useTranslation();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadBellCount, setUnreadBellCount] = useState(0);
+    const [unreadMessageCount, setUnreadMessageCount] = useState(0);
     const [activePrivateInvitation, setActivePrivateInvitation] = useState(null);
     const [dismissedNotificationIds, setDismissedNotificationIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { showToast } = useToast();
 
     // Load notifications for current user
     useEffect(() => {
@@ -53,6 +63,8 @@ export const NotificationProvider = ({ children }) => {
         );
 
 
+        let isInitialLoad = true;
+
         const unsubscribe = onSnapshot(
             q,
             (snapshot) => {
@@ -66,28 +78,57 @@ export const NotificationProvider = ({ children }) => {
 
                 // Count unread
                 const unread = notifs.filter(n => !n.read).length;
+                const unreadMsgs = notifs.filter(n => !n.read && n.type === 'message').length;
+                
                 setUnreadCount(unread);
+                setUnreadMessageCount(unreadMsgs);
+                setUnreadBellCount(unread - unreadMsgs);
 
-                // Find unread private invitations for the Digital Envelope
-                const unreadPrivate = notifs.filter(n =>
-                    n.type === 'private_invitation' &&
-                    !n.read &&
-                    !dismissedNotificationIds.has(n.id)
-                );
-                setActivePrivateInvitation(unreadPrivate.length > 0 ? unreadPrivate[0] : null);
+                // Active private-invitation overlay is synced in useEffect from sorted unreadPrivateInvitations
 
+                // Trigger in-app floating notifications for new items
+                if (!isInitialLoad) {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === 'added') {
+                            const newNotif = change.doc.data();
+                            
+                            // Don't toast if it's already read
+                            const isAlreadyRead = newNotif.read;
+                            // Don't toast if the user is currently on the exact page the notification refers to
+                            const isCurrentlyOnPage = location.pathname === newNotif.actionUrl;
+                            
+                            // Full-screen PrivateInvitationOverlay handles private_invitation; skip duplicate toast
+                            if (newNotif.type === 'private_invitation') return;
+
+                            if (!isAlreadyRead && !isCurrentlyOnPage) {
+                                showToast({
+                                    title: newNotif.title,
+                                    body: newNotif.message,
+                                    icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
+                                    onClick: () => {
+                                        if (newNotif.actionUrl) {
+                                            navigate(newNotif.actionUrl);
+                                        }
+                                    }
+                                }, 'notification');
+                            }
+                        }
+                    });
+                }
+                
+                isInitialLoad = false;
                 setLoading(false);
             },
             (error) => {
                 console.error('Error loading notifications:', error);
-                setLoading(false); // ✅ Important: stop loading on error
+                setLoading(false);
                 setNotifications([]);
                 setUnreadCount(0);
             }
         );
 
         return () => unsubscribe();
-    }, [currentUser?.uid, dismissedNotificationIds]);
+    }, [currentUser?.uid]); // ← dismissedNotificationIds intentionally excluded to prevent re-subscription on every dismiss
 
     // Helper: Check if current time is in Do Not Disturb period
     const isInDNDPeriod = (dndSettings) => {
@@ -211,6 +252,29 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
+    const markMessageNotificationsAsRead = async (actionUrlSubstring) => {
+        if (!currentUser?.uid) return;
+        const unreadToClear = notifications.filter(n => 
+            !n.read && 
+            n.type === 'message' && 
+            n.actionUrl && 
+            n.actionUrl.includes(actionUrlSubstring)
+        );
+
+        if (unreadToClear.length === 0) return;
+
+        unreadToClear.forEach(async (n) => {
+            try {
+                await updateDoc(doc(db, 'notifications', n.id), {
+                    read: true,
+                    readAt: serverTimestamp()
+                });
+            } catch (error) {
+                console.error(`Error marking message notification ${n.id} as read:`, error);
+            }
+        });
+    };
+
     // Mark all as read
     const markAllAsRead = async () => {
         if (!currentUser?.uid) return;
@@ -269,7 +333,7 @@ export const NotificationProvider = ({ children }) => {
         setDismissedNotificationIds(prev => new Set(prev).add(notificationId));
     };
 
-    // Format time
+    // Format time — language-aware
     const formatTime = (date) => {
         if (!date) return '';
 
@@ -279,30 +343,63 @@ export const NotificationProvider = ({ children }) => {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) return 'Just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
-        if (days < 7) return `${days}d ago`;
+        if (minutes < 1) return t('just_now', 'Just now');
+        if (minutes < 60) return `${minutes}${t('time_m', 'm')} ${t('time_ago', 'ago')}`;
+        if (hours < 24) return `${hours}${t('time_h', 'h')} ${t('time_ago', 'ago')}`;
+        if (days < 7) return `${days}${t('time_d', 'd')} ${t('time_ago', 'ago')}`;
 
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const locale = i18n.language === 'ar' ? 'ar-u-nu-latn' : 'en-US';
+        return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
     };
+
+    // Computed outside onSnapshot to avoid re-subscription when dismissed set changes
+    const unreadPrivateInvitations = useMemo(() => {
+        const list = notifications.filter(
+            (n) =>
+                n.type === 'private_invitation' &&
+                !n.read &&
+                !dismissedNotificationIds.has(n.id)
+        );
+        const t = (d) =>
+            d instanceof Date
+                ? d.getTime()
+                : typeof d?.toDate === 'function'
+                  ? d.toDate().getTime()
+                  : typeof d?.seconds === 'number'
+                    ? d.seconds * 1000
+                    : 0;
+        return [...list].sort((a, b) => t(a.createdAt) - t(b.createdAt));
+    }, [notifications, dismissedNotificationIds]);
+
+    // Queue: oldest unread private invitation first; keep selection stable while still valid
+    useEffect(() => {
+        if (unreadPrivateInvitations.length === 0) {
+            setActivePrivateInvitation(null);
+            return;
+        }
+        setActivePrivateInvitation((prev) => {
+            if (prev && unreadPrivateInvitations.some((n) => n.id === prev.id)) {
+                return prev;
+            }
+            return unreadPrivateInvitations[0];
+        });
+    }, [unreadPrivateInvitations]);
 
     const value = {
         notifications,
         unreadCount,
+        unreadBellCount,
+        unreadMessageCount,
         loading,
         createNotification,
         markAsRead,
+        markMessageNotificationsAsRead,
         markAllAsRead,
         deleteNotification,
         deleteAllNotifications,
         activePrivateInvitation,
         setActivePrivateInvitation,
-        unreadPrivateInvitations: notifications.filter(n =>
-            n.type === 'private_invitation' &&
-            !n.read &&
-            !dismissedNotificationIds.has(n.id)
-        ),
+        unreadPrivateInvitations,
         dismissNotification,
         formatTime
     };

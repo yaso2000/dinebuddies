@@ -3,8 +3,20 @@ import { FaMapMarkerAlt, FaSearch, FaStar, FaPlus, FaStore } from 'react-icons/f
 import { useTranslation } from 'react-i18next';
 import { geocode } from '../utils/locationUtils';
 import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
+import { placePhotoProxyUrls } from '../utils/placePhotoUrls';
 
-const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, userLat, userLng, className = '' }) => {
+const LocationAutocomplete = ({
+    value,
+    onChange,
+    onSelect,
+    city,
+    countryCode,
+    userLat,
+    userLng,
+    className = '',
+    placeholder: placeholderProp,
+    'aria-label': ariaLabelProp
+}) => {
     const { t, i18n } = useTranslation();
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -193,12 +205,28 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                 placesService.current.getDetails(
                     {
                         placeId: place.place_id,
-                        fields: ['name', 'formatted_address', 'geometry', 'place_id', 'types', 'photos']
+                        // Do NOT request 'photos' — it triggers Maps JS PhotoService.GetPhoto (403 on localhost
+                        // when API key HTTP referrers omit localhost). Use same-origin proxy URLs instead.
+                        fields: [
+                            'name',
+                            'formatted_address',
+                            'geometry',
+                            'place_id',
+                            'types',
+                            'formatted_phone_number',
+                            'international_phone_number',
+                            'opening_hours',
+                            'website',
+                            'editorial_summary'
+                        ]
                     },
                     (placeDetails, status) => {
                         if (status === window.google.maps.places.PlacesServiceStatus.OK && placeDetails) {
-                            // Extract photos if available
-                            const photos = placeDetails.photos ? placeDetails.photos.slice(0, 5).map(photo => photo.getUrl({ maxWidth: 800 })) : [];
+                            const photos = placePhotoProxyUrls(placeDetails.place_id, 5);
+                            const es = placeDetails.editorial_summary;
+                            const summaryText = typeof es === 'string'
+                                ? es
+                                : (es && typeof es === 'object' && 'overview' in es ? es.overview : '') || '';
 
                             onSelect({
                                 name: placeDetails.name,
@@ -207,7 +235,11 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
                                 lng: placeDetails.geometry.location.lng(),
                                 placeId: placeDetails.place_id,
                                 types: placeDetails.types,
-                                photos: photos
+                                photos,
+                                phone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || '',
+                                website: placeDetails.website || '',
+                                openingHours: placeDetails.opening_hours || null,
+                                editorialSummary: summaryText || ''
                             });
                         }
                     }
@@ -239,12 +271,17 @@ const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, us
         return <FaMapMarkerAlt style={{ color: '#0ea5e9' }} />;
     };
 
+    const placeholder = placeholderProp !== undefined && placeholderProp !== null
+        ? placeholderProp
+        : (city ? t('form_location_placeholder_with_city', { city }) : t('form_location_placeholder'));
+
     return (
         <div className="location-autocomplete" ref={wrapperRef} style={{ position: 'relative' }}>
             <input
                 type="text"
                 name="location"
-                placeholder={city ? t('form_location_placeholder_with_city', { city }) : t('form_location_placeholder')}
+                placeholder={placeholder}
+                aria-label={ariaLabelProp || undefined}
                 value={value}
                 onChange={handleInput}
                 required

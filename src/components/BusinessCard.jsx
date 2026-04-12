@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaMapMarkerAlt, FaStar, FaCalendarPlus, FaShare, FaDownload, FaTimes } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaCalendarPlus, FaShare, FaDownload, FaTimes, FaStar } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, getSafeCoverImage } from '../utils/avatarUtils';
 import { getContrastText } from '../utils/colorUtils';
 import { getTheme } from '../utils/businessThemes';
 
-const BusinessCard = ({ business }) => {
+const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCount }) => {
     const navigate = useNavigate();
-    const { userProfile } = useAuth();
+    const { isBusiness: viewerIsBusiness } = useAuth();
     const { t } = useTranslation();
     const info = business.businessInfo || {};
     const brandKit = info.brandKit || {};
-    const brandFont = 'system-ui, sans-serif';
+    const brandFont = 'sans-serif';
 
     // ── Theme colors (free for all businesses) ──────────────────────────────────
     const theme = getTheme(info.theme || 'default');
@@ -22,14 +22,14 @@ const BusinessCard = ({ business }) => {
     const th = (themed, fallback) => (tc && themed !== undefined) ? themed : fallback;
 
     // Accent color: theme accent → brandKit primaryColor → CSS var
-    const accent = tc?.accent || brandKit.primaryColor || null;
-    const brandRadius = brandKit.buttonStyle || tc?.btnBorderRadius || '16px';
+    const accent = 'var(--brand-primary)' || brandKit.primaryColor || null;
+    const brandRadius = brandKit.buttonStyle || var(--brand-primary) || '16px';
     const [isSharing, setIsSharing] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
+    const [previewShareUrl, setPreviewShareUrl] = useState(null);
     const [cardFile, setCardFile] = useState(null);
 
-    // Canonical: only role. Partner = role === 'business'.
-    const isBusinessAccount = userProfile?.role === 'business';
+    const isBusinessAccount = viewerIsBusiness;
 
     const handleCreateInvitation = (e) => {
         e.stopPropagation();
@@ -65,6 +65,7 @@ const BusinessCard = ({ business }) => {
             location: info.address || info.city,
             hostName: shareTitle,
             hostImage: getSafeAvatar(business),
+            shareUrl,
         };
 
         try {
@@ -73,18 +74,9 @@ const BusinessCard = ({ business }) => {
             if (!blob) throw new Error('No blob');
             const file = new File([blob], 'business-card.png', { type: 'image/png' });
 
-            // Try native share with image file → opens OS picker
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({ files: [file], title: shareTitle, text: shareText, url: shareUrl });
-                    return;
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    // File sharing not supported (e.g. HTTP/localhost) → show preview overlay
-                }
-            }
-            // Fallback: show card preview so user can download & share manually
+            // Always show the overlay — let the user share from fresh gesture (like BusinessProfile)
             setCardFile(file);
+            setPreviewShareUrl(shareUrl);
             setCardPreviewUrl(URL.createObjectURL(blob));
         } catch (err) {
             console.error('Share error:', err);
@@ -93,11 +85,30 @@ const BusinessCard = ({ business }) => {
         }
     };
 
+    const handleShareFromOverlay = async (e) => {
+        e?.stopPropagation();
+        if (!cardFile) return;
+        const shareTitle = info.businessName || 'DineBuddies Partner';
+        const shareUrl = previewShareUrl;
+        const shareText = `Check out ${shareTitle} on DineBuddies!\n\n🔗 ${shareUrl}`;
+
+        try {
+            if (navigator.canShare && navigator.canShare({ files: [cardFile] })) {
+                await navigator.share({ files: [cardFile], title: shareTitle, text: shareText, url: shareUrl });
+            } else if (navigator.share) {
+                await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') console.error('Overlay share error:', err);
+        }
+    };
+
     const closePreview = (e) => {
         e?.stopPropagation();
         if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
         setCardPreviewUrl(null);
         setCardFile(null);
+        setPreviewShareUrl(null);
     };
 
 
@@ -105,7 +116,7 @@ const BusinessCard = ({ business }) => {
         <div
             onClick={handleCardClick}
             style={{
-                background: th(tc?.cardBg, 'var(--bg-card)'),
+                background: 'var(--bg-card)',
                 border: accent ? `1px solid ${accent}44` : '1px solid var(--border-color)',
                 borderRadius: '24px',
                 overflow: 'hidden',
@@ -115,15 +126,15 @@ const BusinessCard = ({ business }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 height: '100%',
-                boxShadow: tc?.cardShadow || (accent ? `0 4px 20px ${accent}22` : '0 4px 20px rgba(0,0,0,0.05)')
+                boxShadow: 'var(--brand-primary)' || (accent ? `0 4px 20px ${accent}22` : '0 4px 20px rgba(0,0,0,0.05)')
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-6px)';
-                e.currentTarget.style.boxShadow = tc?.cardShadow || (accent ? `0 15px 30px ${accent}44` : '0 15px 30px rgba(0,0,0,0.1)');
+                e.currentTarget.style.boxShadow = 'var(--brand-primary)' || (accent ? `0 15px 30px ${accent}44` : '0 15px 30px rgba(0,0,0,0.1)');
             }}
             onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = tc?.cardShadow || '0 4px 20px rgba(0,0,0,0.05)';
+                e.currentTarget.style.boxShadow = 'var(--brand-primary)' || '0 4px 20px rgba(0,0,0,0.05)';
             }}
         >
             {/* Card preview overlay (shown when native file share not supported) */}
@@ -153,23 +164,48 @@ const BusinessCard = ({ business }) => {
                                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}
                         ><FaTimes size={11} /></button>
-                        <img
-                            src={cardPreviewUrl}
-                            alt="Business Card"
-                            style={{ width: '100%', borderRadius: 10, display: 'block', marginBottom: 12 }}
-                        />
-                        <a
-                            href={cardPreviewUrl}
-                            download="business-card.png"
-                            style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                padding: '11px 0', borderRadius: 10, textDecoration: 'none',
-                                background: 'linear-gradient(135deg, #f97316, #eab308)',
-                                color: 'white', fontWeight: 700, fontSize: '0.9rem',
-                            }}
-                        >
-                            <FaDownload /> Download Card
-                        </a>
+                        {previewShareUrl ? (
+                            <a href={previewShareUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginBottom: 12 }}>
+                                <img
+                                    src={cardPreviewUrl}
+                                    alt="Business Card"
+                                    style={{ width: '100%', borderRadius: 10, display: 'block', cursor: 'pointer' }}
+                                />
+                            </a>
+                        ) : (
+                            <img
+                                src={cardPreviewUrl}
+                                alt="Business Card"
+                                style={{ width: '100%', borderRadius: 10, display: 'block', marginBottom: 12 }}
+                            />
+                        )}
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            {navigator.share && (
+                                <button
+                                    onClick={handleShareFromOverlay}
+                                    style={{
+                                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                        padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                        color: 'white', fontWeight: 700, fontSize: '0.9rem',
+                                    }}
+                                >
+                                    <FaShare /> Share
+                                </button>
+                            )}
+                            <a
+                                href={cardPreviewUrl}
+                                download="business-card.png"
+                                style={{
+                                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                    padding: '11px 0', borderRadius: 10, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.1)',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    color: 'white', fontWeight: 700, fontSize: '0.9rem',
+                                }}
+                            >
+                                <FaDownload /> Download
+                            </a>
+                        </div>
                     </div>
                 </div>
             )}
@@ -203,7 +239,7 @@ const BusinessCard = ({ business }) => {
                 background: 'var(--bg-body)'
             }}>
                 <img
-                    src={info.coverImage || 'https://via.placeholder.com/400x200?text=No+Image'}
+                    src={getSafeCoverImage(info.coverImage) || 'https://via.placeholder.com/400x200?text=No+Image'}
                     alt={info.businessName}
                     style={{
                         width: '100%',
@@ -243,9 +279,9 @@ const BusinessCard = ({ business }) => {
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px',
                             marginBottom: '6px',
-                            color: th(tc?.accent, accent || 'var(--primary)'),
+                            color: th(var(--brand-primary), accent || 'var(--primary)'),
                             background: 'rgba(139, 92, 246, 0.08)',
-                            border: `1px solid ${th(tc?.accent, accent || 'var(--primary)')}44`,
+                            border: `1px solid ${th(var(--brand-primary), accent || 'var(--primary)')}44`,
                             borderRadius: '10px',
                             cursor: 'pointer',
                             transition: 'all 0.2s'
@@ -264,7 +300,7 @@ const BusinessCard = ({ business }) => {
                     <h3 style={{
                         fontSize: '1.3rem',
                         fontWeight: '800',
-                        color: th(tc?.badgeText, 'var(--text-main)'),
+                        color: 'var(--text-secondary)',
                         margin: 0,
                         lineHeight: 1.2,
                         fontFamily: brandFont || undefined
@@ -291,17 +327,24 @@ const BusinessCard = ({ business }) => {
                     </span>
                 </div>
 
-                {/* Rating/Services Info */}
+                {/* Rating */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary)'
+                }}>
+                    <FaStar style={{ color: '#fbbf24', flexShrink: 0 }} />
+                    <span>{(propRating ?? business?.averageRating ?? 0).toFixed(1)}</span>
+                    <span style={{ opacity: 0.9 }}>
+                        ({propCount ?? business?.reviewCount ?? 0} {t('reviews', 'reviews')})
+                    </span>
+                </div>
+
                 {info.services && info.services.length > 0 && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '0.8rem',
-                        color: 'var(--text-muted)'
-                    }}>
-                        <FaStar style={{ color: brandPrimary || 'var(--luxury-gold)', fontSize: '0.9rem' }} />
-                        <span>{info.services.length} Menu Items Available</span>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        · {info.services.length} menu items
                     </div>
                 )}
 
@@ -314,12 +357,12 @@ const BusinessCard = ({ business }) => {
                         style={{
                             width: '100%',
                             padding: '12px',
-                            background: tc?.footerBg || (accent
+                            background: 'var(--brand-primary)' || (accent
                                 ? `linear-gradient(135deg, ${accent}, ${brandKit.secondaryColor || accent})`
                                 : 'var(--primary)'),
                             border: 'none',
                             borderRadius: brandRadius,
-                            color: tc?.accentText || 'white',
+                            color: 'var(--brand-primary)' || 'white',
                             fontWeight: '700',
                             fontSize: '0.9rem',
                             cursor: 'pointer',
@@ -329,7 +372,7 @@ const BusinessCard = ({ business }) => {
                             gap: '8px',
                             transition: 'all 0.2s',
                             fontFamily: brandFont || undefined,
-                            boxShadow: tc?.btnShadow || (accent ? `0 4px 16px ${accent}44` : 'var(--shadow-glow)')
+                            boxShadow: 'var(--brand-primary)' || (accent ? `0 4px 16px ${accent}44` : 'var(--shadow-glow)')
                         }}
                         onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'scale(1.02)';

@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaCamera, FaChevronRight, FaPlus, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog, FaBirthdayCake } from 'react-icons/fa';
+import { FaCamera, FaChevronRight, FaPlus, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog, FaBirthdayCake, FaHeart, FaBan, FaQuestionCircle } from 'react-icons/fa';
 import { HiUser } from 'react-icons/hi2';
 import { uploadProfilePicture } from '../utils/imageUpload';
 import { getFollowersCount } from '../utils/followHelpers';
 import ImageUpload from '../components/ImageUpload';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 // Profile Enhancements
 import { StatisticsCards, Achievements } from '../components/ProfileEnhancements';
@@ -19,6 +19,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { goToLogin } from '../utils/goToLogin';
 
 const InvitationListItem = ({ inv, navigate, t }) => (
     <div
@@ -62,20 +63,20 @@ const Profile = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+    const isOwnProfile = true;
 
     // Redirect guests to login - DISABLED this redirect because we want to show a guest-specific profile view
     // useEffect(() => {
     //     if (userProfile?.accountType === 'guest' || userProfile?.role === 'guest') {
-    //         navigate('/login');
+    //         goToLogin();
     //     }
     // }, [userProfile, navigate]);
 
-    // Redirect business accounts to business profile
+    // Redirect business accounts to business profile (wait for uid; replace to avoid history junk)
     useEffect(() => {
-        if (userProfile?.isBusiness) {
-            navigate(`/business/${currentUser.uid}`);
-        }
-    }, [userProfile, navigate]);
+        if (!userProfile?.isBusiness || !currentUser?.uid) return;
+        navigate(`/business/${currentUser.uid}`, { replace: true });
+    }, [userProfile?.isBusiness, currentUser?.uid, navigate]);
 
     // Real-time listener for user profile updates (stats, etc.)
     const [realtimeUser, setRealtimeUser] = useState(userProfile || currentUser);
@@ -149,11 +150,13 @@ const Profile = () => {
     const handleLogout = async () => {
         try {
             await signOut();
-            navigate('/login');
+            goToLogin();
         } catch (error) {
             console.error('Error logging out:', error);
         }
     };
+
+
 
     const [formData, setFormData] = useState({
         name: userProfile?.display_name || userProfile?.displayName || currentUser?.name || currentUser?.displayName || '',
@@ -218,6 +221,10 @@ const Profile = () => {
 
     const activeList = getActiveList();
 
+    // Lock condition: if already saved in Firebase, user cannot change gender/age
+    const genderLocked = !!userProfile?.gender;
+    const ageLocked = !!(userProfile?.ageCategory || userProfile?.age);
+
     const handleSave = async () => {
         // Validate mandatory fields
         if (!formData.gender) {
@@ -281,13 +288,62 @@ const Profile = () => {
 
                 <div className="personal-view">
                     {/* Theme Toggle Button */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.5rem 0' }}>
-                        <button onClick={toggleTheme} className="profile-theme-toggle" style={{ color: isDark ? 'var(--luxury-gold)' : 'var(--primary)' }}>
-                            {isDark ? <FaSun /> : <FaMoon />}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0.5rem 0', gap: '10px' }}>
+                        {/* Help & Support Button */}
+                        {isOwnProfile && (
+                            <button
+                                className="profile-top-btn"
+                                onClick={() => navigate('/support')}
+                                title={t('faq.title', 'Help & Support')}
+                                style={{
+                                    background: 'var(--bg-card)',
+                                    color: 'var(--text-main)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: '36px',
+                                    height: '36px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }}
+                            >
+                                <FaQuestionCircle size={18} />
+                            </button>
+                        )}
+
+                        {/* Settings Button */}
+                        {isOwnProfile && (
+                            <button
+                                className="profile-top-btn"
+                                onClick={() => navigate('/settings')}
+                                title={t('settings')}
+                                style={{
+                                    background: 'var(--bg-card)',
+                                    color: 'var(--text-main)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: '36px',
+                                    height: '36px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }}
+                            >
+                                <FaCog size={18} />
+                            </button>
+                        )}
+
+                        {/* Theme Toggle Button */}
+                        <button onClick={toggleTheme} className="profile-theme-toggle" style={{ color: isDark ? 'var(--luxury-gold)' : 'var(--primary)', marginLeft: '4px' }}>
+                            {isDark ? <FaSun size={18} /> : <FaMoon size={18} />}
                         </button>
                     </div>
 
-                    <div className="profile-identity" style={{ marginBottom: '1.5rem' }}>
+                    <div className="profile-identity" style={{ marginBottom: 'var(--profile-stack-gap)' }}>
                         <div style={{ display: 'inline-block', position: 'relative' }}>
                             {isEditing ? (
                                 <ImageUpload
@@ -305,7 +361,7 @@ const Profile = () => {
                                             width: '100px',
                                             height: '100px',
                                             margin: '0 auto',
-                                            border: `3px solid var(--primary)`,
+                                            border: `3px solid ${(userProfile?.role === 'business' || realtimeUser?.role === 'business') ? 'var(--border-color)' : (realtimeUser?.gender === 'female' ? '#ec4899' : realtimeUser?.gender === 'male' ? '#3b82f6' : '#a855f7')}`,
                                             position: 'relative',
                                             background: 'var(--hover-overlay)'
                                         }}
@@ -321,8 +377,9 @@ const Profile = () => {
                                             }}
                                         />
                                     </div>
+
                                     {!userProfile?.isGuest && (
-                                        <button onClick={() => navigate('/create-story')} className="profile-add-story-btn" title="Add Story">
+                                        <button onClick={() => navigate('/create-story')} className="profile-add-story-btn" title={t('add_story', 'Add Story')}>
                                             <FaPlus size={12} />
                                         </button>
                                     )}
@@ -368,19 +425,20 @@ const Profile = () => {
                                 {/* Gender Selection - Required */}
                                 <div className="form-group">
                                     <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', textAlign: 'center' }}>
-                                        {t('gender')} <span style={{ color: 'var(--secondary)' }}>*</span>
+                                        {t('gender')} <span style={{ color: 'var(--secondary)' }}>*</span> {genderLocked && '🔒'}
                                     </label>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                         <button
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, gender: 'male' })}
+                                            onClick={() => !genderLocked && setFormData({ ...formData, gender: 'male' })}
                                             style={{
                                                 padding: '12px',
                                                 borderRadius: '12px',
                                                 border: formData.gender === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                 background: formData.gender === 'male' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
                                                 color: 'var(--text-main)',
-                                                cursor: 'pointer',
+                                                cursor: genderLocked ? 'not-allowed' : 'pointer',
+                                                opacity: (genderLocked && formData.gender !== 'male') ? 0.3 : 1,
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -394,14 +452,15 @@ const Profile = () => {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, gender: 'female' })}
+                                            onClick={() => !genderLocked && setFormData({ ...formData, gender: 'female' })}
                                             style={{
                                                 padding: '12px',
                                                 borderRadius: '12px',
                                                 border: formData.gender === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                 background: formData.gender === 'female' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
                                                 color: 'var(--text-main)',
-                                                cursor: 'pointer',
+                                                cursor: genderLocked ? 'not-allowed' : 'pointer',
+                                                opacity: (genderLocked && formData.gender !== 'female') ? 0.3 : 1,
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -419,7 +478,7 @@ const Profile = () => {
                                 {/* Age Category Selection - Standardized */}
                                 <div className="form-group">
                                     <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', textAlign: 'center' }}>
-                                        {t('age_category', { defaultValue: 'Age Category' })} <span style={{ color: 'var(--secondary)' }}>*</span>
+                                        {t('age_category', { defaultValue: 'Age Category' })} <span style={{ color: 'var(--secondary)' }}>*</span> {ageLocked && '🔒'}
                                     </label>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                                         {[
@@ -434,7 +493,7 @@ const Profile = () => {
                                                 <button
                                                     key={option.value}
                                                     type="button"
-                                                    onClick={() => setFormData({ ...formData, ageCategory: option.value })}
+                                                    onClick={() => !ageLocked && setFormData({ ...formData, ageCategory: option.value })}
                                                     style={{
                                                         position: 'relative',
                                                         padding: '12px 8px',
@@ -442,7 +501,8 @@ const Profile = () => {
                                                         border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                         background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
                                                         color: isSelected ? 'white' : 'var(--text-secondary)',
-                                                        cursor: 'pointer',
+                                                        cursor: ageLocked ? 'not-allowed' : 'pointer',
+                                                        opacity: (ageLocked && !isSelected) ? 0.3 : 1,
                                                         display: 'flex',
                                                         flexDirection: 'column',
                                                         alignItems: 'center',
@@ -475,8 +535,11 @@ const Profile = () => {
                                 </div>
 
                                 <div className="form-group">
-                                    <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '5px', textAlign: 'center' }}>{t('profile_bio')}</label>
-                                    <textarea className="ui-form-field" value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} placeholder={t('profile_bio_placeholder')} style={{ textAlign: 'center', fontSize: '0.9rem', minHeight: '80px' }} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px', marginBottom: '5px' }}>
+                                        <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>{t('profile_bio')}</label>
+                                        <span style={{ fontSize: '0.7rem', color: formData.bio?.length >= 150 ? 'var(--secondary)' : 'var(--text-muted)' }}>{formData.bio?.length || 0} / 150</span>
+                                    </div>
+                                    <textarea className="ui-form-field" value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} placeholder={t('profile_bio_placeholder')} maxLength={150} style={{ textAlign: 'center', fontSize: '0.9rem', minHeight: '80px' }} />
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button type="button" className="ui-btn ui-btn--primary" onClick={handleSave} disabled={isSaving} style={{ flex: 1 }}>
@@ -555,7 +618,7 @@ const Profile = () => {
                                         {userProfile?.role === 'admin' ? 'ADMIN' : (userProfile?.role === 'business' ? (userProfile?.subscriptionTier || 'free').toUpperCase() : (userProfile?.subscriptionPlan || userProfile?.subscriptionTier || 'FREE')).toString()}
                                     </div>
                                     <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
-                                        Subscription Plan
+                                        {t('subscription_plan_label', 'Subscription Plan')}
                                     </span>
                                 </div>
 
@@ -564,7 +627,7 @@ const Profile = () => {
                                     <div style={{ display: 'flex', gap: '10px' }}>
                                         <div className="profile-subscription-quota-card" style={{ flex: 1 }}>
                                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                                                Private Invites Left
+                                                {t('private_invites_left', 'Private Invites Left')}
                                             </div>
                                             <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--luxury-gold)' }}>
                                                 {userProfile?.weeklyPrivateQuota === -1 ? '∞' :
@@ -572,7 +635,7 @@ const Profile = () => {
                                             </div>
                                             {userProfile?.lastQuotaResetDate && (
                                                 <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                                    Resets on: {(() => {
+                                                    {t('resets_on', 'Resets on: ')} {(() => {
                                                         const timestamp = userProfile.lastQuotaResetDate;
                                                         const lastReset = timestamp?.toDate ? timestamp.toDate() : (timestamp instanceof Date ? timestamp : new Date());
                                                         const nextReset = new Date(lastReset.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -583,23 +646,24 @@ const Profile = () => {
                                         </div>
                                         <div className="profile-subscription-quota-card" style={{ flex: 1 }}>
                                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                                                Extra Credits
+                                                {t('extra_credits', 'Extra Credits')}
                                             </div>
                                             <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 {userProfile?.purchasedPrivateCredits || 0}
                                                 {userProfile?.purchasedPrivateCredits === 5 && (
                                                     <span style={{ fontSize: '0.65rem', background: 'var(--color-success)', color: 'white', padding: '1px 6px', borderRadius: '8px', verticalAlign: 'middle' }}>
-                                                        GIFT 🎁
+                                                        {t('gift_badge', 'GIFT 🎁')}
                                                     </span>
                                                 )}
                                             </div>
+
                                             <button
                                                 type="button"
                                                 className="ui-btn ui-btn--ghost"
                                                 onClick={() => navigate('/pricing')}
                                                 style={{ marginTop: '8px', fontSize: '0.65rem', padding: '2px 8px' }}
                                             >
-                                                + Top Up
+                                                {t('top_up_btn', '+ Top Up')}
                                             </button>
                                         </div>
                                     </div>
@@ -607,7 +671,7 @@ const Profile = () => {
 
                                 {userProfile?.trialExpiry && new Date(userProfile.trialExpiry.seconds * 1000) > new Date() && (
                                     <div className="profile-subscription-trial-banner">
-                                        ✨ Trial Pro Plan Active - Ends: {new Date(userProfile.trialExpiry.seconds * 1000).toLocaleDateString(i18n.language, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                        {t('trial_ends_label', '✨ Trial Pro Plan Active - Ends:')} {new Date(userProfile.trialExpiry.seconds * 1000).toLocaleDateString(i18n.language, { month: 'long', day: 'numeric', year: 'numeric' })}
                                     </div>
                                 )}
 
@@ -616,10 +680,10 @@ const Profile = () => {
                                     const isFree = isBusiness ? (userProfile?.subscriptionTier || 'free') === 'free' : (!userProfile?.subscriptionPlan || userProfile?.subscriptionPlan === 'free');
                                     return isFree;
                                 })() && (
-                                    <button onClick={() => navigate('/pricing')} className="profile-subscription-upgrade-btn">
-                                        Upgrade Plan
-                                    </button>
-                                )}
+                                        <button onClick={() => navigate('/pricing')} className="profile-subscription-upgrade-btn">
+                                            {t('upgrade_plan_btn', 'Upgrade Plan')}
+                                        </button>
+                                    )}
                             </div>
                         )}
 
@@ -652,7 +716,7 @@ const Profile = () => {
                             <div className="ui-prompt">
                                 <h3 className="ui-prompt__title">{t('guest_welcome_title', { defaultValue: 'Join DineBuddies' })}</h3>
                                 <p className="ui-prompt__desc">{t('guest_profile_desc', { defaultValue: 'Create an account to customize your profile and join events.' })}</p>
-                                <button type="button" className="ui-btn ui-btn--primary" onClick={() => navigate('/login')} style={{ width: '100%', padding: '12px' }}>
+                                <button type="button" className="ui-btn ui-btn--primary" onClick={() => goToLogin()} style={{ width: '100%', padding: '12px' }}>
                                     {t('login_signup')}
                                 </button>
                             </div>
@@ -662,7 +726,7 @@ const Profile = () => {
 
                     {/* Plan & Subscription Card - Only show if user has active subscription */}
                     {userProfile?.subscription?.status === 'active' && (
-                        <div className="premium-plan-card" style={{ padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+                        <div className="premium-plan-card" style={{ padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: 'var(--profile-stack-gap)', position: 'relative', overflow: 'hidden' }}>
                             <div style={{ position: 'absolute', top: '-10px', right: '-10px', width: '60px', height: '60px', background: 'var(--luxury-gold)', borderRadius: '50%', filter: 'blur(30px)', opacity: 0.2 }}></div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -735,7 +799,7 @@ const Profile = () => {
                                 <>
                                     {/* My Private Posts */}
                                     {privatePosted.length > 0 && (
-                                        <div style={{ marginBottom: '1.5rem' }}>
+                                        <div style={{ marginBottom: 'var(--profile-stack-gap)' }}>
                                             <div className="profile-meta-row profile-meta-row--sm" style={{ padding: '0 5px' }}>
                                                 <h4 className="profile-stat-label" style={{ margin: 0 }}>
                                                     {t('my_private_posts', 'My Private Posts')}

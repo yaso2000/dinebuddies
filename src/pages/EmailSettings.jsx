@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { updateEmail, sendEmailVerification } from 'firebase/auth';
+import { updateEmail } from 'firebase/auth';
+import { sendVerificationEmailResend } from '../services/verificationEmailService';
 import { FaArrowLeft, FaEnvelope, FaCheckCircle } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 import './SettingsPages.css';
 
 const EmailSettings = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
     const [newEmail, setNewEmail] = useState('');
@@ -17,7 +20,7 @@ const EmailSettings = () => {
         e.preventDefault();
 
         if (!newEmail || newEmail === currentUser.email) {
-            setError('Please enter a different email address');
+            setError(t('error_same_email', 'Please enter a different email address'));
             return;
         }
 
@@ -27,7 +30,7 @@ const EmailSettings = () => {
 
         try {
             await updateEmail(currentUser, newEmail);
-            await sendEmailVerification(currentUser);
+            await sendVerificationEmailResend('settings_email');
             setSuccess(true);
             setNewEmail('');
             setTimeout(() => {
@@ -36,11 +39,11 @@ const EmailSettings = () => {
         } catch (err) {
             console.error('Error updating email:', err);
             if (err.code === 'auth/requires-recent-login') {
-                setError('Please log out and log back in before changing your email');
+                setError(t('error_reauth_email', 'Please log out and log back in before changing your email'));
             } else if (err.code === 'auth/email-already-in-use') {
-                setError('This email is already in use');
+                setError(t('error_email_in_use', 'This email is already in use'));
             } else {
-                setError('Failed to update email. Please try again.');
+                setError(t('error_update_email', 'Failed to update email. Please try again.'));
             }
         } finally {
             setLoading(false);
@@ -54,7 +57,7 @@ const EmailSettings = () => {
                 <button onClick={() => navigate('/settings')} className="back-btn">
                     <FaArrowLeft />
                 </button>
-                <h1>Email Settings</h1>
+                <h1>{t('email_settings_title', 'Email Settings')}</h1>
                 <div style={{ width: '40px' }}></div>
             </div>
 
@@ -65,29 +68,29 @@ const EmailSettings = () => {
                         <FaEnvelope style={{ color: '#3b82f6', fontSize: '1.5rem' }} />
                     </div>
 
-                    <h2>Update Email Address</h2>
+                    <h2>{t('update_email_address', 'Update Email Address')}</h2>
                     <p className="settings-description">
-                        Your current email: <strong>{currentUser?.email}</strong>
+                        {t('your_current_email', 'Your current email:')} <strong>{currentUser?.email}</strong>
                     </p>
 
                     {currentUser?.emailVerified ? (
                         <div className="verified-badge">
-                            <FaCheckCircle /> Verified
+                            <FaCheckCircle /> {t('verified', 'Verified')}
                         </div>
                     ) : (
                         <div className="unverified-badge">
-                            Email not verified
+                            {t('email_not_verified', 'Email not verified')}
                         </div>
                     )}
 
                     <form onSubmit={handleUpdateEmail} className="settings-form">
                         <div className="form-group">
-                            <label>New Email Address</label>
+                            <label>{t('new_email_address', 'New Email Address')}</label>
                             <input
                                 type="email"
                                 value={newEmail}
                                 onChange={(e) => setNewEmail(e.target.value)}
-                                placeholder="Enter new email"
+                                placeholder={t('enter_new_email', 'Enter new email')}
                                 required
                                 disabled={loading}
                             />
@@ -101,7 +104,7 @@ const EmailSettings = () => {
 
                         {success && (
                             <div className="success-message">
-                                Email updated successfully! Verification email sent.
+                                {t('email_updated_success', 'Email updated successfully! Verification email sent.')}
                             </div>
                         )}
 
@@ -110,13 +113,12 @@ const EmailSettings = () => {
                             className="submit-btn"
                             disabled={loading || !newEmail}
                         >
-                            {loading ? 'Updating...' : 'Update Email'}
+                            {loading ? t('updating', 'Updating...') : t('update_email_btn', 'Update Email')}
                         </button>
                     </form>
 
                     <div className="settings-note">
-                        <strong>Note:</strong> You will receive a verification email at your new address.
-                        Please verify it to complete the change.
+                        <strong>{t('note', 'Note:')}</strong> {t('email_verification_note', 'You will receive a verification email at your new address. Please verify it to complete the change.')}
                     </div>
                 </div>
             </div>

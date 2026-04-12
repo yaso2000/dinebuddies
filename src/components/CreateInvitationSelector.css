@@ -10,7 +10,7 @@
     align-items: center;
     justify-content: center;
     z-index: 9999;
-    padding: 20px;
+    padding: 16px;
     animation: fadeIn 0.3s ease;
 }
 
@@ -22,8 +22,10 @@
     background: var(--bg-card);
     width: 100%;
     max-width: 450px;
+    max-height: 92vh;
+    overflow-y: auto;
     border-radius: 24px;
-    padding: 30px;
+    padding: 20px;
     position: relative;
     border: 1px solid var(--border-color);
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -32,8 +34,8 @@
 
 .close-btn {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 16px;
+    right: 16px;
     background: var(--hover-overlay);
     border: none;
     color: var(--text-muted);
@@ -53,32 +55,32 @@
 }
 
 .selector-title {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 800;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     text-align: center;
     color: var(--text-main);
 }
 
 .selector-subtitle {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: var(--text-muted);
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 16px;
 }
 
 .selector-options {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
 }
 
 .selector-card {
     display: flex;
     align-items: center;
-    gap: 20px;
-    padding: 24px;
-    border-radius: 20px;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 16px;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
     cursor: pointer;
@@ -91,7 +93,7 @@
 
 .selector-card:hover {
     background: var(--hover-overlay);
-    transform: translateY(-4px);
+    transform: translateY(-2px);
     border-color: var(--primary);
 }
 
@@ -100,13 +102,13 @@
 }
 
 .icon-wrapper {
-    width: 50px;
-    height: 50px;
-    border-radius: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     flex-shrink: 0;
 }
 
@@ -120,19 +122,30 @@
     color: #8b5cf6;
 }
 
+.dating .icon-wrapper {
+    background: rgba(236, 72, 153, 0.15);
+    color: #ec4899;
+}
+
+.selector-card.dating:hover {
+    border-color: #ec4899;
+}
+
+
 .option-info h4 {
-    font-size: 1.15rem;
+    font-size: 1rem;
     font-weight: 800;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     color: var(--text-main);
 }
 
 .option-info p {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     color: var(--text-muted);
     line-height: 1.4;
     font-weight: 500;
 }
+
 
 @keyframes fadeIn {
     from {

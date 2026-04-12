@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import {
     FaUser, FaBell, FaLock, FaCreditCard, FaSignOutAlt, FaChevronRight,
@@ -15,6 +14,7 @@ import ProAccountSettings from './ProAccountSettings';
 import NotificationsSettings from '../NotificationsSettings';
 import PrivacySettings from '../PrivacySettings';
 import BillingSettings from '../BillingSettings';
+import { goToLogin } from '../../utils/goToLogin';
 
 const NAV_ITEMS = [
     { key: 'business', label: 'Business Profile', desc: 'Edit your listing and business info', icon: <FaStore />, color: 'orange' },
@@ -154,26 +154,41 @@ const ProSettings = () => {
     const [activeKey, setActiveKey] = useState('account');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [deletePassword, setDeletePassword] = useState('');
     const navigate = useNavigate();
-    const { deleteUserAccount, currentUser } = useAuth();
+    const { deleteUserAccount, currentUser, signOut } = useAuth();
+    const { showToast } = useToast();
     const { isDark, toggleTheme } = useTheme();
     const { i18n } = useTranslation();
 
     const handleSignOut = async () => {
-        await signOut(auth);
-        navigate('/login');
+        await signOut('/business/login');
     };
 
-    const handleDeleteAccount = async () => {
-        if (!showDeleteConfirm) { setShowDeleteConfirm(true); return; }
+    const handleDeleteAccount = async (password) => {
+        if (!showDeleteConfirm && !password) { setShowDeleteConfirm(true); return; }
         try {
             setDeleting(true);
-            await deleteUserAccount();
-            navigate('/login');
-        } catch {
+            await deleteUserAccount(password ? { password } : undefined);
+            goToLogin();
+        } catch (error) {
+            if (error.code === 'auth/requires-recent-login' && error.requirePassword) {
+                setShowPasswordModal(true);
+                setDeleting(false);
+                return;
+            }
+            showToast(error?.message || 'Failed to delete account. Please try again.', 'error');
             setDeleting(false);
             setShowDeleteConfirm(false);
         }
+    };
+
+    const handleDeleteWithPassword = () => {
+        if (!deletePassword.trim()) return;
+        setShowPasswordModal(false);
+        handleDeleteAccount(deletePassword);
+        setDeletePassword('');
     };
 
     const renderPanel = () => {
@@ -265,7 +280,7 @@ const ProSettings = () => {
                     <button
                         type="button"
                         className="ui-btn ui-btn--danger-outline"
-                        onClick={handleDeleteAccount}
+                        onClick={() => handleDeleteAccount()}
                         disabled={deleting}
                         style={{
                             width: '100%', justifyContent: 'flex-start', padding: '12px 14px', gap: 12, fontSize: '0.8rem',
@@ -284,6 +299,90 @@ const ProSettings = () => {
             <div className="bpro-settings-panel" style={{ flex: 1, overflowY: 'auto', paddingLeft: 28, minWidth: 0 }}>
                 {renderPanel()}
             </div>
+
+            {/* Password modal for delete (when re-auth required) */}
+            {showPasswordModal && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        padding: '1rem'
+                    }}
+                    onClick={() => { setShowPasswordModal(false); setDeletePassword(''); }}
+                >
+                    <div
+                        style={{
+                            background: 'var(--surface-dark, #1e1e2e)',
+                            borderRadius: '16px',
+                            padding: '1.5rem',
+                            maxWidth: '360px',
+                            width: '100%',
+                            boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+                            border: '1px solid rgba(255,255,255,0.08)'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ marginBottom: '1rem', fontWeight: 700, fontSize: '1.1rem', color: '#f1f5f9' }}>
+                            Re-enter password
+                        </div>
+                        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>
+                            For your security, please enter your password to confirm account deletion.
+                        </p>
+                        <input
+                            type="password"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            placeholder="Password"
+                            autoFocus
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '10px',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                background: 'rgba(255,255,255,0.05)',
+                                color: '#f1f5f9',
+                                marginBottom: '1rem',
+                                fontSize: '1rem'
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleDeleteWithPassword()}
+                        />
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => { setShowPasswordModal(false); setDeletePassword(''); }}
+                                style={{
+                                    padding: '0.6rem 1.2rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'transparent',
+                                    color: '#f1f5f9'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteWithPassword}
+                                disabled={!deletePassword.trim() || deleting}
+                                style={{
+                                    padding: '0.6rem 1.2rem',
+                                    borderRadius: '10px',
+                                    background: '#ef4444',
+                                    color: '#fff',
+                                    border: 'none',
+                                    opacity: (!deletePassword.trim() || deleting) ? 0.6 : 1,
+                                    cursor: (!deletePassword.trim() || deleting) ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {deleting ? 'Deleting…' : 'Delete Account'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

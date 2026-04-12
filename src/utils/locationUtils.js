@@ -66,7 +66,6 @@ export const fetchIpLocation = async () => {
 
     for (const service of services) {
         try {
-            console.log(`🌐 Trying IP-location service: ${service.name}...`);
             const response = await fetch(service.url, { timeout: 3000 });
             if (!response.ok) continue;
 
@@ -74,7 +73,6 @@ export const fetchIpLocation = async () => {
             const normalized = service.map(data);
 
             if (normalized.success) {
-                console.log(`✅ IP Location found via ${service.name}:`, normalized.city);
                 return normalized;
             }
         } catch (error) {

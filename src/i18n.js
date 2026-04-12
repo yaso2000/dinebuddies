@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
 
 import en from './locales/en.json';
 import ar from './locales/ar.json';
@@ -9,6 +10,7 @@ import ur from './locales/ur.json';
 import hi from './locales/hi.json';
 
 i18n
+    .use(LanguageDetector)
     .use(initReactI18next)
     .init({
         resources: {
@@ -19,12 +21,20 @@ i18n
             ur: { translation: ur },
             hi: { translation: hi }
         },
-        lng: 'en', // Default language is English
+        supportedLngs: ['en', 'ar', 'fr', 'es', 'ur', 'hi'],
         fallbackLng: 'en',
+        detection: {
+            order: ['localStorage', 'navigator', 'htmlTag', 'path', 'subdomain'],
+            caches: ['localStorage'],
+        },
         debug: false,
         interpolation: {
             escapeValue: false,
-        }
+        },
+        react: {
+            // Avoid suspending route content until i18n resolves (can interact badly with Router + Suspense).
+            useSuspense: false,
+        },
     });
 
 export default i18n;

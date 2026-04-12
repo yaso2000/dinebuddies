@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FaTrash, FaArrowLeft, FaExclamationTriangle, FaCog, FaEnvelope } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { goToLogin } from '../utils/goToLogin';
 
 const listStyle = (i18n) => ({
     paddingLeft: i18n.language === 'ar' ? '0' : '1.5rem',
@@ -126,7 +127,7 @@ const AccountDeletionRequest = () => {
                             {t('delete_need_login', 'You need to be signed in to delete your account. Sign in, then go to Settings and use "Delete Account".')}
                         </p>
                         <button
-                            onClick={() => navigate('/login')}
+                            onClick={() => goToLogin()}
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',

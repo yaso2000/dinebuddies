@@ -76,16 +76,26 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
             </div>
 
             <Suspense fallback={<div style={{ width: 300, height: 380, background: '#111827' }} />}>
-                <LazyEmojiPicker
-                    onEmojiClick={(emojiData) => {
-                        onEmojiClick(emojiData);
-                        // Stay open — user can pick multiple emojis
-                    }}
-                    theme="dark"
-                    width={300}
-                    height={380}
-                    previewConfig={{ showPreview: false }}
-                />
+                <div className="custom-emoji-picker-wrapper">
+                    <style>{`
+                        .custom-emoji-picker-wrapper .epr-category-nav {
+                            display: none !important;
+                        }
+                        .custom-emoji-picker-wrapper .epr-emoji-category-label {
+                            display: none !important;
+                        }
+                    `}</style>
+                    <LazyEmojiPicker
+                        onEmojiClick={(emojiData) => {
+                            onEmojiClick(emojiData);
+                            // Stay open — user can pick multiple emojis
+                        }}
+                        theme="dark"
+                        width={300}
+                        height={380}
+                        previewConfig={{ showPreview: false }}
+                    />
+                </div>
             </Suspense>
         </div>,
         document.body

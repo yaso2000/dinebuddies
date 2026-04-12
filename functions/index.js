@@ -1,12 +1,20 @@
+const path = require('path');
+// Load functions/.env at runtime (emulator + deploys that include the file). For production, also set
+// RESEND_API_KEY (and optional vars) in Google Cloud Console → Cloud Functions → each function → Variables.
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const admin = require('firebase-admin');
 admin.initializeApp();
 
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
+const { runInvitationCardGeneration } = require('./invitationCards/InvitationCardOrchestrator');
+const { runFinalizeInvitationCardDraft } = require('./invitationCards/DraftLifecycleManager');
+const { ImageProviderError } = require('./invitationCards/providers/ImageProviderError');
 const functions = require('firebase-functions');
 const db = admin.firestore();
-
 const MONTHLY_PRIVATE_QUOTAS = {
+    free: 3,
     pro: 4,
     premium: 10,
     vip: 10
@@ -167,8 +175,6 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
         type === 'request_approved' ||
         type === 'invitation_accepted' ||
         type === 'invitation_rejected' ||
-        type === 'like' ||
-        type === 'comment' ||
         type === 'invitation_cancelled' ||
         type === 'booking_cancelled' ||
         type === 'invitation_completed' ||
@@ -183,7 +189,6 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
         if (type === 'join_request') return hostId === userId && senderId !== hostId;
         if (type === 'request_approved' || type === 'invitation_full') return hostId === senderId;
         if (type === 'invitation_accepted' || type === 'invitation_rejected') return hostId === userId && senderId !== hostId;
-        if (type === 'like' || type === 'comment') return hostId === userId;
         if (
             type === 'invitation_cancelled' ||
             type === 'booking_cancelled' ||
@@ -192,6 +197,16 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
             type === 'invitation_updated'
         ) return hostId === senderId;
         return false;
+    }
+
+    // comment & like: allowed for both post-based (no invitationId) and invitation-based interactions
+    if (type === 'like' || type === 'comment') {
+        if (!invitationId) return true; // post-based: always allow
+        const invSnap = await db.collection('invitations').doc(invitationId).get();
+        if (!invSnap.exists) return false;
+        const inv = invSnap.data() || {};
+        const hostId = inv.author?.id || inv.hostId || inv.authorId;
+        return hostId === userId;
     }
 
     if (type === 'private_invitation' || type === 'private_invitation_response' || type === 'system_announcement') {
@@ -295,9 +310,13 @@ function toPublicProfile(userDocData, uid) {
         asTrimmedString(locationData.country);
 
     const businessInfo = userData.businessInfo && typeof userData.businessInfo === 'object' ? userData.businessInfo : {};
+    // Public directory listing requires BOTH: verified auth email (mirrored on users.emailVerified)
+    // AND explicit opt-in businessInfo.isPublished (manual hide/vacation).
+    const authEmailVerified = userData.emailVerified === true;
+    const userOptedIntoDirectory = businessInfo.isPublished === true;
     const businessPublic = profileType === 'business'
         ? {
-            isPublished: businessInfo.isPublished !== false,
+            isPublished: authEmailVerified && userOptedIntoDirectory,
             businessType: asTrimmedString(businessInfo.businessType),
             city: asTrimmedString(businessInfo.city) || asTrimmedString(userData.city),
             country:
@@ -315,11 +334,18 @@ function toPublicProfile(userDocData, uid) {
         }
         : null;
 
+    const tierRaw = userData.subscriptionTier;
+    const subscriptionTier =
+        typeof tierRaw === 'string' && tierRaw.trim()
+            ? tierRaw.trim().toLowerCase()
+            : 'free';
+
     return {
         uid: safeUid,
         profileType,
         displayName,
         avatarUrl: avatarUrl || null,
+        subscriptionTier,
         search: {
             displayNameLower: displayName.trim().toLowerCase()
         },
@@ -411,8 +437,62 @@ exports.syncPublicProfileOnUserWrite = functions.firestore
         return null;
     });
 
+// ─── Trigger: denormalize averageRating + reviewCount into public_profiles ───
+// Fires on every create/update/delete in reviews/{reviewId}.
+// Eliminates the expensive N+1 rating query from the client (InvitationContext).
+exports.updateBusinessRatingOnReview = functions.firestore
+    .document('reviews/{reviewId}')
+    .onWrite(async (change, context) => {
+        const after = change.after.exists ? change.after.data() : null;
+        const before = change.before.exists ? change.before.data() : null;
+        const data = after || before;
+        if (!data) return null;
+
+        // Support multiple field names for business ID
+        const businessId = data.partnerId || data.profileId || data.restaurantId;
+        if (!businessId) {
+            functions.logger.warn('updateBusinessRatingOnReview: no businessId found', { reviewId: context.params.reviewId });
+            return null;
+        }
+
+        try {
+            // Aggregate from both field patterns in one parallel query
+            const [byPartner, byProfile] = await Promise.all([
+                db.collection('reviews').where('partnerId', '==', businessId).get(),
+                db.collection('reviews').where('profileId', '==', businessId).get()
+            ]);
+
+            // Merge, deduplicate by doc ID
+            const seen = new Set();
+            let total = 0;
+            let count = 0;
+            for (const snap of [byPartner, byProfile]) {
+                for (const doc of snap.docs) {
+                    if (!seen.has(doc.id)) {
+                        seen.add(doc.id);
+                        total += doc.data().rating || 0;
+                        count++;
+                    }
+                }
+            }
+
+            const averageRating = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+
+            await db.collection('public_profiles').doc(businessId).set(
+                { averageRating, reviewCount: count, ratingUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
+                { merge: true }
+            );
+
+            functions.logger.info(`updateBusinessRatingOnReview: ${businessId} avg=${averageRating} count=${count}`);
+        } catch (err) {
+            functions.logger.error('updateBusinessRatingOnReview error:', err);
+        }
+        return null;
+    });
+
 // ─── Trusted callable: publish private invitation draft + consume credit ───
 exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, context) => {
+    // FORCE CACHE INVALIDATION: Quota fix for free users applied
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -501,6 +581,77 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
     return { success: true, ...result };
 });
 
+function mapInvitationCardCallableError(err, logLabel) {
+    if (err instanceof functions.https.HttpsError) {
+        return err;
+    }
+    const msg = err && err.message ? String(err.message) : 'Request failed.';
+    functions.logger.error(logLabel, err);
+    if (msg.includes('Maximum attempts')) {
+        return new functions.https.HttpsError('failed-precondition', msg);
+    }
+    if (
+        msg.includes('does not belong') ||
+        msg.includes('DraftLifecycleManager: forbidden') ||
+        msg.includes('invitationKind does not match')
+    ) {
+        return new functions.https.HttpsError('permission-denied', msg);
+    }
+    if (msg.includes('Invalid or unknown draftGroupId') || msg.includes('DraftLifecycleManager: session not found')) {
+        return new functions.https.HttpsError('not-found', msg);
+    }
+    if (
+        err instanceof ImageProviderError ||
+        msg.includes('INVITATION_CARD_IMAGE_PROVIDER not supported') ||
+        msg.includes('CardVisualGeneratorGateway:')
+    ) {
+        return new functions.https.HttpsError('internal', 'Image generation is temporarily unavailable.');
+    }
+    return new functions.https.HttpsError('invalid-argument', msg);
+}
+
+// ─── Invitation card drafts (one draftGroupId per session, max 3 attempts × 3 cards) ───
+// NOTE: Not wired from the private-invitation UI (removed); kept for future reuse or admin/tools.
+// Each attempt runs 3 sequential OpenAI image calls; default 60s function + ~70s client timeouts are too short.
+exports.generateInvitationCards = functions
+    .runWith({ timeoutSeconds: 300, memory: '512MB' })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+        const uid = context.auth.uid;
+        await enforceCallableRateLimit(uid, 'generate_invitation_cards', {
+            perMinute: 8,
+            perHour: 40,
+            perDay: 120,
+            cooldownMs: 2000
+        });
+        try {
+            return await runInvitationCardGeneration(data, context);
+        } catch (err) {
+            throw mapInvitationCardCallableError(err, 'generateInvitationCards');
+        }
+    });
+
+// NOTE: Companion to generateInvitationCards; same — retained for future use, not used by current app UI.
+exports.finalizeInvitationCardDraft = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    await enforceCallableRateLimit(uid, 'finalize_invitation_card_draft', {
+        perMinute: 20,
+        perHour: 100,
+        perDay: 300,
+        cooldownMs: 1000
+    });
+    try {
+        return await runFinalizeInvitationCardDraft(data, context);
+    } catch (err) {
+        throw mapInvitationCardCallableError(err, 'finalizeInvitationCardDraft');
+    }
+});
+
 // ─── Trusted callable: create/get conversation with anti-spam limits ────────
 exports.createOrGetConversation = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -523,25 +674,17 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
         cooldownMs: 500
     });
 
-    // Allow conversation between any two distinct UIDs; do not require the other user
-    // to have a Firestore users doc (new accounts or delayed profile creation would otherwise block chat).
+    // Deterministic conversation ID: sorted UIDs joined by "_".
+    // Guarantees a single document per pair without a query scan.
+    const conversationId = [uid, otherUserId].sort().join('_');
+    const convRef = db.collection('conversations').doc(conversationId);
+    const existingSnap = await convRef.get();
 
-    const existingSnap = await db.collection('conversations')
-        .where('participants', 'array-contains', uid)
-        .limit(200)
-        .get();
-
-    const existing = existingSnap.docs.find((docSnap) => {
-        const convo = docSnap.data() || {};
-        const participants = Array.isArray(convo.participants) ? convo.participants : [];
-        return participants.includes(otherUserId);
-    });
-
-    if (existing) {
-        return { success: true, conversationId: existing.id, created: false };
+    if (existingSnap.exists) {
+        return { success: true, conversationId, created: false };
     }
 
-    const newConvo = await db.collection('conversations').add({
+    await convRef.set({
         participants: [uid, otherUserId],
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
@@ -549,7 +692,7 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
         unreadBy: []
     });
 
-    return { success: true, conversationId: newConvo.id, created: true };
+    return { success: true, conversationId, created: true };
 });
 
 // ─── Trusted callable: community membership (join/leave) ───────────────────
@@ -642,10 +785,10 @@ exports.listCommunityMembers = functions.https.onCall(async (data, context) => {
     }
 
     await enforceCallableRateLimit(requesterUid, 'list_community_members', {
-        perMinute: 60,
+        perMinute: 120,
         perHour: 1000,
         perDay: 5000,
-        cooldownMs: 500
+        cooldownMs: 0
     });
 
     const partnerSnap = await db.collection('users').doc(partnerId).get();
@@ -653,11 +796,24 @@ exports.listCommunityMembers = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('not-found', 'Community owner not found.');
     }
     const partner = partnerSnap.data() || {};
-    const partnerRole = partner.role || partner.accountType;
-    if (!['business', 'partner'].includes(partnerRole)) {
+    const partnerRole = String(partner.role || partner.accountType || '').toLowerCase();
+    const isBusinessAccount = partnerRole === 'business' || partnerRole === 'partner' || partner.isBusiness === true;
+    
+    if (!isBusinessAccount) {
         throw new functions.https.HttpsError('failed-precondition', 'Target user is not a community owner.');
     }
 
+    // ── Pre-Verification Access Logic ──
+    const isOwner = requesterUid === partnerId;
+    const isVerified = partner.emailVerified === true;
+    
+    // If not verified, ONLY the owner can list members. 
+    // (This prevents public scraping of unverified/private business data).
+    if (!isVerified && !isOwner) {
+        throw new functions.https.HttpsError('permission-denied', 'This community is not yet public.');
+    }
+
+    // Fetch members from 'users' collection where 'joinedCommunities' contains partnerId.
     const membersSnap = await db.collection('users')
         .where('joinedCommunities', 'array-contains', partnerId)
         .limit(500)
@@ -698,10 +854,10 @@ exports.listUserNetwork = functions.https.onCall(async (data, context) => {
         : 100;
 
     await enforceCallableRateLimit(requesterUid, 'list_user_network', {
-        perMinute: 60,
-        perHour: 1200,
-        perDay: 6000,
-        cooldownMs: 300
+        perMinute: 120,
+        perHour: 2400,
+        perDay: 12000,
+        cooldownMs: 0
     });
 
     const userSnap = await db.collection('users').doc(userId).get();
@@ -900,8 +1056,9 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Keep auth-claim authorization path as primary trust boundary.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
+    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
+    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
 
     return { success: true, targetUid };
 });
@@ -1336,7 +1493,8 @@ exports.createNotification = functions.https.onCall(async (data, context) => {
     const senderSnap = await db.collection('users').doc(senderId).get();
     const sender = senderSnap.exists ? senderSnap.data() : {};
     const senderName = sender.display_name || sender.displayName || context.auth.token.email || 'User';
-    const senderAvatar = sender.photo_url || sender.photoURL || null;
+    // Comprehensive avatar extraction exactly like frontend avatarUtils.js
+    const senderAvatar = sender.avatar || sender.photo_url || sender.photoURL || sender.profilePicture || sender.userPhoto || sender.logo || sender.logoImage || null;
 
     await db.collection('notifications').add({
         userId,
@@ -1590,30 +1748,31 @@ exports.adminCleanOrphanContent = functions.https.onCall(async (_data, context) 
     return { success: true, deletedPosts, deletedStories };
 });
 
+/** Firestore batch writes are limited to 500 ops; delete in chunks. */
+async function deleteAllDocsInCollection(collectionName, chunkSize = 450) {
+    const colRef = db.collection(collectionName);
+    let total = 0;
+    for (;;) {
+        const snap = await colRef.limit(chunkSize).get();
+        if (snap.empty) break;
+        const batch = db.batch();
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        total += snap.docs.length;
+    }
+    return total;
+}
+
 // ─── Trusted admin callable: wipe all posts/stories ─────────────────────────
-exports.adminWipeCommunityContent = functions.https.onCall(async (_data, context) => {
-    await assertAdminContext(context);
-    let deletedPosts = 0;
-    let deletedStories = 0;
-
-    const postsSnap = await db.collection('communityPosts').get();
-    const postBatch = db.batch();
-    postsSnap.docs.forEach((d) => {
-        postBatch.delete(d.ref);
-        deletedPosts++;
+exports.adminWipeCommunityContent = functions
+    // 512MB: some Gen1 projects fail updating when memory is set to 1GB; 540s for large wipes.
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onCall(async (_data, context) => {
+        await assertAdminContext(context);
+        const deletedPosts = await deleteAllDocsInCollection('communityPosts');
+        const deletedStories = await deleteAllDocsInCollection('stories');
+        return { success: true, deletedPosts, deletedStories };
     });
-    if (deletedPosts > 0) await postBatch.commit();
-
-    const storiesSnap = await db.collection('stories').get();
-    const storyBatch = db.batch();
-    storiesSnap.docs.forEach((d) => {
-        storyBatch.delete(d.ref);
-        deletedStories++;
-    });
-    if (deletedStories > 0) await storyBatch.commit();
-
-    return { success: true, deletedPosts, deletedStories };
-});
 
 // ─── Scheduled: Reset weekly private invitation credits ─
 // Runs every Monday at 00:00 UTC
@@ -1744,3 +1903,529 @@ exports.deleteExpiredInvitations = functions.pubsub
 
         return null;
     });
+
+// ─── Scheduled: Archive + delete expired invitation chats (1 day post-endDate) ───
+// Runs daily at 03:00 UTC. Invitations whose endDate/date is > 1 day ago
+// get archived (stats only) then their Firestore doc + Storage files are removed.
+exports.archiveAndDeleteExpiredInvitationChats = functions.pubsub
+    .schedule('0 3 * * *')
+    .timeZone('UTC')
+    .onRun(async () => {
+        const bucket = admin.storage().bucket();
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+        const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
+
+        function extractStoragePath(url) {
+            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
+            try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
+        }
+
+        try {
+            // Query completed invitations whose event date ended > 30 days ago
+            const expiredSnap = await db.collection('invitations')
+                .where('meetingStatus', 'in', ['completed', 'cancelled'])
+                .where('endDate', '<=', cutoffTs)
+                .get();
+
+            if (expiredSnap.empty) {
+                console.log('archiveAndDeleteExpiredInvitationChats: nothing to process.');
+                return null;
+            }
+
+            console.log(`archiveAndDeleteExpiredInvitationChats: processing ${expiredSnap.size} invitation(s).`);
+
+            for (const invDoc of expiredSnap.docs) {
+                const invId = invDoc.id;
+                const invData = invDoc.data() || {};
+
+                // 1) Fetch messages subcollection
+                const messagesSnap = await db.collection('invitations').doc(invId).collection('messages').get();
+
+                // 2) Create archive document (stats only, no PII)
+                await db.collection('invitation_archives').doc(invId).set({
+                    invitationId: invId,
+                    archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    eventDate: invData.endDate || invData.date || null,
+                    guestCount: invData.guestCount || invData.attendeeCount || messagesSnap.size || 0,
+                    restaurantId: invData.restaurantId || null,
+                    hostId: invData.author?.id || invData.authorId || null,
+                    messageCount: messagesSnap.size,
+                    title: invData.title || null
+                });
+
+                // 3) Delete Storage media
+                const mediaFields = ['customImage', 'customVideo', 'videoThumbnail', 'image', 'restaurantImage'];
+                const messageMediaFields = ['imageUrl', 'audioUrl', 'fileUrl'];
+                const urls = [];
+                mediaFields.forEach(f => { if (invData[f]) urls.push(invData[f]); });
+                messagesSnap.docs.forEach(d => {
+                    const md = d.data() || {};
+                    messageMediaFields.forEach(f => { if (md[f]) urls.push(md[f]); });
+                    if (md.attachment?.url) urls.push(md.attachment.url);
+                });
+                const paths = [...new Set(urls)].map(extractStoragePath).filter(Boolean);
+                for (const path of paths) {
+                    try { await bucket.file(path).delete(); }
+                    catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
+                }
+
+                // 4) Delete Firestore documents
+                const batch = db.batch();
+                messagesSnap.docs.forEach(d => batch.delete(d.ref));
+                batch.delete(invDoc.ref);
+                await batch.commit();
+            }
+
+            console.log(`archiveAndDeleteExpiredInvitationChats: archived and deleted ${expiredSnap.size} invitation(s).`);
+        } catch (error) {
+            console.error('archiveAndDeleteExpiredInvitationChats error:', error);
+        }
+        return null;
+    });
+
+// ─── Scheduled: Delete inactive private conversations (30 days no activity) ───
+// Runs daily at 04:00 UTC.
+exports.deleteInactivePrivateConversations = functions.pubsub
+    .schedule('0 4 * * *')
+    .timeZone('UTC')
+    .onRun(async () => {
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
+
+        try {
+            const inactiveSnap = await db.collection('conversations')
+                .where('lastMessageTime', '<=', cutoffTs)
+                .get();
+
+            if (inactiveSnap.empty) {
+                console.log('deleteInactivePrivateConversations: nothing to process.');
+                return null;
+            }
+
+            console.log(`deleteInactivePrivateConversations: removing ${inactiveSnap.size} conversation(s).`);
+
+            for (const convDoc of inactiveSnap.docs) {
+                // Delete messages subcollection
+                const msgsSnap = await db.collection('conversations').doc(convDoc.id).collection('messages').get();
+                const batch = db.batch();
+                msgsSnap.docs.forEach(d => batch.delete(d.ref));
+                batch.delete(convDoc.ref);
+                await batch.commit();
+            }
+
+            console.log(`deleteInactivePrivateConversations: deleted ${inactiveSnap.size} conversation(s).`);
+        } catch (error) {
+            console.error('deleteInactivePrivateConversations error:', error);
+        }
+        return null;
+    });
+
+// ─── Scheduled: Delete old community posts (30 days since creation) ───────────
+// Community posts (communityPosts collection) older than 30 days are removed.
+// Runs daily at 05:00 UTC.
+exports.deleteOldCommunityPosts = functions.pubsub
+    .schedule('0 5 * * *')
+    .timeZone('UTC')
+    .onRun(async () => {
+        const bucket = admin.storage().bucket();
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
+
+        function extractStoragePath(url) {
+            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
+            try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
+        }
+
+        try {
+            const oldPostsSnap = await db.collection('communityPosts')
+                .where('createdAt', '<=', cutoffTs)
+                .get();
+
+            if (oldPostsSnap.empty) {
+                console.log('deleteOldCommunityPosts: nothing to process.');
+                return null;
+            }
+
+            console.log(`deleteOldCommunityPosts: removing ${oldPostsSnap.size} post(s).`);
+
+            // Process in batches of 400 to stay under Firestore batch limit
+            const chunks = [];
+            for (let i = 0; i < oldPostsSnap.docs.length; i += 400) {
+                chunks.push(oldPostsSnap.docs.slice(i, i + 400));
+            }
+
+            for (const chunk of chunks) {
+                const batch = db.batch();
+                for (const postDoc of chunk) {
+                    const pd = postDoc.data() || {};
+                    // Delete associated media files
+                    const mediaUrls = [];
+                    ['imageUrl', 'videoUrl', 'mediaUrl', 'image', 'video'].forEach(f => {
+                        if (pd[f]) mediaUrls.push(pd[f]);
+                    });
+                    if (Array.isArray(pd.images)) pd.images.forEach(u => { if (u) mediaUrls.push(u); });
+
+                    for (const url of mediaUrls) {
+                        const path = extractStoragePath(url);
+                        if (path) {
+                            try { await bucket.file(path).delete(); }
+                            catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
+                        }
+                    }
+                    batch.delete(postDoc.ref);
+                }
+                await batch.commit();
+            }
+
+            console.log(`deleteOldCommunityPosts: deleted ${oldPostsSnap.size} post(s).`);
+        } catch (error) {
+            console.error('deleteOldCommunityPosts error:', error);
+        }
+        return null;
+    });
+
+// ─── FCM Push Notifications ──────────────────────────────────────────────────
+
+/**
+ * Send an FCM push notification to a specific user.
+ * Reads fcmTokens[] from users/{uid}, sends multicast, and cleans up stale tokens.
+ *
+ * @param {string} userId  — target user UID
+ * @param {string} title   — notification title
+ * @param {string} body    — notification body text
+ * @param {object} data    — optional key-value data (actionUrl, type, etc.)
+ */
+async function sendPushToUser(userId, title, body, data = {}) {
+    if (!userId || !title) return;
+    try {
+        const userSnap = await db.collection('users').doc(userId).get();
+        if (!userSnap.exists) return;
+        const tokens = userSnap.data()?.fcmTokens || [];
+        if (!tokens.length) return;
+
+        const iconToUse = data.senderAvatar || 'https://www.dinebuddies.com/icon-light-192.png';
+
+        const message = {
+            tokens,
+            notification: { title, body: body || '' },
+            webpush: {
+                notification: {
+                    title,
+                    body: body || '',
+                    icon: iconToUse,
+                    badge: 'https://www.dinebuddies.com/icon-light-192.png',
+                    click_action: data.actionUrl || '/',
+                },
+                fcm_options: { link: data.actionUrl || '/' },
+            },
+            data: Object.fromEntries(
+                Object.entries({ actionUrl: '/', ...data })
+                    .filter(([, v]) => v != null)
+                    .map(([k, v]) => [k, String(v)])
+            ),
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(message);
+
+        // Clean up invalid/expired tokens
+        const expiredTokens = [];
+        response.responses.forEach((r, i) => {
+            if (!r.success) {
+                const code = r.error?.code;
+                if (
+                    code === 'messaging/invalid-registration-token' ||
+                    code === 'messaging/registration-token-not-registered'
+                ) {
+                    expiredTokens.push(tokens[i]);
+                }
+            }
+        });
+        if (expiredTokens.length > 0) {
+            await db.collection('users').doc(userId).update({
+                fcmTokens: admin.firestore.FieldValue.arrayRemove(...expiredTokens),
+            });
+        }
+    } catch (err) {
+        functions.logger.warn('sendPushToUser failed:', userId, err.message);
+    }
+}
+
+/**
+ * Firestore trigger: whenever a new document is created in notifications/{notifId},
+ * send a Firebase Cloud Messaging push to the target user's devices.
+ * This converts every in-app notification into a real push automatically.
+ */
+exports.onNotificationCreated = functions.firestore
+    .document('notifications/{notifId}')
+    .onCreate(async (snap) => {
+        const data = snap.data() || {};
+        const userId = data.userId;
+        const title = data.title || 'DineBuddies';
+        const body = data.message || '';
+        const actionUrl = data.actionUrl || '/';
+        const senderAvatar = data.senderAvatar || data.fromUserAvatar || data.senderPhoto || '';
+
+        if (!userId) return null;
+        await sendPushToUser(userId, title, body, { actionUrl, type: data.type || '', senderAvatar });
+        return null;
+    });
+
+/**
+ * Scheduled function to delete media related to posts and chats permanently after 1 month.
+ * Runs every 24 hours.
+ */
+exports.cleanupOldMedia = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
+    const thirtyDaysAgoMillis = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(thirtyDaysAgoMillis);
+    const bucket = admin.storage().bucket();
+
+    // Helper to extract file path and delete from Storage
+    const deleteStorageFileFromUrl = async (url) => {
+        try {
+            if (!url || !url.includes('firebasestorage.googleapis.com')) return;
+            const encodedPath = url.split('/o/')[1].split('?')[0];
+            const filePath = decodeURIComponent(encodedPath);
+            await bucket.file(filePath).delete();
+            functions.logger.info(`Deleted old media file: ${filePath}`);
+        } catch (e) {
+            if (e.code !== 404) {
+                functions.logger.warn(`Error deleting media file ${url}:`, e);
+            }
+        }
+    };
+
+    let filesDeleted = 0;
+
+    // 1. Delete old chat messages with media (Community Chats)
+    try {
+        const communitiesSnap = await db.collection('communities').get();
+        for (const commDoc of communitiesSnap.docs) {
+            const oldMessagesSnap = await commDoc.ref.collection('messages')
+                .where('createdAt', '<', thirtyDaysAgo)
+                .get();
+
+            if (oldMessagesSnap.empty) continue;
+
+            let msgBatch = db.batch();
+            let batchCount = 0;
+
+            for (const doc of oldMessagesSnap.docs) {
+                const data = doc.data();
+                if (['image', 'video', 'audio'].includes(data.type)) {
+                    const fileUrl = data.text || data.audioUrl || data.imageUrl;
+                    if (fileUrl && fileUrl.includes('firebasestorage')) {
+                        await deleteStorageFileFromUrl(fileUrl);
+                        filesDeleted++;
+                    }
+                    msgBatch.update(doc.ref, {
+                        type: 'text',
+                        text: '🚫 Media expired',
+                        audioUrl: admin.firestore.FieldValue.delete(),
+                        imageUrl: admin.firestore.FieldValue.delete()
+                    });
+                    batchCount++;
+                }
+                
+                if (batchCount === 450) {
+                    await msgBatch.commit();
+                    msgBatch = db.batch();
+                    batchCount = 0;
+                }
+            }
+            if (batchCount > 0) {
+                await msgBatch.commit();
+            }
+        }
+        
+        // Also clean up Invitation Chats
+        const invitationsSnap = await db.collection('invitations').get();
+        for (const invDoc of invitationsSnap.docs) {
+            const oldMessagesSnap = await invDoc.ref.collection('messages')
+                .where('createdAt', '<', thirtyDaysAgo)
+                .get();
+
+            if (oldMessagesSnap.empty) continue;
+
+            let msgBatch = db.batch();
+            let batchCount = 0;
+
+            for (const doc of oldMessagesSnap.docs) {
+                const data = doc.data();
+                if (['image', 'video', 'audio'].includes(data.type)) {
+                    const fileUrl = data.text || data.audioUrl || data.imageUrl;
+                    if (fileUrl && fileUrl.includes('firebasestorage')) {
+                        await deleteStorageFileFromUrl(fileUrl);
+                        filesDeleted++;
+                    }
+                    msgBatch.update(doc.ref, {
+                        type: 'text',
+                        text: '🚫 Media expired',
+                        audioUrl: admin.firestore.FieldValue.delete(),
+                        imageUrl: admin.firestore.FieldValue.delete()
+                    });
+                    batchCount++;
+                }
+                
+                if (batchCount === 450) {
+                    await msgBatch.commit();
+                    msgBatch = db.batch();
+                    batchCount = 0;
+                }
+            }
+            if (batchCount > 0) {
+                await msgBatch.commit();
+            }
+        }
+
+        // Also clean up Direct Conversations Chats
+        const conversationsSnap = await db.collection('conversations').get();
+        for (const convDoc of conversationsSnap.docs) {
+            const oldMessagesSnap = await convDoc.ref.collection('messages')
+                .where('createdAt', '<', thirtyDaysAgo)
+                .get();
+
+            if (oldMessagesSnap.empty) continue;
+
+            let msgBatch = db.batch();
+            let batchCount = 0;
+
+            for (const doc of oldMessagesSnap.docs) {
+                const data = doc.data();
+                if (['image', 'video', 'audio'].includes(data.type)) {
+                    const fileUrl = data.text || data.audioUrl || data.imageUrl;
+                    if (fileUrl && fileUrl.includes('firebasestorage')) {
+                        await deleteStorageFileFromUrl(fileUrl);
+                        filesDeleted++;
+                    }
+                    msgBatch.update(doc.ref, {
+                        type: 'text',
+                        text: '🚫 Media expired',
+                        audioUrl: admin.firestore.FieldValue.delete(),
+                        imageUrl: admin.firestore.FieldValue.delete()
+                    });
+                    batchCount++;
+                }
+                
+                if (batchCount === 450) {
+                    await msgBatch.commit();
+                    msgBatch = db.batch();
+                    batchCount = 0;
+                }
+            }
+            if (batchCount > 0) {
+                await msgBatch.commit();
+            }
+        }
+    } catch (e) {
+        functions.logger.error("Error cleaning up old chat messages:", e);
+    }
+
+    // 2. Delete old community posts with media
+    try {
+        let postBatch = db.batch();
+        let batchCount = 0;
+        const oldPostsSnap = await db.collection('communityPosts')
+            .where('createdAt', '<', thirtyDaysAgo)
+            .get();
+
+        for (const doc of oldPostsSnap.docs) {
+            const data = doc.data();
+            let updated = false;
+
+            if (data.mediaUrl && data.mediaUrl.includes('firebasestorage')) {
+                await deleteStorageFileFromUrl(data.mediaUrl);
+                postBatch.update(doc.ref, { mediaUrl: admin.firestore.FieldValue.delete() });
+                updated = true;
+                filesDeleted++;
+            }
+            if (data.image && data.image.includes('firebasestorage')) {
+                await deleteStorageFileFromUrl(data.image);
+                postBatch.update(doc.ref, { image: admin.firestore.FieldValue.delete() });
+                updated = true;
+                filesDeleted++;
+            }
+            
+            if (updated) {
+                batchCount++;
+            }
+
+            if (batchCount === 450) {
+                await postBatch.commit();
+                postBatch = db.batch();
+                batchCount = 0;
+            }
+        }
+        if (batchCount > 0) {
+            await postBatch.commit();
+        }
+    } catch (e) {
+        functions.logger.error("Error cleaning up old community posts:", e);
+    }
+
+    functions.logger.info(`cleanupOldMedia finished. Deleted ${filesDeleted} media files.`);
+    return null;
+});
+
+// ─── Scheduled: Delete Expired Stories (Runs every hour) ─────────────────────
+exports.deleteExpiredStories = functions.pubsub.schedule('every 1 hours').onRun(async (context) => {
+    const bucket = admin.storage().bucket();
+    const now = admin.firestore.Timestamp.now();
+
+    function extractStoragePath(url) {
+        if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
+        try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
+    }
+
+    try {
+        const expiredStoriesSnap = await db.collection('stories')
+            .where('expiresAt', '<=', now)
+            .get();
+
+        if (expiredStoriesSnap.empty) {
+            console.log('deleteExpiredStories: nothing to process.');
+            return null;
+        }
+
+        console.log(`deleteExpiredStories: removing ${expiredStoriesSnap.size} expired story/stories.`);
+
+        const chunks = [];
+        for (let i = 0; i < expiredStoriesSnap.docs.length; i += 400) {
+            chunks.push(expiredStoriesSnap.docs.slice(i, i + 400));
+        }
+
+        for (const chunk of chunks) {
+            const batch = db.batch();
+            for (const doc of chunk) {
+                const data = doc.data();
+                if (data.url && data.url.includes('firebasestorage')) {
+                    const path = extractStoragePath(data.url);
+                    if (path) {
+                        try { await bucket.file(path).delete(); }
+                        catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
+                    }
+                }
+                batch.delete(doc.ref);
+            }
+            await batch.commit();
+        }
+
+        console.log(`deleteExpiredStories: deleted ${expiredStoriesSnap.size} story/stories.`);
+    } catch (e) {
+        console.error('deleteExpiredStories error:', e);
+    }
+    return null;
+});
+
+// ─── Admin: email campaigns (Resend) — see functions/adminEmailCampaign.js ─
+const { registerAdminEmailCampaign } = require('./adminEmailCampaign');
+registerAdminEmailCampaign({ exports, functions, db, assertAdminContext, admin });
+
+// ─── Auth: verification email via Resend (HTML template) ───────────────────
+const { registerSendVerificationEmailResend } = require('./sendVerificationEmailResend');
+registerSendVerificationEmailResend({ exports, functions, db, admin });
+
+const { registerSendPasswordResetEmailResend } = require('./sendPasswordResetEmailResend');
+registerSendPasswordResetEmailResend({ exports, functions, db, admin });

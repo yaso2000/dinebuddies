@@ -99,6 +99,14 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 
+/* Hide Emoji Picker Category Nav & Labels globally for Chat module */
+.epr-category-nav,
+.epr-emoji-category-label,
+.epr-header,
+.epr-search {
+    display: none !important;
+}
+
 
 
 body,
@@ -119,6 +127,22 @@ html {
     background: linear-gradient(to bottom, var(--bg-dark), var(--bg-darker));
     position: relative;
     overflow: hidden;
+}
+
+/* Scroll-to-bottom: fixed on mobile (viewport); anchored to chat column on desktop */
+.chat-scroll-fab {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 1001;
+}
+
+@media (min-width: 1024px) {
+    .chat-root.chat-container .chat-scroll-fab {
+        position: absolute;
+        bottom: 88px;
+        right: 16px;
+    }
 }
 
 /* Doodle Pattern Overlay (Faint) */
@@ -156,7 +180,7 @@ html {
 
 /* .back-btn: use global definition from index.css (layout override below if needed) */
 .chat-header .back-btn {
-    margin-right: 8px;
+    margin-inline-end: 8px;
     font-size: 1.2rem;
 }
 
@@ -268,7 +292,7 @@ html {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    margin-right: 8px;
+    margin-inline-end: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     object-fit: cover;
@@ -343,13 +367,28 @@ html {
     border-radius: 18px !important;
 }
 
+/* RTL Support for Message Bubbles */
+[dir="rtl"] .message-wrapper.own .message-bubble {
+    border-top-right-radius: 18px;
+    border-top-left-radius: 2px;
+}
+
+[dir="rtl"] .message-wrapper.other .message-bubble {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 2px;
+}
+
+[dir="rtl"] .message-wrapper.consecutive .message-bubble {
+    border-radius: 18px !important;
+}
+
 /* Timestamp */
 .message-meta {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 4px;
-    margin-left: auto;
+    margin-inline-start: auto;
     flex-shrink: 0;
     padding-bottom: 2px;
 }
@@ -494,7 +533,7 @@ html {
 /* Position badge on the right for own messages (Outwards anchor, growing Inwards/Left) */
 .message-wrapper.own .message-reaction-badge {
     left: auto;
-    right: 10px;
+    inset-inline-end: 10px;
 }
 
 .reaction-item {

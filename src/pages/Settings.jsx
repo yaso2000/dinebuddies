@@ -4,54 +4,85 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
-import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
+import { goToLogin } from '../utils/goToLogin';
 
 const Settings = () => {
     const navigate = useNavigate();
-    const { currentUser, userProfile, deleteUserAccount } = useAuth();
+    const { currentUser, userProfile, deleteUserAccount, isBusiness, signOut } = useAuth();
     const { showToast } = useToast();
     const { t, i18n } = useTranslation();
     const { isDark, toggleTheme } = useTheme();
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [deletePassword, setDeletePassword] = useState('');
 
-    const isBusiness = userProfile?.role === 'business';
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    const handleInstallApp = async () => {
+        if (window.__deferredInstallPrompt) {
+            window.__deferredInstallPrompt.prompt();
+            const { outcome } = await window.__deferredInstallPrompt.userChoice;
+            if (outcome === 'accepted') window.__deferredInstallPrompt = null;
+        } else if (isIOS) {
+            showToast('Tap the Share button ↗️ then "Add to Home Screen"', 'info');
+        } else {
+            showToast('Open this page in Chrome and tap ⋮ then "Add to Home Screen"', 'info');
+        }
+    };
 
     // No redirect: show same Settings page on desktop (responsive); business uses dashboard for other things
 
 
     const handleLogout = async () => {
         try {
-            await signOut(auth);
-            navigate('/login');
+            await signOut('/login');
         } catch (error) {
             console.error('Error logging out:', error);
             showToast('Failed to logout. Please try again.', 'error');
         }
     };
 
-    const handleDeleteAccount = async () => {
-        if (!showDeleteConfirm) {
+    const handleDeleteAccount = async (password) => {
+        if (!showDeleteConfirm && !password) {
             setShowDeleteConfirm(true);
             return;
         }
 
         try {
             setDeleting(true);
-            await deleteUserAccount();
-            navigate('/login');
+            await deleteUserAccount(password ? { password } : undefined);
+            goToLogin();
         } catch (error) {
-            console.error('Error deleting account:', error);
-            showToast('Failed to delete account. Please try again.', 'error');
+            const needsPassword = (error?.code === 'auth/requires-recent-login' && error?.requirePassword);
+            if (needsPassword) {
+                setShowPasswordModal(true);
+                setDeleting(false);
+                return;
+            }
+            if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential') {
+                showToast(t('incorrect_password', 'Incorrect password. Please try again.'), 'error');
+            } else {
+                showToast(t('failed_delete_account', 'Failed to delete account. Please try again.'), 'error');
+            }
             setDeleting(false);
             setShowDeleteConfirm(false);
         }
+    };
+
+    const handleDeleteWithPassword = () => {
+        if (!deletePassword.trim()) return;
+        const pwd = deletePassword;
+        setShowPasswordModal(false);
+        setDeletePassword('');
+        handleDeleteAccount(pwd);
     };
 
     const settingsSections = [
@@ -97,7 +128,14 @@ const Settings = () => {
                     value: isDark ? t('dark_mode', 'Dark Mode') : t('light_mode', 'Light Mode'),
                     onClick: toggleTheme,
                     color: isDark ? '#8b5cf6' : '#f59e0b'
-                }
+                },
+                ...(!isStandalone ? [{
+                    icon: <FaDownload />,
+                    label: t('install_app', 'Install App'),
+                    value: isIOS ? t('install_ios_desc', 'Tap Share → Add to Home Screen') : t('install_android_desc', 'Add to your home screen'),
+                    onClick: handleInstallApp,
+                    color: '#E86E2E'
+                }] : [])
             ]
         },
         {
@@ -115,6 +153,12 @@ const Settings = () => {
         {
             title: t('settings_about', 'About & Legal'),
             items: [
+                {
+                    icon: <FaQuestionCircle />,
+                    label: t('help_and_support', 'Help & Support'),
+                    onClick: () => navigate('/support'),
+                    color: '#eab308'
+                },
                 {
                     icon: <FaShieldAlt />,
                     label: t('privacy_policy', 'Privacy Policy'),
@@ -146,12 +190,12 @@ const Settings = () => {
     // Add Business Profile link for business accounts
     if (isBusiness) {
         settingsSections.unshift({
-            title: 'Business',
+            title: t('business', 'Business'),
             items: [
                 {
                     icon: <FaStore />,
-                    label: 'My Business Profile',
-                    value: 'View & edit inline',
+                    label: t('my_business_profile', 'My Business Profile'),
+                    value: t('view_edit_inline', 'View & edit inline'),
                     onClick: () => navigate(`/business/${currentUser?.uid}`),
                     color: '#f97316'
                 }
@@ -168,26 +212,26 @@ const Settings = () => {
         const isPaidBusiness = isElite || isProfessional;
 
         settingsSections.unshift({
-            title: 'Subscription & Billing',
+            title: t('subscription_billing', 'Subscription & Billing'),
             items: [
                 {
                     icon: isElite ? '👑' : isProfessional ? '⚡' : '📦',
-                    label: 'Current Plan',
-                    value: isElite ? 'Elite' : isProfessional ? 'Professional' : 'Free',
+                    label: t('current_plan', 'Current Plan'),
+                    value: isElite ? t('elite', 'Elite') : isProfessional ? t('professional', 'Professional') : t('free', 'Free'),
                     onClick: () => navigate('/settings/subscription'),
                     color: isElite ? '#f59e0b' : isProfessional ? '#8b5cf6' : '#6b7280',
-                    badge: isPaidBusiness ? null : 'Upgrade Available'
+                    badge: isPaidBusiness ? null : t('upgrade_available', 'Upgrade Available')
                 },
                 ...(isPaidBusiness ? [{
                     icon: '💳',
-                    label: 'Payment Method',
-                    value: userProfile?.paymentMethod || 'Not set',
+                    label: t('payment_method', 'Payment Method'),
+                    value: userProfile?.paymentMethod || t('not_set', 'Not set'),
                     onClick: () => navigate('/settings/payment'),
                     color: '#8b5cf6'
                 }] : []),
                 ...(isPaidBusiness ? [{
                     icon: '📄',
-                    label: 'Billing History',
+                    label: t('billing_history', 'Billing History'),
                     value: '',
                     onClick: () => navigate('/settings/billing'),
                     color: '#10b981'
@@ -210,7 +254,7 @@ const Settings = () => {
                         <FaArrowLeft />
                     </button>
                     <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                        ⚙️ Settings
+                        ⚙️ {t('settings_title_page', 'Settings')}
                     </h3>
                     <div style={{ width: '40px' }}></div>
                 </header>
@@ -232,24 +276,24 @@ const Settings = () => {
                     }}>
                         <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>👤</div>
                         <h2 className="ui-prompt__title" style={{ color: 'white', fontSize: '1.5rem' }}>
-                            Guest Mode
+                            {t('guest_mode', 'Guest Mode')}
                         </h2>
                         <p className="ui-prompt__desc" style={{ color: 'rgba(255,255,255,0.9)', marginBottom: '2rem' }}>
-                            You're browsing as a guest. Sign in to access all settings and personalize your experience!
+                            {t('guest_mode_desc', 'You\'re browsing as a guest. Sign in to access all settings and personalize your experience!')}
                         </p>
                         <button
-                            onClick={() => navigate('/login')}
+                            onClick={() => goToLogin()}
                             className="ui-btn ui-btn--primary"
                             style={{ width: '100%', marginBottom: '0.75rem', background: 'white', color: 'var(--primary)' }}
                         >
-                            Sign In / Sign Up
+                            {t('sign_in_up', 'Sign In / Sign Up')}
                         </button>
                         <button
                             onClick={() => navigate('/')}
                             className="ui-btn ui-btn--ghost"
                             style={{ width: '100%', borderColor: 'white', color: 'white' }}
                         >
-                            Continue Browsing
+                            {t('continue_browsing', 'Continue Browsing')}
                         </button>
                     </div>
 
@@ -289,8 +333,8 @@ const Settings = () => {
                                     <FaGlobe />
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    <div style={{ fontWeight: '700', marginBottom: '2px' }}>Language</div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>English</div>
+                                    <div style={{ fontWeight: '700', marginBottom: '2px' }}>{t('welcome_language', 'Language')}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('english', 'English')}</div>
                                 </div>
                                 <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }} />
                             </div>
@@ -314,7 +358,7 @@ const Settings = () => {
                 >
                     <FaArrowLeft />
                 </button>
-                <h2 className="settings-title">Settings</h2>
+                <h2 className="settings-title">{t('settings_title_page', 'Settings')}</h2>
             </div>
 
             {/* User Info Card */}
@@ -359,7 +403,7 @@ const Settings = () => {
                                 fontWeight: '700',
                                 color: 'var(--primary)'
                             }}>
-                                Business Account
+                                {t('business_account_badge', 'Business Account')}
                             </div>
                         )}
                         {isBusiness && (userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'professional') && (
@@ -460,7 +504,7 @@ const Settings = () => {
 
             {/* Danger Zone */}
                 <div className="settings-section">
-                    <h3 className="settings-section-title settings-section-title--danger">Danger Zone</h3>
+                    <h3 className="settings-section-title settings-section-title--danger">{t('danger_zone', 'Danger Zone')}</h3>
                     <div className="settings-section-card ui-card">
                     {/* Logout */}
                     <div
@@ -495,14 +539,14 @@ const Settings = () => {
                             <FaSignOutAlt />
                         </div>
                         <div style={{ flex: 1, fontWeight: '700', color: '#ef4444' }}>
-                            Logout
+                            {t('logout')}
                         </div>
                         <FaChevronRight style={{ color: '#ef4444', fontSize: '0.9rem' }} />
                     </div>
 
                     {/* Delete Account */}
                     <div
-                        onClick={handleDeleteAccount}
+                        onClick={() => handleDeleteAccount()}
                         style={{
                             padding: '1rem 1.25rem',
                             display: 'flex',
@@ -533,11 +577,11 @@ const Settings = () => {
                         </div>
                         <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: '700', color: '#ef4444', marginBottom: '2px' }}>
-                                {showDeleteConfirm ? 'Tap again to confirm' : 'Delete Account'}
+                                {showDeleteConfirm ? t('tap_again_confirm', 'Tap again to confirm') : t('delete_account_confirm', 'Delete Account')}
                             </div>
                             {showDeleteConfirm && (
                                 <div style={{ fontSize: '0.85rem', color: '#ef4444' }}>
-                                    This action cannot be undone
+                                    {t('action_cannot_undone', 'This action cannot be undone')}
                                 </div>
                             )}
                         </div>
@@ -557,8 +601,86 @@ const Settings = () => {
                 </div>
             </div>
 
+            {/* Password modal for delete (when re-auth required) */}
+            {showPasswordModal && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        padding: '1rem'
+                    }}
+                    onClick={() => { setShowPasswordModal(false); setDeletePassword(''); }}
+                >
+                    <div
+                        style={{
+                            background: 'var(--surface, #fff)',
+                            borderRadius: '16px',
+                            padding: '1.5rem',
+                            maxWidth: '360px',
+                            width: '100%',
+                            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ marginBottom: '1rem', fontWeight: 700, fontSize: '1.1rem' }}>
+                            {t('re_enter_password', 'Re-enter password')}
+                        </div>
+                        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary, #666)' }}>
+                            {t('security_confirm_deletion', 'For your security, please enter your password to confirm account deletion.')}
+                        </p>
+                        <input
+                            type="password"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            placeholder="Password"
+                            autoFocus
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '10px',
+                                border: '1px solid var(--border, #e5e7eb)',
+                                marginBottom: '1rem',
+                                fontSize: '1rem'
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleDeleteWithPassword()}
+                        />
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => { setShowPasswordModal(false); setDeletePassword(''); }}
+                                style={{
+                                    padding: '0.6rem 1.2rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid var(--border)',
+                                    background: 'transparent'
+                                }}
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={handleDeleteWithPassword}
+                                disabled={!deletePassword.trim() || deleting}
+                                style={{
+                                    padding: '0.6rem 1.2rem',
+                                    borderRadius: '10px',
+                                    background: '#ef4444',
+                                    color: '#fff',
+                                    border: 'none'
+                                }}
+                            >
+                                {deleting ? t('deleting', 'Deleting...') : t('delete_account_confirm', 'Delete Account')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* App Version */}
-            <div className="settings-version">DineBuddies v1.0.0</div>
+            <div className="settings-version">{t('app_version', 'DineBuddies v1.0.0')}</div>
             </div>
         </div>
     );

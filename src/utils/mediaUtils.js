@@ -154,3 +154,19 @@ export const formatDuration = (seconds) => {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
+
+class MediaManager {
+    constructor() {
+        this.listeners = new Set();
+        this.activeId = null;
+    }
+    play(id) {
+        this.activeId = id;
+        this.listeners.forEach(fn => fn(id));
+    }
+    subscribe(fn) {
+        this.listeners.add(fn);
+        return () => this.listeners.delete(fn);
+    }
+}
+export const globalMediaManager = new MediaManager();

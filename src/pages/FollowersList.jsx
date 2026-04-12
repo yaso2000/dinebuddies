@@ -1,109 +1,111 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowRight, FaComments, FaUserPlus, FaUserCheck, FaUsers, FaHeart } from 'react-icons/fa';
 import { getFollowers, getFollowing, getMutualFollowersCount } from '../utils/followHelpers';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const FollowersList = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
+    const { userId: paramUserId } = useParams();
     const { currentUser, toggleFollow } = useInvitations();
     const { userProfile } = useAuth();
-    // Use state from location if available, otherwise default to 'mutual' or 'following' if mutual is empty? 
-    // Sticking to 'mutual' as default is safer, but let's respect the user's entry point.
-    const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'mutual');
-
     const [followers, setFollowers] = useState([]);
     const [following, setFollowing] = useState([]);
     const [mutualFollowers, setMutualFollowers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [profileName, setProfileName] = useState('');
+
+    // Whose network are we viewing?
+    const viewedUserId = paramUserId || currentUser?.id || currentUser?.uid;
+    const isOwnProfile = !paramUserId || paramUserId === (currentUser?.id || currentUser?.uid);
+
+    // Default to followers when viewing someone else, keep context when viewing own
+    const [activeTab, setActiveTab] = useState(!isOwnProfile ? 'followers' : (location.state?.activeTab || 'mutual'));
+
 
     useEffect(() => {
-        const userId = currentUser?.id || currentUser?.uid;
-
-        if (!userId) {
-            // Keep loading if we expect a user, but maybe set a timeout to stop it?
-            // Or just return and wait for the user to load.
-            return;
-        }
+        if (!viewedUserId) return;
 
         const fetchFollowData = async () => {
             setLoading(true);
             try {
-                // Prepare IDs
-                const followingIds = currentUser.following || [];
-
-                // 1. Fetch Followers (people who follow me)
-                let followersData = [];
-                try {
-                    followersData = await getFollowers(userId);
-                } catch (e) {
-                    console.error('Failed to get followers:', e);
+                // If viewing another user, get their following list from Firestore
+                let viewedFollowingIds = [];
+                if (!isOwnProfile) {
+                    const userDoc = await getDoc(doc(db, 'users', viewedUserId));
+                    if (userDoc.exists()) {
+                        viewedFollowingIds = userDoc.data().following || [];
+                        setProfileName(userDoc.data().display_name || userDoc.data().name || '');
+                    }
+                } else {
+                    viewedFollowingIds = currentUser?.following || [];
                 }
 
-                // 2. Fetch Following (people I follow)
+                const myFollowingIds = currentUser?.following || [];
+
+                // 1. Fetch Followers
+                let followersData = [];
+                try { followersData = await getFollowers(viewedUserId); } catch (e) {}
+
+                // 2. Fetch Following
                 let followingData = [];
                 try {
-                    if (followingIds.length > 0) {
-                        followingData = await getFollowing(userId, followingIds);
+                    if (viewedFollowingIds.length > 0) {
+                        followingData = await getFollowing(viewedUserId, viewedFollowingIds);
                     }
-                } catch (e) {
-                    console.error('Failed to get following:', e);
-                }
+                } catch (e) {}
 
-                // 3. Calculate Mutuals (Intersection)
-                // Mutual = I follow them AND they follow me
-                // We can derive this from the two lists we just fetched
+                // 3. Mutuals
                 const followersIds = followersData.map(u => u.id);
-                // Users I follow who are ALSO in my followers list
                 const mutualData = followingData.filter(user => followersIds.includes(user.id));
 
-                // Process Metadata (isFollowingMe, isFollowedByMe, mutualCount)
-
-                // For Followers List:
                 const followersProcessed = followersData.map(user => ({
                     ...user,
-                    isFollowingMe: true, // They are in my followers list
-                    isFollowedByMe: followingIds.includes(user.id), // Do I follow them?
-                    mutualFollowersCount: getMutualFollowersCount(followingIds, user.following || [])
+                    isFollowingMe: true,
+                    isFollowedByMe: myFollowingIds.includes(user.id),
+                    mutualFollowersCount: getMutualFollowersCount(myFollowingIds, user.following || [])
                 }));
 
-                // For Following List:
                 const followingProcessed = followingData.map(user => ({
                     ...user,
-                    isFollowingMe: (user.following || []).includes(userId), // Do they follow me?
-                    isFollowedByMe: true, // I follow them
-                    mutualFollowersCount: getMutualFollowersCount(followingIds, user.following || [])
+                    isFollowingMe: (user.following || []).includes(viewedUserId),
+                    isFollowedByMe: myFollowingIds.includes(user.id),
+                    mutualFollowersCount: getMutualFollowersCount(myFollowingIds, user.following || [])
                 }));
 
-                // For Mutual List:
                 const mutualProcessed = mutualData.map(user => ({
                     ...user,
                     isFollowingMe: true,
-                    isFollowedByMe: true,
-                    mutualFollowersCount: getMutualFollowersCount(followingIds, user.following || [])
+                    isFollowedByMe: myFollowingIds.includes(user.id),
+                    mutualFollowersCount: getMutualFollowersCount(myFollowingIds, user.following || [])
                 }));
 
                 setFollowers(followersProcessed);
                 setFollowing(followingProcessed);
                 setMutualFollowers(mutualProcessed);
-
             } catch (error) {
-                console.error('❌ Error fetching follow data:', error);
+                console.error('Error fetching follow data:', error);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchFollowData();
-    }, [currentUser]); // Re-run when currentUser updates (e.g. following list changes)
+    }, [viewedUserId, currentUser]);
 
     // Filter users based on active tab
     const getFilteredUsers = () => {
+        // If viewing someone else, force showing only followers
+        if (!isOwnProfile) return followers;
+
         switch (activeTab) {
             case 'followers': return followers;
             case 'following': return following;
@@ -130,10 +132,9 @@ const FollowersList = () => {
     return (
         <div className="page-container" style={{ paddingBottom: '100px', minHeight: '100vh' }}>
             {/* Header */}
-            {/* Minimal Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '8px 8px 2px' }}>
                 <button
-                    onClick={() => navigate('/profile')}
+                    onClick={() => isOwnProfile ? navigate('/profile') : navigate(-1)}
                     style={{
                         background: 'none',
                         border: 'none',
@@ -148,7 +149,7 @@ const FollowersList = () => {
                     <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
                 </button>
                 <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>
-                    {t('followers') || 'Network'}
+                    {profileName ? `${t('network_of', 'Network of')} ${profileName}` : (t('followers') || 'Network')}
                 </h2>
             </div>
 
@@ -163,40 +164,42 @@ const FollowersList = () => {
                         marginBottom: '1rem',
                         overflow: 'hidden'
                     }}>
-                        {/* Tabs Section */}
-                        <div style={{
-                            display: 'flex',
-                            borderBottom: '1px solid var(--border-color)',
-                            background: 'rgba(0,0,0,0.1)'
-                        }}>
-                            {['mutual', 'followers', 'following'].map((tab) => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    style={{
-                                        flex: 1,
-                                        padding: '12px',
-                                        border: 'none',
-                                        background: activeTab === tab ? 'var(--primary)' : 'transparent',
-                                        color: activeTab === tab ? 'white' : 'var(--text-muted)',
-                                        fontSize: '0.85rem',
-                                        fontWeight: '800',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        transition: 'all 0.3s'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-                                        {tab === 'mutual' && <FaHeart className={activeTab === 'mutual' ? 'beat-icon' : ''} />}
-                                        {tab === 'followers' && <FaUsers />}
-                                        {tab === 'following' && <FaUserCheck />}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
+                        {/* Tabs Section - Only show if it is the user's own profile */}
+                        {isOwnProfile && (
+                            <div style={{
+                                display: 'flex',
+                                borderBottom: '1px solid var(--border-color)',
+                                background: 'rgba(0,0,0,0.1)'
+                            }}>
+                                {['mutual', 'followers', 'following'].map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        style={{
+                                            flex: 1,
+                                            padding: '12px',
+                                            border: 'none',
+                                            background: activeTab === tab ? 'var(--primary)' : 'transparent',
+                                            color: activeTab === tab ? 'white' : 'var(--text-muted)',
+                                            fontSize: '0.85rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            transition: 'all 0.3s'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                                            {tab === 'mutual' && <FaHeart className={activeTab === 'mutual' ? 'beat-icon' : ''} />}
+                                            {tab === 'followers' && <FaUsers />}
+                                            {tab === 'following' && <FaUserCheck />}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Stats Section */}
                         <div style={{
@@ -204,15 +207,19 @@ const FollowersList = () => {
                             background: 'linear-gradient(180deg, rgba(139, 92, 246, 0.05) 0%, transparent 100%)'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
-                                <div>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                        {mutualFollowers.length}
-                                    </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
-                                        {t('mutual')}
-                                    </div>
-                                </div>
-                                <div style={{ borderLeft: '1px solid var(--border-color)' }}></div>
+                                {isOwnProfile && (
+                                    <>
+                                        <div>
+                                            <div style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                                {mutualFollowers.length}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
+                                                {t('mutual')}
+                                            </div>
+                                        </div>
+                                        <div style={{ borderLeft: '1px solid var(--border-color)' }}></div>
+                                    </>
+                                )}
                                 <div>
                                     <div style={{ fontSize: '1.5rem', fontWeight: '900', color: 'white' }}>
                                         {followers.length}
@@ -221,15 +228,19 @@ const FollowersList = () => {
                                         {t('followers')}
                                     </div>
                                 </div>
-                                <div style={{ borderLeft: '1px solid var(--border-color)' }}></div>
-                                <div>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: 'white' }}>
-                                        {following.length}
-                                    </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
-                                        {t('following')}
-                                    </div>
-                                </div>
+                                {isOwnProfile && (
+                                    <>
+                                        <div style={{ borderLeft: '1px solid var(--border-color)' }}></div>
+                                        <div>
+                                            <div style={{ fontSize: '1.5rem', fontWeight: '900', color: 'white' }}>
+                                                {following.length}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>
+                                                {t('following')}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -276,16 +287,45 @@ const FollowersList = () => {
                                             width: '50px',
                                             height: '50px',
                                             borderRadius: '50%',
-                                            border: `2px solid ${isMutualFollow(user) ? 'var(--primary)' : 'var(--border-color)'}`,
+                                            border: `2px solid ${isMutualFollow(user) && isOwnProfile ? 'var(--primary)' : getGenderBorderColor(user)}`,
                                             overflow: 'hidden'
                                         }}>
-                                            <img
-                                                src={getSafeAvatar(user)}
+                                            <UserAvatar
+                                                user={user}
                                                 alt={user.name}
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                onError={(e) => { e.target.src = getSafeAvatar(null); }}
                                             />
                                         </div>
+                                        {/* Avatar Plus Badge just like in UserProfile */}
+                                        {userProfile?.role !== 'business' && !user.isFollowedByMe && user.id !== (currentUser?.id || currentUser?.uid) && (
+                                            <div
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleFollow(user.id);
+                                                    
+                                                    // Optimistic update for the badge
+                                                    if (!isOwnProfile) {
+                                                        setFollowers(prev => prev.map(u => 
+                                                            u.id === user.id ? { ...u, isFollowedByMe: true } : u
+                                                        ));
+                                                    } else {
+                                                        const updater = prev => prev.map(u => 
+                                                            u.id === user.id ? { ...u, isFollowedByMe: true } : u
+                                                        );
+                                                        setFollowers(updater);
+                                                        setFollowing(updater);
+                                                        setMutualFollowers(updater);
+                                                    }
+                                                }}
+                                                style={{
+                                                    position: 'absolute', bottom: '-2px', insetInlineEnd: '-2px',
+                                                    width: '20px', height: '20px', borderRadius: '50%',
+                                                    background: 'var(--primary)', border: '2px solid var(--bg-card)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '12px', color: 'white', fontWeight: '900', lineHeight: 1, zIndex: 1
+                                                }}
+                                            >+</div>
+                                        )}
                                     </div>
 
                                     {/* User Info */}
@@ -307,7 +347,7 @@ const FollowersList = () => {
 
                                     {/* Action Buttons */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {/* Chat Button - Only for mutual followers */}
+                                        {/* Chat Button - Only if mutual with ME (current viewer) */}
                                         {isMutualFollow(user) && (
                                             <button
                                                 onClick={(e) => {
@@ -333,56 +373,7 @@ const FollowersList = () => {
                                                 {t('chat')}
                                             </button>
                                         )}
-
-                                        {/* Follow/Unfollow Button - Business accounts cannot follow regular users */}
-                                        {userProfile?.role !== 'business' && (
-                                        !user.isFollowedByMe ? (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleFollow(user.id);
-                                                }}
-                                                style={{
-                                                    background: 'rgba(139, 92, 246, 0.1)',
-                                                    color: 'var(--primary)',
-                                                    border: '1px solid var(--primary)',
-                                                    borderRadius: '12px',
-                                                    padding: '8px 12px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '800',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                <FaUserPlus /> {t('follow')}
-                                            </button>
-                                        ) : (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleFollow(user.id);
-                                                }}
-                                                style={{
-                                                    background: 'rgba(139, 92, 246, 0.15)',
-                                                    color: 'var(--primary)',
-                                                    border: '2px solid var(--primary)',
-                                                    borderRadius: '12px',
-                                                    padding: '8px 12px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '900',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                            >
-                                                <FaUserCheck /> {t('following')}
-                                            </button>
-                                        )
-                                        )}
+                                        {/* We removed the full Follow/Unfollow button and replaced it with Avatar Badge logic */}
                                     </div>
                                 </div>
                             ))

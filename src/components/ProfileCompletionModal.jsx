@@ -14,7 +14,7 @@ const ProfileCompletionModal = () => {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const location = useLocation();
-    const { currentUser, userProfile, isGuest, loading } = useAuth();
+    const { currentUser, userProfile, isGuest, loading, isBusiness } = useAuth();
     const { isDark } = useTheme();
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,10 +25,20 @@ const ProfileCompletionModal = () => {
     });
 
     // Check for missing fields and open modal if necessary
-    // Canonical: only role. Business/partner skip gender/age.
-    const isBusinessRole = userProfile?.role === 'business' || userProfile?.isBusiness;
+    // Skip for: business, admin, staff, support, guest, partner (same rules as ProfileGuard / normalizeProfile)
+    const roleLc = String(userProfile?.role || '').toLowerCase();
+    const hasBizInfo =
+        userProfile?.businessInfo &&
+        typeof userProfile.businessInfo === 'object' &&
+        Object.keys(userProfile.businessInfo).length > 0;
+    const skipForRole =
+        isBusiness ||
+        hasBizInfo ||
+        userProfile?.pendingBusinessRegistration ||
+        ['admin', 'staff', 'support', 'guest', 'partner', 'business'].includes(roleLc) ||
+        String(userProfile?.accountType || '').toLowerCase() === 'business';
     useEffect(() => {
-        if (loading || !userProfile || isGuest || isBusinessRole || userProfile?.role === 'guest') {
+        if (loading || !userProfile || isGuest || skipForRole) {
             setIsOpen(false);
             return;
         }
@@ -59,7 +69,7 @@ const ProfileCompletionModal = () => {
         } else {
             setIsOpen(false);
         }
-    }, [userProfile, loading, isGuest, isBusinessRole]);
+    }, [userProfile, loading, isGuest, skipForRole]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -146,68 +156,86 @@ const ProfileCompletionModal = () => {
         { value: 'unspecified', label: t('non_binary', 'Non-Binary'), icon: IoMaleFemale }
     ];
 
+    const reqStar = <span style={{ color: '#f97316', fontWeight: 800 }} aria-hidden="true"> *</span>;
+
     return (
         <div style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
+            inset: 0,
+            width: '100%',
+            maxWidth: '100vw',
+            minHeight: '100dvh',
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
             backdropFilter: 'blur(8px)',
             zIndex: 10000,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            animation: 'fadeIn 0.3s ease-out',
+            paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
+            paddingBottom: 'max(20px, env(safe-area-inset-bottom, 0px))',
+            paddingLeft: 12,
+            paddingRight: 12,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            animation: 'fadeIn 0.3s ease-out'
+            alignItems: 'flex-start',
+            justifyContent: 'center'
         }}>
             <div style={{
                 background: 'var(--bg-card)',
-                borderRadius: '24px',
-                padding: '2rem',
+                borderRadius: '20px',
+                padding: '1.15rem 1.1rem',
                 width: '100%',
                 maxWidth: '480px',
+                marginTop: 'clamp(8px, 3vh, 24px)',
+                marginBottom: '24px',
+                maxHeight: 'min(92dvh, 720px)',
+                overflowY: 'auto',
                 boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 10px 30px rgba(0, 0, 0, 0.1)',
                 border: '1px solid var(--border-color)',
                 position: 'relative',
                 animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
             }}>
-                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
                     <div style={{
-                        width: '60px',
-                        height: '60px',
+                        width: '48px',
+                        height: '48px',
                         background: 'linear-gradient(135deg, var(--premium-orange), #f97316)',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        margin: '0 auto 1rem auto',
-                        fontSize: '1.5rem',
+                        margin: '0 auto 0.65rem auto',
+                        fontSize: '1.25rem',
                         color: '#fff',
                         boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)'
                     }}>
                         <FaUser />
                     </div>
                     <h2 style={{
-                        fontSize: '1.5rem',
+                        fontSize: '1.25rem',
                         fontWeight: 'bold',
-                        marginBottom: '0.5rem',
+                        marginBottom: '0.35rem',
                         color: 'var(--text-main)'
                     }}>
                         {t('complete_profile', 'Complete Your Profile')}
                     </h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.4, marginBottom: '0.35rem' }}>
                         {t('complete_profile_desc', 'Please provide a few details to get the best experience.')}
+                    </p>
+                    <p style={{ color: '#f97316', fontSize: '0.75rem', fontWeight: 700, margin: 0 }}>
+                        {t('required_fields_note', 'Fields marked with * are required.')}
+                    </p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.68rem', lineHeight: 1.35, margin: '0.45rem 0 0', opacity: 0.95 }}>
+                        {t('warning_permanent_demographics_short', 'Gender and age category cannot be changed after saving.')}
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     {/* Display Name - Only show if missing or empty */}
                     {!userProfile?.displayName && (
-                        <div style={{ marginBottom: '1.25rem' }}>
-                            <label style={{ display: 'block', color: 'var(--text-secondary)', marginBottom: '8px', fontSize: '0.9rem' }}>
+                        <div style={{ marginBottom: '0.85rem' }}>
+                            <label style={{ display: 'block', color: 'var(--text-secondary)', marginBottom: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
                                 {t('display_name', 'Display Name / Nickname')}
+                                {reqStar}
                             </label>
                             <input
                                 type="text"
@@ -229,9 +257,10 @@ const ProfileCompletionModal = () => {
 
                     {/* Gender */}
                     {!userProfile?.gender && (
-                        <div style={{ marginBottom: '1.25rem' }}>
-                            <label style={{ display: 'block', color: 'var(--text-secondary)', marginBottom: '8px', fontSize: '0.9rem' }}>
+                        <div style={{ marginBottom: '0.85rem' }}>
+                            <label style={{ display: 'block', color: 'var(--text-secondary)', marginBottom: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
                                 {t('select_gender', 'Select Gender')}
+                                {reqStar}
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                                 {genderOptions.map((option) => {
@@ -242,8 +271,8 @@ const ProfileCompletionModal = () => {
                                             type="button"
                                             onClick={() => setFormData({ ...formData, gender: option.value })}
                                             style={{
-                                                padding: '10px',
-                                                borderRadius: '12px',
+                                                padding: '8px 6px',
+                                                borderRadius: '10px',
                                                 border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                 background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--bg-input)',
                                                 color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
@@ -251,7 +280,7 @@ const ProfileCompletionModal = () => {
                                                 display: 'flex',
                                                 flexDirection: 'column',
                                                 alignItems: 'center',
-                                                gap: '4px',
+                                                gap: '2px',
                                                 transition: 'all 0.2s'
                                             }}
                                         >
@@ -266,9 +295,10 @@ const ProfileCompletionModal = () => {
 
                     {/* Age Category */}
                     {!userProfile?.ageCategory && (
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', color: 'var(--text-secondary)', marginBottom: '8px', fontSize: '0.9rem' }}>
+                        <div style={{ marginBottom: '0.85rem' }}>
+                            <label style={{ display: 'block', color: 'var(--text-secondary)', marginBottom: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
                                 {t('select_age_category', 'Select Age Category')}
+                                {reqStar}
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                                 {ageOptions.map((option) => {
@@ -279,14 +309,14 @@ const ProfileCompletionModal = () => {
                                             type="button"
                                             onClick={() => setFormData({ ...formData, ageCategory: option.value })}
                                             style={{
-                                                padding: '10px',
-                                                borderRadius: '12px',
+                                                padding: '8px 6px',
+                                                borderRadius: '10px',
                                                 border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                                 background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--bg-input)',
                                                 color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
                                                 cursor: 'pointer',
                                                 transition: 'all 0.2s',
-                                                fontSize: '0.9rem'
+                                                fontSize: '0.82rem'
                                             }}
                                         >
                                             {option.label}
@@ -302,16 +332,17 @@ const ProfileCompletionModal = () => {
                         disabled={isSubmitting}
                         style={{
                             width: '100%',
-                            padding: '14px',
-                            borderRadius: '16px',
+                            padding: '12px',
+                            borderRadius: '14px',
                             background: 'linear-gradient(135deg, var(--premium-orange), #fbbf24)',
                             color: 'white',
-                            fontSize: '1rem',
+                            fontSize: '0.95rem',
                             fontWeight: 'bold',
                             border: 'none',
                             cursor: isSubmitting ? 'not-allowed' : 'pointer',
                             opacity: isSubmitting ? 0.7 : 1,
-                            boxShadow: '0 4px 15px rgba(249, 115, 22, 0.3)'
+                            boxShadow: '0 4px 15px rgba(249, 115, 22, 0.3)',
+                            marginTop: '4px'
                         }}
                     >
                         {isSubmitting ? t('saving', 'Saving...') : t('save_and_continue', 'Save & Continue')}

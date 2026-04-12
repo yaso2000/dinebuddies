@@ -6,8 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import NewReportModal from '../components/NewReportModal';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment, FaChevronRight } from 'react-icons/fa';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment, FaChevronRight, FaHeart, FaBan, FaComments } from 'react-icons/fa';
+import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getFollowers, getFollowing } from '../utils/followHelpers';
+import UserAvatar from '../components/UserAvatar';
+import { goToLogin } from '../utils/goToLogin';
 
 const InvitationListItem = ({ inv, navigate, t }) => (
     <div
@@ -40,11 +43,22 @@ const UserProfile = () => {
     const { userId } = useParams();
     const navigate = useNavigate();
     const { invitations, currentUser, toggleFollow, submitReport } = useInvitations();
+    const handleToggleFollow = (targetUserId, e) => {
+        e.stopPropagation();
+        if (currentUser?.isGuest || !currentUser) { goToLogin(); return; }
+        // Optimistic UI update — toggle isFollowedByMe locally
+        setNetworkUsers(prev => prev.map(u =>
+            u.id === targetUserId ? { ...u, isFollowedByMe: !u.isFollowedByMe } : u
+        ));
+        toggleFollow(targetUserId);
+    };
     const { userProfile } = useAuth();
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('public');
+    const [networkUsers, setNetworkUsers] = useState([]);
+    const [networkLoading, setNetworkLoading] = useState(false);
 
     // Fetch user data from Firestore
     useEffect(() => {
@@ -64,6 +78,15 @@ const UserProfile = () => {
 
                 if (userDoc.exists()) {
                     const userData = { id: userDoc.id, ...userDoc.data() };
+                    
+                    // SECURITY BLOCK: Prevent normal users/businesses from viewing admin profiles
+                    if (userData.role === 'admin' && currentUser?.role !== 'admin') {
+                        console.warn("Unauthorized access to admin profile blocked.");
+                        setUser(null); // Pretend the user doesn't exist
+                        setLoading(false);
+                        return;
+                    }
+
                     console.log('✅ User data loaded:', userData);
                     setUser(userData);
                 } else {
@@ -80,6 +103,29 @@ const UserProfile = () => {
 
         fetchUser();
     }, [userId, currentUser, navigate]);
+
+    // Fetch followers preview for this user
+    useEffect(() => {
+        if (!userId) return;
+        const fetchNetwork = async () => {
+            setNetworkLoading(true);
+            try {
+                const myFollowingIds = currentUser?.following || [];
+
+                let followersData = [];
+                try { followersData = await getFollowers(userId); } catch (e) {}
+
+                const allNetwork = followersData.map(u => ({ 
+                    ...u, 
+                    isFollowedByMe: myFollowingIds.includes(u.id) 
+                }));
+                
+                setNetworkUsers(allNetwork);
+            } catch (e) {}
+            setNetworkLoading(false);
+        };
+        fetchNetwork();
+    }, [userId, currentUser]);
 
     // Loading state
     if (loading) {
@@ -103,6 +149,9 @@ const UserProfile = () => {
     }
 
     const isFollowing = currentUser?.following?.includes(userId);
+    // Respect the target user's "Allow Following" privacy setting.
+    // Defaults to true for users who haven't configured it yet.
+    const canBeFollowed = user.privacySettings?.allowFollowing !== false;
 
     const publicInvitations = invitations.filter(inv =>
         inv.author?.id === userId &&
@@ -157,7 +206,7 @@ const UserProfile = () => {
                                 width: '130px',
                                 height: '130px',
                                 margin: '0 auto',
-                                border: `4px solid var(--primary)`,
+                                border: `4px solid ${getGenderBorderColor(user)}`,
                                 position: 'relative',
                                 background: 'var(--hover-overlay)'
                             }}
@@ -174,23 +223,24 @@ const UserProfile = () => {
                             />
                             {user.isOnline && <div className="host-status-online"></div>}
                         </div>
+
                     </div>
 
                     <h1 style={{ fontSize: '2rem', fontWeight: '900', marginTop: '1rem', marginBottom: '0.5rem' }}>
                         {user.name || user.display_name || t('dinebuddy_member') || 'DineBuddy Member'}
                     </h1>
 
-                    <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--profile-stack-gap)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         {user.isOnline
-                            ? <><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> Online</>
+                            ? <><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> {t('status_online', 'Online')}</>
                             : t('active_member')}
                     </p>
 
                     {/* Stats */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '2rem' }}>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: 'white' }}>
-                                {publicInvitations.length + privateInvitations.length}
+                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: 'var(--text-main)' }}>
+                                {publicInvitations.length}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                 {t('invitations')}
@@ -207,7 +257,7 @@ const UserProfile = () => {
                         </div>
                         <div style={{ borderRight: '1px solid var(--border-color)' }}></div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: 'white' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: 'var(--text-main)' }}>
                                 {joinedInvitations.length}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -219,51 +269,71 @@ const UserProfile = () => {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '500px', margin: '0 auto' }}>
                         {/* Business accounts cannot follow regular users */}
-                        {userProfile?.role !== 'business' && (
-                        <button
-                            onClick={() => {
-                                if (currentUser?.isGuest || !currentUser) {
-                                    navigate('/login');
-                                    return;
-                                }
-                                toggleFollow(userId);
-                            }}
-                            className="btn"
-                            style={{
+                        {userProfile?.role !== 'business' && canBeFollowed && (
+                            <button
+                                onClick={() => {
+                                    if (currentUser?.isGuest || !currentUser) {
+                                        goToLogin();
+                                        return;
+                                    }
+                                    toggleFollow(userId);
+                                }}
+                                className="btn"
+                                style={{
+                                    flex: 1,
+                                    height: '55px',
+                                    background: isFollowing
+                                        ? 'rgba(139, 92, 246, 0.15)'
+                                        : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+                                    border: isFollowing ? '2px solid var(--primary)' : 'none',
+                                    color: isFollowing ? 'var(--primary)' : 'white',
+                                    fontSize: '1rem',
+                                    fontWeight: '900',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '10px',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {isFollowing ? (
+                                    <>
+                                        <FaCheckCircle />
+                                        <span>{t('following')}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <FaUserFriends />
+                                        <span>{t('follow')}</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
+                        {/* Show a "following locked" badge when the user has disabled following */}
+                        {userProfile?.role !== 'business' && !canBeFollowed && (
+                            <div style={{
                                 flex: 1,
                                 height: '55px',
-                                background: isFollowing
-                                    ? 'rgba(139, 92, 246, 0.15)'
-                                    : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                                border: isFollowing ? '2px solid var(--primary)' : 'none',
-                                color: isFollowing ? 'var(--primary)' : 'white',
-                                fontSize: '1rem',
-                                fontWeight: '900',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '10px',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {isFollowing ? (
-                                <>
-                                    <FaCheckCircle />
-                                    <span>{t('following')}</span>
-                                </>
-                            ) : (
-                                <>
-                                    <FaUserFriends />
-                                    <span>{t('follow')}</span>
-                                </>
-                            )}
-                        </button>
+                                gap: '8px',
+                                background: 'rgba(100,100,120,0.12)',
+                                border: '1px solid rgba(100,100,120,0.25)',
+                                borderRadius: '12px',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.9rem',
+                                fontWeight: '700',
+                                cursor: 'default',
+                            }}>
+                                {t('following_disabled', '🔒 Following Disabled')}
+                            </div>
                         )}
 
                         <button
                             onClick={() => {
                                 if (currentUser?.isGuest) {
-                                    navigate('/login');
+                                    goToLogin();
                                     return;
                                 }
                                 navigate(`/chat/${userId}`);
@@ -290,7 +360,7 @@ const UserProfile = () => {
                         <button
                             onClick={() => {
                                 if (currentUser?.isGuest) {
-                                    navigate('/login');
+                                    goToLogin();
                                     return;
                                 }
                                 setIsReportModalOpen(true);
@@ -308,7 +378,7 @@ const UserProfile = () => {
                                 fontSize: '1.2rem',
                                 padding: 0
                             }}
-                            title="Report User"
+                            title={t('report_user_btn', 'Report User')}
                         >
                             <FaFlag />
                         </button>
@@ -326,9 +396,12 @@ const UserProfile = () => {
                     />
                 )}
 
-                {/* User's Invitations Restructured */}
-                <div style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                {/* User's Invitations — with section title */}
+                <div style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: '1.25rem' }}>
+                    <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        📋 {t('invitation_history', 'Invitation History')}
+                    </h3>
+                    <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: 'var(--profile-stack-gap)', overflowX: 'auto', scrollbarWidth: 'none' }}>
                         <style>{`
                             .profile-tab-btn {
                                 flex: 1;
@@ -356,15 +429,7 @@ const UserProfile = () => {
                                 <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({publicInvitations.length})</span>
                             </div>
                         </button>
-                        <button
-                            onClick={() => setActiveTab('private')}
-                            className={`profile-tab-btn ${activeTab === 'private' ? 'active' : ''}`}
-                        >
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span>{t('stats_private')}</span>
-                                <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({privateInvitations.length})</span>
-                            </div>
-                        </button>
+                        {/* Private tab intentionally hidden from public profile view */}
                         <button
                             onClick={() => setActiveTab('joined')}
                             className={`profile-tab-btn ${activeTab === 'joined' ? 'active' : ''}`}
@@ -387,6 +452,99 @@ const UserProfile = () => {
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Followers Section */}
+                <div style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginTop: '1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            👥 {t('followers', 'Followers')}
+                        </h3>
+                    </div>
+
+                    {networkLoading ? (
+                        <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                            <div style={{ width: 28, height: 28, border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+                        </div>
+                    ) : networkUsers.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem 0' }}>
+                            {t('no_network_yet', 'No connections yet')}
+                        </p>
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {networkUsers.slice(0, 5).map(netUser => (
+                                    <div
+                                        key={netUser.id}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '6px 0' }}
+                                        onClick={() => navigate(`/profile/${netUser.id}`)}
+                                    >
+                                        {/* Avatar with follow indicator */}
+                                        <div
+                                            style={{ position: 'relative', flexShrink: 0 }}
+                                            onClick={(userProfile?.role !== 'business' && netUser.id !== (currentUser?.id || currentUser?.uid)) ? (e) => handleToggleFollow(netUser.id, e) : undefined}
+                                        >
+                                            <div style={{
+                                                width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden',
+                                                border: `2px solid ${getGenderBorderColor(netUser)}`
+                                            }}>
+                                                <UserAvatar user={netUser} alt={netUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                            {/* Follow badge — shows "+" when not followed, and not the current user */}
+                                            {userProfile?.role !== 'business' && !netUser.isFollowedByMe && netUser.id !== (currentUser?.id || currentUser?.uid) && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    bottom: '-2px',
+                                                    insetInlineEnd: '-2px',
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '50%',
+                                                    background: 'var(--primary)',
+                                                    border: '2px solid var(--bg-card)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '11px',
+                                                    color: 'white',
+                                                    fontWeight: '900',
+                                                    lineHeight: 1
+                                                }}>+</div>
+                                            )}
+                                        </div>
+
+                                        {/* Name */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: '700', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {netUser.name}
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                ))}
+                            </div>
+
+
+                            {networkUsers.length > 5 && (
+                                <button
+                                    onClick={() => navigate(`/followers/${userId}`)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: '1rem',
+                                        padding: '10px',
+                                        background: 'rgba(139, 92, 246, 0.1)',
+                                        border: '1px solid var(--primary)',
+                                        borderRadius: '12px',
+                                        color: 'var(--primary)',
+                                        fontWeight: '800',
+                                        fontSize: '0.9rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {t('view_all', 'View All')} ({networkUsers.length})
+                                </button>
+                            )}
+                        </>
+                    )}
                 </div>
             </div>
         </div>

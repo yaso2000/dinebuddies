@@ -12,7 +12,7 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
 
     return (
         <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
-            <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-white)', fontWeight: '800' }}>
+            <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-main)', fontWeight: '800' }}>
                 {t('members_list_title', 'Who\'s Coming')} ({joined.length + 1})
             </h4>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -30,7 +30,7 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                         <img
                             src={getSafeAvatar(author)}
                             alt={author?.name}
-                            title={`${author?.name} (Host)`}
+                            title={`${author?.name} (${t('host', { defaultValue: 'Host' })})`}
                             style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
                             onError={(e) => { e.target.src = getSafeAvatar(null); }}
                         />
@@ -46,14 +46,14 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                             padding: '2px 6px',
                             borderRadius: '6px',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                        }}>HOST</div>
+                        }}>{t('host_badge')}</div>
                     </div>
-                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-white)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{author?.name || 'Host'}</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-main)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{author?.name || t('host')}</span>
                 </div>
 
                 {/* Joined Members */}
                 {joined.map(userId => {
-                    const member = safeMembersData[userId] || { name: 'Member', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
+                    const member = safeMembersData[userId] || { name: t('member'), avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
                     return (
                         <div key={userId} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate(`/profile/${userId}`)}>
                             <div style={{

@@ -2,8 +2,10 @@ import React from 'react';
 import { getTemplateStyle } from '../../utils/invitationTemplates';
 import { FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUtensils, FaCreditCard, FaUsers, FaChild } from 'react-icons/fa';
 import { formatAgeGroupsSmart } from '../../utils/invitationDisplayUtils';
+import { useTranslation } from 'react-i18next';
 
 const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
+    const { i18n } = useTranslation();
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
@@ -14,14 +16,14 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
 
     // Helper to format date
     const formatDate = (dateString) => {
-        if (!dateString) return 'TBD';
+        if (!dateString) return t('tbd', { defaultValue: 'TBD' });
         const date = new Date(dateString);
-        return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        return date.toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     };
 
     // Helper to format time
     const formatTime = (timeString) => {
-        if (!timeString) return 'TBD';
+        if (!timeString) return t('tbd', { defaultValue: 'TBD' });
         // Handle full ISO string or time string
         return timeString.includes('T') ? timeString.split('T')[1].substring(0, 5) : timeString;
     };
@@ -44,26 +46,11 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
                 </div>
             </div>
 
-            <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border-color)', gridColumn: 'span 2' }}>
-                <FaMapMarkerAlt style={{ color: themeColor }} />
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('location')}</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>
-                        {restaurantName || invitation.locationName || invitation.location || t('location_tbd')}
-                    </div>
-                    {distance && (
-                        <div style={{ fontSize: '0.7rem', color: themeColor }}>
-                            {distance.toFixed(1)} km away
-                        </div>
-                    )}
-                </div>
-            </div>
-
             <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border-color)' }}>
                 <FaUtensils style={{ color: themeColor }} />
                 <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('cuisine')}</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.cuisine || 'Any'}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('category', { defaultValue: 'Category' })}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.type ? t(invitation.type) : (invitation.businessType ? t(invitation.businessType) : t('venue', { defaultValue: 'Venue' }))}</div>
                 </div>
             </div>
 
@@ -71,7 +58,7 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
                 <FaCreditCard style={{ color: themeColor }} />
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('payment_label', { defaultValue: 'Payment' })}</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.paymentType || t('payment_split')}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.paymentType ? t(`payment_type_${invitation.paymentType.toLowerCase().replace(' ', '_')}`, { defaultValue: invitation.paymentType }) : t('payment_split')}</div>
                 </div>
             </div>
 

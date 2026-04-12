@@ -29,33 +29,29 @@
   <title>DineBuddies - Premium Social Events</title>
 
   <!-- Primary Meta Tags -->
-  <meta name="title" content="DineBuddies - Premium Social Dining | تجربتك الاجتماعية الفاخرة">
-  <meta name="description"
-    content="Connect with food lovers, join exclusive dining events, and make new friends. اكتشف تجارب طعام حصرية وكون صداقات جديدة مع محبي الطعام.">
+  <meta name="title" content="DineBuddies | Premium Social Dining & Exclusive Food Network">
+  <meta name="description" content="DineBuddies is an exclusive social dining network where food lovers meet, join private restaurant invitations, and connect over premium meals. داين باديز هي المنصة الاجتماعية الحصرية لعشاق المطاعم، شارك في دعوات طعام خاصة وتعرف على أصدقاء جدد.">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dinebuddies.com/">
-  <meta property="og:title" content="DineBuddies - Premium Social Dining">
-  <meta property="og:description"
-    content="The ultimate social dining experience on dinebuddies.com. Join exclusive invitations and connect over great food.">
-  <meta property="og:image" content="/logo.png">
+  <meta property="og:title" content="DineBuddies | Premium Social Dining & Exclusive Food Network">
+  <meta property="og:description" content="Discover exclusive dining experiences, create private invitations, and connect with like-minded foodies near you.">
+  <meta property="og:image" content="https://www.dinebuddies.com/icon-light-512.png">
   <meta property="og:site_name" content="DineBuddies">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="ar_SA">
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
-  <meta property="twitter:title" content="DineBuddies - Social Dining">
-  <meta property="twitter:description"
-    content="Discover exclusive dining experiences and connect with like-minded foodies! اكتشف تجارب الطعام الاستثنائية وكون صداقات جديدة!">
-  <meta property="twitter:image" content="/logo.png">
-  <script type="module" crossorigin src="/assets/index-COW6Dxf4.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/vendor-react-BK0Zu1gg.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-C9n2CdB2.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-i18n-DKVX3KWZ.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-media-DZt8SJek.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-DgJXTdiX.css">
+  <meta property="twitter:title" content="DineBuddies | Premium Social Dining">
+  <meta property="twitter:description" content="Discover exclusive dining experiences, create private invitations, and connect with like-minded foodies near you.">
+  <meta property="twitter:image" content="https://www.dinebuddies.com/icon-light-512.png">
+  <script type="module" crossorigin src="/assets/index-BnavPdKB.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/vendor-react-BmvckJc4.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-i18n-DvSMhiJj.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-g84Rntil.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-B_Ivl6Us.css">
 </head>
 
 <body style="margin: 0; padding: 0; overscroll-behavior-y: none;">
@@ -63,24 +59,14 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    // Production Cleanup: Force unregister old Service Workers and clear caches
-    console.log('🚀 DineBuddies: Initializing Clean Mode...');
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        if (regs.length > 0) {
-          console.log(`🧹 Unregistering ${regs.length} Service Workers...`);
-          regs.forEach(r => r.unregister());
-        }
-      });
-    }
-    if (window.caches) {
-      caches.keys().then(keys => {
-        if (keys.length > 0) {
-          console.log(`🗑️ Clearing ${keys.length} Caches...`);
-          keys.forEach(k => caches.delete(k));
-        }
-      });
-    }
+    // Capture beforeinstallprompt EARLY — before React loads
+    window.__deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window.__deferredInstallPrompt = e;
+    });
+    // Service worker registration is in src/main.jsx (prod only). Registering sw.js on
+    // localhost breaks Vite HMR and can leave blank screens until a full reload.
   </script>
 </body>
 

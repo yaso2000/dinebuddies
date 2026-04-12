@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { FaImage, FaVideo, FaStore, FaCamera, FaUpload, FaTimes } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 import MediaUpload from '../Shared/MediaUpload';
 import UnifiedCamera from '../UnifiedCamera';
 
 import './MediaSelector.css';
 
 const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoading = false, onMediaSelect, initialData = null, className = '' }) => {
-
+    const { t } = useTranslation();
     const [source, setSource] = useState(initialData?.source || null); // 'venue' | 'custom_image' | 'custom_video'
     const [videoMode, setVideoMode] = useState(null); // 'upload' | 'record'
     const [photoMode, setPhotoMode] = useState(null); // 'upload' | 'capture'
     const [selectedMedia, setSelectedMedia] = useState(initialData || null);
-
 
     const handleSourceChange = (newSource) => {
         setSource(newSource);
@@ -175,7 +175,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                         }}
                     >
                         <FaStore />
-                        <span style={{ fontSize: '0.9rem' }}>{hasRestaurantImage ? 'Rest. Photos' : 'Google Photos'}</span>
+                        <span style={{ fontSize: '0.9rem' }}>{hasRestaurantImage ? t('venue_photos_tab', 'Venue Photos') : t('google_photos_tab', 'Google Photos')}</span>
                     </button>
                 )}
 
@@ -199,7 +199,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                     }}
                 >
                     <FaImage />
-                    <span style={{ fontSize: '0.9rem' }}>Upload</span>
+                    <span style={{ fontSize: '0.9rem' }}>{t('upload_media_tab', 'Upload')}</span>
                 </button>
 
                 <button
@@ -222,7 +222,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                     }}
                 >
                     <FaVideo />
-                    <span style={{ fontSize: '0.9rem' }}>Video</span>
+                    <span style={{ fontSize: '0.9rem' }}>{t('video_media_tab', 'Video')}</span>
                 </button>
             </div>
 
@@ -253,6 +253,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         <img
                                             src={restaurant.image || restaurant.restaurantImage}
                                             alt="Official"
+                                            referrerPolicy="no-referrer"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                         />
                                     </div>
@@ -292,6 +293,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         <img
                                             src={url}
                                             alt={`Suggested ${idx}`}
+                                            referrerPolicy="no-referrer"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                         />
                                     </div>
@@ -303,6 +305,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                     src={selectedMedia.url}
                                     alt="Selected Venue"
                                     className="preview-image"
+                                    referrerPolicy="no-referrer"
                                     style={{
                                         width: '100%',
                                         maxHeight: '250px',
@@ -325,7 +328,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         alignItems: 'center',
                                         gap: '4px'
                                     }}>
-                                        ✨ Will be saved permanently
+                                        ✨ {t('will_be_saved_permanently', 'Will be saved permanently')}
                                     </div>
                                 )}
                                 <button
@@ -345,7 +348,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    Change Selection
+                                    {t('change_selection', 'Change Selection')}
                                 </button>
                             </div>
                         )}
@@ -357,7 +360,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                     <div className="custom-image-container">
                         {!selectedMedia && !photoMode && (
                             <div className="video-mode-selection">
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>Choose how to add your photo:</p>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>{t('choose_how_to_add_photo', 'Choose how to add your photo:')}</p>
                                 <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                     <button
                                         type="button"
@@ -379,7 +382,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         <div className="icon-circle" style={{ background: 'rgba(139, 92, 246, 0.1)', padding: '10px', borderRadius: '50%' }}>
                                             <FaCamera size={20} style={{ color: 'var(--primary)' }} />
                                         </div>
-                                        <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Take Photo</span>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t('take_photo', 'Take Photo')}</span>
                                     </button>
                                     <button
                                         type="button"
@@ -401,7 +404,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         <div className="icon-circle" style={{ background: 'rgba(236, 72, 153, 0.1)', padding: '10px', borderRadius: '50%' }}>
                                             <FaUpload size={20} style={{ color: 'var(--secondary)' }} />
                                         </div>
-                                        <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Upload</span>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t('upload_media_tab', 'Upload')}</span>
                                     </button>
                                 </div>
                             </div>
@@ -474,7 +477,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    Remove
+                                    {t('remove_preview', 'Remove')}
                                 </button>
                             </div>
                         )}
@@ -486,7 +489,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                     <div className="custom-video-container">
                         {!videoMode && !selectedMedia && (
                             <div className="video-mode-selection">
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>Choose how to add your video:</p>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>{t('choose_how_to_add_video', 'Choose how to add your video:')}</p>
                                 <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                     <button
                                         type="button"
@@ -506,7 +509,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         }}
                                     >
                                         <FaCamera size={24} style={{ color: 'var(--primary)' }} />
-                                        <span style={{ fontSize: '0.9rem' }}>Record</span>
+                                        <span style={{ fontSize: '0.9rem' }}>{t('record_video', 'Record')}</span>
                                     </button>
                                     <button
                                         type="button"
@@ -526,7 +529,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         }}
                                     >
                                         <FaUpload size={24} style={{ color: 'var(--secondary)' }} />
-                                        <span style={{ fontSize: '0.9rem' }}>Upload</span>
+                                        <span style={{ fontSize: '0.9rem' }}>{t('upload_media_tab', 'Upload')}</span>
                                     </button>
                                 </div>
                             </div>
@@ -535,7 +538,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                         {videoMode === 'record' && !selectedMedia && (
                             <UnifiedCamera
                                 mode="video"
-                                maxDuration={30}
+                                maxDuration={15}
                                 onMediaCaptured={handleRecording}
                                 stopCamera={() => setVideoMode(null)}
                             />
@@ -544,7 +547,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                         {videoMode === 'upload' && !selectedMedia && (
                             <MediaUpload
                                 type="video"
-                                maxDuration={30}
+                                maxDuration={15}
                                 maxSize={50}
                                 onMediaSelect={handleCustomMedia}
                                 onCancel={() => setVideoMode(null)}
@@ -584,7 +587,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    Remove
+                                    {t('remove_preview', 'Remove')}
                                 </button>
                             </div>
                         )}

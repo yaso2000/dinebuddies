@@ -16,6 +16,7 @@ import { updateSocialMetaTags, generateInvitationMetaTags, resetSocialMetaTags }
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import MembersList from '../components/Invitation/MembersList';
+import { goToLogin } from '../utils/goToLogin';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -601,7 +602,7 @@ const InvitationDetails = () => {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (currentUser?.isGuest) {
-                                                    navigate('/login');
+                                                    goToLogin();
                                                 } else {
                                                     toggleFollow(author.id);
                                                 }
@@ -898,7 +899,7 @@ const InvitationDetails = () => {
                                 className={`btn btn-block ${!eligibility.eligible ? 'btn-disabled' : (isPending ? 'btn-outline' : 'btn-primary')}`}
                                 onClick={async () => {
                                     if (currentUser?.isGuest) {
-                                        navigate('/login');
+                                        goToLogin();
                                         return;
                                     }
                                     if (!eligibility.eligible) return;

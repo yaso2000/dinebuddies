@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar, FaTrash, FaShare, FaGripVertical } from 'react-icons/fa';
+import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar, FaTrash, FaShare, FaGripVertical, FaImage } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
@@ -31,8 +31,8 @@ const CATEGORIES = [
 ];
 
 function SortableGalleryItem({
-    id, image, actualIndex, category, Icon, tc, th, t, isEditMode, captionEdit, setCaptionEdit,
-    handleUpdateCaption, handleDeleteImage, handleMoveToCategory, moveMenuForIndex, setMoveMenuForIndex,
+    id, image, actualIndex, category, Icon, t, isEditMode, captionEdit, setCaptionEdit,
+    handleUpdateCaption, handleDeleteImage, handleMoveToCategory, handleSetAsCover, moveMenuForIndex, setMoveMenuForIndex,
     moveMenuRef, moveButtonRef, moveMenuPosition, CATEGORIES, setLightboxIndex, setLightboxOpen
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -77,7 +77,7 @@ function SortableGalleryItem({
                 )}
             </div>
             {(image.caption || captionEdit === actualIndex) && (
-                <div className="image-caption" style={{ color: th(tc?.accent, undefined), zIndex: 4 }}>
+                <div className="image-caption" style={{ color: 'var(--brand-primary)', zIndex: 4 }}>
                     {captionEdit === actualIndex ? (
                         <div className="caption-edit">
                             <input
@@ -96,6 +96,16 @@ function SortableGalleryItem({
             )}
             {isEditMode && (
                 <div className="image-actions-container">
+                    {handleSetAsCover && (
+                        <button
+                            className="gallery-action-btn"
+                            onClick={(e) => { e.stopPropagation(); handleSetAsCover(actualIndex); }}
+                            title={t('set_as_header', 'Set as header')}
+                            style={{ background: '#22c55e', border: '1px solid rgba(255,255,255,0.4)', color: '#fff' }}
+                        >
+                            <FaImage size={15} />
+                        </button>
+                    )}
                     <button className="gallery-action-btn gallery-caption-btn" onClick={(e) => { e.stopPropagation(); setCaptionEdit(actualIndex); }} title={t('edit_caption', 'Edit caption')}>
                         <FaEdit size={16} />
                     </button>
@@ -105,7 +115,7 @@ function SortableGalleryItem({
                             className="gallery-action-btn"
                             onClick={(e) => { e.stopPropagation(); setMoveMenuForIndex(prev => prev === actualIndex ? null : actualIndex); }}
                             title={t('move_to_category', 'Move to category')}
-                            style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.5)', color: '#3b82f6', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                            style={{ background: '#3b82f6', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                         >
                             <FaShare size={14} />
                         </button>
@@ -151,7 +161,93 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
     const moveMenuRef = useRef(null);
     const moveButtonRef = useRef(null);
 
-    const gallery = business?.businessInfo?.galleryEnhanced || [];
+    /** Horizontal drag-to-scroll on category tabs (mouse / pen). */
+    const categoryFilterWrapRef = useRef(null);
+    const categoryPanRef = useRef({
+        active: false,
+        pointerId: null,
+        startX: 0,
+        scrollLeft0: 0,
+        moved: false
+    });
+    const suppressGalleryCategoryClick = useRef(false);
+
+    const endGalleryCategoryPan = useCallback((e) => {
+        const p = categoryPanRef.current;
+        if (!p.active || (e && e.pointerId !== p.pointerId)) return;
+        const el = categoryFilterWrapRef.current;
+        if (el) {
+            el.classList.remove('category-filter-wrap--dragging');
+            try {
+                el.releasePointerCapture(p.pointerId);
+            } catch {
+                /* ignore */
+            }
+        }
+        if (p.moved) suppressGalleryCategoryClick.current = true;
+        categoryPanRef.current = {
+            active: false,
+            pointerId: null,
+            startX: 0,
+            scrollLeft0: 0,
+            moved: false
+        };
+    }, []);
+
+    const onGalleryCategoryPointerDown = useCallback((e) => {
+        if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const el = categoryFilterWrapRef.current;
+        if (!el) return;
+        categoryPanRef.current = {
+            active: true,
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            scrollLeft0: el.scrollLeft,
+            moved: false
+        };
+        el.classList.add('category-filter-wrap--dragging');
+        try {
+            el.setPointerCapture(e.pointerId);
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    const onGalleryCategoryPointerMove = useCallback((e) => {
+        const p = categoryPanRef.current;
+        if (!p.active || e.pointerId !== p.pointerId) return;
+        const el = categoryFilterWrapRef.current;
+        if (!el) return;
+        const dx = e.clientX - p.startX;
+        if (Math.abs(dx) > 6) p.moved = true;
+        el.scrollLeft = p.scrollLeft0 - dx;
+    }, []);
+
+    const onGalleryCategoryPointerUp = useCallback((e) => {
+        endGalleryCategoryPan(e);
+    }, [endGalleryCategoryPan]);
+
+    const onGalleryCategoryPointerCancel = useCallback((e) => {
+        endGalleryCategoryPan(e);
+    }, [endGalleryCategoryPan]);
+
+    const onGalleryCategoryTabClick = useCallback((select) => (ev) => {
+        if (suppressGalleryCategoryClick.current) {
+            ev.preventDefault();
+            suppressGalleryCategoryClick.current = false;
+            return;
+        }
+        select();
+    }, []);
+
+    const rawEnhanced = business?.businessInfo?.galleryEnhanced || [];
+    const rawGallery = business?.businessInfo?.gallery || [];
+    const gallery = rawEnhanced.length
+        ? rawEnhanced
+        : Array.isArray(rawGallery)
+            ? rawGallery.map((u) => (typeof u === 'string' ? { url: u, category: 'venue', caption: '' } : u))
+            : [];
 
     useEffect(() => {
         if (moveMenuForIndex === null) return;
@@ -266,6 +362,19 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
         }
     };
 
+    const handleSetAsCover = async (index) => {
+        const url = gallery[index]?.url || (typeof gallery[index] === 'string' ? gallery[index] : null);
+        if (!url) return;
+        try {
+            const partnerRef = doc(db, 'users', partnerId);
+            await updateDoc(partnerRef, { 'businessInfo.coverImage': url });
+            showToast(t('header_updated', 'Header image updated'), 'success');
+        } catch (err) {
+            console.error('Set cover error:', err);
+            showToast(t('update_error', 'Failed to update'), 'error');
+        }
+    };
+
     const handleMoveToCategory = async (index, newCategoryId) => {
         try {
             const updatedGallery = [...gallery];
@@ -320,17 +429,16 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
     if (!isOwner && gallery.length === 0) return null;
 
     return (
-        <div className="enhanced-gallery-section" style={{ background: th(tc?.cardBg, undefined), position: 'relative' }}>
+        <div className="enhanced-gallery-section" style={{ background: 'var(--bg-card)', position: 'relative' }}>
             {/* Header */}
-            <div className="gallery-header">
-                <h3 style={{ color: 'var(--text-main)', textShadow: 'none' }}>
-                    <FaImages style={{ color: th(tc?.accent, '#8b5cf6'), marginRight: '0.5rem' }} />
-                    {t('gallery', 'Gallery')}
+            <div className="gallery-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ color: 'var(--text-main)', textShadow: 'none', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <FaImages style={{ color: 'var(--brand-primary)' }} />
+                    <span>{t('gallery', 'Gallery')}</span>
                     <span style={{
                         fontSize: '0.9rem',
                         fontWeight: '600',
-                        color: 'var(--text-secondary)',
-                        marginLeft: '0.5rem'
+                        color: 'var(--text-secondary)'
                     }}>
                         ({gallery.length}/{MAX_IMAGES})
                     </span>
@@ -346,7 +454,7 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                             color: isEditMode ? '#ef4444' : '#8b5cf6',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                            transition: 'all 0.2s', position: 'absolute', top: 16, right: 16
+                            transition: 'all 0.2s'
                         }}
                     >
                         {isEditMode ? <FaTimes size={16} /> : <FaEdit size={16} />}
@@ -354,11 +462,20 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                 )}
             </div>
 
-            {/* Category Filter - Icon Mode */}
+            {/* Category Filter - single horizontal row, scroll or drag left/right */}
+            <div
+                ref={categoryFilterWrapRef}
+                className="category-filter-wrap"
+                onPointerDown={onGalleryCategoryPointerDown}
+                onPointerMove={onGalleryCategoryPointerMove}
+                onPointerUp={onGalleryCategoryPointerUp}
+                onPointerCancel={onGalleryCategoryPointerCancel}
+            >
             <div className="category-filter">
                 <button
+                    type="button"
                     className={`category-btn ${selectedCategory === 'all' ? 'active' : ''}`}
-                    onClick={() => setSelectedCategory('all')}
+                    onClick={onGalleryCategoryTabClick(() => setSelectedCategory('all'))}
                     title={t('all', 'All')}
                     style={tc && selectedCategory === 'all' ? {
                         background: tc.tabBgColor || 'rgba(255,255,255,0.95)',
@@ -383,9 +500,10 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                     if (!isOwner && stats[cat.id] === 0) return null;
                     return (
                         <button
+                            type="button"
                             key={cat.id}
                             className={`category-btn ${selectedCategory === cat.id ? 'active' : ''}`}
-                            onClick={() => setSelectedCategory(cat.id)}
+                            onClick={onGalleryCategoryTabClick(() => setSelectedCategory(cat.id))}
                             title={t(cat.id, cat.label)}
                             style={tc ? (selectedCategory === cat.id ? {
                                 background: tc.tabBgColor || 'rgba(255,255,255,0.95)',
@@ -416,6 +534,7 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                         </button>
                     );
                 })}
+            </div>
             </div>
 
             {/* Upload Buttons (Edit Mode) - always visible so owner can add more until limit */}
@@ -510,6 +629,7 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                                             handleUpdateCaption={handleUpdateCaption}
                                             handleDeleteImage={handleDeleteImage}
                                             handleMoveToCategory={handleMoveToCategory}
+                                            handleSetAsCover={handleSetAsCover}
                                             moveMenuForIndex={moveMenuForIndex}
                                             setMoveMenuForIndex={setMoveMenuForIndex}
                                             moveMenuRef={moveMenuRef}
@@ -576,7 +696,7 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
 
                                 {/* Caption */}
                                 {(image.caption || captionEdit === actualIndex) && (
-                                    <div className="image-caption" style={{ color: th(tc?.accent, undefined), zIndex: 4 }}>
+                                    <div className="image-caption" style={{ color: 'var(--brand-primary)', zIndex: 4 }}>
                                         {captionEdit === actualIndex ? (
                                             <div className="caption-edit">
                                                 <input
@@ -604,6 +724,14 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                                 {isEditMode && (
                                     <div className="image-actions-container">
                                         <button
+                                            className="gallery-action-btn"
+                                            onClick={(e) => { e.stopPropagation(); handleSetAsCover(actualIndex); }}
+                                            title={t('set_as_header', 'Set as header')}
+                                            style={{ background: '#22c55e', border: '1px solid rgba(255,255,255,0.4)', color: '#fff' }}
+                                        >
+                                            <FaImage size={15} />
+                                        </button>
+                                        <button
                                             className="gallery-action-btn gallery-caption-btn"
                                             onClick={(e) => { e.stopPropagation(); setCaptionEdit(actualIndex); }}
                                             title={t('edit_caption', 'Edit caption')}
@@ -621,11 +749,11 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                                                 }}
                                                 title={t('move_to_category', 'Move to category')}
                                                 style={{
-                                                    background: 'rgba(59, 130, 246, 0.2)',
-                                                    border: '1px solid rgba(59, 130, 246, 0.5)',
-                                                    color: '#3b82f6',
-                                                    width: 36,
-                                                    height: 36,
+                                                    background: '#3b82f6',
+                                                    border: '1px solid rgba(255,255,255,0.4)',
+                                                    color: '#fff',
+                                                    width: 32,
+                                                    height: 32,
                                                     borderRadius: 8,
                                                     display: 'flex',
                                                     alignItems: 'center',

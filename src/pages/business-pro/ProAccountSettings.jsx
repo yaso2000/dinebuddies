@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { useTheme } from '../../context/ThemeContext';
-import { updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendEmailVerification, signOut } from 'firebase/auth';
+import { updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, signOut } from 'firebase/auth';
+import { sendVerificationEmailResend } from '../../services/verificationEmailService';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +13,7 @@ import {
     FaMoon, FaSun, FaCheckCircle, FaSignOutAlt, FaTrash,
     FaMobileAlt, FaVolumeUp, FaUserPlus, FaCommentAlt, FaHeart, FaExclamationCircle
 } from 'react-icons/fa';
+import { goToLogin } from '../../utils/goToLogin';
 
 // ---- Shared Styles ----
 const inputStyle = {
@@ -108,7 +111,7 @@ const EmailSection = ({ currentUser }) => {
         setLoading(true); setError(''); setSuccess(false);
         try {
             await updateEmail(currentUser, newEmail);
-            await sendEmailVerification(currentUser);
+            await sendVerificationEmailResend('pro_settings');
             setSuccess(true); setNewEmail('');
         } catch (err) {
             setError(err.code === 'auth/requires-recent-login'
@@ -246,25 +249,50 @@ const AppearanceSection = () => {
 const DeleteSection = ({ currentUser }) => {
     const navigate = useNavigate();
     const { deleteUserAccount } = useAuth();
+    const { showToast } = useToast();
     const [confirm, setConfirm] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [deletePassword, setDeletePassword] = useState('');
 
-    const handle = async () => {
-        if (!confirm) { setConfirm(true); return; }
+    const handle = async (password) => {
+        if (!confirm && !password) { setConfirm(true); return; }
         setLoading(true);
         try {
-            await deleteUserAccount();
-            navigate('/login');
-        } catch (_) { setLoading(false); setConfirm(false); }
+            await deleteUserAccount(password ? { password } : undefined);
+            goToLogin();
+        } catch (error) {
+            if (error.code === 'auth/requires-recent-login' && error.requirePassword) {
+                setShowPasswordModal(true);
+            } else {
+                showToast(error?.message || 'Failed to delete account. Please try again.', 'error');
+            }
+            setLoading(false);
+            setConfirm(false);
+        }
     };
 
     return (
         <div style={{ marginTop: 14 }}>
-            {confirm && <div style={{ ...errStyle, marginBottom: 10 }}>⚠️ This cannot be undone. Click again to confirm.</div>}
-            <button onClick={handle} disabled={loading}
-                style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, padding: '10px 20px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
-                {loading ? 'Deleting...' : confirm ? 'Confirm Delete Account' : 'Delete My Account'}
-            </button>
+            {confirm && !showPasswordModal && <div style={{ ...errStyle, marginBottom: 10 }}>⚠️ This cannot be undone. Click again to confirm.</div>}
+            {showPasswordModal && (
+                <div style={{ marginBottom: 12 }}>
+                    <div style={{ ...labelStyle, marginBottom: 6 }}>Re-enter password to confirm deletion</div>
+                    <input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Password" style={inputStyle}
+                        onKeyDown={(e) => e.key === 'Enter' && handle(deletePassword)} />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button onClick={() => { setShowPasswordModal(false); setDeletePassword(''); }} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>Cancel</button>
+                        <button onClick={() => handle(deletePassword)} disabled={!deletePassword.trim() || loading}
+                            style={{ ...inputStyle, width: 'auto', background: '#ef4444', borderColor: '#ef4444', cursor: deletePassword.trim() && !loading ? 'pointer' : 'not-allowed', opacity: (!deletePassword.trim() || loading) ? 0.6 : 1 }}>Delete Account</button>
+                    </div>
+                </div>
+            )}
+            {!showPasswordModal && (
+                <button onClick={() => handle()} disabled={loading}
+                    style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, padding: '10px 20px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
+                    {loading ? 'Deleting...' : confirm ? 'Confirm Delete Account' : 'Delete My Account'}
+                </button>
+            )}
         </div>
     );
 };

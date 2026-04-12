@@ -319,6 +319,13 @@
     font-size: 2rem;
 }
 
+/* Language settings: white labels and flag area on all rows */
+.language-option .language-flag,
+.language-option .language-info h3,
+.language-option .language-info p {
+    color: #fff;
+}
+
 .language-info {
     flex: 1;
 }

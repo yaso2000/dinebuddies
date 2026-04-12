@@ -1,6 +1,21 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastContext';
 import { getAuthErrorMessage } from '../utils/errorMessages';
+import { isBusinessUser } from '../utils/accountRole';
+import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
+
+/** Keeps Layout/HomeRouter treating the session as business when userProfile is briefly null (Firestore/auth race). */
+function syncBusinessNavHint(profile, uid) {
+    try {
+        if (profile && uid && isBusinessUser(profile)) {
+            sessionStorage.setItem('dineb_biz_uid', uid);
+        } else {
+            sessionStorage.removeItem('dineb_biz_uid');
+        }
+    } catch { /* ignore */ }
+}
+import { sendPasswordResetViaResend } from '../services/passwordResetEmailService';
+import { isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
     auth,
@@ -8,19 +23,74 @@ import {
 } from '../firebase/config';
 import {
     signInWithPopup,
+    signInWithCredential,
     GoogleAuthProvider,
     OAuthProvider,
     signOut as firebaseSignOut,
     onAuthStateChanged,
-    RecaptchaVerifier,
-    signInWithPhoneNumber,
     signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
     FacebookAuthProvider,
     TwitterAuthProvider,
-    updateProfile as updateAuthProfile
+    updateProfile as updateAuthProfile,
+    EmailAuthProvider,
+    reauthenticateWithCredential,
+    reauthenticateWithPopup
 } from 'firebase/auth';
+
+// Detect in-app browsers (Facebook, Instagram, TikTok, WeChat, etc.)
+// These browsers sandbox sessionStorage and block OAuth popups/redirects.
+const isInAppBrowser = () => {
+    const ua = navigator.userAgent || '';
+    return (
+        /FBAN|FBAV|FB_IAB|FB4A|FBBV/i.test(ua) ||   // Facebook
+        /Instagram/i.test(ua) ||                        // Instagram
+        /TikTok|musical_ly/i.test(ua) ||               // TikTok
+        /MicroMessenger/i.test(ua) ||                   // WeChat
+        /Twitter/i.test(ua) ||                          // Twitter
+        /Snapchat/i.test(ua) ||                         // Snapchat
+        /Line\//i.test(ua)                              // LINE
+    );
+};
+
+// Try to open the current URL in an external browser.
+// On Android: uses an intent URI to launch Chrome.
+// On iOS: returns false — caller must show instructions to the user.
+const openInExternalBrowser = () => {
+    const url = window.location.href;
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (isAndroid) {
+        // intent:// URI forces Chrome on Android
+        const intentUrl = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+        window.location.href = intentUrl;
+        return true;
+    }
+    // iOS — can't programmatically force Safari easily; caller should show instructions
+    return false;
+};
+
+// Facebook App ID — used for the JS SDK auth flow
+const FB_APP_ID = '1718617005774108';
+
+// Dynamically load the Facebook JS SDK (only once per session)
+const loadFacebookSDK = () => new Promise((resolve) => {
+    if (window.FB) { resolve(window.FB); return; }
+    window.fbAsyncInit = () => {
+        window.FB.init({ appId: FB_APP_ID, version: 'v19.0', cookie: true, xfbml: false });
+        resolve(window.FB);
+    };
+    if (!document.getElementById('facebook-jssdk')) {
+        const script = document.createElement('script');
+        script.id = 'facebook-jssdk';
+        script.src = 'https://connect.facebook.net/en_US/sdk.js';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+});
+
 import { fetchIpLocation, reverseGeocode } from '../utils/locationUtils';
+import { initNotifications, removeFcmToken } from '../services/notificationService';
+
 import {
     doc,
     setDoc,
@@ -29,6 +99,7 @@ import {
     deleteDoc,
     serverTimestamp,
     onSnapshot,
+    collection,
 } from 'firebase/firestore';
 
 const AuthContext = createContext();
@@ -45,9 +116,11 @@ export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
     const [isGuest, setIsGuest] = useState(false);
-    const nominatimFailed = React.useRef(false);
+    const nominatimFailed = useRef(false);
+    const isDeletingAccountRef = useRef(false);
+    /** Cleared when Firestore profile snapshot resolves so the 5s fail-safe cannot fire after real data. */
+    const authLoadingTimeoutRef = useRef(null);
 
     // Guest profile template
     const guestProfile = {
@@ -65,48 +138,51 @@ export const AuthProvider = ({ children }) => {
         shortDescription: ''
     };
 
-    // Canonical: only role. user | business | admin | staff | support | guest. Use "business" for partners (no "partner" value).
-    const normalizeProfile = (data) => {
-        if (!data) return null;
-        const isBusiness = data.role === 'business';
-        const isGuestProfile = data.role === 'guest' || data.isGuest === true;
-        return {
-            ...data,
-            id: data.id || data.uid || '',
-            uid: data.uid || data.id || '',
-            displayName: data.displayName || data.display_name || data.nickname || '',
-            display_name: data.display_name || data.displayName || data.nickname || '',
-            photoURL: data.photoURL || data.photo_url || data.avatar || '',
-            photo_url: data.photo_url || data.photoURL || data.avatar || '',
-            // ── Unified flags — use ONLY these across the whole codebase ──
-            isBusiness,
-            isGuest: isGuestProfile,
-            // Ensure role is always set
-            role: isBusiness ? 'business' : isGuestProfile ? 'guest' : (data.role || 'user'),
-            // Business accounts are always profile-complete (no gender/age required)
-            // Guests are always considered complete (minimal profile)
-            // Only regular users need to fill gender + ageCategory
-            isProfileComplete: isBusiness || isGuestProfile
-                ? true
-                : data.isProfileComplete === true || (
-                    (data.displayName || data.display_name) &&
-                    data.gender &&
-                    (data.ageCategory || data.age)
-                )
-        };
-    };
-
     // Listen to auth state changes
     useEffect(() => {
+
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user);
 
             if (user) {
                 setIsGuest(false);
+                // Guest mode leaves a synthetic userProfile; if the user signs in, we must not route
+                // (e.g. HomeRouter) using that guest profile while Firestore is still loading.
+                let clearedGuestProfile = false;
+                setUserProfile((prev) => {
+                    if (prev?.isGuest || prev?.role === 'guest') {
+                        clearedGuestProfile = true;
+                        return null;
+                    }
+                    return prev;
+                });
+                if (clearedGuestProfile) {
+                    syncBusinessNavHint(null, null);
+                    try {
+                        localStorage.removeItem('guestMode');
+                    } catch { /* ignore */ }
+                }
+                // Always wait for Firestore profile (or fail-safe timeout) after any sign-in.
+                // If we only set loading when leaving guest mode, loading stays false while currentUser is set
+                // and userProfile is still null → HomeRouter / redirects break (wrong route or blank states).
+                setLoading(true);
+                if (authLoadingTimeoutRef.current) {
+                    clearTimeout(authLoadingTimeoutRef.current);
+                    authLoadingTimeoutRef.current = null;
+                }
                 // Profile listener will handle setLoading(false)
                 // Fail-safe: if profile doesn't load in 5s, release the UI
-                setTimeout(() => setLoading(false), 5000);
+                authLoadingTimeoutRef.current = setTimeout(() => {
+                    setLoading(false);
+                    authLoadingTimeoutRef.current = null;
+                }, 5000);
+                // Initialize push notifications (request permission + save FCM token)
+                initNotifications(user.uid).catch(() => { });
             } else {
+                if (authLoadingTimeoutRef.current) {
+                    clearTimeout(authLoadingTimeoutRef.current);
+                    authLoadingTimeoutRef.current = null;
+                }
                 const guestMode = localStorage.getItem('guestMode') === 'true';
                 if (guestMode) {
                     setUserProfile(guestProfile);
@@ -115,6 +191,7 @@ export const AuthProvider = ({ children }) => {
                     setUserProfile(null);
                     setIsGuest(false);
                 }
+                syncBusinessNavHint(null, null);
                 setLoading(false);
             }
         });
@@ -122,28 +199,74 @@ export const AuthProvider = ({ children }) => {
         return unsubscribe;
     }, []);
 
-
-    // Real-time Profile Listener
+    // Mirror Firebase Auth email verification onto users/{uid} so Cloud Functions can gate public_profiles.
     useEffect(() => {
-        if (!currentUser) return;
-        const userRef = doc(db, 'users', currentUser.uid);
+        if (!currentUser || isGuest) return;
+        (async () => {
+            try {
+                await setDoc(
+                    doc(db, 'users', currentUser.uid),
+                    {
+                        emailVerified: currentUser.emailVerified === true,
+                        authEmail: currentUser.email || null,
+                    },
+                    { merge: true }
+                );
+            } catch (e) {
+                console.warn('Auth email flags sync skipped:', e?.message || e);
+            }
+        })();
+    }, [currentUser?.uid, currentUser?.emailVerified, currentUser?.email, isGuest]);
+
+    // Real-time Profile Listener — depend on uid only. Firebase User object identity can change on token
+    // refresh; re-subscribing on [currentUser] caused a race where profile/user flashed null and routes
+    // fell through to HomeRouter → /posts-feed while on /business/:id.
+    useEffect(() => {
+        const uid = currentUser?.uid;
+        if (!uid) return;
+        const userRef = doc(db, 'users', uid);
         const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
+            const fromCache = docSnap.metadata.fromCache;
             if (docSnap.exists()) {
-                setUserProfile(normalizeProfile({
+                const normalized = normalizeProfile({
                     id: docSnap.id,
                     uid: docSnap.id,
                     ...docSnap.data()
-                }));
-            } else {
+                });
+                syncBusinessNavHint(normalized, docSnap.id);
+                setUserProfile(normalized);
+            } else if (!isDeletingAccountRef.current) {
+                syncBusinessNavHint(null, null);
                 setUserProfile(null);
+            }
+            // Local cache can hold an older consumer-shaped doc; routing (HomeRouter) must not run
+            // until we have a server snapshot or a fail-safe timeout.
+            if (fromCache) {
+                if (authLoadingTimeoutRef.current) {
+                    clearTimeout(authLoadingTimeoutRef.current);
+                    authLoadingTimeoutRef.current = null;
+                }
+                authLoadingTimeoutRef.current = setTimeout(() => {
+                    setLoading(false);
+                    authLoadingTimeoutRef.current = null;
+                }, 8000);
+                return;
+            }
+            if (authLoadingTimeoutRef.current) {
+                clearTimeout(authLoadingTimeoutRef.current);
+                authLoadingTimeoutRef.current = null;
             }
             setLoading(false);
         }, (error) => {
             console.error("Profile Error:", error);
+            if (authLoadingTimeoutRef.current) {
+                clearTimeout(authLoadingTimeoutRef.current);
+                authLoadingTimeoutRef.current = null;
+            }
             setLoading(false);
         });
         return () => unsubscribeSnapshot();
-    }, [currentUser]);
+    }, [currentUser?.uid]);
 
     // Update lastSeen and location
     useEffect(() => {
@@ -159,7 +282,9 @@ export const AuthProvider = ({ children }) => {
         syncMeta();
         const interval = setInterval(syncMeta, 5 * 60 * 1000); // 5 min
         return () => clearInterval(interval);
-    }, [currentUser, isGuest]);
+        // Firebase User object identity changes on token refresh; depending on [currentUser] re-ran this
+        // effect and wrote lastSeen repeatedly — same doc BusinessProfile listens to → render/snapshot storm.
+    }, [currentUser?.uid, isGuest]);
 
     const trackUserLocation = () => {
         if (!currentUser || isGuest) return;
@@ -270,7 +395,9 @@ export const AuthProvider = ({ children }) => {
             const userDoc = await getDoc(userRef);
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                setUserProfile(normalizeProfile(data));
+                const normalized = normalizeProfile(data);
+                syncBusinessNavHint(normalized, userId);
+                setUserProfile(normalized);
             }
         } catch (error) {
             console.error('Error fetching user profile:', error);
@@ -278,74 +405,6 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Setup reCAPTCHA for phone authentication
-    const setupRecaptcha = (elementId = 'recaptcha-container') => {
-        if (!recaptchaVerifier) {
-            const verifier = new RecaptchaVerifier(auth, elementId, {
-                size: 'invisible',
-                callback: (response) => {
-                    // reCAPTCHA solved
-                },
-                'expired-callback': () => {
-                    // Response expired
-                }
-            });
-            setRecaptchaVerifier(verifier);
-            return verifier;
-        }
-        return recaptchaVerifier;
-    };
-
-    // Phone Authentication - Send OTP
-    const sendPhoneOTP = async (phoneNumber) => {
-        try {
-            const verifier = setupRecaptcha();
-            const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
-            return confirmationResult;
-        } catch (error) {
-            console.error('Error sending OTP:', error);
-            throw error;
-        }
-    };
-
-    // Phone Authentication - Verify OTP
-    const verifyPhoneOTP = async (confirmationResult, code) => {
-        try {
-            const result = await confirmationResult.confirm(code);
-            // Create profile if new user
-            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-            if (!userDoc.exists()) {
-                await createUserProfile(result.user.uid, {
-                    display_name: result.user.phoneNumber,
-                    email: '',
-                    authProvider: 'phone'
-                });
-            }
-            return result.user;
-        } catch (error) {
-            console.error('Error verifying OTP:', error);
-            throw error;
-        }
-    };
-
-    // Email/Password Sign Up
-    const signUpWithEmail = async (email, password, name) => {
-        try {
-            const result = await createUserWithEmailAndPassword(auth, email, password);
-            // Create user profile in Firestore
-            await createUserProfile(result.user.uid, {
-                display_name: name,
-                email,
-                authProvider: 'email'
-            });
-            return result.user;
-        } catch (error) {
-            console.error('Error signing up with email:', error);
-            throw error;
-        }
-    };
-
-    // Email/Password Sign In
     const signInWithEmail = async (email, password) => {
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
@@ -356,14 +415,26 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    /** Password reset email (Resend + same Firebase reset link / oobCode flow). */
+    const sendPasswordResetToEmail = async (email) => {
+        const em = String(email || '').trim().toLowerCase();
+        if (!em) throw new Error('missing-email');
+        await sendPasswordResetViaResend(em);
+    };
+
     // Google Sign In
     const signInWithGoogle = async () => {
         try {
             const provider = new GoogleAuthProvider();
-            // Force Firebase to use the correct Google Cloud Client ID
-            provider.setCustomParameters({
-                client_id: '596978732537-vfum3vmph4gjak0ctnhftlj8u0ms35oj.apps.googleusercontent.com'
-            });
+            // Only override OAuth client on non-localhost when VITE_GOOGLE_WEB_CLIENT_ID is set (e.g. Vercel).
+            // Forcing client_id on http://localhost breaks sign-in if that Web client omits localhost in
+            // Google Cloud Console "Authorized JavaScript origins". Leaving unset uses Firebase's default.
+            const explicitClientId = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
+            const host = typeof window !== 'undefined' ? window.location.hostname : '';
+            const isLocalDev = host === 'localhost' || host === '127.0.0.1';
+            if (explicitClientId && !isLocalDev) {
+                provider.setCustomParameters({ client_id: explicitClientId });
+            }
             provider.addScope('email');
             provider.addScope('profile');
             const result = await signInWithPopup(auth, provider);
@@ -387,6 +458,20 @@ export const AuthProvider = ({ children }) => {
             }
             return { user: result.user, isNewUser };
         } catch (error) {
+            if (error.code === 'auth/account-exists-with-different-credential') {
+                const email = error.customData?.email;
+                if (email) {
+                    try {
+                        if (await isEmailRegisteredAsBusiness(email)) {
+                            const e = new Error('business');
+                            e.code = 'auth/business-email-in-use';
+                            throw e;
+                        }
+                    } catch (inner) {
+                        if (inner?.code === 'auth/business-email-in-use') throw inner;
+                    }
+                }
+            }
             if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
                 console.error('Google Sign-in Error:', error.code, error.message);
             }
@@ -394,50 +479,45 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Apple Sign In
-    const signInWithApple = async () => {
-        try {
-            const provider = new OAuthProvider('apple.com');
-            const result = await signInWithPopup(auth, provider);
-
-            // Check if user exists in Firestore, if not create profile
-            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-            let isNewUser = false;
-
-            if (!userDoc.exists()) {
-                isNewUser = true;
-                await createUserProfile(result.user.uid, {
-                    display_name: result.user.displayName || 'Apple User',
-                    email: result.user.email,
-                    photo_url: result.user.photoURL,
-                    authProvider: 'apple'
-                });
-            } else if (result.user.photoURL) {
-                // Sync photo if missing or default
-                const data = userDoc.data();
-                const currentPhoto = data.photoURL || data.photo_url;
-                if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
-                    await updateDoc(doc(db, 'users', result.user.uid), {
-                        photoURL: result.user.photoURL,
-                        photo_url: result.user.photoURL,
-                        updatedAt: serverTimestamp()
-                    });
-                }
-            }
-
-            return { user: result.user, isNewUser };
-        } catch (error) {
-            console.error('Error signing in with Apple:', error);
-            throw error;
-        }
-    };
-
-    // Facebook Sign In
+    // Facebook Sign In — uses Facebook JS SDK + signInWithCredential.
+    // This completely bypasses Firebase's popup/redirect OAuth flow (and its sessionStorage
+    // partitioning issues on mobile). Facebook SDK handles the auth flow natively, then
+    // we pass the resulting access token to Firebase via signInWithCredential.
     const signInWithFacebook = async () => {
+        // ── In-app browser guard ─────────────────────────────────────────────
+        if (isInAppBrowser()) {
+            const openedExternal = openInExternalBrowser();
+            if (!openedExternal) {
+                const err = new Error('Please open the app in Safari or Chrome to use Facebook login.');
+                err.code = 'auth/in-app-browser';
+                throw err;
+            }
+            return null;
+        }
+        // ─────────────────────────────────────────────────────────────────
         try {
-            const provider = new FacebookAuthProvider();
-            const result = await signInWithPopup(auth, provider);
+            // Step 1: Load the Facebook JS SDK and get access token
+            const FB = await loadFacebookSDK();
 
+            const fbAuthResponse = await new Promise((resolve, reject) => {
+                FB.login((response) => {
+                    if (response.status === 'connected' && response.authResponse?.accessToken) {
+                        resolve(response.authResponse);
+                    } else if (response.status === 'unknown' || !response.authResponse) {
+                        const err = new Error('Facebook login was cancelled or failed.');
+                        err.code = 'auth/popup-closed-by-user';
+                        reject(err);
+                    } else {
+                        reject(new Error(`Facebook login failed: ${response.status}`));
+                    }
+                }, { scope: 'email,public_profile' });
+            });
+
+            // Step 2: Exchange Facebook token for Firebase credential
+            const credential = FacebookAuthProvider.credential(fbAuthResponse.accessToken);
+            const result = await signInWithCredential(auth, credential);
+
+            // Step 3: Create or update Firestore profile
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -450,7 +530,6 @@ export const AuthProvider = ({ children }) => {
                     authProvider: 'facebook'
                 });
             } else if (result.user.photoURL) {
-                // Sync photo if missing or default
                 const data = userDoc.data();
                 const currentPhoto = data.photoURL || data.photo_url;
                 if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
@@ -464,44 +543,21 @@ export const AuthProvider = ({ children }) => {
 
             return { user: result.user, isNewUser };
         } catch (error) {
+            if (error.code === 'auth/account-exists-with-different-credential') {
+                const email = error.customData?.email;
+                if (email) {
+                    try {
+                        if (await isEmailRegisteredAsBusiness(email)) {
+                            const e = new Error('business');
+                            e.code = 'auth/business-email-in-use';
+                            throw e;
+                        }
+                    } catch (inner) {
+                        if (inner?.code === 'auth/business-email-in-use') throw inner;
+                    }
+                }
+            }
             console.error('Error signing in with Facebook:', error);
-            throw error;
-        }
-    };
-
-    // Twitter (X) Sign In
-    const signInWithTwitter = async () => {
-        try {
-            const provider = new TwitterAuthProvider();
-            const result = await signInWithPopup(auth, provider);
-
-            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-            let isNewUser = false;
-
-            if (!userDoc.exists()) {
-                isNewUser = true;
-                await createUserProfile(result.user.uid, {
-                    display_name: result.user.displayName,
-                    email: result.user.email,
-                    photo_url: result.user.photoURL,
-                    authProvider: 'twitter'
-                });
-            } else if (result.user.photoURL) {
-                // Sync photo if missing or default
-                const data = userDoc.data();
-                const currentPhoto = data.photoURL || data.photo_url;
-                if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
-                    await updateDoc(doc(db, 'users', result.user.uid), {
-                        photoURL: result.user.photoURL,
-                        photo_url: result.user.photoURL,
-                        updatedAt: serverTimestamp()
-                    });
-                }
-            }
-
-            return { user: result.user, isNewUser };
-        } catch (error) {
-            console.error('Error signing in with Twitter:', error);
             throw error;
         }
     };
@@ -527,30 +583,82 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            await setDoc(doc(db, 'users', userId), {
+            let grantedCredits = 0;
+            let showWelcomeNotification = false;
+
+            // Generate a unique identifier (email or phone)
+            const uniqueId = userData.email?.toLowerCase() || auth.currentUser?.phoneNumber || null;
+
+            // welcome_gifts_claimed must be allowed in firestore.rules; if missing/denied, skip and still create users/{uid}.
+            if (uniqueId) {
+                try {
+                    const giftRef = doc(db, 'welcome_gifts_claimed', uniqueId);
+                    const giftSnap = await getDoc(giftRef);
+
+                    if (!giftSnap.exists()) {
+                        grantedCredits = 5;
+                        showWelcomeNotification = true;
+                        try {
+                            await setDoc(giftRef, {
+                                claimedAt: serverTimestamp(),
+                                userId: userId,
+                                authProvider: userData.authProvider || 'unknown'
+                            });
+                        } catch (giftWriteErr) {
+                            console.warn('welcome_gifts_claimed write skipped:', giftWriteErr?.message || giftWriteErr);
+                        }
+                    }
+                } catch (giftReadErr) {
+                    console.warn('welcome gift eligibility check skipped:', giftReadErr?.message || giftReadErr);
+                    grantedCredits = 5;
+                    showWelcomeNotification = true;
+                }
+            } else {
+                // Fallback if no unique identity can be verified (rare in Firebase Auth)
+                grantedCredits = 5;
+                showWelcomeNotification = true;
+            }
+
+            const existingSnap = await getDoc(doc(db, 'users', userId));
+            const existing = existingSnap.exists() ? existingSnap.data() : null;
+            const pendingBusinessFlow =
+                String(existing?.registrationIntent || '').toLowerCase() === 'business';
+
+            const baseProfile = {
                 uid: userId,
                 display_name: finalDisplayName,
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
-                role: 'user',
                 reputation: 100,
-                purchasedPrivateCredits: 5,          // welcome gift: 5 free private invitation credits
-                usedPrivateCreditsThisMonth: 0,       // monthly usage counter (reset by InvitationContext)
-                lastPrivateResetMonth: '',             // tracks which month was last reset
+                purchasedPrivateCredits: grantedCredits,
+                usedPrivateCreditsThisMonth: 0,
+                lastPrivateResetMonth: '',
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 lastSeen: serverTimestamp(),
                 isProfileComplete: false
-            }, { merge: true });
+            };
+            // Do not stamp role:user on top of an in-progress /business/signup stub (Firestore allows first business write only when role is absent or via registrationIntent completion rule).
+            if (!pendingBusinessFlow) {
+                baseProfile.role = 'user';
+            }
 
-            await adminSecurityService.createNotification({
-                userId,
-                type: 'system_announcement',
-                title: '🎁 Welcome Gift!',
-                message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
-                style: 'success'
-            });
+            await setDoc(doc(db, 'users', userId), baseProfile, { merge: true });
+
+            if (showWelcomeNotification) {
+                try {
+                    await adminSecurityService.createNotification({
+                        userId,
+                        type: 'system_announcement',
+                        title: '🎁 Welcome Gift!',
+                        message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
+                        style: 'success'
+                    });
+                } catch (notifErr) {
+                    console.warn('Welcome notification skipped:', notifErr?.message || notifErr);
+                }
+            }
 
             await fetchUserProfile(userId);
         } catch (error) {
@@ -593,37 +701,80 @@ export const AuthProvider = ({ children }) => {
     };
 
     // Delete User Account
-    const deleteUserAccount = async () => {
-        if (!currentUser) return;
+    // Pass { password } for email users when re-auth is required (auth/requires-recent-login).
+    const deleteUserAccount = async (options = {}) => {
+        const { password } = options;
+        if (!currentUser) return false;
 
-        try {
-            const uid = currentUser.uid;
+        const user = auth.currentUser;
+        if (!user) return false;
 
-            // 1. Delete from Firestore first
+        const uid = user.uid;
+
+        const doFirestoreDelete = async () => {
             await deleteDoc(doc(db, 'users', uid));
+        };
 
-            // 2. Clear Guest Mode and Profile
+        const doAuthDelete = async () => {
             localStorage.removeItem('guestMode');
-            setUserProfile(null);
+            await user.delete();
+        };
 
-            // 3. Delete from Auth
-            const user = auth.currentUser;
-            if (user) {
-                await user.delete();
-            }
-
+        const performDelete = async () => {
+            await doFirestoreDelete();
+            await doAuthDelete();
             return true;
+        };
+
+        isDeletingAccountRef.current = true;
+        try {
+            return await performDelete();
         } catch (error) {
+            const isRequiresRecentLogin = error?.code === 'auth/requires-recent-login';
+            if (isRequiresRecentLogin) {
+                if (password) {
+                    const cred = EmailAuthProvider.credential(user.email, password);
+                    await reauthenticateWithCredential(user, cred);
+                    await doAuthDelete();
+                    return true;
+                }
+                const providerIds = (user.providerData || []).map((p) => p.providerId);
+                let provider = null;
+                if (providerIds.includes('google.com')) provider = new GoogleAuthProvider();
+                else if (providerIds.includes('apple.com')) provider = new OAuthProvider('apple.com');
+                else if (providerIds.includes('facebook.com')) provider = new FacebookAuthProvider();
+                else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
+                if (provider) {
+                    await reauthenticateWithPopup(user, provider);
+                    await doAuthDelete();
+                    return true;
+                }
+                const err = new Error('Re-authentication required');
+                err.code = 'auth/requires-recent-login';
+                err.requirePassword = true;
+                throw err;
+            }
             console.error('Error deleting account:', error);
-            // Re-authentication might be needed: auth/requires-recent-login
             throw error;
+        } finally {
+            isDeletingAccountRef.current = false;
         }
     };
 
-    const signOut = async () => {
+    /** Full-page navigation avoids stale React state / nested routes that block SPA `navigate('/login')`. */
+    const signOut = async (redirectTo = '/login') => {
+        const dest = (redirectTo && String(redirectTo).replace(/\/$/, '')) || '/login';
         try {
+            if (currentUser) await removeFcmToken(currentUser.uid).catch(() => { });
             await firebaseSignOut(auth);
             setUserProfile(null);
+            syncBusinessNavHint(null, null);
+            if (typeof window !== 'undefined') {
+                const path = (window.location.pathname || '/').replace(/\/$/, '') || '/';
+                if (path !== dest) {
+                    window.location.replace(dest);
+                }
+            }
         } catch (error) {
             console.error('Error signing out:', error);
             throw error;
@@ -631,14 +782,24 @@ export const AuthProvider = ({ children }) => {
     };
 
 
-    // Continue as Guest
-    const continueAsGuest = () => {
+    // Continue as Guest — must sign out Firebase or the next onAuthStateChanged will restore the real user
+    // and routing will treat them as logged-in (e.g. redirect /login → /).
+    const continueAsGuest = async () => {
         localStorage.setItem('guestMode', 'true');
-        setCurrentUser(null); // Important: clear Firebase user
+        const hadFirebaseUser = !!auth.currentUser;
+        try {
+            if (hadFirebaseUser) {
+                await firebaseSignOut(auth);
+            }
+        } catch (e) {
+            console.warn('continueAsGuest signOut:', e?.message || e);
+        }
+        // Always apply guest profile here so the login hub can navigate immediately; onAuthStateChanged
+        // will align state when user is null (avoids race where / still sees no guest profile).
         setUserProfile(guestProfile);
         setIsGuest(true);
-        setLoading(false); // Ensure loading is false
-        console.log('✅ Guest mode activated');
+        setLoading(false);
+        syncBusinessNavHint(guestProfile, guestProfile?.uid);
     };
 
     // Exit Guest Mode
@@ -646,12 +807,13 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('guestMode');
         setUserProfile(null);
         setIsGuest(false);
-        console.log('✅ Guest mode deactivated');
+        syncBusinessNavHint(null, null);
     };
 
     const value = {
         currentUser: currentUser ? {
             ...currentUser,
+            uid: currentUser.uid,
             id: currentUser.uid,
             name: currentUser.displayName,
             avatar: currentUser.photoURL
@@ -660,26 +822,19 @@ export const AuthProvider = ({ children }) => {
         loading,
         // Derive from normalised profile so there is ONE source of truth
         isGuest: isGuest || userProfile?.isGuest || false,
-        isBusiness: userProfile?.isBusiness || false,
+        isBusiness: isBusinessUser(userProfile),
         isAdmin: userProfile?.role === 'admin',
         isStaff: userProfile?.role === 'staff' || userProfile?.role === 'support' || userProfile?.role === 'admin',
-        sendPhoneOTP,
-        verifyPhoneOTP,
-        signUpWithEmail,
         signInWithEmail,
+        sendPasswordResetToEmail,
         signInWithGoogle,
-        signInWithApple,
         signInWithFacebook,
-        signInWithTwitter,
         signOut,
-
         updateUserProfile,
         deleteUserAccount,
-        setupRecaptcha,
-        convertToBusiness: null, // removed — use role: 'business' directly
         updateProfile: updateUserProfile,
         continueAsGuest,
-        exitGuestMode
+        exitGuestMode,
     };
 
     return (

@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
 import { FaTimes, FaChevronLeft, FaChevronRight, FaImage } from 'react-icons/fa';
+import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+
+const BROKEN_PHOTO_PLACEHOLDER =
+    'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23e5e7eb" width="100%25" height="100%25"/%3E%3C/svg%3E';
+
+function safeGalleryPhotoSrc(photo) {
+    const raw = typeof photo === 'string' ? photo : (photo?.url || '');
+    return pickSafeDisplayImageUrl(raw) || BROKEN_PHOTO_PLACEHOLDER;
+}
 
 const PhotoGallery = ({ photos = [], businessName = 'Business' }) => {
     const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -104,7 +113,7 @@ const PhotoGallery = ({ photos = [], businessName = 'Business' }) => {
                             }}
                         >
                             <img
-                                src={photo.url || photo}
+                                src={safeGalleryPhotoSrc(photo)}
                                 alt={photo.caption || `${businessName} photo ${index + 1}`}
                                 style={{
                                     position: 'absolute',
@@ -303,7 +312,7 @@ const PhotoGallery = ({ photos = [], businessName = 'Business' }) => {
                         }}
                     >
                         <img
-                            src={photos[currentImageIndex].url || photos[currentImageIndex]}
+                            src={safeGalleryPhotoSrc(photos[currentImageIndex])}
                             alt={photos[currentImageIndex].caption || `Photo ${currentImageIndex + 1}`}
                             style={{
                                 maxWidth: '100%',
@@ -375,7 +384,7 @@ const PhotoGallery = ({ photos = [], businessName = 'Business' }) => {
                                     }}
                                 >
                                     <img
-                                        src={photo.url || photo}
+                                        src={safeGalleryPhotoSrc(photo)}
                                         alt={`Thumbnail ${index + 1}`}
                                         style={{
                                             width: '100%',

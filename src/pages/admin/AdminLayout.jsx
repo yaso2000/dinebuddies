@@ -22,6 +22,7 @@ const ROUTE_LABELS = {
     'business-limits': 'Business Limits',
     migration: 'Migration',
     backups: 'Code Snapshots',
+    'grant-credits': 'Grant Credits',
     settings: 'Settings',
 };
 

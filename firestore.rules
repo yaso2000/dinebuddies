@@ -15,15 +15,23 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return isSignedIn() && 
-             (request.auth.token.admin == true || 
+      return isSignedIn() &&
+             (request.auth.token.admin == true ||
+              request.auth.token.role == 'admin' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
-    
+
+    // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
+    // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
+    function isSuperOwner() {
+      return isSignedIn() && request.auth.token.superOwner == true;
+    }
+
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
     function isPartner() {
-      return isSignedIn() && 
-             (request.auth.token.partner == true || 
+      return isSignedIn() &&
+             (request.auth.token.partner == true ||
+              request.auth.token.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
@@ -64,45 +72,71 @@ service cloud.firestore {
       let accepted = rsvps[request.auth.uid] == 'accepted';
       return isHost || (invited && accepted);
     }
+
+    // True when Firestore doc has never stored `role` (e.g. email-only stub from auth sync).
+    // Allows the first write that sets role to business during /business/signup — without allowing
+    // consumer accounts (role == 'user') to change role via client (those docs always have role set).
+    function userDocHasNoRoleField() {
+      return !resource.data.keys().hasAny(['role']);
+    }
+
+    // Mid-flow business signup (step 1) may have registrationIntent:business but role accidentally set to
+    // 'user' (race with profile bootstrap). Allow one completion write to role:business + businessInfo.
+    function isBusinessSignupCompletionFromIntent() {
+      return resource.data.get('registrationIntent', '') == 'business' &&
+             resource.data.get('role', '') != 'business' &&
+             request.resource.data.role == 'business' &&
+             request.resource.data.keys().hasAny(['businessInfo']);
+    }
     
     // ============================================
     // USERS COLLECTION
     // ============================================
     
     match /users/{userId} {
-      allow get: if true; // Keep temporarily until remaining cross-user reads are migrated
-      allow list: if isAdmin() &&
-                   request.query.limit != null &&
-                   request.query.limit <= 200;
+      // Restricted to signed-in users only. Public data should be read from public_profiles.
+      allow get: if isSignedIn();
+      // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
+      allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
+      allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
       allow create: if isSignedIn() && request.auth.uid == userId;
+      // Allow user to update their own FCM push tokens (from notificationService)
+      allow update: if isOwner(userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
+      // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
+      allow update: if isOwner(userId) &&
+                       userDocHasNoRoleField() &&
+                       request.resource.data.role == 'business' &&
+                       request.resource.data.keys().hasAny(['businessInfo']);
+      // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
+      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       allow update: if isAdmin();
-      // Allow any signed-in user to increment profile view counter only
+      // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['businessInfo']) &&
-                       request.resource.data.businessInfo.diff(resource.data.businessInfo).affectedKeys()
-                         .hasOnly(['profileViews']);
+                       request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
+                         .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
       
       // SUPER OWNER PROTECTION:
       // 1. Only Super Owner can delete Admins.
       // 2. Admins cannot delete themselves.
       // 3. Admins can delete regular users.
-      // 4. Regular users can delete themselves.
+      // 4. Regular users can delete themselves (user, business, staff, support - not admin).
+      // 5. Owner can delete own doc even if it no longer exists (no-op retry after re-auth).
       
-      allow delete: if 
-        // Case 1: Super Owner can delete ANYONE (including other admins)
-        (request.auth.token.email.matches('.*y.abohamed@gmail.com') || 
-         request.auth.token.email == 'admin@dinebuddies.com' ||
-         request.auth.uid == 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') ||
-         
+      allow delete: if
+        // Case 0: Doc doesn't exist - allow owner no-op (retry after re-auth)
+        (isOwner(userId) && !exists(/databases/$(database)/documents/users/$(userId))) ||
+        // Case 1: Super Owner (granted via Custom Claim superOwner:true) can delete ANYONE
+        isSuperOwner() ||
         // Case 2: Admin deleting a non-admin user
-        (isAdmin() && resource.data.role != 'admin') ||
-        
-        // Case 3: Regular user deleting themselves (if not admin)
-        (isOwner(userId) && resource.data.role != 'admin');
+        (isAdmin() && resource.data.get('role', 'user') != 'admin') ||
+        // Case 3: Regular user deleting themselves (role must not be admin)
+        (isOwner(userId) && resource.data.get('role', 'user') != 'admin');
       
       // USER REVIEWS SUBCOLLECTION
       match /reviews/{reviewId} {
@@ -130,6 +164,30 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
     }
+
+    // ============================================
+    // WELCOME GIFT CLAIMS (one doc per email key — client createUserProfile)
+    // ============================================
+    match /welcome_gifts_claimed/{claimId} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ============================================
+    // BUSINESS LIKES (like system: businessLikes/{businessId}_{userId})
+    // ============================================
+    match /businessLikes/{likeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.businessId is string;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.businessId is string;
+    }
     
     // ============================================
     // PUBLIC PROFILES (READ-ONLY PROJECTION)
@@ -138,7 +196,7 @@ service cloud.firestore {
     match /public_profiles/{uid} {
       // Public-facing display/search projection
       allow get: if true;
-      allow list: if request.query.limit != null && request.query.limit <= 20;
+      allow list: if request.query.limit != null && request.query.limit <= 200;
 
       // Backend-synced only (Cloud Functions trigger/callables)
       allow create, update, delete: if false;
@@ -302,7 +360,7 @@ service cloud.firestore {
         // Security: constrain message create schema and sender ownership
         allow create: if isSignedIn() && 
                          request.resource.data.senderId == request.auth.uid &&
-                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration']) &&
+                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent']) &&
                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow update: if isSignedIn() && 
                          resource.data.senderId == request.auth.uid;
@@ -342,16 +400,18 @@ service cloud.firestore {
 
     match /partner_notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
-      // Client-side create is self-only; cross-user partner notifications must use trusted backend callable.
-      allow create: if isSignedIn() &&
+      // Client-side create is self-only; cross-user partner notifications must use trusted backend callable, unless it's a feedback alert.
+      allow create: if (isSignedIn() &&
                       request.resource.data.senderId == request.auth.uid &&
-                      request.resource.data.restaurantId == request.auth.uid;
+                      request.resource.data.restaurantId == request.auth.uid) ||
+                      (request.resource.data.type == 'business_feedback');
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
     // ============================================
     // POSTS & FEED
     // ============================================
+
 
     match /communityPosts/{postId} {
       // Anyone can read posts
@@ -373,6 +433,10 @@ service cloud.firestore {
         (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
         isAdmin()
       );
+      // Any signed-in user can like, repost, or comment (social interactions only)
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['likes', 'reposts', 'comments']);
     }
 
     match /stories/{storyId} {
@@ -524,6 +588,48 @@ service cloud.firestore {
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
+    }
+
+    // ============================================
+    // FEATURED POSTS (Business Pro elite slides)
+    // ============================================
+    match /featured_posts/{postId} {
+      // Anyone can read (displayed publicly in the home feed)
+      allow read: if true;
+
+      // Only the owning partner can create/update/delete their own posts
+      allow create: if isSignedIn() &&
+                       request.resource.data.partnerId == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+                               (resource.data.partnerId == request.auth.uid || isAdmin());
+
+      // Any signed-in user can like, comment, or repost (social interactions only)
+      allow update: if isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['likes', 'reposts', 'comments']);
+    }
+
+    // ============================================
+    // BUSINESS FEEDBACK & COMPLAINTS
+    // ============================================
+    match /business_feedback/{feedbackId} {
+      // Only the assigned business owner (or Admin) can read their inbox
+      allow read: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+      
+      // Anyone (even public visitors) can submit feedback/complaints
+      allow create: if true;
+      
+      // Only the business owner (to mark as resolved) or Admin can update
+      allow update: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+      
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // ADMIN EMAIL CAMPAIGN LOG (server-only via Cloud Functions)
+    // ============================================
+    match /admin_email_campaigns/{id} {
+      allow read, write: if false;
     }
 
     // ============================================

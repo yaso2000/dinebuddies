@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 
 import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -7,16 +8,20 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
     FaArrowLeft, FaPaperPlane, FaMicrophone, FaTrash,
-    FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers
+    FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers, FaKeyboard
 } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
 import './CommunityChatRoom.css';
+import { createNotification } from '../utils/notificationHelpers';
+import { goToLogin } from '../utils/goToLogin';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const InvitationChatRoom = () => {
+    const { t, i18n } = useTranslation();
     const { id: invitationId } = useParams();
     const navigate = useNavigate();
     const { currentUser, userProfile, isGuest } = useAuth();
@@ -31,7 +36,7 @@ const InvitationChatRoom = () => {
 
     useEffect(() => {
         if (!loading && (!currentUser || isGuest)) {
-            navigate('/login');
+            goToLogin();
         }
     }, [currentUser, isGuest, loading, navigate]);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -45,7 +50,13 @@ const InvitationChatRoom = () => {
     const inputRef = useRef(null);
     const fileInputRef = useRef(null);
     const emojiBtnRef = useRef(null);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    
+    // Dynamic Viewport & Emoji States
+    const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(320);
+    const [lockTop, setLockTop] = useState(null);
+    const containerRef = useRef(null);
+    const composerRef = useRef(null);
 
     // Audio State
     const [isRecording, setIsRecording] = useState(false);
@@ -54,6 +65,88 @@ const InvitationChatRoom = () => {
     const timerRef = useRef(null);
     const [playingAudioId, setPlayingAudioId] = useState(null);
     const audioRef = useRef(new Audio());
+
+    const maxVisibleHeight = useRef(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+    // Visual Viewport tracking (mobile only)
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
+        if (!window.visualViewport) return;
+        const vv = window.visualViewport;
+
+        const handleResize = () => {
+            if (containerRef.current) {
+                containerRef.current.style.height = `${vv.height}px`;
+                containerRef.current.style.top = `${vv.offsetTop}px`;
+            }
+
+            if (vv.height > maxVisibleHeight.current) {
+                maxVisibleHeight.current = vv.height;
+            }
+
+            const diff = maxVisibleHeight.current - vv.height;
+            if (diff > 150) {
+                setKeyboardHeight(diff);
+            }
+
+            window.scrollTo(0, 0);
+        };
+
+        vv.addEventListener('resize', handleResize);
+        vv.addEventListener('scroll', handleResize);
+        handleResize();
+
+        // Lock document scroll
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            vv.removeEventListener('resize', handleResize);
+            vv.removeEventListener('scroll', handleResize);
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+        };
+    }, []);
+
+    const handleEmojiToggle = () => {
+        if (!composerRef.current || !containerRef.current) return;
+        
+        const rect = composerRef.current.getBoundingClientRect();
+        const containerRect = containerRef.current.getBoundingClientRect();
+        setLockTop(rect.top - containerRect.top);
+
+        if (showEmojiPanel) {
+            setShowEmojiPanel(false);
+            inputRef.current?.focus();
+        } else {
+            setShowEmojiPanel(true);
+            inputRef.current?.blur();
+        }
+
+        setTimeout(() => {
+            setLockTop(null);
+        }, 400);
+    };
+
+    const handleEmojiClick = (emojiData) => {
+        const emoji = emojiData.emoji;
+        const input = inputRef.current;
+        
+        setNewMessage(prevMessage => {
+            if (input) {
+                const s = input.selectionStart ?? prevMessage.length;
+                const e = input.selectionEnd ?? prevMessage.length;
+                
+                setTimeout(() => {
+                    input.setSelectionRange(s + emoji.length, s + emoji.length);
+                }, 10);
+                
+                return prevMessage.slice(0, s) + emoji + prevMessage.slice(e);
+            } else {
+                return prevMessage + emoji;
+            }
+        });
+    };
 
     // --- 1. Fetch Invitation & Verify Access ---
     useEffect(() => {
@@ -86,11 +179,11 @@ const InvitationChatRoom = () => {
                     const isParticipant = members.includes(currentUser.uid) || isPrivateAccepted;
 
                     if (!isHost && !isParticipant) {
-                        showToast("You are not a member of this invitation group chat.", 'error');
+                        showToast(t('not_group_member'), 'error');
                         navigate(resolvedCollection === 'private_invitations' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`);
                     }
                 } else {
-                    navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
+                    navigate('/', { replace: true, state: { message: t('invitation_ended') } });
                 }
             } catch (error) {
                 console.error("Error fetching invitation:", error);
@@ -107,7 +200,7 @@ const InvitationChatRoom = () => {
         const invRef = doc(db, collectionName, invitationId);
         const unsubscribe = onSnapshot(invRef, (snapshot) => {
             if (!snapshot.exists()) {
-                navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
+                navigate('/', { replace: true, state: { message: t('invitation_ended') } });
             }
         }, (err) => {
             console.error('Invitation snapshot error:', err);
@@ -195,7 +288,7 @@ const InvitationChatRoom = () => {
             scrollToBottom();
         } catch (error) {
             console.error("Error uploading image:", error);
-            showToast('Failed to send image. Try again.', 'error');
+            showToast(t('failed_upload_image'), 'error');
         } finally {
             e.target.value = '';
         }
@@ -239,7 +332,7 @@ const InvitationChatRoom = () => {
             }, 1000);
         } catch (error) {
             console.error("Mic Error:", error);
-            showToast('Could not access microphone.', 'error');
+            showToast(t('no_mic_access'), 'error');
         }
     };
 
@@ -273,7 +366,7 @@ const InvitationChatRoom = () => {
             scrollToBottom();
         } catch (error) {
             console.error("Error sending voice:", error);
-            showToast('Failed to send voice message. Try again.', 'error');
+            showToast(t('failed_send_voice'), 'error');
         }
     };
 
@@ -307,10 +400,30 @@ const InvitationChatRoom = () => {
             });
             setNewMessage('');
             scrollToBottom();
-            setTimeout(() => inputRef.current?.focus(), 10);
+            if (!showEmojiPanel) {
+                setTimeout(() => inputRef.current?.focus(), 10);
+            }
+
+            // Notify all participants (host + joined members) except the sender
+            const hostId = invitation?.authorId || invitation?.author?.id;
+            const members = invitation?.joinedMembers || invitation?.joined || [];
+            const recipients = [hostId, ...members].filter(id => id && id !== currentUser.uid);
+            const senderName = userProfile?.display_name || 'Someone';
+            const actionUrl = collectionName === 'private_invitations'
+                ? `/invitation/private/${invitationId}/chat`
+                : `/invitation/${invitationId}/chat`;
+            recipients.forEach(userId => {
+                createNotification({
+                    userId,
+                    type: 'message',
+                    title: senderName,
+                    message: text.slice(0, 80),
+                    actionUrl
+                }).catch(() => { });
+            });
         } catch (error) {
             console.error("Error sending:", error);
-            showToast('Failed to send message. Try again.', 'error');
+            showToast(t('failed_send_message'), 'error');
         }
     };
 
@@ -328,8 +441,8 @@ const InvitationChatRoom = () => {
     };
 
     if (loading) return (
-        <div className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Loading Chat...</div>
+        <div dir="ltr" className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t("loading_chat")}</div>
         </div>
     );
 
@@ -337,9 +450,7 @@ const InvitationChatRoom = () => {
     const invImage = invitation?.customImage || invitation?.restaurantImage || invitation?.image;
 
     return (
-        <div className="chat-screen" style={{
-            height: '100dvh', overflow: 'hidden', position: 'relative'
-        }}>
+        <div ref={containerRef} className="chat-screen invitation-chat-root">
 
             {/* Subtle dot-grid overlay for depth */}
             <div style={{
@@ -394,21 +505,22 @@ const InvitationChatRoom = () => {
                             cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s',
                         }}
                     >
-                        <FaArrowLeft size={14} />
+                        <FaArrowLeft size={14} style={{ transform: i18n.language === 'ar' ? 'rotate(180deg)' : 'none' }} />
                     </button>
 
                     {/* Host avatar with gold ring + HOST badge */}
                     <div style={{ position: 'relative', flexShrink: 0 }}>
-                        <img
+                        <UserAvatar
                             src={getSafeAvatar(invitation?.author)}
+                            user={invitation?.author}
                             alt="Host"
                             style={{
-                                width: '44px', height: '44px', borderRadius: '50%',
+                                width: '44px', height: '44px', minWidth: '44px', minHeight: '44px', maxWidth: '44px', maxHeight: '44px',
                                 objectFit: 'cover',
                                 border: '2px solid #fbbf24',
+                                borderRadius: '50%',
                                 boxShadow: '0 0 14px rgba(251,191,36,0.35)',
                             }}
-                            onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
                         />
                         <div style={{
                             position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%)',
@@ -416,17 +528,17 @@ const InvitationChatRoom = () => {
                             color: '#000', fontSize: '6.5px', fontWeight: '900',
                             padding: '1.5px 4px', borderRadius: '4px', letterSpacing: '0.5px',
                             whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                        }}>HOST</div>
+                        }}>{t("host_badge")}</div>
                     </div>
 
                     {/* Invitation title + location + date */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <h2 style={{
                             margin: '0 0 3px', fontSize: '0.92rem', fontWeight: '800',
                             color: 'var(--text-primary)', whiteSpace: 'nowrap',
                             overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
                         }}>
-                            {invitation?.title || 'Group Chat'}
+                            {invitation?.title || t('group_chat')}
                         </h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
                             {invitation?.location && (
@@ -464,7 +576,7 @@ const InvitationChatRoom = () => {
             </header>
 
             {/* Messages List */}
-            <div className="message-list" onScroll={handleScroll} style={{ position: 'relative', zIndex: 1 }}>
+            <div className="message-list" onScroll={handleScroll} style={{ position: 'relative', zIndex: 1, paddingBottom: showEmojiPanel ? `${keyboardHeight + 80}px` : '80px' }}>
 
                 {/* Empty state */}
                 {messages.length === 0 && (
@@ -482,8 +594,8 @@ const InvitationChatRoom = () => {
                             </div>
                         )}
                         <div style={{ textAlign: 'center' }}>
-                            <p style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>Say Hello! 👋</p>
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>Be the first to start the conversation</p>
+                            <p style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>{t("say_hello")} 👋</p>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>{t("start_conversation_first")}</p>
                         </div>
                     </div>
                 )}
@@ -500,14 +612,11 @@ const InvitationChatRoom = () => {
                     return (
                         <div key={msg.id} className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isSequence ? 'sequence' : 'first-of-group'}`}>
                             {!isMe && !isSequence && (
-                                <img
-                                    src={msg.senderAvatar || getSafeAvatar(null)}
+                                <UserAvatar
+                                    src={msg.senderAvatar}
+                                    user={{ avatar: msg.senderAvatar }}
                                     alt="avatar"
                                     className="sender-avatar"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = getSafeAvatar(null);
-                                    }}
                                 />
                             )}
                             {/* Empty placeholder for alignment if sequence */}
@@ -528,37 +637,41 @@ const InvitationChatRoom = () => {
                                     <img src={msg.imageUrl} alt="attachment" className="chat-image" />
                                 )}
 
-                                {msg.type === 'audio' ? (
-                                    <div className="voice-widget">
-                                        <div className="voice-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <button className="voice-play-btn" onClick={(e) => { e.stopPropagation(); handlePlayAudio(msg.audioUrl, msg.id); }}>
-                                                {playingAudioId === msg.id ? (
-                                                    <FaPause color="#10b981" size={14} />
-                                                ) : (
-                                                    <FaPlay color="white" size={14} />
-                                                )}
-                                            </button>
-                                            <div className="voice-time">{formatDuration(msg.duration || 0)}</div>
-                                        </div>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: '4px 12px' }}>
+                                    <div style={{ flex: '1 1 auto', margin: 0, minWidth: 0, wordBreak: 'break-word', paddingTop: '2px' }}>
+                                        {msg.type === 'audio' ? (
+                                            <div className="voice-widget">
+                                                <div className="voice-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <button className="voice-play-btn" onClick={(e) => { e.stopPropagation(); handlePlayAudio(msg.audioUrl, msg.id); }}>
+                                                        {playingAudioId === msg.id ? (
+                                                            <FaPause color="#10b981" size={14} />
+                                                        ) : (
+                                                            <FaPlay color="white" size={14} />
+                                                        )}
+                                                    </button>
+                                                    <div className="voice-time">{formatDuration(msg.duration || 0)}</div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <span dir="auto">{msg.text}</span>
+                                        )}
                                     </div>
-                                ) : (
-                                    <span>{msg.text}</span>
-                                )}
 
-                                <span className="timestamp">{formatTime(msg.createdAt)}</span>
+                                    <span className="timestamp" style={{ margin: '0 0 0 auto', display: 'flex', flexShrink: 0 }}>{formatTime(msg.createdAt)}</span>
+                                </div>
 
                                 {/* Reaction Badge */}
                                 {hasReactions && (
-                                    <div className="message-reaction-badge" style={{ position: 'absolute', bottom: '-10px', right: isMe ? 'auto' : '-5px', left: isMe ? '-5px' : 'auto', background: '#1f2937', borderRadius: '12px', padding: '2px 6px', fontSize: '0.75rem', border: '2px solid #0b1220', display: 'flex', alignItems: 'center', gap: '2px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
+                                    <div className="message-reaction-badge" style={{ position: 'absolute', bottom: '-10px', insetInlineEnd: isMe ? 'auto' : '-5px', insetInlineStart: isMe ? '-5px' : 'auto', background: '#1f2937', borderRadius: '12px', padding: '2px 6px', fontSize: '0.75rem', border: '2px solid #0b1220', display: 'flex', alignItems: 'center', gap: '2px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
                                         {distinctReactions.map((r, i) => <span key={i}>{r}</span>)}
-                                        {reactions.length > 1 && <span style={{ marginLeft: '2px', color: '#9CA3AF', fontSize: '0.7rem' }}>{reactions.length}</span>}
+                                        {reactions.length > 1 && <span style={{ marginInlineStart: '2px', color: '#9CA3AF', fontSize: '0.7rem' }}>{reactions.length}</span>}
                                     </div>
                                 )}
                             </div>
 
                             {/* Reaction Popup Menu */}
                             {activeReactionId === msg.id && (
-                                <div className="reaction-popup-container" style={{ position: 'absolute', top: '-45px', left: isMe ? 'auto' : '50px', right: isMe ? '50px' : 'auto', background: '#1f2937', padding: '5px 10px', borderRadius: '25px', display: 'flex', gap: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: 100 }} onClick={(e) => e.stopPropagation()}>
+                                <div className="reaction-popup-container" style={{ position: 'absolute', top: '-45px', insetInlineStart: isMe ? 'auto' : '50px', insetInlineEnd: isMe ? '50px' : 'auto', background: '#1f2937', padding: '5px 10px', borderRadius: '25px', display: 'flex', gap: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: 100 }} onClick={(e) => e.stopPropagation()}>
                                     {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
                                         <span
                                             key={emoji}
@@ -634,32 +747,29 @@ const InvitationChatRoom = () => {
                 </button>
             )}
 
-            {/* Input Composer */}
-
-            <div className="input-area" style={{ position: 'relative' }}>
-                {/* Emoji Picker Portal */}
-                <EmojiPickerPortal
-                    open={showEmojiPicker}
-                    onClose={() => setShowEmojiPicker(false)}
-                    anchorRef={emojiBtnRef}
-                    onEmojiClick={(emojiData) => {
-                        const input = inputRef.current;
-                        if (input) {
-                            const start = input.selectionStart ?? newMessage.length;
-                            const end = input.selectionEnd ?? newMessage.length;
-                            const updated = newMessage.slice(0, start) + emojiData.emoji + newMessage.slice(end);
-                            setNewMessage(updated);
-                            setTimeout(() => {
-                                input.focus();
-                                input.setSelectionRange(start + emojiData.emoji.length, start + emojiData.emoji.length);
-                            }, 0);
-                        } else {
-                            setNewMessage(prev => prev + emojiData.emoji);
-                        }
-                    }}
-                />
-
-                <div className="input-wrapper">
+            {/* ── COMPOSER (Pixel-perfect locked) ── */}
+            <div ref={composerRef} style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                zIndex: 100,
+                background: 'var(--bg-darker)',
+                borderTop: '1px solid var(--border-color)',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+                willChange: 'top, bottom',
+                ...(lockTop !== null 
+                    ? { top: `${lockTop}px`, bottom: 'auto' } 
+                    : { top: 'auto', bottom: showEmojiPanel ? `${keyboardHeight}px` : '0px' })
+            }}>
+                <div className="input-wrapper" style={{
+                    flex: 1, display: 'flex', alignItems: 'center',
+                    background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
+                    border: '1px solid var(--border-color)'
+                }}>
                     {/* Image Input (Hidden) */}
                     <input
                         type="file"
@@ -668,17 +778,6 @@ const InvitationChatRoom = () => {
                         accept="image/*"
                         onChange={handleImageUpload}
                     />
-
-                    {/* Image Button */}
-                    {!isRecording && (
-                        <button
-                            className="composer-icon-btn"
-                            onClick={handleImageClick}
-                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', marginRight: '8px', cursor: 'pointer' }}
-                        >
-                            <FaImage size={18} />
-                        </button>
-                    )}
 
                     {isRecording ? (
                         <div className="recording-ui" style={{ flex: 1, color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px' }}>
@@ -692,36 +791,37 @@ const InvitationChatRoom = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Emoji Button — desktop only */}
-                            {!isMobile && (
-                                <button
-                                    ref={emojiBtnRef}
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }}
-                                    style={{
-                                        background: 'none', border: 'none', fontSize: '1.2rem',
-                                        cursor: 'pointer', padding: '0 4px', opacity: 0.7, flexShrink: 0,
-                                    }}
-                                    title="Emoji"
-                                >😊</button>
-                            )}
-
                             <input
                                 ref={inputRef}
                                 type="text"
                                 className="message-input"
-                                placeholder="Type a message..."
+                                placeholder={t("type_message")}
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                                onFocus={() => showEmojiPanel && setShowEmojiPanel(false)}
                                 autoComplete="off"
                             />
+                            
+                            <button type="button" onClick={handleEmojiToggle} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                                {showEmojiPanel ? <FaKeyboard /> : '😊'}
+                            </button>
+                            
+                            <button className="composer-icon-btn" onClick={handleImageClick} style={{ background: 'none', border: 'none', color: '#9ca3af', marginRight: '8px', cursor: 'pointer', display: 'flex' }}>
+                                <FaImage size={18} />
+                            </button>
                         </>
                     )}
                 </div>
 
                 <button
                     className="send-btn-circle"
+                    style={{
+                        background: isRecording ? '#ef4444' : 'var(--primary)',
+                        color: 'white', border: 'none', borderRadius: '50%',
+                        width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+                    }}
                     onMouseDown={(e) => {
                         e.preventDefault();
                         if (isRecording) handleStopRecording(true);
@@ -730,6 +830,35 @@ const InvitationChatRoom = () => {
                 >
                     {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleStartRecording(); }} />)}
                 </button>
+            </div>
+
+            {/* ── EMOJI PANEL ── */}
+            <div style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
+                overflow: 'hidden',
+                background: 'var(--bg-card)',
+                borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
+                zIndex: 99,
+                willChange: 'top, bottom',
+                ...(lockTop !== null
+                    ? { top: `${lockTop + (composerRef.current?.offsetHeight || 60)}px`, bottom: 'auto' }
+                    : { top: 'auto', bottom: '0px' })
+                }}
+            >
+                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
+                    <LazyEmojiPicker
+                        onEmojiClick={handleEmojiClick}
+                        width="100%"
+                        height={`${keyboardHeight}px`}
+                        searchDisabled={true}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                        categories={[{ name: 'Smileys & Emotion', category: 'smileys_people' }]}
+                    />
+                </Suspense>
             </div>
         </div>
 

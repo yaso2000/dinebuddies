@@ -27,12 +27,14 @@ export const checkDailyInvitationLimit = async (userId) => {
         );
 
         const snapshot = await getDocs(q);
+        const validInvitations = snapshot.docs.filter(doc => doc.data().status !== 'draft');
+        
         return {
-            hasInvitationToday: snapshot.size > 0,
-            count: snapshot.size,
-            existingInvitation: snapshot.size > 0 ? {
-                id: snapshot.docs[0].id,
-                ...snapshot.docs[0].data()
+            hasInvitationToday: validInvitations.length > 0,
+            count: validInvitations.length,
+            existingInvitation: validInvitations.length > 0 ? {
+                id: validInvitations[0].id,
+                ...validInvitations[0].data()
             } : null
         };
     } catch (error) {

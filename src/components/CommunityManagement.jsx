@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { FaUsers, FaTrash, FaEnvelope, FaUserShield, FaBan, FaCheck } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { useTranslation } from 'react-i18next';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { createNotification } from '../utils/notificationHelpers';
 import { useToast } from '../context/ToastContext';
 import { useInvitations } from '../context/InvitationContext';
+import { useChat } from '../context/ChatContext';
 
 /**
- * Community Management Panel for Business Partners
+ * {t('community_management', 'Community Management')} Panel for Business Partners
  * Allows business accounts to manage their community members
  */
 const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
     const profileId = businessId;
     const { showToast } = useToast();
+    const { t } = useTranslation();
     const { getCommunityMembers } = useInvitations();
+    const { getOrCreateConversation, sendMessage: sendDirectMessage } = useChat();
     const [members, setMembers] = useState([]);
     const [selectedMembers, setSelectedMembers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -71,7 +75,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
 
     // Remove member from community
     const removeMember = async (memberId) => {
-        if (!confirm('Are you sure you want to remove this member from your community?')) {
+        if (!confirm(t('remove_member_confirm', 'Are you sure you want to remove this member from your community?'))) {
             return;
         }
 
@@ -92,46 +96,49 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
 
             // Reload members
             loadMembers();
-            showToast('Member removed successfully', 'success');
+            showToast(t('member_removed_success', 'Member removed successfully'), 'success');
         } catch (error) {
             console.error('Error removing member:', error);
-            showToast('Failed to remove member', 'error');
+            showToast(t('member_removed_error', 'Failed to remove member'), 'error');
         }
     };
 
     // Send message to selected members
     const sendMessageToMembers = async () => {
         if (!message.trim()) {
-            showToast('Please enter a message', 'error');
+            showToast(t('please_enter_message', 'Please enter a message'), 'error');
             return;
         }
 
         if (selectedMembers.length === 0) {
-            showToast('Please select at least one member', 'error');
+            showToast(t('please_select_member', 'Please select at least one member'), 'error');
             return;
         }
 
         setSending(true);
         try {
-            // Send notification to each selected member
+            // Send direct message to each selected member (automatically creates chat & push notification)
             for (const memberId of selectedMembers) {
-                await createNotification({
-                    userId: memberId,
-                    type: 'community_message',
-                    title: `Message from ${businessName || 'Business'}`,
-                    message: message.substring(0, 100),
-                    actionUrl: `/business/${profileId}`,
-                    metadata: { partnerId: profileId, fullMessage: message }
-                });
+                try {
+                    const conversationId = await getOrCreateConversation(memberId);
+                    if (conversationId) {
+                        await sendDirectMessage(conversationId, {
+                            text: message.trim(),
+                            type: 'text'
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to send message to', memberId, err);
+                }
             }
 
-            showToast(`Message sent to ${selectedMembers.length} member(s)`, 'success');
+            showToast(`${t('message_sent', 'Message sent to')} ${selectedMembers.length} ${t('members_count', 'members')}`, 'success');
             setMessage('');
             setShowMessageModal(false);
             deselectAll();
         } catch (error) {
             console.error('Error sending messages:', error);
-            showToast('Failed to send messages', 'error');
+            showToast(t('message_sent_error', 'Failed to send messages'), 'error');
         } finally {
             setSending(false);
         }
@@ -140,7 +147,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
     if (loading) {
         return (
             <div style={{ padding: '2rem', textAlign: 'center' }}>
-                <p>Loading members...</p>
+                <p>{t('loading_members', 'Loading members...')}</p>
             </div>
         );
     }
@@ -157,7 +164,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                 {/* 1. Title */}
                 <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <FaUserShield />
-                    Community Management
+                    {t('community_management', 'Community Management')}
                 </h3>
 
                 {/* 2. Action Buttons */}
@@ -182,7 +189,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                 }}
                             >
                                 <FaEnvelope />
-                                Message Selected
+                                {t('message_selected', 'Message Selected')}
                             </button>
                             <button
                                 onClick={deselectAll}
@@ -196,7 +203,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                     fontWeight: '500'
                                 }}
                             >
-                                Deselect All
+                                {t('deselect_all', 'Deselect All')}
                             </button>
                         </>
                     ) : (
@@ -214,7 +221,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                     fontWeight: '500'
                                 }}
                             >
-                                Select All (Broadcasting)
+                                {t('select_all_broadcast', 'Select All (Group Message)')}
                             </button>
                         )
                     )}
@@ -222,7 +229,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
 
                 {/* 3. Stats */}
                 <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                    {members.length} member(s) • <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{selectedMembers.length} selected</span>
+                    {members.length} {t('members_count', 'member')}  • <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{selectedMembers.length} {t('selected_count', 'selected')}</span>
                 </p>
             </div>
 
@@ -230,7 +237,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
             {members.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                     <FaUsers size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                    <p>No community members yet</p>
+                    <p>{t('no_community_members_yet', 'No community members yet')}</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -320,7 +327,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                     gap: '0.5rem',
                                     flexShrink: 0
                                 }}
-                                title="Remove member"
+                                title={t('remove_member', 'Remove member')}
                             >
                                 <FaTrash />
                             </button>
@@ -349,13 +356,13 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                         maxWidth: '500px'
                     }}>
                         <h3 style={{ margin: '0 0 1rem 0' }}>
-                            Send Message to {selectedMembers.length} Member(s)
+                            {t('send_message_to_members', 'Send Message to')} {selectedMembers.length} {t('members_count', 'Members')}
                         </h3>
 
                         <textarea
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            placeholder="Type your message here..."
+                            placeholder={t('type_message_placeholder', 'Type your message here...')}
                             rows={6}
                             style={{
                                 width: '100%',
@@ -383,7 +390,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                     cursor: 'pointer'
                                 }}
                             >
-                                Cancel
+                                {t('btn_cancel', 'Cancel')}
                             </button>
                             <button
                                 onClick={sendMessageToMembers}
@@ -399,7 +406,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                     opacity: sending || !message.trim() ? 0.5 : 1
                                 }}
                             >
-                                {sending ? 'Sending...' : 'Send Message'}
+                                {sending ? t('sending_message', 'Sending...') : t('send_message', 'Send Message')}
                             </button>
                         </div>
                     </div>

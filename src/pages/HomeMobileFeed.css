@@ -26,13 +26,7 @@
         width: auto !important;
         max-width: 100% !important;
 
-        background: var(--bg-card) !important;
         border-radius: 16px !important;
-        /* Rounded corners */
-        /* Edge to edge */
-        border: none !important;
-        border-bottom: 1px solid var(--border-color) !important;
-
         box-shadow: none !important;
         /* Simplify */
 

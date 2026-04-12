@@ -8,8 +8,11 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaUsers, FaSearch, FaArrowLeft, FaTrash } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import EmptyState from '../components/EmptyState';
+import { useTranslation } from 'react-i18next';
+import { goToLogin } from '../utils/goToLogin';
 
 const MyCommunities = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
     const { leaveCommunity } = useInvitations();
@@ -20,7 +23,7 @@ const MyCommunities = () => {
     // Redirect guests to login & business accounts to their dashboard
     useEffect(() => {
         if (userProfile?.isGuest) {
-            navigate('/login');
+            goToLogin();
         } else if (userProfile?.isBusiness) {
             navigate('/business-dashboard');
         }
@@ -134,7 +137,7 @@ const MyCommunities = () => {
     };
 
     const handleLeaveCommunity = async (partnerId, communityName) => {
-        if (window.confirm(`Are you sure you want to leave ${communityName}?`)) {
+        if (window.confirm(`${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${communityName}?`)) {
             try {
                 const success = await leaveCommunity(partnerId);
                 if (success) {
@@ -151,11 +154,12 @@ const MyCommunities = () => {
         community.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // Guest check - Don't render anything for guests
-    const isGuest = userProfile?.isGuest || false;
-    if (isGuest) {
-
-        return null; // Redirect will happen via useEffect
+    if (userProfile?.isGuest) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>
+                <div className="spinner" />
+            </div>
+        );
     }
 
     if (loading) {
@@ -170,7 +174,7 @@ const MyCommunities = () => {
                     animation: 'spin 1s linear infinite',
                     margin: '0 auto 1rem'
                 }} />
-                <p style={{ color: 'var(--text-muted)' }}>Loading communities...</p>
+                <p style={{ color: 'var(--text-muted)' }}>{t('Loading communities...', 'Loading communities...')}</p>
             </div>
         );
     }
@@ -194,7 +198,7 @@ const MyCommunities = () => {
                 >
                     <FaArrowLeft />
                 </button>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>My Communities</h2>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>{t('My Communities', 'My Communities')}</h2>
             </div>
 
             {/* Search Bar */}
@@ -215,7 +219,7 @@ const MyCommunities = () => {
                     }} />
                     <input
                         type="text"
-                        placeholder="Search communities..."
+                        placeholder={t('Search communities...', 'Search communities...')}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{
@@ -236,9 +240,9 @@ const MyCommunities = () => {
                 {filteredCommunities.length === 0 ? (
                     <EmptyState
                         icon={FaUsers}
-                        title={searchQuery ? 'No communities found' : 'No communities yet'}
-                        message={searchQuery ? 'Try a different search' : 'Join communities from partner profiles'}
-                        actionText={!searchQuery ? 'Explore Partners' : null}
+                        title={searchQuery ? t('No communities found', 'No communities found') : t('No communities yet', 'No communities yet')}
+                        message={searchQuery ? t('Try a different search', 'Try a different search') : t('Join communities from partner profiles', 'Join communities from partner profiles')}
+                        actionText={!searchQuery ? t('Explore Partners', 'Explore Partners') : null}
                         onAction={!searchQuery ? () => navigate('/restaurants') : null}
                         variant="primary"
                     />
@@ -306,7 +310,7 @@ const MyCommunities = () => {
                                         color: 'var(--text-muted)',
                                         marginBottom: '4px'
                                     }}>
-                                        {community.memberCount} members
+                                        {community.memberCount} {t('members', 'members')}
                                     </p>
                                     {community.lastMessage && (
                                         <p style={{
@@ -362,7 +366,7 @@ const MyCommunities = () => {
                                             transition: 'all 0.2s',
                                             zIndex: 10
                                         }}
-                                        title="Leave Community"
+                                        title={t('Leave Community', 'Leave Community')}
                                     >
                                         <FaTrash size={14} />
                                     </button>

@@ -4,7 +4,7 @@ import { FaCrown, FaLock } from 'react-icons/fa';
 /**
  * A small badge to indicate a premium feature.
  * @param {string} mode - 'pro' (crown) or 'locked' (lock icon) 
- * @param {boolean} isPaid - if true, the badge can optionally be hidden or restyled (usually hidden by the parent though)
+ * @param {boolean} isPaid - if truee badge can optionally be hidden or restyled (usually hidden by the parent though)
  */
 const PremiumBadge = ({ mode = 'pro', text = 'PRO' }) => {
     if (mode === 'locked') {

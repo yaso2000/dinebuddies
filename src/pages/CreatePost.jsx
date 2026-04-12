@@ -116,7 +116,7 @@ const CreatePost = () => {
             videoEl.onloadedmetadata = () => {
                 window.URL.revokeObjectURL(videoEl.src);
                 if (videoEl.duration > 31) {
-                    showToast('Video too long. Max 30s.', 'error');
+                    showToast(t('video_too_long', 'Video too long. Max 30s.'), 'error');
                     e.target.value = null;
                     return;
                 }
@@ -149,6 +149,7 @@ const CreatePost = () => {
                     name: authorInfo.name,
                     avatar: authorInfo.avatar
                 },
+                authorId: currentUser.uid,
                 content: text.trim(),
                 mediaUrl: mediaUrl,
                 mediaType: mediaType,
@@ -193,7 +194,7 @@ const CreatePost = () => {
             navigate('/');
         } catch (error) {
             console.error("Error creating post:", error);
-            showToast('Failed to post. Try again.', 'error');
+            showToast(t('failed_to_post', 'Failed to post. Try again.'), 'error');
         } finally {
             setLoading(false);
         }
@@ -236,7 +237,7 @@ const CreatePost = () => {
                         opacity: (!text.trim() && !media && !attachedInvitation) || loading ? 0.5 : 1
                     }}
                 >
-                    {loading ? 'Posting...' : 'Post'}
+                    {loading ? t('posting', 'Posting...') : t('post_button', 'Post')}
                 </button>
             </div>
 
@@ -256,11 +257,11 @@ const CreatePost = () => {
                 }}>
                     <textarea
                         className="post-textarea"
-                        placeholder="What's happening?"
+                        placeholder={t('whats_happening', "What's happening?")}
                         autoFocus
                         value={text}
                         onChange={(e) => setText(e.target.value)}
-                        maxLength={Math.floor(4800 / fontSize)}
+                        maxLength={300}
                         style={{
                             width: '100%',
                             border: 'none',
@@ -328,7 +329,7 @@ const CreatePost = () => {
                                 }}>
                                     <input
                                         type="text" value={overlayText} onChange={(e) => setOverlayText(e.target.value)}
-                                        placeholder="Caption..."
+                                        placeholder={t('caption_placeholder', 'Caption...')}
                                         style={{
                                             width: '100%', background: 'transparent', border: 'none',
                                             color: 'white', fontSize: '1rem', outline: 'none', marginBottom: '8px'
@@ -339,7 +340,7 @@ const CreatePost = () => {
                                             <FaFont /> {FONTS[fontIndex].name}
                                         </button>
                                         <button onClick={() => setHasStroke(!hasStroke)} style={{ background: 'none', border: 'none', color: hasStroke ? '#22c55e' : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <FaPalette /> Stroke
+                                            <FaPalette /> {t('stroke', 'Stroke')}
                                         </button>
                                     </div>
                                 </div>
@@ -386,10 +387,10 @@ const CreatePost = () => {
                     <div style={{
                         textAlign: 'right',
                         fontSize: '0.85rem',
-                        color: text.length >= Math.floor(4800 / fontSize) ? 'var(--secondary)' : 'var(--text-muted)',
+                        color: text.length >= 300 ? 'var(--secondary)' : 'var(--text-muted)',
                         marginTop: '8px'
                     }}>
-                        {text.length} / {Math.floor(4800 / fontSize)}
+                        {text.length} / 300
                     </div>
                 </div>
 
@@ -416,7 +417,7 @@ const CreatePost = () => {
                                 whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                             }}
                         >
-                            <FaSmile size={16} /> Emoji
+                            <FaSmile size={16} /> {t('emoji', 'Emoji')}
                         </button>
                         {showEmojiPicker && (
                             <>
@@ -447,7 +448,7 @@ const CreatePost = () => {
                                     flexDirection: 'column'
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Quick Emojis</span>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{t('quick_emojis', 'Quick Emojis')}</span>
                                         <button
                                             onClick={() => setShowEmojiPicker(false)}
                                             style={{ background: 'var(--bg-input)', border: 'none', color: 'var(--text-main)', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -483,7 +484,7 @@ const CreatePost = () => {
                                             onClick={() => setShowEmojiPicker(false)}
                                             style={{ background: 'var(--primary)', border: 'none', color: 'white', padding: '8px 24px', borderRadius: '12px', fontSize: '0.9rem', fontWeight: '600', width: '100%' }}
                                         >
-                                            Done
+                                            {t('done', 'Done')}
                                         </button>
                                     </div>
                                 </div>
@@ -501,7 +502,7 @@ const CreatePost = () => {
                             whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                         }}
                     >
-                        <FaImage size={16} /> Photo
+                        <FaImage size={16} /> {t('photo', 'Photo')}
                     </button>
 
                     {/* Video Upload */}
@@ -514,7 +515,7 @@ const CreatePost = () => {
                             whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                         }}
                     >
-                        <FaVideo size={16} /> Video
+                        <FaVideo size={16} /> {t('video', 'Video')}
                     </button>
 
                     {/* Camera Recording */}
@@ -527,7 +528,7 @@ const CreatePost = () => {
                             whiteSpace: 'nowrap', flexShrink: 0, boxShadow: 'var(--shadow-premium)'
                         }}
                     >
-                        <FaCircle size={12} /> Record
+                        <FaCircle size={12} /> {t('record', 'Record')}
                     </button>
                 </div>
 
@@ -544,7 +545,7 @@ const CreatePost = () => {
                 }}>
                     {/* Section 1: Size */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', minWidth: '40px' }}>Size</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', minWidth: '40px' }}>{t('size', 'Size')}</span>
                         <input
                             type="range" min="12" max="48" value={fontSize}
                             onChange={(e) => setFontSize(parseInt(e.target.value))}
@@ -596,7 +597,7 @@ const CreatePost = () => {
 
                     {/* Section 3: Text Color */}
                     <div>
-                        <div style={{ fontSize: '0.85rem', marginBottom: '10px', fontWeight: '600', color: 'var(--text-main)' }}>Text Color</div>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '10px', fontWeight: '600', color: 'var(--text-main)' }}>{t('text_color', 'Text Color')}</div>
                         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '6px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                             {COLORS.map(c => (
                                 <button
@@ -610,7 +611,7 @@ const CreatePost = () => {
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                     }}
-                                    title={c === '' ? "Auto" : c}
+                                    title={c === '' ? t('auto_color', 'Auto') : c}
                                 >
                                     {c === '' && textColor === '' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }} />}
                                 </button>
@@ -620,7 +621,7 @@ const CreatePost = () => {
 
                     {/* Section 4: Background Color */}
                     <div>
-                        <div style={{ fontSize: '0.85rem', marginBottom: '10px', fontWeight: '600', color: 'var(--text-main)' }}>Background Color</div>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '10px', fontWeight: '600', color: 'var(--text-main)' }}>{t('background_color', 'Background Color')}</div>
                         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '6px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                             {BG_COLORS.map(c => (
                                 <button

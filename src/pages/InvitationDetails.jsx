@@ -22,6 +22,11 @@ import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
 import InvitationTimeline from '../components/Invitation/InvitationTimeline';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
+import InvitationShareModal from '../components/InvitationShareModal';
+import InternalShareModal from '../components/InternalShareModal';
+import SimpleMap from '../components/SimpleMap';
+import { getTemplateStyle } from '../utils/invitationTemplates';
+import { goToLogin } from '../utils/goToLogin';
 
 const InvitationDetails = () => {
     const { t, i18n } = useTranslation();
@@ -43,6 +48,7 @@ const InvitationDetails = () => {
     const [showShare, setShowShare] = useState(false);
     const [sharingCard, setSharingCard] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
+    const shareCardFileRef = useRef(null);
     const [isEditing, setIsEditing] = useState(false);
     const chatEndRef = useRef(null);
 
@@ -55,9 +61,60 @@ const InvitationDetails = () => {
 
     const handleUpdateStatus = async (newStatus) => {
         if (isUpdatingStatus) return;
+
+        // 1. Validation Rules
+        if (newStatus === 'on_way') {
+            if (invitation.date && invitation.time) {
+                const eventDate = new Date(invitation.date);
+                const [hours, mins] = invitation.time.split(':').map(Number);
+                eventDate.setHours(hours || 0, mins || 0, 0, 0);
+                
+                const now = new Date();
+                const diffMs = eventDate.getTime() - now.getTime();
+                const diffHours = diffMs / (1000 * 60 * 60);
+                
+                // Allow only if within 1 hour before, or if the event has already started
+                if (diffHours > 1) {
+                    showToast(t('on_way_too_early', { defaultValue: 'You can only send "I\'m on my way" up to 1 hour before the invitation time.' }), 'error');
+                    return;
+                }
+            }
+        }
+
+        if (newStatus === 'arrived') {
+            // Check distance (allow up to 200m / 0.2km for GPS drift leeway)
+            if (distance === null || distance > 0.2) {
+                showToast(t('arrived_too_far', { defaultValue: 'You must be near the restaurant (within 100-200 meters) to send "I\'ve arrived".' }), 'error');
+                return;
+            }
+        }
+
         setIsUpdatingStatus(true);
         try {
             await updateMeetingStatus(id, newStatus);
+            
+            // Check privacy collection 
+            const collectionName = invitation?.privacy === 'private' ? 'private_invitations' : 'invitations';
+            
+            // Dispatch systemic chat message
+            try {
+                const userName = currentUser?.name || currentUser?.displayName || t('a_guest');
+                const msgText = newStatus === 'on_way' 
+                    ? t('chat_on_way', { name: userName })
+                    : t('chat_arrived', { name: userName });
+
+                await addDoc(collection(db, collectionName, id, 'messages'), {
+                    text: msgText,
+                    senderId: 'system',
+                    senderName: t('system'),
+                    isSystemMessage: true,
+                    createdAt: serverTimestamp(),
+                    type: 'status_update'
+                });
+            } catch (chatErr) {
+                console.error("Failed to broadcast chat status:", chatErr);
+            }
+
             // If using fetchedInvitation (not in context), update local state manually
             if (!invitations.find(inv => inv.id === id) && fetchedInvitation) {
                 setFetchedInvitation(prev => ({
@@ -72,6 +129,7 @@ const InvitationDetails = () => {
             }
         } catch (error) {
             console.error("Failed to update status:", error);
+            showToast(t('failed_update_status', { defaultValue: 'Failed to update status. Please try again.' }), 'error');
         } finally {
             setIsUpdatingStatus(false);
         }
@@ -84,6 +142,12 @@ const InvitationDetails = () => {
     if (!invitation && fetchedInvitation) {
         invitation = fetchedInvitation;
     }
+
+    const templateStyles = invitation ? getTemplateStyle(
+        invitation.templateType || 'classic',
+        invitation.colorScheme || 'oceanBlue',
+        invitation.occasionType
+    ) : null;
 
     // Fetch invitation from Firestore if not in context (e.g., deep linking)
     useEffect(() => {
@@ -102,12 +166,22 @@ const InvitationDetails = () => {
         fetchInvitation();
     }, [id, invitation, loadingInvitations, navigate]);
 
-    // Resilience: if invitation is deleted while viewing (e.g. by Cloud Function), redirect to home
+    // Resilience: if invitation is deleted after load, redirect to home.
+    // Do NOT redirect on the first snapshot when exists() is false — that can happen briefly before
+    // the new doc is visible to the listener (race after create), which would send users to "/" incorrectly.
+    const invitationDocSeenRef = useRef(false);
+    useEffect(() => {
+        invitationDocSeenRef.current = false;
+    }, [id]);
     useEffect(() => {
         if (!id) return;
         const invRef = doc(db, 'invitations', id);
         const unsubscribe = onSnapshot(invRef, (snapshot) => {
-            if (!snapshot.exists()) {
+            if (snapshot.exists()) {
+                invitationDocSeenRef.current = true;
+                return;
+            }
+            if (!snapshot.exists() && invitationDocSeenRef.current) {
                 navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
             }
         }, (err) => {
@@ -249,7 +323,7 @@ const InvitationDetails = () => {
 
     const [showCopiedToast, setShowCopiedToast] = useState(false);
 
-    // Direct image share (generates card → native share or desktop preview)
+    // Generate share card and show modal so the image is always visible; user can Share / Download / Copy link
     const handleShareCard = async () => {
         if (sharingCard) return;
         const shareUrl = window.location.href;
@@ -263,25 +337,50 @@ const InvitationDetails = () => {
             maxGuests: invitation?.guestsNeeded,
             hostName: invitation?.author?.name || invitation?.hostName,
             hostImage: getSafeAvatar(invitation?.author || {}),
+            shareUrl,
         };
         try {
             setSharingCard(true);
             setCardPreviewUrl(null);
+            shareCardFileRef.current = null;
             const blob = await generateShareCardBlob(storyData);
             if (!blob) throw new Error('No blob');
-            const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
-            const shareTextWithLink = `${invitation?.title || 'Invitation'}${invitation?.description ? `\n\n${invitation.description}` : ''}\n\n🔗 ${shareUrl}`;
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: invitation.title, text: shareTextWithLink, url: shareUrl });
-            } else {
-                setCardPreviewUrl(URL.createObjectURL(blob));
-            }
+            const file = new File([blob], 'dinebuddies-invitation.png', { type: 'image/png' });
+            shareCardFileRef.current = file;
+            setCardPreviewUrl(URL.createObjectURL(blob));
         } catch (err) {
             if (err?.name !== 'AbortError') console.error('Share error:', err);
+            showToast(t('share_failed', { defaultValue: 'Could not generate share image. Try again.' }), 'error');
         } finally {
             setSharingCard(false);
         }
     };
+
+    const closeShareModal = () => {
+        if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
+        setCardPreviewUrl(null);
+        shareCardFileRef.current = null;
+    };
+
+    const [showInternalShare, setShowInternalShare] = useState(false);
+
+    const handleShareNativeFromModal = async () => {
+        const shareUrl = window.location.href;
+        const file = shareCardFileRef.current;
+        const shareTextWithLink = `${invitation?.title || 'Invitation'}${invitation?.description ? `\n\n${invitation.description}` : ''}\n\n🔗 ${shareUrl}`;
+        if (!file || !navigator.share) return;
+        try {
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: invitation?.title, text: shareTextWithLink, url: shareUrl });
+            } else {
+                await navigator.share({ title: invitation?.title, text: shareTextWithLink, url: shareUrl });
+            }
+        } catch (e) {
+            if (e?.name !== 'AbortError') showToast(t('share_failed', { defaultValue: 'Share failed' }), 'error');
+        }
+    };
+
+
 
     const handleCancelInvitation = async (reason, customReason) => {
         try {
@@ -322,7 +421,7 @@ const InvitationDetails = () => {
             }
         } catch (error) {
             console.error('Error cancelling invitation:', error);
-            showToast('Failed to cancel invitation', 'error');
+            showToast(t('something_went_wrong', { defaultValue: 'Failed to cancel invitation' }), 'error');
         }
     };
 
@@ -337,7 +436,7 @@ const InvitationDetails = () => {
             return;
         }
 
-        if (!window.confirm('Are you sure you want to complete this invitation?')) {
+        if (!window.confirm(t('confirm_complete_invitation'))) {
             return;
         }
 
@@ -359,11 +458,11 @@ const InvitationDetails = () => {
                 let errorMessage;
 
                 if (result.requiresLocation) {
-                    errorMessage = '😊 It looks like you\'re not at the venue yet\n\nYou can complete the invitation once you arrive at the restaurant';
+                    errorMessage = t('not_at_venue_yet');
                 } else if (result.requiresPermission) {
-                    errorMessage = '📍 We need to verify you\'re at the venue\n\nPlease allow location access in your browser settings';
+                    errorMessage = t('verify_venue_location');
                 } else {
-                    errorMessage = 'Sorry, something went wrong. Please try again';
+                    errorMessage = t('something_went_wrong');
                 }
 
                 showToast(errorMessage, 'error');
@@ -371,7 +470,7 @@ const InvitationDetails = () => {
             }
         } catch (error) {
             console.error('Error completing invitation:', error);
-            showToast('Sorry, something went wrong. Please try again', 'error');
+            showToast(t('something_went_wrong'), 'error');
             setLocationStatus('');
         } finally {
             setIsCompleting(false);
@@ -468,7 +567,7 @@ const InvitationDetails = () => {
 
         } catch (error) {
             console.error("Error updating age category:", error);
-            showToast("Failed to update profile. Please try again.", 'error');
+            showToast(t('failed_update_profile'), 'error');
         } finally {
             setIsUpdatingStatus(false);
         }
@@ -509,7 +608,7 @@ const InvitationDetails = () => {
                 const allowed = invitation.ageGroups.join(', ');
                 return {
                     eligible: false,
-                    reason: `Sorry, this invitation is for age groups: ${allowed}`
+                    reason: t('age_groups_restricted', { allowed })
                 };
             }
         }
@@ -532,7 +631,7 @@ const InvitationDetails = () => {
 
     const handleRequestToJoin = async () => {
         if (currentUser?.isGuest) {
-            navigate('/login');
+            goToLogin();
             return;
         }
 
@@ -561,7 +660,7 @@ const InvitationDetails = () => {
     return (
         <div className="page-container details-page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
             {/* Header Actions - Absolute on top of Hero */}
-            <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 50 }}>
+            <div style={{ position: 'absolute', top: '20px', ...(i18n.language === 'ar' || i18n.language?.startsWith('ar') ? { right: '20px' } : { left: '20px' }), zIndex: 50 }}>
                 <button
                     onClick={() => navigate('/')}
                     style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer' }}
@@ -623,15 +722,17 @@ const InvitationDetails = () => {
                         t={t}
                     />
 
-                    <InvitationTimeline
-                        invitation={invitation}
-                        myStatus={myStatus}
-                        isAccepted={isAccepted}
-                        isHost={isHost}
-                        onUpdateStatus={handleUpdateStatus}
-                        onComplete={handleCompleteInvitation}
-                        isUpdatingStatus={isUpdatingStatus || isCompleting}
-                    />
+                    {(isHost || isAccepted) && (
+                        <InvitationTimeline
+                            invitation={invitation}
+                            myStatus={myStatus}
+                            isAccepted={isAccepted}
+                            isHost={isHost}
+                            onUpdateStatus={handleUpdateStatus}
+                            onComplete={handleCompleteInvitation}
+                            isUpdatingStatus={isUpdatingStatus || isCompleting}
+                        />
+                    )}
 
                     {/* Description */}
                     <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '0.5rem' }}>{t('about_event')}</h4>
@@ -649,81 +750,37 @@ const InvitationDetails = () => {
                         </div>
                     )}
 
-                    {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '1rem', flexWrap: 'wrap' }}>
-                        {((isAccepted || isHost) && myStatus === 'planning') && (
+                    {/* Join Button for non-hosts/strangers */}
+                    {!isHost && !isAccepted && userProfile?.role !== 'business' && (
+                        <div style={{ marginTop: '1.5rem' }}>
                             <button
                                 type="button"
-                                onClick={() => handleUpdateStatus('on_way')}
-                                disabled={isUpdatingStatus}
-                                className="ui-btn ui-btn--primary"
-                                style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', opacity: isUpdatingStatus ? 0.7 : 1, cursor: isUpdatingStatus ? 'not-allowed' : 'pointer' }}
+                                className={`ui-btn ${!eligibility.eligible || isPending ? 'ui-btn--secondary' : ''}`}
+                                onClick={handleRequestToJoin}
+                                disabled={!eligibility.eligible && !currentUser?.isGuest}
+                                style={{
+                                    width: '100%',
+                                    height: '60px',
+                                    fontSize: '1.1rem',
+                                    background: !eligibility.eligible && !currentUser?.isGuest 
+                                        ? 'var(--bg-input)' 
+                                        : (!isPending ? (templateStyles?.button?.background || 'var(--primary)') : undefined),
+                                    color: !eligibility.eligible && !currentUser?.isGuest 
+                                        ? 'var(--text-muted)' 
+                                        : (!isPending ? 'white' : undefined),
+                                    cursor: !eligibility.eligible && !currentUser?.isGuest ? 'not-allowed' : 'pointer',
+                                    border: !isPending ? 'none' : undefined,
+                                    boxShadow: !isPending && eligibility.eligible ? (templateStyles?.button?.boxShadow || '0 8px 20px rgba(0,0,0,0.2)') : 'none',
+                                }}
                             >
-                                {isUpdatingStatus ? '...' : t('im_on_way')}
+                                {currentUser?.isGuest ? t('login_to_join', { defaultValue: 'Login to Join' }) : (!eligibility.eligible ? (eligibility.reason || t('invite_unavailable')) : (isPending ? t('joined_btn') : t('join_btn')))}
                             </button>
-                        )}
-                        {((isAccepted || isHost) && myStatus === 'on_way') && (
-                            <button
-                                type="button"
-                                onClick={() => handleUpdateStatus('arrived')}
-                                disabled={isUpdatingStatus}
-                                className="ui-btn ui-btn--secondary"
-                                style={{ flex: 1, padding: '8px', fontSize: '0.75rem', borderRadius: '8px', opacity: isUpdatingStatus ? 0.7 : 1, cursor: isUpdatingStatus ? 'not-allowed' : 'pointer' }}
-                            >
-                                {isUpdatingStatus ? '...' : t('ive_arrived')}
-                            </button>
-                        )}
-                        {isHost && (
-                            <>
-                                {/* Complete Meeting Button with Location Verification */}
-                                {myStatus !== 'completed' && (
-                                    <button
-                                        type="button"
-                                        onClick={handleCompleteInvitation}
-                                        disabled={isCompleting}
-                                        className="ui-btn ui-btn--primary"
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px',
-                                            fontSize: '0.75rem',
-                                            borderRadius: '8px',
-                                            background: isCompleting ? 'var(--bg-secondary)' : 'var(--luxury-gold)',
-                                            border: 'none',
-                                            color: 'black',
-                                            opacity: isCompleting ? 0.6 : 1,
-                                            cursor: isCompleting ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        <FaCheckCircle /> {isCompleting ? locationStatus : t('complete_meeting')}
-                                    </button>
-                                )}
+                            <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
+                                {!eligibility.eligible ? eligibility.reason : (isPending ? t('request_sent_waiting') : t('join_to_chat'))}
+                            </p>
+                        </div>
+                    )}
 
-                            </>
-                        )}
-                        {!isHost && !isAccepted && (
-                            <div style={{ marginTop: '1.5rem' }}>
-                                <button
-                                    type="button"
-                                    className={`ui-btn ${!eligibility.eligible ? 'ui-btn--secondary' : (isPending ? 'ui-btn--secondary' : 'ui-btn--primary')}`}
-                                    onClick={handleRequestToJoin}
-                                    disabled={!eligibility.eligible && !currentUser?.isGuest}
-                                    style={{
-                                        width: '100%',
-                                        height: '60px',
-                                        fontSize: '1.1rem',
-                                        background: !eligibility.eligible && !currentUser?.isGuest ? 'var(--bg-input)' : undefined,
-                                        color: !eligibility.eligible && !currentUser?.isGuest ? 'var(--text-muted)' : undefined,
-                                        cursor: !eligibility.eligible && !currentUser?.isGuest ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    {currentUser?.isGuest ? t('login_to_join', { defaultValue: 'Login to Join' }) : (!eligibility.eligible ? (eligibility.reason || t('invite_unavailable')) : (isPending ? t('joined_btn') : t('join_btn')))}
-                                </button>
-                                <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.8rem' }}>
-                                    {!eligibility.eligible ? eligibility.reason : (isPending ? t('request_sent_waiting') : t('join_to_chat'))}
-                                </p>
-                            </div>
-                        )}
-                    </div>
 
                     {/* PRIVATE SECTION: Management & Chat */}
                     {(isHost || isAccepted) ? (
@@ -762,11 +819,11 @@ const InvitationDetails = () => {
                                             <FaComments color="white" size={20} />
                                         </div>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ color: 'white', fontWeight: '800', fontSize: '1rem' }}>
+                                            <div style={{ color: 'var(--text-main)', fontWeight: '800', fontSize: '1rem' }}>
                                                 {t('group_chat_title', { defaultValue: 'Group Chat' })}
                                             </div>
                                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                                Check updates & details
+                                                {t('check_updates_details', { defaultValue: 'Check updates & details' })}
                                             </div>
                                         </div>
                                         <FaArrowRight color="var(--text-muted)" />
@@ -805,7 +862,7 @@ const InvitationDetails = () => {
                             )}
 
                         </>
-                    ) : (
+                    ) : userProfile?.role !== 'business' ? (
                         /* Locked Chat Message for non-members */
                         <div style={{ padding: '2rem 1.25rem', textAlign: 'center' }}>
                             <div style={{ background: 'rgba(255,255,255,0.02)', padding: '2rem', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border-color)' }}>
@@ -814,7 +871,55 @@ const InvitationDetails = () => {
                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('members_only_chat')}</p>
                             </div>
                         </div>
-                    )}
+                    ) : null}
+
+                    {/* NEW LOCATION MAP BLOCK AT THE BOTTOM */}
+                    <div style={{ marginTop: '2rem', padding: '0 1.25rem', paddingBottom: '2rem' }}>
+                        <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FaMapMarkerAlt style={{ color: 'var(--primary)' }} /> {t('location_map', { defaultValue: 'Location' })}
+                        </h4>
+                        
+                        <div style={{ 
+                            background: 'var(--bg-card)', 
+                            borderRadius: '16px', 
+                            overflow: 'hidden',
+                            border: '1px solid var(--border-color)',
+                            boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                        }}>
+                            {/* Location Text Summary */}
+                            <div style={{ padding: '15px' }}>
+                                <div style={{ fontWeight: '800', fontSize: '1.05rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                                    {restaurantName || invitation.locationName || invitation.location || t('location_tbd')}
+                                </div>
+                                {(invitation.locationName || invitation.location) && (restaurantName !== invitation.locationName) && (
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        {invitation.locationName || invitation.location}
+                                    </div>
+                                )}
+                                {invitation.distance && (
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold', marginTop: '6px' }}>
+                                        {invitation.distance.toFixed(1)} km away
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Interactive Map */}
+                            {((invitation.lat && invitation.lng) || (invitation.restaurantData?.lat && invitation.restaurantData?.lng)) ? (
+                                <div style={{ height: '220px', width: '100%' }}>
+                                    <SimpleMap 
+                                        lat={invitation.lat || invitation.restaurantData?.lat} 
+                                        lng={invitation.lng || invitation.restaurantData?.lng} 
+                                        businessName={restaurantName} 
+                                        address={invitation.locationName || invitation.location} 
+                                    />
+                                </div>
+                            ) : (
+                                <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid var(--border-color)' }}>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>📍 Map coordinates not available</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Cancellation Modal */}
@@ -898,35 +1003,33 @@ const InvitationDetails = () => {
                     </div>
                 )}
 
-                {/* Desktop fallback: card preview + download */}
-                {cardPreviewUrl && (
-                    <div
-                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
-                    >
-                        <div
-                            style={{ width: 320, padding: 16, borderRadius: 20, background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <a href={window.location.href} target="_blank" rel="noopener noreferrer">
-                                <img src={cardPreviewUrl} alt="Share Card" style={{ width: '100%', borderRadius: 10, display: 'block', cursor: 'pointer' }} />
-                            </a>
-                            <a
-                                href={cardPreviewUrl}
-                                download="invitation-card.png"
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, padding: '10px 0', borderRadius: 10, background: 'linear-gradient(135deg,#8b5cf6,#ec4899)', color: 'white', fontWeight: 700, textDecoration: 'none', fontSize: '0.9rem' }}
-                            >
-                                ⬇️ Download Card
-                            </a>
-                            <button
-                                onClick={() => { URL.revokeObjectURL(cardPreviewUrl); setCardPreviewUrl(null); }}
-                                style={{ width: '100%', marginTop: 8, padding: '8px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', borderRadius: 10, cursor: 'pointer', fontSize: '0.82rem' }}
-                            >
-                                {t('close')}
-                            </button>
-                        </div>
-                    </div>
-                )}
+                {/* Share modal: card preview + Share / Download / Copy link */}
+                <InvitationShareModal
+                    cardPreviewUrl={cardPreviewUrl}
+                    shareUrl={window.location.href}
+                    title={invitation?.title}
+                    onClose={closeShareModal}
+                    onShareNative={navigator.share ? handleShareNativeFromModal : null}
+                    onCopyLink={() => showToast(t('link_copied', { defaultValue: 'Link copied!' }), 'success')}
+                    onInternalShare={() => {
+                        closeShareModal(); 
+                        setShowInternalShare(true);
+                    }}
+                    t={t}
+                />
+
+                <InternalShareModal 
+                    isOpen={showInternalShare} 
+                    onClose={() => setShowInternalShare(false)} 
+                    shareData={{ 
+                        type: 'invitation', 
+                        id: invitation?.id || id, 
+                        title: invitation?.title || 'Invitation', 
+                        description: invitation?.description || '', 
+                        image: invitation?.customImage || invitation?.restaurantImage || invitation?.image || null,
+                        url: window.location.href 
+                    }} 
+                />
             </div>
         </div>
     );

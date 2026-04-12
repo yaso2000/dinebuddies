@@ -8,6 +8,20 @@ const functions = getFunctions();
 const listUserNetworkCallable = httpsCallable(functions, 'listUserNetwork');
 const getFollowerCountCallable = httpsCallable(functions, 'getFollowerCount');
 
+/** Coalesce identical in-flight listUserNetwork calls (Firestore/auth can fan out many at once). */
+const listUserNetworkInflight = new Map();
+function callListUserNetwork(payload) {
+    const key = JSON.stringify(payload);
+    if (listUserNetworkInflight.has(key)) {
+        return listUserNetworkInflight.get(key);
+    }
+    const promise = listUserNetworkCallable(payload).finally(() => {
+        listUserNetworkInflight.delete(key);
+    });
+    listUserNetworkInflight.set(key, promise);
+    return promise;
+}
+
 const mapNetworkUser = (user) => ({
     id: user?.id || user?.uid || '',
     uid: user?.uid || user?.id || '',
@@ -26,7 +40,7 @@ const mapNetworkUser = (user) => ({
  */
 export const getFollowers = async (userId) => {
     try {
-        const result = await listUserNetworkCallable({
+        const result = await callListUserNetwork({
             userId,
             includeFollowers: true,
             includeFollowing: false,
@@ -50,7 +64,7 @@ export const getFollowing = async (userId, followingIds = []) => {
             return [];
         }
 
-        const result = await listUserNetworkCallable({
+        const result = await callListUserNetwork({
             userId,
             includeFollowers: false,
             includeFollowing: true,

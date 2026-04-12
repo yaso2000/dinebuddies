@@ -6,7 +6,7 @@ import './VideoRecorder.css';
  * A robust, simplified video recorder component.
  * Focuses on stability and standard HTML5 MediaRecorder API usage.
  */
-const VideoRecorder = ({ maxDuration = 30, onRecordingComplete, onCancel }) => {
+const VideoRecorder = ({ maxDuration = 15, onRecordingComplete, onCancel }) => {
     // State
     const [status, setStatus] = useState('idle'); // idle, recording, review
     const [recordingTime, setRecordingTime] = useState(0);

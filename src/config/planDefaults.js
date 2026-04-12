@@ -1,6 +1,6 @@
 /**
  * Default Subscription Plans and Credit Packs
- * These serve as the "hardcoded" fallback and the source for Admin Seeding.
+ * Base currency: USD. Display in local currency via currencyConverter.js.
  */
 
 export const BASE_SUBSCRIPTION_PLANS = [
@@ -13,11 +13,13 @@ export const BASE_SUBSCRIPTION_PLANS = [
         price: 0,
         duration: { type: 'month', value: 1 },
         invitationCredits: 0,
-        publicCredits: 3,
+        publicCredits: 4,
+        monthlyPrivateQuota: 2,
         stripePriceId: null,
         tier: 'free',
         features: [
-            'Create 3 Public Invitations per month',
+            'Create 4 Public Invitations per month',
+            '2 Private Invitations per month',
             'Browse all nearby Public Invitations',
             'Join Food Communities',
             'App-based technical support'
@@ -31,9 +33,8 @@ export const BASE_SUBSCRIPTION_PLANS = [
         title: 'Most Popular',
         description: 'For active users seeking privacy',
         type: 'user',
-        price: 5.23, // $8 AUD
+        price: 8,
         currency: 'USD',
-        priceEur: 4.49,
         duration: { type: 'month', value: 1 },
         monthlyPrivateQuota: 4,
         stripePriceId: 'price_1T4DptKpQn3RDJUCrhwtOx0u',
@@ -54,11 +55,9 @@ export const BASE_SUBSCRIPTION_PLANS = [
         title: 'Golden Experience',
         description: 'For lovers of luxury and absolute privacy',
         type: 'user',
-        price: 9.80, // $15 AUD
+        price: 15,
         currency: 'USD',
-        priceEur: 8.99,
         duration: { type: 'month', value: 1 },
-        weeklyPrivateQuota: 10,
         monthlyPrivateQuota: 10,
         stripePriceId: 'price_1T4DrkKpQn3RDJUC7cPercNu',
         tier: 'vip',
@@ -78,18 +77,13 @@ export const BASE_SUBSCRIPTION_PLANS = [
         title: 'For Small Venues',
         description: 'Perfect solution for emerging businesses and venues',
         type: 'business',
-        price: 12.42, // $19 AUD
+        price: 19,
         currency: 'USD',
-        originalPrice: 18.95, // $29 AUD
-        priceEur: 37.99,
-        originalPriceEur: 47.99,
-        discount: 20,
         duration: { type: 'month', value: 1 },
         invitationCredits: null,
         invitationOffers: null,
         stripePriceId: 'price_1T4DfJKpQn3RDJUC4ANefmpl',
         tier: 'professional',
-        // Offer rules
         offerSlots: 1,
         offerHoursPerSlot: 50,
         offerPerpetual: false,
@@ -112,20 +106,15 @@ export const BASE_SUBSCRIPTION_PLANS = [
         title: 'For Businesses & Large Venues',
         description: 'Professional tools to manage and grow your business',
         type: 'business',
-        price: 18.95, // $29 AUD
+        price: 29,
         currency: 'USD',
-        originalPrice: 25.49, // $39 AUD
-        priceEur: 75.99,
-        originalPriceEur: 93.99,
-        discount: 20,
         duration: { type: 'month', value: 1 },
         invitationCredits: null,
         invitationOffers: null,
         stripePriceId: 'price_1T4DlqKpQn3RDJUC6vrueW0n',
         tier: 'elite',
-        // Offer rules
         offerSlots: 1,
-        offerHoursPerSlot: null,  // null = perpetual
+        offerHoursPerSlot: null,
         offerPerpetual: true,
         features: [
             '1 Month FREE Trial ✨',
@@ -163,12 +152,13 @@ export const BASE_SUBSCRIPTION_PLANS = [
 ];
 
 export const BASE_CREDIT_PACKS = [
+    // ── Private Invitation Packs ──────────────────────────────────────────────
     {
         id: 'c1',
         name: 'Single Private Invitation',
         type: 'invitation',
         amount: 1,
-        price: 1.31, // $2 AUD
+        price: 2,
         currency: 'USD',
         stripePriceId: 'price_1T4DyrKpQn3RDJUCN6ipD592'
     },
@@ -177,7 +167,7 @@ export const BASE_CREDIT_PACKS = [
         name: '3 Private Invitations',
         type: 'invitation',
         amount: 3,
-        price: 2.61, // $4 AUD
+        price: 4,
         currency: 'USD',
         stripePriceId: 'price_1T4E1aKpQn3RDJUCMLLV7g4D'
     },
@@ -186,7 +176,7 @@ export const BASE_CREDIT_PACKS = [
         name: '5 Private Invitations',
         type: 'invitation',
         amount: 5,
-        price: 3.92, // $6 AUD
+        price: 6,
         currency: 'USD',
         stripePriceId: 'price_1T4E1xKpQn3RDJUC6wYEr9I1'
     },
@@ -195,7 +185,7 @@ export const BASE_CREDIT_PACKS = [
         name: '10 Private Invitations',
         type: 'invitation',
         amount: 10,
-        price: 5.88, // $9 AUD
+        price: 9,
         currency: 'USD',
         stripePriceId: 'price_1T4E3EKpQn3RDJUC97Rro1xj'
     },
@@ -204,16 +194,38 @@ export const BASE_CREDIT_PACKS = [
         name: '20 Private Invitations',
         type: 'invitation',
         amount: 20,
-        price: 9.80, // $15 AUD
+        price: 15,
         currency: 'USD',
         stripePriceId: 'price_1T4E8AKpQn3RDJUCc3tJwnAI'
     },
+
+    // ── Dating Invitation Packs ───────────────────────────────────────────────
+    {
+        id: 'd1',
+        name: '5 Dating Invitations',
+        type: 'dating',
+        amount: 5,
+        price: 7,
+        currency: 'USD',
+        stripePriceId: 'price_1TDaNMKpQn3RDJUCWAJdI5YZ'
+    },
+    {
+        id: 'd2',
+        name: '10 Dating Invitations',
+        type: 'dating',
+        amount: 10,
+        price: 10,
+        currency: 'USD',
+        stripePriceId: 'price_1TDaO5KpQn3RDJUC0vD1Afzj'
+    },
+
+    // ── Business Offer Packs ───────────────────────────────────────────────────
     {
         id: 'o1',
         name: '50 Hour Offer Slot',
         type: 'offer_slot',
         offerHours: 50,
-        price: 3.27, // $5 AUD
+        price: 5,
         currency: 'USD',
         stripePriceId: 'price_1T5mIGKpQn3RDJUCMzhlyN6a',
         description: 'Adds one 50-hour premium offer display slot to your banner'

@@ -1,6 +1,6 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { goToLogin } from '../utils/goToLogin';
 
 /**
  * Blocks guest users from accessing protected routes.
@@ -8,6 +8,11 @@ import { useAuth } from '../context/AuthContext';
  */
 const GuestBlockedRoute = ({ children }) => {
     const { currentUser, isGuest, loading } = useAuth();
+
+    useEffect(() => {
+        if (loading) return;
+        if (!currentUser || isGuest) goToLogin({ replace: true });
+    }, [loading, currentUser, isGuest]);
 
     if (loading) {
         return (
@@ -18,7 +23,11 @@ const GuestBlockedRoute = ({ children }) => {
     }
 
     if (!currentUser || isGuest) {
-        return <Navigate to="/login" replace />;
+        return (
+            <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                …
+            </div>
+        );
     }
 
     return children;

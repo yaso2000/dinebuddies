@@ -161,12 +161,18 @@ const OfferEditor = ({ onPublish, businessProfile, initialData = null }) => {
                     onChange={(e) => setOfferData({ ...offerData, title: e.target.value })}
                 />
 
-                <textarea
-                    placeholder={t('offer_desc_placeholder', 'Offer Description (Appears in banner)')}
-                    maxLength="100"
-                    value={offerData.description}
-                    onChange={(e) => setOfferData({ ...offerData, description: e.target.value })}
-                />
+                <div style={{ position: 'relative', marginBottom: '15px' }}>
+                    <textarea
+                        placeholder={t('offer_desc_placeholder', 'Offer Description (Appears in banner)')}
+                        maxLength={100}
+                        value={offerData.description}
+                        onChange={(e) => setOfferData({ ...offerData, description: e.target.value })}
+                        style={{ width: '100%', marginBottom: 0 }}
+                    />
+                    <span style={{ position: 'absolute', bottom: '10px', right: '10px', fontSize: '0.75rem', color: (offerData.description?.length || 0) >= 100 ? 'var(--secondary)' : 'var(--text-muted)' }}>
+                        {offerData.description?.length || 0}/100
+                    </span>
+                </div>
 
                 <div className="media-upload-section" style={{ marginBottom: '20px' }}>
                     <label>{t('offer_image_label', 'Offer Image:')}</label>

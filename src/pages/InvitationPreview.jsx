@@ -1,19 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUsers, FaMoneyBillWave, FaLock, FaGlobe, FaUserFriends } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
 import { FaVenusMars, FaBirthdayCake } from 'react-icons/fa';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const InvitationPreview = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { showToast } = useToast();
+    const { isBusiness } = useAuth();
+    const isBusinessRef = useRef(isBusiness);
+    isBusinessRef.current = isBusiness;
     const navigate = useNavigate();
     const { id: draftId } = useParams(); // Get draft ID from URL
+
+    const fallbackAfterPreviewError = () => (isBusinessRef.current ? '/' : '/create');
 
     const [invitation, setInvitation] = useState(null);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -27,28 +33,42 @@ const InvitationPreview = () => {
 
     // Fetch draft invitation from Firestore
     useEffect(() => {
+        let cancelled = false;
+
         const fetchDraft = async () => {
             if (!draftId) {
-                navigate('/create');
+                navigate(fallbackAfterPreviewError(), { replace: true });
                 return;
             }
 
             try {
                 const invitationRef = doc(db, 'invitations', draftId);
-                const invitationDoc = await getDoc(invitationRef);
+                // Prefer server read right after create (avoids stale cache); fall back to cache read.
+                let invitationDoc;
+                try {
+                    invitationDoc = await getDocFromServer(invitationRef);
+                } catch {
+                    invitationDoc = await getDoc(invitationRef);
+                }
+                if (!invitationDoc.exists()) {
+                    invitationDoc = await getDoc(invitationRef);
+                }
+
+                if (cancelled) return;
 
                 if (!invitationDoc.exists()) {
                     showToast(t('invitation_not_found') || 'Draft not found', 'error');
-                    navigate('/create');
+                    navigate(fallbackAfterPreviewError(), { replace: true });
                     return;
                 }
 
                 const data = invitationDoc.data();
 
-                // Verify it's a draft
-                if (data.status !== 'draft') {
-                    // Already published, redirect to invitation page
-                    navigate(`/invitation/${draftId}`);
+                // Source of truth for "still a draft": status === 'draft'. Published docs clear status (deleteField) and set publishedAt.
+                // Do NOT use Boolean(publishedAt) alone — it can mis-classify or fight with other redirects.
+                const isStillDraft = data.status === 'draft';
+                if (!isStillDraft) {
+                    navigate(`/invitation/${draftId}`, { replace: true });
                     return;
                 }
 
@@ -56,13 +76,14 @@ const InvitationPreview = () => {
             } catch (error) {
                 console.error('Error fetching draft:', error);
                 showToast(t('error_loading_draft') || 'Error loading draft', 'error');
-                navigate('/create');
+                navigate(fallbackAfterPreviewError(), { replace: true });
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         fetchDraft();
+        return () => { cancelled = true; };
     }, [draftId, navigate, t]);
 
     const handleEdit = () => {
@@ -100,7 +121,12 @@ const InvitationPreview = () => {
             navigate(`/invitation/${draftId}`);
         } catch (error) {
             console.error('❌ Error publishing invitation:', error);
-            showToast(t('failed_publish_invitation') || 'Failed to publish invitation', 'error');
+            const code = error?.code || '';
+            const msg =
+                code === 'permission-denied'
+                    ? (t('publish_permission_denied') || 'Publishing failed: account does not have permission to update this invitation.')
+                    : (t('failed_publish_invitation') || 'Failed to publish invitation');
+            showToast(msg, 'error');
         } finally {
             setIsPublishing(false);
         }
@@ -280,22 +306,22 @@ const InvitationPreview = () => {
                     }}>
                         <span className="meta-badge" style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
-                            background: 'rgba(255,255,255,0.1)', padding: '6px 14px',
-                            borderRadius: '12px', fontSize: '0.9rem', color: 'white',
-                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                            background: templateStyles.card?.color ? 'rgba(255,255,255,0.1)' : 'var(--bg-input)', padding: '6px 14px',
+                            borderRadius: '12px', fontSize: '0.9rem', color: templateStyles.card?.color || 'var(--text-main)',
+                            fontWeight: '700', border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
                         }}>
                             <FaCalendarAlt style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} />
                             {(() => {
                                 if (!invitation.date) return 'TBD';
                                 const d = new Date(invitation.date);
-                                return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                                return d.toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                             })()}
                         </span>
                         <span className="meta-badge" style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
-                            background: 'rgba(255,255,255,0.1)', padding: '6px 14px',
-                            borderRadius: '12px', fontSize: '0.9rem', color: 'white',
-                            fontWeight: '700', border: '1px solid rgba(255,255,255,0.1)'
+                            background: templateStyles.card?.color ? 'rgba(255,255,255,0.1)' : 'var(--bg-input)', padding: '6px 14px',
+                            borderRadius: '12px', fontSize: '0.9rem', color: templateStyles.card?.color || 'var(--text-main)',
+                            fontWeight: '700', border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
                         }}>
                             <FaClock style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} /> {invitation.time}
                         </span>
@@ -305,7 +331,7 @@ const InvitationPreview = () => {
                     <h3 style={{
                         fontSize: templateStyles.layout?.titleSize || '1.6rem',
                         fontWeight: '900',
-                        color: 'white',
+                        color: templateStyles.card?.color || 'var(--text-main)',
                         margin: '0 0 1rem 0',
                         lineHeight: 1.2,
                         fontFamily: templateStyles.layout?.fontFamily || 'inherit'
@@ -317,7 +343,8 @@ const InvitationPreview = () => {
                     {templateStyles.layout?.displayDescription && invitation.description && (
                         <p style={{
                             fontSize: '1rem',
-                            color: 'rgba(255,255,255,0.9)',
+                            color: templateStyles.card?.color ? 'inherit' : 'var(--text-secondary)',
+                            opacity: templateStyles.card?.color ? 0.9 : 1,
                             margin: '0 0 1.5rem 0',
                             lineHeight: '1.6',
                             ...templateStyles.layout.messageStyle
@@ -333,13 +360,13 @@ const InvitationPreview = () => {
                         justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
                         gap: '8px',
                         fontSize: '1.1rem',
-                        color: 'white',
+                        color: templateStyles.card?.color || 'var(--text-main)',
                         fontWeight: '700',
                         marginBottom: '1.5rem',
                         padding: '0.5rem 1rem',
-                        background: 'rgba(255,255,255,0.05)',
+                        background: templateStyles.card?.color ? 'rgba(255,255,255,0.05)' : 'var(--bg-input)',
                         borderRadius: '12px',
-                        border: '1px solid rgba(255,255,255,0.1)'
+                        border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
                     }}>
                         <FaMapMarkerAlt style={{ color: '#f87171' }} />
                         <span>
@@ -354,19 +381,20 @@ const InvitationPreview = () => {
                         gap: '1rem',
                         width: '100%',
                         marginBottom: '1.5rem',
-                        opacity: 0.9
+                        opacity: 0.9,
+                        color: templateStyles.card?.color || 'var(--text-main)'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <FaUsers style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                             <div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('guests')}</div>
+                                <div style={{ fontSize: '0.7rem', color: templateStyles.card?.color ? 'inherit' : 'var(--text-muted)', opacity: templateStyles.card?.color ? 0.7 : 1 }}>{t('guests')}</div>
                                 <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.guestsNeeded}</div>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <FaMoneyBillWave style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                             <div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('payment')}</div>
+                                <div style={{ fontSize: '0.7rem', color: templateStyles.card?.color ? 'inherit' : 'var(--text-muted)', opacity: templateStyles.card?.color ? 0.7 : 1 }}>{t('payment')}</div>
                                 <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.paymentType}</div>
                             </div>
                         </div>

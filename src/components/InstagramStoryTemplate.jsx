@@ -15,7 +15,7 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                 width: '1080px',
                 height: '1920px',
                 backgroundColor: '#0f172a',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: 'sans-serif',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',

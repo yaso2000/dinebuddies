@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaUtensils, FaEdit, FaTimes, FaPlus, FaSave, FaTrash, FaFileImage, FaGripVertical } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -17,7 +17,7 @@ import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@d
 import { CSS } from '@dnd-kit/utilities';
 import './MenuShowcase.css';
 
-function SortableMenuItem({ item, category, isOwner, tc, th, t, editingId, editForm, setEditForm, uploadingEdit, openEdit, setEditingId, handleSaveEdit, handleDelete, uploadMenuImage, setUploadingEdit }) {
+function SortableMenuItem({ item, category, isOwner, t, editingId, editForm, setEditForm, uploadingEdit, openEdit, setEditingId, handleSaveEdit, handleDelete, uploadMenuImage, setUploadingEdit }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
     const style = { transform: CSS.Transform.toString(transform), transition };
     const isEditing = editingId === item.id;
@@ -44,7 +44,7 @@ function SortableMenuItem({ item, category, isOwner, tc, th, t, editingId, editF
             )}
             <div className="item-content">
                 <div className="item-header">
-                    <h4 style={{ color: th(tc?.accent, 'var(--text-main)') }}>{item.name}</h4>
+                    <h4 style={{ color: 'var(--brand-primary)' }}>{item.name}</h4>
                     <div className="item-price" style={tc ? { color: tc.accent, textShadow: `0 0 8px ${tc.accent}66`, background: tc.badgeBg, border: `1px solid ${tc.border}`, borderRadius: '8px', padding: '2px 8px' } : {}}>
                         {typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : item.price?.toString().startsWith('$') ? item.price : `$${item.price}`}
                     </div>
@@ -79,8 +79,11 @@ function SortableMenuItem({ item, category, isOwner, tc, th, t, editingId, editF
                             <input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))} />
                         </div>
                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                            <label>{t('description', 'Description')}</label>
-                            <textarea rows={2} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <label style={{ margin: 0 }}>{t('description', 'Description')}</label>
+                                <span style={{ fontSize: '0.7rem', color: (editForm.description?.length || 0) >= 150 ? 'var(--secondary)' : 'var(--text-muted)' }}>{editForm.description?.length || 0}/150</span>
+                            </div>
+                            <textarea rows={2} maxLength={150} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
                         </div>
                         <div className="form-group">
                             <label>{t('category', 'Category')}</label>
@@ -153,6 +156,86 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
 
     const hasPending = pendingItems.length > 0;
     const [showDraftBanner, setShowDraftBanner] = useState(false);
+
+    /** Horizontal drag-to-scroll for category tabs (mouse / pen); touch uses native overflow-x pan. */
+    const categoryFilterRef = useRef(null);
+    const categoryPanRef = useRef({
+        active: false,
+        pointerId: null,
+        startX: 0,
+        scrollLeft0: 0,
+        moved: false
+    });
+    const suppressCategoryTabClick = useRef(false);
+
+    const endCategoryPan = useCallback((e) => {
+        const p = categoryPanRef.current;
+        if (!p.active || (e && e.pointerId !== p.pointerId)) return;
+        const el = categoryFilterRef.current;
+        if (el) {
+            el.classList.remove('category-filter--dragging');
+            try {
+                el.releasePointerCapture(p.pointerId);
+            } catch {
+                /* ignore */
+            }
+        }
+        if (p.moved) suppressCategoryTabClick.current = true;
+        categoryPanRef.current = {
+            active: false,
+            pointerId: null,
+            startX: 0,
+            scrollLeft0: 0,
+            moved: false
+        };
+    }, []);
+
+    const onCategoryFilterPointerDown = useCallback((e) => {
+        if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const el = categoryFilterRef.current;
+        if (!el) return;
+        categoryPanRef.current = {
+            active: true,
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            scrollLeft0: el.scrollLeft,
+            moved: false
+        };
+        el.classList.add('category-filter--dragging');
+        try {
+            el.setPointerCapture(e.pointerId);
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    const onCategoryFilterPointerMove = useCallback((e) => {
+        const p = categoryPanRef.current;
+        if (!p.active || e.pointerId !== p.pointerId) return;
+        const el = categoryFilterRef.current;
+        if (!el) return;
+        const dx = e.clientX - p.startX;
+        if (Math.abs(dx) > 6) p.moved = true;
+        el.scrollLeft = p.scrollLeft0 - dx;
+    }, []);
+
+    const onCategoryFilterPointerUp = useCallback((e) => {
+        endCategoryPan(e);
+    }, [endCategoryPan]);
+
+    const onCategoryFilterPointerCancel = useCallback((e) => {
+        endCategoryPan(e);
+    }, [endCategoryPan]);
+
+    const onCategoryTabClick = useCallback((select) => (ev) => {
+        if (suppressCategoryTabClick.current) {
+            ev.preventDefault();
+            suppressCategoryTabClick.current = false;
+            return;
+        }
+        select();
+    }, []);
 
     // Warn on browser close/refresh if pending items
     useEffect(() => {
@@ -329,7 +412,7 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
     /* ---- render --------------------------------------------------- */
     return (
         <>
-            <div className="menu-showcase-section" style={{ background: th(tc?.cardBg, undefined) }}>
+            <div className="menu-showcase-section" style={{ background: 'var(--bg-card)' }}>
 
                 {/* ── Free Plan Draft Banner ── */}
                 {showDraftBanner && (
@@ -379,8 +462,8 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
 
                 {/* ── Header ── */}
                 <div className="menu-header">
-                    <h3 style={{ color: th(tc?.accent, 'var(--text-main)') }}>
-                        <FaUtensils style={{ color: th(tc?.accent, '#f59e0b') }} />
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FaUtensils style={{ color: 'var(--brand-primary)' }} />
                         {t('menu', 'Menu')} ({menuItems.length})
                     </h3>
                     {isOwner && (
@@ -467,12 +550,16 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
                                 />
                             </div>
                             <div className="form-group full-width">
-                                <label>{t('description', 'Description')}</label>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <label style={{ margin: 0 }}>{t('description', 'Description')}</label>
+                                    <span style={{ fontSize: '0.75rem', color: (addForm.description?.length || 0) >= 150 ? 'var(--secondary)' : 'var(--text-muted)' }}>{addForm.description?.length || 0}/150</span>
+                                </div>
                                 <textarea
                                     value={addForm.description}
                                     onChange={e => setAddForm(f => ({ ...f, description: e.target.value }))}
                                     placeholder={t('description_placeholder', 'Describe this item...')}
                                     rows={2}
+                                    maxLength={150}
                                 />
                             </div>
                             <div className="form-group">
@@ -558,26 +645,41 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
                 )}
 
                 {/* ── Category Filter ── */}
-                <div className="category-filter" style={{
-                    display: 'flex',
-                    flexWrap: 'nowrap',
-                    overflowX: 'auto',
-                    gap: '6px',
-                    paddingBottom: '4px',
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none',
-                }}>
+                <div
+                    ref={categoryFilterRef}
+                    className="category-filter"
+                    onPointerDown={onCategoryFilterPointerDown}
+                    onPointerMove={onCategoryFilterPointerMove}
+                    onPointerUp={onCategoryFilterPointerUp}
+                    onPointerCancel={onCategoryFilterPointerCancel}
+                    style={{
+                        display: 'flex',
+                        flexWrap: 'nowrap',
+                        overflowX: 'auto',
+                        gap: '6px',
+                        paddingBottom: '4px',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch',
+                        touchAction: 'pan-x',
+                        width: '100%',
+                        maxWidth: '100vw'
+                    }}
+                >
                     <button
+                        type="button"
                         className={`category-btn ${selectedCategory === 'all' ? 'active' : ''}`}
-                        onClick={() => setSelectedCategory('all')}
+                        onClick={onCategoryTabClick(() => setSelectedCategory('all'))}
                         style={tc && selectedCategory === 'all' ? {
                             background: tc.tabBgColor || 'rgba(255,255,255,0.95)',
                             borderColor: tc.tabBorderColor || tc.accent,
                             borderWidth: '2px',
                             color: tc.tabTextColor || tc.tabBorderColor || tc.accent,
                             boxShadow: `0 2px 12px ${tc.tabBorderColor || tc.accent}33`,
-                            fontWeight: '800'
-                        } : tc ? { borderColor: `${tc.accent}44`, color: 'var(--text-secondary)', background: 'transparent' } : {}}
+                            fontWeight: '800',
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap'
+                        } : tc ? { borderColor: `${tc.accent}44`, color: 'var(--text-secondary)', background: 'transparent', flexShrink: 0, whiteSpace: 'nowrap' } : { flexShrink: 0, whiteSpace: 'nowrap' }}
                     >
                         <span className="category-icon">🍴</span>
                         <span className="category-label">{t('all', 'All')}</span>
@@ -587,24 +689,31 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
                         .filter(cat => isOwner || (stats[cat.id] > 0))
                         .map(cat => (
                             <button
+                                type="button"
                                 key={cat.id}
                                 className={`category-btn ${selectedCategory === cat.id ? 'active' : ''}`}
-                                onClick={() => setSelectedCategory(cat.id)}
+                                onClick={onCategoryTabClick(() => setSelectedCategory(cat.id))}
                                 style={tc ? (selectedCategory === cat.id ? {
                                     background: tc.tabBgColor || 'rgba(255,255,255,0.95)',
                                     borderColor: tc.tabBorderColor || tc.accent,
                                     borderWidth: '2px',
                                     color: tc.tabTextColor || tc.tabBorderColor || tc.accent,
                                     boxShadow: `0 2px 12px ${tc.tabBorderColor || tc.accent}33`,
-                                    fontWeight: '800'
+                                    fontWeight: '800',
+                                    flexShrink: 0,
+                                    whiteSpace: 'nowrap'
                                 } : {
                                     borderColor: `${tc.accent}44`,
                                     color: 'var(--text-secondary)',
-                                    background: 'transparent'
+                                    background: 'transparent',
+                                    flexShrink: 0,
+                                    whiteSpace: 'nowrap'
                                 }) : {
                                     borderColor: selectedCategory === cat.id ? cat.color : 'var(--border-color)',
                                     color: selectedCategory === cat.id ? cat.color : 'var(--text-main)',
-                                    fontWeight: selectedCategory === cat.id ? '800' : '600'
+                                    fontWeight: selectedCategory === cat.id ? '800' : '600',
+                                    flexShrink: 0,
+                                    whiteSpace: 'nowrap'
                                 }}
                             >
                                 <span className="category-icon">{cat.icon}</span>
@@ -687,7 +796,7 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
                                     {/* Content */}
                                     <div className="item-content">
                                         <div className="item-header">
-                                            <h4 style={{ color: th(tc?.accent, 'var(--text-main)') }}>{item.name}</h4>
+                                            <h4 style={{ color: 'var(--brand-primary)' }}>{item.name}</h4>
                                             <div className="item-price" style={tc ? {
                                                 color: tc.accent,
                                                 textShadow: `0 0 8px ${tc.accent}66`,

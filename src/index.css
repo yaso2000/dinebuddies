@@ -10,14 +10,27 @@
   --luxury-gold: #E86E2E;
   --premium-orange: #E86E2E;
 
+  /* Theme Engine Standard Variables (Fallback - Dark Mode Default) */
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e2e;
+  --bg-card: rgba(22, 14, 35, 0.85);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --icon-primary: #cbd5e1;
+  --icon-secondary: #64748b;
+  --brand-primary: #8b5cf6;
+  --brand-glow: rgba(139, 92, 246, 0.4);
+  --text-on-brand: #ffffff;
+
   /* Backgrounds - Unified Luxury Dark (Burgundy Midnight) */
-  --bg-body: #0b0812;
+  --bg-body: var(--bg-primary);
   --bg-body-gradient: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%);
-  --bg-card: rgba(22, 14, 35, 0.65);
-  --card-bg: rgba(22, 14, 35, 0.65);
+  --card-bg: var(--bg-card);
   --bg-input: rgba(18, 12, 28, 0.7);
-  --bg-secondary: rgba(30, 24, 50, 0.6);
-  --bg-main: #0b0812;
+  --bg-main: var(--bg-primary);
+  /* Raised surfaces (landing, cards outside Layout); must exist — used by DesktopLanding etc. */
+  --bg-elevated: var(--bg-secondary);
   --hover-overlay: rgba(255, 255, 255, 0.05);
   --bg-hover: rgba(255, 255, 255, 0.08);
   --glass-overlay: rgba(11, 8, 18, 0.88);
@@ -41,25 +54,24 @@
   --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 
   /* Text */
-  --text-main: #ffffff;
-  --text-primary: #ffffff;
-  --text-secondary: #e2e8f0;
-  --text-muted: #cbd5e1;
+  --text-main: var(--text-primary);
+  --text-muted: var(--text-secondary);
   --text-white: #ffffff;
 
-  /* Typography */
-  --font-arabic: 'Readex Pro', 'Cairo', 'Tajawal', sans-serif;
-  --font-heading: 'Inter', 'Roboto', sans-serif, var(--font-arabic);
-  --font-body: 'Inter', 'Roboto', sans-serif, var(--font-arabic);
+  /* Typography — unified sans-serif across the app */
+  --font-arabic: sans-serif;
+  --font-heading: sans-serif;
+  --font-body: sans-serif;
+  --font-family: sans-serif;
 
-  /* Additional Premium Fonts */
-  --font-montserrat: 'Montserrat', sans-serif;
-  --font-bebas: 'Bebas Neue', cursive;
-  --font-lato: 'Lato', sans-serif;
-  --font-poppins: 'Poppins', sans-serif;
-  --font-playfair: 'Inter', sans-serif;
-  --font-inter: 'Inter', sans-serif;
-  --font-roboto: 'Roboto', sans-serif;
+  /* Additional (all resolve to sans-serif for consistency) */
+  --font-montserrat: sans-serif;
+  --font-bebas: sans-serif;
+  --font-lato: sans-serif;
+  --font-poppins: sans-serif;
+  --font-playfair: sans-serif;
+  --font-inter: sans-serif;
+  --font-roboto: sans-serif;
 
   /* Pairing Presets */
   --pair-tech-h: var(--font-montserrat);
@@ -72,7 +84,6 @@
   --pair-edu-b: var(--font-roboto);
 
   /* Borders & Effects */
-  --border-color: rgba(255, 255, 255, 0.08);
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -87,6 +98,14 @@
   --header-height: 60px;
   --nav-height: 70px;
   --max-width: 500px;
+  /* Desktop center column: match phone card width */
+  --desktop-content-max: 500px;
+}
+
+/* Hide Google reCAPTCHA Badge globally to prevent overlapping UI Elements */
+.grecaptcha-badge {
+    visibility: hidden !important;
+    display: none !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -94,27 +113,34 @@
    No disappearing elements, no low-contrast text
    ═══════════════════════════════════════════════════════════════ */
 [data-theme='light'] {
-  /* Backgrounds - Light surfaces */
-  --bg-body: #f8fafc;
-  --bg-body-gradient: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 60%, #f8fafc 100%);
-  --bg-card: #ffffff;
-  --card-bg: #ffffff;
-  --bg-input: #ffffff;
+  /* Theme Engine Standard Variables (Light Mode) */
+  --bg-primary: #f8fafc;
   --bg-secondary: #f1f5f9;
-  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --border-color: rgba(15, 23, 42, 0.18);
+  --icon-primary: #334155;
+  --icon-secondary: #94a3b8;
+  --brand-primary: #6d28d9;
+  --brand-glow: rgba(109, 40, 217, 0.4);
+  --text-on-brand: #ffffff;
+
+  /* Backgrounds - Light surfaces */
+  --bg-body: var(--bg-primary);
+  --bg-body-gradient: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 60%, #f8fafc 100%);
+  --card-bg: var(--bg-card);
+  --bg-input: #ffffff;
+  --bg-main: var(--bg-primary);
+  --bg-elevated: #e8edf3;
   --hover-overlay: rgba(0, 0, 0, 0.04);
   --bg-hover: rgba(0, 0, 0, 0.06);
   --glass-overlay: rgba(255, 255, 255, 0.95);
 
   /* Text - Dark on light for WCAG contrast */
-  --text-main: #0f172a;
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
+  --text-main: var(--text-primary);
+  --text-muted: var(--text-secondary);
   --text-white: #ffffff;
-
-  /* Borders - Visible separation (strong enough so cards/surfaces don't blend) */
-  --border-color: rgba(15, 23, 42, 0.18);
 
   /* Semantic colors - light theme */
   --color-rating-empty: #cbd5e1;
@@ -154,9 +180,11 @@
   background: #f1f5f9 !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
+
 [data-theme='light'] .header-actions .notification-bell {
   color: #334155;
 }
+
 [data-theme='light'] .header-actions .notification-bell:hover {
   color: #0f172a;
 }
@@ -190,6 +218,7 @@
   --bg-input: rgba(18, 12, 28, 0.9);
   --bg-secondary: rgba(30, 24, 50, 0.7);
   --bg-main: #0b0812;
+  --bg-elevated: #161625;
   --hover-overlay: rgba(255, 255, 255, 0.06);
   --bg-hover: rgba(255, 255, 255, 0.1);
   --glass-overlay: rgba(11, 8, 18, 0.92);
@@ -418,11 +447,10 @@ body {
     max-width: 1280px !important;
     /* matches ds-body-grid exactly */
     width: 100% !important;
-    margin: 0 auto !important;
-    /* center on wide screens */
     overflow: hidden !important;
     border: none !important;
     box-shadow: none !important;
+    /* #root flex centers this block; avoid duplicate margin rules */
     margin: 0 !important;
   }
 
@@ -456,6 +484,39 @@ body {
   /* Force chat-screen to fill the container height (not full dvh) */
   .app-main--chat .chat-screen {
     height: 100% !important;
+  }
+}
+
+/* Chat shells: mobile = fixed fullscreen; desktop = in-flow (no viewport-fixed layer) */
+@media (max-width: 1023px) {
+
+  .chat-root.chat-container,
+  .invitation-chat-root.chat-screen,
+  .community-chat-root.chat-room-container {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 100%;
+    max-height: 100dvh;
+  }
+}
+
+@media (min-width: 1024px) {
+
+  .chat-root.chat-container,
+  .invitation-chat-root.chat-screen,
+  .community-chat-root.chat-room-container {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    z-index: auto !important;
+    width: 100% !important;
+    max-height: none !important;
   }
 }
 
@@ -570,13 +631,16 @@ body {
   color: var(--text-white, white);
   box-shadow: var(--shadow-glow);
 }
+
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: var(--shadow-glow);
 }
+
 .submit-btn:active:not(:disabled) {
   transform: translateY(0);
 }
+
 .submit-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -632,7 +696,7 @@ html:not([data-theme='light']) .app-header .app-name {
 
 /* RTL Support for Arabic */
 [dir="rtl"] {
-  font-family: 'Tajawal', 'Inter', sans-serif;
+  font-family: sans-serif;
 }
 
 /* Smart Invitation Card */
@@ -1728,8 +1792,14 @@ select.input-field {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
-  /* Space between bell and avatar */
+  gap: 0.95rem;
+  /* mobile: breathing room between search / messages / bell / settings / avatar */
+}
+
+@media (min-width: 1024px) {
+  .header-actions {
+    gap: 1.65rem;
+  }
 }
 
 /* Logo Wrapper Alignment */
@@ -1755,6 +1825,15 @@ select.input-field {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Reset button defaults — prevents white background on dark mode */
+button.notification-bell {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 8px;
 }
 
 /* GLOBAL FORCE: Fix invasive white backgrounds on inputs in Chat */
@@ -1814,14 +1893,17 @@ select.input-field {
 .auth-input {
   color: var(--text-main) !important;
 }
+
 .auth-input::placeholder {
   color: var(--text-muted);
   opacity: 1;
 }
+
 .auth-input::-webkit-input-placeholder {
   color: var(--text-muted);
   opacity: 1;
 }
+
 .auth-input::-moz-placeholder {
   color: var(--text-muted);
   opacity: 1;
@@ -1897,6 +1979,12 @@ select.input-field {
     overflow-x: hidden;
   }
 
+  /* Form pages keep side padding on mobile */
+  .page-container.form-page {
+    padding: 1rem 1rem 6rem !important;
+  }
+
+
   .feed-list {
     padding: 10px 4px !important;
     /* Minimum side padding for feed items */
@@ -1921,6 +2009,26 @@ select.input-field {
 /* Modern Solution: Hide bottom nav automatically when chat input is focused */
 body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: none !important;
+}
+
+/* Standalone auth routes (outside Layout): on desktop, html/body/#root use overflow:hidden —
+   this wrapper becomes the scroll container so tall login hubs can scroll. */
+.auth-route-scroll {
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@supports (height: 100svh) {
+  .auth-route-scroll {
+    min-height: 100svh;
+    max-height: 100svh;
+  }
 }
 
 /* Auth Pages Styles */
@@ -1980,7 +2088,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 
 .btn-auth-social {
   width: 100%;
-  height: 48px;
+  height: 44px;
   /* Uniform height */
   display: flex;
   align-items: center;
@@ -2225,6 +2333,29 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     padding: 0 !important;
     min-width: 0;
     border-right: 1px solid var(--border-color);
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  /* Phone-like width: center feed/cards in the middle column */
+  .app-main > * {
+    width: 100% !important;
+    max-width: var(--desktop-content-max) !important;
+    box-sizing: border-box !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Chat / fullscreen routes: let the shell fill vertical space */
+  .app-main--chat > .chat-root.chat-container,
+  .app-main--chat > .invitation-chat-root.chat-screen,
+  .app-main--chat > .community-chat-root {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+
+  .app-main--fullscreen > * {
+    max-width: 100% !important;
   }
 
   /* Undo page-container mobile width constraint */

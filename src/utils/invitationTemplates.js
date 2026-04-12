@@ -358,6 +358,7 @@ export const TEMPLATE_STYLES = {
         getStyles: (colors) => ({
             card: {
                 background: `linear-gradient(135deg, #0f172a, #1e293b)`,
+                color: 'white',
                 borderRadius: '16px',
                 border: `1px solid ${colors.primary}50`,
                 boxShadow: `0 25px 50px -12px rgba(0, 0, 0, 0.5)`,
@@ -410,11 +411,6 @@ export const TEMPLATE_STYLES = {
 };
 
 export const OCCASION_PRESETS = {
-    Dating: {
-        templateType: 'elegant',
-        colorScheme: 'royalRed',
-        lottieUrl: 'https://assets9.lottiefiles.com/packages/lf20_m6cu961l.json' // Romantic Heart
-    },
     Birthday: {
         templateType: 'fun',
         colorScheme: 'sunsetOrange',
@@ -449,19 +445,43 @@ export const OCCASION_PRESETS = {
         templateType: 'fun',
         colorScheme: 'slateBlue',
         lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_5njpkv83.json' // Gaming
+    },
+    Family: {
+        templateType: 'fun',
+        colorScheme: 'natureGreen',
+        emoji: '👨‍👩‍👧',
+        lottieUrl: 'https://assets3.lottiefiles.com/packages/lf20_cjqtkpjm.json' // Family/Home
+    },
+    Celebration: {
+        templateType: 'elegant',
+        colorScheme: 'midnightGold',
+        emoji: '🎉',
+        lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_obhph3t0.json' // Celebration/Fireworks
+    },
+    Cinema: {
+        templateType: 'modern',
+        colorScheme: 'royalPurple',
+        emoji: '🍿',
+        lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_6s1bndto.json' // Cinema/Popcorn/Movies
+    },
+    Sports: {
+        templateType: 'fun',
+        colorScheme: 'oceanBlue',
+        emoji: '🏆',
+        lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_jmz1a7.json' // Sports
+    },
+    Bbq: {
+        templateType: 'fun',
+        colorScheme: 'sunsetOrange',
+        emoji: '🔥',
+        lottieUrl: 'https://assets4.lottiefiles.com/packages/lf20_06m8n5.json' // Food/BBQ
     }
 };
 
 export const getTemplateStyle = (templateType, colorScheme, occasionType) => {
-    // If occasionType is provided and a preset exists, use it
-    const normalizedOccasion = (occasionType || '').charAt(0).toUpperCase() + (occasionType || '').slice(1).toLowerCase();
-    if (normalizedOccasion && OCCASION_PRESETS[normalizedOccasion]) {
-        const preset = OCCASION_PRESETS[normalizedOccasion];
-        const template = TEMPLATE_STYLES[preset.templateType] || TEMPLATE_STYLES.modern;
-        const colors = COLOR_SCHEMES[preset.colorScheme] || COLOR_SCHEMES.oceanBlue;
-        return template.getStyles(colors);
-    }
-
+    // If occasionType is provided and a preset exists, we ONLY use it for Lottie/Emoji metadata,
+    // NOT to override the user's explicitly chosen templateType and colorScheme.
+    
     // Fallback to manual selection or defaults
     const template = TEMPLATE_STYLES[templateType] || TEMPLATE_STYLES.classic;
     const colors = COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.oceanBlue;

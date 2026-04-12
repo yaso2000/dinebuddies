@@ -1,16 +1,15 @@
-/* PostCard.css - Twitter-like Feed Style */
+/* PostCard.css - Facebook-like Feed Style */
 .post-card {
     display: flex;
-    gap: 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color);
-    background: transparent;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     cursor: pointer;
-    transition: background 0.2s;
-}
-
-.post-card:not(.in-chat):hover {
-    background: var(--hover-overlay);
+    overflow: hidden;
 }
 
 .post-card.in-chat {
@@ -18,6 +17,7 @@
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 12px;
+    margin-bottom: 0;
 }
 
 .post-avatar-col {
@@ -80,20 +80,20 @@
 
 /* Media */
 .post-media-container {
-    margin-top: 10px;
-    margin-bottom: 4px;
-    border-radius: 16px;
+    margin-top: 8px;
+    margin-bottom: 0px;
+    border-radius: 0;
     overflow: hidden;
-    border: 1px solid var(--border-color);
-    max-height: 500px;
+    border: none;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
     background: #000;
 }
 
 .post-media-content {
     width: 100%;
-    max-height: 500px;
-    object-fit: cover;
-    /* Twitter usually crops to cover, but contain is safer for varying sizes. Let's start with cover but maintain aspect ratio via max-height container */
+    max-height: 80vh;
+    object-fit: contain;
     display: block;
 }
 
@@ -101,61 +101,46 @@
 .post-actions {
     display: flex;
     justify-content: space-between;
-    margin-top: 8px;
-    max-width: 400px;
-    /* Limit width to keep icons closer */
+    margin-top: 4px;
+    width: 100%;
+    border-top: 1px solid var(--border-color);
+    padding: 4px 16px;
 }
 
 .action-item {
+    flex: 1;
     display: flex;
+    justify-content: center;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 0.9rem;
-    padding: 8px;
-    border-radius: 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 8px 0;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
-    position: relative;
-    /* Create a larger hit area visually via padding/margin if needed */
 }
 
 .action-count {
-    font-size: 0.8rem;
-    /* font-weight: 600; */
+    font-size: 0.9rem;
 }
 
 /* Hover Effects */
-.action-item.reply:hover {
-    color: #1d9bf0;
-    background: rgba(29, 155, 240, 0.1);
-}
-
-.action-item.repost:hover {
-    color: #00ba7c;
-    background: rgba(0, 186, 124, 0.1);
-}
-
-.action-item.like:hover {
-    color: #f91880;
-    background: rgba(249, 24, 128, 0.1);
+.action-item:hover {
+    background: rgba(128, 128, 128, 0.1);
 }
 
 .action-item.like.liked {
-    color: #f91880;
-}
-
-.action-item.share:hover {
-    color: #1d9bf0;
-    background: rgba(29, 155, 240, 0.1);
+    color: var(--primary);
 }
 
 /* Comments Dropdown (Simple implementation) */
 .comments-section {
     margin-top: 12px;
-    padding-top: 12px;
+    padding: 12px 16px 0 16px;
     border-top: 1px solid var(--border-color);
 }
 

@@ -37,7 +37,14 @@ export const adminSecurityService = {
         call('adminWipeCommunityContent', {}),
 
     createNotification: (payload) =>
-        call('createNotification', payload)
+        call('createNotification', payload),
+
+    /** Resend email campaign — audience filters match adminEmailCampaign.js */
+    previewEmailCampaign: (filters) =>
+        call('adminPreviewEmailCampaign', filters),
+
+    sendEmailCampaign: (payload) =>
+        call('adminSendEmailCampaign', payload),
 };
 
 export const consumeOfferCredit = () => call('consumeOfferCredit', {});

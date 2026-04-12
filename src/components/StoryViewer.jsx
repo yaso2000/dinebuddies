@@ -637,7 +637,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                             ))}
                                         </div>
                                         <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem', fontWeight: 'bold', marginLeft: '10px', whiteSpace: 'nowrap' }}>
-                                            {uniqueInteractors.length} {uniqueInteractors.length === 1 ? 'Person' : 'People'}
+                                            {uniqueInteractors.length} {uniqueInteractors.length === 1 ? t('person', 'Person') : t('people', 'People')}
                                         </span>
                                     </div>
                                 )}
@@ -659,7 +659,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                         <input
                                             className="story-reply-input"
                                             type="text"
-                                            placeholder="Send message..."
+                                            placeholder={t('send_message_placeholder', 'Send message...')}
                                             value={replyText}
                                             onChange={(e) => setReplyText(e.target.value)}
                                             onFocus={() => { setIsInputFocused(true); setIsPaused(true); }}

@@ -19,7 +19,91 @@ import {
     FaCheckDouble
 } from 'react-icons/fa';
 import EmptyState from '../components/EmptyState';
+import UserAvatar from '../components/UserAvatar';
+import PrivateInvitationNotifVisual from '../components/notifications/PrivateInvitationNotifVisual';
 import './Notifications.css';
+import { goToLogin } from '../utils/goToLogin';
+
+/**
+ * Returns a translated title for a notification based on its type.
+ * Falls back to the stored title if no translation is found.
+ */
+const getNotifTitle = (notif, t) => {
+    const name = notif.fromUserName || t('someone', 'Someone');
+    switch (notif.type) {
+        case 'follow':           return t('notif_title_follow', 'New Follower');
+        case 'invitation_accepted': return t('notif_title_accepted', 'Invitation Accepted');
+        case 'invitation_rejected': return t('notif_title_rejected', 'Invitation Declined');
+        case 'message':          return t('notif_title_message', 'New Message');
+        case 'reminder':         return t('notif_title_reminder', 'Upcoming Invitation');
+        case 'like':             return t('notif_title_like', 'Invitation Liked');
+        case 'comment':          return t('notif_title_comment', 'New Comment');
+        case 'invitation_full':  return t('notif_title_full', 'Invitation Complete');
+        case 'booking_confirmed':return t('notif_title_booking_confirmed', 'Booking Confirmed');
+        case 'invitation_cancelled': return t('notif_title_cancelled', 'Invitation Cancelled');
+        case 'booking_cancelled':return t('notif_title_booking_cancelled', 'Booking Cancelled');
+        case 'invitation_completed': return t('notif_title_completed', 'Invitation Completed! 🎉');
+        case 'invitation_updated': return t('notif_title_updated', 'Invitation Time Updated');
+        case 'private_invitation': return t('notification_private_invitation_title', '💌 New Private Invitation');
+        case 'join_request':     return t('notif_title_join_request', 'New Join Request');
+        case 'request_approved':    return t('notif_title_request_approved', 'Request Approved');
+        case 'business_message':    return t('notif_title_business_message', 'Message from Business');
+        default:                    return notif.title || t('notification', 'Notification');
+    }
+};
+
+/**
+ * Returns a translated message for a notification based on its type and metadata.
+ * Falls back to the stored message if no translation is found.
+ */
+const getNotifMessage = (notif, t) => {
+    const name = notif.fromUserName || t('someone', 'Someone');
+    const title = notif.metadata?.invitationTitle || notif.invitationTitle || '';
+    switch (notif.type) {
+        case 'follow':
+            return t('notif_msg_follow', '{{name}} started following you', { name });
+        case 'invitation_accepted':
+            return t('notif_msg_accepted', '{{name}} accepted your invitation', { name });
+        case 'invitation_rejected':
+            return t('notif_msg_rejected', '{{name}} declined your invitation', { name });
+        case 'message':
+            return notif.message || t('notif_msg_message', 'You have a new message from {{name}}', { name });
+        case 'reminder':
+            return notif.message || t('notif_msg_reminder', 'Your invitation is coming up soon');
+        case 'like':
+            return t('notif_msg_like', '{{name}} liked your invitation', { name });
+        case 'comment':
+            return notif.message || t('notif_msg_comment', '{{name}} commented on your invitation', { name });
+        case 'invitation_full':
+            return t('notif_msg_full', 'Great news! Your invitation is now complete with all guests confirmed.');
+        case 'booking_confirmed':
+            return t('notif_msg_booking_confirmed', 'A booking at your venue is now confirmed.');
+        case 'invitation_cancelled':
+            return notif.message || t('notif_msg_cancelled', 'An invitation has been cancelled.');
+        case 'booking_cancelled':
+            return notif.message || t('notif_msg_booking_cancelled', 'A booking at your venue has been cancelled.');
+        case 'invitation_completed':
+            return t('notif_msg_completed', 'The invitation has been completed. Hope you had a great time!');
+        case 'invitation_updated':
+            return notif.message || t('notif_msg_updated', 'The invitation time has been updated. Please confirm your attendance.');
+        case 'private_invitation':
+            return t('notification_private_invitation_message', '{{name}} has invited you to a private occasion: {{title}}', { name, title });
+        case 'join_request':
+            return t('notif_msg_join_request', '{{name}} requested to join your invitation', { name });
+        case 'request_approved':
+            return t('notif_msg_request_approved', 'Your request to join was approved', { name });
+        case 'business_message':
+            return notif.message || t('notif_title_business_message', 'Message from Business');
+        default:
+            return notif.message || '';
+    }
+};
+
+/** Strip leading envelope emoji from private-invitation titles (large icon carries the visual cue). */
+function privateInvitationDisplayTitle(notif, t) {
+    const raw = getNotifTitle(notif, t);
+    return String(raw).replace(/^💌\s*/u, '').trim() || raw;
+}
 
 const Notifications = () => {
     const { t, i18n } = useTranslation();
@@ -39,7 +123,7 @@ const Notifications = () => {
 
     // Redirect guests to login
     useEffect(() => {
-        if (userProfile?.isGuest) navigate('/login');
+        if (userProfile?.isGuest) goToLogin();
     }, [userProfile, navigate]);
 
     // Filter and search states
@@ -70,24 +154,24 @@ const Notifications = () => {
     };
 
     const handleNotificationClick = (notification) => {
-        console.log('🔔 Notification clicked:', {
-            id: notification.id,
-            type: notification.type,
-            actionUrl: notification.actionUrl,
-            read: notification.read
-        });
-
         // Mark as read
         if (!notification.read) {
             markAsRead(notification.id);
         }
 
+        // Special routing: business_message should always open the chat,
+        // regardless of what actionUrl is stored (Cloud Function may store /profile/... by mistake)
+        if (notification.type === 'business_message' || notification.type === 'message') {
+            const senderId = notification.fromUserId || notification.metadata?.senderId;
+            if (senderId) {
+                navigate(`/chat/${senderId}`);
+                return;
+            }
+        }
+
         // Navigate to action URL if exists
         if (notification.actionUrl) {
-            console.log('🚀 Navigating to:', notification.actionUrl);
             navigate(notification.actionUrl);
-        } else {
-            console.log('⚠️ No actionUrl found in notification');
         }
     };
 
@@ -260,25 +344,44 @@ const Notifications = () => {
                     filteredNotifications.map(notif => (
                         <div
                             key={notif.id}
-                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}
+                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}${notif.type === 'private_invitation' ? ' notification-item--private-invitation' : ''}`}
                             onClick={() => handleNotificationClick(notif)}
                         >
                             {/* Unread Indicator */}
                             {!notif.read && <div className="unread-dot"></div>}
 
-                            {/* Avatar/Icon */}
-                            <div className="notification-icon">
-                                {notif.fromUserAvatar ? (
-                                    <img src={notif.fromUserAvatar} alt={notif.fromUserName || 'User'} />
-                                ) : (
-                                    getIcon(notif.type)
-                                )}
-                            </div>
+                            {notif.type === 'private_invitation' ? (
+                                <PrivateInvitationNotifVisual
+                                    occasionType={notif.metadata?.occasionType}
+                                    hostAvatarUrl={notif.fromUserAvatar || notif.senderAvatar}
+                                    hostName={notif.fromUserName || notif.senderName}
+                                />
+                            ) : (
+                                <div className="notification-icon">
+                                    {notif.fromUserAvatar ? (
+                                        <UserAvatar
+                                            src={notif.fromUserAvatar}
+                                            user={{
+                                                name: notif.fromUserName,
+                                                gender: notif.fromUserGender,
+                                                role: notif.fromUserRole
+                                            }}
+                                            alt={notif.fromUserName || 'User'}
+                                        />
+                                    ) : (
+                                        getIcon(notif.type)
+                                    )}
+                                </div>
+                            )}
 
                             {/* Content */}
                             <div className="notification-content">
-                                <h4 className="notification-title">{notif.title}</h4>
-                                <p className="notification-message">{notif.message}</p>
+                                <h4 className="notification-title">
+                                    {notif.type === 'private_invitation'
+                                        ? privateInvitationDisplayTitle(notif, t)
+                                        : getNotifTitle(notif, t)}
+                                </h4>
+                                <p className="notification-message">{getNotifMessage(notif, t)}</p>
                                 <span className="notification-time">{formatTime(notif.createdAt)}</span>
                             </div>
 

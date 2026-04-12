@@ -1,17 +1,20 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaShareAlt, FaEdit, FaSpinner } from 'react-icons/fa';
-import { getTemplateStyle } from '../../utils/invitationTemplates';
+import { getTemplateStyle, COLOR_SCHEMES } from '../../utils/invitationTemplates';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 
 const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete, onShare, sharingCard }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
         invitation.occasionType
     );
+
+    const themeColors = COLOR_SCHEMES[invitation.colorScheme || 'oceanBlue'] || COLOR_SCHEMES.oceanBlue;
+    const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar');
 
     // Determine the best image source, matching logic in InvitationCard
     const displayImage = invitation.customImage || invitation.restaurantImage || invitation.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
@@ -34,15 +37,15 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
                     right: 0,
                     bottom: 0,
                     background:
-                        'linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.6) 85%, rgba(16, 185, 129, 0.63) 100%)',
+                        `linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.6) 85%, ${themeColors.primary}A0 100%)`,
                     borderStyle: 'solid',
                     borderWidth: '1px',
                     borderColor: 'rgba(0, 0, 0, 1)',
                 }}
             ></div>
 
-            {/* Action Buttons (Top Right) */}
-            <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10, display: 'flex', gap: '10px' }}>
+            {/* Action Buttons (Top Right corner normally, flips to Top Left in RTL) */}
+            <div style={{ position: 'absolute', top: '20px', ...(isRTL ? { left: '20px' } : { right: '20px' }), zIndex: 10, display: 'flex', gap: '10px' }}>
                 <button
                     onClick={onShare}
                     disabled={sharingCard}
@@ -104,24 +107,28 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
                     {t(invitation.type)}
                 </div>
                 <h1 style={{
-                    fontSize: '2.2rem',
+                    fontSize: 'clamp(1.4rem, 5vw, 1.8rem)',
                     fontWeight: '900',
                     color: '#ffffff',
                     lineHeight: '1.2',
-                    textShadow: '0 2px 15px rgba(0,0,0,0.8), 0 0 5px rgba(0,0,0,0.5)',
+                    textShadow: '0 2px 10px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)',
                     fontFamily: templateStyles.layout?.fontFamily || 'inherit',
-                    marginBottom: '10px'
+                    marginBottom: '8px'
                 }}>
                     {invitation.title}
                 </h1>
                 {invitation.description && (
                     <p style={{
                         color: 'rgba(255,255,255,0.95)',
-                        marginTop: '10px',
-                        fontSize: '1rem',
+                        marginTop: '8px',
+                        fontSize: '0.95rem',
                         maxWidth: '600px',
-                        lineHeight: '1.6',
-                        textShadow: '0 1px 8px rgba(0,0,0,0.8)',
+                        lineHeight: '1.5',
+                        textShadow: '0 1px 6px rgba(0,0,0,0.8)',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
                         ...templateStyles.layout?.messageStyle
                     }}>
                         {invitation.description}

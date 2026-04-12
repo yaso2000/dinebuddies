@@ -4,13 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import InstagramStoryTemplate from './InstagramStoryTemplate';
+import InternalShareModal from './InternalShareModal';
+import { FaCommentDots } from 'react-icons/fa';
 
-const ShareButtons = ({ title, description, url, storyData, type = 'invitation' }) => {
+const ShareButtons = ({ title, description, url, storyData, type = 'invitation', sharedData = null }) => {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [generatingCard, setGeneratingCard] = useState(false);
     const [generatingStory, setGeneratingStory] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
+    const [showInternalShare, setShowInternalShare] = useState(false);
     const storyRef = useRef(null);
 
     const shareText = `${title}${description ? `\n\n${description}` : ''}`;
@@ -53,7 +56,7 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
             }
         } catch (err) {
             console.error('Share card error:', err);
-            showToast('Could not generate share card. Please try again.', 'error');
+            showToast(t('share_failed', { defaultValue: 'Could not generate share card. Please try again.' }), 'error');
         } finally {
             setGeneratingCard(false);
         }
@@ -88,14 +91,15 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
     };
 
     const platforms = [
-        { name: generatingCard ? '⏳' : 'Share Card', icon: <FaImage />, action: handleShareCard, color: '#a78bfa', show: !!storyData, disabled: generatingCard },
-        { name: 'Share', icon: <FaShareAlt />, action: handleNativeShare, color: 'var(--primary)', show: !!navigator.share },
+        { name: t('share_chat', { defaultValue: 'Send in Chat' }), icon: <FaCommentDots />, action: () => setShowInternalShare(true), color: '#3b82f6', show: true },
+        { name: generatingCard ? '⏳' : t('share_card', { defaultValue: 'Share Card' }), icon: <FaImage />, action: handleShareCard, color: '#a78bfa', show: !!storyData, disabled: generatingCard },
+        { name: t('share', { defaultValue: 'Share' }), icon: <FaShareAlt />, action: handleNativeShare, color: 'var(--primary)', show: !!navigator.share },
         { name: 'WhatsApp', icon: <FaWhatsapp />, url: `https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`, color: '#25D366', show: true },
         { name: generatingStory ? '⏳' : 'Instagram', icon: <FaInstagram />, action: handleInstagramStory, color: '#E1306C', show: true, disabled: generatingStory },
         { name: 'Facebook', icon: <FaFacebook />, url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`, color: '#1877F2', show: true },
         { name: 'Twitter', icon: <FaTwitter />, url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`, color: '#1DA1F2', show: true },
         { name: 'Telegram', icon: <FaTelegram />, url: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`, color: '#0088cc', show: true },
-        { name: 'Copy Link', icon: <FaLink />, action: copyToClipboard, color: 'var(--text-muted)', show: true },
+        { name: t('copy_link', { defaultValue: 'Copy Link' }), icon: <FaLink />, action: copyToClipboard, color: 'var(--text-muted)', show: true },
     ];
 
     return (
@@ -133,49 +137,64 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation' 
                             textDecoration: 'none',
                         }}
                     >
-                        <FaDownload /> Download Image
+                        <FaDownload /> {t('download_image', { defaultValue: 'Download Image' })}
                     </a>
                     <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '0.7rem', marginTop: 6 }}>
-                        Save then share on WhatsApp / Instagram
+                        {t('save_then_share', { defaultValue: 'Save then share on WhatsApp / Instagram' })}
                     </p>
                 </div>
             )}
 
             {/* Share Buttons */}
             {!cardPreviewUrl && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center' }}>
                     {platforms.filter(p => p.show).map((p) => (
-                        <button
-                            key={p.name}
-                            onClick={() => { if (!p.disabled) { p.action ? p.action() : window.open(p.url, '_blank'); } }}
-                            title={p.name}
-                            aria-label={p.name}
-                            style={{
-                                width: '48px', height: '48px', borderRadius: '50%', border: 'none',
-                                background: 'rgba(255,255,255,0.05)', color: p.color,
-                                cursor: p.disabled ? 'wait' : 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '1.2rem', transition: 'all 0.2s ease',
-                                opacity: p.disabled ? 0.5 : 0.85,
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!p.disabled) {
-                                    e.currentTarget.style.background = p.color;
-                                    e.currentTarget.style.opacity = '1';
-                                    e.currentTarget.style.transform = 'translateY(-3px) scale(1.1)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                                e.currentTarget.style.opacity = '0.85';
-                                e.currentTarget.style.transform = 'none';
-                            }}
-                        >
-                            {p.icon}
-                        </button>
+                        <div key={p.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                            <button
+                                onClick={() => { if (!p.disabled) { p.action ? p.action() : window.open(p.url, '_blank'); } }}
+                                title={p.name}
+                                aria-label={p.name}
+                                style={{
+                                    width: '48px', height: '48px', borderRadius: '50%', border: 'none',
+                                    background: 'rgba(255,255,255,0.05)', color: p.color,
+                                    cursor: p.disabled ? 'wait' : 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '1.2rem', transition: 'all 0.2s ease',
+                                    opacity: p.disabled ? 0.5 : 0.85,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!p.disabled) {
+                                        e.currentTarget.style.background = p.color;
+                                        e.currentTarget.style.opacity = '1';
+                                        e.currentTarget.style.transform = 'translateY(-3px) scale(1.1)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                    e.currentTarget.style.opacity = '0.85';
+                                    e.currentTarget.style.transform = 'none';
+                                }}
+                            >
+                                {p.icon}
+                            </button>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-main)', textAlign: 'center', maxWidth: '60px', lineHeight: '1.2' }}>{p.name}</span>
+                        </div>
                     ))}
                 </div>
             )}
+
+            <InternalShareModal 
+                isOpen={showInternalShare} 
+                onClose={() => setShowInternalShare(false)} 
+                shareData={sharedData || { 
+                    type, 
+                    id: url.split('/').pop(), 
+                    title, 
+                    description, 
+                    image: storyData?.mainImage || null,
+                    url 
+                }} 
+            />
         </>
     );
 };

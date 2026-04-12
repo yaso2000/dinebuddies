@@ -2,18 +2,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 :root {
-    --bg-dark: #0b1220;
-    --bg-darker: #0f1724;
-    --text-primary: #E6EEF8;
-    --text-muted: #94A3B8;
-    --accent-color: #6C5CE7;
-    /* Luxurious Purple */
-    --incoming-bg: rgba(30, 41, 59, 0.7);
-    --outgoing-bg: #5a4ad1;
-    /* Slightly darker purple for bubbles */
-    --header-bg: rgba(11, 18, 32, 0.85);
-    --composer-bg: #1E293B;
-    --font-family: 'Inter', system-ui, sans-serif;
+    --bg-dark: var(--bg-body);
+    --bg-darker: var(--bg-card);
+    --text-primary: var(--text-main);
+    --text-muted: var(--text-secondary);
+    --accent-color: var(--primary);
+    --incoming-bg: var(--bg-light);
+    --outgoing-bg: var(--primary);
+    --header-bg: var(--bg-body);
+    --composer-bg: var(--bg-card);
+    --font-family: 'Outfit', sans-serif;
 }
 
 
@@ -43,7 +41,7 @@ html {
     content: "";
     position: absolute;
     top: 0;
-    left: 0;
+    inset-inline-start: 0;
     right: 0;
     bottom: 0;
     opacity: 0.03;
@@ -82,7 +80,7 @@ html {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 8px;
+    margin-inline-end: 8px;
     transition: all 0.2s;
 }
 
@@ -169,7 +167,7 @@ html {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    margin-right: 8px;
+    margin-inline-end: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     object-fit: cover;
@@ -217,6 +215,18 @@ html {
     /* Keep bottom rounded */
 }
 
+/* Align avatar to top of bubble (not bottom) when sender name is shown */
+.message-row.incoming.first-of-group {
+    align-items: flex-start;
+}
+
+/* Offset avatar slightly to vertically center it with bubble content (not name) */
+.message-row.incoming.first-of-group .sender-avatar {
+    margin-top: 0px;
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+
 .message-row.outgoing.first-of-group .bubble {
     border-top-right-radius: 2px;
     /* Sharp tail at top — sharper than before */
@@ -224,10 +234,22 @@ html {
     /* Keep bottom rounded */
 }
 
+/* Force correct tail direction regardless of global RTL setting.
+   The container has dir="ltr" so outgoing is always RIGHT, incoming always LEFT. */
+.chat-room-container .message-row.incoming.first-of-group .bubble {
+    border-top-left-radius: 2px !important;
+    border-top-right-radius: 18px !important;
+}
+
+.chat-room-container .message-row.outgoing.first-of-group .bubble {
+    border-top-right-radius: 2px !important;
+    border-top-left-radius: 18px !important;
+}
+
 /* Timestamp */
 .timestamp {
     font-size: 10px;
-    margin-left: auto;
+    margin-inline-start: auto;
     opacity: 0.7;
     white-space: nowrap;
     padding-bottom: 2px;
@@ -448,7 +470,7 @@ input.message-input {
     position: absolute;
     bottom: -60px;
     /* Below the whole row content */
-    left: 0;
+    inset-inline-start: 0;
     right: 0;
     margin: 0 auto;
     width: fit-content;
@@ -477,7 +499,7 @@ input.message-input {
 .message-reaction-badge {
     position: absolute;
     bottom: -12px;
-    right: 8px;
+    inset-inline-end: 8px;
     background: var(--bg-darker);
     border: 1px solid var(--border-color);
     border-radius: 20px;
@@ -493,12 +515,12 @@ input.message-input {
 
 @keyframes popIn {
     from {
-        transform: translateX(-50%) scale(0.5);
+        transform: translateX(calc(-50% * var(--dir-sign, 1))) scale(0.5);
         opacity: 0;
     }
 
     to {
-        transform: translateX(-50%) scale(1);
+        transform: translateX(calc(-50% * var(--dir-sign, 1))) scale(1);
         opacity: 1;
     }
 }
@@ -549,7 +571,7 @@ input.message-input {
 /* SVG ring sits behind avatar */
 svg.progress-ring {
     position: absolute;
-    left: 0;
+    inset-inline-start: 0;
     top: 0;
     width: 100%;
     height: 100%;
@@ -736,5 +758,21 @@ svg.progress-ring {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+/* Scroll-to-bottom: viewport-fixed on mobile; column-anchored on desktop */
+.community-chat-root .chat-scroll-fab {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 1001;
+}
+
+@media (min-width: 1024px) {
+    .community-chat-root .chat-scroll-fab {
+        position: absolute;
+        bottom: 88px;
+        right: 16px;
     }
 }

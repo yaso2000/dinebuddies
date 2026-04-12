@@ -94,6 +94,15 @@ service firebase.storage {
                    && request.resource.size < 8 * 1024 * 1024;
     }
 
+    // Business/partner logos (logos/{userId}/logo.jpg)
+    match /logos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 2 * 1024 * 1024; // Max 2MB
+    }
+
     // Partner gallery
     match /gallery/{partnerId}/{fileName} {
       allow read: if true;
@@ -139,13 +148,36 @@ service firebase.storage {
                    && request.resource.size < 30 * 1024 * 1024;
     }
 
-    // Invitation media (public/private flows stay separate in Firestore; media path remains invitation-id based)
-    match /invitations/{invitationId}/{fileName} {
+    // Invitation media — uid subfolder enforces upload ownership.
+    // Modern apps upload to: invitations/{userId}/{fileName}
+    // Legacy app uploads to: invitations/{invitationId}/{userId}/{fileName}
+    
+    // 1. Modern upload path pattern
+    match /invitations/{userId}/{fileName} {
       allow read: if true;
       allow write: if isSignedIn()
+                   && request.auth.uid == userId
                    && (isImage() || isVideo())
-                   && request.resource.size < 100 * 1024 * 1024;
+                   && request.resource.size < 50 * 1024 * 1024; // Max 50MB
     }
+
+    // 2. Legacy subfolder path pattern
+    match /invitations/{invitationId}/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && (isImage() || isVideo())
+                   && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // AI invitation card images (written only by Cloud Functions Admin SDK)
+    match /invitation_cards/{userId}/{draftGroupId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Legacy flat path (read-only for backwards compatibility with existing URLs)
+    // Example: invitations/{invitationId}/{fileName} (where fileName is not a UID folder)
 
     // User place images
     match /users/{userId}/places/{fileName} {
@@ -154,6 +186,42 @@ service firebase.storage {
                    && request.auth.uid == userId
                    && isImage()
                    && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // Featured posts (Elite animated posts – background images)
+    match /featured_posts/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && (request.resource.contentType == null || request.resource.contentType.matches('image/.*'))
+                   && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Community posts media (images/videos for feed posts)
+    match /community-posts/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && (isImage() || isVideo())
+                   && request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // Featured posts background images (Business Pro feature)
+    match /featured_posts/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 5 * 1024 * 1024; // Max 5MB
+    }
+
+    // Business Feedback Media (Images, Videos up to 30s, Audio up to 60s)
+    match /feedback_media/{businessId}/{fileName} {
+      // Allow public read so the business can view the media in their browser
+      allow read: if true; 
+      // Allow anyone (public users) to upload proof media
+      allow write: if (isImage() || isVideo() || isAudio())
+                   && request.resource.size < 30 * 1024 * 1024; // Max 30MB
     }
 
     // Deny everything else by default

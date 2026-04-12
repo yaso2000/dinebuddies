@@ -128,7 +128,7 @@ export const getVideoDimensions = (videoFile) => {
  */
 export const validateVideo = async (file, options = {}) => {
     const {
-        maxDuration = 60,        // seconds
+        maxDuration = 15,        // seconds
         maxSize = 100 * 1024 * 1024, // 100MB
         allowedFormats = ['video/mp4', 'video/quicktime', 'video/x-msvideo']
     } = options;

@@ -151,7 +151,7 @@ const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
     };
 
     return (
-        <div className="business-hours-section" style={{ background: th(tc?.cardBg, undefined) }}>
+        <div className="business-hours-section" style={{ background: 'var(--bg-card)' }}>
             <div className="section-header">
                 <h3 style={{ color: 'var(--text-main)' }}>
                     <FaClock style={{ color: 'var(--primary)', marginRight: '0.5rem' }} />

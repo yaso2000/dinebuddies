@@ -12,6 +12,7 @@ import { FaUser, FaCheckCircle, FaVenusMars, FaBirthdayCake, FaCamera } from 're
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
+import { needsConsumerEmailVerification } from '../utils/emailVerification';
 
 const CompleteProfile = () => {
     const { t } = useTranslation();
@@ -21,6 +22,7 @@ const CompleteProfile = () => {
     const { isDark } = useTheme();
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [firestoreRoleChecked, setFirestoreRoleChecked] = useState(false);
 
     const [formData, setFormData] = useState({
         displayName: '',
@@ -30,12 +32,23 @@ const CompleteProfile = () => {
     });
     const [uploadProgress, setUploadProgress] = useState(0);
 
+    useEffect(() => {
+        if (loading) return;
+        if (currentUser && needsConsumerEmailVerification(currentUser, userProfile)) {
+            navigate('/verify-email', { replace: true });
+        }
+    }, [loading, currentUser, userProfile, navigate]);
+
     // Load existing data if available
     useEffect(() => {
-        // SAFEGUARD: If user is a business account, redirect to their dashboard
+        // Mid–business signup: not a full business doc yet — send back to the wizard
+        if (userProfile?.pendingBusinessRegistration && currentUser?.uid) {
+            navigate('/business/onboarding', { replace: true });
+            return;
+        }
+        // Full business account → dashboard
         if (userProfile?.isBusiness) {
-            console.log('🏢 Business user detected on /complete-profile. Redirecting...');
-            navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard');
+            navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
             return;
         }
 
@@ -53,6 +66,72 @@ const CompleteProfile = () => {
             }));
         }
     }, [userProfile, currentUser, navigate]);
+
+    // Same guard from Firestore directly — fixes race where AuthContext userProfile is not yet role=business
+    // (e.g. after business email signup) so this consumer-only page never flashes for partners.
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setFirestoreRoleChecked(true);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const snap = await getDoc(doc(db, 'users', currentUser.uid));
+                if (cancelled) return;
+                if (!snap.exists()) {
+                    setFirestoreRoleChecked(true);
+                    return;
+                }
+                const data = snap.data();
+                const rl = String(data?.role || '').toLowerCase();
+                const at = String(data?.accountType || '').toLowerCase();
+                const hasBi =
+                    data?.businessInfo &&
+                    typeof data.businessInfo === 'object' &&
+                    Object.keys(data.businessInfo).length > 0;
+                const pendingBiz = String(data?.registrationIntent || '').toLowerCase() === 'business' && rl !== 'business' && !hasBi;
+                const isFullBiz =
+                    rl === 'business' ||
+                    rl === 'partner' ||
+                    at === 'business' ||
+                    hasBi;
+                if (data.pendingBusinessRegistration === true && currentUser.uid) {
+                    navigate('/business/onboarding', { replace: true });
+                    return;
+                }
+                if (pendingBiz && currentUser.uid) {
+                    navigate('/business/onboarding', { replace: true });
+                    return;
+                }
+                if (isFullBiz) {
+                    navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
+                    return;
+                }
+            } catch {
+                /* ignore */
+            }
+            if (!cancelled) setFirestoreRoleChecked(true);
+        })();
+        return () => { cancelled = true; };
+    }, [currentUser?.uid, navigate]);
+
+    // Consumer already finished onboarding — do not show the form again on every login.
+    useEffect(() => {
+        if (loading || !currentUser || !firestoreRoleChecked) return;
+        if (userProfile?.pendingBusinessRegistration) return;
+        if (userProfile?.isBusiness) return;
+        const done =
+            userProfile?.isProfileComplete === true ||
+            (
+                (userProfile?.displayName || userProfile?.display_name || userProfile?.nickname) &&
+                userProfile?.gender &&
+                (userProfile?.ageCategory || userProfile?.age)
+            );
+        if (done) {
+            navigate('/', { replace: true });
+        }
+    }, [loading, currentUser, userProfile, firestoreRoleChecked, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -175,9 +254,11 @@ const CompleteProfile = () => {
         }
     };
 
-    if (loading) {
+    if (loading || (currentUser && !firestoreRoleChecked)) {
         return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>Loading...</div>;
     }
+
+    const reqStar = <span style={{ color: 'var(--accent)', fontWeight: 800 }} aria-hidden="true"> *</span>;
 
     return (
         <div style={{
@@ -190,48 +271,54 @@ const CompleteProfile = () => {
             overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
             zIndex: 1000, // Ensure it's above other elements but below major overlays
-            padding: '2rem 1rem'
+            padding: 'max(12px, env(safe-area-inset-top)) 1rem max(28px, calc(12px + env(safe-area-inset-bottom)))'
         }}>
             <div style={{
-                margin: '0 auto 4rem auto', // Extra bottom margin for space
+                margin: '0 auto',
                 width: '100%',
                 maxWidth: '500px',
                 background: 'var(--card-bg)', // Dark card background
-                borderRadius: '24px',
-                padding: '2rem',
+                borderRadius: '20px',
+                padding: '1.35rem 1.15rem',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
                 border: '1px solid var(--border-color)'
             }}>
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: '1.15rem' }}>
                     <div style={{
-                        width: '80px',
-                        height: '80px',
+                        width: '64px',
+                        height: '64px',
                         background: 'linear-gradient(135deg, var(--primary), var(--accent))',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        margin: '0 auto 1rem auto',
-                        fontSize: '2rem',
+                        margin: '0 auto 0.65rem auto',
+                        fontSize: '1.6rem',
                         color: '#fff',
                         boxShadow: '0 4px 15px rgba(139, 92, 246, 0.4)'
                     }}>
                         <FaUser />
                     </div>
-                    <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
+                    <h2 style={{ fontSize: '1.35rem', fontWeight: 'bold', marginBottom: '0.35rem', color: 'var(--text-main)' }}>
                         {t('complete_profile', 'Complete Your Profile')}
                     </h2>
-                    <p style={{ color: 'var(--text-muted)' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.4, marginBottom: '0.35rem' }}>
                         {t('complete_profile_desc', 'Please provide a few details to get the best experience.')}
+                    </p>
+                    <p style={{ color: 'var(--accent)', fontSize: '0.78rem', fontWeight: 700, margin: '0 0 0.35rem' }}>
+                        {t('required_fields_note', 'Fields marked with * are required.')}
+                    </p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', lineHeight: 1.35, margin: 0, opacity: 0.95 }}>
+                        {t('warning_permanent_demographics_short', 'Gender and age category cannot be changed after saving.')}
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     {/* Photo Upload Section */}
-                    <div className="form-group" style={{ marginBottom: '2rem', textAlign: 'center' }}>
+                    <div className="form-group" style={{ marginBottom: '1.1rem', textAlign: 'center' }}>
                         <label className="elegant-label" style={{ justifyContent: 'center', color: isDark ? 'var(--text-main)' : '#0f172a' }}>
                             <span className="label-icon" style={{ color: 'var(--primary)' }}><FaCamera /></span>
-                            {t('profile_photo', 'Profile Photo (Required)')}
+                            {t('profile_photo_optional', 'Profile photo (optional)')}
                         </label>
                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', position: 'relative' }}>
                             <ImageUpload
@@ -260,10 +347,11 @@ const CompleteProfile = () => {
                     </div>
 
                     {/* Display Name */}
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
                         <label className="elegant-label" style={{ color: isDark ? 'var(--text-main)' : '#0f172a' }}>
                             <span className="label-icon" style={{ color: 'var(--primary)' }}><FaUser /></span>
                             {t('display_name', 'Display Name / Nickname')}
+                            {reqStar}
                         </label>
                         <input
                             type="text"
@@ -285,12 +373,13 @@ const CompleteProfile = () => {
                     </div>
 
                     {/* Gender Selection */}
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
                         <label className="elegant-label" style={{ color: isDark ? 'var(--text-main)' : '#0f172a' }}>
                             <span className="label-icon" style={{ color: 'var(--primary)' }}><FaVenusMars /></span>
                             {t('select_gender', 'Select Gender')}
+                            {reqStar}
                         </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                             {genderOptions.map((option) => {
                                 const isSelected = formData.gender === option.value;
                                 return (
@@ -300,8 +389,8 @@ const CompleteProfile = () => {
                                         onClick={() => setFormData({ ...formData, gender: option.value })}
                                         style={{
                                             position: 'relative',
-                                            padding: '16px 12px',
-                                            borderRadius: '16px',
+                                            padding: '12px 10px',
+                                            borderRadius: '14px',
                                             border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                             background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--bg-input)',
                                             color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
@@ -309,7 +398,7 @@ const CompleteProfile = () => {
                                             display: 'flex',
                                             flexDirection: 'column',
                                             alignItems: 'center',
-                                            gap: '8px',
+                                            gap: '6px',
                                             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                             transform: isSelected ? 'translateY(-2px)' : 'none',
                                             boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
@@ -331,10 +420,11 @@ const CompleteProfile = () => {
                     </div>
 
                     {/* Age Category Selection */}
-                    <div className="form-group" style={{ marginBottom: '2rem' }}>
+                    <div className="form-group" style={{ marginBottom: '1.1rem' }}>
                         <label className="elegant-label" style={{ color: isDark ? 'var(--text-main)' : '#0f172a' }}>
                             <span className="label-icon" style={{ color: 'var(--primary)' }}><FaBirthdayCake /></span>
                             {t('select_age_category', 'Select Age Category')}
+                            {reqStar}
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {ageOptions.map((option) => {
@@ -346,8 +436,8 @@ const CompleteProfile = () => {
                                         onClick={() => setFormData({ ...formData, ageCategory: option.value })}
                                         style={{
                                             position: 'relative',
-                                            padding: '16px 12px',
-                                            borderRadius: '16px',
+                                            padding: '12px 10px',
+                                            borderRadius: '14px',
                                             border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                                             background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--bg-input)',
                                             color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
@@ -360,7 +450,7 @@ const CompleteProfile = () => {
                                             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                             transform: isSelected ? 'translateY(-2px)' : 'none',
                                             boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none',
-                                            minHeight: '80px'
+                                            minHeight: '64px'
                                         }}
                                     >
                                         {isSelected && (
@@ -388,10 +478,10 @@ const CompleteProfile = () => {
                         disabled={isSubmitting}
                         className="ui-btn ui-btn--primary"
                         style={{
-                            height: '56px',
-                            fontSize: '1.1rem',
+                            height: '50px',
+                            fontSize: '1rem',
                             fontWeight: 'bold',
-                            borderRadius: '16px',
+                            borderRadius: '14px',
                             background: 'linear-gradient(135deg, var(--primary), var(--accent))',
                             boxShadow: '0 4px 15px rgba(139, 92, 246, 0.4)',
                             width: '100%',

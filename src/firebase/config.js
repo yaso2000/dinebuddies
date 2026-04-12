@@ -1,7 +1,9 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, RecaptchaVerifier } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getDatabase } from 'firebase/database';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 // Firebase configuration from environment variables
 // Create .env from .env.example and add your Firebase credentials
@@ -34,10 +36,21 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-
-// Make RecaptchaVerifier available globally for phone auth
+// Realtime Database — used for low-cost presence tracking (online/offline)
+export const rtdb = getDatabase(app);
+// Firebase Cloud Messaging — must not throw at import time (unsupported browser / non-HTTPS / etc.)
+export let messaging = null;
 if (typeof window !== 'undefined') {
-    window.RecaptchaVerifier = RecaptchaVerifier;
+    isSupported()
+        .then((ok) => {
+            if (!ok) return;
+            try {
+                messaging = getMessaging(app);
+            } catch (e) {
+                console.warn('[Firebase] getMessaging failed:', e?.message || e);
+            }
+        })
+        .catch(() => {});
 }
 
 export default app;

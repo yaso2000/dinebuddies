@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FaEdit, FaPause, FaPlay, FaTrash } from 'react-icons/fa';
 import AnimatedOfferIcon from './AnimatedOfferIcons';
 import OfferTemplateRenderer from './OfferTemplateRenderer';
@@ -103,6 +104,8 @@ const PremiumOfferCard = ({
     isOwnerView = false,
     compactHeight = false
 }) => {
+    const { t } = useTranslation();
+
 
     // ── Desktop template — render using new unified renderer ──────
     if (offer.templateId) {
@@ -112,16 +115,13 @@ const PremiumOfferCard = ({
                 {isOwnerView && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '8px 4px' }}>
                         <button onClick={() => onEdit?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'var(--bg-body)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
-                            <FaEdit /> Edit
-                        </button>
+                            <FaEdit /> {t('edit', 'Edit')}</button>
                         {offer.status === 'active' ? (
                             <button onClick={() => onFreeze?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
-                                <FaPause /> Freeze
-                            </button>
+                                <FaPause /> {t('freeze', 'Freeze')}</button>
                         ) : (
                             <button onClick={() => onRepublish?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
-                                <FaPlay /> Re-Publish
-                            </button>
+                                <FaPlay /> {t('republish', 'Re-Publish')}</button>
                         )}
                         <button onClick={() => onDelete?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
                             <FaTrash />
@@ -210,7 +210,7 @@ const PremiumOfferCard = ({
                         {offer.description || 'Provide a short description of your offer here...'}
                     </p>
                     {offer.status === 'inactive' && (
-                        <span style={{ marginTop: '6px', display: 'inline-block', padding: '2px 8px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', borderRadius: '12px', fontSize: '0.65rem', fontWeight: 'bold', width: 'max-content' }}>FROZEN</span>
+                        <span style={{ marginTop: '6px', display: 'inline-block', padding: '2px 8px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', borderRadius: '12px', fontSize: '0.65rem', fontWeight: 'bold', width: 'max-content' }}>{t('frozen', 'FROZEN')}</span>
                     )}
                 </div>
 
@@ -230,11 +230,11 @@ const PremiumOfferCard = ({
 
             {isOwnerView && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '8px 4px' }}>
-                    <button onClick={() => onEdit?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'var(--bg-body)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}><FaEdit /> Edit</button>
+                    <button onClick={() => onEdit?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'var(--bg-body)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}><FaEdit /> {t('edit', 'Edit')}</button>
                     {offer.status === 'active' ? (
-                        <button onClick={() => onFreeze?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' }}><FaPause /> Freeze</button>
+                        <button onClick={() => onFreeze?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' }}><FaPause /> {t('freeze', 'Freeze')}</button>
                     ) : (
-                        <button onClick={() => onRepublish?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)' }}><FaPlay /> Re-Publish</button>
+                        <button onClick={() => onRepublish?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)' }}><FaPlay /> {t('republish', 'Re-Publish')}</button>
                     )}
                     <button onClick={() => onDelete?.(offer)} className="premium-action-btn" style={{ ...btnBaseStyle, background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}><FaTrash /></button>
                 </div>

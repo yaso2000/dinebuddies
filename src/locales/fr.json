@@ -54,5 +54,54 @@
     "cancel_btn": "Annuler",
     "stats_posted": "Publié",
     "stats_joined": "Rejoint",
-    "language_selector": "Langue"
+    "language_selector": "Langue",
+    "faq": {
+        "title": "Help & Support",
+        "subtitle": "Find answers to your questions and learn how to get the most out of DineBuddies.",
+        "empty": "No questions currently available.",
+        "user_questions": [
+            {
+                "q": "How do I create a private invitation?",
+                "a": "Tap the + button or open a restaurant card and select \"Create Invitation\". Set the time, guest count, and who pays the bill."
+            },
+            {
+                "q": "How do join requests work?",
+                "a": "When you request to join a private invitation, the host receives a notification. If they accept, a private chat room will instantly unlock for both of you."
+            },
+            {
+                "q": "What is a Dating Invitation?",
+                "a": "Dating invitations are high-intent premium dining dates. You need a Premium subscription to actively explore dating invitations and chat with hosts."
+            },
+            {
+                "q": "How do I upgrade to Premium?",
+                "a": "Go to Settings > Subscription or click any of the golden upgrade banners in the app to access our premium tiers."
+            },
+            {
+                "q": "What is Community Chat?",
+                "a": "Every restaurant has a public community chat where you can browse recent posts, ask questions, and mingle with other food lovers."
+            }
+        ],
+        "business_questions": [
+            {
+                "q": "How do I publish a Featured Post?",
+                "a": "In your Pro Dashboard, open the 'New Featured Post' tab, upload your high-quality banner, write a caption, and deploy it straight to everyone's feed."
+            },
+            {
+                "q": "How do Offers and Credits work?",
+                "a": "In the Offers section, you can create exclusive digital packages. Customers claim them, and you can redeem their points securely using our built-in scanner."
+            },
+            {
+                "q": "Why should I join my community chat?",
+                "a": "Your restaurant's community chat is your direct line to guests. Answer queries, build hype for events, and foster brand loyalty instantly."
+            },
+            {
+                "q": "How are my limits determined?",
+                "a": "Limits like Featured Posts availability are governed by your subscription tier (Free, Pro, Elite). Upgrade via the Subscription tab for more tools."
+            }
+        ]
+    },
+    "seo": {
+        "title": "DineBuddies | Premium Social Dining & Exclusive Food Network",
+        "description": "DineBuddies is an exclusive social dining network where food lovers meet, join private restaurant invitations, and connect over premium meals."
+    }
 }

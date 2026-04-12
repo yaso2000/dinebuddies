@@ -53,7 +53,8 @@ export const uploadImage = (file, path, onProgress = null, compressionOptions = 
             }
 
             const storageRef = ref(storage, path);
-            const uploadTask = uploadBytesResumable(storageRef, uploadFile);
+            const contentType = (uploadFile.type && uploadFile.type.startsWith('image/')) ? uploadFile.type : 'image/jpeg';
+            const uploadTask = uploadBytesResumable(storageRef, uploadFile, { contentType });
 
             uploadTask.on(
                 'state_changed',
@@ -99,13 +100,15 @@ export const uploadProfilePicture = async (file, userId, onProgress = null) => {
  * Upload invitation photo
  * @param {File} file - Image file
  * @param {string} invitationId - Invitation ID
+ * @param {string} userId - Uploader's UID (used to enforce storage ownership)
  * @param {number} index - Photo index
  * @param {Function} onProgress - Progress callback
  * @returns {Promise<string>} Download URL
  */
-export const uploadInvitationPhoto = async (file, invitationId, index = 0, onProgress = null) => {
+export const uploadInvitationPhoto = async (file, invitationId, userId, index = 0, onProgress = null) => {
     const timestamp = Date.now();
-    const path = `invitations/${invitationId}/${timestamp}_${index}.jpg`;
+    // uid subfolder enforces ownership via storage.rules (request.auth.uid == userId)
+    const path = `invitations/${invitationId}/${userId}/${timestamp}_${index}.jpg`;
     return uploadImage(file, path, onProgress);
 };
 

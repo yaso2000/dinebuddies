@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -10,6 +11,7 @@ import EmojiPickerPortal, { isMobile } from './EmojiPickerPortal';
 import '../pages/CommunityChatRoom.css';
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
+    const { t, i18n } = useTranslation();
     const { currentUser, userProfile } = useAuth();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -103,7 +105,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
             }, 1000);
         } catch (error) {
             console.error("Failed to start recording:", error);
-            showToast('Could not access microphone.', 'error');
+            showToast(t('no_mic_access'), 'error');
         }
     };
 
@@ -137,7 +139,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
             scrollToBottom();
         } catch (error) {
             console.error("Error sending voice:", error);
-            showToast('Failed to send voice message. Try again.', 'error');
+            showToast(t('failed_send_voice'), 'error');
         }
     };
 
@@ -172,7 +174,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
             scrollToBottom();
         } catch (error) {
             console.error("Error sending message:", error);
-            showToast('Failed to send message. Try again.', 'error');
+            showToast(t('failed_send_message'), 'error');
         } finally {
             setTimeout(() => inputRef.current?.focus(), 10);
         }
@@ -227,7 +229,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
     };
 
 
-    if (!currentUser) return <div style={{ padding: '20px', textAlign: 'center' }}>Please login to view chat</div>;
+    if (!currentUser) return <div style={{ padding: '20px', textAlign: 'center' }}>{t("login_to_view_chat")}</div>;
 
     // Styles for Full Screen vs Embedded
     const containerStyle = isFullScreen ? {
@@ -285,12 +287,12 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                         >
                             <FaArrowLeft /> Back
                         </button>
-                        <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'white' }}>Group Chat</span>
+                        <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'white' }}>{t("group_chat")}</span>
                         <div style={{ width: '60px' }}></div> {/* Spacer for visual centering */}
                     </>
                 ) : (
                     <>
-                        <span style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: '600' }}>Recent Messages</span>
+                        <span style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: '600' }}>{t("recent_messages")}</span>
                         <button
                             onClick={() => setIsFullScreen(true)}
                             style={{
@@ -314,9 +316,9 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
             {/* Messages Area - Using classes from CommunityChatRoom.css */}
             <div className="message-list" onScroll={handleScroll} style={{ flex: 1, padding: '15px' }}>
                 {messages.length === 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
+                    <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
                         <div style={{ fontSize: '2rem' }}>💬</div>
-                        <p>Start the conversation!</p>
+                        <p>{t("start_conversation_first")}</p>
                     </div>
                 ) : (
                     messages.map((msg, index) => {
@@ -370,7 +372,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                     style={{
                         position: 'absolute',
                         bottom: '80px',
-                        right: '20px',
+                        insetInlineEnd: '20px',
                         background: 'var(--primary)',
                         color: 'white',
                         border: 'none',
@@ -420,7 +422,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                                 <FaMicrophone className="recording-pulse" />
                                 <span>{formatDuration(recordingDuration)}</span>
                             </div>
-                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Recording...</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{t("recording")}</span>
                             <button
                                 onClick={() => handleStopRecording(false)}
                                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
@@ -451,7 +453,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                                 ref={inputRef}
                                 type="text"
                                 className="message-input"
-                                placeholder="Type a message..."
+                                placeholder={t("type_message")}
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
@@ -479,7 +481,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                         background: isRecording ? '#ef4444' : 'var(--primary)',
                         border: 'none', color: 'white',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', marginLeft: '8px',
+                        cursor: 'pointer', marginInlineStart: '8px',
                         boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
                     }}
                 >
@@ -487,7 +489,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                         <FaPaperPlane />
                     ) : (
                         newMessage.trim() ? (
-                            <FaPaperPlane style={{ marginLeft: '-2px' }} />
+                            <FaPaperPlane style={{ marginInlineStart: '-2px' }} />
                         ) : (
                             <FaMicrophone onMouseDown={(e) => {
                                 e.preventDefault(); // Also prevent blur on mic click

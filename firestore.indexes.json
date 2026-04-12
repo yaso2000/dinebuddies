@@ -15,6 +15,48 @@
             ]
         },
         {
+            "collectionGroup": "conversations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "participants",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "lastMessageAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "private_invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "invitedFriends",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "private_invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "authorId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "messages",
             "queryScope": "COLLECTION_GROUP",
             "fields": [
@@ -99,6 +141,34 @@
             ]
         },
         {
+            "collectionGroup": "featured_posts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "partnerId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "featured_posts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "type",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "publishedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "partnerStories",
             "queryScope": "COLLECTION",
             "fields": [
@@ -113,6 +183,24 @@
                 {
                     "fieldPath": "createdAt",
                     "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "role",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "banned",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
                 }
             ]
         }

@@ -249,3 +249,13 @@
 .conversations-list::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* RTL Support - Search Bar Fix */
+[dir="rtl"] .search-bar .search-icon {
+    left: auto;
+    right: 1.75rem;
+}
+
+[dir="rtl"] .search-bar input {
+    padding: 0.75rem 2.5rem 0.75rem 1rem;
+}

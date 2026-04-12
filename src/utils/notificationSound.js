@@ -40,8 +40,8 @@ class NotificationSound {
 
         // Default options
         const defaultOptions = {
-            icon: '/logo192.png',
-            badge: '/logo192.png',
+            icon: '/icon-light-192.png',
+            badge: '/icon-light-192.png',
             vibrate: [200, 100, 200],
             requireInteraction: false,
             ...options

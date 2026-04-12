@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { MdDeliveryDining } from 'react-icons/md';
 import { FaEdit, FaSave } from 'react-icons/fa';
 import PremiumBadge from './PremiumBadge';
@@ -16,6 +17,8 @@ const DeliveryLinksSection = ({
     onSave,
     onCancel
 }) => {
+    const { t } = useTranslation();
+
     // Business is "paid" only if on professional or elite plan
     const isPaid = business?.subscriptionTier === 'professional' || business?.subscriptionTier === 'elite';
 
@@ -36,15 +39,17 @@ const DeliveryLinksSection = ({
     return (
         <div style={{
             background: 'var(--bg-card)',
-            borderRadius: '20px',
+            borderRadius: 'var(--profile-card-radius, 20px)',
             padding: '1.5rem',
-            margin: '0',
-            marginTop: '1.5rem',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
+            margin: 0,
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
         }}>
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
                 alignItems: 'center',
                 marginBottom: '1rem'
             }}>
@@ -58,7 +63,7 @@ const DeliveryLinksSection = ({
                     gap: '10px'
                 }}>
                     <MdDeliveryDining style={{ fontSize: '1.5rem', color: '#8b5cf6' }} />
-                    Order Online
+                    {t('order_online', 'Order Online')}
                 </h3>
 
                 {isOwner && !editingDeliveryLinks && (
@@ -180,9 +185,7 @@ const DeliveryLinksSection = ({
                                 fontWeight: '600',
                                 cursor: 'pointer'
                             }}
-                        >
-                            Cancel
-                        </button>
+                        >{t('cancel', 'Cancel')}</button>
                         <button
                             onClick={onSave}
                             style={{
@@ -198,9 +201,7 @@ const DeliveryLinksSection = ({
                                 gap: '6px'
                             }}
                         >
-                            <FaSave style={{ fontSize: '1rem' }} />
-                            Save Links
-                        </button>
+                            <FaSave style={{ fontSize: '1rem' }} />{t('save_links', 'Save Links')}</button>
                     </div>
                 </div>
             )}
@@ -250,7 +251,7 @@ const DeliveryLinksSection = ({
                                         borderRadius: '6px',
                                         backdropFilter: 'blur(4px)'
                                     }}>
-                                        🔒 Locked
+                                        🔒 {t('locked', 'Locked')}
                                     </div>
                                 )}
                             </>

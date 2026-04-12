@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaGlobe, FaLock, FaTimes } from 'react-icons/fa';
+import { FaGlobe, FaLock, FaHeart, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -11,8 +11,7 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { showToast } = useToast();
-    const { userProfile } = useAuth();
-    const isBusiness = userProfile?.role === 'business';
+    const { isBusiness } = useAuth();
 
     const { canCreatePrivateInvitation } = useInvitations();
 
@@ -26,10 +25,18 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
         }
         if (type === 'public') {
             navigate('/create', { state: navigationState });
-        } else {
+        } else if (type === 'private') {
             const quotaInfo = canCreatePrivateInvitation();
             if (quotaInfo.canCreate) {
                 navigate('/create-private', { state: navigationState });
+            } else {
+                showToast(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'), 'error');
+                navigate('/pricing');
+            }
+        } else if (type === 'dating') {
+            const quotaInfo = canCreatePrivateInvitation();
+            if (quotaInfo.canCreate) {
+                navigate('/create-dating', { state: navigationState });
             } else {
                 showToast(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'), 'error');
                 navigate('/pricing');
@@ -54,8 +61,8 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
                             <FaGlobe />
                         </div>
                         <div className="option-info">
-                            <h4>{t('create_public_invitation')}</h4>
-                            <p>{t('public_invitation_desc')}</p>
+                            <h4>{t('dinebuddy_open', 'DineBuddy Open')}</h4>
+                            <p>{t('public_invitation_desc', 'Open to everyone — find new dining companions')}</p>
                         </div>
                     </div>
 
@@ -64,8 +71,18 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
                             <FaLock />
                         </div>
                         <div className="option-info">
-                            <h4>{t('create_private_invitation')}</h4>
-                            <p>{t('private_invitation_desc')}</p>
+                            <h4>{t('dinebuddy_private', 'DineBuddy Private')}</h4>
+                            <p>{t('private_invitation_desc', 'Invite specific friends for an exclusive gathering')}</p>
+                        </div>
+                    </div>
+
+                    <div className="selector-card dating" onClick={() => handleSelect('dating')}>
+                        <div className="icon-wrapper">
+                            <FaHeart />
+                        </div>
+                        <div className="option-info">
+                            <h4>{t('dinebuddy_date', 'DineBuddy Date')}</h4>
+                            <p>{t('dating_invitation_selector_desc', 'Send an exclusive private date to someone special')}</p>
                         </div>
                     </div>
                 </div>
@@ -75,3 +92,5 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
 };
 
 export default CreateInvitationSelector;
+
+

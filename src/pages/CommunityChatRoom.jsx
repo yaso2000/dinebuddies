@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDoc, doc, updateDoc } from 'firebase/firestore'; // Added updateDoc
@@ -7,16 +8,21 @@ import { useToast } from '../context/ToastContext';
 import {
     FaArrowLeft, FaEllipsisV, FaImage, FaPaperPlane,
     FaCamera, FaMicrophone, FaPlus, FaStop,
-    FaPlay, FaPause, FaTrash, FaArrowDown
+    FaPlay, FaPause, FaTrash, FaArrowDown, FaKeyboard
 } from 'react-icons/fa';
 import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
 import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
+import { createNotification } from '../utils/notificationHelpers';
+import SharedContentBubble from '../components/SharedContentBubble';
+import UnifiedCamera from '../components/UnifiedCamera';
 import './CommunityChatRoom.css';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const CommunityChatRoom = () => {
+    const { t, i18n } = useTranslation();
     const { partnerId } = useParams();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
@@ -31,7 +37,10 @@ const CommunityChatRoom = () => {
     const [isMember, setIsMember] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+    const [lockTop, setLockTop] = useState(null);
+    const [keyboardHeight, setKeyboardHeight] = useState(320); // Dynamic fallback
+    const [showCamera, setShowCamera] = useState(false);
 
     const emojiBtnRef = useRef(null);
 
@@ -41,31 +50,57 @@ const CommunityChatRoom = () => {
         setShowScrollBottom(!isNearBottom);
     };
 
+    const handleEmojiToggle = () => {
+        if (!composerRef.current || !containerRef.current) return;
+        
+        // Lock the absolute pixel position of the composer relative to the container
+        const rect = composerRef.current.getBoundingClientRect();
+        const containerRect = containerRef.current.getBoundingClientRect();
+        setLockTop(rect.top - containerRect.top);
+
+        if (showEmojiPanel) {
+            // Close emoji → switch to keyboard
+            setShowEmojiPanel(false);
+            inputRef.current?.focus();
+        } else {
+            // Open emoji → switch away from keyboard
+            setShowEmojiPanel(true);
+            inputRef.current?.blur();
+        }
+
+        // Release the lock after the native keyboard finishes animating (approx 400ms)
+        setTimeout(() => {
+            setLockTop(null);
+        }, 400);
+    };
+
     const handleEmojiClick = (emojiData) => {
         const emoji = emojiData.emoji;
         const input = inputRef.current;
-        if (input) {
-            const s = input.selectionStart ?? newMessage.length;
-            const e = input.selectionEnd ?? newMessage.length;
-            setNewMessage(newMessage.slice(0, s) + emoji + newMessage.slice(e));
-            setTimeout(() => {
-                input.focus();
-                input.setSelectionRange(s + emoji.length, s + emoji.length);
-            }, 0);
-        } else {
-            setNewMessage(p => p + emoji);
-        }
+        
+        setNewMessage(prevMessage => {
+            if (input) {
+                const s = input.selectionStart ?? prevMessage.length;
+                const e = input.selectionEnd ?? prevMessage.length;
+                
+                // DO NOT focus the input here, because focusing opens the keyboard and closes the emoji panel
+                // Just update the selection range after the state updates
+                setTimeout(() => {
+                    input.setSelectionRange(s + emoji.length, s + emoji.length);
+                }, 10);
+                
+                return prevMessage.slice(0, s) + emoji + prevMessage.slice(e);
+            } else {
+                return prevMessage + emoji;
+            }
+        });
     };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // Recording State
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingDuration, setRecordingDuration] = useState(0);
-    const recordingRef = useRef(null);
-    const timerRef = useRef(null);
+    // Recording State removed (business group logic)
 
     // Audio Playback State
     const [playingAudioId, setPlayingAudioId] = useState(null);
@@ -74,6 +109,53 @@ const CommunityChatRoom = () => {
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const inputRef = useRef(null);
+    const composerRef = useRef(null);
+    const containerRef = useRef(null);
+
+    const maxVisibleHeight = useRef(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+    // Lock layout to Visual Viewport to prevent Android Chrome scroll glitches (mobile only)
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
+        const vv = window.visualViewport;
+        if (!vv) return;
+        
+        const adjustLayout = () => {
+            if (containerRef.current) {
+                containerRef.current.style.height = `${vv.height}px`;
+                containerRef.current.style.top = `${vv.offsetTop}px`;
+            }
+
+            // Track maximum observed height to dynamically calculate real keyboard height
+            if (vv.height > maxVisibleHeight.current) {
+                maxVisibleHeight.current = vv.height;
+            }
+            
+            // If viewport shrinks significantly, use it as the dynamic keyboard height
+            const currentDiff = maxVisibleHeight.current - vv.height;
+            if (currentDiff > 150) {
+                setKeyboardHeight(currentDiff);
+            }
+
+            window.scrollTo(0, 0);
+        };
+
+        vv.addEventListener('resize', adjustLayout);
+        vv.addEventListener('scroll', adjustLayout);
+        
+        // Block body scroll
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+        
+        adjustLayout();
+
+        return () => {
+            vv.removeEventListener('resize', adjustLayout);
+            vv.removeEventListener('scroll', adjustLayout);
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+        };
+    }, []);
 
 
 
@@ -96,8 +178,9 @@ const CommunityChatRoom = () => {
     // Cleanup Audio on Unmount
     useEffect(() => {
         return () => {
-            audioRef.current.pause();
-            if (timerRef.current) clearInterval(timerRef.current);
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
         };
     }, []);
 
@@ -134,29 +217,31 @@ const CommunityChatRoom = () => {
     // 1. Fetch Partner & Check Membership
     useEffect(() => {
         const checkAccess = async () => {
-            if (!partnerId || !currentUser) return;
+            if (!partnerId || !currentUser || !userProfile) return;
             try {
-                const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-                if (partnerDoc.exists()) {
-                    setPartner(partnerDoc.data());
-
-                    // Check membership
-                    if (currentUser.uid === partnerId) {
-                        setIsMember(true);
-                    } else {
-                        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                        const joinedCommunities = userDoc.data()?.joinedCommunities || [];
-                        setIsMember(joinedCommunities.includes(partnerId));
+                // If partner profile hasn't been fetched yet, get it
+                if (!partner) {
+                    const partnerDoc = await getDoc(doc(db, 'users', partnerId));
+                    if (partnerDoc.exists()) {
+                        setPartner(partnerDoc.data());
                     }
                 }
+
+                // Check membership locally from context
+                if (currentUser.uid === partnerId) {
+                    setIsMember(true);
+                } else {
+                    const joinedCommunities = userProfile.joinedCommunities || [];
+                    setIsMember(joinedCommunities.includes(partnerId));
+                }
             } catch (error) {
-                console.error("Error fetching partner:", error);
+                console.error("Error verifying access:", error);
             } finally {
                 setLoading(false);
             }
         };
         checkAccess();
-    }, [partnerId, currentUser]);
+    }, [partnerId, currentUser, userProfile]);
 
     // 2. Subscribe to Messages
     useEffect(() => {
@@ -176,6 +261,23 @@ const CommunityChatRoom = () => {
         return () => unsubscribe();
     }, [partnerId, isMember]);
 
+    // Mark community as read when user opens the chat room
+    useEffect(() => {
+        if (!isMember || !partnerId || !currentUser?.uid) return;
+
+        const markAsRead = async () => {
+            try {
+                await updateDoc(doc(db, 'users', currentUser.uid), {
+                    [`communityLastRead.${partnerId}`]: serverTimestamp()
+                });
+            } catch (err) {
+                // Fail silently — not critical
+            }
+        };
+
+        markAsRead();
+    }, [isMember, partnerId, currentUser?.uid]);
+
     // Auto-scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -184,55 +286,7 @@ const CommunityChatRoom = () => {
 
     // --- Audio Handlers ---
 
-    const handleStartRecording = async () => {
-        try {
-            const { stop } = await startRecording();
-            recordingRef.current = stop;
-            setIsRecording(true);
-            setRecordingDuration(0);
-
-            timerRef.current = setInterval(() => {
-                setRecordingDuration(prev => prev + 1);
-            }, 1000);
-        } catch (error) {
-            console.error("Failed to start recording:", error);
-            showToast('Could not access microphone.', 'error');
-        }
-    };
-
-    const handleStopRecording = async (shouldSend = true) => {
-        if (!recordingRef.current) return;
-
-        clearInterval(timerRef.current);
-        const audioBlob = await recordingRef.current();
-        setIsRecording(false);
-        setRecordingDuration(0);
-        recordingRef.current = null;
-
-        if (shouldSend && audioBlob) {
-            await sendVoiceMessage(audioBlob);
-        }
-    };
-
-    const sendVoiceMessage = async (audioBlob) => {
-        try {
-            const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
-            await addDoc(collection(db, 'communities', partnerId, 'messages'), {
-                text: '',
-                audioUrl: url,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'audio',
-                duration: recordingDuration
-            });
-            scrollToBottom();
-        } catch (error) {
-            console.error("Error sending voice:", error);
-            showToast('Failed to send voice message. Try again.', 'error');
-        }
-    };
+    // (Recording handlers removed)
 
     const handlePlayAudio = (url, msgId) => {
         if (playingAudioId === msgId) {
@@ -261,7 +315,15 @@ const CommunityChatRoom = () => {
         try {
             const messagesRef = collection(db, 'communities', partnerId, 'messages');
 
-            const isAvgEmoji = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component}){1,3}$/u.test(newMessage.trim());
+            const str = newMessage.trim();
+            let isAvgEmoji = false;
+            try {
+                const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+                const graphemes = Array.from(segmenter.segment(str));
+                isAvgEmoji = graphemes.length === 1 && /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component})+$/u.test(str);
+            } catch (e) {
+                isAvgEmoji = Array.from(str).length <= 2 && /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component})+$/u.test(str);
+            }
 
             await addDoc(messagesRef, {
                 text: newMessage.trim(),
@@ -273,20 +335,33 @@ const CommunityChatRoom = () => {
             });
 
             setNewMessage('');
-            setTimeout(() => inputRef.current?.focus(), 100);
+            if (!showEmojiPanel) {
+                setTimeout(() => inputRef.current?.focus(), 100);
+            }
+
+            // Notify the business owner when a member sends a message (not the owner themselves)
+            if (currentUser.uid !== partnerId) {
+                createNotification({
+                    userId: partnerId,
+                    type: 'message',
+                    title: userProfile?.display_name || 'New message in your community',
+                    message: newMessage.trim().slice(0, 80),
+                    actionUrl: `/community/${partnerId}/chat`
+                }).catch(() => { });
+            }
         } catch (error) {
             console.error("Error sending message:", error);
-            showToast('Failed to send message. Try again.', 'error');
+            showToast(t('failed_send_message'), 'error');
         }
     };
 
 
 
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
+    const handleCameraCapture = async (file) => {
         if (!file) return;
 
         try {
+            setShowCamera(false);
             const imageUrl = await uploadImage(file, currentUser.uid);
             const messagesRef = collection(db, 'communities', partnerId, 'messages');
 
@@ -301,12 +376,9 @@ const CommunityChatRoom = () => {
             });
         } catch (error) {
             console.error("Error uploading image:", error);
-            showToast('Failed to send image. Try again.', 'error');
-        } finally {
-            e.target.value = '';
+            showToast(t('failed_upload_image'), 'error');
         }
     };
-
     // --- Render Helpers ---
 
     const formatTime = (timestamp) => {
@@ -320,6 +392,13 @@ const CommunityChatRoom = () => {
         const urlRegex = /(https?:\/\/[^\s]+)/g;
 
         switch (msg.type) {
+            case 'shared_content':
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <SharedContentBubble data={msg.sharedContent} />
+                        {msg.text && <span dir="auto">{msg.text}</span>}
+                    </div>
+                );
             case 'image':
                 return (
                     <div className="image-bubble">
@@ -328,9 +407,53 @@ const CommunityChatRoom = () => {
                     </div>
                 );
             case 'emoji-big':
+                const isMe = msg.senderId === currentUser.uid;
                 return (
-                    <div className="big-emoji-bubble">
-                        <span className="big-emoji">{msg.text}</span>
+                    <div className="big-emoji-bubble" style={{ 
+                        position: 'relative', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        // The container just holds them naturally.
+                    }}>
+                        {!isMe && (
+                            <UserAvatar 
+                                src={msg.senderAvatar} 
+                                user={{ avatar: msg.senderAvatar }}
+                                alt="Avatar" 
+                                style={{ 
+                                    width: '110px', 
+                                    height: '110px', 
+                                    objectFit: 'cover', 
+                                    zIndex: 1,
+                                    marginInlineEnd: '-50px',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    flexShrink: 0
+                                }} 
+                            />
+                        )}
+                        
+                        <span className="big-emoji" style={{ position: 'relative', zIndex: 2 }}>{msg.text}</span>
+
+                        {isMe && (
+                            <UserAvatar 
+                                src={msg.senderAvatar} 
+                                user={{ avatar: msg.senderAvatar }}
+                                alt="Avatar" 
+                                style={{ 
+                                    width: '110px', 
+                                    height: '110px', 
+                                    objectFit: 'cover', 
+                                    zIndex: 1,
+                                    marginInlineStart: '-50px',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    flexShrink: 0
+                                }} 
+                            />
+                        )}
                     </div>
                 );
             case 'audio':
@@ -354,8 +477,9 @@ const CommunityChatRoom = () => {
                                 />
                             </svg>
                             <div className="voice-avatar">
-                                <img
-                                    src={msg.senderAvatar || getSafeAvatar(null)}
+                                <UserAvatar
+                                    src={msg.senderAvatar}
+                                    user={{ avatar: msg.senderAvatar }}
                                     alt={msg.senderName}
                                 />
                             </div>
@@ -398,32 +522,32 @@ const CommunityChatRoom = () => {
     if (!isMember) {
         return (
             <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--text-primary)' }}>
-                <h2>Access Denied</h2>
-                <button onClick={() => navigate('/communities')} style={{ padding: '10px', marginTop: '10px' }}>Go Back</button>
+                <h2>{t("access_denied")}</h2>
+                <button onClick={() => navigate('/communities')} style={{ padding: '10px', marginTop: '10px' }}>{t("go_back")}</button>
             </div>
         );
     }
 
     return (
-        <div className="chat-screen">
+        <div dir="ltr" ref={containerRef} className="chat-room-container chat-screen community-chat-root" style={{
+            display: 'flex', flexDirection: 'column',
+            background: 'var(--bg-color)',
+            overflow: 'hidden'
+        }}>
             {/* 1. Glass Header */}
             <header className="chat-header">
-                <button className="header-back-btn" onClick={() => navigate(-1)} style={{ color: 'var(--text-primary)' }}>
-                    <FaArrowLeft size={20} />
+                <button className="header-back-btn" onClick={() => navigate('/communities')} style={{ color: 'var(--text-primary)' }}>
+                    <FaArrowLeft size={20} style={{ transform: i18n.language === 'ar' ? 'rotate(180deg)' : 'none' }} />
                 </button>
-                <div className="header-info" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginLeft: '8px' }}>
-                    <img
-                        src={getSafeAvatar(partner)}
+                <div className="header-info" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginInlineStart: '8px', flex: 1, minWidth: 0 }}>
+                    <UserAvatar
+                        user={partner}
                         alt=""
-                        style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '10px', objectFit: 'cover' }}
-                        onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                        }}
+                        style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px', maxWidth: '40px', maxHeight: '40px', flexShrink: 0, marginInlineEnd: '10px', objectFit: 'cover' }}
                     />
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <h1 className="header-title" style={{ fontSize: '16px' }}>{partner?.display_name || 'Community Chat'}</h1>
-                        <span className="header-subtitle" style={{ fontSize: '12px' }}>{partner?.communityMembers?.length || 0} members</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                        <h1 className="header-title" style={{ fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{partner?.display_name || t('community_chat')}</h1>
+                        <span className="header-subtitle" style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{partner?.communityMembers?.length || 0} {t("members")}</span>
                     </div>
                 </div>
                 <button className="header-menu-btn">
@@ -432,7 +556,7 @@ const CommunityChatRoom = () => {
             </header>
 
             {/* 2. Message List */}
-            <div className="message-list" onScroll={handleScroll}>
+            <div className="message-list" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 60}px` : '70px', flex: 1, overflowY: 'auto' }}>
                 {messages.map((msg, index) => {
                     const isMe = msg.senderId === currentUser.uid;
                     const isBigEmoji = msg.type === 'emoji-big';
@@ -450,9 +574,8 @@ const CommunityChatRoom = () => {
                     return (
                         <div
                             key={msg.id}
-                            className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isBigEmoji ? 'emoji-center' : ''} ${isFirstOfGroup ? 'first-of-group' : ''}`}
+                            className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isFirstOfGroup ? 'first-of-group' : ''}`}
                             style={{
-                                ...(isBigEmoji ? { justifyContent: 'center' } : {}),
                                 position: 'relative', // Needed for centering popup within row
                                 marginTop: isFirstOfGroup ? '6px' : '0px'
                             }}
@@ -461,52 +584,51 @@ const CommunityChatRoom = () => {
                                 setActiveReactionId(msg.id);
                             }}
                         >
-                            {/* Avatar for Incoming */}
+                            {/* Avatar column for incoming messages */}
                             {!isMe && !isBigEmoji && (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                    {isFirstOfGroup && (
-                                        <span style={{
-                                            fontSize: '11px',
-                                            fontWeight: '700',
-                                            color: 'var(--accent-color)',
-                                            marginLeft: '12px',
-                                            marginBottom: '2px'
-                                        }}>
-                                            {msg.senderName}
-                                        </span>
-                                    )}
-                                    <img
-                                        src={msg.senderAvatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
-                                        alt=""
-                                        className="sender-avatar"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                                        }}
-                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden' }}
-                                    />
-                                </div>
+                                <UserAvatar
+                                    src={msg.senderAvatar}
+                                    user={{ avatar: msg.senderAvatar }}
+                                    alt=""
+                                    className="sender-avatar"
+                                    style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden', alignSelf: 'flex-start' }}
+                                />
                             )}
 
                             {/* Bubble */}
                             <div className={`bubble ${isBigEmoji ? 'big-emoji-bubble' : ''} ${msg.type === 'audio' ? 'bubble-audio-transparent' : ''}`} style={{ position: 'relative' }}>
 
-                                {/* Sender Name (Optional, small on top?) - skipping for clean minimalist look requested */}
-
-                                {renderBubbleContent(msg)}
-
-                                {/* Timestamp */}
-                                {!isBigEmoji && msg.type !== 'audio' && (
-                                    <span className="timestamp" style={{ color: isMe ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>
-                                        {formatTime(msg.createdAt)}
-                                    </span>
+                                {/* Sender name inside bubble */}
+                                {!isMe && isFirstOfGroup && (
+                                    <div style={{
+                                        width: '100%',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        color: 'var(--accent-color)',
+                                        marginBottom: '2px'
+                                    }}>
+                                        {msg.senderName}
+                                    </div>
                                 )}
 
+                                <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: '4px 12px' }}>
+                                    <div style={{ flex: '1 1 auto', margin: 0, minWidth: 0, wordBreak: 'break-word', paddingTop: '2px' }}>
+                                        {renderBubbleContent(msg)}
+                                    </div>
+
+                                    {/* Timestamp */}
+                                    {!isBigEmoji && msg.type !== 'audio' && (
+                                        <span className="timestamp" style={{ margin: '0 0 0 auto', display: 'flex', flexShrink: 0, color: isMe ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>
+                                            {formatTime(msg.createdAt)}
+                                        </span>
+                                    )}
+                                </div>
+
                                 {/* Reaction Badge (Displayed on message) */}
-                                {hasReactions && !isBigEmoji && (
+                                {hasReactions && (
                                     <div className="message-reaction-badge">
                                         {distinctReactions.map((r, i) => <span key={i}>{r}</span>)}
-                                        {reactions.length > 1 && <span style={{ marginLeft: '2px', color: '#9CA3AF' }}>{reactions.length}</span>}
+                                        {reactions.length > 1 && <span style={{ marginInlineStart: '2px', color: '#9CA3AF' }}>{reactions.length}</span>}
                                     </div>
                                 )}
                             </div>
@@ -539,7 +661,7 @@ const CommunityChatRoom = () => {
 
                             {/* Extended Emoji Picker for Reactions */}
                             {extendedReactionPicker === msg.id && (
-                                <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', left: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
+                                <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', insetInlineStart: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
                                     <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
                                         <LazyEmojiPicker
                                             onEmojiClick={(emojiObject) => {
@@ -562,11 +684,10 @@ const CommunityChatRoom = () => {
 
                 {showScrollBottom && (
                     <button
+                        type="button"
+                        className="chat-scroll-fab"
                         onClick={scrollToBottom}
                         style={{
-                            position: 'fixed',
-                            bottom: '80px',
-                            right: '20px',
                             background: 'var(--accent)',
                             color: 'white',
                             border: 'none',
@@ -578,7 +699,6 @@ const CommunityChatRoom = () => {
                             justifyContent: 'center',
                             cursor: 'pointer',
                             boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-                            zIndex: 1001,
                             transition: 'all 0.3s ease'
                         }}
                     >
@@ -588,111 +708,116 @@ const CommunityChatRoom = () => {
             </div>
 
 
-            {/* 3. Composer */}
-            {/* 3. Composer Section */}
-            <div style={{ flexShrink: 0, background: 'var(--bg-darker)' }}>
-                <div className="input-area" style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid var(--border-color)' }}>
-
-                    {/* Input Wrapper */}
-                    <div className="input-wrapper" style={{
-                        flex: 1, display: 'flex', alignItems: 'center',
-                        background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
-                        border: '1px solid var(--border-color)'
-                    }}>
-                        {isRecording ? (
-                            /* RECORDING UI */
-                            <div className="recording-ui" style={{ display: 'flex', alignItems: 'center', width: '100%', color: 'white' }}>
-                                <div className="recording-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <FaMicrophone className="recording-pulse" color="#ef4444" />
-                                    <span className="recording-timer">{formatDuration(recordingDuration)}</span>
-                                </div>
-                                <span className="recording-text" style={{ flex: 1, textAlign: 'center', fontSize: '0.85rem', opacity: 0.8 }}>Slide to cancel</span>
-                                <button
-                                    className="composer-icon-btn delete-recording-btn"
-                                    onClick={() => handleStopRecording(false)}
-                                    title="Cancel"
-                                    style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}
-                                >
-                                    <FaTrash />
-                                </button>
-                            </div>
-                        ) : (
-                            /* NORMAL INPUT UI */
-                            <>
-                                {!isMobile && (
-                                    <button
-                                        ref={emojiBtnRef}
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }}
-                                        style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', padding: '0 4px', opacity: 0.7, flexShrink: 0 }}
-                                        title="Emoji"
-                                    >😊</button>
-                                )}
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    className="message-input"
-                                    placeholder="Message"
-                                    value={newMessage}
-                                    onChange={(e) => setNewMessage(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                                />
-
-                                {/* Attachments */}
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    hidden
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                />
-
-                                <button className="composer-icon-btn" onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 4px' }}>
-                                    <FaCamera />
-                                </button>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Mic or Send Button */}
-                    <button
-                        type="button"
-                        className="send-btn-circle"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            if (isRecording) handleStopRecording(true);
-                            else handleSendMessage(e);
-                        }}
-                        style={{
-                            background: isRecording ? '#ef4444' : 'var(--primary)',
-                            color: 'white', border: 'none', borderRadius: '50%',
-                            width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', flexShrink: 0,
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-                        }}
-                    >
-                        {isRecording ? (
-                            <FaPaperPlane />
-                        ) : (
-                            newMessage.trim() ? (
-                                <FaPaperPlane style={{ marginLeft: '-2px' }} />
-                            ) : (
-                                <FaMicrophone onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleStartRecording(); }} />
-                            )
-                        )}
+            {/* ── COMPOSER (Pixel-perfect locked during animation) ── */}
+            <div ref={composerRef} style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                zIndex: 100,
+                background: 'var(--bg-darker)',
+                borderTop: '1px solid var(--border-color)',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+                willChange: 'top, bottom',
+                ...(lockTop !== null 
+                    ? { top: `${lockTop}px`, bottom: 'auto' } 
+                    : { top: 'auto', bottom: showEmojiPanel ? `${keyboardHeight}px` : '0px' })
+            }}>
+                {/* Input Wrapper */}
+                <div className="input-wrapper" style={{
+                    flex: 1, display: 'flex', alignItems: 'center',
+                    background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
+                    border: '1px solid var(--border-color)'
+                }}>
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        className="message-input"
+                        placeholder={t("message_placeholder")}
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                        onFocus={() => showEmojiPanel && setShowEmojiPanel(false)}
+                    />
+                    {/* Emoji / Keyboard toggle */}
+                    <button type="button" onClick={handleEmojiToggle} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }} title={showEmojiPanel ? 'Keyboard' : 'Emoji'}>
+                        {showEmojiPanel ? <FaKeyboard /> : '😊'}
+                    </button>
+                    <button className="composer-icon-btn" onClick={() => setShowCamera(true)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 4px' }}>
+                        <FaCamera />
                     </button>
                 </div>
 
+                {/* Send Button */}
+                <button type="button" className="send-btn-circle"
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                    }}
+                    style={{
+                        background: 'var(--primary)',
+                        color: 'white', border: 'none', borderRadius: '50%',
+                        width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                        opacity: newMessage.trim() ? 1 : 0.5,
+                        pointerEvents: newMessage.trim() ? 'auto' : 'none'
+                    }}
+                >
+                    <FaPaperPlane style={{ marginInlineStart: '-2px' }} />
+                </button>
             </div>
 
-            {/* Desktop Emoji Picker Portal */}
-            <EmojiPickerPortal
-                open={showEmojiPicker}
-                onClose={() => setShowEmojiPicker(false)}
-                anchorRef={emojiBtnRef}
-                onEmojiClick={handleEmojiClick}
-            />
+            {/* ── EMOJI PANEL (Pixel-perfect locked behind keyboard) ── */}
+            <div style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
+                overflow: 'hidden',
+                background: 'var(--bg-card)',
+                borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
+                zIndex: 99,
+                willChange: 'top, bottom',
+                ...(lockTop !== null
+                    ? { top: `${lockTop + (composerRef.current?.offsetHeight || 60)}px`, bottom: 'auto' }
+                    : { top: 'auto', bottom: '0px' })
+                }}
+            >
+                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
+                    <LazyEmojiPicker
+                        onEmojiClick={handleEmojiClick}
+                        width="100%"
+                        height={`${keyboardHeight}px`}
+                        searchDisabled={true}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                        categories={[
+                            {
+                                name: 'Smileys & Emotion',
+                                category: 'smileys_people'
+                            }
+                        ]}
+                    />
+                </Suspense>
+            </div>
 
+            {/* Camera Overlay */}
+            {showCamera && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100000 }}>
+                    <UnifiedCamera
+                        stopCamera={() => setShowCamera(false)}
+                        onMediaCaptured={(file, previewUrl, type) => {
+                            if (type === 'video') { setShowCamera(false); return; }
+                            handleCameraCapture(file);
+                        }}
+                        maxDuration={0}
+                        mode="photo"
+                    />
+                </div>
+            )}
         </div>
     );
 };

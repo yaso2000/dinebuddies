@@ -5,8 +5,21 @@ import { FaSearch, FaMapMarkerAlt, FaStore, FaGoogle } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
+import { placePhotoProxyUrls } from '../utils/placePhotoUrls';
+import { parseGoogleAddressComponents } from '../utils/googlePlacesBusiness';
 
-const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishment', cityBias = null }) => {
+const SmartPlaceSearch = ({
+    onSelect,
+    excludeIds = [],
+    searchType = 'establishment',
+    cityBias = null,
+    /** ISO 3166-1 alpha-2 (e.g. AU) — narrows autocomplete to country when set. */
+    countryCode = null,
+    /** When false, skips Firestore partner search (onboarding: Google-only). */
+    showPartnerResults = true,
+    /** When true, fetches phone, hours, website, description for business onboarding (skips url/photos). */
+    fetchExtendedBusinessDetails = false,
+}) => {
     const { t } = useTranslation();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -58,10 +71,14 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
         setShowResults(true);
 
         try {
-            // 1. FireStore Search (Partners) - Only if NOT searching for cities
+            // 1. FireStore Search (Partners) — optional (hidden on business onboarding)
             let partnersPromise = Promise.resolve({ docs: [] });
 
-            if (searchType !== '(cities)' && searchType !== 'geocode') {
+            if (
+                showPartnerResults &&
+                searchType !== '(cities)' &&
+                searchType !== 'geocode'
+            ) {
                 const normalizedText = text.trim().toLowerCase();
                 const partnersQuery = query(
                     collection(db, 'public_profiles'),
@@ -74,36 +91,63 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                 partnersPromise = getDocs(partnersQuery);
             }
 
-            // 2. Google Search Promise
+            // 2. Google Places — use a single `types` value (API ignores invalid multi-type arrays).
             const googlePromise = new Promise((resolve) => {
                 if (!autocompleteService.current) return resolve([]);
 
-                const request = {
-                    input: text,
-                    types: searchType === '(cities)' ? ['(cities)'] : (searchType === 'geocode' ? ['geocode'] : ['establishment', 'geocode']),
+                const mapPredictions = (predictions) =>
+                    predictions.map((p) => ({
+                        id: p.place_id,
+                        name: p.structured_formatting.main_text,
+                        address: p.structured_formatting.secondary_text,
+                        source: 'google',
+                        types: p.types,
+                        place_id: p.place_id,
+                    }));
+
+                const applyBias = (req) => {
+                    if (cityBias && cityBias.lat && cityBias.lng && window.google) {
+                        req.location = new window.google.maps.LatLng(cityBias.lat, cityBias.lng);
+                        req.radius = 50000;
+                    }
+                    if (countryCode && String(countryCode).trim().length === 2) {
+                        req.componentRestrictions = {
+                            country: [String(countryCode).trim().toLowerCase()],
+                        };
+                    }
+                    return req;
                 };
 
-                // Apply City Bias if available
-                if (cityBias && cityBias.lat && cityBias.lng && window.google) {
-                    request.location = new window.google.maps.LatLng(cityBias.lat, cityBias.lng);
-                    request.radius = 50000; // 50km radius
-                    console.log("📍 Applying City Bias:", cityBias);
-                }
-
-                autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
-                    if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-                        resolve(predictions.map(p => ({
-                            id: p.place_id,
-                            name: p.structured_formatting.main_text,
-                            address: p.structured_formatting.secondary_text,
-                            source: 'google',
-                            types: p.types,
-                            place_id: p.place_id
-                        })));
-                    } else {
+                const runPredictions = (request, isFallback) => {
+                    autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
+                        const OK = window.google.maps.places.PlacesServiceStatus.OK;
+                        const ZERO = window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
+                        if (status === OK && predictions && predictions.length > 0) {
+                            resolve(mapPredictions(predictions));
+                            return;
+                        }
+                        if (
+                            !isFallback &&
+                            searchType === 'establishment' &&
+                            (status === ZERO || status === OK)
+                        ) {
+                            const fallbackReq = applyBias({ input: text });
+                            runPredictions(fallbackReq, true);
+                            return;
+                        }
                         resolve([]);
-                    }
-                });
+                    });
+                };
+
+                const request = applyBias({ input: text });
+                if (searchType === '(cities)') {
+                    request.types = ['(cities)'];
+                } else if (searchType === 'geocode') {
+                    request.types = ['geocode'];
+                } else {
+                    request.types = ['establishment'];
+                }
+                runPredictions(request, false);
             });
 
             const [partnersSnapshot, googleResults] = await Promise.all([
@@ -141,31 +185,76 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
     const handleSelect = async (place) => {
         // If it's a google place, we might want to get more details (like lat/lng or photo)
         if (place.source === 'google' && placesService.current) {
+            const fields = fetchExtendedBusinessDetails
+                ? [
+                    'name',
+                    'formatted_address',
+                    'geometry',
+                    'place_id',
+                    'formatted_phone_number',
+                    'international_phone_number',
+                    'opening_hours',
+                    'website',
+                    'editorial_summary',
+                    'address_components',
+                    'types',
+                ]
+                : ['name', 'formatted_address', 'geometry', 'url'];
+
             placesService.current.getDetails({
                 placeId: place.place_id,
-                fields: ['name', 'formatted_address', 'geometry', 'photos', 'url']
+                // Omit 'photos' to avoid Maps JS PhotoService.GetPhoto (403 on localhost).
+                fields,
             }, (placeDetails, status) => {
                 if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+                    if (fetchExtendedBusinessDetails) {
+                        const es = placeDetails.editorial_summary;
+                        const summaryText = typeof es === 'string'
+                            ? es
+                            : (es && typeof es === 'object' && 'overview' in es ? es.overview : '') || '';
+                        const addrParts = parseGoogleAddressComponents(placeDetails.address_components);
+                        const enrichedPlace = {
+                            ...place,
+                            source: 'google',
+                            name: placeDetails.name,
+                            address: placeDetails.formatted_address,
+                            placeId: placeDetails.place_id,
+                            location: {
+                                lat: placeDetails.geometry.location.lat(),
+                                lng: placeDetails.geometry.location.lng(),
+                            },
+                            phone:
+                                placeDetails.formatted_phone_number ||
+                                placeDetails.international_phone_number ||
+                                '',
+                            website: placeDetails.website || '',
+                            openingHours: placeDetails.opening_hours || null,
+                            editorialSummary: summaryText,
+                            city: addrParts.city,
+                            country: addrParts.country,
+                            countryCode: addrParts.countryCode,
+                            googleTypes: placeDetails.types || [],
+                        };
+                        onSelect(enrichedPlace);
+                    } else {
+                        const photos = placePhotoProxyUrls(placeDetails.place_id, 5);
+                        const photoUrl = photos.length > 0 ? photos[0] : null;
 
+                        const enrichedPlace = {
+                            ...place,
+                            name: placeDetails.name,
+                            address: placeDetails.formatted_address,
+                            image: photoUrl,
+                            photos: photos,
+                            location: {
+                                lat: placeDetails.geometry.location.lat(),
+                                lng: placeDetails.geometry.location.lng(),
+                            },
+                            googleUrl: placeDetails.url,
+                        };
 
-
-                    const photos = placeDetails.photos?.map(p => p.getUrl({ maxWidth: 400 })) || [];
-                    const photoUrl = photos.length > 0 ? photos[0] : null;
-
-                    const enrichedPlace = {
-                        ...place,
-                        name: placeDetails.name,
-                        address: placeDetails.formatted_address,
-                        image: photoUrl,
-                        photos: photos,
-                        location: {
-                            lat: placeDetails.geometry.location.lat(),
-                            lng: placeDetails.geometry.location.lng()
-                        },
-                        googleUrl: placeDetails.url
-                    };
-
-                    onSelect(enrichedPlace);
+                        onSelect(enrichedPlace);
+                    }
                 } else {
                     // Fallback to basic info
                     onSelect(place);
@@ -201,7 +290,14 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                     type="text"
                     value={input}
                     onChange={(e) => handleSearch(e.target.value)}
-                    placeholder={t('search_places_placeholder') || "Search for restaurants, cafes..."}
+                    placeholder={
+                        fetchExtendedBusinessDetails
+                            ? t(
+                                'business_onboarding_google_placeholder',
+                                'Search Google for your business name or address…'
+                            )
+                            : (t('search_places_placeholder') || 'Search for restaurants, cafes…')
+                    }
                     style={{
                         width: '100%',
                         padding: '12px 12px 12px 40px',
@@ -274,7 +370,7 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                     )}
 
                     {/* Partners Section */}
-                    {!loading && results.partners.length > 0 && (
+                    {showPartnerResults && !loading && results.partners.length > 0 && (
                         <div style={{ padding: '8px 0' }}>
                             <div style={{
                                 padding: '4px 12px',
@@ -304,10 +400,18 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                                 >
                                     <div style={{
                                         width: '40px', height: '40px', borderRadius: '8px',
-                                        backgroundImage: `url(${item.image || 'https://via.placeholder.com/40'})`,
-                                        backgroundSize: 'cover', backgroundPosition: 'center',
-                                        border: '1px solid var(--luxury-gold)'
-                                    }}></div>
+                                        overflow: 'hidden',
+                                        border: '1px solid var(--luxury-gold)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        background: 'var(--bg-card)'
+                                    }}>
+                                        <img 
+                                            src={item.image || 'https://via.placeholder.com/40'} 
+                                            alt={item.name}
+                                            referrerPolicy="no-referrer"
+                                            style={{ minWidth: '100%', minHeight: '100%', objectFit: 'cover' }}
+                                        />
+                                    </div>
                                     <div>
                                         <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
                                             {item.name} <span style={{ color: 'var(--primary)', fontSize: '0.8em' }}>✓</span>
@@ -323,7 +427,10 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
 
                     {/* Google Section */}
                     {!loading && results.google.length > 0 && (
-                        <div style={{ padding: '8px 0', borderTop: results.partners.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
+                        <div style={{
+                            padding: '8px 0',
+                            borderTop: (showPartnerResults && results.partners.length > 0) ? '1px solid var(--border-color)' : 'none',
+                        }}>
                             <div style={{
                                 padding: '4px 12px',
                                 fontSize: '0.75rem',
@@ -333,7 +440,10 @@ const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishme
                                 letterSpacing: '0.5px',
                                 display: 'flex', alignItems: 'center', gap: '6px'
                             }}>
-                                <FaGoogle /> Google Places
+                                <FaGoogle />{' '}
+                                {fetchExtendedBusinessDetails
+                                    ? t('google_maps_business_results', 'Google Maps — businesses')
+                                    : 'Google Places'}
                             </div>
                             {results.google.map((item) => (
                                 <div

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
@@ -9,16 +10,19 @@ import { useTheme } from '../context/ThemeContext';
 import {
     FaArrowLeft, FaCamera, FaMicrophone,
     FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile,
-    FaDownload, FaStop, FaPlus, FaArrowDown
+    FaDownload, FaStop, FaPlus, FaArrowDown, FaKeyboard
 } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
 import NewReportModal from '../components/NewReportModal';
+import SharedContentBubble from '../components/SharedContentBubble';
 import './Chat.css';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const Chat = () => {
+    const { t, i18n } = useTranslation();
     const { userId } = useParams();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
@@ -64,6 +68,93 @@ const Chat = () => {
     const imageInputRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingIntervalRef = useRef(null);
+
+    // Dynamic Viewport & Emoji States
+    const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(320);
+    const [lockTop, setLockTop] = useState(null);
+    const containerRef = useRef(null);
+    const composerRef = useRef(null);
+    const maxVisibleHeight = useRef(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+    // Visual Viewport tracking (mobile only — avoids locking body scroll on desktop)
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
+        if (!window.visualViewport) return;
+        const vv = window.visualViewport;
+
+        const handleResize = () => {
+            if (containerRef.current) {
+                containerRef.current.style.height = `${vv.height}px`;
+                containerRef.current.style.top = `${vv.offsetTop}px`;
+            }
+
+            if (vv.height > maxVisibleHeight.current) {
+                maxVisibleHeight.current = vv.height;
+            }
+
+            const diff = maxVisibleHeight.current - vv.height;
+            if (diff > 150) {
+                setKeyboardHeight(diff);
+            }
+
+            window.scrollTo(0, 0);
+        };
+
+        vv.addEventListener('resize', handleResize);
+        vv.addEventListener('scroll', handleResize);
+        handleResize();
+
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            vv.removeEventListener('resize', handleResize);
+            vv.removeEventListener('scroll', handleResize);
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+        };
+    }, []);
+
+    const handleEmojiToggle = () => {
+        if (!composerRef.current || !containerRef.current) return;
+        
+        const rect = composerRef.current.getBoundingClientRect();
+        const containerRect = containerRef.current.getBoundingClientRect();
+        setLockTop(rect.top - containerRect.top);
+
+        if (showEmojiPanel) {
+            setShowEmojiPanel(false);
+            inputRef.current?.focus();
+        } else {
+            setShowEmojiPanel(true);
+            inputRef.current?.blur();
+        }
+
+        setTimeout(() => {
+            setLockTop(null);
+        }, 400);
+    };
+
+    const handleEmojiClick = (emojiData) => {
+        const emoji = emojiData.emoji;
+        const input = inputRef.current;
+        
+        setNewMessage(prevMessage => {
+            if (input) {
+                const s = input.selectionStart ?? prevMessage.length;
+                const e = input.selectionEnd ?? prevMessage.length;
+                
+                setTimeout(() => {
+                    input.setSelectionRange(s + emoji.length, s + emoji.length);
+                }, 10);
+                
+                return prevMessage.slice(0, s) + emoji + prevMessage.slice(e);
+            } else {
+                return prevMessage + emoji;
+            }
+        });
+    };
 
     const initInFlightRef = useRef(false);
     useEffect(() => {
@@ -187,7 +278,9 @@ const Chat = () => {
         if (messageId) {
             setNewMessage('');
             setReplyTo(null);
-            setTimeout(() => inputRef.current?.focus(), 100);
+            if (!showEmojiPanel) {
+                setTimeout(() => inputRef.current?.focus(), 100);
+            }
         }
         setTypingStatus(conversationId, false);
     };
@@ -237,7 +330,7 @@ const Chat = () => {
             }, 500);
         } catch (error) {
             console.error('Error uploading image:', error);
-            showToast('Failed to upload image. Try again.', 'error');
+            showToast(t('failed_upload_image'), 'error');
             setUploading(false);
             setUploadProgress(0);
         } finally {
@@ -277,7 +370,7 @@ const Chat = () => {
                     setUploading(false);
                 } catch (error) {
                     console.error('Error uploading voice:', error);
-                    showToast('Failed to send voice message. Try again.', 'error');
+                    showToast(t('failed_send_voice'), 'error');
                     setUploading(false);
                 }
             };
@@ -293,7 +386,7 @@ const Chat = () => {
 
         } catch (error) {
             console.error('Error starting recording:', error);
-            showToast('Could not access microphone.', 'error');
+            showToast(t('no_mic_access'), 'error');
         }
     };
 
@@ -312,11 +405,11 @@ const Chat = () => {
     };
 
     const formatLastSeen = (timestamp) => {
-        if (!timestamp) return 'Offline';
+        if (!timestamp) return t('offline');
         const date = timestamp.toDate();
         const now = new Date();
         const diff = now - date;
-        if (diff < 60000) return 'Just now';
+        if (diff < 60000) return t('just_now');
         if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`;
         if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
         return date.toLocaleDateString();
@@ -330,12 +423,12 @@ const Chat = () => {
 
     if (loading && !conversationError) {
         return (
-            <div className="chat-container">
+            <div dir="ltr" className="chat-container">
                 <div className="chat-header">
                     <button className="back-btn" onClick={() => navigate('/messages')}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
-                    <div className="header-info"><h3>Loading...</h3></div>
+                    <div className="header-info" style={{ minWidth: 0, flex: 1 }}><h3>{t("loading")}</h3></div>
                 </div>
             </div>
         );
@@ -343,12 +436,12 @@ const Chat = () => {
 
     if (conversationError) {
         return (
-            <div className="chat-container">
+            <div dir="ltr" className="chat-container">
                 <div className="chat-header">
                     <button className="back-btn" onClick={() => navigate('/messages')}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
-                    <div className="header-info"><h3>Chat</h3></div>
+                    <div className="header-info" style={{ minWidth: 0, flex: 1 }}><h3>{t("chat_title")}</h3></div>
                 </div>
                 <div style={{ padding: '2rem', textAlign: 'center' }}>
                     <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>Couldn&apos;t start conversation.</p>
@@ -372,7 +465,7 @@ const Chat = () => {
     }
 
     return (
-        <div className="chat-container">
+        <div ref={containerRef} className="chat-container chat-root">
             <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
 
             {/* Header */}
@@ -399,20 +492,17 @@ const Chat = () => {
                 </button>
                 {otherUser && (
                     <>
-                        <div className="header-avatar">
-                            <img
-                                src={getSafeAvatar(otherUser)}
+                        <div className="header-avatar" style={{ position: 'relative', display: 'flex', width: '42px', height: '42px', minWidth: '42px', minHeight: '42px', flexShrink: 0, marginRight: '12px' }}>
+                            <UserAvatar
+                                user={otherUser}
                                 alt={otherUser.displayName}
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                                }}
+                                style={{ width: '42px', height: '42px', minWidth: '42px', minHeight: '42px', maxWidth: '42px', maxHeight: '42px', borderRadius: '50%', objectFit: 'cover' }}
                             />
-                            {otherUser.isOnline && <div className="online-dot" />}
+                            {otherUser.isOnline && <div className="online-dot" style={{ position: 'absolute', bottom: -2, right: -2, width: '12px', height: '12px', background: '#10b981', borderRadius: '50%', border: '2px solid var(--bg-card)' }} />}
                         </div>
-                        <div className="header-info" style={{ textAlign: 'left' }}>
+                        <div className="header-info" style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
                             <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{otherUser.displayName}</h3>
-                            <p className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>{otherUserTyping ? 'typing...' : otherUser.isOnline ? 'Online' : formatLastSeen(otherUser.lastSeen)}</p>
+                            <p className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>{otherUserTyping ? t('typing') : otherUser.isOnline ? t('online') : formatLastSeen(otherUser.lastSeen)}</p>
                         </div>
                     </>
                 )}
@@ -420,7 +510,7 @@ const Chat = () => {
             </div>
 
             {/* Messages */}
-            <div className="messages-area" onScroll={handleScroll}>
+            <div className="messages-area" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 80}px` : '80px' }}>
                 {messages.map((msg, index) => {
                     const isOwn = msg.senderId === currentUser?.uid;
                     const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
@@ -445,9 +535,14 @@ const Chat = () => {
                                     </div>
                                 )}
 
-                                <div className="message-bubble" style={{ position: 'relative' }}>
+                                <div className="message-bubble" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                    {msg.type === 'shared_content' && (
+                                        <div style={{ marginBottom: msg.text ? '8px' : '0' }}>
+                                            <SharedContentBubble data={msg.sharedContent} />
+                                        </div>
+                                    )}
                                     {msg.type === 'image' && <img src={msg.text} alt="Shared" className="message-image" />}
-                                    {msg.type === 'text' && <p className="message-text">{msg.text}</p>}
+                                    
                                     {msg.type === 'voice' && (
                                         <div className="voice-message">
                                             <audio controls src={msg.text} style={{ maxWidth: '250px' }} />
@@ -458,15 +553,24 @@ const Chat = () => {
                                         <div className="file-message">
                                             <FaFile size={24} />
                                             <div className="file-info">
-                                                <p className="file-name">{msg.fileName || 'File'}</p>
+                                                <p className="file-name">{msg.fileName || t('file_default')}</p>
                                                 <p className="file-size">{formatFileSize(msg.fileSize || 0)}</p>
                                             </div>
                                             <a href={msg.text} download target="_blank" rel="noreferrer"><FaDownload /></a>
                                         </div>
                                     )}
-                                    <div className="message-meta">
-                                        <span className="message-time">{formatTime(msg.createdAt)}</span>
-                                        {isOwn && <span className="message-status">{msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}</span>}
+
+                                    {/* Inline Text and Time */}
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: '4px 12px' }}>
+                                        {(msg.type === 'text' || (msg.type === 'shared_content' && msg.text)) && (
+                                            <span className="message-text" style={{ flex: '1 1 auto', margin: 0, minWidth: 0, wordBreak: 'break-word', paddingTop: '2px' }}>
+                                                {msg.text}
+                                            </span>
+                                        )}
+                                        <div className="message-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: '0 0 0 auto', paddingBottom: 0, flexShrink: 0 }}>
+                                            <span className="message-time" style={{ fontSize: '0.65rem', opacity: 0.8, whiteSpace: 'nowrap' }}>{formatTime(msg.createdAt)}</span>
+                                            {isOwn && <span className="message-status" style={{ fontSize: '0.7rem', display: 'flex' }}>{msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}</span>}
+                                        </div>
                                     </div>
 
                                     {/* Reaction Badge */}
@@ -541,11 +645,10 @@ const Chat = () => {
 
                 {showScrollBottom && (
                     <button
+                        type="button"
+                        className="chat-scroll-fab"
                         onClick={scrollToBottom}
                         style={{
-                            position: 'fixed',
-                            bottom: '80px', // Above input area
-                            right: '20px',
                             background: 'var(--accent-color)',
                             color: 'white',
                             border: 'none',
@@ -557,7 +660,6 @@ const Chat = () => {
                             justifyContent: 'center',
                             cursor: 'pointer',
                             boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-                            zIndex: 1001,
                             transition: 'all 0.3s ease'
                         }}
                     >
@@ -572,7 +674,7 @@ const Chat = () => {
                         <div className="reply-bar-content">
                             <div className="reply-line" />
                             <div className="reply-info">
-                                <p className="reply-label">Replying to</p>
+                                <p className="reply-label">{t("replying_to")}</p>
                                 <p className="reply-message">{replyTo.text}</p>
                             </div>
                         </div>
@@ -585,18 +687,37 @@ const Chat = () => {
                 uploading && (
                     <div className="upload-progress-bar">
                         <div className="progress-fill" style={{ width: `${uploadProgress}%` }}></div>
-                        <span>Uploading... {uploadProgress}%</span>
+                        <span>{t("uploading")} {uploadProgress}%</span>
                     </div>
                 )
             }
 
-            {/* Input Area - WhatsApp Style - Fixed Layout */}
-            <div className="chat-input-area">
-                <div className="chat-input-inner">
-                    {/* Recording UI */}
+            {/* ── COMPOSER (Pixel-perfect locked) ── */}
+            <div ref={composerRef} style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                zIndex: 100,
+                background: 'var(--bg-darker)',
+                borderTop: '1px solid var(--border-color)',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+                willChange: 'top, bottom',
+                ...(lockTop !== null 
+                    ? { top: `${lockTop}px`, bottom: 'auto' } 
+                    : { top: 'auto', bottom: showEmojiPanel ? `${keyboardHeight}px` : '0px' })
+            }}>
+                <div className="input-wrapper" style={{
+                    flex: 1, display: 'flex', alignItems: 'center',
+                    background: 'var(--bg-input)', borderRadius: '24px', padding: '4px 12px',
+                    border: '1px solid var(--border-color)'
+                }}>
                     {isRecording ? (
-                        <div className="recording-ui">
-                            <div className="recording-info">
+                        <div className="recording-ui" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <div className="recording-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div className="recording-pulse"></div>
                                 <span className="recording-timer">{formatDuration(recordingDuration)}</span>
                             </div>
@@ -605,8 +726,7 @@ const Chat = () => {
                             </button>
                         </div>
                     ) : (
-                        /* Normal Input UI */
-                        <div className="chat-input-pill">
+                        <>
                             <input
                                 ref={inputRef}
                                 type="text"
@@ -614,37 +734,67 @@ const Chat = () => {
                                 autoComplete="off"
                                 autoCorrect="off"
                                 enterKeyHint="send"
-                                placeholder="Message"
+                                placeholder={t("message_placeholder")}
                                 value={newMessage}
                                 onChange={(e) => handleTyping(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                                onFocus={() => showEmojiPanel && setShowEmojiPanel(false)}
                                 className="chat-input-field"
                             />
-
-                            {/* Attachments */}
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-
-                                <button onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '8px', display: 'flex' }}><FaCamera style={{ fontSize: '1.2rem' }} /></button>
-                            </div>
-                        </div>
+                            
+                            <button type="button" onClick={handleEmojiToggle} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                                {showEmojiPanel ? <FaKeyboard /> : '😊'}
+                            </button>
+                            
+                            <button onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 4px', fontSize: '1.2rem', display: 'flex' }}>
+                                <FaCamera />
+                            </button>
+                        </>
                     )}
-
-                    {/* Send / Mic Button */}
-                    <button
-                        type="button"
-                        onPointerDown={(e) => e.preventDefault()}
-                        onClick={newMessage.trim() ? handleSendMessage : startRecording}
-                        style={{
-                            background: isRecording ? '#ef4444' : 'var(--primary)',
-                            color: 'white', border: 'none', borderRadius: '50%',
-                            width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-                        }}
-                    >
-                        {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />)}
-                    </button>
                 </div>
 
+                <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={newMessage.trim() ? handleSendMessage : startRecording}
+                    style={{
+                        background: isRecording ? '#ef4444' : 'var(--primary)',
+                        color: 'white', border: 'none', borderRadius: '50%',
+                        width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+                    }}
+                >
+                    {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />)}
+                </button>
+            </div>
+
+            {/* ── EMOJI PANEL ── */}
+            <div style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
+                overflow: 'hidden',
+                background: 'var(--bg-card)',
+                borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
+                zIndex: 99,
+                willChange: 'top, bottom',
+                ...(lockTop !== null
+                    ? { top: `${lockTop + (composerRef.current?.offsetHeight || 60)}px`, bottom: 'auto' }
+                    : { top: 'auto', bottom: '0px' })
+                }}
+            >
+                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
+                    <LazyEmojiPicker
+                        onEmojiClick={handleEmojiClick}
+                        width="100%"
+                        height={`${keyboardHeight}px`}
+                        searchDisabled={true}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                        categories={[{ name: 'Smileys & Emotion', category: 'smileys_people' }]}
+                    />
+                </Suspense>
             </div>
         </div>
     );

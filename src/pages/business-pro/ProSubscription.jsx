@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCrown, FaBolt, FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
@@ -9,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 const PARTNER_PLANS = BASE_SUBSCRIPTION_PLANS.filter(p => p.type === 'business' && p.price > 0);
 
 const ProSubscription = () => {
+    const { t } = useTranslation();
     const { userProfile } = useAuth();
     const { showToast } = useToast();
     const [loading, setLoading] = useState(null);
@@ -46,7 +48,7 @@ const ProSubscription = () => {
         window.open('https://billing.stripe.com/p/login/test_...', '_blank');
     };
 
-    const currentPlanLabel = isElite ? '👑 Elite Business' : isProfessional ? '⚡ Professional Business' : '🎁 Free Business';
+    const currentPlanLabel = isElite ? '👑 ' + t('Elite Business', 'Elite Business') : isProfessional ? '⚡ ' + t('Professional Business', 'Professional Business') : '🎁 ' + t('Free Business', 'Free Business');
 
     return (
         <div>
@@ -69,7 +71,7 @@ const ProSubscription = () => {
             }}>
                 <div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                        Current Plan
+                        {t('Current Plan', 'Current Plan')}
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isElite ? 'var(--stat-reviews)' : isProfessional ? 'var(--primary)' : 'var(--text-muted)' }}>
                         {currentPlanLabel}
@@ -77,8 +79,8 @@ const ProSubscription = () => {
                     {(isElite || isProfessional) && (
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6 }}>
                             {isElite
-                                ? '1 permanent offer slot • Unlimited display time • Priority placement'
-                                : '1 offer slot × 50h/week • Buy extra hours or slots as needed'}
+                                ? t('Elite_Plan_Features', '1 permanent offer slot • Unlimited display time • Priority placement')
+                                : t('Pro_Business_Plan_Features', '1 offer slot × 50h/week • Buy extra hours or slots as needed')}
                         </div>
                     )}
                 </div>
@@ -89,14 +91,14 @@ const ProSubscription = () => {
                         onClick={handleManageBilling}
                         style={{ padding: '10px 18px', gap: 8, fontSize: '0.875rem' }}
                     >
-                        <FaExternalLinkAlt size={12} /> Manage Billing
+                        <FaExternalLinkAlt size={12} /> {t('Manage Billing', 'Manage Billing')}
                     </button>
                 )}
             </div>
 
             {/* Plans Comparison - theme tokens for text/surfaces */}
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 20, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {isElite ? 'Plan Overview' : 'Available Plans'}
+                {isElite ? t('Plan Overview', 'Plan Overview') : t('Available Plans', 'Available Plans')}
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
@@ -121,7 +123,7 @@ const ProSubscription = () => {
                                     color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
                                     fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em'
                                 }}>
-                                    CURRENT
+                                    {t('CURRENT', 'CURRENT')}
                                 </div>
                             )}
                             {isRecommended && !isCurrent && (
@@ -131,17 +133,17 @@ const ProSubscription = () => {
                                     color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
                                     fontSize: '0.7rem', fontWeight: 800
                                 }}>
-                                    RECOMMENDED
+                                    {t('RECOMMENDED', 'RECOMMENDED')}
                                 </div>
                             )}
 
                             {/* Plan header */}
                             <div style={{ marginBottom: 16 }}>
                                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
-                                    {plan.name}
+                                    {t(plan.name, plan.name)}
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    {plan.description}
+                                    {t(plan.description, plan.description)}
                                 </div>
                             </div>
 
@@ -150,10 +152,10 @@ const ProSubscription = () => {
                                 <span style={{ fontSize: '2.2rem', fontWeight: 900, color: isCurrent ? 'var(--stat-reviews)' : 'var(--text-main)' }}>
                                     ${Math.round(plan.price * 1.53)} AUD
                                 </span>
-                                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginLeft: 6 }}>/ month</span>
+                                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginLeft: 6 }}>/ {t('month', 'month')}</span>
                                 {plan.discount > 0 && (
                                     <div style={{ fontSize: '0.8rem', color: 'var(--color-success)', marginTop: 4 }}>
-                                        ✨ First month FREE
+                                        ✨ {t('First month FREE', 'First month FREE')}
                                     </div>
                                 )}
                             </div>
@@ -163,7 +165,7 @@ const ProSubscription = () => {
                                 {(plan.features || []).map((f, i) => (
                                     <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                                         <FaCheck style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: 2 }} />
-                                        {f}
+                                        {t(f, f)}
                                     </li>
                                 ))}
                             </ul>
@@ -171,7 +173,7 @@ const ProSubscription = () => {
                             {/* CTA */}
                             {isCurrent ? (
                                 <button type="button" className="ui-btn ui-btn--secondary" disabled style={{ padding: '12px', fontSize: '0.875rem', cursor: 'default', opacity: 0.8 }}>
-                                    Current Plan
+                                    {t('Current Plan', 'Current Plan')}
                                 </button>
                             ) : (
                                 <button
@@ -186,7 +188,7 @@ const ProSubscription = () => {
                                         color: isRecommended ? 'var(--text-white)' : undefined
                                     }}
                                 >
-                                    {loading === plan.id ? 'Loading...' : plan.tier === 'elite' ? 'Upgrade to Elite →' : 'Start with Professional →'}
+                                    {loading === plan.id ? t('loading', 'Loading...') : plan.tier === 'elite' ? t('Upgrade to Elite', 'Upgrade to Elite') + ' →' : t('Start with Professional', 'Start with Professional') + ' →'}
                                 </button>
                             )}
                         </div>

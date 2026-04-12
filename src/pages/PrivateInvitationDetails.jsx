@@ -69,13 +69,13 @@ const PrivateInvitationDetails = () => {
                     setInvitedUsers(users);
                 }
             } else {
-                navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
+                navigate('/', { replace: true, state: { message: t('invitation_ended') } });
             }
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [id, navigate, currentUser]);
+    }, [id, navigate, currentUser, t]);
 
     // Fetch Lottie data
     useEffect(() => {
@@ -150,8 +150,8 @@ const PrivateInvitationDetails = () => {
             )}
 
             {/* Header / Nav */}
-            <div className="private-details-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10, 10, 15, 0.4)', backdropFilter: 'blur(15px)' }}>
-                <button onClick={() => navigate(-1)} className="back-circle-btn" style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <div className="private-details-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-body)', backdropFilter: 'blur(15px)', borderBottom: '1px solid var(--border-color)' }}>
+                <button onClick={() => navigate(-1)} className="back-circle-btn" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <FaArrowLeft />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(251, 191, 36, 0.1)', color: 'var(--luxury-gold)', padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '800', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
@@ -162,7 +162,7 @@ const PrivateInvitationDetails = () => {
             {/* Media Hero */}
             <div className="private-hero-section" style={{ position: 'relative', width: '100%', height: '280px', overflow: 'hidden', borderRadius: '0 0 40px 40px', marginBottom: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                 {(invitation.customImage || invitation.restaurantImage || invitation.image) ? (
-                    <img src={invitation.customImage || invitation.restaurantImage || invitation.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={invitation.customImage || invitation.restaurantImage || invitation.image} alt="" className="private-hero-img-animated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                     <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #1e1b4b, #312e81)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <FaLock size={60} color="rgba(255,255,255,0.2)" />
@@ -173,16 +173,15 @@ const PrivateInvitationDetails = () => {
 
             {/* Content Area */}
             <div className="private-details-content" style={{ padding: '0 15px' }}>
-                <div className="reveal-text" style={{ transitionDelay: '0.2s' }}>
+                <div className="reveal-text private-title-heavy reveal-delay-1">
                     <h1 style={{
                         fontFamily: templateStyles?.layout?.fontFamily || 'inherit',
                         fontSize: '2.2rem',
                         fontWeight: '900',
                         textAlign: templateStyles?.layout?.textAlign || 'center',
-                        color: 'white',
+                        color: 'var(--text-main)',
                         marginBottom: '10px',
                         lineHeight: '1.1',
-                        textShadow: '0 4px 15px rgba(0,0,0,0.5)'
                     }}>
                         {invitation.title}
                     </h1>
@@ -208,29 +207,29 @@ const PrivateInvitationDetails = () => {
 
                 {/* Description - Glassy card */}
                 {invitation.description && (
-                    <div className="reveal-text" style={{ transitionDelay: '0.4s', marginBottom: '2rem', background: 'rgba(255,255,255,0.03)', padding: '1.2rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }}>
-                        <h3 style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '10px' }}>{t('message_to_friends', 'Message to Friends')}</h3>
-                        <p style={{ color: 'rgba(255,255,255,0.95)', lineHeight: '1.6', fontSize: '1.1rem', fontWeight: '500' }}>{invitation.description}</p>
+                    <div className="reveal-text premium-glass-card reveal-delay-2" style={{ marginBottom: '2rem', padding: '1.2rem', borderRadius: '24px' }}>
+                        <h3 style={{ fontSize: '0.75rem', color: 'var(--luxury-gold)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '10px' }}>{t('message_to_friends', 'Message to Friends')}</h3>
+                        <p style={{ color: 'var(--text-main)', lineHeight: '1.6', fontSize: '1.1rem', fontWeight: '500' }}>{invitation.description}</p>
                     </div>
                 )}
 
                 {/* RSVP Actions for Invitees */}
                 {!isHost && (
-                    <div className="rsvp-card reveal-text" style={{
-                        transitionDelay: '0.5s',
+                    <div className="rsvp-card reveal-text reveal-delay-3" style={{
                         background: myRSVP === 'accepted' ? 'rgba(16, 185, 129, 0.1)' : myRSVP === 'declined' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.05)',
                         border: `1px solid ${myRSVP === 'accepted' ? 'rgba(16, 185, 129, 0.3)' : myRSVP === 'declined' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
                         padding: '24px', borderRadius: '28px', marginBottom: '30px', textAlign: 'center', backdropFilter: 'blur(10px)'
                     }}>
                         {myRSVP === 'pending' ? (
                             <>
-                                <h4 style={{ color: 'white', marginBottom: '15px', fontWeight: '800' }}>
+                                <h4 style={{ color: 'var(--text-main)', marginBottom: '15px', fontWeight: '800' }}>
                                     {t('will_you_attend?')}
                                 </h4>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button
                                         onClick={() => handleRSVP('accepted')}
                                         disabled={isResponding}
+                                        className="vip-btn"
                                         style={{
                                             flex: 1, height: '50px', borderRadius: '14px', border: 'none',
                                             background: '#10b981', color: 'white',
@@ -255,12 +254,13 @@ const PrivateInvitationDetails = () => {
                         ) : myRSVP === 'accepted' ? (
                             <>
                                 <div style={{ color: '#10b981', fontSize: '2rem', marginBottom: '10px' }}>🎉</div>
-                                <h4 style={{ color: 'white', marginBottom: '10px', fontWeight: '800' }}>{t('you_are_going!')}</h4>
-                                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('invitation_accepted_hint')}</p>
-                                <button
-                                    onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
-                                    style={{
-                                        width: '100%', height: '54px', borderRadius: '16px', border: 'none',
+                                <h4 style={{ color: 'var(--text-main)', marginBottom: '10px', fontWeight: '800' }}>{t('you_are_going!')}</h4>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('invitation_accepted_hint')}</p>
+                                    <button
+                                        onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
+                                        className="vip-btn vip-btn-primary"
+                                        style={{
+                                            width: '100%', height: '54px', borderRadius: '16px', border: 'none',
                                         background: 'var(--primary)', color: 'white',
                                         fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                                         boxShadow: '0 10px 20px rgba(139, 92, 246, 0.3)', cursor: 'pointer'
@@ -272,8 +272,8 @@ const PrivateInvitationDetails = () => {
                         ) : (
                             <>
                                 <div style={{ color: '#ef4444', fontSize: '2rem', marginBottom: '10px' }}>👋</div>
-                                <h4 style={{ color: 'white', marginBottom: '10px', fontWeight: '800' }}>{t('you_declined')}</h4>
-                                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('hope_to_see_you_next_time')}</p>
+                                <h4 style={{ color: 'var(--text-main)', marginBottom: '10px', fontWeight: '800' }}>{t('you_declined')}</h4>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('hope_to_see_you_next_time')}</p>
                                 <button
                                     onClick={() => navigate('/')}
                                     style={{
@@ -292,8 +292,8 @@ const PrivateInvitationDetails = () => {
                 <PrivateInvitationInfoGrid invitation={invitation} t={t} />
 
                 {/* Invited Friends List */}
-                <div className="invited-friends-section" style={{ marginBottom: '2rem' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '15px', color: 'white' }}>{t('invited_friends')}</h3>
+                <div className="invited-friends-section premium-glass-card reveal-text reveal-delay-4" style={{ marginBottom: '2rem', padding: '20px', borderRadius: '24px' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '15px', color: 'var(--text-main)' }}>{t('invited_friends')}</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {invitedUsers.length > 0 ? invitedUsers.map(user => {
                             const badge = getStatusBadge(user.rsvpStatus);
@@ -302,7 +302,7 @@ const PrivateInvitationDetails = () => {
                                     <img src={getSafeAvatar(user)} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{user.display_name}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{user.username || 'user'}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{user.username || t('username_fallback', 'user')}</div>
                                     </div>
                                     <div style={{
                                         fontSize: '0.7rem',
@@ -327,6 +327,7 @@ const PrivateInvitationDetails = () => {
                     <div style={{ display: 'flex', gap: '12px', marginTop: '8px', marginBottom: '2rem' }}>
                         <button
                             onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
+                            className="vip-btn vip-btn-primary"
                             style={{
                                 flex: 1, height: '54px', borderRadius: '18px', border: 'none',
                                 background: 'var(--primary)', color: 'white',

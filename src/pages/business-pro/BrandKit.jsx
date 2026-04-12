@@ -12,147 +12,123 @@ import DraftSavedModal from '../../components/DraftSavedModal';
 // textColor = color used for headings/badges on dark card backgrounds
 const BRAND_TEMPLATES = [
     {
-        id: 'golden-hour', name: 'Golden Hour', emoji: '🌟', desc: 'Bright Gold & Yellow',
-        preview: ['#f59e0b', '#fde047'],
+        id: 'golden_elegance', name: 'Golden Elegance', emoji: '✨', desc: 'Luxurious gold & amber',
+        preview: ['#d4af37', '#997a00'],
         kit: {
-            primaryColor: '#f59e0b', secondaryColor: '#fde047', textColor: '#fef3c7',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '40px',
-            tabBorderColor: '#f59e0b', tabBgColor: '#fffbeb', tabTextColor: '#f59e0b',
-            joinBtnBg: '#f59e0b', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#f59e0b',
-            starColor: '#fde047', btnTextColor: '#ffffff', btnBorderColor: '#f59e0b',
-        }
-    },
-    {
-        id: 'neon-cyber', name: 'Neon Cyber', emoji: '⚡', desc: 'Vibrant Cyan',
-        preview: ['#06b6d4', '#22d3ee'],
-        kit: {
-            primaryColor: '#06b6d4', secondaryColor: '#22d3ee', textColor: '#cffafe',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '8px',
-            tabBorderColor: '#06b6d4', tabBgColor: '#ecfeff', tabTextColor: '#06b6d4',
-            joinBtnBg: '#06b6d4', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#06b6d4',
-            starColor: '#22d3ee', btnTextColor: '#ffffff', btnBorderColor: '#06b6d4',
-        }
-    },
-    {
-        id: 'crimson-ruby', name: 'Crimson Ruby', emoji: '🍷', desc: 'Vibrant Red',
-        preview: ['#ef4444', '#fca5a5'],
-        kit: {
-            primaryColor: '#ef4444', secondaryColor: '#fca5a5', textColor: '#fee2e2',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '12px',
-            tabBorderColor: '#ef4444', tabBgColor: '#fef2f2', tabTextColor: '#ef4444',
-            joinBtnBg: '#ef4444', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#ef4444',
-            starColor: '#fca5a5', btnTextColor: '#ffffff', btnBorderColor: '#ef4444',
-        }
-    },
-    {
-        id: 'sapphire-glow', name: 'Sapphire Glow', emoji: '💎', desc: 'Bright Vivid Blue',
-        preview: ['#3b82f6', '#93c5fd'],
-        kit: {
-            primaryColor: '#3b82f6', secondaryColor: '#93c5fd', textColor: '#eff6ff',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '40px',
-            tabBorderColor: '#3b82f6', tabBgColor: '#eff6ff', tabTextColor: '#3b82f6',
-            joinBtnBg: '#3b82f6', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#3b82f6',
-            starColor: '#93c5fd', btnTextColor: '#ffffff', btnBorderColor: '#3b82f6',
-        }
-    },
-    {
-        id: 'emerald-mint', name: 'Emerald Mint', emoji: '🌿', desc: 'Vivid Green',
-        preview: ['#10b981', '#6ee7b7'],
-        kit: {
-            primaryColor: '#10b981', secondaryColor: '#6ee7b7', textColor: '#ecfdf5',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '6px',
-            tabBorderColor: '#10b981', tabBgColor: '#ecfdf5', tabTextColor: '#10b981',
-            joinBtnBg: '#10b981', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#10b981',
-            starColor: '#6ee7b7', btnTextColor: '#ffffff', btnBorderColor: '#10b981',
-        }
-    },
-    {
-        id: 'hot-pink', name: 'Hot Pink', emoji: '🥀', desc: 'Bright Pink Glow',
-        preview: ['#ec4899', '#f9a8d4'],
-        kit: {
-            primaryColor: '#ec4899', secondaryColor: '#f9a8d4', textColor: '#fce7f3',
+            primaryColor: '#d4af37', secondaryColor: '#997a00', textColor: '#ffffff',
             fontFamily: "system-ui, sans-serif", buttonStyle: '24px',
-            tabBorderColor: '#ec4899', tabBgColor: '#fdf2f8', tabTextColor: '#ec4899',
-            joinBtnBg: '#ec4899', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#ec4899',
-            starColor: '#f9a8d4', btnTextColor: '#ffffff', btnBorderColor: '#ec4899',
+            tabBorderColor: '#d4af37', tabBgColor: 'rgba(212,175,55,0.1)', tabTextColor: '#d4af37',
+            joinBtnBg: '#d4af37', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#d4af37',
+            starColor: '#d4af37', btnTextColor: '#ffffff', btnBorderColor: '#d4af37',
         }
     },
     {
-        id: 'starlight-white', name: 'Starlight White', emoji: '✨', desc: 'Pure White & Silver',
-        preview: ['#ffffff', '#e2e8f0'],
+        id: 'ruby_velvet', name: 'Ruby Velvet', emoji: '🍷', desc: 'Rich burgundy crimson',
+        preview: ['#e11d48', '#be123c'],
         kit: {
-            primaryColor: '#ffffff', secondaryColor: '#e2e8f0', textColor: '#f8fafc',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '8px',
-            tabBorderColor: '#ffffff', tabBgColor: '#f8fafc', tabTextColor: '#000000',
-            joinBtnBg: '#ffffff', joinBtnTextColor: '#000000',
-            inviteBtnBg: '#0f172a', inviteBtnTextColor: '#ffffff',
-            starColor: '#e2e8f0', btnTextColor: '#000000', btnBorderColor: '#ffffff',
-        }
-    },
-    {
-        id: 'arcade-glow', name: 'Arcade Glow', emoji: '🕹️', desc: 'Lime Green Neon',
-        preview: ['#84cc16', '#bef264'],
-        kit: {
-            primaryColor: '#84cc16', secondaryColor: '#bef264', textColor: '#ecfccb',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '6px',
-            tabBorderColor: '#84cc16', tabBgColor: '#ecfccb', tabTextColor: '#84cc16',
-            joinBtnBg: '#84cc16', joinBtnTextColor: '#000000',
-            inviteBtnBg: '#000000', inviteBtnTextColor: '#84cc16',
-            starColor: '#bef264', btnTextColor: '#000000', btnBorderColor: '#84cc16',
-        }
-    },
-    {
-        id: 'mango-tango', name: 'Mango Tango', emoji: '🥭', desc: 'Vibrant Orange',
-        preview: ['#f97316', '#fdba74'],
-        kit: {
-            primaryColor: '#f97316', secondaryColor: '#fdba74', textColor: '#ffedd5',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '40px',
-            tabBorderColor: '#f97316', tabBgColor: '#fff7ed', tabTextColor: '#f97316',
-            joinBtnBg: '#f97316', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#f97316',
-            starColor: '#fdba74', btnTextColor: '#ffffff', btnBorderColor: '#f97316',
-        }
-    },
-    {
-        id: 'purple-rain', name: 'Purple Rain', emoji: '🔮', desc: 'Bright Amethyst',
-        preview: ['#a855f7', '#d8b4fe'],
-        kit: {
-            primaryColor: '#a855f7', secondaryColor: '#d8b4fe', textColor: '#faf5ff',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '12px',
-            tabBorderColor: '#a855f7', tabBgColor: '#faf5ff', tabTextColor: '#a855f7',
-            joinBtnBg: '#a855f7', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#a855f7',
-            starColor: '#d8b4fe', btnTextColor: '#ffffff', btnBorderColor: '#a855f7',
-        }
-    },
-    {
-        id: 'coral-reef', name: 'Coral Reef', emoji: '🪸', desc: 'Bright Coral Pink',
-        preview: ['#fb7185', '#fda4af'],
-        kit: {
-            primaryColor: '#fb7185', secondaryColor: '#fda4af', textColor: '#fff1f2',
+            primaryColor: '#e11d48', secondaryColor: '#be123c', textColor: '#ffffff',
             fontFamily: "system-ui, sans-serif", buttonStyle: '16px',
-            tabBorderColor: '#fb7185', tabBgColor: '#fff1f2', tabTextColor: '#fb7185',
-            joinBtnBg: '#fb7185', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#fb7185',
-            starColor: '#fda4af', btnTextColor: '#ffffff', btnBorderColor: '#fb7185',
+            tabBorderColor: '#e11d48', tabBgColor: 'rgba(225,29,72,0.1)', tabTextColor: '#e11d48',
+            joinBtnBg: '#e11d48', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#e11d48',
+            starColor: '#e11d48', btnTextColor: '#ffffff', btnBorderColor: '#e11d48',
         }
     },
     {
-        id: 'glacier-ice', name: 'Glacier Ice', emoji: '❄️', desc: 'Bright Light Blue',
-        preview: ['#0ea5e9', '#7dd3fc'],
+        id: 'royal_sapphire', name: 'Royal Sapphire', emoji: '💎', desc: 'Deep blue and azure',
+        preview: ['#3b82f6', '#1d4ed8'],
         kit: {
-            primaryColor: '#0ea5e9', secondaryColor: '#7dd3fc', textColor: '#f0f9ff',
-            fontFamily: "system-ui, sans-serif", buttonStyle: '40px',
-            tabBorderColor: '#0ea5e9', tabBgColor: '#e0f2fe', tabTextColor: '#0ea5e9',
-            joinBtnBg: '#0ea5e9', joinBtnTextColor: '#ffffff',
-            inviteBtnBg: '#ffffff', inviteBtnTextColor: '#0ea5e9',
-            starColor: '#7dd3fc', btnTextColor: '#ffffff', btnBorderColor: '#0ea5e9',
+            primaryColor: '#3b82f6', secondaryColor: '#1d4ed8', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '16px',
+            tabBorderColor: '#3b82f6', tabBgColor: 'rgba(59,130,246,0.1)', tabTextColor: '#3b82f6',
+            joinBtnBg: '#3b82f6', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#3b82f6',
+            starColor: '#3b82f6', btnTextColor: '#ffffff', btnBorderColor: '#3b82f6',
+        }
+    },
+    {
+        id: 'emerald_prestige', name: 'Emerald Prestige', emoji: '🌿', desc: 'Vibrant forest green',
+        preview: ['#10b981', '#047857'],
+        kit: {
+            primaryColor: '#10b981', secondaryColor: '#047857', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '16px',
+            tabBorderColor: '#10b981', tabBgColor: 'rgba(16,185,129,0.1)', tabTextColor: '#10b981',
+            joinBtnBg: '#10b981', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#10b981',
+            starColor: '#10b981', btnTextColor: '#ffffff', btnBorderColor: '#10b981',
+        }
+    },
+    {
+        id: 'amethyst_glow', name: 'Amethyst Glow', emoji: '🔮', desc: 'Sleek modern purple',
+        preview: ['#8b5cf6', '#6d28d9'],
+        kit: {
+            primaryColor: '#8b5cf6', secondaryColor: '#6d28d9', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '12px',
+            tabBorderColor: '#8b5cf6', tabBgColor: 'rgba(139,92,246,0.1)', tabTextColor: '#8b5cf6',
+            joinBtnBg: '#8b5cf6', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#8b5cf6',
+            starColor: '#8b5cf6', btnTextColor: '#ffffff', btnBorderColor: '#8b5cf6',
+        }
+    },
+    {
+        id: 'cyber_neon', name: 'Cyber Neon', emoji: '⚡', desc: 'Futuristic cyan magenta',
+        preview: ['#06b6d4', '#ec4899'],
+        kit: {
+            primaryColor: '#06b6d4', secondaryColor: '#ec4899', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '8px',
+            tabBorderColor: '#06b6d4', tabBgColor: 'rgba(6,182,212,0.1)', tabTextColor: '#06b6d4',
+            joinBtnBg: '#06b6d4', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#06b6d4',
+            starColor: '#06b6d4', btnTextColor: '#ffffff', btnBorderColor: '#06b6d4',
+        }
+    },
+    {
+        id: 'signature_orange', name: 'Signature Orange', emoji: '🔥', desc: 'Vibrant orange glow',
+        preview: ['#ea580c', '#f97316'],
+        kit: {
+            primaryColor: '#ea580c', secondaryColor: '#f97316', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '20px',
+            tabBorderColor: '#ea580c', tabBgColor: 'rgba(234, 88, 12, 0.1)', tabTextColor: '#ea580c',
+            joinBtnBg: '#ea580c', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#ea580c',
+            starColor: '#ea580c', btnTextColor: '#ffffff', btnBorderColor: '#ea580c',
+        }
+    },
+    {
+        id: 'cosmic_wave', name: 'Cosmic Wave', emoji: '🌌', desc: 'Purple to sky blue',
+        preview: ['#8b5cf6', '#0ea5e9'],
+        kit: {
+            primaryColor: '#8b5cf6', secondaryColor: '#0ea5e9', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '16px',
+            tabBorderColor: '#8b5cf6', tabBgColor: 'rgba(139, 92, 246, 0.1)', tabTextColor: '#8b5cf6',
+            joinBtnBg: '#8b5cf6', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#8b5cf6',
+            starColor: '#8b5cf6', btnTextColor: '#ffffff', btnBorderColor: '#8b5cf6',
+        }
+    },
+    {
+        id: 'copper_steel', name: 'Copper & Steel', emoji: '🛡️', desc: 'Orange & cool silver',
+        preview: ['#d97706', '#cbd5e1'],
+        kit: {
+            primaryColor: '#d97706', secondaryColor: '#94a3b8', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '12px',
+            tabBorderColor: '#d97706', tabBgColor: 'rgba(217, 119, 6, 0.1)', tabTextColor: '#d97706',
+            joinBtnBg: '#d97706', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#d97706',
+            starColor: '#d97706', btnTextColor: '#ffffff', btnBorderColor: '#d97706',
+        }
+    },
+    {
+        id: 'tropical_sunset', name: 'Tropical Sunset', emoji: '🍹', desc: 'Hot pink & warm orange',
+        preview: ['#f43f5e', '#fbd38d'],
+        kit: {
+            primaryColor: '#f43f5e', secondaryColor: '#f59e0b', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '24px',
+            tabBorderColor: '#f43f5e', tabBgColor: 'rgba(244, 63, 94, 0.1)', tabTextColor: '#f43f5e',
+            joinBtnBg: '#f43f5e', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#f43f5e',
+            starColor: '#f43f5e', btnTextColor: '#ffffff', btnBorderColor: '#f43f5e',
         }
     }
 ];

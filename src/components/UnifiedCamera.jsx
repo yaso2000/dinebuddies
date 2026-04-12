@@ -17,7 +17,7 @@ const UnifiedCamera = ({
     onUnmount,             // Function called when component unmounts (cleanup)
     onMediaCaptured,       // Callback(file, previewUrl, type='video'|'image')
     allowPhoto = false,    // If true, shows photo capture button
-    maxDuration = 30,      // Max recording duration in seconds
+    maxDuration = 15,      // Max recording duration in seconds
     mode = 'video',        // 'video' or 'photo' or 'both' (default 'video') in UI
 }) => {
     const { showToast } = useToast();

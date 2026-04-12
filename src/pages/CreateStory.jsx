@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaCamera } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
@@ -39,6 +40,7 @@ const MOOD_EMOJIS = [
 
 const CreateStory = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const { currentUser, userProfile, loading: authLoading } = useAuth();
     const { showToast } = useToast();
 
@@ -88,7 +90,7 @@ const CreateStory = () => {
             const role = (userProfile.role || '').toLowerCase();
             const isGuest = role === 'guest' || userProfile.isGuest;
             if (isGuest) {
-                showToast('Guests cannot post stories. Please sign up.', 'error');
+                showToast(t('guests_no_story', 'Guests cannot post stories. Please sign up.'), 'error');
                 navigate('/');
             }
         }
@@ -102,7 +104,7 @@ const CreateStory = () => {
 
         // Only accept images
         if (!file.type.startsWith('image/')) {
-            showToast('Only image files are supported for stories.', 'error');
+            showToast(t('only_image_stories', 'Only image files are supported for stories.'), 'error');
             e.target.value = "";
             return;
         }
@@ -174,7 +176,7 @@ const CreateStory = () => {
             navigate('/');
         } catch (error) {
             console.error("Error creating story:", error);
-            showToast('Failed to share story. Try again.', 'error');
+            showToast(t('failed_share_story', 'Failed to share story. Try again.'), 'error');
         } finally {
             setLoading(false);
         }
@@ -184,9 +186,9 @@ const CreateStory = () => {
         <div className="create-story-container" style={{ zIndex: 100000 }}>
             <div className="story-header">
                 <button onClick={() => { navigate(-1); }} className="icon-btn"><FaTimes /></button>
-                <div className="story-title">{backgroundType === 'GRADIENT' ? 'Create' : 'Edit'} Story</div>
+                <div className="story-title">{backgroundType === 'GRADIENT' ? t('create_story_title', 'Create Story') : t('edit_story_title', 'Edit Story')}</div>
                 <button onClick={handleShare} className="share-btn" disabled={loading || (backgroundType === 'GRADIENT' && !text.trim())}>
-                    {loading ? 'Posting...' : 'Share'}
+                    {loading ? t('posting', 'Posting...') : t('share_btn', 'Share')}
                 </button>
             </div>
 
@@ -208,7 +210,7 @@ const CreateStory = () => {
                     <textarea
                         value={text}
                         onChange={(e) => setText(e.target.value)}
-                        placeholder={backgroundType === 'GRADIENT' ? "Tap to type..." : "Add a caption..."}
+                        placeholder={backgroundType === 'GRADIENT' ? t('tap_to_type', "Tap to type...") : t('add_a_caption', "Add a caption...")}
                         className={`story-textarea ${backgroundType !== 'GRADIENT' ? 'text-overlay' : ''}`}
                         style={{ fontFamily: FONTS[fontIndex].family, color: textColor }}
                         maxLength={200}
@@ -236,7 +238,7 @@ const CreateStory = () => {
 
             {/* Sidebar Tools */}
             <div className="story-tools">
-                <button className={`tool-btn ${isTextMode ? 'active' : ''}`} onClick={() => setIsTextMode(!isTextMode)} title="Text">
+                <button className={`tool-btn ${isTextMode ? 'active' : ''}`} onClick={() => setIsTextMode(!isTextMode)} title={t('tool_text', 'Text')}>
                     <FaFont />
                 </button>
 
@@ -263,7 +265,7 @@ const CreateStory = () => {
                                 display: 'flex', flexDirection: 'column', minWidth: '160px'
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <span style={{ color: 'white', fontSize: '0.8rem', fontWeight: 'bold', paddingLeft: '4px' }}>Emojis</span>
+                                    <span style={{ color: 'white', fontSize: '0.8rem', fontWeight: 'bold', paddingLeft: '4px' }}>{t('emojis_label', 'Emojis')}</span>
                                     <button onClick={() => setShowMoodPicker(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', padding: '4px', display: 'flex' }}>
                                         <FaTimes size={14} />
                                     </button>
@@ -283,16 +285,16 @@ const CreateStory = () => {
                 )}
 
                 {backgroundType === 'GRADIENT' && (
-                    <button className="tool-btn" onClick={cycleBackground} title="Background">
+                    <button className="tool-btn" onClick={cycleBackground} title={t('tool_bg', 'Background')}>
                         <FaPalette />
                     </button>
                 )}
 
-                <button className={`tool-btn ${backgroundType === 'IMAGE' ? 'active' : ''}`} onClick={() => fileInputRef.current?.click()} title="Upload Photo">
+                <button className={`tool-btn ${backgroundType === 'IMAGE' ? 'active' : ''}`} onClick={() => fileInputRef.current?.click()} title={t('upload_photo', 'Upload Photo')}>
                     <FaPhotoVideo />
                 </button>
 
-                <button className="tool-btn" onClick={startCamera} title="Camera">
+                <button className="tool-btn" onClick={startCamera} title={t('tool_camera', 'Camera')}>
                     <FaCamera />
                 </button>
 

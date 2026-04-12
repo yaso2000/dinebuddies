@@ -18,6 +18,7 @@ import {
     FaTools,
     FaCopy,
     FaSlidersH,
+    FaGift,
 } from 'react-icons/fa';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -27,11 +28,22 @@ const Sidebar = ({ isOpen, onClose }) => {
 
     const navGroups = [
         {
-            title: 'Main',
+            title: 'Overview',
             items: [
                 { path: '/admin/dashboard', icon: FaTachometerAlt, label: 'Dashboard', roles: ['admin', 'moderator', 'support'] },
+            ],
+        },
+        {
+            title: 'Users & businesses',
+            items: [
                 { path: '/admin/users', icon: FaUsers, label: 'Users', roles: ['admin', 'moderator', 'support'] },
                 { path: '/admin/businesses', icon: FaStore, label: 'Businesses', roles: ['admin', 'moderator'] },
+                { path: '/admin/business-limits', icon: FaSlidersH, label: 'Business limits', roles: ['admin'] },
+            ],
+        },
+        {
+            title: 'Invitations',
+            items: [
                 { path: '/admin/invitations', icon: FaEnvelope, label: 'Invitations', roles: ['admin', 'moderator'] },
             ],
         },
@@ -40,6 +52,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             items: [
                 { path: '/admin/subscriptions', icon: FaCreditCard, label: 'Subscriptions', roles: ['admin'] },
                 { path: '/admin/plans', icon: FaBox, label: 'Plans & Packs', roles: ['admin'] },
+                { path: '/admin/grant-credits', icon: FaGift, label: 'Grant Credits', roles: ['admin'] },
             ],
         },
         {
@@ -58,7 +71,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         {
             title: 'Data & Tools',
             items: [
-                { path: '/admin/business-limits', icon: FaSlidersH, label: 'Business Limits', roles: ['admin'] },
                 { path: '/admin/migration', icon: FaDatabase, label: 'Migration', roles: ['admin'] },
                 { path: '/admin/system-tools', icon: FaTools, label: 'System Tools', roles: ['admin'] },
                 { path: '/admin/audit-log', icon: FaHistory, label: 'Audit Log', roles: ['admin'] },
