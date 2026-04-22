@@ -7,18 +7,20 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
+import HostPrivateInvitationCardExport from '../components/Invitations/privateCard/HostPrivateInvitationCardExport';
 import './PrivateInvitation.css';
 
 import Lottie from 'lottie-react';
 import { OCCASION_PRESETS } from '../utils/invitationTemplates';
+import { asUidArray } from '../utils/userSocialLists';
 
 const PrivateInvitationDetails = () => {
     const { id } = useParams();
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const { respondToPrivateInvitation, deleteInvitation } = useInvitations();
 
     const [invitation, setInvitation] = useState(null);
@@ -39,6 +41,13 @@ const PrivateInvitationDetails = () => {
                 const authorId = data.authorId || data.author?.id;
                 const isHost = viewerId === authorId;
                 const isInvited = data.invitedFriends?.includes(viewerId);
+
+                const myBlocked = asUidArray(userProfile?.blockedUserIds);
+                const myMuted = asUidArray(userProfile?.mutedUserIds);
+                if (!isHost && authorId && (myBlocked.includes(authorId) || myMuted.includes(authorId))) {
+                    navigate('/', { replace: true });
+                    return;
+                }
 
                 // For private invitations, we are VERY strict
                 if (!isHost && !isInvited && viewerId !== 'guest') {
@@ -75,17 +84,27 @@ const PrivateInvitationDetails = () => {
         });
 
         return () => unsubscribe();
-    }, [id, navigate, currentUser, t]);
+    }, [id, navigate, currentUser, t, userProfile?.blockedUserIds, userProfile?.mutedUserIds]);
 
-    // Fetch Lottie data
+    // Optional background animation (skip failed / blocked CDN responses)
     useEffect(() => {
         const lottieUrl = invitation ? OCCASION_PRESETS[(invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase()]?.lottieUrl : null;
-        if (lottieUrl) {
-            fetch(lottieUrl)
-                .then(res => res.json())
-                .then(data => setAnimationData(data))
-                .catch(err => console.error('Error loading Lottie animation in details:', err));
-        }
+        if (!lottieUrl) return;
+        let cancelled = false;
+        fetch(lottieUrl, { mode: 'cors' })
+            .then((res) => {
+                if (!res.ok) return null;
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('json')) return null;
+                return res.json();
+            })
+            .then((data) => {
+                if (!cancelled && data) setAnimationData(data);
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
     }, [invitation]);
 
     const handleRSVP = async (status) => {
@@ -117,6 +136,12 @@ const PrivateInvitationDetails = () => {
     );
 
     // Helpers for status badges
+    const privateHeroImageSrc = pickSafeDisplayImageUrl(
+        invitation.customImage,
+        invitation.restaurantImage,
+        invitation.image
+    );
+
     const getStatusBadge = (status) => {
         switch (status) {
             case 'accepted':
@@ -161,8 +186,13 @@ const PrivateInvitationDetails = () => {
 
             {/* Media Hero */}
             <div className="private-hero-section" style={{ position: 'relative', width: '100%', height: '280px', overflow: 'hidden', borderRadius: '0 0 40px 40px', marginBottom: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-                {(invitation.customImage || invitation.restaurantImage || invitation.image) ? (
-                    <img src={invitation.customImage || invitation.restaurantImage || invitation.image} alt="" className="private-hero-img-animated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {privateHeroImageSrc ? (
+                    <img
+                        src={privateHeroImageSrc}
+                        alt=""
+                        className="private-hero-img-animated"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                 ) : (
                     <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #1e1b4b, #312e81)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <FaLock size={60} color="rgba(255,255,255,0.2)" />
@@ -204,6 +234,8 @@ const PrivateInvitationDetails = () => {
                         </div>
                     )}
                 </div>
+
+                {isHost && <HostPrivateInvitationCardExport invitation={invitation} />}
 
                 {/* Description - Glassy card */}
                 {invitation.description && (

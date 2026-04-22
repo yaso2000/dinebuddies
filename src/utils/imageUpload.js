@@ -37,9 +37,14 @@ export const compressImage = async (file, options = {}) => {
  * @returns {Promise<string>} Download URL
  */
 const MAX_IMAGE_MB = 15;
+const COMPRESSION_TIMEOUT_MS = 12000;
+const UPLOAD_TIMEOUT_MS = 45000;
+const COMPRESSION_SKIP_THRESHOLD_BYTES = 700 * 1024; // Skip compression for small images
 
 export const uploadImage = (file, path, onProgress = null, compressionOptions = {}) => {
     return new Promise(async (resolve, reject) => {
+        let uploadTimedOut = false;
+        let uploadTimeoutId = null;
         try {
             const sizeMB = file.size / (1024 * 1024);
             if (sizeMB > MAX_IMAGE_MB) {
@@ -48,27 +53,50 @@ export const uploadImage = (file, path, onProgress = null, compressionOptions = 
             }
             // Compress image before upload
             let uploadFile = file;
-            if (file.type.startsWith('image/')) {
-                uploadFile = await compressImage(file, compressionOptions);
+            if (file.type.startsWith('image/') && file.size > COMPRESSION_SKIP_THRESHOLD_BYTES) {
+                try {
+                    const compressionTask = compressImage(file, compressionOptions);
+                    const timeoutTask = new Promise((_, rej) =>
+                        setTimeout(() => rej(new Error('Image compression timeout')), COMPRESSION_TIMEOUT_MS)
+                    );
+                    uploadFile = await Promise.race([compressionTask, timeoutTask]);
+                } catch (compressionError) {
+                    console.warn('Compression skipped, uploading original file:', compressionError?.message || compressionError);
+                    uploadFile = file;
+                }
             }
 
             const storageRef = ref(storage, path);
             const contentType = (uploadFile.type && uploadFile.type.startsWith('image/')) ? uploadFile.type : 'image/jpeg';
             const uploadTask = uploadBytesResumable(storageRef, uploadFile, { contentType });
+            uploadTimeoutId = setTimeout(() => {
+                uploadTimedOut = true;
+                try {
+                    uploadTask.cancel();
+                } catch {
+                    // ignore cancel errors
+                }
+                reject(new Error('Upload timeout. Please try a smaller image or check your connection.'));
+            }, UPLOAD_TIMEOUT_MS);
 
             uploadTask.on(
                 'state_changed',
                 (snapshot) => {
+                    if (uploadTimedOut) return;
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                     if (onProgress) {
                         onProgress(progress);
                     }
                 },
                 (error) => {
+                    if (uploadTimeoutId) clearTimeout(uploadTimeoutId);
+                    if (uploadTimedOut) return;
                     console.error('Upload error:', error);
                     reject(error);
                 },
                 async () => {
+                    if (uploadTimeoutId) clearTimeout(uploadTimeoutId);
+                    if (uploadTimedOut) return;
                     try {
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                         resolve(downloadURL);

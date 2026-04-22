@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
 
 const Settings = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { currentUser, userProfile, deleteUserAccount, isBusiness, signOut } = useAuth();
     const { showToast } = useToast();
     const { t, i18n } = useTranslation();
@@ -25,6 +26,13 @@ const Settings = () => {
 
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    useEffect(() => {
+        if (location.state?.passwordUpdated) {
+            showToast(t('password_updated_success', 'Password updated successfully!'), 'success');
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, location.pathname, navigate, showToast, t]);
 
     const handleInstallApp = async () => {
         if (window.__deferredInstallPrompt) {
@@ -147,6 +155,16 @@ const Settings = () => {
                     value: t('public', 'Public'),
                     onClick: () => navigate('/settings/privacy'),
                     color: '#06b6d4'
+                },
+                {
+                    icon: <FaBan />,
+                    label: t('settings_blocked_users', 'Blocked users'),
+                    value:
+                        Array.isArray(userProfile?.blockedUserIds) && userProfile.blockedUserIds.length > 0
+                            ? String(userProfile.blockedUserIds.length)
+                            : t('none', 'None'),
+                    onClick: () => navigate('/settings/blocked-users'),
+                    color: '#b91c1c'
                 }
             ]
         },
@@ -385,7 +403,7 @@ const Settings = () => {
                     )}
                 </div>
                 <div style={{ flex: 1 }}>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '0.25rem' }}>
+                    <h2 className="settings-user-name">
                         {userProfile?.displayName || userProfile?.display_name || 'User'}
                     </h2>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
@@ -393,32 +411,16 @@ const Settings = () => {
                     </p>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                         {isBusiness && (
-                            <div style={{
-                                display: 'inline-block',
-                                padding: '4px 10px',
-                                background: 'rgba(139, 92, 246, 0.2)',
-                                border: '1px solid rgba(139, 92, 246, 0.4)',
-                                borderRadius: '12px',
-                                fontSize: '0.7rem',
-                                fontWeight: '700',
-                                color: 'var(--primary)'
-                            }}>
+                            <div className="settings-badge-pill settings-badge-pill--business">
                                 {t('business_account_badge', 'Business Account')}
                             </div>
                         )}
                         {isBusiness && (userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'professional') && (
-                            <div style={{
-                                display: 'inline-block',
-                                padding: '4px 10px',
-                                background: userProfile?.subscriptionTier === 'elite'
-                                    ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(249, 115, 22, 0.2))'
-                                    : 'rgba(139, 92, 246, 0.2)',
-                                border: `1px solid ${userProfile?.subscriptionTier === 'elite' ? 'rgba(251, 191, 36, 0.4)' : 'rgba(139, 92, 246, 0.4)'}`,
-                                borderRadius: '12px',
-                                fontSize: '0.7rem',
-                                fontWeight: '700',
-                                color: userProfile?.subscriptionTier === 'elite' ? '#fbbf24' : 'var(--primary)'
-                            }}>
+                            <div className={
+                                userProfile?.subscriptionTier === 'elite'
+                                    ? 'settings-badge-pill settings-badge-pill--tier-elite'
+                                    : 'settings-badge-pill settings-badge-pill--tier-pro'
+                            }>
                                 {userProfile?.subscriptionTier === 'elite' ? '👑 Elite' : '⚡ Professional'}
                             </div>
                         )}
@@ -435,21 +437,7 @@ const Settings = () => {
                             <div
                                 key={itemIndex}
                                 onClick={item.onClick}
-                                style={{
-                                    padding: '1rem 1.25rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '1rem',
-                                    cursor: 'pointer',
-                                    borderBottom: itemIndex < section.items.length - 1 ? '1px solid var(--border-color)' : 'none',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(139, 92, 246, 0.05)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'transparent';
-                                }}
+                                className="settings-row"
                             >
                                 <div style={{
                                     width: '40px',
@@ -509,21 +497,7 @@ const Settings = () => {
                     {/* Logout */}
                     <div
                         onClick={handleLogout}
-                        style={{
-                            padding: '1rem 1.25rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            cursor: 'pointer',
-                            borderBottom: '1px solid var(--border-color)',
-                            transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                        }}
+                        className="settings-row settings-row--danger"
                     >
                         <div style={{
                             width: '40px',
@@ -547,20 +521,7 @@ const Settings = () => {
                     {/* Delete Account */}
                     <div
                         onClick={() => handleDeleteAccount()}
-                        style={{
-                            padding: '1rem 1.25rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            cursor: 'pointer',
-                            transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                        }}
+                        className="settings-row settings-row--danger"
                     >
                         <div style={{
                             width: '40px',
@@ -618,19 +579,21 @@ const Settings = () => {
                 >
                     <div
                         style={{
-                            background: 'var(--surface, #fff)',
+                            background: 'var(--bg-card)',
                             borderRadius: '16px',
                             padding: '1.5rem',
                             maxWidth: '360px',
                             width: '100%',
-                            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                            border: '1px solid var(--border-color)',
+                            boxShadow: 'var(--shadow-premium)',
+                            color: 'var(--text-main)'
                         }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div style={{ marginBottom: '1rem', fontWeight: 700, fontSize: '1.1rem' }}>
                             {t('re_enter_password', 'Re-enter password')}
                         </div>
-                        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary, #666)' }}>
+                        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                             {t('security_confirm_deletion', 'For your security, please enter your password to confirm account deletion.')}
                         </p>
                         <input
@@ -643,9 +606,11 @@ const Settings = () => {
                                 width: '100%',
                                 padding: '0.75rem 1rem',
                                 borderRadius: '10px',
-                                border: '1px solid var(--border, #e5e7eb)',
+                                border: '1px solid var(--border-color)',
                                 marginBottom: '1rem',
-                                fontSize: '1rem'
+                                fontSize: '1rem',
+                                background: 'var(--bg-input)',
+                                color: 'var(--text-main)'
                             }}
                             onKeyDown={(e) => e.key === 'Enter' && handleDeleteWithPassword()}
                         />
@@ -655,8 +620,9 @@ const Settings = () => {
                                 style={{
                                     padding: '0.6rem 1.2rem',
                                     borderRadius: '10px',
-                                    border: '1px solid var(--border)',
-                                    background: 'transparent'
+                                    border: '1px solid var(--border-color)',
+                                    background: 'var(--bg-input)',
+                                    color: 'var(--text-main)'
                                 }}
                             >
                                 {t('cancel')}

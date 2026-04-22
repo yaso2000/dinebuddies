@@ -156,23 +156,30 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
                                 aria-label={p.name}
                                 style={{
                                     width: '48px', height: '48px', borderRadius: '50%', border: 'none',
-                                    background: 'rgba(255,255,255,0.05)', color: p.color,
+                                    background: 'rgba(255,255,255,0.06)', color: p.color,
                                     cursor: p.disabled ? 'wait' : 'pointer',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '1.2rem', transition: 'all 0.2s ease',
-                                    opacity: p.disabled ? 0.5 : 0.85,
+                                    fontSize: '1.2rem', transition: 'background 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
+                                    opacity: p.disabled ? 0.5 : 0.92,
+                                    boxShadow: 'none',
                                 }}
                                 onMouseEnter={(e) => {
                                     if (!p.disabled) {
-                                        e.currentTarget.style.background = p.color;
-                                        e.currentTarget.style.opacity = '1';
-                                        e.currentTarget.style.transform = 'translateY(-3px) scale(1.1)';
+                                        const el = e.currentTarget;
+                                        el.style.background = p.color;
+                                        el.style.color = '#ffffff';
+                                        el.style.opacity = '1';
+                                        el.style.transform = 'translateY(-3px) scale(1.08)';
+                                        el.style.boxShadow = '0 6px 16px rgba(0,0,0,0.22)';
                                     }
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                                    e.currentTarget.style.opacity = '0.85';
-                                    e.currentTarget.style.transform = 'none';
+                                    const el = e.currentTarget;
+                                    el.style.background = 'rgba(255,255,255,0.06)';
+                                    el.style.color = p.color;
+                                    el.style.opacity = p.disabled ? '0.5' : '0.92';
+                                    el.style.transform = 'none';
+                                    el.style.boxShadow = 'none';
                                 }}
                             >
                                 {p.icon}

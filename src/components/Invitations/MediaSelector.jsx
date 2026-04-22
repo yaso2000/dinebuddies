@@ -1,480 +1,540 @@
 import React, { useState, useEffect } from 'react';
-import { FaImage, FaVideo, FaStore, FaCamera, FaUpload, FaTimes } from 'react-icons/fa';
+import { FaVideo, FaStore, FaCamera, FaUpload, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import MediaUpload from '../Shared/MediaUpload';
 import UnifiedCamera from '../UnifiedCamera';
 
 import './MediaSelector.css';
 
-const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoading = false, onMediaSelect, initialData = null, className = '' }) => {
+const MediaSelector = ({
+    restaurant,
+    onMediaSelect,
+    mediaData: parentMediaData = null,
+    libraryVideo = null,
+    libraryImages = [],
+    onPersistSelfieVideo,
+    onPersistImage,
+    onDeleteLibraryVideo,
+    onDeleteLibraryImage,
+    initialData = null,
+    className = '',
+}) => {
     const { t } = useTranslation();
-    const [source, setSource] = useState(initialData?.source || null); // 'venue' | 'custom_image' | 'custom_video'
-    const [videoMode, setVideoMode] = useState(null); // 'upload' | 'record'
-    const [photoMode, setPhotoMode] = useState(null); // 'upload' | 'capture'
+    /** camera = capture photo/video | upload = image files from device */
+    const [source, setSource] = useState(
+        initialData?.source === 'custom_video' ? 'camera' : initialData?.source === 'custom_image' ? 'upload' : null
+    );
+    const [cameraSubMode, setCameraSubMode] = useState(null);
     const [selectedMedia, setSelectedMedia] = useState(initialData || null);
+    const [videoPersisting, setVideoPersisting] = useState(false);
+
+    useEffect(() => {
+        setSelectedMedia(parentMediaData ?? null);
+    }, [parentMediaData]);
+
+    useEffect(() => {
+        if (parentMediaData?.type === 'video') setSource('camera');
+    }, [parentMediaData?.type]);
+
+    /** When editing with an existing uploaded/custom image, show Upload tab + preview. */
+    useEffect(() => {
+        if (
+            parentMediaData?.source === 'custom_image' &&
+            parentMediaData?.type === 'image' &&
+            (parentMediaData?.preview || parentMediaData?.url)
+        ) {
+            setSource('upload');
+        }
+    }, [parentMediaData?.source, parentMediaData?.type, parentMediaData?.preview, parentMediaData?.url]);
+
+    useEffect(() => {
+        if (source !== null) return;
+        setSource('camera');
+    }, [source]);
 
     const handleSourceChange = (newSource) => {
+        setCameraSubMode(null);
         setSource(newSource);
-        setVideoMode(null);
-        setPhotoMode(null);
-        setSelectedMedia(null);
-
-        if (newSource === 'venue') {
-            const restaurantImage = restaurant?.image || restaurant?.restaurantImage;
-
-            // If there's only one option (restaurant image and no suggestions, or 1 suggestion and no restaurant image), select it immediately
-            if (restaurantImage && (!suggestedImages || suggestedImages.length === 0)) {
-                const mediaData = {
-                    source: 'restaurant',
-                    url: restaurantImage,
-                    type: 'image'
-                };
-                onMediaSelect(mediaData);
-                setSelectedMedia(mediaData);
-            } else if (!restaurantImage && suggestedImages?.length === 1) {
-                // Auto-select google image logic - skipping async save for now to avoid UX delay on open
-                // User can re-select or we can improve this later
-                const mediaData = {
-                    source: 'google_place',
-                    url: suggestedImages[0],
-                    type: 'image'
-                };
-                onMediaSelect(mediaData);
-                setSelectedMedia(mediaData);
-            }
-            // Otherwise, we wait for user to pick from the grid
-        }
     };
 
-    const handleVenueImageSelect = (url) => {
-        // Simple select - defer uploading to the submission phase
+    const handleRestaurantImageSelect = (url) => {
         const mediaData = {
-            source: 'venue', // could be 'restaurant' or 'google_place'
-            url: url,
-            type: 'image'
+            source: 'restaurant',
+            url,
+            type: 'image',
         };
         setSelectedMedia(mediaData);
         onMediaSelect(mediaData);
     };
 
-    const handleCustomMedia = (file, preview, type) => {
+    const isVenueSelection = selectedMedia?.source === 'restaurant' || selectedMedia?.source === 'google_place';
+    const isUploadSelection = source === 'upload' && selectedMedia?.source === 'custom_image';
+    const isCameraPhotoSelection = source === 'camera' && selectedMedia?.source === 'custom_image' && !!selectedMedia?.file;
+    const isVenueUrlSelected = (url) =>
+        isVenueSelection && selectedMedia?.type === 'image' && selectedMedia?.url === url;
+
+    const handleCustomMedia = async (file, preview, type) => {
+        if (type === 'video') {
+            if (libraryVideo) return;
+            if (onPersistSelfieVideo) {
+                setVideoPersisting(true);
+                try {
+                    await onPersistSelfieVideo(file);
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setVideoPersisting(false);
+                }
+                return;
+            }
+        }
         const mediaData = {
             source: type === 'video' ? 'custom_video' : 'custom_image',
             file,
             preview,
-            type
+            type,
         };
-
         setSelectedMedia(mediaData);
         onMediaSelect(mediaData);
     };
 
-    const handleRecording = (file, previewUrl) => {
+    const handleRecording = async (file, previewUrl) => {
+        if (libraryVideo) return;
+        if (onPersistSelfieVideo) {
+            setVideoPersisting(true);
+            try {
+                await onPersistSelfieVideo(file);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setVideoPersisting(false);
+            }
+            return;
+        }
         const mediaData = {
             source: 'custom_video',
-            file: file,
+            file,
             preview: previewUrl,
-            type: 'video'
+            type: 'video',
         };
         setSelectedMedia(mediaData);
         onMediaSelect(mediaData);
     };
+
+    const selectLibraryVideo = () => {
+        if (!libraryVideo) return;
+        const data = {
+            source: 'custom_video',
+            type: 'video',
+            file: null,
+            preview: libraryVideo.videoUrl,
+            videoThumbnail: libraryVideo.thumbnailUrl,
+            fromLibrary: true,
+        };
+        setSelectedMedia(data);
+        onMediaSelect(data);
+    };
+
+    const isLibraryTileSelected =
+        libraryVideo && selectedMedia?.type === 'video' && selectedMedia?.preview === libraryVideo.videoUrl;
 
     const handlePhotoCapture = (file, previewUrl) => {
         const mediaData = {
             source: 'custom_image',
-            file: file,
+            file,
             preview: previewUrl,
-            type: 'image'
+            type: 'image',
         };
         setSelectedMedia(mediaData);
         onMediaSelect(mediaData);
     };
 
-    // Auto-select 'venue' source when images are available (e.g. after location select) or when loading
-    useEffect(() => {
-        const hasRestaurantImage = restaurant && (restaurant.image || restaurant.restaurantImage);
-        const hasSuggested = suggestedImages && suggestedImages.length > 0;
-
-        if (hasRestaurantImage || hasSuggested || suggestedImagesLoading) {
-            // Only set source to venue if no source is selected yet
-            if (!source) {
-                setSource('venue');
-            }
-
-            // If only one image exists, select it automatically.
-            // ONLY if nothing is already selected.
-            if (!selectedMedia) {
-                if (hasRestaurantImage && (!suggestedImages || suggestedImages.length === 0)) {
-                    const mediaData = {
-                        source: 'restaurant',
-                        url: restaurant.image || restaurant.restaurantImage,
-                        type: 'image'
-                    };
-                    setSelectedMedia(mediaData);
-                    onMediaSelect(mediaData);
-                } else if (!hasRestaurantImage && suggestedImages?.length === 1) {
-                    const mediaData = {
-                        source: 'google_place',
-                        url: suggestedImages[0],
-                        type: 'image'
-                    };
-                    setSelectedMedia(mediaData);
-                    onMediaSelect(mediaData);
-                } else {
-                    // Multiple images available: show grid
-                    // Don't reset if we already have something!
-                }
-            }
-        }
-    }, [suggestedImages, restaurant, suggestedImagesLoading]);
-
-    const resetSelection = () => {
-        setSource(null);
-        setVideoMode(null);
-        setPhotoMode(null);
-        setSelectedMedia(null);
-        onMediaSelect(null);
+    const selectLibraryImage = (url) => {
+        if (!url) return;
+        const mediaData = {
+            source: 'custom_image',
+            type: 'image',
+            file: null,
+            preview: url,
+            fromLibrary: true,
+        };
+        setSelectedMedia(mediaData);
+        onMediaSelect(mediaData);
     };
 
-    // Determine if we have any venue images available (or are loading suggested ones)
     const hasRestaurantImage = restaurant && (restaurant.image || restaurant.restaurantImage);
-    const hasSuggestedImages = suggestedImages && suggestedImages.length > 0;
-    const hasVenueImages = hasRestaurantImage || hasSuggestedImages || suggestedImagesLoading;
+    const restaurantCoverUrl = hasRestaurantImage ? restaurant.image || restaurant.restaurantImage : null;
+
+    const tabBtnStyle = (active) => ({
+        flex: 1,
+        padding: '10px',
+        borderRadius: '12px',
+        background: active ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+        color: active ? 'white' : 'var(--text-secondary)',
+        border: active ? 'none' : '1px solid transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        fontWeight: active ? 'bold' : 'normal',
+        minWidth: '0',
+    });
 
     return (
         <div className={`media-selector ${className}`}>
-            {/* Tabs Header */}
-            <div className="media-tabs" style={{
-                display: 'flex',
-                gap: '8px',
-                marginBottom: '16px',
-                overflowX: 'auto',
-                paddingBottom: '4px',
-                borderBottom: '1px solid var(--border-color)',
-                padding: '10px 0'
-            }}>
-                {hasVenueImages && (
-                    <button
-                        type="button"
-                        onClick={() => handleSourceChange('venue')}
-                        style={{
-                            flex: 1,
-                            padding: '10px',
-                            borderRadius: '12px',
-                            background: source === 'venue' ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                            color: source === 'venue' ? 'white' : 'var(--text-secondary)',
-                            border: source === 'venue' ? 'none' : '1px solid transparent',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            fontWeight: source === 'venue' ? 'bold' : 'normal'
-                        }}
-                    >
-                        <FaStore />
-                        <span style={{ fontSize: '0.9rem' }}>{hasRestaurantImage ? t('venue_photos_tab', 'Venue Photos') : t('google_photos_tab', 'Google Photos')}</span>
-                    </button>
-                )}
-
-                <button
-                    type="button"
-                    onClick={() => handleSourceChange('custom_image')}
+            {hasRestaurantImage && restaurantCoverUrl && (
+                <div
+                    className="media-selector-venue-cover"
                     style={{
-                        flex: 1,
-                        padding: '10px',
-                        borderRadius: '12px',
-                        background: source === 'custom_image' ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                        color: source === 'custom_image' ? 'white' : 'var(--text-secondary)',
-                        border: source === 'custom_image' ? 'none' : '1px solid transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        fontWeight: source === 'custom_image' ? 'bold' : 'normal'
+                        marginBottom: 16,
+                        padding: 14,
+                        borderRadius: 14,
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-card)',
                     }}
                 >
-                    <FaImage />
-                    <span style={{ fontSize: '0.9rem' }}>{t('upload_media_tab', 'Upload')}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                        <FaStore style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                            {t('media_dinebuddies_venue_cover', 'Venue on DineBuddies')}
+                        </span>
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.45 }}>
+                        {t(
+                            'media_dinebuddies_venue_cover_hint',
+                            'Optional: use the cover image from the business profile you selected — not from map listings.'
+                        )}
+                    </p>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleRestaurantImageSelect(restaurantCoverUrl)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRestaurantImageSelect(restaurantCoverUrl);
+                            }}
+                            style={{
+                                width: 96,
+                                height: 96,
+                                borderRadius: 12,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: isVenueUrlSelected(restaurantCoverUrl) ? '3px solid var(--primary)' : '2px solid var(--border-color)',
+                                flexShrink: 0,
+                                // Hide if URL is blocked (Google photo)
+                                display: (restaurantCoverUrl && (restaurantCoverUrl.includes('/api/place-photo') || restaurantCoverUrl.includes('maps.googleapis.com'))) ? 'none' : 'block'
+                            }}
+                        >
+                            <img
+                                src={restaurantCoverUrl}
+                                alt=""
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.parentElement.style.display = 'none';
+                                }}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => handleRestaurantImageSelect(restaurantCoverUrl)}
+                            style={{
+                                padding: '10px 16px',
+                                borderRadius: 12,
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-input)',
+                                color: 'var(--text-main)',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                fontSize: '0.88rem',
+                            }}
+                        >
+                            {t('media_use_venue_cover', 'Use this cover')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div
+                className="media-tabs"
+                style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginBottom: '16px',
+                    overflowX: 'auto',
+                    paddingBottom: '4px',
+                    borderBottom: '1px solid var(--border-color)',
+                    padding: '10px 0',
+                }}
+            >
+                <button type="button" onClick={() => handleSourceChange('camera')} style={tabBtnStyle(source === 'camera')}>
+                    <FaCamera />
+                    <span style={{ fontSize: '0.9rem' }}>{t('media_tab_camera', 'Camera')}</span>
                 </button>
-
-                <button
-                    type="button"
-                    onClick={() => handleSourceChange('custom_video')}
-                    style={{
-                        flex: 1,
-                        padding: '10px',
-                        borderRadius: '12px',
-                        background: source === 'custom_video' ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                        color: source === 'custom_video' ? 'white' : 'var(--text-secondary)',
-                        border: source === 'custom_video' ? 'none' : '1px solid transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        fontWeight: source === 'custom_video' ? 'bold' : 'normal'
-                    }}
-                >
-                    <FaVideo />
-                    <span style={{ fontSize: '0.9rem' }}>{t('video_media_tab', 'Video')}</span>
+                <button type="button" onClick={() => handleSourceChange('upload')} style={tabBtnStyle(source === 'upload')}>
+                    <FaUpload />
+                    <span style={{ fontSize: '0.9rem' }}>{t('media_tab_upload_photo', 'Upload photo')}</span>
                 </button>
             </div>
 
-            {/* Content Area */}
             <div className="tab-content">
-                {/* 1. Venue Images */}
-                {source === 'venue' && hasVenueImages && (
-                    <div className="venue-images-container">
-                        {!selectedMedia ? (
-                            <div className="venue-images-grid" style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-                                gap: '10px',
-                                marginTop: '10px'
-                            }}>
-                                {hasRestaurantImage && (
-                                    <div
-                                        onClick={() => handleVenueImageSelect(restaurant.image || restaurant.restaurantImage)}
-                                        style={{
-                                            cursor: 'pointer',
-                                            borderRadius: '12px',
-                                            overflow: 'hidden',
-                                            height: '90px',
-                                            border: '2px solid transparent',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                                        }}
-                                    >
-                                        <img
-                                            src={restaurant.image || restaurant.restaurantImage}
-                                            alt="Official"
-                                            referrerPolicy="no-referrer"
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                    </div>
-                                )}
-                                {/* Skeleton tiles while suggested images are loading */}
-                                {suggestedImagesLoading && (
-                                    <>
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                            <div
-                                                key={`skeleton-${i}`}
-                                                className="venue-image-skeleton"
-                                                style={{
-                                                    height: '90px',
-                                                    borderRadius: '12px',
-                                                    background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%)',
-                                                    backgroundSize: '200% 100%',
-                                                    animation: 'shimmer 1.5s infinite'
-                                                }}
-                                            />
-                                        ))}
-                                    </>
-                                )}
-                                {!suggestedImagesLoading && suggestedImages.map((url, idx) => (
-                                    <div
-                                        key={idx}
-                                        onClick={() => handleVenueImageSelect(url)}
-                                        style={{
-                                            cursor: 'pointer',
-                                            borderRadius: '12px',
-                                            overflow: 'hidden',
-                                            height: '90px',
-                                            border: '2px solid transparent',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                                            position: 'relative'
-                                        }}
-                                    >
-                                        <img
-                                            src={url}
-                                            alt={`Suggested ${idx}`}
-                                            referrerPolicy="no-referrer"
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="media-preview" style={{ position: 'relative' }}>
-                                <img
-                                    src={selectedMedia.url}
-                                    alt="Selected Venue"
-                                    className="preview-image"
-                                    referrerPolicy="no-referrer"
+                {source === 'camera' && (
+                    <div className="custom-video-container">
+                        {libraryVideo && (
+                            <div style={{ marginBottom: 14 }}>
+                                <p
                                     style={{
-                                        width: '100%',
-                                        maxHeight: '250px',
-                                        objectFit: 'cover',
-                                        borderRadius: '12px'
-                                    }}
-                                />
-                                {selectedMedia.url && selectedMedia.url.includes('google') && !selectedMedia.url.includes('firebasestorage') && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '10px',
-                                        left: '10px',
-                                        background: 'rgba(0,0,0,0.7)',
-                                        color: '#4ade80',
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: 'bold',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}>
-                                        ✨ {t('will_be_saved_permanently', 'Will be saved permanently')}
-                                    </div>
-                                )}
-                                <button
-                                    type="button"
-                                    className="remove-preview-btn"
-                                    onClick={() => setSelectedMedia(null)}
-                                    style={{
-                                        position: 'absolute',
-                                        top: '10px',
-                                        right: '10px',
-                                        background: 'rgba(0,0,0,0.6)',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '20px',
-                                        padding: '5px 12px',
-                                        fontSize: '0.8rem',
-                                        cursor: 'pointer'
+                                        fontSize: '0.85rem',
+                                        color: 'var(--text-muted)',
+                                        marginBottom: 10,
+                                        lineHeight: 1.45,
                                     }}
                                 >
-                                    {t('change_selection', 'Change Selection')}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* 2. Custom Image */}
-                {source === 'custom_image' && (
-                    <div className="custom-image-container">
-                        {!selectedMedia && !photoMode && (
-                            <div className="video-mode-selection">
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>{t('choose_how_to_add_photo', 'Choose how to add your photo:')}</p>
-                                <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                    <button
-                                        type="button"
-                                        className="mode-btn"
-                                        onClick={() => setPhotoMode('capture')}
+                                    {t('video_library_hint', {
+                                        defaultValue:
+                                            'Your selfie video is saved. Tap to use it on the card, or delete it permanently to record or upload a different one.',
+                                    })}
+                                </p>
+                                <div
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                                        gap: 10,
+                                    }}
+                                >
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            selectLibraryVideo();
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') selectLibraryVideo();
+                                        }}
                                         style={{
-                                            padding: '1rem',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            border: '1px solid var(--border-color)',
-                                            borderRadius: '12px',
-                                            color: 'var(--text-main)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            cursor: 'pointer'
+                                            position: 'relative',
+                                            borderRadius: 12,
+                                            overflow: 'hidden',
+                                            height: 120,
+                                            cursor: 'pointer',
+                                            border: isLibraryTileSelected ? '3px solid var(--primary)' : '2px solid var(--border-color)',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                            background: '#111',
                                         }}
                                     >
-                                        <div className="icon-circle" style={{ background: 'rgba(139, 92, 246, 0.1)', padding: '10px', borderRadius: '50%' }}>
-                                            <FaCamera size={20} style={{ color: 'var(--primary)' }} />
+                                        <img
+                                            src={libraryVideo.thumbnailUrl}
+                                            alt=""
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                padding: '6px 8px',
+                                                background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
+                                                color: '#fff',
+                                                fontSize: '0.72rem',
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            {t('selfie_video', { defaultValue: 'Selfie video' })}
                                         </div>
-                                        <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t('take_photo', 'Take Photo')}</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="mode-btn"
-                                        onClick={() => setPhotoMode('upload')}
-                                        style={{
-                                            padding: '1rem',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            border: '1px solid var(--border-color)',
-                                            borderRadius: '12px',
-                                            color: 'var(--text-main)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <div className="icon-circle" style={{ background: 'rgba(236, 72, 153, 0.1)', padding: '10px', borderRadius: '50%' }}>
-                                            <FaUpload size={20} style={{ color: 'var(--secondary)' }} />
-                                        </div>
-                                        <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t('upload_media_tab', 'Upload')}</span>
-                                    </button>
+                                        {onDeleteLibraryVideo && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDeleteLibraryVideo();
+                                                }}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 8,
+                                                    right: 8,
+                                                    background: 'rgba(220,38,38,0.92)',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 10,
+                                                    padding: '6px 10px',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: 800,
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 6,
+                                                }}
+                                                title={t('delete_video_permanent', { defaultValue: 'Delete video permanently' })}
+                                            >
+                                                <FaTrash size={12} /> {t('delete', { defaultValue: 'Delete' })}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        {photoMode === 'capture' && !selectedMedia && (
-                            <UnifiedCamera
-                                mode="photo"
-                                onMediaCaptured={handlePhotoCapture}
-                                stopCamera={() => setPhotoMode(null)}
-                            />
+                        {!libraryVideo && (
+                            <>
+                                {!cameraSubMode && (
+                                    <div className="video-mode-selection">
+                                        <p
+                                            style={{
+                                                fontSize: '0.9rem',
+                                                color: 'var(--text-muted)',
+                                                marginBottom: '1rem',
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            {t(
+                                                'camera_tab_hint',
+                                                { defaultValue: 'Take a photo or record a video with your camera (no file upload here).' }
+                                            )}
+                                        </p>
+                                        <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                            <button
+                                                type="button"
+                                                className="mode-btn"
+                                                disabled={videoPersisting}
+                                                onClick={() => setCameraSubMode('video')}
+                                                style={{
+                                                    padding: '1rem',
+                                                    background: 'rgba(255,255,255,0.05)',
+                                                    border: '1px solid var(--border-color)',
+                                                    borderRadius: '12px',
+                                                    color: 'var(--text-main)',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    cursor: videoPersisting ? 'not-allowed' : 'pointer',
+                                                    opacity: videoPersisting ? 0.6 : 1,
+                                                }}
+                                            >
+                                                <FaVideo size={24} style={{ color: 'var(--primary)' }} />
+                                                <span style={{ fontSize: '0.9rem' }}>{t('record_video', 'Record video')}</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="mode-btn"
+                                                disabled={videoPersisting}
+                                                onClick={() => setCameraSubMode('photo')}
+                                                style={{
+                                                    padding: '1rem',
+                                                    background: 'rgba(255,255,255,0.05)',
+                                                    border: '1px solid var(--border-color)',
+                                                    borderRadius: '12px',
+                                                    color: 'var(--text-main)',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    cursor: videoPersisting ? 'not-allowed' : 'pointer',
+                                                    opacity: videoPersisting ? 0.6 : 1,
+                                                }}
+                                            >
+                                                <FaCamera size={24} style={{ color: 'var(--secondary)' }} />
+                                                <span style={{ fontSize: '0.9rem' }}>{t('take_photo', 'Take photo')}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {cameraSubMode === 'photo' && (
+                                    <UnifiedCamera
+                                        mode="photo"
+                                        allowFilePicker={false}
+                                        onMediaCaptured={(file, url) => handlePhotoCapture(file, url)}
+                                        stopCamera={() => setCameraSubMode(null)}
+                                    />
+                                )}
+
+                                {cameraSubMode === 'video' && (
+                                    <UnifiedCamera
+                                        mode="video"
+                                        maxDuration={15}
+                                        allowFilePicker={false}
+                                        onMediaCaptured={(file, url) => handleRecording(file, url)}
+                                        stopCamera={() => setCameraSubMode(null)}
+                                    />
+                                )}
+                            </>
                         )}
 
-                        {photoMode === 'upload' && !selectedMedia && (
-                            <div className="upload-wrapper" style={{ position: 'relative' }}>
+                        {videoPersisting && (
+                            <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: 8 }}>
+                                {t('saving_video', { defaultValue: 'Saving video…' })}
+                            </p>
+                        )}
+
+                        {selectedMedia?.type === 'video' && selectedMedia?.preview && (
+                            <div className="media-preview" style={{ position: 'relative', marginTop: 12 }}>
+                                <video
+                                    src={selectedMedia.preview}
+                                    controls
+                                    playsInline
+                                    className="preview-video"
+                                    style={{
+                                        width: '100%',
+                                        borderRadius: '12px',
+                                        maxHeight: '400px',
+                                    }}
+                                />
                                 <button
                                     type="button"
-                                    onClick={() => setPhotoMode(null)}
+                                    onClick={() => {
+                                        setSelectedMedia(null);
+                                        onMediaSelect(null);
+                                    }}
                                     style={{
-                                        position: 'absolute',
-                                        top: '-40px',
-                                        right: '0',
-                                        background: 'transparent',
+                                        marginTop: 8,
+                                        background: 'rgba(0,0,0,0.55)',
+                                        color: 'white',
                                         border: 'none',
-                                        color: 'var(--text-muted)',
+                                        borderRadius: '20px',
+                                        padding: '6px 14px',
+                                        fontSize: '0.8rem',
                                         cursor: 'pointer',
-                                        fontSize: '0.9rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '5px'
                                     }}
                                 >
-                                    <FaTimes /> Cancel
+                                    {t('remove_preview', 'Remove')}
                                 </button>
-                                <MediaUpload
-                                    type="image"
-                                    maxSize={10}
-                                    onMediaSelect={handleCustomMedia}
-                                />
                             </div>
                         )}
 
-                        {selectedMedia && (
-                            <div className="media-preview" style={{ position: 'relative' }}>
+                        {isCameraPhotoSelection && (
+                            <div className="media-preview" style={{ position: 'relative', marginTop: 12 }}>
                                 <img
                                     src={selectedMedia.preview}
-                                    alt="Selected"
+                                    alt=""
                                     className="preview-image"
                                     style={{
                                         width: '100%',
                                         maxHeight: '300px',
                                         objectFit: 'cover',
-                                        borderRadius: '12px'
+                                        borderRadius: '12px',
                                     }}
                                 />
                                 <button
                                     type="button"
-                                    className="remove-preview-btn"
-                                    onClick={() => setSelectedMedia(null)}
+                                    onClick={() => {
+                                        setSelectedMedia(null);
+                                        onMediaSelect(null);
+                                        setCameraSubMode(null);
+                                    }}
                                     style={{
-                                        position: 'absolute',
-                                        top: '10px',
-                                        right: '10px',
-                                        background: 'rgba(0,0,0,0.6)',
+                                        marginTop: 8,
+                                        background: 'rgba(0,0,0,0.55)',
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '20px',
-                                        padding: '5px 12px',
+                                        padding: '6px 14px',
                                         fontSize: '0.8rem',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
                                     }}
                                 >
                                     {t('remove_preview', 'Remove')}
@@ -484,87 +544,106 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                     </div>
                 )}
 
-                {/* 3. Custom Video */}
-                {source === 'custom_video' && (
-                    <div className="custom-video-container">
-                        {!videoMode && !selectedMedia && (
-                            <div className="video-mode-selection">
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>{t('choose_how_to_add_video', 'Choose how to add your video:')}</p>
-                                <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                    <button
-                                        type="button"
-                                        className="mode-btn"
-                                        onClick={() => setVideoMode('record')}
-                                        style={{
-                                            padding: '1rem',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            border: '1px solid var(--border-color)',
-                                            borderRadius: '12px',
-                                            color: 'var(--text-main)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <FaCamera size={24} style={{ color: 'var(--primary)' }} />
-                                        <span style={{ fontSize: '0.9rem' }}>{t('record_video', 'Record')}</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="mode-btn"
-                                        onClick={() => setVideoMode('upload')}
-                                        style={{
-                                            padding: '1rem',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            border: '1px solid var(--border-color)',
-                                            borderRadius: '12px',
-                                            color: 'var(--text-main)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <FaUpload size={24} style={{ color: 'var(--secondary)' }} />
-                                        <span style={{ fontSize: '0.9rem' }}>{t('upload_media_tab', 'Upload')}</span>
-                                    </button>
+                {source === 'upload' && (
+                    <div className="custom-image-container">
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12, textAlign: 'center' }}>
+                            {t(
+                                'upload_photo_only_hint',
+                                {
+                                    defaultValue:
+                                        'Choose an image from your device. Videos are not accepted here — use the Camera tab to record.',
+                                }
+                            )}
+                        </p>
+                        {libraryImages.length > 0 && (
+                            <div style={{ marginBottom: 14 }}>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+                                    {t('saved_media_library', { defaultValue: 'Saved media library' })}
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 10 }}>
+                                    {libraryImages.map((url, idx) => (
+                                        <div
+                                            key={`${url}-${idx}`}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => selectLibraryImage(url)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') selectLibraryImage(url);
+                                            }}
+                                            style={{
+                                                position: 'relative',
+                                                borderRadius: 10,
+                                                overflow: 'hidden',
+                                                height: 90,
+                                                cursor: 'pointer',
+                                                border:
+                                                    selectedMedia?.preview === url ? '3px solid var(--primary)' : '2px solid var(--border-color)',
+                                            }}
+                                        >
+                                            <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            {onDeleteLibraryImage && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeleteLibraryImage(url);
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 4,
+                                                        right: 4,
+                                                        background: 'rgba(220,38,38,0.9)',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        borderRadius: 8,
+                                                        padding: '3px 6px',
+                                                        fontSize: '0.65rem',
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {t('delete', { defaultValue: 'Delete' })}
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
-
-                        {videoMode === 'record' && !selectedMedia && (
-                            <UnifiedCamera
-                                mode="video"
-                                maxDuration={15}
-                                onMediaCaptured={handleRecording}
-                                stopCamera={() => setVideoMode(null)}
-                            />
-                        )}
-
-                        {videoMode === 'upload' && !selectedMedia && (
+                        {!isUploadSelection && (
                             <MediaUpload
-                                type="video"
-                                maxDuration={15}
-                                maxSize={50}
-                                onMediaSelect={handleCustomMedia}
-                                onCancel={() => setVideoMode(null)}
+                                type="image"
+                                maxSize={10}
+                                onMediaSelect={async (file, preview, type) => {
+                                    if (onPersistImage && type === 'image') {
+                                        const persisted = await onPersistImage(file);
+                                        if (persisted) {
+                                            const mediaData = {
+                                                source: 'custom_image',
+                                                type: 'image',
+                                                file: null,
+                                                preview: persisted,
+                                                fromLibrary: true,
+                                            };
+                                            setSelectedMedia(mediaData);
+                                            onMediaSelect(mediaData);
+                                            return;
+                                        }
+                                    }
+                                    handleCustomMedia(file, preview, type);
+                                }}
                             />
                         )}
-
-                        {selectedMedia && (
+                        {isUploadSelection && (selectedMedia.preview || selectedMedia.url) && (
                             <div className="media-preview" style={{ position: 'relative' }}>
-                                <video
-                                    src={selectedMedia.preview}
-                                    controls
-                                    playsInline
-                                    className="preview-video"
+                                <img
+                                    src={selectedMedia.preview || selectedMedia.url}
+                                    alt="Selected"
+                                    className="preview-image"
                                     style={{
                                         width: '100%',
+                                        maxHeight: '300px',
+                                        objectFit: 'cover',
                                         borderRadius: '12px',
-                                        maxHeight: '400px'
                                     }}
                                 />
                                 <button
@@ -572,7 +651,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                     className="remove-preview-btn"
                                     onClick={() => {
                                         setSelectedMedia(null);
-                                        setVideoMode(null);
+                                        onMediaSelect(null);
                                     }}
                                     style={{
                                         position: 'absolute',
@@ -584,7 +663,7 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
                                         borderRadius: '20px',
                                         padding: '5px 12px',
                                         fontSize: '0.8rem',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
                                     }}
                                 >
                                     {t('remove_preview', 'Remove')}
@@ -596,7 +675,6 @@ const MediaSelector = ({ restaurant, suggestedImages = [], suggestedImagesLoadin
             </div>
         </div>
     );
-
 };
 
 export default MediaSelector;

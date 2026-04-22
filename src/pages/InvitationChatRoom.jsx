@@ -11,7 +11,7 @@ import {
     FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers, FaKeyboard
 } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
 import './CommunityChatRoom.css';
@@ -446,11 +446,14 @@ const InvitationChatRoom = () => {
         </div>
     );
 
-    // Invitation image helper
-    const invImage = invitation?.customImage || invitation?.restaurantImage || invitation?.image;
+    const invImage = pickSafeDisplayImageUrl(
+        invitation?.customImage,
+        invitation?.restaurantImage,
+        invitation?.image
+    );
 
     return (
-        <div ref={containerRef} className="chat-screen invitation-chat-root">
+        <div ref={containerRef} dir="ltr" className="chat-screen invitation-chat-root">
 
             {/* Subtle dot-grid overlay for depth */}
             <div style={{

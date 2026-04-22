@@ -3,13 +3,13 @@ import { FaMapMarkerAlt, FaSearch, FaStore, FaStar, FaGlobe, FaTimes } from 'rea
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
 import LocationAutocomplete from './LocationAutocomplete';
+import { sortDineBuddiesVenues } from '../utils/invitationVenueSearch';
+import './venue-search.css';
 
 /**
  * VenueLocationPicker
- * A drop-in replacement for LocationAutocomplete that adds a toggle
- * between searching DineBuddies registered venues and Google Places.
+ * Toggle between DineBuddies registered venues and OpenStreetMap (Photon) search.
  *
  * Props mirror LocationAutocomplete:
  *   value, onChange, onSelect, city, countryCode, userLat, userLng, className
@@ -26,21 +26,18 @@ const VenueLocationPicker = ({
     countryCode,
     userLat,
     userLng,
+    /** Invitation venue type (Restaurant, Cafe, …) — ranks matching partners & Google predictions. */
+    invitationType,
     className = ''
 }) => {
     const { t } = useTranslation();
-    const [source, setSource] = useState('dinebuddies'); // 'dinebuddies' | 'google'
+    const [source, setSource] = useState('dinebuddies'); // 'dinebuddies' | 'osm'
     const [dbQuery, setDbQuery] = useState('');
     const [dbResults, setDbResults] = useState([]);
     const [dbLoading, setDbLoading] = useState(false);
     const [showDbDropdown, setShowDbDropdown] = useState(false);
     const wrapperRef = useRef(null);
     const debounceRef = useRef(null);
-
-    // Pre-load Google Maps script immediately so it's ready when user switches to Google tab
-    useEffect(() => {
-        loadGoogleMapsScript().catch(() => { });
-    }, []);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -102,19 +99,8 @@ const VenueLocationPicker = ({
                 }
             });
 
-            // Sort: city match first
-            if (city) {
-                const cityLower = city.toLowerCase();
-                results.sort((a, b) => {
-                    const aMatch = a.city.toLowerCase().includes(cityLower);
-                    const bMatch = b.city.toLowerCase().includes(cityLower);
-                    if (aMatch && !bMatch) return -1;
-                    if (!aMatch && bMatch) return 1;
-                    return 0;
-                });
-            }
-
-            setDbResults(results.slice(0, 10));
+            const ranked = sortDineBuddiesVenues(results, city, undefined);
+            setDbResults(ranked.slice(0, 10));
         } catch (err) {
             console.error('DineBuddies venue search error:', err);
             setDbResults([]);
@@ -173,38 +159,13 @@ const VenueLocationPicker = ({
     };
 
     return (
-        <div ref={wrapperRef}>
+        <div ref={wrapperRef} className="venue-location-picker">
             {/* Toggle */}
-            <div style={{
-                display: 'flex',
-                gap: 6,
-                marginBottom: 10,
-                background: 'var(--bg-input)',
-                borderRadius: 12,
-                padding: '4px',
-                border: '1px solid var(--border-color)'
-            }}>
+            <div className="venue-search-segment">
                 <button
                     type="button"
                     onClick={() => switchSource('dinebuddies')}
-                    style={{
-                        flex: 1,
-                        padding: '8px 10px',
-                        borderRadius: 9,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        fontSize: '0.8rem',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        background: source === 'dinebuddies'
-                            ? 'var(--primary)'
-                            : 'transparent',
-                        color: source === 'dinebuddies' ? 'white' : 'var(--text-muted)'
-                    }}
+                    className={`venue-search-segment__btn${source === 'dinebuddies' ? ' venue-search-segment__btn--active' : ''}`}
                 >
                     <FaStore style={{ fontSize: '0.85rem' }} />
                     {t('dinbuddies_venues', 'DineBuddies Venues')}
@@ -212,42 +173,38 @@ const VenueLocationPicker = ({
 
                 <button
                     type="button"
-                    onClick={() => switchSource('google')}
-                    style={{
-                        flex: 1,
-                        padding: '8px 10px',
-                        borderRadius: 9,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        fontSize: '0.8rem',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        background: source === 'google'
-                            ? 'var(--primary)'
-                            : 'transparent',
-                        color: source === 'google' ? 'white' : 'var(--text-muted)'
-                    }}
+                    onClick={() => switchSource('osm')}
+                    className={`venue-search-segment__btn${source === 'osm' ? ' venue-search-segment__btn--active' : ''}`}
                 >
                     <FaGlobe style={{ fontSize: '0.85rem' }} />
-                    {t('google_places', 'Google Places')}
+                    {t('openstreetmap_places', 'All places (OpenStreetMap)')}
                 </button>
             </div>
+
+            {source === 'osm' && (
+                <p style={{
+                    fontSize: '0.72rem',
+                    color: 'var(--text-muted)',
+                    margin: '0 0 8px 0',
+                    lineHeight: 1.35,
+                }}>
+                    {t('venue_osm_search_hint', 'Search powered by OpenStreetMap — no Google Places fees.')}
+                </p>
+            )}
 
             {/* DineBuddies search input */}
             {source === 'dinebuddies' && (
                 <div style={{ position: 'relative' }}>
                     <input
                         type="text"
+                        name="location"
                         value={dbQuery}
                         onChange={handleDbInput}
                         onFocus={() => dbQuery.length >= 2 && setShowDbDropdown(true)}
                         placeholder={t('search_dineBuddies_venue', 'Search registered venues on DineBuddies...')}
                         className={`input-field ${className}`}
                         autoComplete="off"
+                        required
                         style={{ paddingRight: dbQuery ? '36px' : undefined }}
                     />
 
@@ -266,19 +223,7 @@ const VenueLocationPicker = ({
 
                     {/* Dropdown */}
                     {showDbDropdown && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            right: 0,
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '0 0 12px 12px',
-                            zIndex: 1000,
-                            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                            maxHeight: 320,
-                            overflowY: 'auto'
-                        }}>
+                        <div className="venue-search-dropdown venue-search-dropdown--tight">
                             {dbLoading && (
                                 <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                                     {t('searching', 'Searching...')}
@@ -289,7 +234,7 @@ const VenueLocationPicker = ({
                                 <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                                     <div style={{ marginBottom: 6 }}>😕 {t('no_venues_found', 'No registered venues found')}</div>
                                     <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>
-                                        {t('try_google_places_hint', 'Try Google Places for unregistered venues')}
+                                        {t('try_osm_places_hint', 'Search all places (OpenStreetMap) for unregistered venues')}
                                     </div>
                                 </div>
                             )}
@@ -298,26 +243,10 @@ const VenueLocationPicker = ({
                                 <div
                                     key={venue.id}
                                     onClick={() => handleDbSelect(venue)}
-                                    style={{
-                                        padding: '12px 16px',
-                                        cursor: 'pointer',
-                                        borderBottom: '1px solid var(--border-color)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        transition: 'background 0.15s'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    className="venue-search-row"
                                 >
                                     {/* Venue avatar/image */}
-                                    <div style={{
-                                        width: 42, height: 42, borderRadius: '10px',
-                                        overflow: 'hidden', flexShrink: 0,
-                                        background: 'var(--bg-input)',
-                                        border: '1px solid var(--border-color)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
+                                    <div className="venue-search-partner-thumb">
                                         {venue.avatar || venue.image
                                             ? <img
                                                 src={venue.avatar || venue.image}
@@ -351,22 +280,13 @@ const VenueLocationPicker = ({
                             {/* Hint to switch to Google */}
                             {!dbLoading && (
                                 <div
-                                    onClick={() => switchSource('google')}
-                                    style={{
-                                        padding: '12px 16px',
-                                        cursor: 'pointer',
-                                        display: 'flex', alignItems: 'center', gap: 10,
-                                        background: 'var(--bg-input)',
-                                        borderTop: '1px solid var(--border-color)',
-                                        transition: 'background 0.15s'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-input)'}
+                                    onClick={() => switchSource('osm')}
+                                    className="venue-search-footer-hint"
                                 >
                                     <FaGlobe style={{ color: 'var(--text-muted)', fontSize: '1rem' }} />
                                     <div>
                                         <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                                            {t('switch_to_google', 'Search on Google Places instead')}
+                                            {t('switch_to_osm', 'Search OpenStreetMap instead')}
                                         </div>
                                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                                             {t('for_unregistered_venues', 'For venues not yet on DineBuddies')}
@@ -379,8 +299,8 @@ const VenueLocationPicker = ({
                 </div>
             )}
 
-            {/* Google Places — always mounted so service initializes immediately; shown/hidden via CSS */}
-            <div style={{ display: source === 'google' ? 'block' : 'none' }}>
+            {/* Mount OSM field only when active — avoids hidden `required` input (browser "not focusable" bug). */}
+            {source === 'osm' && (
                 <LocationAutocomplete
                     value={value}
                     onChange={onChange}
@@ -389,9 +309,10 @@ const VenueLocationPicker = ({
                     countryCode={countryCode}
                     userLat={userLat}
                     userLng={userLng}
+                    invitationType={invitationType}
                     className={className}
                 />
-            </div>
+            )}
         </div>
     );
 };

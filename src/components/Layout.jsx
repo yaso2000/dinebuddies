@@ -10,6 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import ProfileCompletionModal from './ProfileCompletionModal';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
+import PrivateInvitationOverlay from './Invitation/PrivateInvitationOverlay';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -17,8 +18,9 @@ import OffersBanner from './OffersBanner';
 import RankingSidebarWidget from './RankingSidebarWidget';
 import PushNotificationPrompt from './PushNotificationPrompt';
 import { isBusinessUser } from '../utils/accountRole';
-import { needsConsumerEmailVerification } from '../utils/emailVerification';
+import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
 import { goToLogin } from '../utils/goToLogin';
+import { isAdminIdentity } from '../utils/adminAccess';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -108,17 +110,18 @@ const Layout = ({ children }) => {
                 aria-busy="true"
                 style={{
                     minHeight: '100dvh',
+                    width: '100%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'var(--bg-body)',
+                    background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)',
                 }}
             >
                 <div
                     style={{
                         width: 44,
                         height: 44,
-                        border: '4px solid var(--border-color)',
+                        border: '4px solid rgba(148, 163, 184, 0.15)',
                         borderTopColor: 'var(--primary)',
                         borderRadius: '50%',
                         animation: 'spin 0.9s linear infinite',
@@ -128,8 +131,10 @@ const Layout = ({ children }) => {
         );
     }
 
-    // 2. Email verification guard — skips for guests and businesses
-    if (!isGuest && currentUser && needsConsumerEmailVerification(currentUser, userProfile)) {
+    // 2. Email verification — email/password accounts (consumer or business) until verified
+    // For business accounts, we allow them to continue but show the EmailVerificationBusinessBanner instead of force redirect.
+    const isAdminAccount = isAdminIdentity(currentUser, userProfile);
+    if (!isAdminAccount && !isGuest && currentUser && userProfile && needsConsumerEmailVerification(currentUser, userProfile)) {
         return <Navigate to="/verify-email" replace />;
     }
 
@@ -152,6 +157,9 @@ const Layout = ({ children }) => {
         location.pathname === '/messages' ||
         location.pathname.startsWith('/messages') ||
         (location.pathname.startsWith('/invitation/') && location.pathname.endsWith('/chat'));
+    /** Conversation list in left column — not on /messages (desktop: show main nav + list in center). */
+    const isMessagesIndex = location.pathname === '/messages';
+    const showConversationSidebar = isChatRoute && !isMessagesIndex;
     const isCommunityRoute = location.pathname.startsWith('/community/');
     const isStoryRoute = location.pathname === '/create-story';
     const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
@@ -382,6 +390,7 @@ const Layout = ({ children }) => {
 
             <ProfileCompletionModal />
             <PushNotificationPrompt />
+            <PrivateInvitationOverlay />
 
             {/* ── HEADER ── always on desktop, hidden on mobile chat ── */}
             <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}`}>
@@ -435,7 +444,7 @@ const Layout = ({ children }) => {
             <div className="ds-body-grid">
 
                 {/* Column 1 — contextual left sidebar */}
-                {isChatRoute ? (
+                {showConversationSidebar ? (
                     <ChatSidebar />
                 ) : isCommunityRoute ? (
                     <CommunitySidebar />
@@ -509,7 +518,7 @@ const Layout = ({ children }) => {
                                 <FaCog /><span>{t('settings', 'Settings')}</span>
                             </Link>
                         )}
-                        {(userProfile?.role === 'admin' || ['admin@dinebuddies.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au', 'y.abohamed@gmail.com'].includes(currentUser?.email?.toLowerCase()) || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') && (
+                        {isAdminAccount && (
                             <Link to="/admin" className={`ds-nav-item ${isActive('/admin') ? 'active' : ''}`}>
                                 <FaCrown /><span>Admin</span>
                             </Link>
@@ -519,7 +528,7 @@ const Layout = ({ children }) => {
                 )}
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}`}>
+                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}`}>
                     <EmailVerificationBusinessBanner />
                     <UnpublishedBusinessReminder />
                     {children}
@@ -572,7 +581,7 @@ const Layout = ({ children }) => {
                             <span>{t('my_community')}</span>
                         </Link>
                     )}
-                    {(userProfile?.role === 'admin' || ['admin@dinebuddies.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au', 'y.abohamed@gmail.com'].includes(currentUser?.email?.toLowerCase()) || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') && (
+                    {isAdminAccount && (
                         <Link to="/admin" className={`nav-item ${isActive('/admin') ? 'active' : ''}`}>
                             <FaCrown className="nav-icon" />
                             <span>Admin</span>

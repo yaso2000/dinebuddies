@@ -1,19 +1,44 @@
-/** Google Maps PhotoService URLs cannot be used as direct img src (403; callback-style URL, not a stable image). */
+/**
+ * Google Places image URLs (JS PhotoService, REST /place/photo, etc.) are not persisted app media.
+ * Do not use as gallery/cover img src — use Firebase Storage + Firestore instead.
+ */
+export function isGooglePlaceImageUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    if (/maps\.googleapis\.com\/maps\/api\/place\/photo\b/i.test(url)) return true;
+    return /PhotoService\.GetPhoto|maps\.googleapis\.com.*PhotoService|place\/js.*PhotoService/i.test(url);
+}
+
+/**
+ * Legacy server proxy URLs (Firebase `placePhoto` / Vercel `api/place-photo`) are disabled (410).
+ * Stored gallery/cover entries must not keep these as img src.
+ */
+export function isPlacePhotoProxyUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const u = url.trim();
+    return u.includes('/api/place-photo') || u.includes('/__dev/place-photo');
+}
+
+/** True for Google Place CDNs and disabled place-photo proxies — do not render or persist as media URLs. */
+export function shouldBlockDirectImageLoad(url) {
+    if (!url || typeof url !== 'string') return true;
+    if (isGooglePlaceImageUrl(url)) return true;
+    if (isPlacePhotoProxyUrl(url)) return true;
+    return false;
+}
+
 const isInvalidDirectImageUrl = (url) => {
     if (!url || typeof url !== 'string') return true;
-    return /PhotoService\.GetPhoto|maps\.googleapis\.com.*PhotoService|place\/js.*PhotoService/i.test(url);
+    return shouldBlockDirectImageLoad(url);
 };
 
 /**
  * Safe cover/header image URL for business profiles.
- * Accepts Firebase Storage URLs, our /api/place-photo URLs, etc.
- * Rejects Maps JS PhotoService callback URLs (403 as direct img src on localhost).
+ * Rejects Maps JS PhotoService URLs and disabled /api/place-photo proxies.
  */
 export const getSafeCoverImage = (url) => {
     if (!url || typeof url !== 'string') return null;
     if (isInvalidDirectImageUrl(url)) return null;
     if (url.startsWith('http') || url.startsWith('data:image')) return url;
-    if (url.startsWith('/api/place-photo') || url.startsWith('/__dev/place-photo')) return url;
     return null;
 };
 
@@ -75,10 +100,11 @@ export const getSafeAvatar = (userData) => {
  * Returns a consistent default avatar (Initial-based or silhouette)
  */
 export const getDefaultAvatar = (name = '') => {
-    if (name && name !== 'User' && name !== 'Member') {
-        const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    const label = name == null ? '' : String(name).trim();
+    if (label && label !== 'User' && label !== 'Member') {
+        const initials = label.split(/\s+/).map((n) => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2);
         // Using UI Avatars for a clean, initials-based look
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7c3aed&color=fff&bold=true&size=150`;
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(label)}&background=7c3aed&color=fff&bold=true&size=150`;
     }
 
     // Elegant silhouette SVG as the absolute base fallback

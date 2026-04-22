@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { db } from '../firebase/config';
+import app, { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+
+const FUNCTIONS_REGION = 'us-central1';
 import {
     collection,
     query,
@@ -28,10 +30,11 @@ import notificationSound from '../utils/notificationSound';
 import { followUser, unfollowUser } from '../utils/followHelpers';
 import { convertFromUSD, getCurrencyByCountry } from '../utils/currencyConverter';
 import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../config/planDefaults';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { incrementBusinessInvitationCount } from '../services/businessLikeService';
+import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
 
 const InvitationContext = createContext(null);
 
@@ -71,7 +74,7 @@ export const InvitationProvider = ({ children }) => {
     const [restaurants, setRestaurants] = useState([]);
     const [loadingInvitations, setLoadingInvitations] = useState(true);
     const [detectedCountry, setDetectedCountry] = useState(null);
-    const functions = getFunctions();
+    const functions = getFunctions(app, FUNCTIONS_REGION);
     const publishPrivateInvitationDraftCallable = httpsCallable(functions, 'publishPrivateInvitationDraft');
     const setCommunityMembershipCallable = httpsCallable(functions, 'setCommunityMembership');
     const listCommunityMembersCallable = httpsCallable(functions, 'listCommunityMembers');
@@ -111,8 +114,8 @@ export const InvitationProvider = ({ children }) => {
 
     // --- 1b. Sync Private Invitations (separate collection) ---
     useEffect(() => {
-        if (!currentUser?.id || currentUser.id === 'guest') return;
-        const userId = currentUser.id;
+        const userId = currentUser?.uid || currentUser?.id;
+        if (!userId || userId === 'guest') return;
 
         // Query 1: invitations where user is the host
         const qHost = query(
@@ -163,7 +166,7 @@ export const InvitationProvider = ({ children }) => {
             unsubHost();
             unsubInvited();
         };
-    }, [currentUser?.id]);
+    }, [currentUser?.uid]);
 
     // --- 2. Sync Businesses (directory - visible to everyone including guests) ---
     // Enrich with ratings so directory cards show same rating as profile/dashboard
@@ -214,7 +217,7 @@ export const InvitationProvider = ({ children }) => {
                     ownerId: doc.id,
                     name: data.displayName || 'Business',
                     type: info.businessType || 'Restaurant',
-                    image: info.coverImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
+                    image: pickSafeDisplayImageUrl(info.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
                     avatar: data.avatarUrl || '',
                     location: info.city || info.address || 'Sydney',
                     description: info.description || '',
@@ -608,6 +611,10 @@ export const InvitationProvider = ({ children }) => {
         try {
             if (!newInvite.title) return false;
 
+            // Firebase Auth User uses `uid` (not `id`). Never omit authorId or publish will reject the host.
+            const creatorUid = currentUser.uid || currentUser.id;
+            if (!creatorUid || creatorUid === 'guest') return false;
+
             // Remove undefined values — Firestore rejects them (e.g. lat/lng when no location selected)
             const sanitize = (obj) => {
                 const clean = {};
@@ -617,17 +624,30 @@ export const InvitationProvider = ({ children }) => {
                 return clean;
             };
 
-            const inviteData = sanitize({
+            const displayName =
+                currentUser.displayName ||
+                firebaseProfile?.display_name ||
+                firebaseProfile?.displayName ||
+                'User';
+
+            let inviteData = sanitize({
                 ...newInvite,
-                authorId: currentUser.id,
+                authorId: creatorUid,
                 author: {
-                    id: currentUser.id,
-                    name: currentUser.name || 'User',
+                    id: creatorUid,
+                    name: displayName,
                     avatar: getSafeAvatar(currentUser)
                 },
                 privacy: 'private',
                 createdAt: serverTimestamp()
             });
+            if (inviteData.invitedFriends?.length) {
+                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteData.invitedFriends);
+                inviteData = { ...inviteData, invitedFriends: allowed };
+                if (skipped.length) {
+                    showToast('Some people could not be invited (they blocked or muted you).', 'info');
+                }
+            }
             const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
             if (newInvite.restaurantId) incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
             return docRef.id;
@@ -834,7 +854,8 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const publishPrivateInvitationDraft = async (invitationId) => {
-        if (!invitationId || !currentUser || currentUser.id === 'guest') {
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!invitationId || !currentUser || uid === 'guest') {
             return { success: false, alreadyPublished: false };
         }
         try {
@@ -852,7 +873,8 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const respondToPrivateInvitation = async (invId, status) => {
-        if (!currentUser || currentUser.id === 'guest') return false;
+        const me = currentUser?.uid || currentUser?.id;
+        if (!currentUser || me === 'guest') return false;
         if (currentUser?.role === 'business' || currentUser?.isBusiness) {
             showToast('Business accounts cannot respond to invitations.', 'error');
             return false;
@@ -864,8 +886,10 @@ export const InvitationProvider = ({ children }) => {
 
             const invData = invDoc.data();
             const hostId = invData.authorId || invData.author?.id;
+            const responderName =
+                currentUser.displayName || firebaseProfile?.display_name || firebaseProfile?.displayName || 'Guest';
 
-            await updateDoc(invRef, { [`rsvps.${currentUser.id}`]: status });
+            await updateDoc(invRef, { [`rsvps.${me}`]: status });
 
             if (status === 'declined') {
                 const updatedDoc = await getDoc(invRef);
@@ -889,12 +913,12 @@ export const InvitationProvider = ({ children }) => {
                 }
             }
 
-            if (hostId && hostId !== currentUser.id) {
+            if (hostId && hostId !== me) {
                 await addUserNotification({
                     userId: hostId,
                     type: 'private_invitation_response',
                     title: status === 'accepted' ? '✅ Invitation Accepted' : '❌ Invitation Declined',
-                    message: `${currentUser.name} has ${status === 'accepted' ? 'accepted' : 'declined'} your private invitation "${invData.title}"`,
+                    message: `${responderName} has ${status === 'accepted' ? 'accepted' : 'declined'} your private invitation "${invData.title}"`,
                     invitationId: invId,
                     actionUrl: `/invitation/private/${invId}`,
                     status: status,
@@ -1108,7 +1132,8 @@ export const InvitationProvider = ({ children }) => {
     const toggleCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return;
         const isJoined = (firebaseProfile?.joinedCommunities || []).includes(partnerId);
-        if (isJoined) await leaveCommunity(partnerId); else await joinCommunity(partnerId);
+        if (isJoined) return await leaveCommunity(partnerId);
+        return await joinCommunity(partnerId);
     };
 
     const getCommunityMembers = async (partnerId, options = {}) => {
@@ -1200,6 +1225,29 @@ export const InvitationProvider = ({ children }) => {
         return [...invitations, ...extra];
     }, [invitations, loadedMoreInvitations]);
 
+    const invitationsMergedFiltered = React.useMemo(() => {
+        const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
+        if (blocked.size === 0) return invitationsMerged;
+        return invitationsMerged.filter((inv) => {
+            const aid = inv.author?.id;
+            if (!aid) return true;
+            return !blocked.has(aid);
+        });
+    }, [invitationsMerged, firebaseProfile?.blockedUserIds]);
+
+    const privateInvitationsFiltered = React.useMemo(() => {
+        const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
+        const muted = new Set(asUidArray(firebaseProfile?.mutedUserIds));
+        if (blocked.size === 0 && muted.size === 0) return privateInvitations;
+        return privateInvitations.filter((inv) => {
+            const aid = inv.authorId || inv.author?.id;
+            if (!aid) return true;
+            if (blocked.has(aid)) return false;
+            if (muted.has(aid)) return false;
+            return true;
+        });
+    }, [privateInvitations, firebaseProfile?.blockedUserIds, firebaseProfile?.mutedUserIds]);
+
     const extendedCurrentUser = React.useMemo(() => {
         if (!currentUser) return null;
         return { ...currentUser, ...firebaseProfile };
@@ -1207,7 +1255,7 @@ export const InvitationProvider = ({ children }) => {
 
     return (
         <InvitationContext.Provider value={{
-            invitations: invitationsMerged, privateInvitations, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
+            invitations: invitationsMergedFiltered, privateInvitations: privateInvitationsFiltered, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
             loadMoreInvitations, hasMoreInvitations, loadingMoreInvitations,
             addInvitation, addPrivateInvitation, requestToJoin, cancelRequest,
             approveUser, rejectUser, respondToPrivateInvitation, canCreatePrivateInvitation, publishPrivateInvitationDraft,

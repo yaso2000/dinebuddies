@@ -6,11 +6,16 @@ import { useAuth } from '../context/AuthContext';
 import NewReportModal from '../components/NewReportModal';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment, FaChevronRight, FaHeart, FaBan, FaComments } from 'react-icons/fa';
+import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment, FaChevronRight, FaBan, FaVolumeMute } from 'react-icons/fa';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { getFollowers, getFollowing } from '../utils/followHelpers';
 import UserAvatar from '../components/UserAvatar';
 import { goToLogin } from '../utils/goToLogin';
+import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
+import { useToast } from '../context/ToastContext';
+
+/** ~5 invitation rows visible in scroll area (see .user-profile-invitation-list-scroll max-height). */
+const INVITATION_HISTORY_SCROLL_HINT_THRESHOLD = 5;
 
 const InvitationListItem = ({ inv, navigate, t }) => (
     <div
@@ -53,12 +58,20 @@ const UserProfile = () => {
         toggleFollow(targetUserId);
     };
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [socialBusy, setSocialBusy] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('public');
     const [networkUsers, setNetworkUsers] = useState([]);
     const [networkLoading, setNetworkLoading] = useState(false);
+    /** After blocking, keep showing this profile until the user navigates to another route (same userId mount). */
+    const [stayOnProfileAfterBlock, setStayOnProfileAfterBlock] = useState(false);
+
+    useEffect(() => {
+        setStayOnProfileAfterBlock(false);
+    }, [userId]);
 
     // Fetch user data from Firestore
     useEffect(() => {
@@ -148,38 +161,146 @@ const UserProfile = () => {
         );
     }
 
+    const myUid = currentUser?.uid || currentUser?.id;
+    const blockedIds = asUidArray(userProfile?.blockedUserIds);
+    const mutedIds = asUidArray(userProfile?.mutedUserIds);
+    const theirBlockedIds = asUidArray(user?.blockedUserIds);
+    const theyBlockedMe = Boolean(myUid && theirBlockedIds.includes(myUid));
+    const iBlockedThem = Boolean(myUid && blockedIds.includes(userId));
+    const iMutedThem = Boolean(myUid && mutedIds.includes(userId));
+
     const isFollowing = currentUser?.following?.includes(userId);
     // Respect the target user's "Allow Following" privacy setting.
     // Defaults to true for users who haven't configured it yet.
     const canBeFollowed = user.privacySettings?.allowFollowing !== false;
 
-    const publicInvitations = invitations.filter(inv =>
-        inv.author?.id === userId &&
-        inv.privacy !== 'private'
+    /** Public invitations only — private invites are stored in `private_invitations` and are visible only to the host on their own profile. */
+    const publicInvitations = invitations.filter(
+        (inv) => inv.author?.id === userId && inv.privacy !== 'private'
     );
 
-    const privateInvitations = invitations.filter(inv =>
-        inv.author?.id === userId &&
-        inv.privacy === 'private' &&
-        (inv.invitedFriends?.includes(currentUser?.id || currentUser?.uid))
-    );
-
-    const joinedInvitations = invitations.filter(inv =>
-        inv.joined?.includes(userId) &&
-        (inv.privacy !== 'private' || inv.invitedFriends?.includes(currentUser?.id || currentUser?.uid))
+    const joinedInvitations = invitations.filter(
+        (inv) =>
+            inv.joined?.includes(userId) &&
+            (inv.privacy !== 'private' || inv.invitedFriends?.includes(currentUser?.id || currentUser?.uid))
     );
 
     const getActiveList = () => {
         switch (activeTab) {
-            case 'public': return publicInvitations;
-            case 'private': return privateInvitations;
-            case 'joined': return joinedInvitations;
-            default: return [];
+            case 'public':
+                return publicInvitations;
+            case 'joined':
+                return joinedInvitations;
+            default:
+                return publicInvitations;
         }
     };
 
     const activeList = getActiveList();
 
+    const handleToggleMute = async () => {
+        if (currentUser?.isGuest || !myUid) {
+            goToLogin();
+            return;
+        }
+        if (socialBusy) return;
+        setSocialBusy(true);
+        try {
+            await toggleUserMute(myUid, userId, !iMutedThem);
+            showToast(
+                iMutedThem ? t('user_unmuted_toast', 'User unmuted.') : t('user_muted_toast', 'User muted for invitations and messages.'),
+                'success'
+            );
+        } catch (e) {
+            console.error(e);
+            showToast(t('error_update_settings', 'Something went wrong.'), 'error');
+        } finally {
+            setSocialBusy(false);
+        }
+    };
+
+    const handleToggleBlock = async () => {
+        if (currentUser?.isGuest || !myUid) {
+            goToLogin();
+            return;
+        }
+        if (socialBusy) return;
+        if (iBlockedThem) {
+            setSocialBusy(true);
+            try {
+                await toggleUserBlock(myUid, userId, false);
+                setStayOnProfileAfterBlock(false);
+                showToast(t('user_unblocked_toast', 'User unblocked.'), 'success');
+            } catch (e) {
+                console.error(e);
+                showToast(t('error_update_settings', 'Something went wrong.'), 'error');
+            } finally {
+                setSocialBusy(false);
+            }
+            return;
+        }
+        if (!window.confirm(t('block_user_confirm', 'Block this user? You will no longer see their profile, posts, or invitations.'))) {
+            return;
+        }
+        setSocialBusy(true);
+        try {
+            await toggleUserBlock(myUid, userId, true);
+            setStayOnProfileAfterBlock(true);
+            showToast(t('user_blocked_stay_on_page_toast', 'User blocked. You can keep viewing this page until you leave.'), 'success');
+        } catch (e) {
+            console.error(e);
+            showToast(t('error_update_settings', 'Something went wrong.'), 'error');
+        } finally {
+            setSocialBusy(false);
+        }
+    };
+
+    if (myUid && !currentUser?.isGuest && theyBlockedMe) {
+        return (
+            <div className="profile-page" style={{ paddingBottom: '100px' }}>
+                <header className="app-header" style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(25px)', padding: '0 1rem', marginBottom: '1rem' }}>
+                    <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back">
+                        <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
+                    </button>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: '800' }}>{t('profile')}</h3>
+                    </div>
+                    <div style={{ width: '40px' }} />
+                </header>
+                <div style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('profile_unavailable_blocked_you', 'This profile is unavailable.')}</p>
+                    <button type="button" className="btn btn-primary" onClick={() => navigate('/')}>{t('nav_home')}</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (myUid && !currentUser?.isGuest && iBlockedThem && !stayOnProfileAfterBlock) {
+        return (
+            <div className="profile-page" style={{ paddingBottom: '100px' }}>
+                <header className="app-header" style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(25px)', padding: '0 1rem', marginBottom: '1rem' }}>
+                    <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back">
+                        <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
+                    </button>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: '800' }}>{t('profile')}</h3>
+                    </div>
+                    <div style={{ width: '40px' }} />
+                </header>
+                <div style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('you_blocked_this_user', 'You blocked this user.')}</p>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={socialBusy}
+                        onClick={handleToggleBlock}
+                    >
+                        {t('unblock_user', 'Unblock')}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="profile-page" style={{ paddingBottom: '100px' }}>
@@ -266,123 +387,245 @@ const UserProfile = () => {
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', maxWidth: '500px', margin: '0 auto' }}>
-                        {/* Business accounts cannot follow regular users */}
-                        {userProfile?.role !== 'business' && canBeFollowed && (
+                    {/* Action buttons: row 1 = follow + message, row 2 = report + mute + block */}
+                    <div
+                        className="user-profile-action-rows"
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px',
+                            maxWidth: '520px',
+                            margin: '0 auto',
+                            width: '100%'
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: 'flex',
+                                gap: '10px',
+                                flexWrap: 'wrap',
+                                justifyContent: 'center',
+                                alignItems: 'stretch'
+                            }}
+                        >
+                            {userProfile?.role !== 'business' && canBeFollowed && (
+                                <button
+                                    onClick={() => {
+                                        if (currentUser?.isGuest || !currentUser) {
+                                            goToLogin();
+                                            return;
+                                        }
+                                        toggleFollow(userId);
+                                    }}
+                                    className="btn"
+                                    type="button"
+                                    style={{
+                                        flex: '1 1 140px',
+                                        minHeight: '52px',
+                                        background: isFollowing
+                                            ? 'rgba(139, 92, 246, 0.15)'
+                                            : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+                                        border: isFollowing ? '2px solid var(--primary)' : 'none',
+                                        color: isFollowing ? 'var(--primary)' : 'white',
+                                        fontSize: '0.95rem',
+                                        fontWeight: '800',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '10px',
+                                        transition: 'all 0.2s',
+                                        padding: '0 14px',
+                                        borderRadius: '14px'
+                                    }}
+                                >
+                                    {isFollowing ? (
+                                        <>
+                                            <FaCheckCircle size={18} aria-hidden />
+                                            <span>{t('following')}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FaUserFriends size={18} aria-hidden />
+                                            <span>{t('follow')}</span>
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            {userProfile?.role !== 'business' && !canBeFollowed && (
+                                <div
+                                    style={{
+                                        flex: '1 1 140px',
+                                        minHeight: '52px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        background: 'rgba(100,100,120,0.12)',
+                                        border: '1px solid rgba(100,100,120,0.25)',
+                                        borderRadius: '14px',
+                                        color: 'var(--text-muted)',
+                                        fontSize: '0.88rem',
+                                        fontWeight: '700',
+                                        cursor: 'default',
+                                        padding: '0 12px',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    {t('following_disabled', '🔒 Following Disabled')}
+                                </div>
+                            )}
+
                             <button
+                                type="button"
                                 onClick={() => {
-                                    if (currentUser?.isGuest || !currentUser) {
+                                    if (currentUser?.isGuest) {
                                         goToLogin();
                                         return;
                                     }
-                                    toggleFollow(userId);
+                                    navigate(`/chat/${userId}`);
                                 }}
                                 className="btn"
                                 style={{
-                                    flex: 1,
-                                    height: '55px',
-                                    background: isFollowing
-                                        ? 'rgba(139, 92, 246, 0.15)'
-                                        : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                                    border: isFollowing ? '2px solid var(--primary)' : 'none',
-                                    color: isFollowing ? 'var(--primary)' : 'white',
-                                    fontSize: '1rem',
-                                    fontWeight: '900',
+                                    flex: '1 1 140px',
+                                    minHeight: '52px',
+                                    background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                                    border: 'none',
+                                    color: 'white',
+                                    fontSize: '0.95rem',
+                                    fontWeight: '800',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: '10px',
-                                    transition: 'all 0.2s'
+                                    padding: '0 14px',
+                                    borderRadius: '14px'
                                 }}
                             >
-                                {isFollowing ? (
-                                    <>
-                                        <FaCheckCircle />
-                                        <span>{t('following')}</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <FaUserFriends />
-                                        <span>{t('follow')}</span>
-                                    </>
-                                )}
+                                <FaComment size={18} aria-hidden />
+                                <span>{t('message')}</span>
                             </button>
-                        )}
-                        {/* Show a "following locked" badge when the user has disabled following */}
-                        {userProfile?.role !== 'business' && !canBeFollowed && (
-                            <div style={{
-                                flex: 1,
-                                height: '55px',
+                        </div>
+
+                        <div
+                            style={{
                                 display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
                                 gap: '8px',
-                                background: 'rgba(100,100,120,0.12)',
-                                border: '1px solid rgba(100,100,120,0.25)',
-                                borderRadius: '12px',
-                                color: 'var(--text-muted)',
-                                fontSize: '0.9rem',
-                                fontWeight: '700',
-                                cursor: 'default',
-                            }}>
-                                {t('following_disabled', '🔒 Following Disabled')}
-                            </div>
-                        )}
-
-                        <button
-                            onClick={() => {
-                                if (currentUser?.isGuest) {
-                                    goToLogin();
-                                    return;
-                                }
-                                navigate(`/chat/${userId}`);
-                            }}
-                            className="btn"
-                            style={{
-                                flex: 1,
-                                height: '55px',
-                                background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
-                                border: 'none',
-                                color: 'white',
-                                fontSize: '1rem',
-                                fontWeight: '900',
-                                display: 'flex',
-                                alignItems: 'center',
+                                flexWrap: 'wrap',
                                 justifyContent: 'center',
-                                gap: '10px'
+                                alignItems: 'stretch'
                             }}
                         >
-                            <FaComment />
-                            <span>{t('message')}</span>
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (currentUser?.isGuest) {
+                                        goToLogin();
+                                        return;
+                                    }
+                                    setIsReportModalOpen(true);
+                                }}
+                                className="btn"
+                                style={{
+                                    flex: '1 1 100px',
+                                    minHeight: '48px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    color: '#EF4444',
+                                    border: '1px solid rgba(239, 68, 68, 0.22)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    fontSize: '0.88rem',
+                                    fontWeight: '700',
+                                    padding: '10px 12px',
+                                    borderRadius: '12px'
+                                }}
+                            >
+                                <FaFlag size={16} aria-hidden />
+                                <span>{t('profile_action_report', 'Report')}</span>
+                            </button>
 
-                        <button
-                            onClick={() => {
-                                if (currentUser?.isGuest) {
-                                    goToLogin();
-                                    return;
-                                }
-                                setIsReportModalOpen(true);
-                            }}
-                            className="btn"
-                            style={{
-                                width: '55px',
-                                height: '55px',
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                color: '#EF4444',
-                                border: '1px solid rgba(239, 68, 68, 0.2)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.2rem',
-                                padding: 0
-                            }}
-                            title={t('report_user_btn', 'Report User')}
-                        >
-                            <FaFlag />
-                        </button>
+                            {myUid && !currentUser?.isGuest && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleMute}
+                                        disabled={socialBusy}
+                                        className="btn"
+                                        style={{
+                                            flex: '1 1 100px',
+                                            minHeight: '48px',
+                                            background: iMutedThem ? 'rgba(139, 92, 246, 0.18)' : 'rgba(100, 116, 139, 0.1)',
+                                            color: iMutedThem ? 'var(--primary)' : 'var(--text-muted)',
+                                            border: `1px solid ${iMutedThem ? 'var(--primary)' : 'rgba(100, 116, 139, 0.28)'}`,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            fontSize: '0.88rem',
+                                            fontWeight: '700',
+                                            padding: '10px 12px',
+                                            borderRadius: '12px',
+                                            opacity: socialBusy ? 0.6 : 1
+                                        }}
+                                    >
+                                        <FaVolumeMute size={16} aria-hidden />
+                                        <span>{iMutedThem ? t('unmute_user', 'Unmute') : t('mute_user', 'Mute')}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleBlock}
+                                        disabled={socialBusy}
+                                        className="btn"
+                                        style={{
+                                            flex: '1 1 100px',
+                                            minHeight: '48px',
+                                            background: iBlockedThem ? 'rgba(16, 185, 129, 0.1)' : 'rgba(185, 28, 28, 0.08)',
+                                            color: iBlockedThem ? '#059669' : '#b91c1c',
+                                            border: `1px solid ${iBlockedThem ? 'rgba(16, 185, 129, 0.35)' : 'rgba(185, 28, 28, 0.28)'}`,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            fontSize: '0.88rem',
+                                            fontWeight: '700',
+                                            padding: '10px 12px',
+                                            borderRadius: '12px',
+                                            opacity: socialBusy ? 0.6 : 1
+                                        }}
+                                    >
+                                        <FaBan size={16} aria-hidden />
+                                        <span>{iBlockedThem ? t('unblock_user', 'Unblock') : t('block_user', 'Block')}</span>
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
+
+                    {stayOnProfileAfterBlock && iBlockedThem && (
+                        <div
+                            role="status"
+                            style={{
+                                marginTop: '14px',
+                                maxWidth: '520px',
+                                marginLeft: 'auto',
+                                marginRight: 'auto',
+                                padding: '12px 14px',
+                                borderRadius: '14px',
+                                fontSize: '0.85rem',
+                                lineHeight: 1.45,
+                                color: 'var(--text-muted)',
+                                background: 'rgba(185, 28, 28, 0.07)',
+                                border: '1px solid rgba(185, 28, 28, 0.2)',
+                                textAlign: 'center'
+                            }}
+                        >
+                            {t(
+                                'block_grace_banner',
+                                'This person is blocked. You can keep viewing this page; the simplified blocked view will show when you open their profile again.'
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {isReportModalOpen && (
@@ -441,7 +684,11 @@ const UserProfile = () => {
                         </button>
                     </div>
 
-                    <div style={{ minHeight: '100px' }}>
+                    <div
+                        className="user-profile-invitation-list-scroll"
+                        role="region"
+                        aria-label={t('invitation_history', 'Invitation History')}
+                    >
                         {activeList.map(inv => (
                             <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
                         ))}
@@ -452,6 +699,20 @@ const UserProfile = () => {
                             </div>
                         )}
                     </div>
+                    {activeList.length > INVITATION_HISTORY_SCROLL_HINT_THRESHOLD && (
+                        <p
+                            style={{
+                                fontSize: '0.72rem',
+                                color: 'var(--text-muted)',
+                                textAlign: 'center',
+                                marginTop: '10px',
+                                marginBottom: 0,
+                                opacity: 0.9
+                            }}
+                        >
+                            {t('invitation_history_scroll_hint', 'Scroll to see more')}
+                        </p>
+                    )}
                 </div>
 
                 {/* Followers Section */}

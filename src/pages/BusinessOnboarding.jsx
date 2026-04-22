@@ -2,13 +2,22 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
-import { FaStore, FaPhone, FaMapMarkerAlt, FaGlobe, FaEye } from 'react-icons/fa';
+import { FaStore, FaPhone, FaMapMarkerAlt, FaGlobe, FaEye, FaClock } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { db } from '../firebase/config';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import LocalhostAppPreviewHint from '../components/LocalhostAppPreviewHint';
-import { openingHoursToBusinessHours, mapGoogleTypesToBusinessType } from '../utils/googlePlacesBusiness';
+import {
+    openingHoursToBusinessHours,
+    mapGoogleTypesToBusinessType,
+    parseGoogleAddressComponents,
+} from '../utils/googlePlacesBusiness';
+import {
+    ENABLE_BACKGROUND_AREA_DETECT,
+    GEOLOCATION_OPTIONS,
+    detectCityCountryInBackground,
+} from '../utils/bigDataCloudGeocode';
 
 const BUSINESS_TYPES = [
     'Restaurant',
@@ -32,6 +41,7 @@ export default function BusinessOnboarding() {
 
     const [pageLoading, setPageLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [areaDetecting, setAreaDetecting] = useState(() => ENABLE_BACKGROUND_AREA_DETECT);
     const [formData, setFormData] = useState({
         businessName: '',
         businessType: 'Restaurant',
@@ -56,38 +66,33 @@ export default function BusinessOnboarding() {
     };
 
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    setFormData((prev) => ({ ...prev, userLat: lat, userLng: lng }));
-                    try {
-                        const response = await fetch(
-                            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-                        );
-                        if (!response.ok) return;
-                        const data = await response.json();
-                        const city = data.city || data.locality || data.principalSubdivision || '';
-                        const country = data.countryName || '';
-                        const countryCode = (data.countryCode || 'AU').toUpperCase();
-                        if (city) {
-                            setFormData((prev) => ({
-                                ...prev,
-                                city,
-                                country: country || prev.country,
-                                countryCode,
-                            }));
-                        }
-                    } catch {
-                        /* ignore */
-                    }
-                },
-                () => {
-                    /* GPS denied */
-                }
-            );
+        if (!ENABLE_BACKGROUND_AREA_DETECT) {
+            setAreaDetecting(false);
+            return;
         }
+        let mounted = true;
+        (async () => {
+            try {
+                const detected = await detectCityCountryInBackground({
+                    defaultCountryCode: 'AU',
+                    geolocationOptions: GEOLOCATION_OPTIONS,
+                });
+                if (!mounted) return;
+                setFormData((prev) => ({
+                    ...prev,
+                    userLat: detected.lat ?? prev.userLat,
+                    userLng: detected.lng ?? prev.userLng,
+                    countryCode: detected.countryCode || prev.countryCode,
+                    country: detected.countryName || prev.country,
+                    ...(detected.city ? { city: detected.city } : {}),
+                }));
+            } finally {
+                if (mounted) setAreaDetecting(false);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
     }, []);
 
     useEffect(() => {
@@ -143,7 +148,14 @@ export default function BusinessOnboarding() {
     const handleLocationSelect = useCallback((place) => {
         let city = '';
         let country = '';
-        if (place.fullAddress) {
+        let countryCode = '';
+        if (Array.isArray(place.addressComponents) && place.addressComponents.length > 0) {
+            const parsed = parseGoogleAddressComponents(place.addressComponents);
+            city = parsed.city;
+            country = parsed.country;
+            countryCode = parsed.countryCode;
+        }
+        if (!city && place.fullAddress) {
             const parts = place.fullAddress.split(',').map((p) => p.trim());
             if (parts.length >= 2) {
                 country = parts[parts.length - 1];
@@ -151,10 +163,15 @@ export default function BusinessOnboarding() {
             }
         }
         const mappedType = mapGoogleTypesToBusinessType(place.types || []);
-        const summary =
-            place.editorialSummary && String(place.editorialSummary).trim()
-                ? String(place.editorialSummary).trim().slice(0, 300)
-                : null;
+        const summaryRaw =
+            place.editorialSummary != null && place.editorialSummary !== ''
+                ? String(place.editorialSummary).trim()
+                : '';
+        const summary = summaryRaw ? summaryRaw.slice(0, 300) : null;
+
+        const nameFromPlace = (place.name && String(place.name).trim()) || '';
+        const phoneFromPlace = (place.phone && String(place.phone).trim()) || '';
+        const websiteFromPlace = (place.website && String(place.website).trim()) || '';
 
         setFormData((prev) => ({
             ...prev,
@@ -162,21 +179,19 @@ export default function BusinessOnboarding() {
                 (place.fullAddress && String(place.fullAddress).trim()) ||
                 place.name ||
                 prev.location,
-            lat: place.lat ?? prev.lat,
-            lng: place.lng ?? prev.lng,
+            lat: place.lat != null ? place.lat : prev.lat,
+            lng: place.lng != null ? place.lng : prev.lng,
             city: city || prev.city,
             country: country || prev.country,
-            phone:
-                place.phone && String(place.phone).trim()
-                    ? place.phone
-                    : prev.phone,
-            businessName:
-                (place.name && String(place.name).trim()) || prev.businessName,
+            countryCode: countryCode || prev.countryCode,
+            phone: phoneFromPlace || prev.phone,
+            businessName: nameFromPlace || prev.businessName,
             businessType: mappedType || prev.businessType,
             description: summary != null ? summary : prev.description,
-            website: (place.website && String(place.website).trim()) || prev.website,
+            website: websiteFromPlace || prev.website,
             placeId: place.placeId || prev.placeId,
-            importedHours: place.openingHours || prev.importedHours,
+            importedHours:
+                place.openingHours != null ? place.openingHours : prev.importedHours,
         }));
     }, []);
 
@@ -281,7 +296,7 @@ export default function BusinessOnboarding() {
                     <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                         {t(
                             'business_onboarding_sub',
-                            'Search for your venue on Google Maps first — name, address, phone, and more fill in when you pick a result. You can edit everything before saving.'
+                            'We detect your area first, then you search for your business on Google Maps. Picking a listing fills name, description (when available), phone, website, and opening hours — edit anything before saving.'
                         )}
                     </p>
                     <div style={{ marginTop: '1rem' }}>
@@ -296,53 +311,87 @@ export default function BusinessOnboarding() {
                             padding: '1.15rem',
                             borderRadius: 16,
                             border: '1px solid var(--border-color)',
-                            marginBottom: '1.25rem',
+                            marginBottom: '1.35rem',
                         }}
                     >
-                        <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '0 0 0.85rem', color: 'var(--text-main)' }}>
-                            📍 {t('business_onboarding_location_section', 'Business address (Google Maps)')}
-                        </h3>
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 0.65rem', lineHeight: 1.45 }}>
-                            {t(
-                                'business_onboarding_address_autocomplete_hint',
-                                'Refine the address or search manually if needed.'
-                            )}
-                        </p>
-                        <label style={{ ...labelStyle, fontSize: '0.82rem' }}>
-                            {t('form_location_placeholder', 'Search address or venue')}
-                            {' *'}
+                        <label style={{ ...labelStyle, fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                            {t('business_onboarding_detected_city_label', 'Detected city / area (automatic)')}
                         </label>
-                        <LocationAutocomplete
-                            value={formData.location}
-                            onChange={handleChange}
-                            onSelect={handleLocationSelect}
-                            city={formData.city}
-                            countryCode={formData.countryCode}
-                            userLat={formData.userLat}
-                            userLng={formData.userLng}
-                        />
-                    </div>
-
-                    {formData.city && (
-                        <div
+                        <input
+                            type="text"
+                            readOnly
+                            tabIndex={-1}
+                            aria-readonly="true"
+                            value={
+                                areaDetecting && !formData.city && !formData.country
+                                    ? ''
+                                    : [formData.city, formData.country].filter(Boolean).join(', ') ||
+                                      t(
+                                          'business_onboarding_area_unknown',
+                                          'Could not detect city — search still works; pick your business below.'
+                                      )
+                            }
+                            placeholder={
+                                areaDetecting && !formData.city && !formData.country
+                                    ? t('business_onboarding_area_detecting', 'Detecting approximate city…')
+                                    : ''
+                            }
                             style={{
-                                marginBottom: '1rem',
-                                padding: '0.65rem 0.75rem',
-                                borderRadius: 12,
-                                border: '1px solid rgba(139, 92, 246, 0.35)',
-                                background: 'rgba(139, 92, 246, 0.08)',
-                                fontSize: '0.85rem',
+                                ...inputStyle,
+                                cursor: 'default',
+                                opacity: areaDetecting && !formData.city && !formData.country ? 0.85 : 1,
+                                borderColor: 'rgba(139, 92, 246, 0.35)',
+                                background: 'rgba(139, 92, 246, 0.06)',
+                            }}
+                        />
+                        <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.45rem 0 0', lineHeight: 1.45 }}>
+                            {t('business_onboarding_area_hint')}
+                        </p>
+
+                        <div
+                            className="venue-search-stack"
+                            style={{
+                                marginTop: '1.1rem',
+                                paddingTop: '1.1rem',
+                                borderTop: '1px solid var(--border-color)',
                             }}
                         >
-                            <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem' }}>
-                                {t('detected_location', 'Detected area')}
-                            </span>
-                            <strong style={{ color: 'var(--primary)' }}>
-                                {formData.city}
-                                {formData.country ? `, ${formData.country}` : ''}
-                            </strong>
+                            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '0 0 0.5rem', color: 'var(--text-main)' }}>
+                                {t('business_onboarding_location_section', 'Find your business on Google Maps')}
+                            </h3>
+                            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 0.65rem', lineHeight: 1.45 }}>
+                                {t(
+                                    'business_onboarding_address_autocomplete_hint',
+                                    'Search by business name or address. Choosing a Google listing fills the fields below when Google provides them.'
+                                )}
+                            </p>
+                            <label style={{ ...labelStyle, fontSize: '0.82rem' }}>
+                                {t('form_location_placeholder', 'Search address or venue')}
+                                {' *'}
+                            </label>
+                            <LocationAutocomplete
+                                value={formData.location}
+                                onChange={handleChange}
+                                onSelect={handleLocationSelect}
+                                city={formData.city}
+                                countryCode={formData.countryCode}
+                                userLat={formData.userLat}
+                                userLng={formData.userLng}
+                                useGooglePlacesMinimal
+                            />
                         </div>
-                    )}
+                    </div>
+
+                    <h3
+                        style={{
+                            fontSize: '0.95rem',
+                            fontWeight: 800,
+                            margin: '0 0 0.85rem',
+                            color: 'var(--text-main)',
+                        }}
+                    >
+                        {t('business_onboarding_details_section', 'Business details')}
+                    </h3>
 
                     <div style={{ marginBottom: '1rem' }}>
                         <label style={labelStyle}>
@@ -413,6 +462,38 @@ export default function BusinessOnboarding() {
                             {(formData.description || '').length}/300
                         </div>
                     </div>
+
+                    {Array.isArray(formData.importedHours?.weekday_text) && formData.importedHours.weekday_text.length > 0 ? (
+                        <div
+                            style={{
+                                marginBottom: '1.25rem',
+                                padding: '1rem',
+                                borderRadius: 16,
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-body)',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
+                                <FaClock style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                                    {t('business_onboarding_hours_imported', 'Opening hours (from Google)')}
+                                </h3>
+                            </div>
+                            <p style={{ margin: '0 0 0.65rem', fontSize: '0.76rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                                {t(
+                                    'business_onboarding_hours_imported_hint',
+                                    'Saved with your listing. You can adjust hours later on your profile if needed.'
+                                )}
+                            </p>
+                            <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                                {formData.importedHours.weekday_text.map((line) => (
+                                    <li key={line} style={{ marginBottom: 4 }}>
+                                        {line}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : null}
 
                     <div
                         style={{

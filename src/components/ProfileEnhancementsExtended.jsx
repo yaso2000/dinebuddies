@@ -15,16 +15,16 @@ import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } fr
 import { db } from '../firebase/config';
 import './ProfileEnhancements.css';
 
-import SmartPlaceSearch from './SmartPlaceSearch';
 import MediaSelector from './Invitations/MediaSelector';
 import { uploadImage } from '../utils/imageUpload';
 import LocationAutocomplete from './LocationAutocomplete';
+import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { Country } from 'country-state-city';
 
 // ================================
 // 4. FAVORITE PLACES COMPONENT
 // ================================
-export const FavoritePlaces = ({ userId }) => {
+export const FavoritePlaces = ({ userId, readOnly = false }) => {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [places, setPlaces] = useState([]);
@@ -82,6 +82,14 @@ export const FavoritePlaces = ({ userId }) => {
             });
         }
     }, [adding]);
+
+    useEffect(() => {
+        if (readOnly) {
+            setAdding(false);
+            setPendingPlace(null);
+            setSelectedMedia(null);
+        }
+    }, [readOnly]);
 
     useEffect(() => {
         const fetchPlaces = async () => {
@@ -147,10 +155,11 @@ export const FavoritePlaces = ({ userId }) => {
                     }
                 }
             } else if (pendingPlace.photos && pendingPlace.photos.length > 0) {
-                // If no explicit selection but photos exist, use the first one (or place.image which is already set to first one)
-                // Try to upload the default image if it's external
-                const defaultUrl = pendingPlace.image || pendingPlace.photos[0];
-                if (defaultUrl && !defaultUrl.includes('firebasestorage')) {
+                // Legacy: only non-Google URLs (we do not persist Places PhotoService links).
+                const defaultUrl = pickSafeDisplayImageUrl(pendingPlace.image, ...pendingPlace.photos);
+                if (!defaultUrl) {
+                    finalImage = '';
+                } else if (!defaultUrl.includes('firebasestorage')) {
                     try {
                         setUploadProgress(10);
                         const response = await fetch(defaultUrl);
@@ -212,8 +221,8 @@ export const FavoritePlaces = ({ userId }) => {
                 lat: placeData.lat,
                 lng: placeData.lng
             },
-            photos: placeData.photos || [],
-            image: (placeData.photos && placeData.photos.length > 0) ? placeData.photos[0] : null,
+            photos: [],
+            image: null,
             source: placeData.types?.includes('restaurant') || placeData.types?.includes('food') ? 'google_restaurant' : 'google_place',
             businessId: placeData.placeId // Important for dupe check
         };
@@ -221,6 +230,7 @@ export const FavoritePlaces = ({ userId }) => {
     };
 
     const handleRemovePlace = async (placeId) => {
+        if (readOnly) return;
         try {
             const updatedPlaces = places.filter(p => p.id !== placeId);
 
@@ -237,6 +247,7 @@ export const FavoritePlaces = ({ userId }) => {
     };
 
     const toggleAdding = () => {
+        if (readOnly) return;
         if (adding) {
             setAdding(false);
             setPendingPlace(null);
@@ -258,16 +269,19 @@ export const FavoritePlaces = ({ userId }) => {
                     <FaMapMarkerAlt style={{ color: 'var(--secondary)', marginRight: '0.5rem' }} />
                     {t('favorite_places', 'Favorite Places')}
                 </h3>
-                <button
-                    className="add-place-btn"
-                    onClick={toggleAdding}
-                >
-                    {adding ? <FaTimes /> : <FaPlus />}
-                </button>
+                {!readOnly && (
+                    <button
+                        className="add-place-btn"
+                        onClick={toggleAdding}
+                        type="button"
+                    >
+                        {adding ? <FaTimes /> : <FaPlus />}
+                    </button>
+                )}
             </div>
 
             {adding && !pendingPlace && (
-                <div className="add-place-form" style={{ padding: '0 0 1rem 0' }}>
+                <div className="add-place-form venue-search-stack" style={{ padding: '0 0 1rem 0' }}>
 
                     {/* Location Context Header */}
                     <div style={{
@@ -412,14 +426,17 @@ export const FavoritePlaces = ({ userId }) => {
                                     </span>
                                 )}
                             </div>
-                            <button
-                                className="remove-place-btn"
-                                onClick={() => handleRemovePlace(place.id)}
-                                title={t('remove', 'Remove')}
-                                style={{ alignSelf: 'center', marginLeft: '10px', background: 'rgba(239,68,68,0.1)', color: 'var(--secondary)', border: 'none', borderRadius: '8px', padding: '8px', cursor: 'pointer' }}
-                            >
-                                <FaTrash />
-                            </button>
+                            {!readOnly && (
+                                <button
+                                    type="button"
+                                    className="remove-place-btn"
+                                    onClick={() => handleRemovePlace(place.id)}
+                                    title={t('remove', 'Remove')}
+                                    style={{ alignSelf: 'center', marginLeft: '10px', background: 'rgba(239,68,68,0.1)', color: 'var(--secondary)', border: 'none', borderRadius: '8px', padding: '8px', cursor: 'pointer' }}
+                                >
+                                    <FaTrash />
+                                </button>
+                            )}
                         </div>
                     ))
                 )}

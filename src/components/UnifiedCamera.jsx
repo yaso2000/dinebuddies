@@ -19,6 +19,8 @@ const UnifiedCamera = ({
     allowPhoto = false,    // If true, shows photo capture button
     maxDuration = 15,      // Max recording duration in seconds
     mode = 'video',        // 'video' or 'photo' or 'both' (default 'video') in UI
+    /** When false, hide gallery/file picker so capture is camera-only (e.g. invitation “Camera” tab). */
+    allowFilePicker = true,
 }) => {
     const { showToast } = useToast();
     const videoRef = useRef(null);
@@ -254,7 +256,11 @@ const UnifiedCamera = ({
                         {cameraError ? (
                             <div style={{ color: 'white', textAlign: 'center', padding: '20px' }}>
                                 <p>{cameraError}</p>
-                                <button type="button" onClick={() => uploadInputRef.current.click()} style={{ marginTop: '20px', padding: '10px 20px' }}>Upload Instead</button>
+                                {allowFilePicker ? (
+                                    <button type="button" onClick={() => uploadInputRef.current.click()} style={{ marginTop: '20px', padding: '10px 20px' }}>Upload Instead</button>
+                                ) : (
+                                    <button type="button" onClick={stopCamera} style={{ marginTop: '20px', padding: '10px 20px' }}>Close</button>
+                                )}
                             </div>
                         ) : (
                             <video
@@ -293,12 +299,15 @@ const UnifiedCamera = ({
                 ) : (
                     // Camera Controls
                     <>
-                        {/* 1. Upload Button */}
-                        <button type="button" onClick={() => uploadInputRef.current.click()} style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '50%', color: 'white', border: 'none' }}>
-                            <FaFileUpload size={20} />
-                        </button>
+                        {allowFilePicker ? (
+                            <button type="button" onClick={() => uploadInputRef.current.click()} style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '50%', color: 'white', border: 'none' }}>
+                                <FaFileUpload size={20} />
+                            </button>
+                        ) : (
+                            <div style={{ width: 44, flexShrink: 0 }} aria-hidden />
+                        )}
 
-                        {/* 2. Shutter / Record Button */}
+                        {/* Shutter / Record Button */}
                         <button
                             type="button"
                             onClick={mode === 'photo' ? capturePhoto : (isRecording ? stopRecording : startRecording)}
@@ -337,13 +346,15 @@ const UnifiedCamera = ({
             </div>
 
             {/* Hidden Input for Upload */}
-            <input
-                ref={uploadInputRef}
-                type="file"
-                accept={mode === 'photo' ? "image/*" : (mode === 'video' ? "video/*" : "image/*,video/*")}
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-            />
+            {allowFilePicker && (
+                <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept={mode === 'photo' ? "image/*" : (mode === 'video' ? "video/*" : "image/*,video/*")}
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                />
+            )}
         </div>
     );
 };

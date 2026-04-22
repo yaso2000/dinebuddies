@@ -277,3 +277,199 @@
 .lottie-bg-container {
     mix-blend-mode: screen;
 }
+
+/* --- Host card export: Download / Share (aligned weight + readable on dark pages) --- */
+.host-private-card-export__actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.host-private-card-export__btn {
+    flex: 0 1 auto;
+    min-width: 148px;
+    min-height: 48px;
+    padding: 0 18px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        opacity 0.2s ease;
+}
+
+.host-private-card-export__btn:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.host-private-card-export__btn--primary {
+    border: 1px solid rgba(167, 139, 250, 0.45);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.95) 0%, rgba(99, 102, 241, 0.92) 100%);
+    color: #fafafa;
+    box-shadow: 0 8px 22px rgba(99, 102, 241, 0.28);
+}
+
+.host-private-card-export__btn--primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(99, 102, 241, 0.38);
+}
+
+.host-private-card-export__btn--secondary {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(248, 250, 252, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.host-private-card-export__btn--secondary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* --- Create private invitation: dark glass fields (match venue search, not stark white) --- */
+.private-theme .elegant-input,
+.private-theme .elegant-textarea {
+    width: 100%;
+    padding: 0.88rem 1rem;
+    background: rgba(30, 41, 59, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    color: #f1f5f9;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        background 0.2s ease;
+    box-sizing: border-box;
+}
+
+.private-theme .elegant-textarea {
+    min-height: 5.5rem;
+    resize: vertical;
+}
+
+.private-theme .elegant-input::placeholder,
+.private-theme .elegant-textarea::placeholder {
+    color: rgba(148, 163, 184, 0.88);
+}
+
+.private-theme .elegant-input:hover,
+.private-theme .elegant-textarea:hover {
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.private-theme .elegant-input:focus,
+.private-theme .elegant-textarea:focus {
+    outline: none;
+    border-color: rgba(139, 92, 246, 0.55);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+    background: rgba(30, 41, 59, 0.75);
+}
+
+.private-theme input[type='date'].elegant-input,
+.private-theme input[type='time'].elegant-input {
+    color-scheme: dark;
+}
+
+.private-theme .private-friend-search-input {
+    width: 100%;
+    padding: 11px 40px 11px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(30, 41, 59, 0.5);
+    color: #f1f5f9;
+    font-size: 0.9rem;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.private-theme .private-friend-search-input::placeholder {
+    color: rgba(148, 163, 184, 0.85);
+}
+
+.private-theme .private-friend-search-input:focus {
+    outline: none;
+    border-color: rgba(139, 92, 246, 0.5);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+/* Occasion tiles: clearer idle state + obvious selection */
+.private-theme .private-occasion-chip {
+    padding: 14px 10px;
+    border-radius: 16px;
+    text-align: center;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 23, 42, 0.45);
+    color: rgba(226, 232, 240, 0.92);
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        color 0.2s ease,
+        transform 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.private-theme .private-occasion-chip:hover {
+    border-color: rgba(167, 139, 250, 0.35);
+    background: rgba(30, 41, 59, 0.55);
+}
+
+.private-theme .private-occasion-chip--selected {
+    border-color: rgba(167, 139, 250, 0.75);
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.22) 0%, rgba(99, 102, 241, 0.12) 100%);
+    color: #e9d5ff;
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.2);
+}
+
+.private-theme .private-occasion-chip__icon {
+    font-size: 1.25rem;
+    color: rgba(251, 191, 36, 0.85);
+}
+
+.private-theme .private-occasion-chip--selected .private-occasion-chip__icon {
+    color: var(--luxury-gold, #fbbf24);
+}
+
+.private-theme .private-payment-chip {
+    padding: 12px;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 23, 42, 0.35);
+    color: rgba(226, 232, 240, 0.95);
+    font-weight: 700;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.private-theme .private-payment-chip--selected {
+    border-color: rgba(167, 139, 250, 0.65);
+    background: rgba(139, 92, 246, 0.14);
+    color: #ddd6fe;
+}

@@ -15,6 +15,7 @@ function syncBusinessNavHint(profile, uid) {
     } catch { /* ignore */ }
 }
 import { sendPasswordResetViaResend } from '../services/passwordResetEmailService';
+import { sendVerificationEmailResend } from '../services/verificationEmailService';
 import { isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
@@ -29,6 +30,7 @@ import {
     signOut as firebaseSignOut,
     onAuthStateChanged,
     signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
     FacebookAuthProvider,
     TwitterAuthProvider,
     updateProfile as updateAuthProfile,
@@ -233,9 +235,11 @@ export const AuthProvider = ({ children }) => {
                     uid: docSnap.id,
                     ...docSnap.data()
                 });
+                console.log('Profile snapshot updated:', normalized.uid, 'Role:', normalized.role);
                 syncBusinessNavHint(normalized, docSnap.id);
                 setUserProfile(normalized);
             } else if (!isDeletingAccountRef.current) {
+                console.log('Profile snapshot: Document does not exist yet for UID:', uid);
                 syncBusinessNavHint(null, null);
                 setUserProfile(null);
             }
@@ -408,6 +412,15 @@ export const AuthProvider = ({ children }) => {
     const signInWithEmail = async (email, password) => {
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
+            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+            if (!userDoc.exists()) {
+                await createUserProfile(result.user.uid, {
+                    display_name: result.user.displayName || '',
+                    email: result.user.email,
+                    photo_url: result.user.photoURL || '',
+                    authProvider: 'password',
+                });
+            }
             return result.user;
         } catch (error) {
             console.error('Error signing in with email:', error);
@@ -415,10 +428,51 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    /** Consumer sign-up with email/password — creates Firebase user + Firestore profile; sends verification email. */
+    const registerWithEmail = async (email, password) => {
+        const em = String(email || '').trim().toLowerCase();
+        if (!em) {
+            const e = new Error('missing-email');
+            e.code = 'auth/missing-email';
+            throw e;
+        }
+        if (await isEmailRegisteredAsBusiness(em)) {
+            const e = new Error('business');
+            e.code = 'auth/business-email-in-use';
+            throw e;
+        }
+        const result = await createUserWithEmailAndPassword(auth, em, password);
+        try {
+            await createUserProfile(result.user.uid, {
+                display_name: result.user.displayName || '',
+                email: result.user.email,
+                photo_url: result.user.photoURL || '',
+                authProvider: 'password',
+            });
+        } catch (profileErr) {
+            try {
+                await result.user.delete();
+            } catch {
+                /* ignore */
+            }
+            throw profileErr;
+        }
+        try {
+            await sendVerificationEmailResend('home');
+        } catch (verErr) {
+            console.warn('sendVerificationEmailResend (signup):', verErr?.message || verErr);
+        }
+        return result.user;
+    };
+
     /** Password reset email (Resend + same Firebase reset link / oobCode flow). */
     const sendPasswordResetToEmail = async (email) => {
         const em = String(email || '').trim().toLowerCase();
-        if (!em) throw new Error('missing-email');
+        if (!em) {
+            const e = new Error('missing-email');
+            e.code = 'auth/missing-email';
+            throw e;
+        }
         await sendPasswordResetViaResend(em);
     };
 
@@ -443,6 +497,7 @@ export const AuthProvider = ({ children }) => {
 
             if (!userDoc.exists()) {
                 isNewUser = true;
+                console.log('Google Auth: New user detected, creating profile for:', result.user.uid);
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName,
                     email: result.user.email,
@@ -450,6 +505,7 @@ export const AuthProvider = ({ children }) => {
                     authProvider: 'google'
                 });
             } else {
+                console.log('Google Auth: Existing user, syncing photos for:', result.user.uid);
                 // Keep photo in sync
                 await updateDoc(doc(db, 'users', result.user.uid), {
                     photo_url: result.user.photoURL || userDoc.data().photo_url,
@@ -826,6 +882,7 @@ export const AuthProvider = ({ children }) => {
         isAdmin: userProfile?.role === 'admin',
         isStaff: userProfile?.role === 'staff' || userProfile?.role === 'support' || userProfile?.role === 'admin',
         signInWithEmail,
+        registerWithEmail,
         sendPasswordResetToEmail,
         signInWithGoogle,
         signInWithFacebook,

@@ -30,6 +30,9 @@ const InvitationPreview = () => {
         invitation.colorScheme || 'oceanBlue',
         invitation.occasionType
     ) : null;
+    const previewTextColor = templateStyles?.card?.color || 'var(--text-main)';
+    const previewMutedColor = templateStyles?.card?.color ? 'rgba(255,255,255,0.82)' : 'var(--text-secondary)';
+    const previewSubtleColor = templateStyles?.card?.color ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)';
 
     // Fetch draft invitation from Firestore
     useEffect(() => {
@@ -286,7 +289,8 @@ const InvitationPreview = () => {
                     textAlign: templateStyles.layout?.textAlign || 'left',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start'
+                    alignItems: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
+                    color: previewTextColor,
                 }}>
                     {/* Decorative Header (Optional) */}
                     {templateStyles.layout?.decorativeElement && (
@@ -343,11 +347,10 @@ const InvitationPreview = () => {
                     {templateStyles.layout?.displayDescription && invitation.description && (
                         <p style={{
                             fontSize: '1rem',
-                            color: templateStyles.card?.color ? 'inherit' : 'var(--text-secondary)',
-                            opacity: templateStyles.card?.color ? 0.9 : 1,
+                            color: previewMutedColor,
+                            opacity: 1,
                             margin: '0 0 1.5rem 0',
                             lineHeight: '1.6',
-                            ...templateStyles.layout.messageStyle
                         }}>
                             {invitation.description}
                         </p>
@@ -360,13 +363,13 @@ const InvitationPreview = () => {
                         justifyContent: templateStyles.layout?.textAlign === 'center' ? 'center' : 'flex-start',
                         gap: '8px',
                         fontSize: '1.1rem',
-                        color: templateStyles.card?.color || 'var(--text-main)',
+                        color: previewTextColor,
                         fontWeight: '700',
                         marginBottom: '1.5rem',
                         padding: '0.5rem 1rem',
-                        background: templateStyles.card?.color ? 'rgba(255,255,255,0.05)' : 'var(--bg-input)',
+                        background: templateStyles.card?.color ? 'rgba(255,255,255,0.12)' : 'var(--bg-input)',
                         borderRadius: '12px',
-                        border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
+                        border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.2)' : '1px solid var(--border-color)'
                     }}>
                         <FaMapMarkerAlt style={{ color: '#f87171' }} />
                         <span>
@@ -382,19 +385,19 @@ const InvitationPreview = () => {
                         width: '100%',
                         marginBottom: '1.5rem',
                         opacity: 0.9,
-                        color: templateStyles.card?.color || 'var(--text-main)'
+                        color: previewTextColor
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <FaUsers style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                             <div>
-                                <div style={{ fontSize: '0.7rem', color: templateStyles.card?.color ? 'inherit' : 'var(--text-muted)', opacity: templateStyles.card?.color ? 0.7 : 1 }}>{t('guests')}</div>
+                                <div style={{ fontSize: '0.7rem', color: previewSubtleColor, opacity: 1 }}>{t('guests')}</div>
                                 <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.guestsNeeded}</div>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <FaMoneyBillWave style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                             <div>
-                                <div style={{ fontSize: '0.7rem', color: templateStyles.card?.color ? 'inherit' : 'var(--text-muted)', opacity: templateStyles.card?.color ? 0.7 : 1 }}>{t('payment')}</div>
+                                <div style={{ fontSize: '0.7rem', color: previewSubtleColor, opacity: 1 }}>{t('payment')}</div>
                                 <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.paymentType}</div>
                             </div>
                         </div>

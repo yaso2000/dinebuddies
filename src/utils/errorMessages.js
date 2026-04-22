@@ -18,9 +18,15 @@ const AUTH_ERROR_MAP = {
     'auth/captcha-check-failed': 'Verification failed. Please try again.',
     'auth/requires-recent-login': 'Please sign in again to continue.',
     'auth/account-exists-with-different-credential': 'An account already exists with the same email.',
-    'auth/business-email-in-use': 'This email is already registered as a business account. Sign in via Business login, not Google or Facebook.',
+    'auth/business-email-in-use': 'This email is already registered as a business account. Use Business sign-in, not personal login.',
     'auth/operation-not-allowed': 'This sign-in method is not enabled.',
-    'auth/configuration-not-found': 'Sign-in configuration error. Please try again.'
+    'auth/configuration-not-found': 'Sign-in configuration error. Please try again.',
+    'auth/missing-email': 'Please enter your email address.',
+    'auth/invalid-email': 'Please enter a valid email address.',
+    // Firestore (e.g. profile write after sign-up)
+    'permission-denied': 'Could not save your profile (access denied). Try again or contact support.',
+    'unavailable': 'Service temporarily unavailable. Try again in a moment.',
+    'failed-precondition': 'Request could not be completed. Please try again.'
 };
 
 const FALLBACK = 'Something went wrong. Please try again.';

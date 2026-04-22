@@ -127,6 +127,20 @@
             ]
         },
         {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "author.id",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "reviews",
             "queryScope": "COLLECTION",
             "fields": [

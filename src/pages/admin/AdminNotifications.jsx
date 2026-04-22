@@ -1,18 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaPaperPlane, FaHistory, FaEnvelope, FaSearch, FaExclamationTriangle } from 'react-icons/fa';
 import { adminSecurityService } from '../../services/adminSecurityService';
-import { loadGoogleMapsScript, isGoogleMapsKeyConfigured } from '../../utils/loadGoogleMaps';
-
-function haversineKm(lat1, lng1, lat2, lng2) {
-    const R = 6371;
-    const toRad = (d) => (d * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+import { searchNominatimCities, nominatimCityToLatLngRadius } from '../../utils/osmPhotonSearch';
+import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../../utils/placesCostControl';
 
 const AdminNotifications = () => {
     const [targetId, setTargetId] = useState('');
@@ -29,6 +19,9 @@ const AdminNotifications = () => {
     const [geoRadiusKm, setGeoRadiusKm] = useState('');
     const [cityResolvedLabel, setCityResolvedLabel] = useState('');
     const [mapsNote, setMapsNote] = useState(null);
+    const [citySearchInput, setCitySearchInput] = useState('');
+    const [citySuggestions, setCitySuggestions] = useState([]);
+    const [citySearchLoading, setCitySearchLoading] = useState(false);
 
     const [emailsText, setEmailsText] = useState('');
     const [namePrefix, setNamePrefix] = useState('');
@@ -39,57 +32,52 @@ const AdminNotifications = () => {
     const [preview, setPreview] = useState(null);
     const [emailResult, setEmailResult] = useState(null);
 
-    const cityInputRef = useRef(null);
-    const autocompleteRef = useRef(null);
+    const citySearchDebounceRef = useRef(null);
+    const citySearchGenRef = useRef(0);
 
     useEffect(() => {
-        if (audienceMode !== 'filters') return;
-        if (!isGoogleMapsKeyConfigured()) {
-            setMapsNote('Add VITE_GOOGLE_MAPS_API_KEY to enable city search (same key as the app). You can still enter lat / lng manually.');
-            return;
+        if (audienceMode !== 'filters') return undefined;
+        if (citySearchDebounceRef.current) clearTimeout(citySearchDebounceRef.current);
+        const q = citySearchInput.trim();
+        if (q.length < 2) {
+            setCitySuggestions([]);
+            setCitySearchLoading(false);
+            return undefined;
         }
-        let cancelled = false;
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || !cityInputRef.current || !window.google?.maps?.places) return;
-                const ac = new window.google.maps.places.Autocomplete(cityInputRef.current, {
-                    types: ['(cities)'],
-                    fields: ['geometry', 'formatted_address', 'name'],
+        citySearchGenRef.current += 1;
+        const gen = citySearchGenRef.current;
+        setCitySearchLoading(true);
+        citySearchDebounceRef.current = setTimeout(() => {
+            citySearchDebounceRef.current = null;
+            searchNominatimCities(q, countryCode)
+                .then((rows) => {
+                    if (gen !== citySearchGenRef.current) return;
+                    setCitySuggestions(rows);
+                })
+                .catch(() => {
+                    if (gen === citySearchGenRef.current) setCitySuggestions([]);
+                })
+                .finally(() => {
+                    if (gen === citySearchGenRef.current) setCitySearchLoading(false);
                 });
-                autocompleteRef.current = ac;
-                ac.addListener('place_changed', () => {
-                    const place = ac.getPlace();
-                    const loc = place.geometry?.location;
-                    if (!loc) return;
-                    const lat = loc.lat();
-                    const lng = loc.lng();
-                    let radiusKm = 35;
-                    const vp = place.geometry?.viewport;
-                    if (vp) {
-                        const ne = vp.getNorthEast();
-                        const sw = vp.getSouthWest();
-                        const d = haversineKm(ne.lat(), ne.lng(), sw.lat(), sw.lng());
-                        radiusKm = Math.min(100, Math.max(12, (d / 2) * 1.15));
-                    }
-                    setGeoLat(lat.toFixed(6));
-                    setGeoLng(lng.toFixed(6));
-                    setGeoRadiusKm(String(Math.round(radiusKm)));
-                    setCityResolvedLabel(place.formatted_address || place.name || '');
-                });
-            })
-            .catch((e) => {
-                if (e?.message === 'API_KEY_NOT_SET') {
-                    setMapsNote('Google Maps key not set — enter coordinates manually or add VITE_GOOGLE_MAPS_API_KEY.');
-                }
-            });
+        }, PLACES_AUTOCOMPLETE_DEBOUNCE_MS);
         return () => {
-            cancelled = true;
-            if (autocompleteRef.current && window.google?.maps?.event) {
-                window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
-                autocompleteRef.current = null;
-            }
+            if (citySearchDebounceRef.current) clearTimeout(citySearchDebounceRef.current);
         };
-    }, [audienceMode]);
+    }, [audienceMode, citySearchInput, countryCode]);
+
+    const handlePickCitySuggestion = (s) => {
+        const r = nominatimCityToLatLngRadius(s.nominatim);
+        if (r) {
+            setGeoLat(r.lat.toFixed(6));
+            setGeoLng(r.lng.toFixed(6));
+            setGeoRadiusKm(String(r.radiusKm));
+            setCityResolvedLabel(s.description || s.main_text || '');
+            setCitySearchInput(s.main_text || '');
+        }
+        setCitySuggestions([]);
+        setMapsNote(null);
+    };
 
     const buildGeoPayload = () => {
         const lat = parseFloat(geoLat);
@@ -270,18 +258,53 @@ const AdminNotifications = () => {
                         </div>
 
                         <p style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', marginBottom: '0.5rem' }}>
-                            Optional: pick a <strong>city / region</strong> from Google (autocomplete). We fill center + estimated radius; you can edit numbers.
+                            Optional: pick a <strong>city / region</strong> (OpenStreetMap / Nominatim). We fill center + estimated radius; you can edit numbers.
                         </p>
-                        <div className="admin-mb-2" style={{ maxWidth: '100%' }}>
-                            <label className="admin-label">City or area (Google Maps)</label>
+                        <div className="admin-mb-2" style={{ maxWidth: '100%', position: 'relative' }}>
+                            <label className="admin-label">City or area (OpenStreetMap)</label>
                             <input
-                                ref={cityInputRef}
                                 className="admin-input"
                                 type="text"
                                 autoComplete="off"
+                                value={citySearchInput}
+                                onChange={(e) => setCitySearchInput(e.target.value)}
                                 placeholder="Type e.g. Sydney, Melbourne…"
                                 onFocus={() => setMapsNote(null)}
                             />
+                            {citySearchLoading && (
+                                <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>Searching…</p>
+                            )}
+                            {citySuggestions.length > 0 && (
+                                <ul
+                                    style={{
+                                        listStyle: 'none',
+                                        margin: '6px 0 0',
+                                        padding: 0,
+                                        border: '1px solid var(--admin-border, #334155)',
+                                        borderRadius: 8,
+                                        maxHeight: 200,
+                                        overflowY: 'auto',
+                                        background: 'var(--admin-bg, #0f172a)',
+                                        zIndex: 10,
+                                    }}
+                                >
+                                    {citySuggestions.map((s) => (
+                                        <li
+                                            key={s.place_id}
+                                            onClick={() => handlePickCitySuggestion(s)}
+                                            style={{
+                                                padding: '8px 12px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.85rem',
+                                                borderBottom: '1px solid rgba(148,163,184,0.2)',
+                                            }}
+                                        >
+                                            <strong>{s.main_text}</strong>
+                                            <div style={{ opacity: 0.8, fontSize: '0.75rem' }}>{s.secondary_text}</div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                             {cityResolvedLabel ? (
                                 <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 6 }}>Selected: {cityResolvedLabel}</p>
                             ) : null}

@@ -50,41 +50,6 @@
 </head>
 
 <body style="margin: 0; padding: 0; overscroll-behavior-y: none;">
-  <!-- Runs before Vite/React: MetaMask inpage.js can reject before main.jsx loads -->
-  <script>
-    (function () {
-      function reasonText(r) {
-        try {
-          var s = '';
-          var x = r;
-          var d = 0;
-          while (x != null && d++ < 14) {
-            if (typeof x === 'string') return s + x;
-            if (x && typeof x.message === 'string') s += x.message + ' ';
-            if (x && typeof x.stack === 'string') s += x.stack + ' ';
-            x = x.cause;
-          }
-          return s + String(r);
-        } catch (e) {
-          return '';
-        }
-      }
-      function isMetaMaskInstallNoise(reason) {
-        var t = reasonText(reason).toLowerCase();
-        return (
-          t.indexOf('metamask') !== -1 &&
-          (t.indexOf('extension not found') !== -1 || t.indexOf('failed to connect') !== -1)
-        );
-      }
-      window.addEventListener(
-        'unhandledrejection',
-        function (e) {
-          if (isMetaMaskInstallNoise(e.reason)) e.preventDefault();
-        },
-        true
-      );
-    })();
-  </script>
   <div id="root"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

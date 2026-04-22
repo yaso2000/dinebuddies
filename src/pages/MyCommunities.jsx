@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
@@ -31,13 +31,13 @@ const MyCommunities = () => {
 
 
     useEffect(() => {
-        if (userProfile && userProfile.id) {
+        if (userProfile && (userProfile.id || currentUser?.uid)) {
             fetchMyCommunities();
         } else if (userProfile !== undefined && !userProfile) {
             // userProfile is explicitly null/false = not logged in, stop loading
             setLoading(false);
         }
-    }, [userProfile?.joinedCommunities, userProfile?.id]);
+    }, [userProfile?.joinedCommunities, userProfile?.id, currentUser?.uid]);
 
     const fetchMyCommunities = async () => {
         try {
@@ -58,17 +58,13 @@ const MyCommunities = () => {
             const communitiesData = await Promise.all(
                 joinedCommunities.map(async (partnerId) => {
                     try {
-                        const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-                        console.log('🔍 Checking partner:', partnerId, 'exists:', partnerDoc.exists(), partnerDoc.exists() ? 'data:' : '', partnerDoc.exists() ? partnerDoc.data() : '');
-
-                        if (partnerDoc.exists() && partnerDoc.data().role === 'business') {
-                            const data = partnerDoc.data();
-                            const businessInfo = data.businessInfo || {};
+                        const toCommunityCard = async (bizId, data, businessInfo = {}) => {
+                            const communityId = bizId || partnerId;
 
                             // Fetch unread messages count
-                            const messagesRef = collection(db, 'communities', partnerId, 'messages');
+                            const messagesRef = collection(db, 'communities', communityId, 'messages');
                             let lastReadTime = new Date(0);
-                            const rawLastRead = lastReadTimestamps[partnerId];
+                            const rawLastRead = lastReadTimestamps[communityId] || lastReadTimestamps[partnerId];
 
                             if (rawLastRead) {
                                 if (typeof rawLastRead.toDate === 'function') {
@@ -110,7 +106,7 @@ const MyCommunities = () => {
                             }
 
                             return {
-                                id: partnerId,
+                                id: communityId,
                                 name: businessInfo.businessName || data.display_name || data.name || 'Business',
                                 logo: getSafeAvatar(data),
                                 cover: businessInfo.coverImage || data.cover_url || data.coverImage,
@@ -120,6 +116,45 @@ const MyCommunities = () => {
                                 unreadCount: unreadCount,
                                 lastMessage: lastMessage ? (lastMessage.length > 40 ? lastMessage.substring(0, 40) + '...' : lastMessage) : null
                             };
+                        };
+
+                        // Primary: users/{businessUid}
+                        const partnerDoc = await getDoc(doc(db, 'users', partnerId));
+                        if (partnerDoc.exists() && partnerDoc.data().role === 'business') {
+                            const data = partnerDoc.data();
+                            return await toCommunityCard(partnerId, data, data.businessInfo || {});
+                        }
+
+                        // Fallback: public_profiles/{id} where profileType=business (for legacy joined IDs)
+                        const publicProfileDoc = await getDoc(doc(db, 'public_profiles', partnerId));
+                        if (publicProfileDoc.exists()) {
+                            const p = publicProfileDoc.data();
+                            if (p.profileType === 'business') {
+                                const businessPublic = p.businessPublic || {};
+                                const ownerId = p.userId || p.ownerId || partnerId;
+                                const ownerDoc = await getDoc(doc(db, 'users', ownerId));
+                                if (ownerDoc.exists()) {
+                                    const ownerData = ownerDoc.data();
+                                    return await toCommunityCard(ownerId, ownerData, ownerData.businessInfo || businessPublic);
+                                }
+
+                                // Last resort: render directly from public profile so community still appears
+                                return await toCommunityCard(partnerId, {
+                                    display_name: p.displayName || 'Business',
+                                    name: p.displayName || 'Business',
+                                    photo_url: p.avatarUrl || '',
+                                    cover_url: businessPublic.coverImage || '',
+                                    city: businessPublic.city || '',
+                                    address: businessPublic.address || '',
+                                    communityMembers: [],
+                                }, {
+                                    businessName: p.displayName || 'Business',
+                                    coverImage: businessPublic.coverImage || '',
+                                    businessType: businessPublic.businessType || 'Restaurant',
+                                    city: businessPublic.city || '',
+                                    address: businessPublic.address || '',
+                                });
+                            }
                         }
                     } catch (innerError) {
                         console.error(`🚨 Error fetching partner ${partnerId}:`, innerError);

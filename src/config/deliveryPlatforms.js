@@ -98,9 +98,14 @@ export const PLATFORMS_BY_COUNTRY = {
 /**
  * Get the list of platforms for a given ISO country code.
  * Falls back to a sensible global default.
+ * Coerces any value (null, number, odd Firestore shapes) — default param alone does not replace `null`.
  */
-export function getPlatformsForCountry(countryCode = '') {
-    const keys = PLATFORMS_BY_COUNTRY[countryCode.toUpperCase()] || ['uberEats', 'doorDash', 'deliveroo'];
+export function getPlatformsForCountry(countryCode) {
+    const code = String(countryCode == null ? '' : countryCode)
+        .trim()
+        .slice(0, 2)
+        .toUpperCase();
+    const keys = PLATFORMS_BY_COUNTRY[code] || ['uberEats', 'doorDash', 'deliveroo'];
     const seen = new Set();
     return keys
         .map(k => ALL_PLATFORMS[k])

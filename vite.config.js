@@ -4,6 +4,12 @@ import fs from 'fs'
 import path from 'path'
 import dns from 'dns'
 import { exec } from 'child_process'
+import { createRequire } from 'module'
+import { fileURLToPath } from 'url'
+
+const __viteConfigDir = path.dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
+const { fetchPlacePhotoBufferDetailed } = require(path.join(__viteConfigDir, 'functions', 'placePhotoFetch.js'))
 
 const dnsLookup = dns.promises.lookup.bind(dns.promises)
 
@@ -106,6 +112,80 @@ const devOperations = () => ({
         }
 
         server.middlewares.use(async (req, res, next) => {
+            let devUrl = null
+            try {
+                devUrl = new URL(req.url, `http://${req.headers.host}`)
+            } catch {
+                devUrl = null
+            }
+
+            // Same-origin proxy for Firebase Callable (avoids browser CORS to cloudfunctions.net)
+            if (req.method === 'POST' && devUrl && devUrl.pathname === '/api/suggest-invitation-messages') {
+                const env = loadEnv(process.env.MODE || 'development', process.cwd(), '')
+                const projectId = env.VITE_FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies'
+                const cfUrl = `https://us-central1-${projectId}.cloudfunctions.net/suggestInvitationMessages`
+                const chunks = []
+                for await (const chunk of req) chunks.push(chunk)
+                const rawBody = Buffer.concat(chunks).toString('utf8')
+                let parsed = {}
+                try {
+                    parsed = rawBody ? JSON.parse(rawBody) : {}
+                } catch {
+                    res.statusCode = 400
+                    res.setHeader('Content-Type', 'application/json')
+                    res.end(JSON.stringify({ message: 'Invalid JSON', code: 'functions/invalid-argument' }))
+                    return
+                }
+                const authHeader = req.headers.authorization
+                if (!authHeader || !String(authHeader).startsWith('Bearer ')) {
+                    res.statusCode = 401
+                    res.setHeader('Content-Type', 'application/json')
+                    res.end(JSON.stringify({ message: 'Authentication required.', code: 'functions/unauthenticated' }))
+                    return
+                }
+                const payload = parsed.data !== undefined ? parsed.data : parsed
+                try {
+                    const upstream = await fetch(cfUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: authHeader
+                        },
+                        body: JSON.stringify({ data: payload })
+                    })
+                    const text = await upstream.text()
+                    let json
+                    try {
+                        json = text ? JSON.parse(text) : {}
+                    } catch {
+                        res.statusCode = 502
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ message: 'Invalid upstream JSON', code: 'functions/internal' }))
+                        return
+                    }
+                    if (json.error) {
+                        const st = String(json.error.status || 'INTERNAL').toUpperCase()
+                        res.statusCode = st === 'UNAUTHENTICATED' ? 401 : st === 'INVALID_ARGUMENT' ? 400 : 500
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({
+                            message: json.error.message || 'Suggestion service error',
+                            code: `functions/${st.toLowerCase().replace(/_/g, '-')}`
+                        }))
+                        return
+                    }
+                    res.statusCode = 200
+                    res.setHeader('Content-Type', 'application/json')
+                    res.end(JSON.stringify({ result: json.result }))
+                    return
+                } catch (e) {
+                    console.error('Dev suggest-invitation-messages proxy:', e)
+                    res.statusCode = 500
+                    res.setHeader('Content-Type', 'application/json')
+                    res.end(JSON.stringify({ message: e?.message || 'Proxy error', code: 'functions/internal' }))
+                    return
+                }
+            }
+
             if (req.method === 'GET') {
                 let url
                 try {
@@ -113,14 +193,9 @@ const devOperations = () => ({
                 } catch {
                     url = null
                 }
-                if (url && url.pathname === '/api/place-photo') {
-                    res.statusCode = 302
-                    res.setHeader('Location', `/__dev/place-photo${url.search || ''}`)
-                    res.end()
-                    return
-                }
                 const env = loadEnv(process.env.MODE || 'development', process.cwd(), '')
-                const key = process.env.VITE_GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY
+                const key = process.env.GOOGLE_MAPS_SERVER_KEY || env.GOOGLE_MAPS_SERVER_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY || env.GOOGLE_MAPS_API_KEY
+                const referer = `http://${req.headers.host || 'localhost:5176'}/`
 
                 if (url && url.pathname === '/api/place-autocomplete') {
                     const input = url.searchParams.get('input')
@@ -150,7 +225,7 @@ const devOperations = () => ({
                             params.set('radius', '50000')
                         }
                         const gurl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
-                        const response = await fetch(gurl)
+                        const response = await fetch(gurl, { headers: { 'Referer': referer } })
                         const data = await response.json()
                         res.setHeader('Content-Type', 'application/json')
                         res.setHeader('Access-Control-Allow-Origin', '*')
@@ -188,10 +263,11 @@ const devOperations = () => ({
                         res.end(JSON.stringify({ error: 'Missing placeId or API key' }))
                         return
                     }
-                    const fields = 'name,formatted_address,address_components,geometry,place_id,formatted_phone_number,international_phone_number,website,url,photos,opening_hours,types'
+                    // Cost-control: disable Google Place photos in dev too.
+                    const fields = 'name,formatted_address,address_components,geometry,place_id,formatted_phone_number,international_phone_number,website,url,opening_hours,types'
                     try {
                         const durl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=${fields}&key=${key}`
-                        const response = await fetch(durl)
+                        const response = await fetch(durl, { headers: { 'Referer': referer } })
                         const data = await response.json()
                         res.setHeader('Content-Type', 'application/json')
                         res.setHeader('Access-Control-Allow-Origin', '*')
@@ -205,12 +281,6 @@ const devOperations = () => ({
                         const loc = place.geometry?.location || {}
                         const plat = typeof loc.lat === 'number' ? loc.lat : null
                         const plng = typeof loc.lng === 'number' ? loc.lng : null
-                        const photoUrls = []
-                        if (place.photos?.length) {
-                            for (let i = 0; i < Math.min(place.photos.length, 10); i++) {
-                                photoUrls.push(`/api/place-photo?placeId=${encodeURIComponent(placeId)}&index=${i}`)
-                            }
-                        }
                         let workingHours = null
                         if (place.opening_hours?.weekday_text?.length) {
                             const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -234,9 +304,9 @@ const devOperations = () => ({
                             phone: place.formatted_phone_number || place.international_phone_number || '',
                             website: place.website || place.url || '',
                             description: '',
-                            coverImage: photoUrls[0] || null,
-                            logo: photoUrls[0] || null,
-                            gallery: photoUrls,
+                            coverImage: null,
+                            logo: null,
+                            gallery: [],
                             workingHours,
                             types: place.types || [],
                         }))
@@ -248,6 +318,38 @@ const devOperations = () => ({
                         res.end(JSON.stringify({ error: 'Internal server error' }))
                         return
                     }
+                }
+
+                if (url && url.pathname === '/api/place-photo') {
+                    const placeId = url.searchParams.get('placeId');
+                    const index = url.searchParams.get('index') || '0';
+                    const googleKey = key || '';
+                    if (!placeId || !googleKey) {
+                        res.statusCode = 400;
+                        res.end(JSON.stringify({ error: 'Missing placeId or maps API key' }));
+                        return;
+                    }
+                    try {
+                        const result = await fetchPlacePhotoBufferDetailed(placeId, index, googleKey, referer);
+                        if (!result.ok) {
+                            console.warn(`Dev place-photo fetch failed for ${placeId}:`, result.error);
+                            res.statusCode = result.status;
+                            res.end(JSON.stringify({
+                                error: result.error,
+                                ...(result.google !== undefined ? { google: result.google } : {}),
+                            }));
+                            return;
+                        }
+                        res.setHeader('Content-Type', result.contentType);
+                        res.setHeader('Access-Control-Allow-Origin', '*');
+                        res.setHeader('Cache-Control', 'public, max-age=3600');
+                        res.end(Buffer.from(result.buffer));
+                    } catch (e) {
+                        console.error('Dev place-photo error:', e);
+                        res.statusCode = 500;
+                        res.end(JSON.stringify({ error: String(e?.message || 'Unknown error') }));
+                    }
+                    return;
                 }
             }
 
@@ -344,51 +446,7 @@ const devOperations = () => ({
                     return;
                 }
 
-                if (req.method === 'GET' && action === 'place-photo') {
-                    const placeId = url.searchParams.get('placeId');
-                    const index = url.searchParams.get('index') || '0';
-                    const env = loadEnv(process.env.MODE || 'development', process.cwd(), '');
-                    const key = process.env.VITE_GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY;
-                    if (!placeId || !key) {
-                        res.statusCode = 400;
-                        res.end(JSON.stringify({ error: 'Missing placeId or VITE_GOOGLE_MAPS_API_KEY' }));
-                        return;
-                    }
-                    try {
-                        const detailsRes = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=photos&key=${key}`);
-                        const details = await detailsRes.json();
-                        if (details.status !== 'OK' || !details.result?.photos?.length) {
-                            res.statusCode = 404;
-                            res.end(JSON.stringify({ error: 'No photos' }));
-                            return;
-                        }
-                        const idx = Math.max(0, parseInt(index, 10) || 0);
-                        const photo = details.result.photos[idx] || details.result.photos[0];
-                        const ref = photo?.photo_reference;
-                        if (!ref) {
-                            res.statusCode = 404;
-                            res.end(JSON.stringify({ error: 'No photo reference' }));
-                            return;
-                        }
-                        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1200&photo_reference=${encodeURIComponent(ref)}&key=${key}`;
-                        const imgRes = await fetch(photoUrl, { redirect: 'follow' });
-                        if (!imgRes.ok) {
-                            res.statusCode = 502;
-                            res.end(JSON.stringify({ error: 'Google photo fetch failed' }));
-                            return;
-                        }
-                        res.setHeader('Content-Type', imgRes.headers.get('content-type') || 'image/jpeg');
-                        res.setHeader('Access-Control-Allow-Origin', '*');
-                        res.setHeader('Cache-Control', 'public, max-age=3600');
-                        const buf = await imgRes.arrayBuffer();
-                        res.end(Buffer.from(buf));
-                    } catch (e) {
-                        console.error('place-photo dev error:', e);
-                        res.statusCode = 500;
-                        res.end(JSON.stringify({ error: String(e?.message || 'Unknown error') }));
-                    }
-                    return;
-                }
+
 
                 if (req.method === 'GET' && action === 'backups') {
                     // List backups

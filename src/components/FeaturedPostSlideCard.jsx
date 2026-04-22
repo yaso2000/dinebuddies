@@ -4,6 +4,7 @@
  * @refresh reset
  */
 import React, { useState, useEffect, useRef } from 'react';
+import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 
 export const ICON_OPTIONS = {
     none: null,
@@ -40,7 +41,7 @@ export function getBackgroundStyle(background) {
     if (!background) return { background: '#1e1e2e' };
     const { type, value } = background;
     if (type === 'gradient' && value) return { background: value };
-    if (type === 'image' && value) return { backgroundImage: `url(${value})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+    if (type === 'image' && value) return { backgroundImage: `url(${pickSafeDisplayImageUrl(value)})`, backgroundSize: 'cover', backgroundPosition: 'center' };
     return { background: value || '#1e1e2e' };
 }
 

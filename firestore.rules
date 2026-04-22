@@ -84,8 +84,21 @@ service cloud.firestore {
     // 'user' (race with profile bootstrap). Allow one completion write to role:business + businessInfo.
     function isBusinessSignupCompletionFromIntent() {
       return resource.data.get('registrationIntent', '') == 'business' &&
-             resource.data.get('role', '') != 'business' &&
-             request.resource.data.role == 'business' &&
+             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+             request.resource.data.keys().hasAny(['businessInfo']);
+    }
+
+    // True when users/{uid} has no real businessInfo yet (empty or missing). Used so /business/signup can
+    // replace a consumer stub (e.g. role:user from a race) with partner + businessInfo in one setDoc.
+    function hasMeaningfulBusinessInfo() {
+      return resource.data.keys().hasAny(['businessInfo']) &&
+             resource.data.businessInfo is map &&
+             resource.data.businessInfo.keys().size() > 0;
+    }
+
+    function isUpgradingStubToBusinessProfile() {
+      return !hasMeaningfulBusinessInfo() &&
+             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
     
@@ -103,13 +116,19 @@ service cloud.firestore {
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
+      // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
+      allow update: if isOwner(userId) &&
+                       userDocHasNoRoleField() &&
+                       request.resource.data.role == 'user';
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'business' &&
+                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']);
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
       allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
+      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);

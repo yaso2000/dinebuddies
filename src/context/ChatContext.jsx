@@ -20,6 +20,7 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { notifyNewMessage } from '../utils/notificationHelpers';
+import { asUidArray, messagingRestrictedBetweenUsers } from '../utils/userSocialLists';
 
 const ChatContext = createContext();
 
@@ -66,9 +67,16 @@ export const ChatProvider = ({ children }) => {
                 const convos = [];
                 let totalUnread = 0;
 
+                const myBlocked = new Set(asUidArray(userProfile?.blockedUserIds));
+                const myMuted = new Set(asUidArray(userProfile?.mutedUserIds));
+
                 for (const docSnap of snapshot.docs) {
                     const data = docSnap.data();
                     const otherUserId = data.participants.find(id => id !== currentUser.uid);
+
+                    if (otherUserId && (myBlocked.has(otherUserId) || myMuted.has(otherUserId))) {
+                        continue;
+                    }
 
                     // Get other user's data (cache to avoid N getDocs per snapshot fire)
                     let otherUser = null;
@@ -118,7 +126,7 @@ export const ChatProvider = ({ children }) => {
         );
 
         return () => unsubscribe();
-    }, [currentUser?.uid]);
+    }, [currentUser?.uid, userProfile?.blockedUserIds, userProfile?.mutedUserIds]);
 
     // Create or get conversation (stable reference to avoid effect re-runs and 429 rate limit)
     const getOrCreateConversation = useCallback(async (otherUserId) => {
@@ -156,6 +164,24 @@ export const ChatProvider = ({ children }) => {
         if (!currentUser?.uid) return null;
 
         try {
+            const convoRefPre = doc(db, 'conversations', conversationId);
+            const convoSnapPre = await getDoc(convoRefPre);
+            const convoDataPre = convoSnapPre.data();
+            const otherUserIdPre = convoDataPre?.participants?.find((id) => id !== currentUser.uid);
+            if (otherUserIdPre) {
+                const otherSnap = await getDoc(doc(db, 'users', otherUserIdPre));
+                const { restricted } = messagingRestrictedBetweenUsers(
+                    userProfile,
+                    currentUser.uid,
+                    otherSnap.data(),
+                    otherUserIdPre
+                );
+                if (restricted) {
+                    showToast('Messaging is not available with this user.', 'error');
+                    return null;
+                }
+            }
+
             const messageRef = await addDoc(
                 collection(db, 'conversations', conversationId, 'messages'),
                 {

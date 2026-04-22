@@ -31,6 +31,7 @@ import { FaBookmark, FaStar, FaCalendarAlt, FaQuestionCircle } from 'react-icons
 
 import './BusinessProDashboard.css';
 import EmailVerificationBusinessBanner from '../components/EmailVerificationBusinessBanner';
+import { needsEmailPasswordVerification } from '../utils/emailVerification';
 
 const NAV_ITEMS = [
     { key: 'overview', label: 'Overview', icon: <FaChartBar />, group: 'main' },
@@ -87,6 +88,9 @@ const BusinessProDashboard = () => {
     }
     if (!currentUser || isGuest) {
         return <Navigate to="/business/login" replace />;
+    }
+    if (needsEmailPasswordVerification(currentUser, userProfile)) {
+        return <Navigate to="/verify-email" replace />;
     }
     if (userProfile && !userProfile.isBusiness) {
         return <Navigate to="/" replace />;

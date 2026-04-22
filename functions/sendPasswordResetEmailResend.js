@@ -82,8 +82,9 @@ function registerSendPasswordResetEmailResend({ exports, functions, db, admin })
         }
 
         const origin = (process.env.PUBLIC_APP_ORIGIN || DEFAULT_ORIGIN).replace(/\/$/, '');
-        // Match Firebase Hosting default handler path so redirect lands in the SPA (see App.jsx /__/auth/action)
-        const continueUrl = `${origin}/__/auth/action`;
+        // SPA route (App.jsx) — use /auth/action, not /__/auth/action. The __ path can confuse
+        // redirects on custom domains and trigger Firebase’s “invalid page mode” page.
+        const continueUrl = `${origin}/auth/action`;
 
         const rateRef = db.collection('password_reset_email_rate').doc(emailRateKey(email));
         const rateSnap = await rateRef.get();

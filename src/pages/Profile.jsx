@@ -4,8 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaCamera, FaChevronRight, FaPlus, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog, FaBirthdayCake, FaHeart, FaBan, FaQuestionCircle } from 'react-icons/fa';
-import { HiUser } from 'react-icons/hi2';
+import { FaChevronRight, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog, FaBirthdayCake, FaHeart, FaBan, FaQuestionCircle } from 'react-icons/fa';
 import { uploadProfilePicture } from '../utils/imageUpload';
 import { getFollowersCount } from '../utils/followHelpers';
 import ImageUpload from '../components/ImageUpload';
@@ -14,7 +13,6 @@ import { db } from '../firebase/config';
 // Profile Enhancements
 import { StatisticsCards, Achievements } from '../components/ProfileEnhancements';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
-import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
@@ -51,18 +49,16 @@ const Profile = () => {
     const { t, i18n } = useTranslation();
     const { showToast } = useToast();
     const navigate = useNavigate();
-    const { currentUser, updateProfile, invitations, restaurants, updateRestaurant, toggleFollow, deleteInvitation } = useInvitations();
-    const { signOut, currentUser: firebaseUser, userProfile, loading } = useAuth();
+    const { currentUser, updateProfile, invitations, privateInvitations, restaurants, updateRestaurant, toggleFollow, deleteInvitation } = useInvitations();
+    const { signOut, userProfile, loading } = useAuth();
     const { setActivePrivateInvitation } = useNotifications();
     const { isDark, toggleTheme } = useTheme();
     const [isEditing, setIsEditing] = useState(false);
 
     const [activeTab, setActiveTab] = useState('public');
-    const [newInterest, setNewInterest] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
     const [avatarFile, setAvatarFile] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [isSaving, setIsSaving] = useState(false);
-    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const isOwnProfile = true;
 
     // Redirect guests to login - DISABLED this redirect because we want to show a guest-specific profile view
@@ -99,7 +95,8 @@ const Profile = () => {
                 gender: currentData.gender || 'male',
                 age: currentData.age || 25,
                 ageCategory: currentData.ageCategory || '',
-                phone: currentData.phone || ''
+                phone: currentData.phone || '',
+                availableForDating: currentData.availableForDating !== false
             });
         }
 
@@ -137,7 +134,8 @@ const Profile = () => {
                         gender: data.gender || 'male',
                         age: data.age || 25,
                         ageCategory: data.ageCategory || '',
-                        phone: data.phone || ''
+                        phone: data.phone || '',
+                        availableForDating: data.availableForDating !== false
                     }));
                 }
             }
@@ -166,19 +164,36 @@ const Profile = () => {
         gender: userProfile?.gender || 'male',
         age: userProfile?.age || 18,
         ageCategory: userProfile?.ageCategory || '',
+        availableForDating: userProfile?.availableForDating !== false,
     });
 
-    const myPostedInvitations = invitations.filter(inv => inv.author?.id === currentUser.uid);
-    const publicPosted = myPostedInvitations.filter(inv => inv.privacy !== 'private');
-    const privatePosted = myPostedInvitations.filter(inv => inv.privacy === 'private');
+    const profileUid = currentUser?.uid || currentUser?.id;
 
-    const receivedPrivate = invitations.filter(inv =>
-        inv.privacy === 'private' &&
-        inv.invitedFriends?.includes(currentUser.uid) &&
-        inv.author?.id !== currentUser.uid
-    );
+    const myPostedInvitations = invitations.filter((inv) => inv.author?.id === profileUid);
+    const publicPosted = myPostedInvitations.filter((inv) => inv.privacy !== 'private');
 
-    const myJoinedInvitations = invitations.filter(inv => inv.joined?.includes(currentUser.uid));
+    /** Legacy rows stored in `invitations` with privacy === private */
+    const privatePostedLegacy = myPostedInvitations.filter((inv) => inv.privacy === 'private');
+    /** Hosted private invites live in `private_invitations`; merge without duplicate ids */
+    const hostedFromPrivateColl = (privateInvitations || [])
+        .filter((inv) => (inv.authorId || inv.author?.id) === profileUid)
+        .map((inv) => ({ ...inv, privacy: 'private' }));
+    const legacyPrivateIds = new Set(privatePostedLegacy.map((i) => i.id));
+    const privatePosted = [
+        ...privatePostedLegacy,
+        ...hostedFromPrivateColl.filter((inv) => !legacyPrivateIds.has(inv.id))
+    ];
+
+    const receivedPrivate = (privateInvitations || [])
+        .filter(
+            (inv) =>
+                Array.isArray(inv.invitedFriends) &&
+                inv.invitedFriends.includes(profileUid) &&
+                (inv.authorId || inv.author?.id) !== profileUid
+        )
+        .map((inv) => ({ ...inv, privacy: 'private' }));
+
+    const myJoinedInvitations = invitations.filter((inv) => inv.joined?.includes(profileUid));
 
     // Loading State
     if (loading || !userProfile || !realtimeUser) {
@@ -221,27 +236,15 @@ const Profile = () => {
 
     const activeList = getActiveList();
 
-    // Lock condition: if already saved in Firebase, user cannot change gender/age
-    const genderLocked = !!userProfile?.gender;
-    const ageLocked = !!(userProfile?.ageCategory || userProfile?.age);
-
     const handleSave = async () => {
-        // Validate mandatory fields
-        if (!formData.gender) {
+        const trimmedName = (formData.name || '').trim();
+        if (!trimmedName) {
             showToast(i18n.language === 'ar'
-                ? t('please_select_gender')
-                : '⚠️ Please select your gender', 'error');
+                ? t('please_enter_name', { defaultValue: 'يرجى إدخال الاسم' })
+                : 'Please enter your name', 'error');
             return;
         }
 
-        if (!formData.ageCategory && !formData.age) {
-            showToast(i18n.language === 'ar'
-                ? t('please_enter_age')
-                : '⚠️ Please select your age category', 'error');
-            return;
-        }
-
-        // Check for external links in bio
         if (containsExternalLinks(formData.bio)) {
             showToast(i18n.language === 'ar'
                 ? t('no_external_links')
@@ -254,19 +257,20 @@ const Profile = () => {
 
         try {
             let finalAvatar = formData.avatar;
-
-            // Upload new avatar if selected
-            if (avatarFile) {
-                const url = await uploadProfilePicture(
+            if (avatarFile && currentUser?.uid) {
+                finalAvatar = await uploadProfilePicture(
                     avatarFile,
-                    firebaseUser.uid,
+                    currentUser.uid,
                     (progress) => setUploadProgress(progress)
                 );
-                finalAvatar = url;
             }
 
-
-            await updateProfile({ ...formData, avatar: finalAvatar });
+            await updateProfile({
+                name: trimmedName,
+                bio: formData.bio,
+                availableForDating: formData.availableForDating,
+                avatar: finalAvatar
+            });
             setIsEditing(false);
             setAvatarFile(null);
             setUploadProgress(0);
@@ -344,75 +348,100 @@ const Profile = () => {
                     </div>
 
                     <div className="profile-identity" style={{ marginBottom: 'var(--profile-stack-gap)' }}>
+                        <div
+                            className="profile-avatar-edit-row"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '1rem',
+                                flexWrap: 'wrap',
+                                marginBottom: '0.5rem'
+                            }}
+                        >
                         <div style={{ display: 'inline-block', position: 'relative' }}>
                             {isEditing ? (
-                                <ImageUpload
-                                    currentImage={getSafeAvatar(formData)}
-                                    onImageSelect={setAvatarFile}
-                                    shape="circle"
-                                    size="large"
-                                    label={t('change_photo')}
-                                />
-                            ) : (
-                                <div style={{ position: 'relative' }}>
-                                    <div
-                                        className="host-avatar-container"
-                                        style={{
-                                            width: '100px',
-                                            height: '100px',
-                                            margin: '0 auto',
-                                            border: `3px solid ${(userProfile?.role === 'business' || realtimeUser?.role === 'business') ? 'var(--border-color)' : (realtimeUser?.gender === 'female' ? '#ec4899' : realtimeUser?.gender === 'male' ? '#3b82f6' : '#a855f7')}`,
-                                            position: 'relative',
-                                            background: 'var(--hover-overlay)'
-                                        }}
-                                    >
-                                        <img
-                                            src={getSafeAvatar(realtimeUser)}
-                                            alt={formData.name}
-                                            className="host-avatar"
-                                            onError={(e) => {
-                                                if (!e.target.src.includes('ui-avatars.com')) {
-                                                    e.target.src = getSafeAvatar(null);
-                                                }
-                                            }}
-                                        />
-                                    </div>
-
-                                    {!userProfile?.isGuest && (
-                                        <button onClick={() => navigate('/create-story')} className="profile-add-story-btn" title={t('add_story', 'Add Story')}>
-                                            <FaPlus size={12} />
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Upload Progress */}
-                            {uploadProgress > 0 && uploadProgress < 100 && (
-                                <div style={{
-                                    marginTop: '10px',
-                                    background: 'var(--card-bg)',
-                                    borderRadius: '10px',
-                                    padding: '8px 12px',
-                                    fontSize: '0.85rem'
-                                }}>
-                                    <div style={{ marginBottom: '5px', color: 'var(--text-secondary)' }}>
-                                        {t('uploading_progress')} {Math.round(uploadProgress)}%
-                                    </div>
-                                    <div style={{
-                                        height: '4px',
-                                        background: 'var(--border-color)',
-                                        borderRadius: '2px',
-                                        overflow: 'hidden'
-                                    }}>
+                                <>
+                                    <ImageUpload
+                                        currentImage={getSafeAvatar(formData)}
+                                        onImageSelect={setAvatarFile}
+                                        onImageRemove={() => setAvatarFile(null)}
+                                        shape="circle"
+                                        size="large"
+                                        label={t('change_photo')}
+                                    />
+                                    {uploadProgress > 0 && uploadProgress < 100 && (
                                         <div style={{
-                                            height: '100%',
-                                            background: 'var(--primary)',
-                                            width: `${uploadProgress}%`,
-                                            transition: 'width 0.3s'
-                                        }} />
-                                    </div>
+                                            marginTop: '10px',
+                                            background: 'var(--card-bg)',
+                                            borderRadius: '10px',
+                                            padding: '8px 12px',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            <div style={{ marginBottom: '5px', color: 'var(--text-secondary)' }}>
+                                                {t('uploading_progress')} {Math.round(uploadProgress)}%
+                                            </div>
+                                            <div style={{
+                                                height: '4px',
+                                                background: 'var(--border-color)',
+                                                borderRadius: '2px',
+                                                overflow: 'hidden'
+                                            }}>
+                                                <div style={{
+                                                    height: '100%',
+                                                    background: 'var(--primary)',
+                                                    width: `${uploadProgress}%`,
+                                                    transition: 'width 0.3s'
+                                                }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div
+                                    className="host-avatar-container"
+                                    style={{
+                                        width: '100px',
+                                        height: '100px',
+                                        margin: '0 auto',
+                                        border: `3px solid ${(userProfile?.role === 'business' || realtimeUser?.role === 'business') ? 'var(--border-color)' : (realtimeUser?.gender === 'female' ? '#ec4899' : realtimeUser?.gender === 'male' ? '#3b82f6' : '#a855f7')}`,
+                                        position: 'relative',
+                                        background: 'var(--hover-overlay)'
+                                    }}
+                                >
+                                    <img
+                                        src={getSafeAvatar(realtimeUser)}
+                                        alt={formData.name}
+                                        className="host-avatar"
+                                        onError={(e) => {
+                                            if (!e.target.src.includes('ui-avatars.com')) {
+                                                e.target.src = getSafeAvatar(null);
+                                            }
+                                        }}
+                                    />
                                 </div>
                             )}
+                        </div>
+
+                        {!isEditing && !userProfile?.isGuest && (
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn--secondary profile-edit-beside-avatar"
+                                onClick={() => setIsEditing(true)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    fontWeight: 700,
+                                    padding: '10px 16px',
+                                    borderRadius: '12px',
+                                    flexShrink: 0
+                                }}
+                            >
+                                <FaEdit size={16} aria-hidden />
+                                {t('edit_profile') || 'Edit Profile'}
+                            </button>
+                        )}
                         </div>
 
                         {isEditing ? (
@@ -422,118 +451,6 @@ const Profile = () => {
                                     <input type="text" className="ui-form-field" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: '900' }} />
                                 </div>
 
-                                {/* Gender Selection - Required */}
-                                <div className="form-group">
-                                    <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', textAlign: 'center' }}>
-                                        {t('gender')} <span style={{ color: 'var(--secondary)' }}>*</span> {genderLocked && '🔒'}
-                                    </label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => !genderLocked && setFormData({ ...formData, gender: 'male' })}
-                                            style={{
-                                                padding: '12px',
-                                                borderRadius: '12px',
-                                                border: formData.gender === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                                background: formData.gender === 'male' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                                color: 'var(--text-main)',
-                                                cursor: genderLocked ? 'not-allowed' : 'pointer',
-                                                opacity: (genderLocked && formData.gender !== 'male') ? 0.3 : 1,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '6px',
-                                                transition: 'all 0.2s',
-                                                fontWeight: '700'
-                                            }}
-                                        >
-                                            <span>👨</span>
-                                            <span>{t('male')}</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => !genderLocked && setFormData({ ...formData, gender: 'female' })}
-                                            style={{
-                                                padding: '12px',
-                                                borderRadius: '12px',
-                                                border: formData.gender === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                                background: formData.gender === 'female' ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                                color: 'var(--text-main)',
-                                                cursor: genderLocked ? 'not-allowed' : 'pointer',
-                                                opacity: (genderLocked && formData.gender !== 'female') ? 0.3 : 1,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '6px',
-                                                transition: 'all 0.2s',
-                                                fontWeight: '700'
-                                            }}
-                                        >
-                                            <span>👩</span>
-                                            <span>{t('female')}</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Age Category Selection - Standardized */}
-                                <div className="form-group">
-                                    <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', textAlign: 'center' }}>
-                                        {t('age_category', { defaultValue: 'Age Category' })} <span style={{ color: 'var(--secondary)' }}>*</span> {ageLocked && '🔒'}
-                                    </label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                                        {[
-                                            { value: '18-24', label: '18-24' },
-                                            { value: '25-34', label: '25-34' },
-                                            { value: '35-44', label: '35-44' },
-                                            { value: '45-54', label: '45-54' },
-                                            { value: '55+', label: '55+' }
-                                        ].map((option) => {
-                                            const isSelected = formData.ageCategory === option.value;
-                                            return (
-                                                <button
-                                                    key={option.value}
-                                                    type="button"
-                                                    onClick={() => !ageLocked && setFormData({ ...formData, ageCategory: option.value })}
-                                                    style={{
-                                                        position: 'relative',
-                                                        padding: '12px 8px',
-                                                        borderRadius: '12px',
-                                                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                                        background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
-                                                        color: isSelected ? 'white' : 'var(--text-secondary)',
-                                                        cursor: ageLocked ? 'not-allowed' : 'pointer',
-                                                        opacity: (ageLocked && !isSelected) ? 0.3 : 1,
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '4px',
-                                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                        transform: isSelected ? 'translateY(-2px)' : 'none',
-                                                        boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none',
-                                                        minHeight: '60px'
-                                                    }}
-                                                >
-                                                    {isSelected && (
-                                                        <div style={{ position: 'absolute', top: '5px', right: '5px', color: 'var(--primary)', fontSize: '0.6rem' }}>
-                                                            <FaCheckCircle />
-                                                        </div>
-                                                    )}
-                                                    <HiUser style={{
-                                                        fontSize: '1.2rem',
-                                                        color: isSelected ? 'var(--primary)' : 'inherit',
-                                                        marginBottom: '2px',
-                                                        filter: isSelected ? 'drop-shadow(0 0 5px rgba(139, 92, 246, 0.5))' : 'none'
-                                                    }} />
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: isSelected ? '800' : '600' }}>
-                                                        {option.label}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
                                 <div className="form-group">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px', marginBottom: '5px' }}>
                                         <label className="ui-form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>{t('profile_bio')}</label>
@@ -541,26 +458,103 @@ const Profile = () => {
                                     </div>
                                     <textarea className="ui-form-field" value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} placeholder={t('profile_bio_placeholder')} maxLength={150} style={{ textAlign: 'center', fontSize: '0.9rem', minHeight: '80px' }} />
                                 </div>
+
+                                <div
+                                    className="form-group"
+                                    style={{
+                                        border: '1px solid color-mix(in srgb, var(--primary) 30%, var(--border-color))',
+                                        borderRadius: '14px',
+                                        padding: '12px',
+                                        background: 'color-mix(in srgb, var(--primary) 10%, var(--bg-card))'
+                                    }}
+                                >
+                                    <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                                            {t('dating_invitation_preference_title', 'Dating invitation preference')}
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                                            {t('dating_invitation_preference_desc', 'Control whether others can send you dating invitations.')}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData((prev) => ({ ...prev, availableForDating: true }))}
+                                            style={{
+                                                padding: '11px',
+                                                borderRadius: '12px',
+                                                border: formData.availableForDating ? '2px solid #16a34a' : '1px solid var(--border-color)',
+                                                background: formData.availableForDating ? 'rgba(22,163,74,0.16)' : 'var(--bg-card)',
+                                                color: formData.availableForDating ? 'var(--text-main)' : 'var(--text-muted)',
+                                                fontWeight: 800,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '7px'
+                                            }}
+                                        >
+                                            <FaHeart color={formData.availableForDating ? '#ef4444' : 'currentColor'} />
+                                            {t('dating_invites_accept', 'Accept')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData((prev) => ({ ...prev, availableForDating: false }))}
+                                            style={{
+                                                padding: '11px',
+                                                borderRadius: '12px',
+                                                border: !formData.availableForDating ? '2px solid #ef4444' : '1px solid var(--border-color)',
+                                                background: !formData.availableForDating ? 'rgba(239,68,68,0.16)' : 'var(--bg-card)',
+                                                color: !formData.availableForDating ? 'var(--text-main)' : 'var(--text-muted)',
+                                                fontWeight: 800,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '7px'
+                                            }}
+                                        >
+                                            <FaBan color={!formData.availableForDating ? '#ef4444' : 'currentColor'} />
+                                            {t('dating_invites_reject', 'Reject')}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <FavoritePlaces userId={currentUser?.uid || currentUser?.id} readOnly={false} />
+
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button type="button" className="ui-btn ui-btn--primary" onClick={handleSave} disabled={isSaving} style={{ flex: 1 }}>
                                         {isSaving ? t('saving') : t('save_btn')}
                                     </button>
-                                    <button type="button" className="ui-btn ui-btn--ghost" onClick={() => setIsEditing(false)} disabled={isSaving} style={{ flex: 1 }}>{t('cancel_btn')}</button>
+                                    <button
+                                        type="button"
+                                        className="ui-btn ui-btn--ghost"
+                                        onClick={() => {
+                                            setAvatarFile(null);
+                                            setUploadProgress(0);
+                                            setIsEditing(false);
+                                        }}
+                                        disabled={isSaving}
+                                        style={{ flex: 1 }}
+                                    >
+                                        {t('cancel_btn')}
+                                    </button>
                                 </div>
                             </div>
                         ) : (
                             <>
-                                <h1 style={{ fontSize: '1.6rem', fontWeight: '900', marginTop: '0.75rem', marginBottom: '0.15rem' }}>{realtimeUser.name}</h1>
+                                <h1 style={{ fontSize: '1.6rem', fontWeight: '900', marginTop: '0.75rem', marginBottom: '0.15rem', color: 'var(--text-main)' }}>{realtimeUser.name}</h1>
                                 <p style={{ color: 'var(--text-muted)', marginBottom: '0.4rem', fontSize: '0.85rem' }}>{realtimeUser.bio || t('active_member')}</p>
                                 {/* Display Gender and Age */}
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '1rem' }}>
                                     <div style={{
-                                        background: 'rgba(139, 92, 246, 0.15)',
+                                        background: 'color-mix(in srgb, var(--primary) 12%, var(--bg-card))',
                                         padding: '6px 12px',
                                         borderRadius: '12px',
-                                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                                        border: '1px solid color-mix(in srgb, var(--primary) 28%, var(--border-color))',
                                         fontSize: '0.85rem',
                                         fontWeight: '700',
+                                        color: 'var(--text-main)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: '6px'
@@ -573,13 +567,13 @@ const Profile = () => {
                                         }</span>
                                     </div>
                                     <div style={{
-                                        background: 'rgba(251, 191, 36, 0.15)',
+                                        background: 'color-mix(in srgb, var(--stat-reviews) 14%, var(--bg-card))',
                                         padding: '6px 12px',
                                         borderRadius: '12px',
-                                        border: '1px solid rgba(251, 191, 36, 0.3)',
+                                        border: '1px solid color-mix(in srgb, var(--stat-reviews) 35%, var(--border-color))',
                                         fontSize: '0.85rem',
                                         fontWeight: '700',
-                                        color: 'var(--luxury-gold)',
+                                        color: 'var(--text-main)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: '6px'
@@ -591,6 +585,8 @@ const Profile = () => {
                             </>
                         )}
 
+                        {!isEditing && (
+                        <>
                         <div className="profile-stats" style={{ justifyContent: 'center', gap: '1.25rem', marginTop: '0.5rem' }}>
                             <div className="profile-stat-item" style={{ flex: 'none', cursor: 'pointer' }} onClick={() => navigate('/followers', { state: { activeTab: 'followers' } })}>
                                 <div className="profile-stat-value">{realtimeUser.followersCount || 0}</div>
@@ -687,30 +683,6 @@ const Profile = () => {
                             </div>
                         )}
 
-                        {/* Profile Actions: Edit & Create Invitation - Hide for Guests */}
-                        {!isEditing && !userProfile?.isGuest && (
-                            <div className="profile-actions-row">
-                                <button
-                                    type="button"
-                                    className="ui-btn ui-btn--secondary"
-                                    onClick={() => setIsEditing(true)}
-                                    style={{ flex: 1 }}
-                                >
-                                    {t('edit_profile') || 'Edit Profile'}
-                                </button>
-                                {!userProfile?.isBusiness && (
-                                    <button
-                                        type="button"
-                                        className="ui-btn ui-btn--primary"
-                                        onClick={() => setIsSelectorOpen(true)}
-                                        style={{ flex: 1 }}
-                                    >
-                                        <FaPlus /> {t('create_invitation', 'Create Invitation')}
-                                    </button>
-                                )}
-                            </div>
-                        )}
-
                         {/* Guest Mode Login Prompt */}
                         {(userProfile?.isGuest) && (
                             <div className="ui-prompt">
@@ -721,18 +693,20 @@ const Profile = () => {
                                 </button>
                             </div>
                         )}
+                        </>
+                        )}
                     </div>
 
 
                     {/* Plan & Subscription Card - Only show if user has active subscription */}
-                    {userProfile?.subscription?.status === 'active' && (
+                    {!isEditing && userProfile?.subscription?.status === 'active' && (
                         <div className="premium-plan-card" style={{ padding: '1.5rem', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: 'var(--profile-stack-gap)', position: 'relative', overflow: 'hidden' }}>
                             <div style={{ position: 'absolute', top: '-10px', right: '-10px', width: '60px', height: '60px', background: 'var(--luxury-gold)', borderRadius: '50%', filter: 'blur(30px)', opacity: 0.2 }}></div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <span>💳</span> {t('my_plan')}
                                 </h3>
-                                <span style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'var(--luxury-gold)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+                                <span style={{ background: 'color-mix(in srgb, var(--stat-reviews) 18%, var(--bg-card))', color: 'var(--text-main)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid color-mix(in srgb, var(--stat-reviews) 35%, var(--border-color))' }}>
                                     {userProfile?.subscription?.planName || 'PREMIUM'}
                                 </span>
                             </div>
@@ -755,6 +729,8 @@ const Profile = () => {
                         </div>
                     )}
 
+                    {!isEditing && (
+                    <>
                     {/* 📊 STATISTICS CARDS */}
                     <StatisticsCards userId={currentUser?.uid || currentUser?.id} />
 
@@ -762,7 +738,7 @@ const Profile = () => {
                     <Achievements userId={currentUser?.uid || currentUser?.id} />
 
                     {/* 📍 FAVORITE PLACES */}
-                    <FavoritePlaces userId={currentUser?.uid || currentUser?.id} />
+                    <FavoritePlaces userId={currentUser?.uid || currentUser?.id} readOnly />
 
 
 
@@ -810,7 +786,8 @@ const Profile = () => {
                                                     onClick={async () => {
                                                         if (window.confirm(t('confirm_delete_all_private', 'Are you sure you want to delete all your private invitations?'))) {
                                                             for (const inv of privatePosted) {
-                                                                await deleteInvitation(inv.id);
+                                                                const inPrivateColl = (privateInvitations || []).some((p) => p.id === inv.id);
+                                                                await deleteInvitation(inv.id, inPrivateColl);
                                                             }
                                                         }
                                                     }}
@@ -859,14 +836,11 @@ const Profile = () => {
                             )}
                         </div>
                     </div>
+                    </>
+                    )}
                 </div>
             </div>
 
-            {/* Invitation Type Selector Modal */}
-            <CreateInvitationSelector
-                isOpen={isSelectorOpen}
-                onClose={() => setIsSelectorOpen(false)}
-            />
         </div>
     );
 };

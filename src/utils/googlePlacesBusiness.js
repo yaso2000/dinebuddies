@@ -49,21 +49,24 @@ export function parseGoogleAddressComponents(components) {
     let country = '';
     let countryCode = '';
     for (const c of components) {
+        const longName = c.long_name || c.longText || '';
+        const shortName = c.short_name || c.shortText || '';
         const t = c.types || [];
-        if (t.includes('locality')) city = c.long_name || city;
-        else if (!city && t.includes('postal_town')) city = c.long_name || '';
-        else if (!city && t.includes('administrative_area_level_2')) city = c.long_name || '';
-        else if (!city && (t.includes('sublocality') || t.includes('sublocality_level_1'))) city = c.long_name || '';
+        if (t.includes('locality')) city = longName || city;
+        else if (!city && t.includes('postal_town')) city = longName || '';
+        else if (!city && t.includes('administrative_area_level_2')) city = longName || '';
+        else if (!city && (t.includes('sublocality') || t.includes('sublocality_level_1'))) city = longName || '';
         if (t.includes('country')) {
-            country = c.long_name || '';
-            countryCode = String(c.short_name || '').toUpperCase();
+            country = longName || '';
+            countryCode = String(shortName || '').toUpperCase();
         }
     }
     if (!city) {
         for (const c of components) {
+            const longName = c.long_name || c.longText || '';
             const t = c.types || [];
             if (t.includes('administrative_area_level_1')) {
-                city = c.long_name || '';
+                city = longName || '';
                 break;
             }
         }

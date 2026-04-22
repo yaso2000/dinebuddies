@@ -1,482 +1,321 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
-import { useNotifications } from '../../context/NotificationContext';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { FaChevronLeft, FaChevronRight, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { FaEnvelopeOpen, FaArrowRight, FaTimes, FaLock, FaCalendarAlt, FaClock, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
-import { getTemplateStyle, OCCASION_PRESETS } from '../../utils/invitationTemplates';
-import { getSafeAvatar, pickSafeDisplayImageUrl } from '../../utils/avatarUtils';
-import PrivateInvitationInfoGrid from './PrivateInvitationInfoGrid';
-import Lottie from 'lottie-react';
-import DatingInvitationSplash from './DatingInvitationSplash';
-import './PrivateInvitationOverlay.css';
+import { db } from '../../firebase/config';
+import { useAuth } from '../../context/AuthContext';
+import { useInvitations } from '../../context/InvitationContext';
+import { getSafeAvatar } from '../../utils/avatarUtils';
+import PrivateInvitationCardPreview from '../Invitations/privateCard/PrivateInvitationCardPreview';
+import { DEFAULT_FRAME_COLOR_ID } from '../Invitations/privateCard/privateCardFrameColors';
+import { DEFAULT_FONT_ID } from '../Invitations/privateCard/privateCardFonts';
 
-const CATEGORY_ICONS = {
-    Dating:      ['❤️', '💖', '🌹', '✨', '💍'],
-    Birthday:    ['🎂', '🎉', '🎈', '🎁', '🎊'],
-    Social:      ['🥳', '🥂', '🍹', '✨', '🎈'],
-    Work:        ['💼', '📈', '✍️', '🤝', '🏢'],
-    Nightlife:   ['🎸', '🍸', '🎧', '🌌', '🕺'],
-    Dining:      ['🍽️', '🍷', '🥗', '🍕', '🍰'],
-    Café:        ['☕', '🥐', '🍪', '🍵', '🍩'],
-    Gaming:      ['🎮', '👾', '🎯', '⚔️', '🛡️'],
-    Family:      ['👨‍👩‍👧', '🏡', '💛', '🌻', '🤗'],
-    Celebration: ['🎉', '✨', '🥂', '🎊', '🌟'],
-};
+function toMillis(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value?.toDate === 'function') return value.toDate().getTime();
+    if (typeof value?.seconds === 'number') return value.seconds * 1000;
+    return 0;
+}
+
+function getMyRsvp(invitation, uid) {
+    if (!uid) return null;
+    const rsvp = invitation?.rsvps?.[uid];
+    return typeof rsvp === 'string' ? rsvp.toLowerCase() : null;
+}
 
 const PrivateInvitationOverlay = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
-    const { activePrivateInvitation, markAsRead, setActivePrivateInvitation, dismissNotification, unreadPrivateInvitations } = useNotifications();
-    const [invitation, setInvitation] = useState(null);
-    const [isOpen, setIsOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [animationData, setAnimationData] = useState(null);
-    const [isTransitioning, setIsTransitioning] = useState(false);
-    const [touchStart, setTouchStart] = useState(null);
-    const [touchEnd, setTouchEnd] = useState(null);
-    const [dragX, setDragX] = useState(0);
-    const [slideDirection, setSlideDirection] = useState(null); // 'next' or 'prev'
+    const { currentUser, isGuest } = useAuth();
+    const { respondToPrivateInvitation } = useInvitations();
 
-    const occasionKey = invitation ? (invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase() : 'Social';
-    const backgroundIcons = CATEGORY_ICONS[occasionKey] || CATEGORY_ICONS.Social;
-    const heroImageUrl = invitation
-        ? pickSafeDisplayImageUrl(invitation.customImage, invitation.restaurantImage, invitation.image)
-        : null;
+    const uid = currentUser?.uid || currentUser?.id;
+    const [pendingInvitations, setPendingInvitations] = useState([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [sessionHiddenIds, setSessionHiddenIds] = useState([]);
+    const [touchStartX, setTouchStartX] = useState(null);
+    const [touchEndX, setTouchEndX] = useState(null);
+    const [isRejecting, setIsRejecting] = useState(false);
+
+    const storageKey = uid ? `private_invites_hidden_session_${uid}` : null;
+    const minSwipeDistance = 60;
 
     useEffect(() => {
-        const fetchInvitation = async () => {
-            if (activePrivateInvitation?.invitationId) {
-                setLoading(true);
-                try {
-                    const docRef = doc(db, 'private_invitations', activePrivateInvitation.invitationId);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        setInvitation({ id: docSnap.id, ...docSnap.data() });
-                        setIsOpen(false);
-                        setIsTransitioning(false);
-                    }
-                } catch (error) {
-                    console.error("Error fetching overlay invitation:", error);
-                } finally {
-                    setLoading(false);
-                }
-            } else if (activePrivateInvitation?.id?.startsWith('test-')) {
-                setInvitation(activePrivateInvitation);
-                setIsOpen(false);
-                setIsTransitioning(false);
-            } else {
-                setInvitation(null);
-                setIsOpen(false);
-            }
-        };
-
-        // Add a slight delay before showing the next one
-        if (activePrivateInvitation) {
-            const timer = setTimeout(fetchInvitation, 600);
-            return () => clearTimeout(timer);
-        } else {
-            setInvitation(null);
+        if (!storageKey) {
+            setSessionHiddenIds([]);
+            return;
         }
-    }, [activePrivateInvitation]);
-
-    // Fetch Lottie data
-    useEffect(() => {
-        const lottieUrl = invitation ? OCCASION_PRESETS[(invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase()]?.lottieUrl : null;
-        if (lottieUrl) {
-            fetch(lottieUrl)
-                .then(res => res.json())
-                .then(data => setAnimationData(data))
-                .catch(err => console.error('Error loading Lottie animation:', err));
-        } else {
-            setAnimationData(null);
+        try {
+            const raw = sessionStorage.getItem(storageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            setSessionHiddenIds(Array.isArray(parsed) ? parsed : []);
+        } catch {
+            setSessionHiddenIds([]);
         }
-    }, [invitation]);
+    }, [storageKey]);
 
-    const [hostInfo, setHostInfo] = useState({ name: null, photo: null });
+    const persistHiddenIds = (next) => {
+        setSessionHiddenIds(next);
+        if (!storageKey) return;
+        try {
+            sessionStorage.setItem(storageKey, JSON.stringify(next));
+        } catch {
+            // ignore session storage failures
+        }
+    };
 
     useEffect(() => {
-        const fetchHostData = async () => {
-            // Priority: Notification profile fields > Firebase user doc > Invitation doc fields
-            const hostId = activePrivateInvitation?.fromUserId || invitation?.fromUserId || invitation?.authorId;
+        if (!uid || isGuest) {
+            setPendingInvitations([]);
+            return;
+        }
+        const q = query(
+            collection(db, 'private_invitations'),
+            where('invitedFriends', 'array-contains', uid)
+        );
+        const unsub = onSnapshot(q, (snapshot) => {
+            const rows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const pending = rows
+                .filter((inv) => inv.status !== 'draft')
+                .filter((inv) => !!inv.publishedAt)
+                .filter((inv) => {
+                    const me = getMyRsvp(inv, uid);
+                    return !me || me === 'pending';
+                })
+                .sort((a, b) => toMillis(a.createdAt) - toMillis(b.createdAt));
+            setPendingInvitations(pending);
+        }, (error) => {
+            console.error('Private invitation overlay query failed:', error);
+            setPendingInvitations([]);
+        });
+        return () => unsub();
+    }, [uid, isGuest]);
 
-            if (hostId) {
-                try {
-                    const userRef = doc(db, 'users', hostId);
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists()) {
-                        const userData = userSnap.data();
-                        setHostInfo({
-                            name: userData.display_name || userData.name || activePrivateInvitation?.fromUserName || invitation?.fromUserName || invitation?.hostName || t('guest'),
-                            photo: getSafeAvatar(userData)
-                        });
-                    } else {
-                        setHostInfo({
-                            name: activePrivateInvitation?.fromUserName || invitation?.fromUserName || invitation?.hostName || t('guest'),
-                            photo: activePrivateInvitation?.fromUserAvatar || invitation?.fromUserAvatar
-                        });
-                    }
-                } catch (error) {
-                    console.error("Error fetching host data:", error);
-                    setHostInfo({
-                        name: activePrivateInvitation?.fromUserName || invitation?.fromUserName || invitation?.hostName || t('guest'),
-                        photo: activePrivateInvitation?.fromUserAvatar || invitation?.fromUserAvatar
-                    });
-                }
-            } else {
-                setHostInfo({
-                    name: activePrivateInvitation?.fromUserName || invitation?.fromUserName || invitation?.hostName || t('guest'),
-                    photo: activePrivateInvitation?.fromUserAvatar || invitation?.fromUserAvatar
-                });
-            }
-        };
-        fetchHostData();
-    }, [invitation, activePrivateInvitation]);
-
-    const hideFullScreenInvite = ['/login', '/auth', '/business/login', '/business/signup'].some(
-        (p) => location.pathname === p || location.pathname.startsWith(`${p}/`)
+    const visibleInvitations = useMemo(
+        () => pendingInvitations.filter((inv) => !sessionHiddenIds.includes(inv.id)),
+        [pendingInvitations, sessionHiddenIds]
     );
-    if (hideFullScreenInvite) return null;
 
-    if (!activePrivateInvitation || !invitation || isTransitioning) return null;
+    useEffect(() => {
+        if (visibleInvitations.length === 0) {
+            setCurrentIndex(0);
+            return;
+        }
+        if (currentIndex >= visibleInvitations.length) {
+            setCurrentIndex(visibleInvitations.length - 1);
+        }
+    }, [visibleInvitations, currentIndex]);
 
-    const handleViewDetails = async () => {
-        setIsTransitioning(true);
-        await markAsRead(activePrivateInvitation.id);
-        setActivePrivateInvitation(null);
+    const shouldHideOverlay =
+        !uid ||
+        isGuest ||
+        location.pathname.startsWith('/login') ||
+        location.pathname.startsWith('/auth') ||
+        location.pathname.startsWith('/business/login') ||
+        location.pathname.startsWith('/business/signup') ||
+        location.pathname.startsWith('/invitation/private/');
+
+    if (shouldHideOverlay || visibleInvitations.length === 0) return null;
+
+    const invitation = visibleInvitations[currentIndex];
+    if (!invitation) return null;
+
+    const closeForSession = () => {
+        const next = Array.from(new Set([...sessionHiddenIds, invitation.id]));
+        persistHiddenIds(next);
+    };
+
+    const handleReject = async () => {
+        if (isRejecting) return;
+        setIsRejecting(true);
+        try {
+            await respondToPrivateInvitation(invitation.id, 'declined');
+            closeForSession();
+        } finally {
+            setIsRejecting(false);
+        }
+    };
+
+    const handleView = () => {
+        closeForSession();
         navigate(`/invitation/private/${invitation.id}`);
     };
 
-    const handleClose = async () => {
-        setIsTransitioning(true);
-        dismissNotification(activePrivateInvitation.id);
-        setActivePrivateInvitation(null);
+    const goPrev = () => {
+        setCurrentIndex((prev) => Math.max(0, prev - 1));
     };
-
-    const handleOpen = (e) => {
-        if (e) e.stopPropagation();
-        setIsOpen(true);
+    const goNext = () => {
+        setCurrentIndex((prev) => Math.min(visibleInvitations.length - 1, prev + 1));
     };
-
-    // ── Dating Invitation → video splash ───────────────────────
-    const isDatingInvitation = (invitation.occasionType || invitation.type || '').toLowerCase() === 'dating';
-    if (isDatingInvitation) {
-        return (
-            <DatingInvitationSplash
-                invitation={invitation}
-                hostInfo={hostInfo}
-                onView={handleViewDetails}
-                onClose={handleClose}
-            />
-        );
-    }
-
-
-    const templateStyles = getTemplateStyle(
-        invitation.templateType || 'classic',
-        invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
-    );
-
-    // Find current index
-    const currentIndex = unreadPrivateInvitations.findIndex(n => n.id === activePrivateInvitation.id) + 1;
-    const totalCount = unreadPrivateInvitations.length;
-
-    // Minimum swipe distance (in px)
-    const minSwipeDistance = 50;
 
     const onTouchStart = (e) => {
-        setTouchEnd(null);
-        setTouchStart(e.targetTouches[0].clientX);
+        setTouchEndX(null);
+        setTouchStartX(e.targetTouches[0].clientX);
     };
-
     const onTouchMove = (e) => {
-        const currentX = e.targetTouches[0].clientX;
-        setTouchEnd(currentX);
-        if (touchStart) {
-            setDragX(currentX - touchStart);
-        }
+        setTouchEndX(e.targetTouches[0].clientX);
     };
-
     const onTouchEnd = () => {
-        if (!touchStart || !touchEnd) {
-            setDragX(0);
-            return;
-        }
-        const distance = touchStart - touchEnd;
-        const isLeftSwipe = distance > minSwipeDistance;
-        const isRightSwipe = distance < -minSwipeDistance;
-
-        if (isLeftSwipe && currentIndex < totalCount) {
-            handleNext();
-        } else if (isRightSwipe && currentIndex > 1) {
-            handlePrev();
-        } else {
-            // Reset position if swipe wasn't long enough
-            setDragX(0);
-        }
-        setTouchStart(null);
-        setTouchEnd(null);
-    };
-
-    const handleNext = () => {
-        if (currentIndex < totalCount) {
-            setSlideDirection('next');
-            setIsOpen(false);
-            setTimeout(() => {
-                setActivePrivateInvitation(unreadPrivateInvitations[currentIndex]);
-                setDragX(0);
-                setSlideDirection(null);
-            }, 600);
-        }
-    };
-
-    const handlePrev = () => {
-        if (currentIndex > 1) {
-            setSlideDirection('prev');
-            setIsOpen(false);
-            setTimeout(() => {
-                setActivePrivateInvitation(unreadPrivateInvitations[currentIndex - 2]);
-                setDragX(0);
-                setSlideDirection(null);
-            }, 600);
-        }
+        if (touchStartX == null || touchEndX == null) return;
+        const delta = touchStartX - touchEndX;
+        if (delta > minSwipeDistance) goNext();
+        if (delta < -minSwipeDistance) goPrev();
+        setTouchStartX(null);
+        setTouchEndX(null);
     };
 
     return (
-        <div className="private-invitation-overlay">
-            {/* Multi-invitation Badge */}
-            {totalCount > 1 && (
-                <div style={{
-                    position: 'fixed',
-                    top: '40px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 2000,
-                    background: 'rgba(0,0,0,0.6)',
-                    backdropFilter: 'blur(10px)',
-                    padding: '8px 20px',
-                    borderRadius: '20px',
-                    color: 'white',
-                    fontSize: '0.9rem',
-                    fontWeight: 'bold',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-                    whiteSpace: 'nowrap'
-                }}>
-                    ✨ {t('you_have_multiple_invitations', { current: currentIndex, total: totalCount })}
-                </div>
-            )}
-
+        <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+                position: 'fixed',
+                inset: 0,
+                /* Must exceed .bottom-nav { z-index: 99999 !important } in index.css */
+                zIndex: 150000,
+                width: '100%',
+                minHeight: '100dvh',
+                background: 'rgba(8, 8, 14, 0.94)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                display: 'flex',
+                alignItems: 'stretch',
+                justifyContent: 'center'
+            }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+        >
             <div
-                className={`overlay-backdrop ${isOpen ? 'is-open' : ''} ${isTransitioning ? 'fade-out' : ''}`}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
+                style={{
+                    width: 'min(720px, 100%)',
+                    boxSizing: 'border-box',
+                    padding: '16px 14px max(20px, env(safe-area-inset-bottom, 0px))',
+                    paddingTop: 'max(16px, env(safe-area-inset-top, 0px))',
+                    display: 'grid',
+                    gridTemplateRows: 'auto minmax(0, 1fr) auto',
+                    gap: 14,
+                    minHeight: 0
+                }}
             >
-                {/* Navigation Arrows (Screen Edges) */}
-                {totalCount > 1 && (
-                    <>
-                        <button
-                            className={`nav-arrow nav-prev ${currentIndex === 1 ? 'disabled' : ''}`}
-                            onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                            disabled={currentIndex === 1}
-                        >
-                            <FaChevronLeft />
-                        </button>
-                        <button
-                            className={`nav-arrow nav-next ${currentIndex === totalCount ? 'disabled' : ''}`}
-                            onClick={(e) => { e.stopPropagation(); handleNext(); }}
-                            disabled={currentIndex === totalCount}
-                        >
-                            <FaChevronRight />
-                        </button>
-                    </>
-                )}
-
-                <div
-                    key={activePrivateInvitation.id}
-                    className={`envelope-wrapper ${slideDirection ? `slide-${slideDirection}` : ''}`}
-                    style={{
-                        transform: !slideDirection ? `translateX(${dragX}px)` : undefined,
-                        transition: !touchStart && !slideDirection ? 'transform 0.8s cubic-bezier(0.22, 1, 0.36, 1)' : 'none'
-                    }}
-                >
-                    {/* Pagination Dots (Mobile context) */}
-                    {totalCount > 1 && (
-                        <div className="pagination-dots">
-                            {[...Array(totalCount)].map((_, i) => (
-                                <div
-                                    key={i}
-                                    className={`dot ${currentIndex === i + 1 ? 'active' : ''}`}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                    <div
-                        className={`envelope-container ${isOpen ? 'is-open' : ''}`}
-                        onClick={!isOpen ? handleOpen : undefined}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button
+                        type="button"
+                        onClick={closeForSession}
+                        aria-label={t('close', 'Close')}
+                        style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            border: '1px solid rgba(255,255,255,0.18)',
+                            background: 'rgba(255,255,255,0.08)',
+                            color: '#fff'
+                        }}
                     >
-                        {/* Envelope Back */}
-                        <div className="envelope-base"></div>
-
-                        {/* Envelope Flap */}
-                        <div className="envelope-flap"></div>
-
-                        {/* Seal */}
-                        <div className="envelope-seal">
-                            <FaLock />
-                        </div>
-
-                        {/* The Card (Inside) */}
-                        <div className={`card-preview-wrapper theme-${(invitation.occasionType || 'social').toLowerCase()}`}>
-                            <div className="card-inner-overlay" style={{
-                                fontFamily: templateStyles?.layout?.fontFamily || 'inherit',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                minHeight: '300px'
-                            }}>
-                                {/* Floating Background Icons Layer */}
-                                <div className="bg-floating-icons">
-                                    {[...Array(12)].map((_, i) => (
-                                        <span
-                                            key={i}
-                                            className={`floating-icon icon-${i}`}
-                                            style={{
-                                                left: `${(i * 27) % 100}%`,
-                                                top: `${(i * 37) % 100}%`,
-                                                animationDelay: `${i * 0.4}s`,
-                                                fontSize: `${1 + (i % 3) * 0.5}rem`
-                                            }}
-                                        >
-                                            {backgroundIcons[i % backgroundIcons.length]}
-                                        </span>
-                                    ))}
-                                </div>
-
-                                {/* Lottie Background Animation (If available) */}
-                                {animationData && (
-                                    <div className="lottie-bg-container">
-                                        <Lottie
-                                            animationData={animationData}
-                                            loop={true}
-                                            autoPlay={true}
-                                            style={{
-                                                position: 'absolute',
-                                                inset: 0,
-                                                width: '100%',
-                                                height: '100%',
-                                                zIndex: 0,
-                                                pointerEvents: 'none'
-                                            }}
-                                            rendererSettings={{
-                                                preserveAspectRatio: 'xMidYMid slice'
-                                            }}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* Floating category icon */}
-                                <div className="category-reveal reveal-text reveal-delay-1" style={{ position: 'relative', zIndex: 3, marginBottom: '20px' }}>
-                                    <span className="giant-icon">
-                                        {invitation.occasionType ? OCCASION_PRESETS[(invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase()]?.emoji || '🍽️' : '🍽️'}
-                                    </span>
-                                </div>
-
-                                {pickSafeDisplayImageUrl(
-                                    invitation.customImage,
-                                    invitation.restaurantImage,
-                                    invitation.image
-                                ) && (
-                                    <div
-                                        style={{
-                                            width: '100%',
-                                            maxWidth: 340,
-                                            margin: '0 auto 18px',
-                                            borderRadius: 16,
-                                            overflow: 'hidden',
-                                            boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
-                                            position: 'relative',
-                                            zIndex: 3
-                                        }}
-                                    >
-                                        <img
-                                            src={pickSafeDisplayImageUrl(
-                                                invitation.customImage,
-                                                invitation.restaurantImage,
-                                                invitation.image
-                                            )}
-                                            alt=""
-                                            style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }}
-                                        />
-                                    </div>
-                                )}
-
-                                <div className="host-identity-section reveal-text reveal-delay-3" style={{ zIndex: 3, textAlign: 'center', marginBottom: '35px' }}>
-                                    <div className="host-avatar-wrapper">
-                                        <img
-                                            src={getSafeAvatar({ photoURL: hostInfo.photo, display_name: hostInfo.name })}
-                                            alt={hostInfo.name}
-                                            className="host-avatar-overlay"
-                                        />
-                                    </div>
-                                    <h2 style={{
-                                        fontSize: '1.9rem',
-                                        color: 'white',
-                                        lineHeight: '1.2',
-                                        margin: '15px 0 0 0',
-                                        fontWeight: '900',
-                                        textShadow: '0 4px 15px rgba(0,0,0,0.5)',
-                                        maxWidth: '340px'
-                                    }}>
-                                        {t('you_have_private_invitation_from_redesign', {
-                                            host: hostInfo.name || t('guest'),
-                                            defaultValue: `You have a private invitation from ${hostInfo.name || t('guest')}`
-                                        })}
-                                    </h2>
-                                </div>
-
-                                <div className="overlay-actions reveal-text reveal-delay-4" style={{ position: 'relative', width: '100%', zIndex: 3, display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                    <button className="btn-open-details" onClick={handleViewDetails}>
-                                        {t('view_invitation_details')} <FaArrowRight style={{ marginLeft: '10px' }} />
-                                    </button>
-                                    <button className="btn-close-overlay" onClick={handleClose}>
-                                        {t('later')}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <FaTimes />
+                    </button>
+                    <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.9rem' }}>
+                        {visibleInvitations.length > 1
+                            ? `${currentIndex + 1}/${visibleInvitations.length}`
+                            : t('private_invitation', 'Private invitation')}
                     </div>
-
-                    {!isOpen && (
-                        <div style={{
-                            position: 'absolute',
-                            bottom: '-60px',
-                            left: 0,
-                            right: 0,
-                            textAlign: 'center',
-                            color: 'white',
-                            animation: 'pulse 2s infinite'
-                        }}>
-                            <p style={{ fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px' }}>
-                                {t('open_envelope')}
-                            </p>
-                        </div>
-                    )}
+                    <div style={{ width: 40 }} />
                 </div>
 
-                <style>{`
-                    @keyframes pulse {
-                        0% { opacity: 0.5; transform: scale(1); }
-                        50% { opacity: 1; transform: scale(1.05); }
-                        100% { opacity: 0.5; transform: scale(1); }
-                    }
-                `}</style>
+                <div style={{ display: 'grid', placeItems: 'center', position: 'relative' }}>
+                    {visibleInvitations.length > 1 && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={goPrev}
+                                disabled={currentIndex === 0}
+                                style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    zIndex: 2,
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    border: '1px solid rgba(255,255,255,0.18)',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    color: '#fff',
+                                    opacity: currentIndex === 0 ? 0.45 : 1
+                                }}
+                            >
+                                <FaChevronLeft />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={goNext}
+                                disabled={currentIndex === visibleInvitations.length - 1}
+                                style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    zIndex: 2,
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    border: '1px solid rgba(255,255,255,0.18)',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    color: '#fff',
+                                    opacity: currentIndex === visibleInvitations.length - 1 ? 0.45 : 1
+                                }}
+                            >
+                                <FaChevronRight />
+                            </button>
+                        </>
+                    )}
+
+                    <PrivateInvitationCardPreview
+                        className="private-invitation-card-preview--showcase"
+                        frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
+                        cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
+                        occasionType={invitation.occasionType}
+                        cardBackgroundId={invitation.cardBackgroundId || null}
+                        title={invitation.title}
+                        description={invitation.description}
+                        date={invitation.date}
+                        time={invitation.time}
+                        location={invitation.location}
+                        inviterName={invitation.author?.name || ''}
+                        inviterAvatarUrl={getSafeAvatar(invitation.author || {})}
+                    />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <button
+                        type="button"
+                        onClick={handleReject}
+                        disabled={isRejecting}
+                        style={{
+                            height: 48,
+                            borderRadius: 14,
+                            border: '1px solid rgba(255,255,255,0.22)',
+                            background: 'rgba(255,255,255,0.08)',
+                            color: '#fff',
+                            fontWeight: 700
+                        }}
+                    >
+                        {isRejecting ? t('processing', 'Processing') : t('reject_invitation', 'Reject Invitation')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleView}
+                        style={{
+                            height: 48,
+                            borderRadius: 14,
+                            border: 'none',
+                            background: 'var(--primary, #8b5cf6)',
+                            color: '#fff',
+                            fontWeight: 800
+                        }}
+                    >
+                        {t('view_invitation', 'View Invitation')}
+                    </button>
+                </div>
             </div>
         </div>
     );

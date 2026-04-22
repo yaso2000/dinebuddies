@@ -4,6 +4,7 @@ import DesktopLanding from '../pages/DesktopLanding';
 import { useAuth } from '../context/AuthContext';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
+import { isAdminIdentity } from '../utils/adminAccess';
 
 const HomeRouter = () => {
     const { currentUser, userProfile, loading } = useAuth();
@@ -37,18 +38,30 @@ const HomeRouter = () => {
     }
 
     if (currentUser && userProfile) {
-        if (isBusinessUser(userProfile)) {
-            // If they are a business but haven't finished signup, go to their new profile page
-            if (userProfile.pendingBusinessRegistration && currentUser.uid) {
-                return <Navigate to="/business/onboarding" replace />;
-            }
-            // Normal business goes to dashboard
-            return <Navigate to={businessHomeDest()} replace />;
+        if (isAdminIdentity(currentUser, userProfile)) {
+            return <Navigate to="/admin/dashboard" replace />;
         }
         if (needsConsumerEmailVerification(currentUser, userProfile)) {
             return <Navigate to="/verify-email" replace />;
         }
-        // Normal user goes to feed
+        if (isBusinessUser(userProfile)) {
+            if (userProfile.pendingBusinessRegistration && currentUser.uid) {
+                return <Navigate to="/business/onboarding" replace />;
+            }
+            return <Navigate to={businessHomeDest()} replace />;
+        }
+        
+        // Consumer (Personal) profile completion layer
+        const isComplete = userProfile.isProfileComplete || (
+            (userProfile.displayName || userProfile.display_name || userProfile.nickname) &&
+            userProfile.gender &&
+            (userProfile.ageCategory || userProfile.age)
+        );
+
+        if (!isComplete) {
+            return <Navigate to="/complete-profile" replace />;
+        }
+
         return <Navigate to="/posts-feed" replace />;
     }
 

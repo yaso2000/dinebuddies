@@ -231,7 +231,7 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                         display: 'flex', alignItems: 'center', background: 'var(--input-bg)',
                         borderRadius: '8px', padding: '8px 12px', border: '1px solid var(--border-color)'
                     }}>
-                        <FaSearch color="var(--text-muted)" style={{ marginRight: '8px' }} />
+                        <FaSearch color="var(--text-muted)" style={{ marginInlineEnd: '8px', flexShrink: 0 }} />
                         <input 
                             type="text" 
                             placeholder={t('search', 'Search...')}
@@ -253,9 +253,9 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                                     const otherUser = convo.otherUser;
                                     const status = sentStatus[otherUser.uid];
                                     return (
-                                        <div key={convo.id} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <img src={getSafeAvatar(otherUser)} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
-                                            <div style={{ flex: 1, marginLeft: '12px', overflow: 'hidden' }}>
+                                        <div key={convo.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
+                                            <img src={getSafeAvatar(otherUser)} alt="" style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                                                 <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{otherUser.displayName}</h4>
                                             </div>
                                             <button 
@@ -285,9 +285,9 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                                 filteredCommunities.map(comm => {
                                     const status = sentStatus[comm.id];
                                     return (
-                                        <div key={comm.id} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <img src={getSafeAvatar(comm)} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
-                                            <div style={{ flex: 1, marginLeft: '12px', overflow: 'hidden' }}>
+                                        <div key={comm.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
+                                            <img src={getSafeAvatar(comm)} alt="" style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                                                 <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{comm.businessName || comm.display_name}</h4>
                                                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Community</p>
                                             </div>

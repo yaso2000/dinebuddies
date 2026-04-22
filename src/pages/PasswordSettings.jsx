@@ -17,7 +17,6 @@ const PasswordSettings = () => {
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
 
     const handleUpdatePassword = async (e) => {
@@ -35,7 +34,6 @@ const PasswordSettings = () => {
 
         setLoading(true);
         setError('');
-        setSuccess(false);
 
         try {
             // Re-authenticate user
@@ -48,14 +46,11 @@ const PasswordSettings = () => {
             // Update password
             await updatePassword(currentUser, newPassword);
 
-            setSuccess(true);
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
 
-            setTimeout(() => {
-                navigate('/settings');
-            }, 2000);
+            navigate('/settings', { replace: true, state: { passwordUpdated: true } });
         } catch (err) {
             console.error('Error updating password:', err);
             if (err.code === 'auth/wrong-password') {
@@ -162,12 +157,6 @@ const PasswordSettings = () => {
                         {error && (
                             <div className="error-message">
                                 {error}
-                            </div>
-                        )}
-
-                        {success && (
-                            <div className="success-message">
-                                {t('password_updated_success', 'Password updated successfully!')}
                             </div>
                         )}
 

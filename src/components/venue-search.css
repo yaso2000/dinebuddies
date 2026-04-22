@@ -1,0 +1,162 @@
+/**
+ * Shared venue / Places search UI: stacking so dropdowns sit above sibling form sections,
+ * and one visual template (tokens from index.css).
+ */
+
+/**
+ * Use on the venue block wrapper (e.g. .ui-card) so the whole card + overflow
+ * dropdown paints above the next sections (media, submit).
+ */
+.venue-search-stack {
+  position: relative;
+  z-index: 8;
+}
+
+.venue-location-picker {
+  position: relative;
+  z-index: 1;
+}
+
+.venue-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-premium);
+  z-index: 2;
+  max-height: min(360px, 50vh);
+  overflow-y: auto;
+}
+
+.venue-search-dropdown--tight {
+  margin-top: 4px;
+}
+
+/* Portaled to document.body — position/top/left/width set in JS (fixed to viewport). */
+.venue-search-dropdown--portal {
+  position: fixed;
+  margin-top: 0;
+  z-index: 10060;
+}
+
+.venue-search-segment {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  background: var(--bg-input);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.venue-search-segment__btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.8rem;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.venue-search-segment__btn--active {
+  background: linear-gradient(135deg, var(--primary), var(--luxury-gold));
+  color: #fff;
+}
+
+.venue-search-row {
+  padding: 12px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background 0.15s;
+}
+
+.venue-search-row:last-child {
+  border-bottom: none;
+}
+
+.venue-search-row:hover,
+.venue-search-row:focus-visible {
+  background: var(--hover-overlay);
+}
+
+.venue-search-icon {
+  min-width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.venue-search-partner-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--luxury-gold) 40%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+}
+
+.venue-search-google-pin {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.venue-search-section-label {
+  padding: 6px 12px 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.venue-search-section-label--accent {
+  color: var(--luxury-gold);
+}
+
+.venue-search-footer-hint {
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-input);
+  border-top: 1px solid var(--border-color);
+  transition: background 0.15s;
+}
+
+.venue-search-footer-hint:hover,
+.venue-search-footer-hint:focus-visible {
+  background: var(--hover-overlay);
+}

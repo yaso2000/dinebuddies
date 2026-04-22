@@ -85,18 +85,81 @@ export const fetchIpLocation = async () => {
 };
 
 /**
+ * Unified city discovery for all account types/pages.
+ * Order: live GPS + reverse geocode -> profile fallback -> IP fallback.
+ */
+export const detectUserLocationContext = async (userProfile = null) => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        try {
+            const pos = await new Promise((resolve, reject) =>
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    timeout: 6000,
+                    maximumAge: 0
+                })
+            );
+            const { latitude, longitude } = pos.coords;
+            const res = await fetch(
+                `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+            if (res.ok) {
+                const d = await res.json();
+                const city = d.city || d.locality || d.principalSubdivision || '';
+                if (city) {
+                    return {
+                        success: true,
+                        source: 'gps',
+                        city,
+                        country: d.countryName || '',
+                        countryCode: d.countryCode || '',
+                        latitude,
+                        longitude
+                    };
+                }
+            }
+        } catch {
+            // Continue to profile/IP fallbacks.
+        }
+    }
+
+    if (userProfile?.city) {
+        return {
+            success: true,
+            source: 'profile',
+            city: userProfile.city,
+            country: userProfile.country || '',
+            countryCode: userProfile.countryCode || '',
+            latitude: userProfile.coordinates?.lat ?? null,
+            longitude: userProfile.coordinates?.lng ?? null
+        };
+    }
+
+    const ip = await fetchIpLocation();
+    if (ip.success) {
+        return {
+            success: true,
+            source: 'ip',
+            city: ip.city || '',
+            country: '',
+            countryCode: ip.country_code || '',
+            latitude: ip.latitude ?? null,
+            longitude: ip.longitude ?? null
+        };
+    }
+
+    return { success: false, source: 'none' };
+};
+
+/**
  * Geocodes an address to coordinates using Nominatim.
  */
 export const geocode = async (address) => {
     try {
         if (!address) return { success: false, error: 'no_address' };
 
-        // Quietly bypass if we know Nominatim is blocked or if on production domain
+        // Same policy on every hostname: only skip when this session already marked Nominatim blocked.
         if (typeof window !== 'undefined') {
-            const isProd = window.location.hostname.includes('dinebuddies.com');
             const isSessionBlocked = sessionStorage.getItem('NOMINATIM_BLOCKED') === 'true';
-
-            if (isProd || isSessionBlocked) {
+            if (isSessionBlocked) {
                 return { success: false, error: 'nominatim_blocked' };
             }
         }
@@ -134,8 +197,7 @@ export const geocode = async (address) => {
         return { success: false, error: 'no_results' };
     } catch (error) {
         console.warn('⚠️ Geocode failed:', error.message);
-        // Treat generic fetch failures on prod as blocks to avoid noise
-        if (typeof window !== 'undefined' && window.location.hostname.includes('dinebuddies.com')) {
+        if (typeof window !== 'undefined') {
             sessionStorage.setItem('NOMINATIM_BLOCKED', 'true');
         }
         return { success: false, error: error.message };
@@ -148,12 +210,9 @@ export const geocode = async (address) => {
  */
 export const reverseGeocode = async (lat, lng) => {
     try {
-        // Quietly bypass if we know Nominatim is blocked or if on production domain
         if (typeof window !== 'undefined') {
-            const isProd = window.location.hostname.includes('dinebuddies.com');
             const isSessionBlocked = sessionStorage.getItem('NOMINATIM_BLOCKED') === 'true';
-
-            if (isProd || isSessionBlocked) {
+            if (isSessionBlocked) {
                 return { success: false, error: 'nominatim_blocked' };
             }
         }
@@ -193,7 +252,7 @@ export const reverseGeocode = async (lat, lng) => {
         return { success: false, error: 'no_results' };
     } catch (error) {
         console.warn('⚠️ Nominatim reverse geocode rejected or failed. Trying fallback...');
-        if (typeof window !== 'undefined' && window.location.hostname.includes('dinebuddies.com')) {
+        if (typeof window !== 'undefined') {
             sessionStorage.setItem('NOMINATIM_BLOCKED', 'true');
         }
 

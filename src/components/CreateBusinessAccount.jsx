@@ -3,9 +3,17 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { FaTimes, FaSave, FaStore, FaEnvelope, FaLock, FaPhone, FaMapMarkerAlt } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 import LocationAutocomplete from './LocationAutocomplete';
+import {
+    ENABLE_BACKGROUND_AREA_DETECT,
+    GEOLOCATION_OPTIONS,
+    cityFromBigDataCloudReverseClient,
+    countryCodeFromBigDataCloudReverseClient,
+} from '../utils/bigDataCloudGeocode';
 
 const CreateBusinessAccount = ({ onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [step, setStep] = useState(1); // 1: Account Info, 2: Business Info
@@ -31,54 +39,47 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
         subscriptionTier: 'free'
     });
 
-    // Get user's location and detect city/country automatically
+    // Optional: GPS + reverse-geocode on mount — off by default (ENABLE_BACKGROUND_AREA_DETECT).
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
+        if (!ENABLE_BACKGROUND_AREA_DETECT || !navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
 
-                    setFormData(prev => ({
+                setFormData((prev) => ({
+                    ...prev,
+                    userLat: lat,
+                    userLng: lng,
+                }));
+
+                try {
+                    const response = await fetch(
+                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+                    );
+
+                    if (!response.ok) throw new Error('Geocoding failed');
+
+                    const data = await response.json();
+                    if (!data) return;
+
+                    const city = cityFromBigDataCloudReverseClient(data);
+                    const country = String(data.countryName || '').trim() || 'Australia';
+                    const countryCode = countryCodeFromBigDataCloudReverseClient(data, 'AU');
+
+                    setFormData((prev) => ({
                         ...prev,
-                        userLat: lat,
-                        userLng: lng
+                        countryCode: countryCode || prev.countryCode,
+                        country,
+                        ...(city ? { city } : {}),
                     }));
-
-                    // Reverse geocode to get city and country
-                    try {
-                        const response = await fetch(
-                            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-                        );
-
-                        if (!response.ok) throw new Error('Geocoding failed');
-
-                        const data = await response.json();
-
-                        if (data) {
-                            const city = data.city || data.locality || data.principalSubdivision || '';
-                            const country = data.countryName || 'Australia';
-                            const countryCode = (data.countryCode || 'AU').toUpperCase();
-
-                            console.log('📍 Detected location (Auto):', { city, country, countryCode });
-
-                            if (city) {
-                                setFormData(prev => ({
-                                    ...prev,
-                                    city,
-                                    country,
-                                    countryCode,
-                                    // Also set country in the dropdown if available
-                                }));
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Reverse geocoding failed:', error);
-                    }
-                },
-                (error) => console.log('Location access denied:', error)
-            );
-        }
+                } catch (error) {
+                    console.error('Reverse geocoding failed:', error);
+                }
+            },
+            () => {},
+            GEOLOCATION_OPTIONS
+        );
     }, []);
 
     const handleChange = (e) => {
@@ -518,56 +519,42 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                 border: '1px solid var(--border-color)',
                                 marginBottom: '1rem'
                             }}>
-                                <h3 style={{
-                                    fontSize: '1rem',
-                                    marginBottom: '1rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    color: 'var(--text-primary)'
-                                }}>
-                                    📍 Search for Business Location
-                                </h3>
-
-                                {/* Current Location Badge */}
-                                {formData.city && (
-                                    <div style={{
-                                        marginBottom: '1rem',
+                                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.35rem' }}>
+                                    {t('business_onboarding_detected_city_label')}
+                                </label>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={
+                                        [formData.city, formData.country].filter(Boolean).join(', ') ||
+                                        t('business_onboarding_area_unknown')
+                                    }
+                                    style={{
+                                        width: '100%',
                                         padding: '0.75rem',
-                                        background: 'rgba(139, 92, 246, 0.1)',
-                                        borderRadius: '12px',
-                                        border: '1px solid rgba(139, 92, 246, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        fontSize: '0.9rem'
-                                    }}>
-                                        <span style={{ fontSize: '1.2rem' }}>📍</span>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{
-                                                fontSize: '0.75rem',
-                                                color: 'var(--text-muted)',
-                                                marginBottom: '2px'
-                                            }}>
-                                                Detected Location
-                                            </div>
-                                            <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-                                                {formData.city}{formData.country && `, ${formData.country}`}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                                        background: 'rgba(139, 92, 246, 0.06)',
+                                        border: '1px solid rgba(139, 92, 246, 0.35)',
+                                        borderRadius: '10px',
+                                        color: 'var(--text-main)',
+                                        fontSize: '0.95rem',
+                                        cursor: 'default',
+                                        marginBottom: '0.45rem'
+                                    }}
+                                />
+                                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0 0 1rem', lineHeight: 1.45 }}>
+                                    {t('business_onboarding_area_hint')}
+                                </p>
 
-                                {/* Location Search */}
-                                <div style={{ marginBottom: 0 }}>
+                                <div className="venue-search-stack" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                                     <label style={{
                                         display: 'block',
-                                        fontSize: '0.8rem',
-                                        fontWeight: '600',
-                                        color: 'var(--text-secondary)',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '700',
+                                        color: 'var(--text-main)',
                                         marginBottom: '0.5rem'
                                     }}>
-                                        Business Location *
+                                        {t('business_onboarding_location_section')} *
                                     </label>
                                     <LocationAutocomplete
                                         value={formData.location}
@@ -577,15 +564,11 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                         countryCode={formData.countryCode}
                                         userLat={formData.userLat}
                                         userLng={formData.userLng}
+                                        useGooglePlacesMinimal
                                     />
-                                    <small style={{
-                                        color: 'var(--text-muted)',
-                                        display: 'block',
-                                        marginTop: '5px',
-                                        fontSize: '0.8rem'
-                                    }}>
-                                        💡 Tip: Search for your business address or exact location
-                                    </small>
+                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.45rem 0 0', lineHeight: 1.45 }}>
+                                        {t('business_onboarding_address_autocomplete_hint')}
+                                    </p>
                                 </div>
                             </div>
 

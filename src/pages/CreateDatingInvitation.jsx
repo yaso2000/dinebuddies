@@ -16,11 +16,10 @@ import { getMutualFollowers } from '../utils/followHelpers';
 import { db } from '../firebase/config';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { fetchIpLocation } from '../utils/locationUtils';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
-import { placePhotoProxyUrls } from '../utils/placePhotoUrls';
+import { detectUserLocationContext } from '../utils/locationUtils';
 import './PrivateInvitation.css';
 import { goToLogin } from '../utils/goToLogin';
+import { resolveVenueCountryIso } from '../utils/countryIso';
 
 const CreateDatingInvitation = () => {
     const { t, i18n } = useTranslation();
@@ -38,8 +37,6 @@ const CreateDatingInvitation = () => {
     const [mutualFriends, setMutualFriends] = useState([]);
     const [friendSearchQuery, setFriendSearchQuery] = useState('');
     const [friendsLoading, setFriendsLoading] = useState(false);
-    const [suggestedImages, setSuggestedImages] = useState([]);
-    const [suggestedImagesLoading, setSuggestedImagesLoading] = useState(false);
     const [existingDraftId, setExistingDraftId] = useState(null);
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
@@ -120,7 +117,24 @@ const CreateDatingInvitation = () => {
                     followingIds = userDoc.data()?.following || [];
                 }
                 const friends = await getMutualFollowers(userId, followingIds);
-                setMutualFriends(friends);
+                const enrichedFriends = await Promise.all(
+                    friends.map(async (friend) => {
+                        try {
+                            const friendDoc = await getDoc(doc(db, 'users', friend.id));
+                            const friendData = friendDoc.exists() ? friendDoc.data() : {};
+                            return {
+                                ...friend,
+                                availableForDating: friendData.availableForDating !== false
+                            };
+                        } catch {
+                            return {
+                                ...friend,
+                                availableForDating: true
+                            };
+                        }
+                    })
+                );
+                setMutualFriends(enrichedFriends);
             } catch (error) {
                 console.error('Error fetching friends:', error);
             } finally {
@@ -130,50 +144,25 @@ const CreateDatingInvitation = () => {
         fetchFriends();
     }, [authUser, currentUser, userProfile]);
 
-    // Location detection
+    // Unified location discovery for all users/pages.
     useEffect(() => {
         if (restaurantData) return;
 
         const detectLocation = async () => {
-            if (navigator.geolocation) {
-                try {
-                    const pos = await new Promise((resolve, reject) =>
-                        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 6000, maximumAge: 0 })
-                    );
-                    const { latitude, longitude } = pos.coords;
-                    const res = await fetch(
-                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-                    );
-                    if (res.ok) {
-                        const d = await res.json();
-                        const city = d.city || d.locality || d.principalSubdivision || '';
-                        if (city) {
-                            setFormData(prev => ({ ...prev, city, country: d.countryCode || prev.country, userLat: latitude, userLng: longitude }));
-                            return;
-                        }
-                    }
-                } catch { /* GPS denied */ }
-            }
-
-            if (userProfile?.city) {
-                setFormData(prev => ({
-                    ...prev,
-                    city: userProfile.city,
-                    country: userProfile.countryCode || prev.country || '',
-                    userLat: userProfile.coordinates?.lat || prev.userLat,
-                    userLng: userProfile.coordinates?.lng || prev.userLng,
-                }));
-                return;
-            }
-
-            const data = await fetchIpLocation();
-            if (data.success) {
-                setFormData(prev => ({ ...prev, city: data.city, country: data.country_code, userLat: data.latitude, userLng: data.longitude }));
-            }
+            const detected = await detectUserLocationContext(userProfile);
+            if (!detected.success) return;
+            setFormData(prev => ({
+                ...prev,
+                city: detected.city || prev.city,
+                country: detected.country || prev.country || '',
+                countryCode: detected.countryCode || prev.countryCode || '',
+                userLat: detected.latitude ?? prev.userLat,
+                userLng: detected.longitude ?? prev.userLng
+            }));
         };
 
         detectLocation();
-    }, [restaurantData]);
+    }, [restaurantData, userProfile]);
 
     const handleLocationSelect = (placeData) => {
         setFormData(prev => ({
@@ -183,7 +172,6 @@ const CreateDatingInvitation = () => {
             lng: placeData.lng,
             title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title
         }));
-        if (placeData.photos?.length > 0) setSuggestedImages(placeData.photos);
     };
 
     const filteredFriends = mutualFriends.filter(friend =>
@@ -203,9 +191,11 @@ const CreateDatingInvitation = () => {
 
         if (isAtLimit) return;
 
-        // Note: We no longer hard-block based on availableForDating because the field
-        // may be incorrect (old toggle bug set it to false for new users).
-        // Recipients can always decline a dating invitation.
+        const target = mutualFriends.find((f) => f.id === friendId);
+        if (target?.availableForDating === false) {
+            showToast(t('dating_invite_disabled_by_user', 'This person has disabled receiving dating invitations.'), 'error');
+            return;
+        }
 
         setFormData(prev => ({ ...prev, invitedFriends: [friendId] }));
     };
@@ -273,41 +263,6 @@ const CreateDatingInvitation = () => {
             setIsSubmitting(false);
         }
     };
-
-    // Restore Google images when editing
-    useEffect(() => {
-        if (!formData.location || suggestedImages?.length > 0 || formData.restaurantId) return;
-
-        let cancelled = false;
-        const searchQuery = formData.location + (formData.city ? ` ${formData.city}` : '');
-        setSuggestedImagesLoading(true);
-
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || !window.google?.maps?.places) {
-                    if (!cancelled) setSuggestedImagesLoading(false);
-                    return;
-                }
-                try {
-                    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-                    service.findPlaceFromQuery({ query: searchQuery, fields: ['place_id'] }, (results, status) => {
-                        if (cancelled) return;
-                        if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.[0]) {
-                            if (cancelled) return;
-                            setSuggestedImagesLoading(false);
-                            setSuggestedImages(placePhotoProxyUrls(results[0].place_id, 5));
-                        } else {
-                            setSuggestedImagesLoading(false);
-                        }
-                    });
-                } catch (err) {
-                    if (!cancelled) setSuggestedImagesLoading(false);
-                }
-            })
-            .catch(() => setSuggestedImagesLoading(false));
-
-        return () => { cancelled = true; setSuggestedImagesLoading(false); };
-    }, [formData.location]);
 
     // No quota → redirect
     if (!quotaInfo.canCreate && !editInvitation) {
@@ -418,16 +373,16 @@ const CreateDatingInvitation = () => {
                     </div>
 
                     {/* Location */}
-                    <div className="form-group mb-4">
+                    <div className="form-group mb-4 venue-search-stack">
                         <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
                         <VenueLocationPicker
                             value={formData.location}
                             onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                             onSelect={handleLocationSelect}
                             city={formData.city}
-                            countryCode={formData.country}
-                            userLat={formData.userLat}
-                            userLng={formData.userLng}
+                            countryCode={resolveVenueCountryIso(formData, userProfile)}
+                            userLat={formData.userLat ?? userProfile?.coordinates?.lat}
+                            userLng={formData.userLng ?? userProfile?.coordinates?.lng}
                             className="elegant-input"
                         />
                     </div>
@@ -437,13 +392,12 @@ const CreateDatingInvitation = () => {
                         <label className="elegant-label">{t('invitation_media')}</label>
                         <MediaSelector
                             restaurant={{
+                                image: formData.restaurantImage || formData.image,
                                 restaurantImage: formData.restaurantImage || formData.image,
                                 name: formData.restaurantName
                             }}
-                            suggestedImages={suggestedImages}
-                            suggestedImagesLoading={suggestedImagesLoading}
+                            mediaData={mediaData}
                             onMediaSelect={(data) => setMediaData(data)}
-                            initialData={mediaData}
                         />
                     </div>
 
@@ -542,17 +496,21 @@ const CreateDatingInvitation = () => {
                                 {filteredFriends.map(friend => {
                                     const isSelected = formData.invitedFriends.includes(friend.id);
                                     const isDisabled = !isSelected && isAtLimit;
+                                    const canReceiveDating = friend.availableForDating !== false;
                                     return (
                                         <div
                                             key={friend.id}
-                                            onClick={() => !isDisabled && toggleFriendSelection(friend.id)}
+                                            onClick={() => {
+                                                if (isDisabled || !canReceiveDating) return;
+                                                toggleFriendSelection(friend.id);
+                                            }}
                                             style={{
                                                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                                                 padding: '10px 6px', borderRadius: 12,
                                                 background: isSelected ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.03)',
                                                 border: `1.5px solid ${isSelected ? '#ec4899' : 'rgba(255,255,255,0.07)'}`,
-                                                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                                opacity: isDisabled ? 0.4 : 1,
+                                                cursor: (isDisabled || !canReceiveDating) ? 'not-allowed' : 'pointer',
+                                                opacity: (isDisabled || !canReceiveDating) ? 0.4 : 1,
                                                 transition: 'all 0.18s',
                                                 position: 'relative'
                                             }}
@@ -570,6 +528,11 @@ const CreateDatingInvitation = () => {
                                             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: isSelected ? '#ec4899' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {friend.display_name?.split(' ')[0]}
                                             </span>
+                                            {!canReceiveDating && (
+                                                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#fca5a5', textAlign: 'center' }}>
+                                                    {t('dating_invites_reject', 'Reject')}
+                                                </span>
+                                            )}
                                         </div>
                                     );
                                 })}

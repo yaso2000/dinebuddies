@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount } from '../services/businessLikeService';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import { getContrastText } from '../utils/colorUtils';
 import '../components/MapStyles.css';
@@ -242,19 +242,27 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     } : null;
 
 
-    const isJoined = (currentUser.joinedCommunities || []).some(id => id === res.id || id === res.ownerId);
+    const joinedCommunities = currentUser.joinedCommunities || [];
+    const communityId = joinedCommunities.includes(res.ownerId)
+        ? res.ownerId
+        : (joinedCommunities.includes(res.id) ? res.id : (res.ownerId || res.id));
+    const isJoined = joinedCommunities.includes(communityId);
     const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
     const isBusinessAccount = userProfile?.isBusiness || false;
 
     const [cardLiked, setCardLiked] = useState(false);
+    const [optimisticLiked, setOptimisticLiked] = useState(null);
     const [likeInProgress, setLikeInProgress] = useState(false);
     useEffect(() => {
         if (!res.id || !likeUser?.uid) {
             setCardLiked(false);
+            setOptimisticLiked(null);
             return () => {};
         }
         return subscribeBusinessLiked(res.id, likeUser.uid, setCardLiked);
     }, [res.id, likeUser?.uid]);
+
+    const effectiveLiked = optimisticLiked ?? cardLiked;
 
     const handleToggleLike = async (e) => {
         e.stopPropagation();
@@ -266,26 +274,33 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
         }
         const businessId = res.id;
         const userId = likeUser.uid;
+        const nextLiked = !effectiveLiked;
+        setOptimisticLiked(nextLiked);
         setLikeInProgress(true);
         try {
-            const businessInfoForFavorite = !cardLiked ? {
+            const businessInfoForFavorite = !effectiveLiked ? {
                 businessId: res.id,
                 name: res.name || '',
                 image: res.image,
                 address: res.location || '',
                 city: ''
             } : undefined;
-            await toggleBusinessLike(businessId, userId, cardLiked, businessInfoForFavorite);
+            await toggleBusinessLike(businessId, userId, effectiveLiked, businessInfoForFavorite);
         } catch (err) {
+            setOptimisticLiked(effectiveLiked);
             console.warn('[like] card toggle failed', { businessId, userId, err });
             showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
         } finally {
+            setOptimisticLiked(null);
             setLikeInProgress(false);
         }
     };
 
     const [communityMembers, setCommunityMembers] = useState([]);
     const [memberCount, setMemberCount] = useState(0);
+    const [optimisticJoined, setOptimisticJoined] = useState(null);
+    const [joinInProgress, setJoinInProgress] = useState(false);
+    const effectiveJoined = optimisticJoined ?? isJoined;
 
     // Use ref to avoid triggering effect on every context re-render
     const getMembersRef = useRef(context?.getCommunityMembers);
@@ -297,7 +312,6 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
         let cancelled = false;
         const loadCommunityPreview = async () => {
             if (!getMembersRef.current || !likeUser?.uid) return;
-            const communityId = res.ownerId || res.id;
             try {
                 const result = await getMembersRef.current(communityId, { includeMembers: true, limit: 5 });
                 if (cancelled) return;
@@ -363,7 +377,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
                 {/* Background Image */}
                 <img
-                    src={res.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name)}&background=random`}
+                    src={pickSafeDisplayImageUrl(res.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name)}&background=random`}
                     alt={res.name}
                     style={{
                         position: 'absolute',
@@ -472,7 +486,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                 background: tc ? `${tc.accent}33` : 'rgba(15, 23, 42, 0.6)',
                                 backdropFilter: 'blur(8px)',
                                 border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.5)',
-                                color: cardLiked ? '#ef4444' : 'white',
+                                color: effectiveLiked ? '#ef4444' : 'white',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -481,7 +495,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                 transition: 'all 0.2s'
                             }}
                         >
-                            {likeInProgress ? <span style={{ fontSize: '0.9rem' }}>⋯</span> : (cardLiked ? <FaHeart /> : <FaRegHeart />)}
+                            {likeInProgress ? <span style={{ fontSize: '0.9rem' }}>⋯</span> : (effectiveLiked ? <FaHeart /> : <FaRegHeart />)}
                         </button>
 
                         <button
@@ -637,32 +651,49 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                     ) : !isBusinessAccount && (
                         <button
                             className="community-join-btn"
+                            disabled={joinInProgress}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
                                 if (!currentUser?.uid && !currentUser?.id && !currentUser?.isGuest) {
                                     goToLogin();
                                 } else {
-                                    toggleCommunity(res.ownerId || res.id);
+                                    const nextJoined = !effectiveJoined;
+                                    setOptimisticJoined(nextJoined);
+                                    setJoinInProgress(true);
+                                    Promise.resolve(toggleCommunity(communityId))
+                                        .then((ok) => {
+                                            if (ok === false) {
+                                                setOptimisticJoined(effectiveJoined);
+                                            }
+                                        })
+                                        .catch(() => {
+                                            setOptimisticJoined(effectiveJoined);
+                                        })
+                                        .finally(() => {
+                                            setOptimisticJoined(null);
+                                            setJoinInProgress(false);
+                                        });
                                 }
                             }}
                             style={{
-                                background: isJoined ? 'rgba(255,255,255,0.25)' : '#ffffff',
-                                color: isJoined ? '#ffffff' : '#f97316', // Use hardcoded orange for text to ensure visibility
-                                border: isJoined ? '1px solid rgba(255,255,255,0.4)' : 'none',
+                                background: effectiveJoined ? 'rgba(255,255,255,0.25)' : '#ffffff',
+                                color: effectiveJoined ? '#ffffff' : '#f97316', // Use hardcoded orange for text to ensure visibility
+                                border: effectiveJoined ? '1px solid rgba(255,255,255,0.4)' : 'none',
                                 padding: '8px 20px',
                                 borderRadius: '14px',
                                 fontWeight: '900',
                                 fontSize: '0.85rem',
-                                cursor: 'pointer',
+                                cursor: joinInProgress ? 'wait' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.2s',
-                                boxShadow: isJoined ? 'none' : '0 6px 15px rgba(0,0,0,0.15)'
+                                boxShadow: effectiveJoined ? 'none' : '0 6px 15px rgba(0,0,0,0.15)',
+                                opacity: joinInProgress ? 0.85 : 1
                             }}
                         >
-                            {isJoined ? t('member_joined') : t('join_plus')}
+                            {joinInProgress ? '…' : (effectiveJoined ? t('member_joined') : t('join_plus'))}
                         </button>
                     )}
                 </div>

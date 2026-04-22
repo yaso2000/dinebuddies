@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { applyActionCode, confirmPasswordReset, signOut, reload } from 'firebase/auth';
+import {
+    applyActionCode,
+    confirmPasswordReset,
+    signOut,
+    reload,
+    verifyPasswordResetCode,
+} from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { getAppOriginForEmailActions } from '../utils/emailActionSettings';
@@ -10,7 +16,7 @@ import { goToLogin } from '../utils/goToLogin';
 
 /**
  * Parses Firebase Auth action query params from ?search and from hash (#/path?mode=...)
- * (some clients put params after #).
+ * (some clients put params after #). Also unwraps Firebase `link=` wrapped URLs.
  */
 function parseAuthActionParams(search, hash) {
     const searchStr = search && search.startsWith('?') ? search.slice(1) : search || '';
@@ -18,6 +24,21 @@ function parseAuthActionParams(search, hash) {
     let mode = fromSearch.get('mode');
     let oobCode = fromSearch.get('oobCode');
     let continueUrlRaw = fromSearch.get('continueUrl');
+
+    const linkWrapped = fromSearch.get('link');
+    if (linkWrapped) {
+        try {
+            const decoded = decodeURIComponent(linkWrapped);
+            const u = new URL(decoded);
+            const inner = new URLSearchParams(u.search.replace(/^\?/, ''));
+            mode = mode || inner.get('mode');
+            oobCode = oobCode || inner.get('oobCode');
+            continueUrlRaw = continueUrlRaw || inner.get('continueUrl');
+        } catch {
+            /* ignore */
+        }
+    }
+
     if (hash && hash.length > 1) {
         const h = hash.startsWith('#') ? hash.slice(1) : hash;
         const queryPart = h.includes('?') ? h.slice(h.indexOf('?') + 1) : h;
@@ -59,8 +80,10 @@ const AuthActionHandler = () => {
         [location.search, location.hash]
     );
 
+    const modeNorm = mode ? String(mode).toLowerCase() : '';
+
     const [status, setStatus] = useState(() => {
-        if (mode === 'resetPassword' && oobCode) return 'resetPassword';
+        if (modeNorm === 'resetpassword' && oobCode) return 'resetPassword';
         return 'working';
     });
     const [message, setMessage] = useState('');
@@ -85,7 +108,7 @@ const AuthActionHandler = () => {
             return fallback;
         };
 
-        if (mode === 'resetPassword') {
+        if (modeNorm === 'resetpassword') {
             if (!oobCode) {
                 setStatus('error');
                 setMessage('This link is invalid or incomplete. Request a new reset email from the sign-in page.');
@@ -101,7 +124,7 @@ const AuthActionHandler = () => {
             return;
         }
 
-        if (mode === 'verifyEmail') {
+        if (modeNorm === 'verifyemail') {
             let cancelled = false;
             const continueDecoded = (() => {
                 if (!continueUrlRaw) return '';
@@ -167,7 +190,7 @@ const AuthActionHandler = () => {
             };
         }
 
-        if (mode === 'recoverEmail') {
+        if (modeNorm === 'recoveremail') {
             applyActionCode(auth, oobCode)
                 .then(() => {
                     navigate('/settings/email', { replace: true });
@@ -179,9 +202,32 @@ const AuthActionHandler = () => {
             return;
         }
 
+        // Some redirects drop `mode` but keep `oobCode` — treat as reset when the code validates.
+        if (!modeNorm && oobCode) {
+            let cancelled = false;
+            verifyPasswordResetCode(auth, oobCode)
+                .then(() => {
+                    if (!cancelled) {
+                        setStatus('resetPassword');
+                        setMessage('');
+                    }
+                })
+                .catch(() => {
+                    if (!cancelled) {
+                        setStatus('error');
+                        setMessage(
+                            'This link is invalid or incomplete. Request a new reset or verification email from the app.'
+                        );
+                    }
+                });
+            return () => {
+                cancelled = true;
+            };
+        }
+
         setStatus('error');
         setMessage('Unsupported action. Open the link from the latest email or use the app.');
-    }, [mode, oobCode, continueUrlRaw, navigate]);
+    }, [modeNorm, oobCode, continueUrlRaw, navigate]);
 
     const handlePasswordResetSubmit = async (e) => {
         e.preventDefault();
@@ -204,11 +250,18 @@ const AuthActionHandler = () => {
                 /* ignore — ensures clean session before login hub */
             }
             try {
+                sessionStorage.removeItem('dineb_password_reset_toast_shown');
                 sessionStorage.setItem('dineb_password_reset_ok', '1');
             } catch {
                 /* ignore */
             }
-            goToLogin({ replace: true });
+            // Full navigation avoids a stuck /auth/action view or Firebase handler state on mobile WebViews.
+            if (typeof window !== 'undefined') {
+                const base = window.location.origin;
+                window.location.replace(`${base}/login?passwordReset=1`);
+            } else {
+                goToLogin({ replace: true });
+            }
         } catch (err) {
             setMessage(err?.message || 'Could not reset password. Request a new link.');
         } finally {

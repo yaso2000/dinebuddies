@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -12,7 +12,8 @@ import { FaUser, FaCheckCircle, FaVenusMars, FaBirthdayCake, FaCamera } from 're
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
-import { needsConsumerEmailVerification } from '../utils/emailVerification';
+import { needsEmailPasswordVerification } from '../utils/emailVerification';
+import { isAdminIdentity } from '../utils/adminAccess';
 
 const CompleteProfile = () => {
     const { t } = useTranslation();
@@ -21,6 +22,7 @@ const CompleteProfile = () => {
     const { currentUser, userProfile, loading, updateProfile } = useAuth();
     const { isDark } = useTheme();
     const navigate = useNavigate();
+    const location = useLocation();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [firestoreRoleChecked, setFirestoreRoleChecked] = useState(false);
 
@@ -34,7 +36,11 @@ const CompleteProfile = () => {
 
     useEffect(() => {
         if (loading) return;
-        if (currentUser && needsConsumerEmailVerification(currentUser, userProfile)) {
+        if (isAdminIdentity(currentUser, userProfile)) {
+            navigate('/admin/dashboard', { replace: true });
+            return;
+        }
+        if (currentUser && needsEmailPasswordVerification(currentUser, userProfile)) {
             navigate('/verify-email', { replace: true });
         }
     }, [loading, currentUser, userProfile, navigate]);
@@ -255,7 +261,19 @@ const CompleteProfile = () => {
     };
 
     if (loading || (currentUser && !firestoreRoleChecked)) {
-        return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>Loading...</div>;
+        return (
+            <div style={{ 
+                height: '100vh', 
+                width: '100%',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)',
+                color: 'white'
+            }}>
+                <div style={{ width: 44, height: 44, border: '4px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+            </div>
+        );
     }
 
     const reqStar = <span style={{ color: 'var(--accent)', fontWeight: 800 }} aria-hidden="true"> *</span>;

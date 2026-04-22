@@ -220,7 +220,7 @@ export default function ProEventPost({ editingEvent, onBack, onSuccess }) {
                     </div>
 
                     {/* Location */}
-                    <div style={{ marginBottom: 16 }}>
+                    <div className="venue-search-stack" style={{ marginBottom: 16 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}><FaMapMarkerAlt /> Location</label>
                         <div style={{ position: 'relative' }}>
                             <LocationAutocomplete

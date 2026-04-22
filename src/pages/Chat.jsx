@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { messagingRestrictedBetweenUsers } from '../utils/userSocialLists';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -25,7 +26,7 @@ const Chat = () => {
     const { t, i18n } = useTranslation();
     const { userId } = useParams();
     const navigate = useNavigate();
-    const { currentUser } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const { isDark } = useTheme();
     const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
     const { showToast } = useToast();
@@ -43,6 +44,7 @@ const Chat = () => {
     const [conversationError, setConversationError] = useState(false);
     const [retryTrigger, setRetryTrigger] = useState(0);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
+    const [messagingRestricted, setMessagingRestricted] = useState(false);
 
     const handleScroll = (e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -164,17 +166,17 @@ const Chat = () => {
             initInFlightRef.current = true;
             setConversationError(false);
             try {
-                const convId = await getOrCreateConversation(userId);
-                if (convId === null) {
-                    setConversationId(null);
-                    setConversationError(true);
-                    setLoading(false);
-                    return;
-                }
-                setConversationId(convId);
                 const userDoc = await getDoc(doc(db, 'users', userId));
+                const userData = userDoc.exists() ? userDoc.data() : {};
+                const { restricted } = messagingRestrictedBetweenUsers(
+                    userProfile,
+                    currentUser.uid,
+                    userData,
+                    userId
+                );
+                setMessagingRestricted(restricted);
+
                 if (userDoc.exists()) {
-                    const userData = userDoc.data();
                     setOtherUser({
                         uid: userId,
                         displayName: userData.display_name || userData.email || 'User',
@@ -191,6 +193,15 @@ const Chat = () => {
                         lastSeen: null
                     });
                 }
+
+                const convId = await getOrCreateConversation(userId);
+                if (convId === null) {
+                    setConversationId(null);
+                    setConversationError(true);
+                    setLoading(false);
+                    return;
+                }
+                setConversationId(convId);
             } catch (error) {
                 console.error('Error initializing conversation:', error);
                 setConversationId(null);
@@ -201,7 +212,7 @@ const Chat = () => {
             }
         };
         initConversation();
-    }, [userId, currentUser?.uid, getOrCreateConversation, retryTrigger]);
+    }, [userId, currentUser?.uid, getOrCreateConversation, retryTrigger, userProfile?.blockedUserIds, userProfile?.mutedUserIds]);
 
     useEffect(() => {
         if (!conversationId) return;
@@ -265,6 +276,7 @@ const Chat = () => {
 
     const handleSendMessage = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
+        if (messagingRestricted) return;
         if (!newMessage.trim()) return;
         if (!conversationId) return;
 
@@ -286,6 +298,7 @@ const Chat = () => {
     };
 
     const handleTyping = (value) => {
+        if (messagingRestricted) return;
         setNewMessage(value);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         if (!isTyping && value) {
@@ -306,7 +319,7 @@ const Chat = () => {
     // Image Upload
     const handleImageSelect = async (e) => {
         const file = e.target.files[0];
-        if (!file || !conversationId) return;
+        if (!file || !conversationId || messagingRestricted) return;
 
         try {
             setUploading(true);
@@ -342,6 +355,7 @@ const Chat = () => {
 
     // Voice Recording
     const startRecording = async () => {
+        if (messagingRestricted) return;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const recorder = new MediaRecorder(stream);
@@ -702,6 +716,7 @@ const Chat = () => {
                 borderTop: '1px solid var(--border-color)',
                 padding: '8px',
                 display: 'flex',
+                flexDirection: messagingRestricted ? 'column' : 'row',
                 alignItems: 'center',
                 gap: '8px',
                 paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
@@ -710,10 +725,26 @@ const Chat = () => {
                     ? { top: `${lockTop}px`, bottom: 'auto' } 
                     : { top: 'auto', bottom: showEmojiPanel ? `${keyboardHeight}px` : '0px' })
             }}>
+                {messagingRestricted && (
+                    <div style={{
+                        width: '100%',
+                        textAlign: 'center',
+                        fontSize: '0.85rem',
+                        color: 'var(--text-muted)',
+                        padding: '6px 8px',
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}>
+                        {t('chat_messaging_restricted', 'Messaging is not available with this user.')}
+                    </div>
+                )}
                 <div className="input-wrapper" style={{
                     flex: 1, display: 'flex', alignItems: 'center',
                     background: 'var(--bg-input)', borderRadius: '24px', padding: '4px 12px',
-                    border: '1px solid var(--border-color)'
+                    border: '1px solid var(--border-color)',
+                    opacity: messagingRestricted ? 0.45 : 1,
+                    pointerEvents: messagingRestricted ? 'none' : 'auto'
                 }}>
                     {isRecording ? (
                         <div className="recording-ui" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -736,6 +767,7 @@ const Chat = () => {
                                 enterKeyHint="send"
                                 placeholder={t("message_placeholder")}
                                 value={newMessage}
+                                disabled={messagingRestricted}
                                 onChange={(e) => handleTyping(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                                 onFocus={() => showEmojiPanel && setShowEmojiPanel(false)}
@@ -757,11 +789,13 @@ const Chat = () => {
                     type="button"
                     onPointerDown={(e) => e.preventDefault()}
                     onClick={newMessage.trim() ? handleSendMessage : startRecording}
+                    disabled={messagingRestricted}
                     style={{
                         background: isRecording ? '#ef4444' : 'var(--primary)',
                         color: 'white', border: 'none', borderRadius: '50%',
                         width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+                        cursor: messagingRestricted ? 'not-allowed' : 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                        opacity: messagingRestricted ? 0.45 : 1
                     }}
                 >
                     {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />)}

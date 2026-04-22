@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { isAdminIdentity } from '../../utils/adminAccess';
 import {
     FaTachometerAlt,
     FaUsers,
@@ -22,9 +23,9 @@ import {
 } from 'react-icons/fa';
 
 const Sidebar = ({ isOpen, onClose }) => {
-    const { userProfile } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const userRole = userProfile?.role;
-    const isAdmin = userRole === 'admin';
+    const isAdmin = isAdminIdentity(currentUser, userProfile);
 
     const navGroups = [
         {

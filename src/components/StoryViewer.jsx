@@ -5,7 +5,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useTranslation } from 'react-i18next';
-import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane, FaRegCommentDots, FaSmileBeam } from 'react-icons/fa';
 
 const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     const { currentUser, userProfile } = useAuth();
@@ -63,7 +63,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     }, [initialStory?.id]);
 
     const currentStory = realTimeStory || initialStory;
-    const isOwnStory = currentUserGroupIndex === 0;
+    const activeStoryOwnerId = String(currentUserStories?.userId || '');
+    const isOwnStory = Boolean(currentUser?.uid) && activeStoryOwnerId === String(currentUser.uid);
 
     // Effect 2a: Mark story as viewed — only fires once per story change
     useEffect(() => {
@@ -96,6 +97,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
         setProgress(0);
         setRealTimeStory(null);
         setVisibleReactions([]);
+        setShowCommentsPanel(false);
+        setShowEmojiTray(false);
         // Clear any pending reaction timers
         reactionTimersRef.current.forEach(t => clearTimeout(t));
         reactionTimersRef.current = [];
@@ -320,6 +323,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     };
 
     const [sendingFeedback, setSendingFeedback] = useState(null);
+    const [showCommentsPanel, setShowCommentsPanel] = useState(false);
+    const [showEmojiTray, setShowEmojiTray] = useState(false);
 
     const handleSendReply = async (content = null) => {
         const textToSend = content || replyText;
@@ -383,6 +388,12 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     if (!currentStory) return null;
 
     const hasLiked = currentStory.likes?.includes(currentUser?.uid);
+    const likesCount = currentStory.likes?.length || 0;
+    const textReactions = (currentStory.reactions || []).filter((r) => r.type === 'text' && String(r.content || '').trim());
+    const privateThread = isOwnStory
+        ? textReactions
+        : textReactions.filter((r) => r.userId === currentUser?.uid);
+    const commentsCount = privateThread.length;
 
     // --- Prepare interactions overview for Owner ---
     let uniqueInteractors = [];
@@ -643,61 +654,273 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                 )}
                             </div>
 
-                            {/* Interaction Bar — only for VIEWERS (not story owner) */}
-                            {groupIndex === currentUserGroupIndex && !isOwnStory && (
-                                <div style={{
-                                    padding: '16px 16px 20px',
-                                    background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
-                                    display: 'flex', alignItems: 'center', gap: '12px',
-                                    zIndex: 30
-                                }}>
+                            {/* Interaction Layer */}
+                            {groupIndex === currentUserGroupIndex && (
+                                <>
                                     <div style={{
-                                        flex: 1, position: 'relative', height: '44px', borderRadius: '22px',
-                                        border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.4)',
-                                        display: 'flex', alignItems: 'center', padding: '0 48px 0 16px', marginRight: '8px'
-                                    }} onClick={e => e.stopPropagation()}>
-                                        <input
-                                            className="story-reply-input"
-                                            type="text"
-                                            placeholder={t('send_message_placeholder', 'Send message...')}
-                                            value={replyText}
-                                            onChange={(e) => setReplyText(e.target.value)}
-                                            onFocus={() => { setIsInputFocused(true); setIsPaused(true); }}
-                                            onBlur={() => { if (!sendingFeedback) { setIsInputFocused(false); setIsPaused(false); } }}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleSendReply(); } }}
-                                            style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', fontSize: '0.95rem', outline: 'none' }}
-                                        />
-                                        {replyText.trim() && (
-                                            <button onClick={(e) => { e.stopPropagation(); handleSendReply(); }}
-                                                style={{
-                                                    position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)',
-                                                    background: '#3b82f6', border: 'none', borderRadius: '50%', width: '36px', height: '36px',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
-                                                }}
-                                            >
-                                                <FaPaperPlane size={14} style={{ transform: 'translateX(-1px) translateY(1px)' }} />
-                                            </button>
+                                        position: 'absolute',
+                                        right: '12px',
+                                        bottom: '130px',
+                                        zIndex: 32,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '14px'
+                                    }}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleLike(); }}
+                                            style={{
+                                                width: '42px',
+                                                height: '42px',
+                                                borderRadius: '50%',
+                                                border: 'none',
+                                                background: 'rgba(0,0,0,0.45)',
+                                                color: 'white',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {hasLiked ? <FaHeart color="#ef4444" size={22} /> : <FaRegHeart size={22} />}
+                                        </button>
+                                        <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: 700, textShadow: '0 2px 6px rgba(0,0,0,0.45)' }}>
+                                            {likesCount}
+                                        </span>
+                                        <span style={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.67rem', fontWeight: 600 }}>
+                                            {t('like_label', 'Like')}
+                                        </span>
+
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowCommentsPanel((prev) => !prev);
+                                                setShowEmojiTray(false);
+                                            }}
+                                            style={{
+                                                width: '42px',
+                                                height: '42px',
+                                                borderRadius: '50%',
+                                                border: 'none',
+                                                background: 'rgba(0,0,0,0.45)',
+                                                color: 'white',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <FaRegCommentDots size={20} />
+                                        </button>
+                                        <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: 700, textShadow: '0 2px 6px rgba(0,0,0,0.45)' }}>
+                                            {commentsCount}
+                                        </span>
+                                        <span style={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.67rem', fontWeight: 600 }}>
+                                            {t('comments_label', 'Comments')}
+                                        </span>
+
+                                        {!isOwnStory && (
+                                            <>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowEmojiTray((prev) => !prev);
+                                                        setShowCommentsPanel(false);
+                                                    }}
+                                                    style={{
+                                                        width: '42px',
+                                                        height: '42px',
+                                                        borderRadius: '50%',
+                                                        border: 'none',
+                                                        background: 'rgba(0,0,0,0.45)',
+                                                        color: 'white',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <FaSmileBeam size={20} />
+                                                </button>
+                                                <span style={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.67rem', fontWeight: 600 }}>
+                                                    {t('emoji_label', 'Emoji')}
+                                                </span>
+                                            </>
                                         )}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        {!replyText && (
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                {['😍', '🥰', '😂'].map(emoji => (
-                                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); handleSendReply(emoji); }}
-                                                        style={{ background: 'none', border: 'none', fontSize: '1.8rem', cursor: 'pointer', padding: '0' }}
-                                                    >
-                                                        {emoji}
-                                                    </button>
+
+                                    {!isOwnStory && showEmojiTray && (
+                                        <div
+                                            onClick={(e) => e.stopPropagation()}
+                                            style={{
+                                                position: 'absolute',
+                                                right: '64px',
+                                                bottom: '146px',
+                                                zIndex: 34,
+                                                display: 'flex',
+                                                gap: '8px',
+                                                background: 'rgba(0,0,0,0.62)',
+                                                border: '1px solid rgba(255,255,255,0.14)',
+                                                borderRadius: '16px',
+                                                padding: '8px 10px',
+                                                backdropFilter: 'blur(10px)'
+                                            }}
+                                        >
+                                            {['😍', '🥰', '😂', '🔥'].map((emoji) => (
+                                                <button
+                                                    key={emoji}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSendReply(emoji);
+                                                        setShowEmojiTray(false);
+                                                    }}
+                                                    style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer', padding: 0 }}
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {showCommentsPanel && (
+                                        <div
+                                            onClick={(e) => e.stopPropagation()}
+                                            style={{
+                                                position: 'absolute',
+                                                left: '12px',
+                                                right: '12px',
+                                                bottom: '84px',
+                                                maxHeight: '38%',
+                                                zIndex: 34,
+                                                background: 'rgba(0,0,0,0.74)',
+                                                border: '1px solid rgba(255,255,255,0.18)',
+                                                borderRadius: '16px',
+                                                backdropFilter: 'blur(10px)',
+                                                overflow: 'hidden',
+                                                display: 'flex',
+                                                flexDirection: 'column'
+                                            }}
+                                        >
+                                            <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: '0.82rem', fontWeight: 700 }}>
+                                                {isOwnStory ? t('story_comments', 'Comments') : t('private_replies', 'Private replies')} ({commentsCount})
+                                            </div>
+                                            <div style={{ padding: '8px 12px 0', color: 'rgba(255,255,255,0.65)', fontSize: '0.72rem' }}>
+                                                {isOwnStory
+                                                    ? t('story_owner_privacy_note', 'Only you can see these replies')
+                                                    : t('story_viewer_privacy_note', 'Visible only to you and the story owner')}
+                                            </div>
+                                            <div style={{ overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                                                {commentsCount === 0 ? (
+                                                    <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.82rem' }}>
+                                                        {t('no_comments_yet', 'No comments yet')}
+                                                    </div>
+                                                ) : privateThread.slice(-14).reverse().map((comment) => (
+                                                    <div key={comment.id} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                                        <div style={{
+                                                            width: '26px', height: '26px', borderRadius: '50%', overflow: 'hidden',
+                                                            background: '#333', flexShrink: 0
+                                                        }}>
+                                                            {comment.userPhoto ? (
+                                                                <img src={comment.userPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                            ) : null}
+                                                        </div>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 700, fontSize: '0.72rem' }}>
+                                                                {comment.userName}
+                                                            </div>
+                                                            <div style={{ color: 'white', fontSize: '0.86rem', wordBreak: 'break-word' }}>
+                                                                {comment.content}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 ))}
                                             </div>
-                                        )}
-                                        <button onClick={(e) => { e.stopPropagation(); handleLike(); }}
-                                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'none', border: 'none', color: 'white', gap: '2px', cursor: 'pointer' }}
-                                        >
-                                            {hasLiked ? <FaHeart color="#ef4444" size={28} /> : <FaRegHeart size={28} />}
-                                        </button>
-                                    </div>
-                                </div>
+                                        </div>
+                                    )}
+
+                                    {!isOwnStory ? (
+                                        <div style={{
+                                            padding: '14px 12px 20px',
+                                            background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            zIndex: 30
+                                        }}>
+                                            <div style={{
+                                                position: 'absolute',
+                                                left: '14px',
+                                                bottom: '68px',
+                                                color: 'rgba(255,255,255,0.78)',
+                                                fontSize: '0.72rem',
+                                                zIndex: 31,
+                                                pointerEvents: 'none'
+                                            }}>
+                                                {t('story_interaction_hint_private', 'Your reply is private between you and the story owner')}
+                                            </div>
+                                            <div
+                                                style={{
+                                                    flex: 1,
+                                                    position: 'relative',
+                                                    height: '42px',
+                                                    borderRadius: '20px',
+                                                    border: '1px solid rgba(255,255,255,0.28)',
+                                                    background: 'rgba(0,0,0,0.38)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    padding: '0 46px 0 14px'
+                                                }}
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                <input
+                                                    className="story-reply-input"
+                                                    type="text"
+                                                    placeholder={t('private_reply_placeholder', 'Send a private reply...')}
+                                                    value={replyText}
+                                                    onChange={(e) => setReplyText(e.target.value)}
+                                                    onFocus={() => { setIsInputFocused(true); setIsPaused(true); }}
+                                                    onBlur={() => { if (!sendingFeedback) { setIsInputFocused(false); setIsPaused(false); } }}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleSendReply(); } }}
+                                                    style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', fontSize: '0.9rem', outline: 'none' }}
+                                                />
+                                                {replyText.trim() && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleSendReply(); }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '4px',
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            background: '#3b82f6',
+                                                            border: 'none',
+                                                            borderRadius: '50%',
+                                                            width: '34px',
+                                                            height: '34px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: 'white',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        <FaPaperPlane size={13} style={{ transform: 'translateX(-1px) translateY(1px)' }} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            padding: '14px 12px 20px',
+                                            background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
+                                            color: 'rgba(255,255,255,0.78)',
+                                            fontSize: '0.8rem',
+                                            textAlign: 'center',
+                                            zIndex: 30
+                                        }}>
+                                            {t('story_owner_hint', 'This is your story. Open comments to see audience reactions.')}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     ))}

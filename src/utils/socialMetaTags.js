@@ -54,8 +54,6 @@ export const updateSocialMetaTags = (data) => {
     updateMetaTag('meta[property="twitter:title"]', title);
     updateMetaTag('meta[property="twitter:description"]', description);
     updateMetaTag('meta[property="twitter:image"]', image);
-
-    console.log('✅ Social meta tags updated:', { title, description, image, url });
 };
 
 /**

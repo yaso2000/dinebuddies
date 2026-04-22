@@ -74,7 +74,7 @@ const ChatList = () => {
 
     return (
         <>
-            {/* ── DESKTOP: sidebar already shows the list → show a placeholder in center ── */}
+            {/* ── DESKTOP: placeholder only when ChatSidebar lists convos (/chat/:id). On /messages the main nav shows + list below. ── */}
             <div className="chat-list-desktop-placeholder">
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                     <div style={{ fontSize: '3rem', marginBottom: '12px' }}>💬</div>

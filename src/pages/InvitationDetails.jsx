@@ -20,9 +20,12 @@ import MembersList from '../components/Invitation/MembersList';
 import InvitationHeader from '../components/Invitation/InvitationHeader';
 import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
 import InvitationTimeline from '../components/Invitation/InvitationTimeline';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+
+const INVITATION_IMAGE_FALLBACK = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import InvitationShareModal from '../components/InvitationShareModal';
+import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import InternalShareModal from '../components/InternalShareModal';
 import SimpleMap from '../components/SimpleMap';
 import { getTemplateStyle } from '../utils/invitationTemplates';
@@ -327,9 +330,32 @@ const InvitationDetails = () => {
     const handleShareCard = async () => {
         if (sharingCard) return;
         const shareUrl = window.location.href;
+        const shareLayout = templateStyles?.layout?.cardVariant || 'photoBottom';
+        const formatInviteDate = () => {
+            if (!invitation?.date) return t('tbd', { defaultValue: 'TBD' });
+            const d = new Date(invitation.date);
+            return d.toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        };
+        const formatInviteTime = () => {
+            if (!invitation?.time) return '';
+            const tm = invitation.time;
+            return tm.includes('T') ? tm.split('T')[1].substring(0, 5) : tm;
+        };
+        const paymentLabel = invitation?.paymentType
+            ? t(`payment_type_${String(invitation.paymentType).toLowerCase().replace(/ /g, '_')}`, { defaultValue: invitation.paymentType })
+            : t('payment_split');
+        const guestsMeta = `${invitation?.guestsNeeded ?? 0} ${t('guests', { defaultValue: 'Guests' })}`;
+        const distanceMeta = invitation?.distance != null && invitation?.distance !== undefined
+            ? `${invitation.distance.toFixed(1)} ${t('km_away', { defaultValue: 'km away' })}`
+            : null;
         const storyData = {
             title: invitation?.title,
-            image: invitation?.customImage || invitation?.restaurantImage || invitation?.image,
+            image:
+                pickSafeDisplayImageUrl(
+                    invitation?.customImage,
+                    invitation?.restaurantImage,
+                    invitation?.image
+                ) || INVITATION_IMAGE_FALLBACK,
             description: invitation?.description,
             date: invitation?.date,
             time: invitation?.time,
@@ -338,6 +364,14 @@ const InvitationDetails = () => {
             hostName: invitation?.author?.name || invitation?.hostName,
             hostImage: getSafeAvatar(invitation?.author || {}),
             shareUrl,
+            shareLayout,
+            shareMeta: {
+                dateLine: formatInviteDate(),
+                timeLine: formatInviteTime() || '—',
+                guestsLine: guestsMeta,
+                paymentLine: paymentLabel,
+                distanceLine: distanceMeta || '',
+            },
         };
         try {
             setSharingCard(true);
@@ -368,16 +402,13 @@ const InvitationDetails = () => {
         const shareUrl = window.location.href;
         const file = shareCardFileRef.current;
         const shareTextWithLink = `${invitation?.title || 'Invitation'}${invitation?.description ? `\n\n${invitation.description}` : ''}\n\n🔗 ${shareUrl}`;
-        if (!file || !navigator.share) return;
-        try {
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: invitation?.title, text: shareTextWithLink, url: shareUrl });
-            } else {
-                await navigator.share({ title: invitation?.title, text: shareTextWithLink, url: shareUrl });
-            }
-        } catch (e) {
-            if (e?.name !== 'AbortError') showToast(t('share_failed', { defaultValue: 'Share failed' }), 'error');
-        }
+        await shareNativeOrFallback({
+            file,
+            title: invitation?.title,
+            text: shareTextWithLink,
+            url: shareUrl,
+            skipExternalFallback: false,
+        });
     };
 
 
@@ -517,12 +548,14 @@ const InvitationDetails = () => {
 
     const { author = {}, title, requests = [], joined = [], chat = [], image, location, date, time, description, guestsNeeded, meetingStatus = 'planning', genderPreference, ageRange, privacy, mediaType, customVideo, videoThumbnail, customImage, restaurantImage, restaurantName } = invitation;
 
-    // Determine media to display
+    // Determine media to display (reject PhotoService.GetPhoto URLs — 403 as img src)
     const isVideo = mediaType === 'video' && customVideo;
-    const mediaUrl = isVideo
-        ? customVideo
-        : customImage || restaurantImage || image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
-    const thumbnailUrl = isVideo ? videoThumbnail : mediaUrl;
+    const safeStillImage =
+        pickSafeDisplayImageUrl(customImage, restaurantImage, image) || INVITATION_IMAGE_FALLBACK;
+    const mediaUrl = isVideo ? customVideo : safeStillImage;
+    const thumbnailUrl = isVideo
+        ? (pickSafeDisplayImageUrl(videoThumbnail, customImage, restaurantImage, image) || safeStillImage)
+        : mediaUrl;
     const isHost = author?.id === currentUser?.id;
     const isAccepted = joined.includes(currentUser?.id);
     const isPending = requests.includes(currentUser?.id);
@@ -696,13 +729,13 @@ const InvitationDetails = () => {
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('host')}</div>
                         </div>
                         <div style={{ marginLeft: 'auto' }}>
-                            {currentUser?.id !== author.id && userProfile?.role !== 'business' && (
+                            {currentUser?.id && currentUser?.id !== author.id && userProfile?.role !== 'business' && (
                                 <button
                                     onClick={() => toggleFollow(author.id)}
                                     style={{
-                                        background: currentUser.following?.includes(author.id) ? 'var(--primary)' : 'transparent',
+                                        background: currentUser?.following?.includes(author.id) ? 'var(--primary)' : 'transparent',
                                         border: '1px solid var(--primary)',
-                                        color: currentUser.following?.includes(author.id) ? 'white' : 'var(--primary)',
+                                        color: currentUser?.following?.includes(author.id) ? 'white' : 'var(--primary)',
                                         padding: '4px 12px',
                                         borderRadius: '20px',
                                         fontSize: '0.75rem',
@@ -1009,7 +1042,7 @@ const InvitationDetails = () => {
                     shareUrl={window.location.href}
                     title={invitation?.title}
                     onClose={closeShareModal}
-                    onShareNative={navigator.share ? handleShareNativeFromModal : null}
+                    onShareNative={handleShareNativeFromModal}
                     onCopyLink={() => showToast(t('link_copied', { defaultValue: 'Link copied!' }), 'success')}
                     onInternalShare={() => {
                         closeShareModal(); 
@@ -1026,7 +1059,12 @@ const InvitationDetails = () => {
                         id: invitation?.id || id, 
                         title: invitation?.title || 'Invitation', 
                         description: invitation?.description || '', 
-                        image: invitation?.customImage || invitation?.restaurantImage || invitation?.image || null,
+                        image:
+                            pickSafeDisplayImageUrl(
+                                invitation?.customImage,
+                                invitation?.restaurantImage,
+                                invitation?.image
+                            ) || null,
                         url: window.location.href 
                     }} 
                 />

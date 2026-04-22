@@ -250,6 +250,7 @@
 .profile-invitation-item__title {
   font-size: 0.85rem;
   font-weight: 800;
+  color: var(--text-heading);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -278,6 +279,27 @@
 .profile-invitation-item__date {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+[data-theme='light'] .profile-invitation-item {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme='light'] .profile-invitation-item:hover {
+  background: color-mix(in srgb, var(--primary) 6%, var(--bg-card));
+}
+
+/* User profile — invitation tab list: ~5 large rows visible, scroll for the rest */
+.user-profile-invitation-list-scroll {
+  max-height: min(52vh, 430px);
+  min-height: 100px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-inline-end: 2px;
 }
 
 /* profile-theme-toggle — theme switch button in profile header */
@@ -347,24 +369,6 @@
 
 /* profile-guest-prompt, profile-banner-warning, profile-clear-btn
    → aliased in ui-primitives.css. Keep until migration to ui-prompt, ui-banner, ui-btn. */
-
-/* profile-add-story-btn — Add Story floating button */
-.profile-add-story-btn {
-  position: absolute;
-  bottom: 5px;
-  right: 5px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-danger);
-  color: white;
-  border: 3px solid var(--bg-body);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-premium);
-}
 
 /* profile-form-surface, profile-form-field, profile-form-label
    → aliased in ui-primitives.css. Keep until migration to ui-form-*. */

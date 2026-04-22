@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
@@ -23,6 +23,14 @@ import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 // Detect if a post object is an elite featured slide
 const isFeaturedSlide = (p) => p && (p.type === 'elite_slide' || (p.background && p.title?.text !== undefined));
 
+const getCommentTimeMs = (c) => {
+    if (!c?.createdAt) return 0;
+    const v = c.createdAt;
+    if (typeof v === 'string') return new Date(v).getTime();
+    if (typeof v.toDate === 'function') return v.toDate().getTime();
+    return new Date(v).getTime();
+};
+
 const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -40,9 +48,63 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const [editedContent, setEditedContent] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
 
+    /** Standalone post page: how many recent comments to show (starts at 5, +5 when scrolling up) */
+    const [detailCommentWindow, setDetailCommentWindow] = useState(5);
+
     const [isPlaying, setIsPlaying] = useState(false);
+
+    // Optimistic likes — local state prevents flicker from onSnapshot two-phase firing
+    const [localLikes, setLocalLikes] = useState(() => post.likes || []);
+    const likeInFlight = useRef(false);
+
     const videoRef = useRef(null);
     const mediaContainerRef = useRef(null);
+    const detailCommentsScrollRef = useRef(null);
+    const detailScrollRestoreRef = useRef(null);
+    const detailLoadMoreCooldownRef = useRef(0);
+
+    const sortedComments = useMemo(() => {
+        const raw = post.comments || [];
+        if (!raw.length) return [];
+        return [...raw].sort((a, b) => getCommentTimeMs(a) - getCommentTimeMs(b));
+    }, [post.comments]);
+
+    const lastCommentPreview = sortedComments.length ? sortedComments[sortedComments.length - 1] : null;
+
+    useEffect(() => {
+        setDetailCommentWindow(5);
+    }, [post.id]);
+
+    /** Standalone post: keep view pinned to newest after comments load or new replies */
+    useEffect(() => {
+        if (!showInChat) return;
+        const id = requestAnimationFrame(() => {
+            const el = detailCommentsScrollRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+        });
+        return () => cancelAnimationFrame(id);
+    }, [showInChat, post.id, sortedComments.length]);
+
+    useLayoutEffect(() => {
+        const fix = detailScrollRestoreRef.current;
+        if (!fix || !detailCommentsScrollRef.current) return;
+        detailScrollRestoreRef.current = null;
+        const el = detailCommentsScrollRef.current;
+        const newH = el.scrollHeight;
+        el.scrollTop = fix.top + (newH - fix.height);
+    }, [detailCommentWindow]);
+
+    const handleDetailCommentsScroll = (e) => {
+        if (!showInChat) return;
+        const el = e.currentTarget;
+        const total = sortedComments.length;
+        if (total <= detailCommentWindow) return;
+        if (el.scrollTop > 56) return;
+        if (Date.now() - detailLoadMoreCooldownRef.current < 450) return;
+        detailLoadMoreCooldownRef.current = Date.now();
+        detailScrollRestoreRef.current = { top: el.scrollTop, height: el.scrollHeight };
+        setDetailCommentWindow((w) => Math.min(w + 5, total));
+    };
 
     useEffect(() => {
         if (!mediaContainerRef.current) return;
@@ -86,11 +148,6 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         setIsPlaying(true);
         globalMediaManager.play(post.id);
     };
-
-    // Optimistic likes — local state prevents flicker from onSnapshot two-phase firing
-    const [localLikes, setLocalLikes] = useState(() => post.likes || []);
-    // useRef instead of useState: always synchronously current, no stale-closure race
-    const likeInFlight = useRef(false);
 
     // Sync from server only when there is no in-flight write
     useEffect(() => {
@@ -265,6 +322,14 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const commentsRaw = post.comments || [];
+
+    const truncateText = (s, max = 100) => {
+        if (!s) return '';
+        const t = String(s).trim();
+        return t.length <= max ? t : `${t.slice(0, max)}…`;
     };
 
     const formatDate = (timestamp) => {
@@ -760,15 +825,12 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </div>
                 )}
 
-                {/* Stats Row */}
-                <div className="post-stats-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {localLikes.length > 0 && <span>👍 {localLikes.length}</span>}
+                {/* Stats Row — likes only; comment count lives in preview below */}
+                {localLikes.length > 0 && (
+                    <div className="post-stats-row" style={{ display: 'flex', justifyContent: 'flex-start', padding: '10px 16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                        <span>👍 {localLikes.length}</span>
                     </div>
-                    <div>
-                        {(post.comments?.length || 0) > 0 && <span>{post.comments.length} {t('comments', 'Comments')}</span>}
-                    </div>
-                </div>
+                )}
 
                 {/* Actions Bar */}
                 <div className="post-actions">
@@ -806,98 +868,105 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </button>
                 </div>
 
-                {/* Comments Section (Inline) */}
-                {showComments && (
-                    <div className="comments-section" onClick={(e) => e.stopPropagation()} style={{ marginTop: '12px' }}>
-                        {/* Input */}
-                        <form
-                            onSubmit={handleAddComment}
-                            className="comment-input-row"
-                            style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                        >
-                            <input
-                                type="text"
-                                className="comment-input"
-                                placeholder={t('post_reply', 'Post your reply')}
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                autoFocus
-                                style={{
-                                    width: '100%',
-                                    paddingInlineEnd: '80px',
-                                    paddingInlineStart: '16px',
-                                    paddingTop: '12px',
-                                    paddingBottom: '12px',
-                                    borderRadius: '24px',
-                                    border: '1px solid var(--border-color)',
-                                    background: 'var(--bg-elevated)',
-                                    color: 'var(--text-main)',
-                                    outline: 'none',
-                                    fontSize: '0.95rem'
-                                }}
-                            />
-                            
-                            <div style={{ position: 'absolute', insetInlineEnd: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {/* Emoji Button */}
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setShowEmojiPicker(prev => !prev);
-                                    }}
-                                    style={{
-                                        background: 'transparent', border: 'none', color: 'var(--text-muted)',
-                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        padding: '4px', transition: 'color 0.2s', outline: 'none'
-                                    }}
-                                >
-                                    <FaRegSmile size={20} />
-                                </button>
-
-                                {/* Send Button */}
-                                <button
-                                    type="submit"
-                                    disabled={!newComment.trim() || submitting}
-                                    style={{
-                                        background: 'transparent', border: 'none',
-                                        cursor: !newComment.trim() || submitting ? 'not-allowed' : 'pointer',
-                                        color: !newComment.trim() || submitting ? 'var(--border-color)' : 'var(--primary)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        padding: '4px', transition: 'color 0.2s, transform 0.1s', outline: 'none',
-                                        transform: newComment.trim() ? 'scale(1)' : 'scale(0.95)'
-                                    }}
-                                >
-                                    <IoSend size={22} style={{ marginLeft: '2px' }} />
-                                </button>
+                {/* Feed preview: count + last comment only (click to open chat-style comments) */}
+                {!showComments && commentsRaw.length > 0 && (
+                    <div
+                        role="button"
+                        tabIndex={0}
+                        className="post-comments-preview"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowComments(true);
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowComments(true);
+                            }
+                        }}
+                    >
+                        <div className="post-comments-preview__count">
+                            {commentsRaw.length} {t('comments', 'Comments')}
+                        </div>
+                        {lastCommentPreview && (
+                            <div className="post-comments-preview__last">
+                                <span className="post-comments-preview__name">{lastCommentPreview.userName}</span>
+                                <span className="post-comments-preview__text">{truncateText(lastCommentPreview.text, 120)}</span>
                             </div>
-                        </form>
+                        )}
+                    </div>
+                )}
+
+                {/* Standalone post page: composer on top, last N comments below (+ load older on scroll up) */}
+                {showComments && showInChat && (
+                    <div className="comments-section comments-section--detail" onClick={(e) => e.stopPropagation()}>
+                        <div className="post-comment-composer-wrap">
+                            <form onSubmit={handleAddComment} className="comment-input-row comment-input-row--footer">
+                                <input
+                                    type="text"
+                                    className="comment-input comment-input--inline"
+                                    placeholder={t('post_reply', 'Post your reply')}
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                />
+                                <div style={{ position: 'absolute', insetInlineEnd: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowEmojiPicker((prev) => !prev);
+                                        }}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: 'var(--text-muted)',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '4px',
+                                            transition: 'color 0.2s',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <FaRegSmile size={20} />
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={!newComment.trim() || submitting}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            cursor: !newComment.trim() || submitting ? 'not-allowed' : 'pointer',
+                                            color: !newComment.trim() || submitting ? 'var(--border-color)' : 'var(--primary)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '4px',
+                                            transition: 'color 0.2s, transform 0.1s',
+                                            outline: 'none',
+                                            transform: newComment.trim() ? 'scale(1)' : 'scale(0.95)'
+                                        }}
+                                    >
+                                        <IoSend size={22} style={{ marginLeft: '2px' }} />
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
 
                         {showEmojiPicker && (
-                            <div style={{
-                                display: 'flex', gap: '16px', padding: '12px 16px',
-                                overflowX: 'auto', WebkitOverflowScrolling: 'touch',
-                                scrollbarWidth: 'none', background: 'var(--bg-elevated)',
-                                borderRadius: '16px', border: '1px solid var(--border-color)',
-                                marginTop: '8px'
-                            }}>
-                                {['❤️', '😂', '🔥', '👏', '😍', '👍', '🙏', '😢', '🎉'].map(emoji => (
+                            <div className="comments-emoji-strip">
+                                {['❤️', '😂', '🔥', '👏', '😍', '👍', '🙏', '😢', '🎉'].map((emoji) => (
                                     <button
                                         key={emoji}
                                         type="button"
                                         onClick={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
-                                            setNewComment(prev => prev + emoji);
+                                            setNewComment((prev) => prev + emoji);
                                         }}
-                                        style={{
-                                            background: 'transparent', border: 'none',
-                                            fontSize: '1.5rem', cursor: 'pointer', padding: '0',
-                                            transition: 'transform 0.1s', outline: 'none'
-                                        }}
-                                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'}
-                                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                     >
                                         {emoji}
                                     </button>
@@ -905,26 +974,116 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             </div>
                         )}
 
-                        {/* Recent Comments */}
-                        {(post.comments?.length || 0) > 0 && (
-                            <div className="recent-comments">
-                                {(post.comments || []).slice(-3).reverse().map((comment, idx) => (
-                                    <div key={idx} style={{
-                                        padding: '8px 0',
-                                        borderTop: '1px solid var(--border-color)',
-                                        fontSize: '0.9rem'
-                                    }}>
-                                        <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
-                                            {comment.userName}
-                                            <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                                                {formatDate(comment.createdAt)}
-                                            </span>
-                                        </div>
-                                        <div style={{ color: 'var(--text-main)' }}>{comment.text}</div>
+                        <div
+                            ref={detailCommentsScrollRef}
+                            className="post-detail-comments-scroll"
+                            onScroll={handleDetailCommentsScroll}
+                        >
+                            {sortedComments.length > detailCommentWindow && (
+                                <div className="post-detail-comments-pull-hint">
+                                    {t('comments_scroll_load_older', 'Scroll up for older comments')}
+                                </div>
+                            )}
+                            {sortedComments.slice(-Math.min(detailCommentWindow, sortedComments.length)).map((comment) => (
+                                <div key={comment.id || `${comment.userId}-${comment.createdAt}`} className="comments-thread__item comments-thread__item--detail">
+                                    <div className="comments-thread__meta">
+                                        <span className="comments-thread__author">{comment.userName}</span>
+                                        <span className="comments-thread__time">{formatDate(comment.createdAt)}</span>
                                     </div>
+                                    <div className="comments-thread__body">{comment.text}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Feed: last comment preview + composer below */}
+                {showComments && !showInChat && (
+                    <div className="comments-section comments-section--chat" onClick={(e) => e.stopPropagation()}>
+                        {lastCommentPreview && (
+                            <div className="comments-inline-last">
+                                <div className="comments-thread__meta">
+                                    <span className="comments-thread__author">{lastCommentPreview.userName}</span>
+                                    <span className="comments-thread__time">{formatDate(lastCommentPreview.createdAt)}</span>
+                                </div>
+                                <div className="comments-thread__body">{lastCommentPreview.text}</div>
+                            </div>
+                        )}
+
+                        {showEmojiPicker && (
+                            <div className="comments-emoji-strip">
+                                {['❤️', '😂', '🔥', '👏', '😍', '👍', '🙏', '😢', '🎉'].map((emoji) => (
+                                    <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setNewComment((prev) => prev + emoji);
+                                        }}
+                                    >
+                                        {emoji}
+                                    </button>
                                 ))}
                             </div>
                         )}
+
+                        <div className="post-comment-composer-wrap">
+                            <form onSubmit={handleAddComment} className="comment-input-row comment-input-row--footer">
+                                <input
+                                    type="text"
+                                    className="comment-input comment-input--inline"
+                                    placeholder={t('post_reply', 'Post your reply')}
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                />
+
+                                <div style={{ position: 'absolute', insetInlineEnd: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowEmojiPicker((prev) => !prev);
+                                        }}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: 'var(--text-muted)',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '4px',
+                                            transition: 'color 0.2s',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <FaRegSmile size={20} />
+                                    </button>
+
+                                    <button
+                                        type="submit"
+                                        disabled={!newComment.trim() || submitting}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            cursor: !newComment.trim() || submitting ? 'not-allowed' : 'pointer',
+                                            color: !newComment.trim() || submitting ? 'var(--border-color)' : 'var(--primary)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '4px',
+                                            transition: 'color 0.2s, transform 0.1s',
+                                            outline: 'none',
+                                            transform: newComment.trim() ? 'scale(1)' : 'scale(0.95)'
+                                        }}
+                                    >
+                                        <IoSend size={22} style={{ marginLeft: '2px' }} />
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 )}
             </div>

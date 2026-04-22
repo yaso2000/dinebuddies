@@ -15,6 +15,7 @@ import { IoShareSocialOutline } from 'react-icons/io5';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { createNotification } from '../utils/notificationHelpers';
 import { useTranslation } from 'react-i18next';
+import { asUidArray } from '../utils/userSocialLists';
 
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 
@@ -26,7 +27,7 @@ const PostsFeed = () => {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewingStory, setViewingStory] = useState(null);
-    const [geoFilter, setGeoFilter] = useState('global');
+    const [geoFilter, setGeoFilter] = useState('local');
     const [isSearchActive, setIsSearchActive] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -99,12 +100,60 @@ const PostsFeed = () => {
     };
 
     const filteredPosts = useMemo(() => {
+        const norm = (v) => String(v || '').trim().toLowerCase();
+        const userCountry = norm(userProfile?.country);
+        const userCountryCode = norm(userProfile?.countryCode);
+        const userCity = norm(userProfile?.city);
+        const userCoords = userProfile?.coordinates;
+
+        const canViewLocalPost = (p) => {
+            if (p.authorId === currentUser?.uid) return true;
+            if (!userProfile) return false;
+
+            const pCountry = norm(p.country);
+            const pCountryCode = norm(p.countryCode);
+            const pCity = norm(p.city);
+            const sameCountry =
+                (userCountry && pCountry && userCountry === pCountry) ||
+                (userCountryCode && pCountryCode && userCountryCode === pCountryCode);
+
+            const pLat = p.coordinates?.lat || p.attachedInvitation?.lat || p.lat;
+            const pLng = p.coordinates?.lng || p.attachedInvitation?.lng || p.lng;
+            const hasCoords = userCoords?.lat != null && userCoords?.lng != null && pLat != null && pLng != null;
+            const radiusKm = 500;
+            const nearEnough = hasCoords
+                ? calculateDistance(userCoords.lat, userCoords.lng, pLat, pLng) < radiusKm
+                : false;
+            const sameCity = Boolean(userCity && pCity && userCity === pCity);
+
+            return sameCountry || sameCity || nearEnough;
+        };
+
+        const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
         let result = posts.filter(p => p.status !== 'draft');
+        if (blocked.size > 0) {
+            result = result.filter((p) => !p.authorId || !blocked.has(p.authorId));
+        }
+
+        // Scope-aware visibility:
+        // - global posts are visible to everyone
+        // - local posts are visible only within matching local audience
+        result = result.filter((p) => {
+            const scope = (p.visibilityScope || 'local').toLowerCase();
+            if (geoFilter === 'global') {
+                // Global tab is a broad feed: includes both global and local posts
+                return scope === 'global' || canViewLocalPost(p);
+            }
+            // Local tab: local audience posts only
+            if (scope === 'global') return false;
+            return canViewLocalPost(p);
+        });
+
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             result = result.filter(p => p.content?.toLowerCase().includes(q) || p.author?.name?.toLowerCase().includes(q));
         }
-        if (userProfile?.coordinates && geoFilter !== 'global') {
+        if (userProfile?.coordinates && geoFilter === 'local') {
             const { lat: uLat, lng: uLng } = userProfile.coordinates;
             result = result.filter(p => {
                 // Bypass distance filter for events so they are visible everywhere
@@ -114,11 +163,11 @@ const PostsFeed = () => {
                 const pLng = p.coordinates?.lng || p.attachedInvitation?.lng || p.lng;
                 if (!pLat || !pLng) return false;
                 const d = calculateDistance(uLat, uLng, pLat, pLng);
-                return geoFilter === 'city' ? d < 50 : d < 500;
+                return d < 500;
             });
         }
         return result;
-    }, [posts, geoFilter, userProfile, searchQuery]);
+    }, [posts, geoFilter, userProfile, searchQuery, userProfile?.blockedUserIds]);
 
     // Helper: extract a comparable timestamp number from any post
     const getTimestamp = (p) => {
@@ -129,11 +178,15 @@ const PostsFeed = () => {
 
     // Merge featured + regular posts into one feed sorted newest-first
     const mergedFeed = useMemo(() => {
+        const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
+        const featured = featuredPosts
+            .map(p => ({ ...p, _isFeatured: true }))
+            .filter((p) => !p.authorId || !blocked.has(p.authorId));
         return [
-            ...featuredPosts.map(p => ({ ...p, _isFeatured: true })),
+            ...featured,
             ...filteredPosts.map(p => ({ ...p, _isFeatured: false }))
         ].sort((a, b) => getTimestamp(b) - getTimestamp(a));
-    }, [featuredPosts, filteredPosts]);
+    }, [featuredPosts, filteredPosts, userProfile?.blockedUserIds]);
 
     if (loading) {
         return (
@@ -152,18 +205,41 @@ const PostsFeed = () => {
             {/* Mobile filter bar (hidden on desktop via CSS) */}
             <div className="mobile-filter-bar" style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '16px', margin: '0 12px 12px', border: '1px solid var(--border-color)', alignItems: 'center', minHeight: '44px' }}>
                 {isSearchActive ? (
-                    <input
-                        type="text" autoFocus value={searchQuery}
-                        placeholder={t('search_posts', 'Search...')}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        onBlur={() => { if (!searchQuery?.trim()) setIsSearchActive(false); }}
-                        style={{ flex: 1, padding: '8px 12px', borderRadius: '12px', border: 'none', background: 'var(--bg-input)', outline: 'none', fontSize: '0.9rem', color: 'var(--text-main)' }}
-                    />
+                    <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: '6px' }}>
+                        <input
+                            type="text" autoFocus value={searchQuery}
+                            placeholder={t('search_posts', 'Search...')}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            onBlur={() => { if (!searchQuery?.trim()) setIsSearchActive(false); }}
+                            style={{ flex: 1, padding: '8px 12px', borderRadius: '12px', border: 'none', background: 'var(--bg-input)', outline: 'none', fontSize: '0.9rem', color: 'var(--text-main)' }}
+                        />
+                        <button
+                            onClick={() => {
+                                setSearchQuery('');
+                                setIsSearchActive(false);
+                            }}
+                            aria-label={t('close_search', 'Close search')}
+                            style={{
+                                width: 36,
+                                height: 36,
+                                border: 'none',
+                                borderRadius: '10px',
+                                background: 'transparent',
+                                cursor: 'pointer',
+                                fontSize: '1.05rem',
+                                color: 'var(--text-muted)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
                 ) : (
                     <div style={{ display: 'flex', width: '100%', gap: '4px', alignItems: 'center' }}>
                         {[
-                            { id: 'city', label: t('my_city', 'City'), icon: '🏙️' },
-                            { id: 'country', label: t('my_country', 'Country'), icon: '🏳️' },
+                            { id: 'local', label: t('post_scope_local', 'Local'), icon: '📍' },
                             { id: 'global', label: t('global', 'Global'), icon: '🌍' }
                         ].map(tab => (
                             <button key={tab.id} onClick={() => setGeoFilter(tab.id)} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: geoFilter === tab.id ? 'var(--primary)' : 'transparent', color: geoFilter === tab.id ? 'white' : 'var(--text-muted)', fontWeight: geoFilter === tab.id ? '800' : '600', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
@@ -179,8 +255,7 @@ const PostsFeed = () => {
             {/* Desktop filter bar — only visible on desktop */}
             <div className="desktop-feed-filters" style={{ gap: '6px', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', alignItems: 'center' }}>
                 {[
-                    { id: 'city', label: t('my_city', 'City'), icon: '🏙️' },
-                    { id: 'country', label: t('my_country', 'Country'), icon: '🏳️' },
+                    { id: 'local', label: t('post_scope_local', 'Local'), icon: '📍' },
                     { id: 'global', label: t('global', 'Global'), icon: '🌍' }
                 ].map(tab => (
                     <button key={tab.id} onClick={() => setGeoFilter(tab.id)} style={{ padding: '6px 14px', borderRadius: '9999px', border: 'none', background: geoFilter === tab.id ? 'var(--primary)' : 'transparent', color: geoFilter === tab.id ? 'white' : 'var(--text-muted)', fontWeight: geoFilter === tab.id ? '800' : '600', cursor: 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '5px' }}>

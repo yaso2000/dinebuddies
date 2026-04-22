@@ -1,6 +1,7 @@
+import app from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-const functions = getFunctions();
+const functions = getFunctions(app, 'us-central1');
 
 const call = async (name, payload) => {
     const fn = httpsCallable(functions, name);

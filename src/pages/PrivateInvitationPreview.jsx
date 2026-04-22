@@ -8,11 +8,14 @@ import { getTemplateStyle } from '../utils/invitationTemplates';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
-import { adminSecurityService } from '../services/adminSecurityService';
 import './PrivateInvitation.css';
 
 import Lottie from 'lottie-react';
 import { OCCASION_PRESETS } from '../utils/invitationTemplates';
+import { pickSafeDisplayImageUrl, getSafeAvatar } from '../utils/avatarUtils';
+import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
+import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
+import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
 
 const PrivateInvitationPreview = () => {
     const { t } = useTranslation();
@@ -61,15 +64,25 @@ const PrivateInvitationPreview = () => {
         fetchDraft();
     }, [draftId, navigate, t]);
 
-    // Fetch Lottie data
+    // Optional background animation (skip failed / blocked CDN responses — avoids 403 console noise)
     useEffect(() => {
         const lottieUrl = invitation ? OCCASION_PRESETS[(invitation.occasionType || '').charAt(0).toUpperCase() + (invitation.occasionType || '').slice(1).toLowerCase()]?.lottieUrl : null;
-        if (lottieUrl) {
-            fetch(lottieUrl)
-                .then(res => res.json())
-                .then(data => setAnimationData(data))
-                .catch(err => console.error('Error loading Lottie animation in preview:', err));
-        }
+        if (!lottieUrl) return;
+        let cancelled = false;
+        fetch(lottieUrl, { mode: 'cors' })
+            .then((res) => {
+                if (!res.ok) return null;
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('json')) return null;
+                return res.json();
+            })
+            .then((data) => {
+                if (!cancelled && data) setAnimationData(data);
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
     }, [invitation]);
 
     const handlePublish = async () => {
@@ -77,31 +90,7 @@ const PrivateInvitationPreview = () => {
         try {
             const publishResult = await publishPrivateInvitationDraft(draftId);
             if (!publishResult?.success) return;
-            if (publishResult.alreadyPublished) {
-                navigate(`/invitation/private/${draftId}`);
-                return;
-            }
-
-            // Send notifications to invited guests
-            if (invitation.invitedFriends?.length > 0) {
-                const notificationsBatch = invitation.invitedFriends.map(friendId => {
-                    return adminSecurityService.createNotification({
-                        userId: friendId,
-                        type: 'private_invitation',
-                        title: t('notification_private_invitation_title'),
-                        message: t('notification_private_invitation_message', {
-                            name: invitation.author?.name || 'Host',
-                            title: invitation.title
-                        }),
-                        invitationId: draftId,
-                        actionUrl: `/invitation/private/${draftId}`, // ENFORCE PRIVATE ROUTE
-                        metadata: {
-                            occasionType: invitation.occasionType || 'Social'
-                        }
-                    });
-                });
-                await Promise.all(notificationsBatch);
-            }
+            // Invite notifications are created server-side in publishPrivateInvitationDraft (Admin SDK).
 
             navigate(`/invitation/private/${draftId}`);
         } catch (error) {
@@ -119,6 +108,12 @@ const PrivateInvitationPreview = () => {
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
         invitation.occasionType
+    );
+
+    const privateHeroImageSrc = pickSafeDisplayImageUrl(
+        invitation.customImage,
+        invitation.restaurantImage,
+        invitation.image
     );
 
     return (
@@ -157,11 +152,28 @@ const PrivateInvitationPreview = () => {
                 <span style={{ color: 'rgba(255,255,255,0.95)', fontWeight: '600' }}>{t('preview_warning_private')}</span>
             </div>
 
+            <div style={{ padding: '0 15px 20px', display: 'flex', justifyContent: 'center' }}>
+                <PrivateInvitationCardPreview
+                    className="private-invitation-card-preview--showcase"
+                    frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
+                    cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
+                    occasionType={invitation.occasionType}
+                    cardBackgroundId={invitation.cardBackgroundId || null}
+                    title={invitation.title}
+                    description={invitation.description}
+                    date={invitation.date}
+                    time={invitation.time}
+                    location={invitation.location}
+                    inviterName={invitation.author?.name || ''}
+                    inviterAvatarUrl={getSafeAvatar(invitation.author || {})}
+                />
+            </div>
+
             {/* Mirror of PrivateInvitationDetails Structure */}
             <div className="private-mock-details" style={{ padding: '0 15px' }}>
                 <div className="private-hero-section" style={{ position: 'relative', width: '100%', height: '240px', overflow: 'hidden', borderRadius: '30px', marginBottom: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
-                    {(invitation.customImage || invitation.restaurantImage || invitation.image) ? (
-                        <img src={invitation.customImage || invitation.restaurantImage || invitation.image} alt="" className="private-hero-img-animated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {privateHeroImageSrc ? (
+                        <img src={privateHeroImageSrc} alt="" className="private-hero-img-animated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                         <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #1e1b4b, #312e81)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <FaLock size={40} color="rgba(255,255,255,0.2)" />

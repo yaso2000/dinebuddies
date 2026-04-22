@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaSearch } from 'react-icons/fa';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
+import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
+import { searchNominatimCities } from '../utils/osmPhotonSearch';
 
 /**
- * City-only autocomplete using Google Places (cities).
- * Only returns cities that exist on Google Maps — no free-text to avoid fake cities.
+ * City autocomplete via OpenStreetMap Nominatim (no Google Places).
  */
 const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
     const [suggestions, setSuggestions] = useState([]);
@@ -12,27 +12,12 @@ const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [inputValue, setInputValue] = useState(value || '');
     const wrapperRef = useRef(null);
-    const autocompleteService = useRef(null);
-    const placesService = useRef(null);
+    const inputDebounceRef = useRef(null);
+    const generationRef = useRef(0);
 
     useEffect(() => {
         setInputValue(value || '');
     }, [value]);
-
-    useEffect(() => {
-        let cancelled = false;
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || typeof window === 'undefined') return;
-                if (window.google?.maps?.places) {
-                    autocompleteService.current = new window.google.maps.places.AutocompleteService();
-                    const dummyDiv = document.createElement('div');
-                    placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-                }
-            })
-            .catch(() => {});
-        return () => { cancelled = true; };
-    }, []);
 
     useEffect(() => {
         function handleClickOutside(e) {
@@ -44,84 +29,73 @@ const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    useEffect(() => () => {
+        if (inputDebounceRef.current) clearTimeout(inputDebounceRef.current);
+    }, []);
+
     const handleInput = (e) => {
         const val = e.target.value;
         setInputValue(val);
+        if (inputDebounceRef.current) clearTimeout(inputDebounceRef.current);
+
         if (val.length < 2) {
+            generationRef.current += 1;
             setSuggestions([]);
             setShowSuggestions(false);
+            setLoading(false);
             return;
         }
+
         setLoading(true);
         setShowSuggestions(true);
-        if (autocompleteService.current) {
-            const request = {
-                input: val,
-                types: ['(cities)'],
-                language: 'en',
-            };
-            if (countryCode) {
-                request.componentRestrictions = { country: countryCode.toLowerCase() };
-            }
-            autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
-                setLoading(false);
-                if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-                    setSuggestions(predictions.map((p) => ({
-                        place_id: p.place_id,
-                        description: p.description,
-                        main_text: p.structured_formatting?.main_text,
-                        secondary_text: p.structured_formatting?.secondary_text,
-                    })));
-                } else {
-                    setSuggestions([]);
-                }
-            });
-        } else {
-            setLoading(false);
-            setSuggestions([]);
-        }
+        generationRef.current += 1;
+        const gen = generationRef.current;
+
+        inputDebounceRef.current = setTimeout(() => {
+            inputDebounceRef.current = null;
+            const stale = () => gen !== generationRef.current;
+
+            if (stale()) return;
+            searchNominatimCities(val, countryCode)
+                .then((rows) => {
+                    if (stale()) return;
+                    setLoading(false);
+                    setSuggestions(rows);
+                })
+                .catch(() => {
+                    if (!stale()) {
+                        setLoading(false);
+                        setSuggestions([]);
+                    }
+                });
+        }, PLACES_AUTOCOMPLETE_DEBOUNCE_MS);
     };
 
     const handleSelect = (s) => {
         setShowSuggestions(false);
         setInputValue(s.description);
-        if (!placesService.current || !s.place_id) return;
-        placesService.current.getDetails(
-            {
-                placeId: s.place_id,
-                fields: ['address_components', 'formatted_address'],
-            },
-            (place, status) => {
-                if (status !== window.google.maps.places.PlacesServiceStatus.OK || !place?.address_components) {
-                    return;
-                }
-                let city = '';
-                let countryCodeOut = '';
-                for (const c of place.address_components) {
-                    if (c.types.includes('locality')) city = c.long_name;
-                    if (c.types.includes('administrative_area_level_1') && !city) city = c.long_name;
-                    if (c.types.includes('country')) countryCodeOut = (c.short_name || '').toUpperCase().slice(0, 2);
-                }
-                if (city) {
-                    onSelect({ city, countryCode: countryCodeOut });
-                }
-            }
-        );
+        onSelect({ city: s.city, countryCode: s.countryCode });
     };
-
-    const hasGoogle = !!window.google?.maps?.places;
 
     return (
         <div ref={wrapperRef} style={{ position: 'relative' }}>
             <div style={{ position: 'relative' }}>
-                <FaSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.9rem' }} />
+                <FaSearch
+                    style={{
+                        position: 'absolute',
+                        left: 12,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'var(--text-muted)',
+                        fontSize: '0.9rem',
+                    }}
+                />
                 <input
                     type="text"
                     value={inputValue}
                     onChange={handleInput}
                     onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                    placeholder={placeholder || 'Search city on Google Maps...'}
-                    disabled={!hasGoogle}
+                    placeholder={placeholder || 'Search city…'}
                     autoComplete="off"
                     style={{
                         width: '100%',
@@ -164,18 +138,24 @@ const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
                                 borderBottom: '1px solid var(--border-color)',
                                 fontSize: '0.9rem',
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-input)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'var(--bg-input)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                            }}
                         >
                             <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{s.main_text}</div>
-                            {s.secondary_text && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{s.secondary_text}</div>}
+                            {s.secondary_text && (
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{s.secondary_text}</div>
+                            )}
                         </li>
                     ))}
                 </ul>
             )}
-            {!hasGoogle && (
+            {loading && (
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                    City search requires Google Maps.
+                    …
                 </div>
             )}
         </div>

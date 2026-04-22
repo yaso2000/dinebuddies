@@ -33,7 +33,15 @@ export async function isEmailRegisteredAsBusiness(emailRaw) {
         }
         return false;
     };
-    if (await run('email')) return true;
-    if (await run('authEmail')) return true;
-    return false;
+    try {
+        if (await run('email')) return true;
+        if (await run('authEmail')) return true;
+        return false;
+    } catch (e) {
+        // firestore.rules: users list/get requires isSignedIn(). This runs *before*
+        // createUserWithEmailAndPassword / OAuth, so unregistered visitors cannot query.
+        // Fail open: personal signup proceeds; Firebase Auth still rejects true duplicates.
+        console.warn('[isEmailRegisteredAsBusiness] query not allowed pre-auth, skipping:', e?.code || e?.message);
+        return false;
+    }
 }

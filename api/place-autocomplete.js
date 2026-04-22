@@ -1,56 +1,85 @@
 /**
- * Place Autocomplete proxy (server-side).
- * Use on production to bypass HTTP referrer restrictions - the request to Google
- * comes from Vercel, not the browser.
+ * Place Autocomplete proxy (server-side, Places API New).
+ * Minimal response fields and city bounds restriction for better cost control.
  *
- * GET /api/place-autocomplete?input=...&countryCode=au&lat=...&lng=...
+ * GET /api/place-autocomplete?input=...&sessionToken=...&countryCode=sa&minLat=...&minLon=...&maxLat=...&maxLon=...
  */
-const AUTOCOMPLETE_URL = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
+const AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         res.setHeader('Allow', 'GET');
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    const { input, countryCode, lat, lng } = req.query;
-    const key = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-    if (!input || typeof input !== 'string' || input.trim().length < 2 || !key) {
-        return res.status(400).json({ error: 'Missing input (min 2 chars) or API key' });
+    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon } = req.query;
+    const key =
+        process.env.GOOGLE_PLACES_API_KEY ||
+        process.env.GOOGLE_MAPS_SERVER_KEY ||
+        process.env.VITE_GOOGLE_MAPS_API_KEY ||
+        process.env.GOOGLE_MAPS_API_KEY;
+    if (!input || typeof input !== 'string' || input.trim().length < 2 || !key || !sessionToken) {
+        return res.status(400).json({ error: 'Missing input/sessionToken/API key' });
     }
     try {
-        const params = new URLSearchParams({
+        const payload = {
             input: input.trim(),
-            types: 'establishment',
-            language: 'en',
-            key,
-        });
+            sessionToken: String(sessionToken).slice(0, 36),
+            languageCode: typeof languageCode === 'string' && languageCode.trim() ? languageCode.trim() : 'ar',
+            includeQueryPredictions: false,
+        };
         if (countryCode && typeof countryCode === 'string') {
-            params.set('components', `country:${countryCode.toLowerCase().slice(0, 2)}`);
+            payload.includedRegionCodes = [countryCode.toLowerCase().slice(0, 2)];
         }
-        const numLat = parseFloat(lat);
-        const numLng = parseFloat(lng);
-        if (!isNaN(numLat) && !isNaN(numLng)) {
-            params.set('location', `${numLat},${numLng}`);
-            params.set('radius', '50000');
+        const loLat = Number(minLat);
+        const loLon = Number(minLon);
+        const hiLat = Number(maxLat);
+        const hiLon = Number(maxLon);
+        if (
+            Number.isFinite(loLat) &&
+            Number.isFinite(loLon) &&
+            Number.isFinite(hiLat) &&
+            Number.isFinite(hiLon)
+        ) {
+            payload.locationRestriction = {
+                rectangle: {
+                    low: { latitude: loLat, longitude: loLon },
+                    high: { latitude: hiLat, longitude: hiLon },
+                },
+            };
         }
-        const url = `${AUTOCOMPLETE_URL}?${params.toString()}`;
-        const response = await fetch(url);
+        const response = await fetch(AUTOCOMPLETE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': key,
+                'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text',
+            },
+            body: JSON.stringify(payload),
+        });
         const data = await response.json();
         res.setHeader('Access-Control-Allow-Origin', '*');
-        if (data.status === 'OK' && Array.isArray(data.predictions)) {
+        const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+        if (response.ok) {
             return res.status(200).json({
                 status: 'OK',
-                predictions: data.predictions.map((p) => ({
-                    place_id: p.place_id,
-                    description: p.description,
-                    structured_formatting: p.structured_formatting,
-                })),
+                predictions: suggestions
+                    .map((s) => s?.placePrediction)
+                    .filter(Boolean)
+                    .map((p) => ({
+                        place_id: p.placeId,
+                        description: p.text?.text || '',
+                        structured_formatting: {
+                            main_text: p.text?.text || '',
+                            secondary_text: '',
+                        },
+                    })),
             });
         }
-        if (data.status === 'ZERO_RESULTS') {
-            return res.status(200).json({ status: 'ZERO_RESULTS', predictions: [] });
-        }
-        return res.status(200).json({ status: data.status || 'ERROR', predictions: [] });
+        return res.status(502).json({
+            status: 'ERROR',
+            predictions: [],
+            error: data?.error?.message || data?.error || 'Autocomplete upstream error',
+        });
     } catch (err) {
         console.error('Place autocomplete error:', err);
         return res.status(500).json({ error: 'Internal server error' });

@@ -26,6 +26,7 @@ import GroupChat from '../components/GroupChat';
 import ShareButtons from '../components/ShareButtons';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
+import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import ServiceModal, { SERVICE_ICONS } from '../components/ServiceModal';
 import { getContrastText } from '../utils/colorUtils';
 import { isBusinessUser } from '../utils/accountRole';
@@ -137,6 +138,8 @@ const BusinessProfile = () => {
     const profileId = businessId ?? partnerId;
     const navigate = useNavigate();
     const location = useLocation();
+    const profileSetupToastRef = useRef(false);
+    const businessSignupVerifyToastRef = useRef(false);
     const { currentUser, userProfile, updateUserProfile, isGuest, loading: authLoading } = useAuth();
     const { setBrandColor } = useTheme();
     const { joinCommunity, leaveCommunity } = useInvitations();
@@ -229,6 +232,7 @@ const BusinessProfile = () => {
     // Like/share counts: single source of truth = Firestore (onSnapshot). No local override state.
     // Optimistic share count so number doesn’t flash back to zero
     const [userLikedBusiness, setUserLikedBusiness] = useState(false);
+    const [likeInProgress, setLikeInProgress] = useState(false);
 
     // Community membership states
     const [memberCount, setMemberCount] = useState(0);
@@ -443,14 +447,12 @@ const BusinessProfile = () => {
 
                 // 3. If visitor and email is not verified, hide it.
                 if (!emailVerifiedPublic) {
-                    // CRITICAL: Prevent re-setting state if already hidden to avoid loops.
-                    setPublicProfileHidden(prev => {
-                        if (prev === true) return true;
-                        setBusiness(null);
-                        setLoading(false);
-                        return true;
-                    });
                     pendingBizDocRef.current = null;
+                    // Never call setBusiness/setLoading inside another setState updater — breaks React 18 batching
+                    // and has been linked to blank screens after leaving the route.
+                    setBusiness(null);
+                    setLoading(false);
+                    setPublicProfileHidden(true);
                     return;
                 }
 
@@ -932,7 +934,6 @@ const BusinessProfile = () => {
 
 
     // Like: write to Firestore then update favoritePlaces so snapshot has new value before context re-renders; keep optimistic override so count doesn’t disappear on stale snapshot
-    const [likeInProgress, setLikeInProgress] = useState(false);
     const handleToggleLike = async () => {
         if (!currentUser?.uid) {
             goToLogin();
@@ -998,18 +999,19 @@ const BusinessProfile = () => {
         const shareTitle = business?.display_name || 'DineBuddies Business';
         const shareUrl = window.location.href;
         const shareText = `Check out ${shareTitle} on DineBuddies!\n\n🔗 ${shareUrl}`;
+        const result = await shareNativeOrFallback({
+            file: headerCardFile,
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl,
+            skipExternalFallback: false,
+        });
+        if (result === 'aborted') return;
         try {
-            if (navigator.canShare && navigator.canShare({ files: [headerCardFile] })) {
-                await navigator.share({ files: [headerCardFile], title: shareTitle, text: shareText, url: shareUrl });
-            } else if (navigator.share) {
-                await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
-            }
-            try {
-                await incrementBusinessShareCount(profileId);
-            } catch (err) {
-                console.warn('Profile shares count update failed:', err);
-            }
-        } catch (e) { /* cancelled */ }
+            await incrementBusinessShareCount(profileId);
+        } catch (err) {
+            console.warn('Profile shares count update failed:', err);
+        }
     };
 
     const closeHeaderPreview = () => {
@@ -1135,14 +1137,18 @@ const BusinessProfile = () => {
     const saveBasicInfo = async () => {
         setSavingInfo(true);
         try {
-            await updateDoc(doc(db, 'users', profileId), {
+            const payload = {
                 display_name: basicInfoForm.businessName,
                 'businessInfo.businessName': basicInfoForm.businessName,
                 'businessInfo.tagline': basicInfoForm.tagline,
                 'businessInfo.businessType': basicInfoForm.businessType,
                 'businessInfo.cuisineType': basicInfoForm.businessType === 'Restaurant' ? basicInfoForm.cuisineType : '',
-                'businessInfo.description': basicInfoForm.description
-            });
+                'businessInfo.description': basicInfoForm.description,
+            };
+            if (business?.businessProfileSetupPending) {
+                payload.businessProfileSetupPending = false;
+            }
+            await updateDoc(doc(db, 'users', profileId), payload);
             setShowBasicInfoModal(false);
         } catch (err) { showToast(t('save_failed'), 'error'); } finally { setSavingInfo(false); }
     };
@@ -1165,7 +1171,7 @@ const BusinessProfile = () => {
     const saveContact = async () => {
         setSavingInfo(true);
         try {
-            await updateDoc(doc(db, 'users', profileId), {
+            const payload = {
                 'businessInfo.phone': contactForm.phone,
                 'businessInfo.email': contactForm.email,
                 'businessInfo.website': contactForm.website,
@@ -1175,7 +1181,11 @@ const BusinessProfile = () => {
                 'businessInfo.facebook': contactForm.facebook,
                 'businessInfo.twitter': contactForm.twitter,
                 'businessInfo.tiktok': contactForm.tiktok,
-            });
+            };
+            if (business?.businessProfileSetupPending) {
+                payload.businessProfileSetupPending = false;
+            }
+            await updateDoc(doc(db, 'users', profileId), payload);
             setShowContactModal(false);
             // Smart pro-fields notice for free users
             if (!isPaid) {
@@ -1193,6 +1203,42 @@ const BusinessProfile = () => {
         };
 
     const isOwner = !isPreviewMode && currentUser?.uid === profileId;
+
+    useEffect(() => {
+        if (!isOwner || profileSetupToastRef.current) return;
+        if (!location.state?.businessProfileSetupReminder) return;
+        profileSetupToastRef.current = true;
+        const pathNorm = (location.pathname || '/').replace(/\/$/, '') || '/';
+        showToast(
+            t(
+                'business_profile_setup_toast',
+                'Complete your business details below so customers can find you.'
+            ),
+            'info'
+        );
+        navigate({ pathname: pathNorm, search: location.search || '' }, { replace: true, state: {} });
+    }, [isOwner, location.state, location.pathname, location.search, navigate, showToast, t]);
+
+    useEffect(() => {
+        if (!isOwner || businessSignupVerifyToastRef.current) return;
+        if (!location.state?.businessSignupNeedsVerify) return;
+        const pathNorm = (location.pathname || '/').replace(/\/$/, '') || '/';
+        const clearNav = () =>
+            navigate({ pathname: pathNorm, search: location.search || '' }, { replace: true, state: {} });
+        if (!currentUser || currentUser.emailVerified) {
+            clearNav();
+            return;
+        }
+        businessSignupVerifyToastRef.current = true;
+        showToast(
+            t(
+                'business_signup_verify_toast',
+                'We sent an activation link to your email. Check your inbox to verify your business account.'
+            ),
+            'info'
+        );
+        clearNav();
+    }, [isOwner, location.state, location.pathname, location.search, navigate, showToast, t, currentUser]);
 
     useEffect(() => {
         if (loading || !business || !isOwner) return;
@@ -1473,6 +1519,30 @@ const BusinessProfile = () => {
                 </Helmet>
             )}
 
+            {isOwner && business?.businessProfileSetupPending === true && (
+                <div
+                    className="ui-banner--warning"
+                    style={{
+                        margin: '12px 16px 0',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                    }}
+                >
+                    <span style={{ fontSize: '1.35rem', flexShrink: 0 }}>📋</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <p className="ui-banner--warning__title">
+                            {t('business_profile_setup_banner_title', 'Finish your business profile')}
+                        </p>
+                        <p style={{ margin: '6px 0 0', fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                            {t(
+                                'business_profile_setup_banner_desc',
+                                'Add your name, contact, address, and photos so customers can discover you.'
+                            )}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Card preview overlay */}
             {headerCardPreviewUrl && (
                 <div onClick={closeHeaderPreview} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -1567,7 +1637,7 @@ const BusinessProfile = () => {
                             <div style={{
                                 width: '90px', height: '90px', borderRadius: '22px',
                                 ...(business.photo_url
-                                    ? { backgroundColor: 'rgba(0,0,0,0.25)', backgroundImage: `url(${business.photo_url})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+                                    ? { backgroundColor: 'rgba(0,0,0,0.25)', backgroundImage: `url(${getSafeAvatar(business)})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
                                     : { background: 'var(--brand-primary)' }
                                 ),
                                 overflow: 'hidden',
@@ -1897,7 +1967,7 @@ const BusinessProfile = () => {
                             profileId={profileId}
                             business={business}
                             isOwner={isOwner}
-                            theme={{ colors: tc }}
+                            theme={{ colors: tc || {} }}
                         />
 
 

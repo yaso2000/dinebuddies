@@ -137,17 +137,220 @@
     color: var(--primary);
 }
 
-/* Comments Dropdown (Simple implementation) */
+/* Comments — feed preview (count + last only) */
+.post-comments-preview {
+    margin: 0 16px 0 16px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    text-align: start;
+}
+
+.post-comments-preview:hover {
+    background: color-mix(in srgb, var(--bg-elevated) 92%, var(--primary));
+}
+
+.post-comments-preview__count {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.post-comments-preview__last {
+    font-size: 0.9rem;
+    line-height: 1.35;
+    color: var(--text-main);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.post-comments-preview__name {
+    font-weight: 700;
+    margin-inline-end: 6px;
+}
+
+.post-comments-preview__text {
+    font-weight: 400;
+    word-break: break-word;
+}
+
+/* Comments — inline expand (feed): one last comment + framed composer */
 .comments-section {
-    margin-top: 12px;
-    padding: 12px 16px 0 16px;
+    margin-top: 0;
+    padding: 0;
+    border-top: none;
+}
+
+.comments-section--chat {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 12px 16px 14px 16px;
     border-top: 1px solid var(--border-color);
+}
+
+.comments-inline-last {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+}
+
+.post-comment-composer-wrap {
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border-color));
+    background: color-mix(in srgb, var(--bg-card) 88%, var(--primary));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.post-comment-composer-wrap .comment-input--inline {
+    width: 100%;
+    padding-inline-end: 80px;
+    padding-inline-start: 14px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-radius: 22px;
+    border: 1px solid color-mix(in srgb, var(--border-color) 90%, var(--primary));
+    background: var(--bg-body);
+    color: var(--text-main);
+    outline: none;
+    font-size: 0.95rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.post-comment-composer-wrap .comment-input--inline:focus {
+    border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+/* Standalone post page — composer first, then scrollable comments */
+.comments-section--detail {
+    flex-direction: column;
+    gap: 12px;
+}
+
+.post-detail-comments-scroll {
+    max-height: min(320px, 45vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 4px 2px 8px 0;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-elevated);
+}
+
+.post-detail-comments-pull-hint {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 8px 10px;
+    background: linear-gradient(180deg, var(--bg-elevated) 85%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.comments-thread__item--detail {
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+}
+
+.comments-thread__item--detail:last-child {
+    border-bottom: none;
+}
+
+.comments-thread {
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-inline-end: 4px;
+}
+
+.comments-thread__item {
+    padding-bottom: 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+}
+
+.comments-thread__item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.comments-thread__meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+}
+
+.comments-thread__author {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.comments-thread__time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.comments-thread__body {
+    font-size: 0.9rem;
+    color: var(--text-main);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.comments-emoji-strip {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    background: var(--bg-elevated);
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+}
+
+.comments-emoji-strip button {
+    background: transparent;
+    border: none;
+    font-size: 1.45rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
 }
 
 .comment-input-row {
     display: flex;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
+}
+
+.comment-input-row--footer {
+    position: relative;
+    margin-top: 0;
 }
 
 .comment-input {

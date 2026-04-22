@@ -22,6 +22,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import './EnhancedGallery.css';
+import { shouldBlockDirectImageLoad } from '../utils/avatarUtils';
 
 const CATEGORIES = [
     { id: 'food', label: 'Food', icon: FaUtensils, color: '#f59e0b' },
@@ -33,7 +34,8 @@ const CATEGORIES = [
 function SortableGalleryItem({
     id, image, actualIndex, category, Icon, t, isEditMode, captionEdit, setCaptionEdit,
     handleUpdateCaption, handleDeleteImage, handleMoveToCategory, handleSetAsCover, moveMenuForIndex, setMoveMenuForIndex,
-    moveMenuRef, moveButtonRef, moveMenuPosition, CATEGORIES, setLightboxIndex, setLightboxOpen
+    moveMenuRef, moveButtonRef, moveMenuPosition, CATEGORIES, setLightboxIndex, setLightboxOpen,
+    tc = null,
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
     const style = { transform: CSS.Transform.toString(transform), transition };
@@ -197,6 +199,9 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
     const onGalleryCategoryPointerDown = useCallback((e) => {
         if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
+        // Do not hijack pointer for horizontal scroll when the user is clicking a category tab
+        const t = e.target;
+        if (typeof t?.closest === 'function' && t.closest('.category-btn')) return;
         const el = categoryFilterWrapRef.current;
         if (!el) return;
         categoryPanRef.current = {
@@ -243,11 +248,37 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
 
     const rawEnhanced = business?.businessInfo?.galleryEnhanced || [];
     const rawGallery = business?.businessInfo?.gallery || [];
-    const gallery = rawEnhanced.length
-        ? rawEnhanced
-        : Array.isArray(rawGallery)
-            ? rawGallery.map((u) => (typeof u === 'string' ? { url: u, category: 'venue', caption: '' } : u))
-            : [];
+    /** Prefer galleryEnhanced; normalize legacy string URLs and malformed entries. */
+    const sourceList = rawEnhanced.length > 0 ? rawEnhanced : rawGallery;
+    const gallery = Array.isArray(sourceList)
+        ? sourceList
+            .map((item) => {
+                if (typeof item === 'string' && item.trim()) {
+                    return { url: item.trim(), category: 'venue', caption: '' };
+                }
+                if (item && typeof item === 'object' && typeof item.url === 'string' && item.url.trim()) {
+                    return {
+                        url: item.url.trim(),
+                        category: item.category || 'venue',
+                        caption: item.caption || '',
+                    };
+                }
+                return null;
+            })
+            .filter(Boolean)
+            .filter((entry) => !shouldBlockDirectImageLoad(entry.url))
+        : [];
+
+    useEffect(() => {
+        if (!lightboxOpen) return;
+        if (gallery.length === 0) {
+            setLightboxOpen(false);
+            return;
+        }
+        if (lightboxIndex >= gallery.length) {
+            setLightboxIndex(gallery.length - 1);
+        }
+    }, [lightboxOpen, gallery.length, lightboxIndex]);
 
     useEffect(() => {
         if (moveMenuForIndex === null) return;

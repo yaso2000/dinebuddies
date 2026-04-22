@@ -246,6 +246,18 @@ html {
     border-top-left-radius: 18px !important;
 }
 
+/* Invitation group chat — same tail geometry as community chat; LTR layout keeps
+   incoming on the left / outgoing on the right so the “tail” points outward in RTL UI too. */
+.invitation-chat-root .message-row.incoming.first-of-group .bubble {
+    border-top-left-radius: 2px !important;
+    border-top-right-radius: 18px !important;
+}
+
+.invitation-chat-root .message-row.outgoing.first-of-group .bubble {
+    border-top-right-radius: 2px !important;
+    border-top-left-radius: 18px !important;
+}
+
 /* Timestamp */
 .timestamp {
     font-size: 10px;
@@ -767,6 +779,12 @@ svg.progress-ring {
     bottom: 80px;
     right: 20px;
     z-index: 1001;
+}
+
+/* Hide emoji category navigation/header in community chat picker */
+.community-chat-root .EmojiPickerReact .epr-category-nav,
+.community-chat-root .EmojiPickerReact .epr-header {
+    display: none !important;
 }
 
 @media (min-width: 1024px) {

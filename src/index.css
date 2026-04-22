@@ -53,8 +53,10 @@
   --shadow-card-hover: 0 8px 20px rgba(0, 0, 0, 0.15);
   --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 
-  /* Text */
+  /* Text — heading/subheading used for section titles (not body-muted gray) */
   --text-main: var(--text-primary);
+  --text-heading: var(--text-primary);
+  --text-subheading: #cbd5e1;
   --text-muted: var(--text-secondary);
   --text-white: #ffffff;
 
@@ -118,10 +120,11 @@
   --bg-secondary: #f1f5f9;
   --bg-card: #ffffff;
   --text-primary: #0f172a;
-  --text-secondary: #475569;
+  /* Secondary = readable body/supporting copy; muted = captions/meta only */
+  --text-secondary: #334155;
   --border-color: rgba(15, 23, 42, 0.18);
   --icon-primary: #334155;
-  --icon-secondary: #94a3b8;
+  --icon-secondary: #64748b;
   --brand-primary: #6d28d9;
   --brand-glow: rgba(109, 40, 217, 0.4);
   --text-on-brand: #ffffff;
@@ -137,9 +140,11 @@
   --bg-hover: rgba(0, 0, 0, 0.06);
   --glass-overlay: rgba(255, 255, 255, 0.95);
 
-  /* Text - Dark on light for WCAG contrast */
+  /* Text - Dark on light: distinct levels (headings ≠ gray body-muted) */
   --text-main: var(--text-primary);
-  --text-muted: var(--text-secondary);
+  --text-heading: #0f172a;
+  --text-subheading: #1e293b;
+  --text-muted: #64748b;
   --text-white: #ffffff;
 
   /* Semantic colors - light theme */
@@ -155,6 +160,7 @@
 [data-theme='light'] html,
 [data-theme='light'] body {
   background: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 60%, #f8fafc 100%) !important;
+  color: var(--text-main) !important;
 }
 
 [data-theme='light'] .glass-card {
@@ -225,6 +231,8 @@
 
   --text-main: #ffffff;
   --text-primary: #ffffff;
+  --text-heading: #f8fafc;
+  --text-subheading: #e2e8f0;
   --text-secondary: #e2e8f0;
   --text-muted: #94a3b8;
   --text-white: #ffffff;
@@ -384,6 +392,8 @@ html,
 body {
   /* Rich dark gradient as the outer canvas */
   background: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%) !important;
+  /* Theme-aware: was #e2e8f0 — that stayed light-gray in light mode and made headings invisible */
+  color: var(--text-main) !important;
   background-attachment: fixed !important;
   height: 100%;
 }
@@ -421,7 +431,7 @@ body {
   html,
   body {
     height: 100vh !important;
-    overflow: hidden !important;
+    overflow: auto !important;
     position: static !important;
     width: 100% !important;
   }
@@ -429,7 +439,7 @@ body {
   /* #root: flex container so app-layout is always centered */
   #root {
     height: 100vh !important;
-    overflow: hidden !important;
+    overflow: auto !important;
     position: static !important;
     width: 100% !important;
     display: flex !important;
@@ -717,6 +727,21 @@ html:not([data-theme='light']) .app-header .app-name {
   will-change: transform;
 }
 
+/* Selfie video split layout: content must not be clipped by fixed viewport height */
+.smart-invitation-card.invitation-card--video-split {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Compact invitation cards (header/body layout): content-driven height */
+.smart-invitation-card.invitation-card--compact {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
 /* Fixed Flicker: Removed scaling, using only Subtle Lift + Shadow */
 .smart-invitation-card:hover {
   transform: translateY(-4px);
@@ -767,6 +792,10 @@ html:not([data-theme='light']) .app-header .app-name {
   padding: 3px;
   background: var(--bg-body);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='light'] .host-avatar-container {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
 }
 
 .host-avatar {
@@ -1195,6 +1224,58 @@ html:not([data-theme='light']) .app-header .app-name {
 .input-field::placeholder {
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+/* Native date/time (and related) pickers: icon + popup follow theme so glyphs match --text-main */
+/* Default matches app theme (dark) before html[data-theme] is set by ThemeProvider */
+.input-field[type="date"],
+.input-field[type="time"],
+.input-field[type="datetime-local"],
+.input-field[type="month"],
+.input-field[type="week"] {
+  color-scheme: dark;
+}
+
+[data-theme='dark'] .input-field[type="date"],
+[data-theme='dark'] .input-field[type="time"],
+[data-theme='dark'] .input-field[type="datetime-local"],
+[data-theme='dark'] .input-field[type="month"],
+[data-theme='dark'] .input-field[type="week"] {
+  color-scheme: dark;
+}
+
+[data-theme='light'] .input-field[type="date"],
+[data-theme='light'] .input-field[type="time"],
+[data-theme='light'] .input-field[type="datetime-local"],
+[data-theme='light'] .input-field[type="month"],
+[data-theme='light'] .input-field[type="week"] {
+  color-scheme: light;
+}
+
+/* Chromium picker indicators */
+.input-field[type="date"]::-webkit-calendar-picker-indicator,
+.input-field[type="time"]::-webkit-calendar-picker-indicator,
+.input-field[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  filter: none;
+}
+
+[data-theme='dark'] .input-field[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme='dark'] .input-field[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme='dark'] .input-field[type="datetime-local"]::-webkit-calendar-picker-indicator,
+html:not([data-theme='light']) .input-field[type="date"]::-webkit-calendar-picker-indicator,
+html:not([data-theme='light']) .input-field[type="time"]::-webkit-calendar-picker-indicator,
+html:not([data-theme='light']) .input-field[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1) contrast(1.35);
+  opacity: 1;
+}
+
+[data-theme='light'] .input-field[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme='light'] .input-field[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme='light'] .input-field[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.8;
 }
 
 select.input-field {
@@ -1788,17 +1869,35 @@ select.input-field {
   background: #0f172a !important;
 }
 
-/* Header Actions Alignment */
+/* Header actions — default flex (pages like Notifications set their own gap) */
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0.95rem;
-  /* mobile: breathing room between search / messages / bell / settings / avatar */
+  flex-shrink: 0;
+}
+
+/* App top bar: icon spacing (halved from 1.5rem / 1.75rem for tighter bar) */
+.app-header .header-actions {
+  gap: 4px;
 }
 
 @media (min-width: 1024px) {
-  .header-actions {
-    gap: 1.65rem;
+  .app-header .header-actions {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* ~44px touch targets (WCAG / iOS HIG) */
+  .app-header .header-actions .notification-bell {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .app-header .header-actions .header-profile-pic {
+    margin-inline-start: 2px;
   }
 }
 
@@ -1831,9 +1930,15 @@ select.input-field {
 button.notification-bell {
   background: none;
   border: none;
-  padding: 4px;
+  padding: 6px;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 10px;
+}
+
+@media (min-width: 1024px) {
+  button.notification-bell {
+    padding: 4px;
+  }
 }
 
 /* GLOBAL FORCE: Fix invasive white backgrounds on inputs in Chat */
@@ -1857,8 +1962,10 @@ button.notification-bell {
 
 .notification-bell .badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: auto;
+  bottom: 1px;
+  right: 60%;
+  transform: translateX(50%);
   background-color: var(--secondary);
   color: white;
   min-width: 18px;
@@ -1911,7 +2018,24 @@ button.notification-bell {
 
 /* --- New Component Classes --- */
 .premium-plan-card {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bg-card) 82%, var(--primary) 18%) 0%,
+    color-mix(in srgb, var(--bg-body) 78%, var(--primary) 22%) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-color));
+  color: var(--text-main);
+  box-shadow: var(--shadow-premium);
+}
+
+[data-theme='light'] .premium-plan-card {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bg-card) 97%, var(--primary) 3%) 0%,
+    color-mix(in srgb, var(--bg-secondary) 98%, var(--primary) 2%) 100%
+  );
+  border-color: color-mix(in srgb, var(--primary) 15%, var(--border-color));
+  box-shadow: 0 2px 16px rgba(15, 23, 42, 0.06);
 }
 
 .sticky-header-glass {
@@ -2011,24 +2135,374 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: none !important;
 }
 
-/* Standalone auth routes (outside Layout): on desktop, html/body/#root use overflow:hidden —
-   this wrapper becomes the scroll container so tall login hubs can scroll. */
+/* Standalone auth routes (outside Layout): html/body/#root use overflow:hidden + #root is flex.
+   After client-side navigation the in-flow flex child can paint with zero usable height (blank screen).
+   A fixed viewport layer is the scroll container so login / verify / 404 always paint and scroll. */
 .auth-route-scroll {
-  min-height: 100dvh;
-  max-height: 100dvh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 10000;
+  width: 100vw;
+  height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-  box-sizing: border-box;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--bg-body);
+  display: flex;
+  flex-direction: column;
 }
 
-@supports (height: 100svh) {
-  .auth-route-scroll {
-    min-height: 100svh;
-    max-height: 100svh;
+/* /login — luxury-minimal palette (warm neutrals + subtle brand) */
+.login-hub.login-hub-page {
+  align-items: center;
+  justify-content: flex-start;
+  padding: clamp(1rem, 3vh, 2rem) 16px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(120% 80% at 50% -20%, rgba(232, 110, 46, 0.06) 0%, transparent 55%),
+    linear-gradient(
+      168deg,
+      #faf9f7 0%,
+      #f1eeea 38%,
+      color-mix(in srgb, var(--bg-body, #0f0817) 88%, #292524) 100%
+    );
+}
+
+.login-hub-header {
+  text-align: center;
+  margin-bottom: clamp(1.1rem, 3vw, 1.5rem);
+}
+
+.login-hub-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.7rem;
+  padding: 0.36rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.login-hub-mode-pill--personal {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.06));
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.24);
+}
+
+.login-hub-mode-pill--business {
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.18), rgba(217, 119, 6, 0.08));
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.28);
+}
+
+.login-hub-brand {
+  font-size: clamp(1.38rem, 4vw, 1.7rem);
+  font-weight: 900;
+  margin: 0 0 0.45rem;
+  letter-spacing: -0.03em;
+  color: #1c1917;
+  background: linear-gradient(120deg, #1c1917 0%, #44403c 55%, #1c1917 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Fallback for browsers that clip poorly */
+@supports not (background-clip: text) {
+  .login-hub-brand {
+    color: #1c1917;
+    background: none;
   }
+}
+
+.login-hub-tagline {
+  color: #78716c;
+  font-size: 0.91rem;
+  line-height: 1.55;
+  margin: 0 auto;
+  max-width: 22rem;
+}
+
+.login-hub-wrap {
+  width: 100%;
+  max-width: min(440px, 100%);
+  margin: 0 auto;
+}
+
+/* Wider card for business registration wizard */
+.login-hub-wrap--business-signup {
+  max-width: min(520px, 100%);
+}
+
+/* Top strip: back to business login (same auth family as LoginHub) */
+.login-hub-business-banner {
+  width: 100%;
+  margin-bottom: 0.85rem;
+}
+
+.login-hub-banner-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 254, 251, 0.65);
+  border: 1px solid rgba(28, 25, 23, 0.1);
+  color: #57534e;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.login-hub-banner-back:hover {
+  background: #fffefb;
+  color: #1c1917;
+}
+
+.login-hub-tagline--business-signup {
+  max-width: 24rem;
+}
+
+.login-hub-card--business-signup {
+  max-width: 100%;
+}
+
+/* Light, readable fields on warm card (theme --bg-body is often dark) */
+.login-hub-card--business-signup .business-signup-form input,
+.login-hub-card--business-signup .business-signup-form select {
+  background: #fffefb !important;
+  border-color: #e7e2dc !important;
+  color: #1c1917 !important;
+}
+
+.login-hub-card--business-signup .business-signup-form h2,
+.login-hub-card--business-signup .business-signup-form h3 {
+  color: #1c1917;
+}
+
+.login-hub-card {
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(28, 25, 23, 0.08);
+  background: linear-gradient(180deg, #fffefb 0%, #faf8f5 55%, #f5f3f0 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 22px 48px -14px rgba(28, 25, 23, 0.14),
+    0 6px 16px rgba(28, 25, 23, 0.06);
+}
+
+/* Business signup wizard: Places dropdown must extend past the card (see LocationAutocomplete). */
+.login-hub-card.login-hub-card--business-signup {
+  overflow: visible;
+}
+
+.login-hub-card--personal {
+  border-color: rgba(37, 99, 235, 0.16);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 22px 48px -14px rgba(30, 64, 175, 0.18),
+    0 6px 16px rgba(30, 64, 175, 0.08);
+}
+
+.login-hub-card--business {
+  border-color: rgba(180, 83, 9, 0.18);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 24px 52px -14px rgba(120, 53, 15, 0.18),
+    0 6px 16px rgba(120, 53, 15, 0.08);
+}
+
+.login-hub-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 10px;
+  background: linear-gradient(180deg, #ebe8e3 0%, #e3e0db 100%);
+  border-bottom: 1px solid rgba(28, 25, 23, 0.07);
+}
+
+.login-hub-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 46px;
+  padding: 12px 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #78716c;
+  font-weight: 800;
+  font-size: 0.88rem;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  position: relative;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.login-hub-tab-subline {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(120, 113, 108, 0.92);
+  line-height: 1.25;
+}
+
+.login-hub-tab svg {
+  width: 1.12em;
+  height: 1.12em;
+  opacity: 0.72;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.login-hub-tab:hover {
+  color: #44403c;
+  background: rgba(255, 254, 251, 0.55);
+}
+
+.login-hub-tab:hover svg {
+  opacity: 0.9;
+}
+
+.login-hub-tab--active {
+  background: linear-gradient(180deg, #ffffff 0%, #fffefb 100%) !important;
+  color: #1c1917 !important;
+  box-shadow:
+    0 2px 10px rgba(28, 25, 23, 0.07),
+    0 1px 3px rgba(28, 25, 23, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+.login-hub-tab--active svg {
+  opacity: 1;
+  color: var(--primary, #e86e2e);
+}
+
+.login-hub-tab--active .login-hub-tab-subline {
+  color: rgba(68, 64, 60, 0.92);
+}
+
+.login-hub-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(48%, 5.5rem);
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--primary, #e86e2e) 65%, transparent),
+    transparent
+  );
+  opacity: 0.85;
+}
+
+.login-hub-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary, #e86e2e) 55%, #a8a29e);
+  outline-offset: 2px;
+}
+
+.login-hub-tabpanel {
+  padding: clamp(14px, 2.5vw, 22px);
+  min-height: 0;
+  background: rgba(255, 254, 251, 0.35);
+}
+
+.auth-luxury-ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 auto 0.9rem;
+  padding: 0.4rem 0.72rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.auth-luxury-ribbon--personal {
+  color: #1e40af;
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.auth-luxury-ribbon--business {
+  color: #b45309;
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(180, 83, 9, 0.24);
+}
+
+.personal-auth-panel .personal-auth-social {
+  border-color: rgba(59, 130, 246, 0.2) !important;
+  box-shadow: 0 8px 22px -16px rgba(37, 99, 235, 0.35);
+}
+
+.personal-auth-panel .personal-auth-email-toggle {
+  border-color: rgba(37, 99, 235, 0.3) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%) !important;
+}
+
+.personal-auth-panel .personal-auth-email-form {
+  border: 1px solid rgba(37, 99, 235, 0.16) !important;
+  background: linear-gradient(180deg, #f9fbff 0%, #f4f8ff 100%) !important;
+}
+
+.personal-auth-panel .personal-auth-primary-submit {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  box-shadow: 0 10px 24px -16px rgba(29, 78, 216, 0.7);
+}
+
+.personal-auth-panel .personal-auth-guest-link {
+  color: #1d4ed8 !important;
+}
+
+.business-auth-panel .business-auth-card {
+  border-color: rgba(180, 83, 9, 0.18) !important;
+  box-shadow: 0 24px 48px -22px rgba(146, 64, 14, 0.45);
+}
+
+.business-auth-panel .business-auth-card--embedded {
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.09), rgba(217, 119, 6, 0.04)) !important;
+  border: 1px solid rgba(180, 83, 9, 0.16);
+}
+
+.business-auth-panel .business-auth-form input {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border-color)) !important;
+  background: color-mix(in srgb, #fff 84%, var(--primary) 5%) !important;
+  /* Inline styles used var(--text-main); theme token stays light-on-dark — force readable text on light field. */
+  color: #1c1917 !important;
+  caret-color: #1c1917;
+}
+
+.business-auth-panel .business-auth-form input::placeholder {
+  color: #78716c !important;
+  opacity: 1;
+}
+
+.login-hub-tabpanel[hidden] {
+  display: none !important;
 }
 
 /* Auth Pages Styles */
@@ -2229,17 +2703,36 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     display: flex !important;
   }
 
-  /* ChatList /messages page: hide full list (sidebar handles it), show centered placeholder */
-  .chat-list-container {
+  /* ChatList: when ChatSidebar shows the list (/chat/:id), center is placeholder only */
+  .app-main:not(.app-main--messages-index) .chat-list-container {
     display: none !important;
   }
 
-  .chat-list-desktop-placeholder {
+  .app-main:not(.app-main--messages-index) .chat-list-desktop-placeholder {
     display: flex !important;
     align-items: center;
     justify-content: center;
     height: 100%;
     min-height: 300px;
+  }
+
+  /* /messages: full left nav — show real conversation list in center, hide placeholder */
+  .app-main--messages-index .chat-list-desktop-placeholder {
+    display: none !important;
+  }
+
+  .app-main--messages-index .chat-list-container {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  /* Allow list to scroll inside layout (override chat screen overflow for this page) */
+  .app-main--messages-index.app-main--chat {
+    overflow-y: auto !important;
+    padding-bottom: 1rem !important;
   }
 
   /* ── 3-column body grid ──
@@ -2488,4 +2981,28 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     min-height: 0 !important;
     overflow: hidden !important;
   }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loader-ring {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
 }

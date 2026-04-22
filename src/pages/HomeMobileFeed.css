@@ -35,6 +35,16 @@
         position: relative !important;
     }
 
+    .smart-invitation-card.invitation-card--video-split {
+        min-height: 0 !important;
+        overflow: visible !important;
+    }
+
+    .smart-invitation-card.invitation-card--compact {
+        height: auto !important;
+        min-height: 0 !important;
+    }
+
     .business-ad-card {
         border: 2px solid #f59e0b !important;
         margin-bottom: 12px !important;
@@ -84,8 +94,9 @@
         display: block !important;
     }
 
-    /* Actions */
-    .header-actions {
+    /* Card overlay actions only — do not target Layout .app-header .header-actions */
+    .smart-invitation-card .header-actions,
+    .business-ad-card .header-actions {
         gap: 8px !important;
     }
 

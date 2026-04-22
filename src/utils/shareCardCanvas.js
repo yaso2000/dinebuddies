@@ -1,16 +1,17 @@
 /**
- * generateShareCard — draws an invitation share card directly on a <canvas>
- * using the Canvas 2D API. No html2canvas, no CORS issues.
- * Returns a Promise<HTMLCanvasElement>
+ * generateShareCard — draws invitation / business share images on <canvas>.
+ * Kept minimal for WhatsApp / social: hero image + title + copy — no fake buttons or UI chrome.
  */
 
 const CARD_W = 1080;
 const CARD_H = 1080;
-const HERO_H = 595;
-const PADDING = 56;
+const HERO_H = 640;
+/** Hero height for selfie-video split layout (~top half) */
+const VIDEO_SPLIT_HERO_H = 520;
+const PADDING = 48;
 
-/** Shorten URL for bottom bar: show path or domain+path, max length */
-function shortenUrlForBar(url, maxLen = 48) {
+/** Shorten URL for bottom bar */
+function shortenUrlForBar(url, maxLen = 52) {
     if (!url || typeof url !== 'string') return '';
     try {
         const u = new URL(url);
@@ -22,7 +23,6 @@ function shortenUrlForBar(url, maxLen = 48) {
     }
 }
 
-/** Proxy endpoint for images that fail CORS */
 const getProxyImageUrl = (imageUrl) => {
     if (!imageUrl || typeof imageUrl !== 'string') return null;
     if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return null;
@@ -35,82 +35,231 @@ const getProxyImageUrl = (imageUrl) => {
     }
 };
 
-/** Load image: direct (CORS) → crossOrigin Image → proxy → null (gradient fallback) */
+/** Absolute http(s) URL for fetch / proxy (relative /api/* breaks server-side proxy). */
+const resolveImageUrl = (src) => {
+    if (!src || typeof src !== 'string') return '';
+    const s = src.trim();
+    if (s.startsWith('data:') || s.startsWith('blob:')) return s;
+    if (s.startsWith('http://') || s.startsWith('https://')) return s;
+    if (s.startsWith('//') && typeof window !== 'undefined' && window.location?.protocol) {
+        return `${window.location.protocol}${s}`;
+    }
+    if (s.startsWith('/') && typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}${s}`;
+    }
+    return s;
+};
+
 const loadImg = async (src) => {
     if (!src) return null;
+    const resolved = resolveImageUrl(src);
+    if (!resolved) return null;
 
-    // Strategy 1: fetch direct (works when server allows CORS)
+    if (resolved.startsWith('data:') || resolved.startsWith('blob:')) {
+        return await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img.naturalWidth > 0 ? img : null);
+            img.onerror = () => resolve(null);
+            img.src = resolved;
+        });
+    }
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const sameOrigin = origin && resolved.startsWith(origin);
+
     try {
-        const resp = await fetch(src, { mode: 'cors' });
+        const resp = await fetch(resolved, { mode: 'cors', credentials: 'omit' });
         if (resp.ok) {
             const blob = await resp.blob();
+            if (!blob || blob.size === 0) throw new Error('empty');
             const blobUrl = URL.createObjectURL(blob);
-            return await new Promise((resolve) => {
+            const fromBlob = await new Promise((resolve) => {
                 const img = new Image();
-                img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img); };
+                img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img.naturalWidth > 0 ? img : null); };
                 img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
                 img.src = blobUrl;
             });
+            if (fromBlob) return fromBlob;
         }
     } catch (_) { /* fall through */ }
 
-    // Strategy 2: crossOrigin Image() (works if server sends CORS headers)
     const imgDirect = await new Promise((resolve) => {
         const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
+        if (!sameOrigin) img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img.naturalWidth > 0 ? img : null);
         img.onerror = () => resolve(null);
-        img.src = src;
+        img.src = resolved;
     });
     if (imgDirect) return imgDirect;
 
-    // Strategy 3: load via our proxy (server fetches image, no CORS)
-    const proxyUrl = getProxyImageUrl(src);
+    const proxyUrl = getProxyImageUrl(resolved);
     if (proxyUrl) {
         try {
             const resp = await fetch(proxyUrl);
             if (resp.ok) {
                 const blob = await resp.blob();
+                if (!blob || blob.size === 0) return null;
                 const blobUrl = URL.createObjectURL(blob);
                 return await new Promise((resolve) => {
                     const img = new Image();
-                    img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img); };
+                    img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img.naturalWidth > 0 ? img : null); };
                     img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
                     img.src = blobUrl;
                 });
             }
         } catch (_) { /* fall through */ }
     }
-
     return null;
 };
 
-/** Draw a rounded rectangle path */
-const roundRect = (ctx, x, y, w, h, r) => {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-};
+/** Word-wrap and draw; returns next Y */
+function drawWrappedTitle(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines) {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${fontSize}px "Arial", sans-serif`;
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    let line = '';
+    let cy = y;
+    let n = 0;
+    for (let i = 0; i < words.length && n < maxLines; i++) {
+        const test = line + (line ? ' ' : '') + words[i];
+        if (ctx.measureText(test).width > maxW && line) {
+            ctx.fillText(line, x, cy);
+            cy += lineHeight;
+            n++;
+            line = words[i];
+        } else {
+            line = test;
+        }
+    }
+    if (line && n < maxLines) {
+        ctx.fillText(line, x, cy);
+        cy += lineHeight;
+    }
+    return cy;
+}
 
-/** Measure text width for pill sizing */
-const measureText = (ctx, text, font) => {
-    ctx.save();
-    ctx.font = font;
-    const w = ctx.measureText(text).width;
-    ctx.restore();
-    return w;
-};
+function drawWrappedBody(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines, color) {
+    if (!text || !String(text).trim()) return y;
+    ctx.fillStyle = color;
+    ctx.font = `${fontSize}px "Arial", sans-serif`;
+    const words = String(text).split(/\s+/);
+    let line = '';
+    let cy = y;
+    let n = 0;
+    for (let i = 0; i < words.length && n < maxLines; i++) {
+        const test = line + (line ? ' ' : '') + words[i];
+        if (ctx.measureText(test).width > maxW && line) {
+            ctx.fillText(line, x, cy);
+            cy += lineHeight;
+            n++;
+            line = words[i];
+        } else {
+            line = test;
+        }
+    }
+    if (line && n < maxLines) {
+        ctx.fillText(line, x, cy);
+        cy += lineHeight;
+    }
+    return cy;
+}
+
+function drawMetaLine(ctx, text, x, y, maxW, fontSize, color) {
+    if (!text) return y;
+    ctx.fillStyle = color;
+    ctx.font = `${fontSize}px "Arial", sans-serif`;
+    const words = String(text).split(/\s+/);
+    let line = '';
+    let cy = y;
+    for (let i = 0; i < words.length; i++) {
+        const test = line + (line ? ' ' : '') + words[i];
+        if (ctx.measureText(test).width > maxW && line) {
+            ctx.fillText(line, x, cy);
+            cy += fontSize + 10;
+            line = words[i];
+        } else {
+            line = test;
+        }
+    }
+    if (line) {
+        ctx.fillText(line, x, cy);
+        cy += fontSize + 14;
+    }
+    return cy;
+}
+
+function drawInvitationFullBleed(ctx, heroImg) {
+    if (heroImg) {
+        const scale = Math.max(CARD_W / heroImg.naturalWidth, CARD_H / heroImg.naturalHeight);
+        const sw = CARD_W / scale;
+        const sh = CARD_H / scale;
+        const sx = (heroImg.naturalWidth - sw) / 2;
+        const sy = (heroImg.naturalHeight - sh) / 2;
+        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, CARD_W, CARD_H);
+    } else {
+        const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+        grad.addColorStop(0, '#2a1810');
+        grad.addColorStop(1, '#5c3d2e');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, CARD_W, CARD_H);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.34)';
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
+}
+
+/** Top crop for video-split share card (thumbnail frame) */
+function drawHeroCoverTop(ctx, heroImg, topH) {
+    if (heroImg) {
+        const scale = Math.max(CARD_W / heroImg.naturalWidth, topH / heroImg.naturalHeight);
+        const sw = CARD_W / scale;
+        const sh = topH / scale;
+        const sx = (heroImg.naturalWidth - sw) / 2;
+        const sy = (heroImg.naturalHeight - sh) / 2;
+        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, CARD_W, topH);
+    } else {
+        const grad = ctx.createLinearGradient(0, 0, CARD_W, topH);
+        grad.addColorStop(0, '#1f2937');
+        grad.addColorStop(1, '#111827');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, CARD_W, topH);
+    }
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+}
+
+function drawBottomBrandAndLink(ctx, shareUrl, titleFallback) {
+    const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (titleFallback && String(titleFallback).trim());
+    const LINK_BAR_H = 48;
+    const linkY = CARD_H - LINK_BAR_H;
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.fillRect(0, linkY, CARD_W, LINK_BAR_H);
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.font = '19px "Arial", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(linkBarLabel, CARD_W / 2, linkY + LINK_BAR_H / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    const brandY = linkY - 28;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '16px "Arial", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DineBuddies', CARD_W / 2, brandY);
+    ctx.textAlign = 'left';
+}
 
 // ─────────────────────────────────────────────
-//  BUSINESS / PARTNER  share card
+//  BUSINESS — hero + title + blurb + plain meta (no buttons)
 // ─────────────────────────────────────────────
 export async function generateBusinessShareCard({
     title = 'DineBuddies Partner',
@@ -118,8 +267,6 @@ export async function generateBusinessShareCard({
     location,
     city,
     description,
-    hostName,
-    hostImage,
     shareUrl,
     averageRating,
     reviewCount,
@@ -129,18 +276,11 @@ export async function generateBusinessShareCard({
     canvas.height = CARD_H;
     const ctx = canvas.getContext('2d');
 
-    // ── Background
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, CARD_W, CARD_H);
 
-    // ── Load images in parallel
-    const [heroImg, hostImg, logoImg] = await Promise.all([
-        loadImg(image),
-        loadImg(hostImage),
-        loadImg('/db-white.svg'),
-    ]);
+    const heroImg = await loadImg(image);
 
-    // ── Hero image (cover crop, same as invitation card)
     if (heroImg) {
         const scale = Math.max(CARD_W / heroImg.naturalWidth, HERO_H / heroImg.naturalHeight);
         const sw = CARD_W / scale;
@@ -149,448 +289,325 @@ export async function generateBusinessShareCard({
         const sy = (heroImg.naturalHeight - sh) / 2;
         ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, CARD_W, HERO_H);
     } else {
-        // Amber/orange gradient placeholder for business
         const grad = ctx.createLinearGradient(0, 0, CARD_W, HERO_H);
         grad.addColorStop(0, '#78350f');
-        grad.addColorStop(0.5, '#92400e');
         grad.addColorStop(1, '#b45309');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, CARD_W, HERO_H);
     }
 
-    // ── Hero gradient overlays
-    const topOv = ctx.createLinearGradient(0, 0, 0, 220);
-    topOv.addColorStop(0, 'rgba(0,0,0,0.65)');
-    topOv.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = topOv;
-    ctx.fillRect(0, 0, CARD_W, 220);
-
-    const botOv = ctx.createLinearGradient(0, HERO_H - 220, 0, HERO_H);
+    // Subtle fade from image into content (not a "button" — just readability)
+    const botOv = ctx.createLinearGradient(0, HERO_H - 120, 0, HERO_H);
     botOv.addColorStop(0, 'rgba(13,17,23,0)');
     botOv.addColorStop(1, 'rgba(13,17,23,1)');
     ctx.fillStyle = botOv;
-    ctx.fillRect(0, HERO_H - 220, CARD_W, 220);
+    ctx.fillRect(0, HERO_H - 120, CARD_W, 120);
 
-    // ── Branding badge (orange for business)
-    const BX = PADDING, BY = 36;
-    const BADGE_SIZE = 68;
-    ctx.fillStyle = '#f97316';
-    roundRect(ctx, BX, BY, BADGE_SIZE, BADGE_SIZE, 16);
-    ctx.fill();
-
-    if (logoImg) {
-        const PAD = 10;
-        const scale = Math.min(
-            (BADGE_SIZE - PAD * 2) / logoImg.naturalWidth,
-            (BADGE_SIZE - PAD * 2) / logoImg.naturalHeight
-        );
-        const lw = logoImg.naturalWidth * scale;
-        const lh = logoImg.naturalHeight * scale;
-        ctx.drawImage(logoImg, BX + (BADGE_SIZE - lw) / 2, BY + (BADGE_SIZE - lh) / 2, lw, lh);
-    } else {
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 30px "Arial", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('db', BX + BADGE_SIZE / 2, BY + BADGE_SIZE / 2);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-    }
-
-    // "Partner" tag instead of "You're Invited!"
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 34px "Arial", sans-serif';
-    ctx.fillText('DineBuddies', BX + BADGE_SIZE + 16, BY + 44);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '20px "Arial", sans-serif';
-    ctx.fillText('Partner Restaurant 🍽️', BX + BADGE_SIZE + 16, BY + 68);
-
-    // ── Info panel
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, HERO_H, CARD_W, CARD_H - HERO_H);
 
-    // ── Restaurant Name
-    let curY = HERO_H + 52;
-    const nameFont = `bold ${title.length > 30 ? 54 : 66}px "Arial", sans-serif`;
-    const nameLineH = title.length > 30 ? 64 : 78;
-    ctx.fillStyle = 'white';
-    ctx.font = nameFont;
     const maxW = CARD_W - PADDING * 2;
-    const words = title.split(' ');
-    let line = '';
-    let lineCount = 0;
-    for (let i = 0; i < words.length && lineCount < 2; i++) {
-        const test = line + (line ? ' ' : '') + words[i];
-        if (ctx.measureText(test).width > maxW && line) {
-            ctx.fillText(line, PADDING, curY);
-            curY += nameLineH;
-            line = words[i];
-            lineCount++;
-        } else { line = test; }
-    }
-    if (line) { ctx.fillText(line, PADDING, curY); curY += nameLineH; }
-    curY += 12;
+    let curY = HERO_H + 44;
+    const titleSize = title.length > 28 ? 52 : 60;
+    const titleLH = title.length > 28 ? 62 : 72;
+    curY = drawWrappedTitle(ctx, title, PADDING, curY, maxW, titleSize, titleLH, 2);
+    curY += 8;
 
-    // ── Description (up to 2 lines, 36px)
-    if (description) {
-        const DESC_FONT = '32px "Arial", sans-serif';
-        ctx.font = DESC_FONT;
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        const descWords = description.split(' ');
-        let dLine = '';
-        let dCount = 0;
-        for (let i = 0; i < descWords.length && dCount < 2; i++) {
-            const test = dLine + (dLine ? ' ' : '') + descWords[i];
-            if (ctx.measureText(test).width > maxW && dLine) {
-                ctx.fillText(dLine, PADDING, curY);
-                curY += 44;
-                dLine = descWords[i];
-                dCount++;
-            } else { dLine = test; }
-        }
-        if (dLine && dCount < 2) { ctx.fillText(dLine + (description.split(' ').length > (dLine + ' ...').split(' ').length ? '...' : ''), PADDING, curY); curY += 44; }
-        curY += 16;
-    }
+    curY = drawWrappedBody(ctx, description, PADDING, curY, maxW, 30, 42, 3, 'rgba(255,255,255,0.65)');
+    curY += 10;
 
-    // ── Location pill (amber colour for business)
     const displayLocation = location || city || '';
     if (displayLocation) {
-        const PILL_H = 56, PILL_R = 28;
-        const PILL_FONT = 'bold 26px "Arial", sans-serif';
-        ctx.font = PILL_FONT;
-        const pillText = `📍 ${displayLocation}`;
-        const tw = ctx.measureText(pillText).width;
-        const pw = tw + 48;
-        roundRect(ctx, PADDING, curY, pw, PILL_H, PILL_R);
-        ctx.fillStyle = 'rgba(251,146,60,0.18)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(251,146,60,0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.fillStyle = '#fdba74';
-        ctx.fillText(pillText, PADDING + 24, curY + 37);
-        curY += PILL_H + 24;
+        curY = drawMetaLine(ctx, `📍 ${displayLocation}`, PADDING, curY, maxW, 26, 'rgba(255,255,255,0.78)');
     }
 
-    // ── Rating (if provided)
     if (averageRating != null || reviewCount != null) {
         const rating = Number(averageRating) || 0;
         const count = Number(reviewCount) || 0;
-        const ratingText = count > 0 ? `⭐ ${rating.toFixed(1)} · ${count} ${count === 1 ? 'review' : 'reviews'}` : '⭐ —';
-        ctx.font = 'bold 24px "Arial", sans-serif';
-        ctx.fillStyle = 'rgba(253,224,71,0.95)';
-        ctx.fillText(ratingText, PADDING, curY + 28);
-        curY += 44;
+        const ratingText = count > 0
+            ? `⭐ ${rating.toFixed(1)} · ${count} ${count === 1 ? 'review' : 'reviews'}`
+            : '⭐ —';
+        curY = drawMetaLine(ctx, ratingText, PADDING, curY, maxW, 24, 'rgba(253,224,71,0.9)');
     }
 
-    // ── Divider
-    const DIV_Y = CARD_H - 130;
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(PADDING, DIV_Y);
-    ctx.lineTo(CARD_W - PADDING, DIV_Y);
-    ctx.stroke();
-
-    // ── Footer
-    const FY = DIV_Y + 26;
-
-    // Host avatar (business logo)
-    if (hostImg) {
-        const AX = PADDING, AY = FY, AS = 60;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(AX + AS / 2, AY + AS / 2, AS / 2, 0, Math.PI * 2);
-        ctx.clip();
-        const hScale = Math.max(AS / hostImg.naturalWidth, AS / hostImg.naturalHeight);
-        const hw = AS / hScale, hh = AS / hScale;
-        ctx.drawImage(hostImg, (hostImg.naturalWidth - hw) / 2, (hostImg.naturalHeight - hh) / 2, hw, hh, AX, AY, AS, AS);
-        ctx.restore();
-    }
-    if (hostName) {
-        const textX = PADDING + (hostImg ? 74 : 0);
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '18px "Arial", sans-serif';
-        ctx.fillText('Restaurant', textX, FY + 22);
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 26px "Arial", sans-serif';
-        ctx.fillText(hostName, textX, FY + 50);
-    }
-
-    // CTA badge — amber gradient for business
-    const CTA = 'Visit Us on DineBuddies 🍽️';
-    ctx.font = 'bold 24px "Arial", sans-serif';
-    const ctaW = ctx.measureText(CTA).width + 64;
-    const ctaX = CARD_W - PADDING - ctaW;
-    const ctaGrad = ctx.createLinearGradient(ctaX, 0, ctaX + ctaW, 0);
-    ctaGrad.addColorStop(0, '#f97316');
-    ctaGrad.addColorStop(1, '#eab308');
-    ctx.fillStyle = ctaGrad;
-    roundRect(ctx, ctaX, FY, ctaW, 64, 32);
-    ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.fillText(CTA, ctaX + 32, FY + 43);
-
-    // ── Bottom bar: link in a compact box under the image (same width as card, not larger)
-    const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (title && String(title).trim());
-    if (linkBarLabel) {
-        const LINK_BAR_H = 52;
-        const linkY = CARD_H - LINK_BAR_H;
-        ctx.fillStyle = 'rgba(0,0,0,0.9)';
-        ctx.fillRect(0, linkY, CARD_W, LINK_BAR_H);
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.font = '20px "Arial", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(linkBarLabel, CARD_W / 2, linkY + LINK_BAR_H / 2);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-    }
+    drawBottomBrandAndLink(ctx, shareUrl, title);
 
     return canvas;
 }
 
 // ─────────────────────────────────────────────
-//  INVITATION  share card
+//  INVITATION — header image + title + description + info (no buttons)
 // ─────────────────────────────────────────────
 export async function generateShareCard({
     title = 'DineBuddies Event',
     image,
+    description,
     date,
     time,
     location,
     city,
     maxGuests,
     hostName,
-    hostImage,
     shareUrl,
+    shareLayout = 'photoBottom',
+    shareMeta = null,
+    /** e.g. "0:09" — shown on video-split hero */
+    videoDurationLabel = '',
 } = {}) {
+    const normalizedHostName = String(hostName || '').trim();
+    const shouldShowHostName = normalizedHostName && normalizedHostName.toLowerCase() !== 'user';
     const canvas = document.createElement('canvas');
     canvas.width = CARD_W;
     canvas.height = CARD_H;
     const ctx = canvas.getContext('2d');
 
-    // ── Background
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, 0, CARD_W, CARD_H);
+    const heroImg = await loadImg(image);
 
-    // ── Load images in parallel
-    const [heroImg, hostImg] = await Promise.all([loadImg(image), loadImg(hostImage)]);
+    const meta = shareMeta || {
+        dateLine: date ? String(date) : '—',
+        timeLine: time ? String(time) : '—',
+        guestsLine: maxGuests != null && maxGuests !== '' ? String(maxGuests) : '—',
+        paymentLine: '',
+        distanceLine: (location || city) ? String(location || city) : '',
+    };
 
-    // ── Hero image (cover crop)
-    if (heroImg) {
-        const scale = Math.max(CARD_W / heroImg.naturalWidth, HERO_H / heroImg.naturalHeight);
-        const sw = CARD_W / scale;
-        const sh = HERO_H / scale;
-        const sx = (heroImg.naturalWidth - sw) / 2;
-        const sy = (heroImg.naturalHeight - sh) / 2;
-        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, CARD_W, HERO_H);
-    } else {
-        // Gradient placeholder
-        const grad = ctx.createLinearGradient(0, 0, CARD_W, HERO_H);
-        grad.addColorStop(0, '#1e1b4b');
-        grad.addColorStop(0.5, '#312e81');
-        grad.addColorStop(1, '#4c1d95');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, CARD_W, HERO_H);
-    }
+    const maxW = CARD_W - PADDING * 2;
+    const layout =
+        shareLayout === 'photoGlass' || shareLayout === 'photoChips' ? shareLayout
+            : shareLayout === 'videoSplit' ? 'videoSplit'
+                : 'photoBottom';
 
-    // ── Hero gradient overlays
-    const topOverlay = ctx.createLinearGradient(0, 0, 0, 220);
-    topOverlay.addColorStop(0, 'rgba(0,0,0,0.65)');
-    topOverlay.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = topOverlay;
-    ctx.fillRect(0, 0, CARD_W, 220);
+    if (layout === 'videoSplit') {
+        const LINK_BAR_H = 48;
+        const contentBottom = CARD_H - LINK_BAR_H;
 
-    const botOverlay = ctx.createLinearGradient(0, HERO_H - 220, 0, HERO_H);
-    botOverlay.addColorStop(0, 'rgba(13,17,23,0)');
-    botOverlay.addColorStop(1, 'rgba(13,17,23,1)');
-    ctx.fillStyle = botOverlay;
-    ctx.fillRect(0, HERO_H - 220, CARD_W, 220);
+        drawHeroCoverTop(ctx, heroImg, VIDEO_SPLIT_HERO_H);
 
-    // ── DineBuddies branding (top-left)
-    const BX = PADDING, BY = 36;
-    const BADGE_SIZE = 68;
+        const gBot = ctx.createLinearGradient(0, VIDEO_SPLIT_HERO_H - 150, 0, VIDEO_SPLIT_HERO_H);
+        gBot.addColorStop(0, 'rgba(0,0,0,0)');
+        gBot.addColorStop(1, 'rgba(0,0,0,0.82)');
+        ctx.fillStyle = gBot;
+        ctx.fillRect(0, VIDEO_SPLIT_HERO_H - 150, CARD_W, 150);
 
-    // Load white version of DineBuddies logo (for use on orange badge)
-    const logoImg = await loadImg('/db-white.svg');
+        const dur = String(videoDurationLabel || '').trim();
+        if (dur) {
+            const label = `🎥 ${dur}`;
+            ctx.font = '22px "Arial", sans-serif';
+            const tw = ctx.measureText(label).width;
+            const pw = tw + 36;
+            const px = CARD_W - PADDING - pw;
+            const py = 24;
+            roundRectPath(ctx, px, py, pw, 42, 21);
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, px + 18, py + 21);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+        }
 
-    // Orange badge (DineBuddies brand color) + white logo
-    ctx.fillStyle = '#f97316';
-    roundRect(ctx, BX, BY, BADGE_SIZE, BADGE_SIZE, 16);
-    ctx.fill();
-
-    if (logoImg) {
-        // Draw logo centered in the badge with padding
-        const PAD = 10;
-        const scale = Math.min(
-            (BADGE_SIZE - PAD * 2) / logoImg.naturalWidth,
-            (BADGE_SIZE - PAD * 2) / logoImg.naturalHeight
-        );
-        const lw = logoImg.naturalWidth * scale;
-        const lh = logoImg.naturalHeight * scale;
-        const lx = BX + (BADGE_SIZE - lw) / 2;
-        const ly = BY + (BADGE_SIZE - lh) / 2;
-        ctx.drawImage(logoImg, lx, ly, lw, lh);
-    } else {
-        // Fallback: draw 'db' text
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 30px "Arial", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('db', BX + BADGE_SIZE / 2, BY + BADGE_SIZE / 2);
+        let ty = VIDEO_SPLIT_HERO_H - 108;
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
+        ctx.textBaseline = 'top';
+        const titleSize = title.length > 28 ? 40 : 48;
+        const titleLH = title.length > 28 ? 48 : 56;
+        ty = drawWrappedTitle(ctx, title, PADDING, ty, maxW, titleSize, titleLH, 2);
+        if (description) {
+            drawWrappedBody(ctx, description, PADDING, ty + 6, maxW, 22, 30, 2, 'rgba(255,255,255,0.92)');
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, VIDEO_SPLIT_HERO_H, CARD_W, contentBottom - VIDEO_SPLIT_HERO_H);
+
+        let my = VIDEO_SPLIT_HERO_H + 32;
+        ctx.fillStyle = '#111827';
+        ctx.font = '26px "Arial", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        const rows = [
+            `📅 ${meta.dateLine}  ·  🕐 ${meta.timeLine}`,
+            `👥 ${meta.guestsLine}`,
+            `💳 ${meta.paymentLine || '—'}`,
+        ];
+        if (meta.distanceLine) rows.push(`📍 ${meta.distanceLine}`);
+
+        rows.forEach((row, idx) => {
+            ctx.fillText(row, PADDING, my);
+            my += 40;
+            if (idx < rows.length - 1) {
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(PADDING, my - 10);
+                ctx.lineTo(CARD_W - PADDING, my - 10);
+                ctx.stroke();
+            }
+            my += 6;
+        });
+
+        if (hostName) {
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '22px "Arial", sans-serif';
+            ctx.fillText(String(hostName), PADDING, my + 8);
+        }
+
+        drawBottomBrandAndLink(ctx, shareUrl, title);
+        return canvas;
     }
 
-    // Brand name text
+    drawInvitationFullBleed(ctx, heroImg);
+    const titleLeftX = layout === 'photoBottom' ? PADDING : (CARD_W - maxW) / 2;
+
+    if (layout === 'photoBottom') {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        let ty = 88;
+        const titleSize = title.length > 30 ? 46 : 54;
+        const titleLH = title.length > 30 ? 56 : 64;
+        ty = drawWrappedTitle(ctx, title, titleLeftX, ty, maxW, titleSize, titleLH, 2);
+        ty += 10;
+        if (description) {
+            ty = drawWrappedBody(ctx, description, titleLeftX, ty, maxW, 26, 36, 2, 'rgba(255,255,255,0.88)');
+        }
+
+        const g2 = ctx.createLinearGradient(0, CARD_H - 340, 0, CARD_H);
+        g2.addColorStop(0, 'rgba(0,0,0,0)');
+        g2.addColorStop(1, 'rgba(0,0,0,0.9)');
+        ctx.fillStyle = g2;
+        ctx.fillRect(0, CARD_H - 340, CARD_W, 340);
+
+        let my = CARD_H - 210;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '26px "Arial", sans-serif';
+        ctx.fillText('📅 ' + meta.dateLine + '    ·    🕐 ' + meta.timeLine, PADDING, my);
+        my += 44;
+        ctx.fillText('👥 ' + meta.guestsLine + '    ·    💳 ' + (meta.paymentLine || '—'), PADDING, my);
+        my += 44;
+        if (meta.distanceLine) {
+            ctx.fillText('📍 ' + meta.distanceLine, PADDING, my);
+            my += 40;
+        }
+        if (hostName) {
+            ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.font = '22px "Arial", sans-serif';
+            ctx.fillText(hostName, PADDING, my);
+        }
+    } else if (layout === 'photoGlass') {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        let ty = 72;
+        const titleSize = title.length > 28 ? 44 : 52;
+        const titleLH = title.length > 28 ? 54 : 62;
+        ty = drawWrappedTitle(ctx, title, titleLeftX, ty, maxW, titleSize, titleLH, 2);
+        ty += 8;
+        if (description) {
+            drawWrappedBody(ctx, description, titleLeftX, ty, maxW, 24, 34, 2, 'rgba(255,255,255,0.88)');
+        }
+
+        // Keep info panel at the bottom so it never covers center of hero image.
+        const bx = 56;
+        const bw = CARD_W - 112;
+        const by = 620;
+        const bh = 340;
+        roundRectPath(ctx, bx, by, bw, bh, 22);
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '26px "Arial", sans-serif';
+        const rows = [
+            '📅  ' + meta.dateLine,
+            '🕐  ' + meta.timeLine,
+            '👥  ' + meta.guestsLine,
+            '💳  ' + (meta.paymentLine || '—'),
+            '📍  ' + (meta.distanceLine || location || city || '—'),
+        ];
+        let ry = by + 28;
+        rows.forEach((row, idx) => {
+            ctx.fillText(row, bx + 28, ry);
+            ry += 54;
+            if (idx < rows.length - 1) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(bx + 20, ry - 12);
+                ctx.lineTo(bx + bw - 20, ry - 12);
+                ctx.stroke();
+            }
+        });
+
+        if (shouldShowHostName) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '22px "Arial", sans-serif';
+            ctx.fillText(normalizedHostName, CARD_W / 2, by + bh + 20);
+        }
+    } else {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        let ty = 72;
+        const titleSize = title.length > 28 ? 44 : 52;
+        const titleLH = title.length > 28 ? 54 : 62;
+        ty = drawWrappedTitle(ctx, title, titleLeftX, ty, maxW, titleSize, titleLH, 2);
+        ty += 8;
+        if (description) {
+            drawWrappedBody(ctx, description, titleLeftX, ty, maxW, 24, 34, 2, 'rgba(255,255,255,0.88)');
+        }
+
+        const drawChip = (text, cx, cy, chipW) => {
+            const padX = 28;
+            const padY = 16;
+            ctx.font = '24px "Arial", sans-serif';
+            const tw = ctx.measureText(text).width;
+            const w = Math.min(chipW || tw + padX * 2, CARD_W - 100);
+            const h = padY * 2 + 28;
+            roundRectPath(ctx, cx - w / 2, cy, w, h, h / 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, cx, cy + h / 2);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+        };
+
+        // Move chips to lower area to avoid covering main subject.
+        let cy = 700;
+        drawChip('📅 ' + meta.dateLine, CARD_W / 2 - 150, cy, 400);
+        drawChip('🕐 ' + meta.timeLine, CARD_W / 2 + 150, cy, 340);
+        cy += 76;
+        drawChip('👥 ' + meta.guestsLine, CARD_W / 2 - 150, cy, 400);
+        drawChip('💳 ' + (meta.paymentLine || '—'), CARD_W / 2 + 150, cy, 360);
+        cy += 76;
+        if (meta.distanceLine || location || city) {
+            drawChip('📍 ' + (meta.distanceLine || location || city), CARD_W / 2, cy, 620);
+            cy += 76;
+        }
+        if (shouldShowHostName) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '22px "Arial", sans-serif';
+            ctx.fillText(normalizedHostName, CARD_W / 2, cy + 10);
+        }
+    }
+
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 34px "Arial", sans-serif';
-    ctx.fillText('DineBuddies', BX + BADGE_SIZE + 16, BY + 44);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '20px "Arial", sans-serif';
-    ctx.fillText("You're Invited!", BX + BADGE_SIZE + 16, BY + 68);
-
-    // ── Info panel background
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, HERO_H, CARD_W, CARD_H - HERO_H);
-
-    // ── Title
-    let curY = HERO_H + 48;
-    const titleFont = `bold ${title.length > 35 ? 52 : 64}px "Arial", sans-serif`;
-    const titleLineH = title.length > 35 ? 62 : 76;
-    ctx.fillStyle = 'white';
-    ctx.font = titleFont;
-    const maxTitleW = CARD_W - PADDING * 2;
-    const words = title.split(' ');
-    let line = '';
-    let lineCount = 0;
-    for (let i = 0; i < words.length && lineCount < 2; i++) {
-        const test = line + (line ? ' ' : '') + words[i];
-        if (ctx.measureText(test).width > maxTitleW && line) {
-            ctx.fillText(line, PADDING, curY);
-            curY += titleLineH;
-            line = words[i];
-            lineCount++;
-        } else {
-            line = test;
-        }
-    }
-    if (line) { ctx.fillText(line, PADDING, curY); curY += titleLineH; }
-    curY += 20;
-
-    // ── Info pills
-    const PILL_H = 56, PILL_R = 28;
-    const PILL_FONT = 'bold 26px "Arial", sans-serif';
-    ctx.font = PILL_FONT;
-
-    const pills = [
-        date && { text: `📅 ${date}${time ? ` · ${time}` : ''}`, bg: 'rgba(139,92,246,0.18)', border: 'rgba(139,92,246,0.4)', color: '#c4b5fd' },
-        (location || city) && { text: `📍 ${location || city}`, bg: 'rgba(236,72,153,0.15)', border: 'rgba(236,72,153,0.35)', color: '#f9a8d4' },
-        maxGuests && { text: `👥 Max ${maxGuests}`, bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.3)', color: '#6ee7b7' },
-    ].filter(Boolean);
-
-    let pillX = PADDING;
-    let pillRow = 0;
-    for (const p of pills) {
-        ctx.font = PILL_FONT;
-        const tw = ctx.measureText(p.text).width;
-        const pw = tw + 48;
-        if (pillX + pw > CARD_W - PADDING && pillRow === 0) {
-            pillX = PADDING; curY += PILL_H + 12; pillRow++;
-        }
-        roundRect(ctx, pillX, curY, pw, PILL_H, PILL_R);
-        ctx.fillStyle = p.bg;
-        ctx.fill();
-        ctx.strokeStyle = p.border;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.fillStyle = p.color;
-        ctx.font = PILL_FONT;
-        ctx.fillText(p.text, pillX + 24, curY + 37);
-        pillX += pw + 14;
-    }
-    curY += PILL_H + 24;
-
-    // ── Divider
-    const DIV_Y = CARD_H - 130;
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(PADDING, DIV_Y);
-    ctx.lineTo(CARD_W - PADDING, DIV_Y);
-    ctx.stroke();
-
-    // ── Footer
-    const FY = DIV_Y + 26;
-
-    // Host info
-    if (hostImg) {
-        const AX = PADDING, AY = FY, AS = 60;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(AX + AS / 2, AY + AS / 2, AS / 2, 0, Math.PI * 2);
-        ctx.clip();
-        const hScale = Math.max(AS / hostImg.naturalWidth, AS / hostImg.naturalHeight);
-        const hw = AS / hScale, hh = AS / hScale;
-        const hx = (hostImg.naturalWidth - hw) / 2, hy = (hostImg.naturalHeight - hh) / 2;
-        ctx.drawImage(hostImg, hx, hy, hw, hh, AX, AY, AS, AS);
-        ctx.restore();
-        if (hostName) {
-            ctx.fillStyle = 'rgba(255,255,255,0.4)';
-            ctx.font = '18px "Arial", sans-serif';
-            ctx.fillText('Hosted by', AX + AS + 14, FY + 22);
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 26px "Arial", sans-serif';
-            ctx.fillText(hostName, AX + AS + 14, FY + 50);
-        }
-    } else if (hostName) {
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '18px "Arial", sans-serif';
-        ctx.fillText('Hosted by', PADDING, FY + 22);
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 26px "Arial", sans-serif';
-        ctx.fillText(hostName, PADDING, FY + 50);
-    }
-
-    // CTA badge (right side)
-    const CTA = 'Join on DineBuddies ✨';
-    ctx.font = 'bold 26px "Arial", sans-serif';
-    const ctaW = ctx.measureText(CTA).width + 64;
-    const ctaX = CARD_W - PADDING - ctaW;
-    const ctaGrad = ctx.createLinearGradient(ctaX, 0, ctaX + ctaW, 0);
-    ctaGrad.addColorStop(0, '#8b5cf6');
-    ctaGrad.addColorStop(1, '#ec4899');
-    ctx.fillStyle = ctaGrad;
-    roundRect(ctx, ctaX, FY, ctaW, 64, 32);
-    ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.fillText(CTA, ctaX + 32, FY + 43);
-
-    // ── Bottom bar: link in a compact box under the image (same width as card, not larger)
-    const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (title && String(title).trim());
-    if (linkBarLabel) {
-        const LINK_BAR_H = 52;
-        const linkY = CARD_H - LINK_BAR_H;
-        ctx.fillStyle = 'rgba(0,0,0,0.9)';
-        ctx.fillRect(0, linkY, CARD_W, LINK_BAR_H);
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.font = '20px "Arial", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(linkBarLabel, CARD_W / 2, linkY + LINK_BAR_H / 2);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-    }
+    drawBottomBrandAndLink(ctx, shareUrl, title);
 
     return canvas;
 }
 
-/** Returns a PNG blob — pass type='partner' for business card */
 export const generateShareCardBlob = async (data, type = 'invitation') => {
     const canvas = type === 'business'
         ? await generateBusinessShareCard(data)
@@ -598,7 +615,6 @@ export const generateShareCardBlob = async (data, type = 'invitation') => {
     return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 };
 
-/** Returns a PNG data URL — pass type='partner' for business card */
 export const generateShareCardDataUrl = async (data, type = 'invitation') => {
     const canvas = type === 'business'
         ? await generateBusinessShareCard(data)

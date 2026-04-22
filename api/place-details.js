@@ -1,11 +1,10 @@
 /**
- * Place Details proxy (server-side).
- * Returns full place info in the same format as fetchPlaceDetails.
- * Use when Maps JS API isn't available (e.g. referrer restrictions on production).
+ * Place Details proxy (server-side, Places API New).
+ * Returns minimal fields only to reduce billable payload.
  *
- * GET /api/place-details?placeId=ChIJ...
+ * GET /api/place-details?placeId=ChIJ...&sessionToken=...
  */
-const DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
+const DETAILS_URL = 'https://places.googleapis.com/v1/places';
 
 function parseAddressComponents(components) {
     let city = '';
@@ -13,11 +12,12 @@ function parseAddressComponents(components) {
     let countryCode = '';
     if (Array.isArray(components)) {
         for (const c of components) {
-            if (c.types?.includes('locality')) city = c.long_name || '';
-            if (c.types?.includes('administrative_area_level_1') && !city) city = c.long_name || '';
-            if (c.types?.includes('country')) {
-                country = c.long_name || '';
-                countryCode = (c.short_name || '').toUpperCase().slice(0, 2);
+            const types = Array.isArray(c.types) ? c.types : [];
+            if (types.includes('locality')) city = c.longText || c.shortText || '';
+            if (types.includes('administrative_area_level_1') && !city) city = c.longText || c.shortText || '';
+            if (types.includes('country')) {
+                country = c.longText || c.shortText || '';
+                countryCode = (c.shortText || '').toUpperCase().slice(0, 2);
             }
         }
     }
@@ -29,59 +29,55 @@ export default async function handler(req, res) {
         res.setHeader('Allow', 'GET');
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    const { placeId } = req.query;
-    const key = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-    if (!placeId || !key) {
-        return res.status(400).json({ error: 'Missing placeId or API key' });
+    const { placeId, sessionToken, languageCode, regionCode } = req.query;
+    const key =
+        process.env.GOOGLE_PLACES_API_KEY ||
+        process.env.GOOGLE_MAPS_SERVER_KEY ||
+        process.env.VITE_GOOGLE_MAPS_API_KEY ||
+        process.env.GOOGLE_MAPS_API_KEY;
+    if (!placeId || !key || !sessionToken) {
+        return res.status(400).json({ error: 'Missing placeId/sessionToken/API key' });
     }
-    const fields = 'name,formatted_address,address_components,geometry,place_id,formatted_phone_number,international_phone_number,website,url,photos,opening_hours,types';
+    const fields = 'id,displayName,formattedAddress,addressComponents';
     try {
-        const url = `${DETAILS_URL}?place_id=${encodeURIComponent(placeId)}&fields=${fields}&key=${key}`;
-        const response = await fetch(url);
+        const params = new URLSearchParams({
+            sessionToken: String(sessionToken).slice(0, 36),
+        });
+        if (typeof languageCode === 'string' && languageCode.trim()) params.set('languageCode', languageCode.trim());
+        if (typeof regionCode === 'string' && regionCode.trim()) params.set('regionCode', regionCode.trim());
+
+        const url = `${DETAILS_URL}/${encodeURIComponent(placeId)}?${params.toString()}`;
+        const response = await fetch(url, {
+            headers: {
+                'X-Goog-Api-Key': key,
+                'X-Goog-FieldMask': fields,
+            },
+        });
         const data = await response.json();
         res.setHeader('Access-Control-Allow-Origin', '*');
-        if (data.status !== 'OK' || !data.result) {
-            return res.status(data.status === 'ZERO_RESULTS' ? 404 : 400).json({ error: data.status || 'Not found' });
+        if (!response.ok || !data) {
+            return res.status(400).json({ error: 'Not found' });
         }
-        const place = data.result;
-        const { city, country, countryCode } = parseAddressComponents(place.address_components || []);
-        const loc = place.geometry?.location || {};
-        const lat = typeof loc.lat === 'number' ? loc.lat : null;
-        const lng = typeof loc.lng === 'number' ? loc.lng : null;
-        const photoUrls = [];
-        if (place.photos?.length) {
-            for (let i = 0; i < Math.min(place.photos.length, 10); i++) {
-                photoUrls.push(`/api/place-photo?placeId=${encodeURIComponent(placeId)}&index=${i}`);
-            }
-        }
-        let workingHours = null;
-        if (place.opening_hours?.weekday_text?.length) {
-            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            workingHours = {};
-            place.opening_hours.weekday_text.forEach((text, i) => {
-                workingHours[days[i]] = {
-                    isOpen: !String(text || '').toLowerCase().includes('closed'),
-                    text: String(text || ''),
-                };
-            });
-        }
+        const place = data;
+        const { city, country, countryCode } = parseAddressComponents(place.addressComponents || []);
         return res.status(200).json({
-            businessName: place.name || '',
-            address: place.formatted_address || '',
+            businessName: place.displayName?.text || '',
+            address: place.formattedAddress || '',
             city,
             country,
             countryCode: countryCode || 'AU',
-            lat,
-            lng,
-            placeId: place.place_id || placeId,
-            phone: place.formatted_phone_number || place.international_phone_number || '',
-            website: place.website || place.url || '',
+            lat: null,
+            lng: null,
+            placeId: place.id || placeId,
+            phone: '',
+            website: '',
             description: '',
-            coverImage: photoUrls[0] || null,
-            logo: photoUrls[0] || null,
-            gallery: photoUrls,
-            workingHours,
-            types: place.types || [],
+            coverImage: null,
+            logo: null,
+            gallery: [],
+            workingHours: null,
+            types: [],
+            addressComponents: place.addressComponents || [],
         });
     } catch (err) {
         console.error('Place details error:', err);

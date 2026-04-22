@@ -4,6 +4,7 @@ import { FaMapMarkerAlt, FaCalendarPlus, FaShare, FaDownload, FaTimes, FaStar } 
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
+import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import { getSafeAvatar, getSafeCoverImage } from '../utils/avatarUtils';
 import { getContrastText } from '../utils/colorUtils';
 import { getTheme } from '../utils/businessThemes';
@@ -92,15 +93,13 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
         const shareUrl = previewShareUrl;
         const shareText = `Check out ${shareTitle} on DineBuddies!\n\n🔗 ${shareUrl}`;
 
-        try {
-            if (navigator.canShare && navigator.canShare({ files: [cardFile] })) {
-                await navigator.share({ files: [cardFile], title: shareTitle, text: shareText, url: shareUrl });
-            } else if (navigator.share) {
-                await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
-            }
-        } catch (err) {
-            if (err.name !== 'AbortError') console.error('Overlay share error:', err);
-        }
+        await shareNativeOrFallback({
+            file: cardFile,
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl,
+            skipExternalFallback: false,
+        });
     };
 
     const closePreview = (e) => {
@@ -180,19 +179,18 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
                             />
                         )}
                         <div style={{ display: 'flex', gap: 10 }}>
-                            {navigator.share && (
-                                <button
-                                    onClick={handleShareFromOverlay}
-                                    style={{
-                                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                        padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-                                        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                                        color: 'white', fontWeight: 700, fontSize: '0.9rem',
-                                    }}
-                                >
-                                    <FaShare /> Share
-                                </button>
-                            )}
+                            <button
+                                type="button"
+                                onClick={handleShareFromOverlay}
+                                style={{
+                                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                    padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                    background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                    color: 'white', fontWeight: 700, fontSize: '0.9rem',
+                                }}
+                            >
+                                <FaShare /> {t('share', { defaultValue: 'Share' })}
+                            </button>
                             <a
                                 href={cardPreviewUrl}
                                 download="business-card.png"
@@ -203,7 +201,7 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
                                     color: 'white', fontWeight: 700, fontSize: '0.9rem',
                                 }}
                             >
-                                <FaDownload /> Download
+                                <FaDownload /> {t('download', { defaultValue: 'Download' })}
                             </a>
                         </div>
                     </div>

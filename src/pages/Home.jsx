@@ -13,10 +13,11 @@ import '../components/MapStyles.css';
 import './HomeMobileFeed.css';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { useTheme } from '../context/ThemeContext';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import OffersBanner from '../components/OffersBanner';
 import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
 import { goToLogin } from '../utils/goToLogin';
+import { asUidArray } from '../utils/userSocialLists';
 
 
 
@@ -141,6 +142,7 @@ const Home = () => {
     ];
 
     const safeInvitations = useMemo(() => Array.isArray(invitations) ? invitations : [], [invitations]);
+    const blockedAuthorIds = useMemo(() => new Set(asUidArray(userProfile?.blockedUserIds)), [userProfile?.blockedUserIds]);
     const safeRestaurants = useMemo(() => Array.isArray(restaurants) ? restaurants : [], [restaurants]);
 
     // Memoized filtered invitations
@@ -157,6 +159,9 @@ const Home = () => {
 
             // 1. HOME SPECIFIC: OWNERSHIP (Always show mine)
             const isOwn = inv.author.id === currentUser?.id;
+
+            // Blocked users: hide their public invitations from feed
+            if (!isOwn && blockedAuthorIds.has(inv.author.id)) return false;
 
             // 2. HOME SPECIFIC: EXPIRY LOGIC
             // Priority 1: If manually completed, hide after 1 hour
@@ -227,7 +232,7 @@ const Home = () => {
         }
 
         return filtered;
-    }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser, userProfile?.role]);
+    }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser, userProfile?.role, blockedAuthorIds]);
 
     // Legacy filtering logic removed.
 
@@ -395,9 +400,12 @@ const Home = () => {
                     });
 
                     // Determine correct image URL logic (matching InvitationCard.jsx priority)
-                    const displayImage = (inv.mediaType === 'video' && inv.videoThumbnail)
-                        ? inv.videoThumbnail
-                        : (inv.customImage || inv.restaurantImage || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400');
+                    const displayImage = pickSafeDisplayImageUrl(
+                        inv.mediaType === 'video' ? inv.videoThumbnail : null,
+                        inv.customImage,
+                        inv.restaurantImage,
+                        inv.image
+                    ) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400';
 
                     // Create compact popup content
                     const popupContent = `
@@ -778,7 +786,7 @@ const Home = () => {
                         <FaSearch className="search-icon" style={{ position: 'absolute', ...(i18n.dir() === 'rtl' ? { right: '12px' } : { left: '12px' }), top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
                         <input
                             type="text"
-                            placeholder={t('search_placeholder')}
+                            placeholder={t('search_invitations_placeholder', 'Search invitations...')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onFocus={() => setShowFilters(true)}

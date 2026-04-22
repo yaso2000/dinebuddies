@@ -215,13 +215,25 @@ service firebase.storage {
                    && request.resource.size < 5 * 1024 * 1024; // Max 5MB
     }
 
-    // Business Feedback Media (Images, Videos up to 30s, Audio up to 60s)
+    // Business feedback/complaint proof media
     match /feedback_media/{businessId}/{fileName} {
-      // Allow public read so the business can view the media in their browser
-      allow read: if true; 
-      // Allow anyone (public users) to upload proof media
+      allow read: if true;
       allow write: if (isImage() || isVideo() || isAudio())
-                   && request.resource.size < 30 * 1024 * 1024; // Max 30MB
+                   && request.resource.size < 30 * 1024 * 1024;
+    }
+
+    // Google Business source photos (synced during registration)
+    match /business_photos/{userId}/{fileName} {
+      allow read: if true;
+      // Some clients send blobs with missing/wrong contentType even when metadata is set — allow common image extensions.
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && request.resource.size < 10 * 1024 * 1024
+                   && (
+                     isImage() ||
+                     request.resource.contentType == null ||
+                     fileName.matches('.*\\.(jpg|jpeg|png|webp|gif)$')
+                   );
     }
 
     // Deny everything else by default

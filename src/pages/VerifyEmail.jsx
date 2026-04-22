@@ -5,7 +5,7 @@ import { reload } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { auth } from '../firebase/config';
-import { needsConsumerEmailVerification } from '../utils/emailVerification';
+import { needsEmailPasswordVerification } from '../utils/emailVerification';
 import { sendVerificationEmailResend, verificationEmailErrorMessage } from '../services/verificationEmailService';
 import { FaEnvelope, FaCheckCircle, FaSignOutAlt, FaRedo } from 'react-icons/fa';
 import { goToLogin } from '../utils/goToLogin';
@@ -20,11 +20,17 @@ const VerifyEmail = () => {
 
     const goNext = useCallback(() => {
         if (userProfile?.isBusiness) {
-            navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
-            return;
+            const uid = userProfile.uid || currentUser?.uid;
+            if (uid) {
+                navigate(`/business/${uid}`, {
+                    replace: true,
+                    state: { businessProfileSetupReminder: true },
+                });
+                return;
+            }
         }
         navigate('/', { replace: true });
-    }, [navigate, userProfile?.isBusiness]);
+    }, [navigate, userProfile?.isBusiness, userProfile?.uid, currentUser?.uid]);
 
     useEffect(() => {
         if (loading) return;
@@ -32,9 +38,13 @@ const VerifyEmail = () => {
             goToLogin({ replace: true });
             return;
         }
-        if (!needsConsumerEmailVerification(currentUser, userProfile)) {
-            goNext();
+        if (needsEmailPasswordVerification(currentUser, userProfile)) {
+            return;
         }
+        if (!userProfile) {
+            return;
+        }
+        goNext();
     }, [loading, currentUser, userProfile, navigate, goNext]);
 
     const handleResend = async () => {
@@ -60,7 +70,7 @@ const VerifyEmail = () => {
             await reload(u);
             if (auth.currentUser?.emailVerified) {
                 showToast(t('verify_email_confirmed', 'Email verified. Welcome!'), 'success');
-                goNext();
+                setTimeout(() => goNext(), 0);
             } else {
                 showToast(t('verify_email_still_pending', 'Not verified yet. Open the link in the email we sent.'), 'info');
             }
@@ -81,8 +91,15 @@ const VerifyEmail = () => {
 
     if (loading || !currentUser) {
         return (
-            <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>
-                <div style={{ width: 40, height: 40, border: '4px solid var(--border-color)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <div style={{ 
+                minHeight: '100dvh', 
+                width: '100%',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)' 
+            }}>
+                <div style={{ width: 44, height: 44, border: '4px solid rgba(148, 163, 184, 0.15)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
             </div>
         );
     }
@@ -94,7 +111,8 @@ const VerifyEmail = () => {
             className="auth-route-scroll"
             style={{
                 minHeight: '100dvh',
-                background: 'var(--bg-body)',
+                width: '100%',
+                background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',

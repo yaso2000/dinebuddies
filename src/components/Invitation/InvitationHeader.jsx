@@ -2,7 +2,9 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaShareAlt, FaEdit, FaSpinner } from 'react-icons/fa';
 import { getTemplateStyle, COLOR_SCHEMES } from '../../utils/invitationTemplates';
-import { getSafeAvatar } from '../../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../../utils/avatarUtils';
+
+const INVITATION_IMAGE_FALLBACK = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
 
 const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete, onShare, sharingCard }) => {
     const { t, i18n } = useTranslation();
@@ -16,8 +18,10 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
     const themeColors = COLOR_SCHEMES[invitation.colorScheme || 'oceanBlue'] || COLOR_SCHEMES.oceanBlue;
     const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar');
 
-    // Determine the best image source, matching logic in InvitationCard
-    const displayImage = invitation.customImage || invitation.restaurantImage || invitation.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
+    // Skip Google Maps PhotoService URLs — they 403 as direct img src (API key / referrer rules)
+    const displayImage =
+        pickSafeDisplayImageUrl(invitation.customImage, invitation.restaurantImage, invitation.image) ||
+        INVITATION_IMAGE_FALLBACK;
 
     return (
         <div className="invitation-hero" style={{ position: 'relative', height: '350px' }}>
@@ -26,7 +30,7 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
                 alt={invitation.title}
                 className="invitation-image"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800'; }}
+                onError={(e) => { e.target.src = INVITATION_IMAGE_FALLBACK; }}
             />
             <div
                 className="overlay"

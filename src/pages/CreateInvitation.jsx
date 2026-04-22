@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaCocktail, FaSearch } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale, IoPeople } from 'react-icons/io5';
@@ -12,17 +12,28 @@ import MediaSelector from '../components/Invitations/MediaSelector';
 import VenueLocationPicker from '../components/VenueLocationPicker';
 import { Country, State, City } from 'country-state-city';
 import { uploadInvitationPhoto } from '../utils/imageUpload';
-import { processInvitationMedia } from '../services/mediaService';
+import { processInvitationMedia, uploadVideoWithThumbnail, uploadMedia, uploadGoogleImage } from '../services/mediaService';
+import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
 import { validateInvitationCreation } from '../utils/invitationValidation';
 import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { fetchIpLocation } from '../utils/locationUtils';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
-import { placePhotoProxyUrls } from '../utils/placePhotoUrls';
-import { COLOR_SCHEMES } from '../utils/invitationTemplates';
-import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
+import { callSuggestInvitationMessages } from '../utils/callSuggestInvitationMessages';
+import { detectUserLocationContext } from '../utils/locationUtils';
+import { COLOR_SCHEMES, TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS } from '../utils/invitationTemplates';
+import InvitationTemplateSwatch from '../components/InvitationTemplateSwatch';
+import {
+    defaultSmartBioOptions,
+    buildInvitationAiPayload,
+    invitationMessageMaxLength
+} from '../utils/invitationSmartDescription';
+import {
+    normalizeHeadlineSuggestionsFromApi,
+    padHeadlinesToTen
+} from '../utils/invitationHeadlineSuggestions';
+
 import { goToLogin } from '../utils/goToLogin';
+import { resolveVenueCountryIso } from '../utils/countryIso';
 const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
@@ -43,14 +54,21 @@ const CreateInvitation = () => {
     const [citySearchOpen, setCitySearchOpen] = useState(false);
     const [imageFile, setImageFile] = useState(null);
     const [mediaData, setMediaData] = useState(null); // NEW: For MediaSelector
+    /** Single saved selfie / upload video (library). New recording blocked until this is deleted from Storage. */
+    const [libraryVideo, setLibraryVideo] = useState(null);
+    const [libraryImages, setLibraryImages] = useState([]);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+    const [smartBioOptions, setSmartBioOptions] = useState(() => defaultSmartBioOptions());
+    const [smartSuggestionsOpen, setSmartSuggestionsOpen] = useState(false);
+    const [smartSuggestionsLoading, setSmartSuggestionsLoading] = useState(false);
+    const [smartSuggestions, setSmartSuggestions] = useState([]);
+    /** True when AI returned nothing usable and built-in lines are shown (non-technical hint only). */
+    const [headlineSuggestionsAreFallback, setHeadlineSuggestionsAreFallback] = useState(false);
     const [friendsLoading, setFriendsLoading] = useState(false);
 
     const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
-    const [suggestedImages, setSuggestedImages] = useState([]); // Suggested venue images
-    const [suggestedImagesLoading, setSuggestedImagesLoading] = useState(false); // Loading skeleton for Google Places fetch
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
     const prefilledData = location.state?.prefilledData; // From BusinessProfile
@@ -59,6 +77,186 @@ const CreateInvitation = () => {
     const editingDraft = location.state?.editingDraft; // Editing draft from preview
     const draftId = location.state?.draftId; // Draft ID to load
     const editingInvitation = location.state?.editingInvitation; // Editing PUBLISHED invitation
+    const editVideoHydratedRef = useRef(null);
+    const mediaLibraryHydratedRef = useRef(false);
+    const templateScrollRef = useRef(null);
+    const colorScrollRef = useRef(null);
+    const dragStateRef = useRef({
+        activeKey: null,
+        startX: 0,
+        startScrollLeft: 0,
+    });
+
+    const mediaLibraryStorageKey = React.useMemo(() => {
+        const userId = currentUser?.id || authUser?.uid;
+        return userId ? `db_invitation_media_library_${userId}` : null;
+    }, [currentUser?.id, authUser?.uid]);
+
+    const startHorizontalDrag = (key, ref, event) => {
+        if (event.button !== 0 || !ref.current) return;
+        dragStateRef.current = {
+            activeKey: key,
+            startX: event.clientX,
+            startScrollLeft: ref.current.scrollLeft,
+        };
+        ref.current.style.cursor = 'grabbing';
+        ref.current.style.userSelect = 'none';
+    };
+
+    const moveHorizontalDrag = (key, ref, event) => {
+        const s = dragStateRef.current;
+        if (s.activeKey !== key || !ref.current) return;
+        const dx = event.clientX - s.startX;
+        ref.current.scrollLeft = s.startScrollLeft - dx;
+    };
+
+    const endHorizontalDrag = (key, ref) => {
+        const s = dragStateRef.current;
+        if (s.activeKey !== key || !ref.current) return;
+        dragStateRef.current.activeKey = null;
+        ref.current.style.cursor = 'grab';
+        ref.current.style.removeProperty('user-select');
+    };
+
+    useEffect(() => {
+        if (!editingInvitation?.id) editVideoHydratedRef.current = null;
+    }, [editingInvitation?.id]);
+
+    useEffect(() => {
+        if (!mediaLibraryStorageKey || mediaLibraryHydratedRef.current) return;
+        try {
+            const raw = localStorage.getItem(mediaLibraryStorageKey);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed.images)) setLibraryImages(parsed.images.slice(0, 24));
+                if (parsed.video?.videoUrl) setLibraryVideo(parsed.video);
+            }
+        } catch (e) {
+            console.warn('Failed to read invitation media library:', e);
+        } finally {
+            mediaLibraryHydratedRef.current = true;
+        }
+    }, [mediaLibraryStorageKey]);
+
+    useEffect(() => {
+        if (!mediaLibraryStorageKey || !mediaLibraryHydratedRef.current) return;
+        const payload = {
+            images: libraryImages.slice(0, 24),
+            video: libraryVideo || null,
+        };
+        localStorage.setItem(mediaLibraryStorageKey, JSON.stringify(payload));
+    }, [mediaLibraryStorageKey, libraryImages, libraryVideo]);
+
+    // Load existing invitation video into the media library + selection (edit flow) — once per invitation id
+    useEffect(() => {
+        if (!editingInvitation?.id) return;
+        if (editVideoHydratedRef.current === editingInvitation.id) return;
+        if (editingInvitation.mediaType !== 'video' || !editingInvitation.customVideo) return;
+        editVideoHydratedRef.current = editingInvitation.id;
+        setLibraryVideo({
+            videoUrl: editingInvitation.customVideo,
+            thumbnailUrl: editingInvitation.videoThumbnail || editingInvitation.customVideo,
+        });
+        setMediaData({
+            source: 'custom_video',
+            type: 'video',
+            file: null,
+            preview: editingInvitation.customVideo,
+            videoThumbnail: editingInvitation.videoThumbnail || null,
+            fromLibrary: true,
+        });
+    }, [editingInvitation]);
+
+    const persistSelfieVideo = useCallback(async (file) => {
+        const userId = currentUser?.id || authUser?.uid;
+        if (!userId) throw new Error('Not signed in');
+        const { videoUrl, thumbnailUrl } = await uploadVideoWithThumbnail(file, userId, 'invitations');
+        setLibraryVideo({ videoUrl, thumbnailUrl });
+        setMediaData({
+            source: 'custom_video',
+            type: 'video',
+            file: null,
+            preview: videoUrl,
+            videoThumbnail: thumbnailUrl,
+            fromLibrary: true,
+        });
+    }, [currentUser?.id, authUser?.uid]);
+
+    const persistImageToLibrary = useCallback(async (file) => {
+        const userId = currentUser?.id || authUser?.uid;
+        if (!userId || !file) throw new Error('Not signed in');
+        const url = await uploadMedia(file, userId, 'image', 'invitations');
+        setLibraryImages((prev) => [url, ...prev.filter((u) => u !== url)].slice(0, 24));
+        return url;
+    }, [currentUser?.id, authUser?.uid]);
+
+    const deleteLibraryVideo = useCallback(async () => {
+        if (!libraryVideo) return;
+        const vUrl = libraryVideo.videoUrl;
+        const tUrl = libraryVideo.thumbnailUrl;
+        try {
+            await deleteFilesAtFirebaseDownloadUrls([vUrl, tUrl]);
+        } catch (e) {
+            console.error(e);
+            showToast(t('delete_failed', { defaultValue: 'Could not delete video' }), 'error');
+            return;
+        }
+        setLibraryVideo(null);
+        setMediaData((prev) => {
+            if (prev?.type === 'video' && prev?.preview === vUrl) return null;
+            return prev;
+        });
+        showToast(t('video_removed_from_library', { defaultValue: 'Video removed. You can record a new one.' }), 'success');
+    }, [libraryVideo, showToast, t]);
+
+    const deleteLibraryImage = useCallback(async (url) => {
+        if (!url) return;
+        try {
+            await deleteFilesAtFirebaseDownloadUrls([url]);
+        } catch (e) {
+            console.error(e);
+            showToast(t('delete_failed', { defaultValue: 'Could not delete image' }), 'error');
+            return;
+        }
+        setLibraryImages((prev) => prev.filter((u) => u !== url));
+        setMediaData((prev) => {
+            if (prev?.type === 'image' && (prev?.preview === url || prev?.url === url)) return null;
+            return prev;
+        });
+    }, [showToast, t]);
+
+    const handleMediaSelect = useCallback(async (data) => {
+        if (!data) {
+            setMediaData(null);
+            return;
+        }
+        const userId = currentUser?.id || authUser?.uid;
+        if (!userId) {
+            setMediaData(data);
+            return;
+        }
+
+        // Persist external venue image (DineBuddies cover or legacy URL) to Storage before save.
+        if ((data.source === 'restaurant' || data.source === 'google_place') && data.url && !String(data.url).includes('firebasestorage')) {
+            try {
+                const stored = await uploadGoogleImage(data.url, userId, 'invitations');
+                if (stored) {
+                    setLibraryImages((prev) => [stored, ...prev.filter((u) => u !== stored)].slice(0, 24));
+                    setMediaData({
+                        ...data,
+                        source: data.source === 'google_place' ? 'google_place' : 'restaurant',
+                        url: stored,
+                        preview: stored,
+                        fromLibrary: true,
+                    });
+                    return;
+                }
+            } catch (e) {
+                console.warn('Could not persist venue image immediately:', e);
+            }
+        }
+        setMediaData(data);
+    }, [currentUser?.id, authUser?.uid]);
 
     // Normalize legacy invitation data for validation (Safety Check)
     const originalGenderGroups = React.useMemo(() => {
@@ -107,7 +305,7 @@ const CreateInvitation = () => {
         ageRange: 'custom',
         ageGroups: [], // Default to NONE selected
         paymentType: 'Split',
-        description: offerData?.description || '',
+        description: String(offerData?.description || '').slice(0, invitationMessageMaxLength),
         image: offerData?.image || restaurantData?.image || prefilledData?.restaurantImage || null,
         // Get coordinates from multiple possible sources
         lat: offerData?.lat || restaurantData?.lat || restaurantData?.coordinates?.lat || prefilledData?.lat,
@@ -120,19 +318,19 @@ const CreateInvitation = () => {
         lastLocationUpdate: serverTimestamp(),
         occasionType: editingInvitation?.occasionType || 'Social',
         colorScheme: editingInvitation?.colorScheme || prefilledData?.colorScheme || 'oceanBlue',
-        templateType: editingInvitation?.templateType || prefilledData?.templateType || 'classic',
+        templateType: editingInvitation?.templateType || prefilledData?.templateType || 'photoBottom',
         // Override with editingInvitation data if present
         ...(editingInvitation ? {
             ...editingInvitation,
             title: editingInvitation.title,
-            description: editingInvitation.description,
+            description: String(editingInvitation.description || '').slice(0, invitationMessageMaxLength),
             date: editingInvitation.date,
             time: editingInvitation.time,
             guestsNeeded: editingInvitation.guestsNeeded,
             genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
             ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
             colorScheme: editingInvitation.colorScheme || 'oceanBlue',
-            templateType: editingInvitation.templateType || 'classic',
+            templateType: editingInvitation.templateType || 'photoBottom',
             image: editingInvitation.image, // Keep existing image URL
             location: editingInvitation.location,
             lat: editingInvitation.lat,
@@ -156,7 +354,7 @@ const CreateInvitation = () => {
                         const draft = invitationDoc.data();
                         setFormData({
                             ...draft,
-
+                            description: String(draft.description || '').slice(0, invitationMessageMaxLength)
                         });
                     }
                 } catch (error) {
@@ -211,94 +409,52 @@ const CreateInvitation = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    /** Fills description from form fields only (no external AI). */
+    /** Loads 10 headline suggestions (AI + OpenAI when available); always shows 10 tappable lines with safe fallbacks. */
     const generateSmartBio = async () => {
+        if (!authUser || currentUser?.id === 'guest') {
+            showToast(t('login_to_create') || 'Please sign in', 'error');
+            goToLogin();
+            return;
+        }
+        setSmartSuggestionsOpen(true);
+        setSmartSuggestionsLoading(true);
+        setSmartSuggestions([]);
+        setHeadlineSuggestionsAreFallback(false);
         setIsGeneratingBio(true);
         try {
-            const {
-                restaurantName,
-                location,
-                time,
-                date,
-                paymentType,
-                city,
-                type,
-                genderGroups,
-                ageGroups,
-                guestsNeeded,
-                title
-            } = formData;
-
-            const hostName = (
-                userProfile?.display_name
-                || userProfile?.displayName
-                || currentUser?.name
-                || currentUser?.displayName
-                || ''
-            ).trim() || t('host', 'Host');
-
-            const genderLabels = (genderGroups || [])
-                .map((g) => {
-                    if (g === 'male') return t('male');
-                    if (g === 'female') return t('female');
-                    if (g === 'unspecified') return t('non_binary', { defaultValue: 'Non-binary' });
-                    return g;
-                })
-                .filter(Boolean);
-
-            const inviteesGenderSummary = genderLabels.length
-                ? genderLabels.join(i18n.language?.startsWith('ar') ? '، ' : ', ')
-                : t('not_set', 'not set yet');
-
-            const ageSummary = formatAgeGroupsSmart(ageGroups || [], t);
-
-            const venueDisplay = (restaurantName || '').trim()
-                || (location || '').trim().split(',')[0]?.trim()
-                || t('venue_tbd', 'the venue');
-
-            const whenLine = date && time ? `${date} ${time}` : (date || time || t('datetime_tbd', 'TBD'));
-
-            const ar = i18n.language?.startsWith('ar');
-            let text;
-            if (ar) {
-                text = [
-                    `${hostName} يدعوكم إلى ${venueDisplay}`,
-                    (city || '').trim() && `${t('city')}: ${city}`,
-                    whenLine && whenLine !== t('datetime_tbd', 'TBD') ? `${whenLine}` : '',
-                    `${type || 'Restaurant'}`,
-                    inviteesGenderSummary,
-                    ageSummary || '',
-                    guestsNeeded != null ? String(guestsNeeded) : '',
-                    paymentType ? t(paymentType.toLowerCase().replace(' ', '_')) : '',
-                    (title || '').trim()
-                ]
-                    .filter(Boolean)
-                    .join(' · ');
-            } else {
-                text = [
-                    `${hostName} invites you to ${venueDisplay}`,
-                    (city || '').trim() && `City: ${city}`,
-                    whenLine && whenLine !== t('datetime_tbd', 'TBD') ? `When: ${whenLine}` : '',
-                    `Type: ${type || 'Restaurant'}`,
-                    `Looking for: ${inviteesGenderSummary}`,
-                    ageSummary && `Ages: ${ageSummary}`,
-                    guestsNeeded != null && `Spots: ${guestsNeeded}`,
-                    paymentType && `Payment: ${paymentType}`,
-                    (title || '').trim() && `Title: ${title}`
-                ]
-                    .filter(Boolean)
-                    .join(' · ');
-            }
-
-            const trimmed = text.substring(0, 300);
-            if (trimmed.length < 10) {
-                showToast(t('failed_generate_bio'), 'error');
-                return;
-            }
-            setFormData((prev) => ({ ...prev, description: trimmed }));
+            const payload = buildInvitationAiPayload(formData, {
+                t,
+                language: i18n.language,
+                userProfile,
+                currentUser,
+                options: smartBioOptions
+            });
+            const result = await callSuggestInvitationMessages(payload);
+            const normalized = normalizeHeadlineSuggestionsFromApi(result);
+            const final = padHeadlinesToTen(normalized, formData);
+            setSmartSuggestions(final);
+            setHeadlineSuggestionsAreFallback(normalized.length === 0);
+        } catch (err) {
+            console.warn('[headline suggestions]', err?.code || err?.message || err);
+            const final = padHeadlinesToTen([], formData);
+            setSmartSuggestions(final);
+            setHeadlineSuggestionsAreFallback(true);
         } finally {
+            setSmartSuggestionsLoading(false);
             setIsGeneratingBio(false);
         }
+    };
+
+    const pickSmartSuggestion = (line) => {
+        const text = String(line || '').slice(0, invitationMessageMaxLength);
+        setFormData((prev) => ({ ...prev, description: text }));
+        setSmartSuggestionsOpen(false);
+        showToast(t('smart_bio_applied'), 'success');
+    };
+
+    const closeSmartSuggestions = () => {
+        setSmartSuggestionsOpen(false);
+        setHeadlineSuggestionsAreFallback(false);
     };
 
     const handlePreview = async (e) => {
@@ -608,6 +764,15 @@ const CreateInvitation = () => {
                     return;
                 }
                 setUploadProgress(80);
+            } else if (editingInvitation?.customVideo && !mediaData) {
+                // User removed the library video and did not choose another medium
+                mediaFields = {
+                    customVideo: deleteField(),
+                    videoThumbnail: deleteField(),
+                    videoDuration: deleteField(),
+                    mediaType: deleteField(),
+                    mediaSource: deleteField(),
+                };
             }
             // 2. Fallback: Legacy Image Upload (if imageFile exists and no mediaData)
             else if (imageFile) {
@@ -701,146 +866,27 @@ const CreateInvitation = () => {
             title: generateTitle(placeData.name) // Auto-generate title
         }));
 
-        // Handle Suggested Images
-        if (placeData.photos && placeData.photos.length > 0) {
-            setSuggestedImages(placeData.photos);
-        } else {
-            // Fallback Stock Images for manual or photo-less places
-            setSuggestedImages([
-                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500',
-                'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=500',
-                'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=500',
-                'https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?w=500'
-            ]);
-        }
     };
 
-    // Real-time location detection: GPS first → profile fallback → IP last resort
+    // Unified location discovery for all users/pages.
     useEffect(() => {
         if (restaurantData) return; // Already have location from restaurant
 
         const detectLocation = async () => {
-            // ── STEP 1: Try live GPS (always most accurate, reflects current city) ──
-            if (navigator.geolocation) {
-                try {
-                    const pos = await new Promise((resolve, reject) =>
-                        navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            timeout: 6000,
-                            maximumAge: 0 // Force fresh reading — don't use cached GPS
-                        })
-                    );
-
-                    const { latitude, longitude } = pos.coords;
-                    console.log('🛰️ Live GPS:', latitude, longitude);
-
-                    // Reverse geocode with BigDataCloud
-                    const res = await fetch(
-                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-                    );
-                    if (res.ok) {
-                        const d = await res.json();
-                        const city = d.city || d.locality || d.principalSubdivision || '';
-                        const country = d.countryName || '';
-                        const countryCode = d.countryCode || '';
-
-                        if (city) {
-                            console.log('✅ GPS → city:', city);
-                            setFormData(prev => ({
-                                ...prev,
-                                city,
-                                country,
-                                countryCode,
-                                userLat: latitude,
-                                userLng: longitude,
-                            }));
-                            return; // Done
-                        }
-                    }
-                } catch {
-                    console.log('📵 GPS unavailable or denied — using fallback');
-                }
-            }
-
-            // ── STEP 2: Fallback to saved profile city (if GPS denied/unavailable) ──
-            if (userProfile?.city) {
-                console.log('📍 Using saved profile city as fallback:', userProfile.city);
-                setFormData(prev => ({
-                    ...prev,
-                    city: userProfile.city,
-                    country: userProfile.countryCode || prev.country || '',
-                    userLat: userProfile.coordinates?.lat || prev.userLat,
-                    userLng: userProfile.coordinates?.lng || prev.userLng,
-                }));
-                return;
-            }
-
-            // ── STEP 3: Last resort — IP geolocation ──
-            const data = await fetchIpLocation();
-            if (data.success) {
-                console.log('🌐 IP fallback city:', data.city);
-                setFormData(prev => ({
-                    ...prev,
-                    city: data.city,
-                    country: data.country_code,
-                    userLat: data.latitude,
-                    userLng: data.longitude,
-                }));
-            }
+            const detected = await detectUserLocationContext(userProfile);
+            if (!detected.success) return;
+            setFormData(prev => ({
+                ...prev,
+                city: detected.city || prev.city,
+                country: detected.country || prev.country || '',
+                countryCode: detected.countryCode || prev.countryCode || '',
+                userLat: detected.latitude ?? prev.userLat,
+                userLng: detected.longitude ?? prev.userLng,
+            }));
         };
 
         detectLocation();
-    }, [restaurantData]); // Only re-run if restaurantData changes — NOT on every userProfile update
-
-    // Restore Google Images when editing (Address User Issue: Images missing in Edit Mode)
-    useEffect(() => {
-        if (!editingInvitation || suggestedImages?.length > 0 || fromRestaurant) return;
-
-        const queryName = editingInvitation.location || editingInvitation.restaurantName;
-        if (!queryName) return;
-
-        let cancelled = false;
-        const searchQuery = queryName + (editingInvitation.city ? ` ${editingInvitation.city}` : '');
-        setSuggestedImagesLoading(true);
-
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || typeof window === 'undefined' || !window.google?.maps?.places) {
-                    if (!cancelled) setSuggestedImagesLoading(false);
-                    return;
-                }
-
-                try {
-                    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-                    const request = { query: searchQuery, fields: ['place_id'] };
-
-                    service.findPlaceFromQuery(request, (results, status) => {
-                        if (cancelled) return;
-                        if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.length > 0) {
-                            const placeId = results[0].place_id;
-                            if (cancelled) return;
-                            setSuggestedImagesLoading(false);
-                            // Do not call getDetails with 'photos' — it triggers PhotoService.GetPhoto 403 on localhost.
-                            setSuggestedImages(placePhotoProxyUrls(placeId, 5));
-                        } else {
-                            setSuggestedImagesLoading(false);
-                        }
-                    });
-                } catch (err) {
-                    if (!cancelled) {
-                        console.error('❌ Error restoring images:', err);
-                        setSuggestedImagesLoading(false);
-                    }
-                }
-            })
-            .catch(() => {
-                setSuggestedImagesLoading(false);
-            });
-
-        return () => {
-            cancelled = true;
-            setSuggestedImagesLoading(false);
-        };
-    }, [editingInvitation, fromRestaurant]);
+    }, [restaurantData, userProfile]);
 
     // Check for cancellation restrictions
     useEffect(() => {
@@ -978,12 +1024,34 @@ const CreateInvitation = () => {
 
                 {/* 1. Location Search - FIRST STEP - Hidden when editing */}
                 {!editingInvitation && (
-                    <div className="ui-card" style={{ marginBottom: '1rem' }}>
+                    <div className="ui-card venue-search-stack" style={{ marginBottom: '1rem' }}>
                         <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             📍 {t('search_venue') || 'Search for a Venue'}
                         </h3>
 
 
+
+                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
+                                {t('form_type_label')}
+                            </label>
+                            <select
+                                name="type"
+                                value={ALLOWED_INVITATION_TYPES.includes(formData.type) ? formData.type : 'Restaurant'}
+                                onChange={handleChange}
+                                className="input-field"
+                            >
+                                <option value="Restaurant">{t('type_restaurant')}</option>
+                                <option value="Cafe">{t('type_cafe')}</option>
+                                <option value="Bar">{t('type_bar', 'Bar')}</option>
+                                <option value="Night Club">{t('type_nightclub', 'Night Club')}</option>
+                                <option value="Food Truck">{t('type_foodtruck', 'Food Truck')}</option>
+                                <option value="Fast Food">{t('type_fastfood', 'Fast Food')}</option>
+                            </select>
+                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                                {t('invitation_type_venue_search_hint', 'Choose the venue type first so search suggests matching places (café, bar, etc.).')}
+                            </small>
+                        </div>
 
                         {/* Venue Search */}
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1006,9 +1074,10 @@ const CreateInvitation = () => {
                                 onChange={handleChange}
                                 onSelect={handleLocationSelect}
                                 city={formData.city}
-                                countryCode={formData.countryCode || formData.country}
-                                userLat={formData.userLat}
-                                userLng={formData.userLng}
+                                countryCode={resolveVenueCountryIso(formData, userProfile)}
+                                userLat={formData.userLat ?? userProfile?.coordinates?.lat}
+                                userLng={formData.userLng ?? userProfile?.coordinates?.lng}
+                                invitationType={formData.type}
                             />
                             <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
                                 {t('location_helper_text') || 'Search for venues, cafes, or restaurants near you'}
@@ -1033,9 +1102,14 @@ const CreateInvitation = () => {
                     </p>
                     <MediaSelector
                         restaurant={restaurantData || prefilledData}
-                        suggestedImages={suggestedImages}
-                        suggestedImagesLoading={suggestedImagesLoading}
-                        onMediaSelect={(data) => setMediaData(data)}
+                        mediaData={mediaData}
+                        libraryVideo={libraryVideo}
+                        libraryImages={libraryImages}
+                        onPersistSelfieVideo={persistSelfieVideo}
+                        onPersistImage={persistImageToLibrary}
+                        onDeleteLibraryVideo={deleteLibraryVideo}
+                        onDeleteLibraryImage={deleteLibraryImage}
+                        onMediaSelect={handleMediaSelect}
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
                         <div style={{
@@ -1091,26 +1165,12 @@ const CreateInvitation = () => {
                 </div>
 
 
-                <div className="form-grid">
-                    <div className="form-group">
-                        <label>{t('form_type_label')}</label>
-                        <select name="type" value={ALLOWED_INVITATION_TYPES.includes(formData.type) ? formData.type : 'Restaurant'} onChange={handleChange} className="input-field">
-                            <option value="Restaurant">{t('type_restaurant')}</option>
-                            <option value="Cafe">{t('type_cafe')}</option>
-                            <option value="Bar">{t('type_bar', 'Bar')}</option>
-                            <option value="Night Club">{t('type_nightclub', 'Night Club')}</option>
-                            <option value="Food Truck">{t('type_foodtruck', 'Food Truck')}</option>
-                            <option value="Fast Food">{t('type_fastfood', 'Fast Food')}</option>
-                        </select>
-                    </div>
-
-                    <div className="form-group">
-                        <label>{t('form_payment_label')}</label>
-                        <select name="paymentType" value={formData.paymentType} onChange={handleChange} className="input-field">
-                            <option value="Split">{t('payment_split')}</option>
-                            <option value="Host Pays">{t('payment_host')}</option>
-                        </select>
-                    </div>
+                <div className="form-group">
+                    <label>{t('form_payment_label')}</label>
+                    <select name="paymentType" value={formData.paymentType} onChange={handleChange} className="input-field">
+                        <option value="Split">{t('payment_split')}</option>
+                        <option value="Host Pays">{t('payment_host')}</option>
+                    </select>
                 </div>
 
 
@@ -1365,18 +1425,82 @@ const CreateInvitation = () => {
                                 ✨ {isGeneratingBio ? t('generating') : t('smart_bio')}
                             </button>
                         </div>
-                        <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= 300 ? '#f87171' : 'var(--text-muted)' }}>
-                            {(formData.description?.length || 0)}/300
+                        <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= invitationMessageMaxLength ? '#f87171' : 'var(--text-muted)' }}>
+                            {(formData.description?.length || 0)}/{invitationMessageMaxLength}
                         </span>
                     </div>
+                    <details style={{ marginBottom: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        <summary style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            {t('smart_bio_options')}
+                        </summary>
+                        <div
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))',
+                                gap: '6px 12px',
+                                marginTop: '10px',
+                                padding: '10px',
+                                background: 'var(--hover-overlay, rgba(128, 128, 128, 0.08))',
+                                borderRadius: '8px',
+                                alignItems: 'center'
+                            }}
+                        >
+                            {[
+                                ['includeCity', 'smart_bio_include_city'],
+                                ['includeDateTime', 'smart_bio_include_datetime'],
+                                ['includeVenueType', 'smart_bio_include_venue_type'],
+                                ['includeGender', 'smart_bio_include_gender'],
+                                ['includeAge', 'smart_bio_include_age'],
+                                ['includeGuests', 'smart_bio_include_guests'],
+                                ['includePayment', 'smart_bio_include_payment'],
+                                ['includeTitle', 'smart_bio_include_title']
+                            ].map(([key, labelKey]) => (
+                                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={!!smartBioOptions[key]}
+                                        onChange={(e) =>
+                                            setSmartBioOptions((prev) => ({ ...prev, [key]: e.target.checked }))
+                                        }
+                                    />
+                                    <span>{t(labelKey)}</span>
+                                </label>
+                            ))}
+                            <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+                                <span style={{ fontWeight: 600 }}>{t('smart_bio_format')}</span>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                                    <input
+                                        type="radio"
+                                        name="smartBioFormat"
+                                        checked={smartBioOptions.format === 'sentence'}
+                                        onChange={() => setSmartBioOptions((prev) => ({ ...prev, format: 'sentence' }))}
+                                    />
+                                    {t('smart_bio_format_sentence')}
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                                    <input
+                                        type="radio"
+                                        name="smartBioFormat"
+                                        checked={smartBioOptions.format === 'lines'}
+                                        onChange={() => setSmartBioOptions((prev) => ({ ...prev, format: 'lines' }))}
+                                    />
+                                    {t('smart_bio_format_lines')}
+                                </label>
+                            </div>
+                        </div>
+                        <p style={{ margin: '8px 0 0', fontSize: '0.72rem', opacity: 0.9, lineHeight: 1.4 }}>
+                            {t('smart_bio_disclaimer_ai')}
+                        </p>
+                    </details>
                     <textarea
                         name="description"
-                        rows="4"
+                        rows="2"
                         placeholder={t('form_message_placeholder', 'Write your message to the invitees here...')}
                         value={formData.description}
                         onChange={handleChange}
                         className="input-field text-area"
-                        maxLength={300}
+                        maxLength={invitationMessageMaxLength}
+                        style={{ minHeight: '44px' }}
                     ></textarea>
                 </div>
 
@@ -1419,6 +1543,66 @@ const CreateInvitation = () => {
                     </div>
                 </div >
 
+                {/* Card layout templates — above colors */}
+                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
+                    <label className="elegant-label" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>{'\u{1F4D0}'}</span>
+                        {t('invitation_card_layout', { defaultValue: 'Card layout' })}
+                    </label>
+                    <div style={{
+                        display: 'flex',
+                        overflowX: 'auto',
+                        gap: '10px',
+                        padding: '10px 4px',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        cursor: 'grab',
+                    }}
+                        className="hide-scroll-bar"
+                        ref={templateScrollRef}
+                        onMouseDown={(e) => startHorizontalDrag('templates', templateScrollRef, e)}
+                        onMouseMove={(e) => moveHorizontalDrag('templates', templateScrollRef, e)}
+                        onMouseUp={() => endHorizontalDrag('templates', templateScrollRef)}
+                        onMouseLeave={() => endHorizontalDrag('templates', templateScrollRef)}
+                    >
+                        {TEMPLATE_PICKER_KEYS.map((key) => {
+                            const resolvedKey = LEGACY_PUBLIC_TEMPLATE_MAP[key] || key;
+                            const tmpl = TEMPLATE_STYLES[resolvedKey] || TEMPLATE_STYLES.photoBottom;
+                            const isSel = formData.templateType === key;
+                            const scheme = COLOR_SCHEMES[formData.colorScheme] || COLOR_SCHEMES.sunsetOrange;
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, templateType: key })}
+                                    style={{
+                                        minWidth: '118px',
+                                        maxWidth: '148px',
+                                        flex: '0 0 auto',
+                                        padding: '10px 10px 12px',
+                                        borderRadius: '14px',
+                                        border: isSel ? '3px solid var(--primary)' : '1px solid var(--border-color)',
+                                        background: isSel ? 'color-mix(in srgb, var(--primary) 18%, var(--bg-card))' : 'var(--bg-card)',
+                                        color: 'var(--text-main)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        transition: 'all 0.2s',
+                                        boxShadow: isSel ? '0 6px 18px rgba(0,0,0,0.12)' : 'none',
+                                    }}
+                                >
+                                    <InvitationTemplateSwatch templateKey={key} accentGradient={scheme.gradient} />
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, textAlign: 'center', lineHeight: 1.25 }}>
+                                        {t(`invitation_template_${key}`, { defaultValue: tmpl.name })}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 {/* Color Theme Horizontal Picker */}
                 <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
                     <label className="elegant-label" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1433,7 +1617,15 @@ const CreateInvitation = () => {
                         padding: '10px 4px',
                         scrollbarWidth: 'none', // Firefox
                         msOverflowStyle: 'none', // IE/Edge
-                    }} className="hide-scroll-bar">
+                        cursor: 'grab',
+                    }}
+                        className="hide-scroll-bar"
+                        ref={colorScrollRef}
+                        onMouseDown={(e) => startHorizontalDrag('colors', colorScrollRef, e)}
+                        onMouseMove={(e) => moveHorizontalDrag('colors', colorScrollRef, e)}
+                        onMouseUp={() => endHorizontalDrag('colors', colorScrollRef)}
+                        onMouseLeave={() => endHorizontalDrag('colors', colorScrollRef)}
+                    >
                         {Object.entries(COLOR_SCHEMES).map(([key, color]) => {
                             const isSelected = formData.colorScheme === key;
                             return (
@@ -1479,7 +1671,108 @@ const CreateInvitation = () => {
                 <button type="submit" className="ui-btn ui-btn--primary" style={{ width: '100%', height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
                     {isSubmitting ? t('loading') : (editingInvitation ? (t('save_changes') || '💾 Save Changes') : (t('preview_invitation') || '📋 Preview Invitation'))}
                 </button>
-            </form >
+            </form>
+
+            {smartSuggestionsOpen && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="smart-suggestions-title"
+                    onClick={closeSmartSuggestions}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 10050,
+                        background: 'rgba(0,0,0,0.55)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '16px',
+                        boxSizing: 'border-box'
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        dir="auto"
+                        style={{
+                            width: '100%',
+                            maxWidth: '420px',
+                            maxHeight: 'min(85vh, 560px)',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            background: 'var(--bg-card, #1a1a24)',
+                            color: 'var(--text-main)',
+                            borderRadius: '16px',
+                            border: '1px solid var(--border-color, rgba(255,255,255,0.12))',
+                            boxShadow: '0 20px 50px rgba(0,0,0,0.45)'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', padding: '16px 16px 8px' }}>
+                            <div>
+                                <h2 id="smart-suggestions-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
+                                    {t('smart_bio_suggestions_title')}
+                                </h2>
+                                <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                    {t('smart_bio_suggestions_hint')}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeSmartSuggestions}
+                                aria-label={t('close')}
+                                style={{
+                                    flexShrink: 0,
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    borderRadius: '8px'
+                                }}
+                            >
+                                <FaTimes size={18} />
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 16px' }}>
+                            {smartSuggestionsLoading && (
+                                <p style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                                    {t('smart_bio_suggestions_loading')}
+                                </p>
+                            )}
+                            {!smartSuggestionsLoading && headlineSuggestionsAreFallback && smartSuggestions.length > 0 && (
+                                <p style={{ textAlign: 'center', padding: '0 8px 12px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                                    {t('smart_bio_suggestions_fallback_hint', { defaultValue: 'Built-in suggestions — pick one to get started.' })}
+                                </p>
+                            )}
+                            {!smartSuggestionsLoading && smartSuggestions.map((line, idx) => (
+                                <button
+                                    key={`${idx}-${line.slice(0, 24)}`}
+                                    type="button"
+                                    onClick={() => pickSmartSuggestion(line)}
+                                    style={{
+                                        display: 'block',
+                                        width: '100%',
+                                        textAlign: 'start',
+                                        marginBottom: '8px',
+                                        padding: '12px 14px',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--border-color)',
+                                        background: 'var(--bg-elevated, rgba(255,255,255,0.04))',
+                                        color: 'var(--text-main)',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        lineHeight: 1.35
+                                    }}
+                                >
+                                    <span style={{ opacity: 0.55, marginInlineEnd: '8px', fontWeight: 700 }}>{idx + 1}.</span>
+                                    {line}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

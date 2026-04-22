@@ -72,7 +72,7 @@
 }
 
 .settings-user-card {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.08));
     border: 2px solid rgba(139, 92, 246, 0.3);
     border-radius: 20px;
     padding: 1.5rem;
@@ -80,6 +80,95 @@
     display: flex;
     align-items: center;
     gap: 1rem;
+}
+
+.settings-user-name {
+    font-size: 1.2rem;
+    font-weight: 800;
+    margin-bottom: 0.25rem;
+    color: var(--text-main);
+}
+
+/* List rows: theme-aware hover (replaces inline purple tint) */
+.settings-row {
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.settings-row:not(:last-child) {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-row:hover {
+    background: var(--bg-hover);
+}
+
+.settings-row.settings-row--danger:hover {
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+.settings-badge-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.settings-badge-pill--business {
+    background: color-mix(in srgb, var(--brand-primary) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 40%, transparent);
+    color: var(--brand-primary);
+}
+
+.settings-badge-pill--tier-elite {
+    background: linear-gradient(135deg, color-mix(in srgb, #fbbf24 22%, transparent), color-mix(in srgb, #f97316 18%, transparent));
+    border: 1px solid color-mix(in srgb, #fbbf24 45%, transparent);
+    color: #fbbf24;
+}
+
+.settings-badge-pill--tier-pro {
+    background: color-mix(in srgb, var(--brand-primary) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 40%, transparent);
+    color: var(--brand-primary);
+}
+
+/* ── Light theme: clearer surfaces & contrast ── */
+[data-theme='light'] .settings-user-card {
+    background: linear-gradient(
+        145deg,
+        color-mix(in srgb, var(--primary) 16%, var(--bg-card)),
+        color-mix(in srgb, var(--brand-primary) 10%, var(--bg-card))
+    );
+    border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border-color));
+    box-shadow: var(--shadow-premium);
+}
+
+[data-theme='light'] .settings-section-title {
+    color: var(--text-subheading);
+    letter-spacing: 0.04em;
+}
+
+[data-theme='light'] .settings-section-title--danger {
+    color: #b91c1c;
+}
+
+[data-theme='light'] .settings-section-card.ui-card {
+    border-color: var(--border-color);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme='light'] .settings-badge-pill--tier-elite {
+    color: #92400e;
+}
+
+[data-theme='light'] .settings-version {
+    color: var(--text-secondary);
+    opacity: 0.9;
 }
 
 @media (min-width: 768px) {
@@ -96,7 +185,7 @@
 .settings-section-title {
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--text-muted);
+    color: var(--text-subheading);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 0;

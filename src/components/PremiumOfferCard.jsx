@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FaEdit, FaPause, FaPlay, FaTrash } from 'react-icons/fa';
 import AnimatedOfferIcon from './AnimatedOfferIcons';
 import OfferTemplateRenderer from './OfferTemplateRenderer';
+import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 
 const themeStyles = {
     'Midnight Lux': {
@@ -194,7 +195,7 @@ const PremiumOfferCard = ({
                 {/* Left: Image */}
                 <div style={{ flex: '0 0 25%', position: 'relative', overflow: 'hidden' }}>
                     <img
-                        src={offer.imageUrl || 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&q=80&w=400'}
+                        src={pickSafeDisplayImageUrl(offer.imageUrl) || 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&q=80&w=400'}
                         alt={offer.title}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -221,7 +222,7 @@ const PremiumOfferCard = ({
                             <AnimatedOfferIcon type={offer.selectedIcon} />
                         </div>
                     ) : offer.logoUrl ? (
-                        <img src={offer.logoUrl} alt="Partner Logo" style={{ width: logoSize, height: logoSize, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${currentTheme.titleText}`, boxShadow: `0 0 15px ${currentTheme.shadow}` }} />
+                        <img src={pickSafeDisplayImageUrl(offer.logoUrl)} alt="Partner Logo" style={{ width: logoSize, height: logoSize, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${currentTheme.titleText}`, boxShadow: `0 0 15px ${currentTheme.shadow}` }} />
                     ) : (
                         <div style={{ width: logoSize, height: logoSize, borderRadius: '50%', background: `radial-gradient(circle, ${currentTheme.titleText} 0%, transparent 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 'bold', border: `2px solid ${currentTheme.titleText}`, animation: 'pulseIcon 2s infinite' }}>%</div>
                     )}

@@ -131,20 +131,12 @@ export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invi
  * @returns {Promise<string|null>} - Firebase Storage URL or null
  */
 export const uploadPlacePhoto = async (placeId, index, userId, folder = 'businesses') => {
-    if (!placeId || !userId) return null;
-    const endpoint = import.meta.env.DEV ? '/__dev/place-photo' : '/api/place-photo';
-    const apiUrl = `${endpoint}?placeId=${encodeURIComponent(placeId)}&index=${index}`;
-    try {
-        const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`Place photo API: ${res.status}`);
-        const blob = await res.blob();
-        if (blob.size < 500) return null;
-        const file = new File([blob], `place_photo_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
-        return await uploadMedia(file, userId, 'image', folder);
-    } catch (e) {
-        console.warn('uploadPlacePhoto failed:', e);
-        return null;
-    }
+    void placeId;
+    void index;
+    void userId;
+    void folder;
+    // Emergency kill-switch: Google Place photos are disabled.
+    return null;
 };
 
 /**
@@ -156,20 +148,10 @@ export const uploadPlacePhoto = async (placeId, index, userId, folder = 'busines
  * @param {string} [folder='businesses']
  */
 export const uploadPlacePhotoFromUrl = async (url, userId, folder = 'businesses') => {
-    if (!url || !userId) return null;
-    // Already a Firebase Storage URL — return as-is
-    if (url.includes('firebasestorage.googleapis.com')) return url;
-    try {
-        // Parse placeId and index regardless of whether URL is relative or absolute
-        const parsed = new URL(url, 'https://placeholder.local');
-        const placeId = parsed.searchParams.get('placeId');
-        const index = parseInt(parsed.searchParams.get('index') || '0', 10);
-        if (!placeId) return null;
-        return await uploadPlacePhoto(placeId, index, userId, folder);
-    } catch (e) {
-        console.warn('uploadPlacePhotoFromUrl failed:', url, e);
-        return null;
-    }
+    void url;
+    void userId;
+    void folder;
+    return null;
 };
 
 
@@ -185,6 +167,14 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
     if (!url) return null;
     if (url.includes('firebasestorage')) {
         return url;
+    }
+    // Block Google Place photo URLs completely (cost-control emergency mode).
+    if (
+        url.includes('/api/place-photo') ||
+        url.includes('/__dev/place-photo') ||
+        url.includes('maps.googleapis.com/maps/api/place/photo')
+    ) {
+        return null;
     }
 
     console.log('🔄 Fetching image via proxy to bypass CORS:', url);

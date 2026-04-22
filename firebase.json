@@ -26,6 +26,10 @@
         ],
         "rewrites": [
             {
+                "source": "/api/place-photo",
+                "function": "placePhoto"
+            },
+            {
                 "source": "**",
                 "destination": "/index.html"
             }

@@ -154,7 +154,7 @@ const InvitationShareModal = ({
 
                 {/* Actions */}
                 <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {onShareNative && navigator.share && (
+                    {onShareNative && (
                         <button
                             type="button"
                             onClick={onShareNative}

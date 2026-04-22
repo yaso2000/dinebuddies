@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { goToLogin } from '../utils/goToLogin';
+import { isAdminIdentity } from '../utils/adminAccess';
 
 const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support', 'staff'] }) => {
     const { currentUser, userProfile } = useAuth();
@@ -18,9 +19,7 @@ const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support',
         );
     }
 
-    // Canonical: only role. No accountType.
-    const isSuperAdmin = currentUser.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33' ||
-        userProfile?.role === 'admin';
+    const isSuperAdmin = isAdminIdentity(currentUser, userProfile);
 
     const userRole = userProfile?.role;
     const hasPermission = isSuperAdmin || allowedRoles.includes(userRole);

@@ -8,10 +8,9 @@ admin.initializeApp();
 
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
-const { runInvitationCardGeneration } = require('./invitationCards/InvitationCardOrchestrator');
-const { runFinalizeInvitationCardDraft } = require('./invitationCards/DraftLifecycleManager');
-const { ImageProviderError } = require('./invitationCards/providers/ImageProviderError');
+const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
 const functions = require('firebase-functions');
+const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
 const MONTHLY_PRIVATE_QUOTAS = {
     free: 3,
@@ -414,6 +413,10 @@ exports.createPortalSession = stripeModule.createPortalSession;
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;
 
+// ─── Google Place photo proxy (Hosting rewrite → /api/place-photo) ───
+const { placePhoto } = require('./placePhotoProxy');
+exports.placePhoto = placePhoto;
+
 // ─── Sync users/{uid} -> public_profiles/{uid} (backend-owned projection) ───
 exports.syncPublicProfileOnUserWrite = functions.firestore
     .document('users/{uid}')
@@ -490,167 +493,279 @@ exports.updateBusinessRatingOnReview = functions.firestore
         return null;
     });
 
-// ─── Trusted callable: publish private invitation draft + consume credit ───
-exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, context) => {
-    // FORCE CACHE INVALIDATION: Quota fix for free users applied
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
-    }
+/**
+ * Create in-app notifications for private invitation invitees (server-side, Admin SDK).
+ * Does not rely on the client callable createNotification (permissions / race / silent failures).
+ */
+async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, inviteeIds, invPre, userRef }) {
+    if (!Array.isArray(inviteeIds) || inviteeIds.length === 0) return 0;
 
-    const invitationId = data?.invitationId;
-    if (!invitationId || typeof invitationId !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'invitationId is required.');
-    }
+    const hostSnap = await userRef.get();
+    const hostData = hostSnap.exists ? hostSnap.data() : {};
+    const hostName =
+        hostData.display_name ||
+        hostData.displayName ||
+        invPre.author?.name ||
+        'Host';
+    const senderAvatar =
+        hostData.avatar ||
+        hostData.photo_url ||
+        hostData.photoURL ||
+        hostData.profilePicture ||
+        hostData.userPhoto ||
+        null;
+    const invTitle = (invPre.title && String(invPre.title).trim()) || 'Private invitation';
+    const occasion = invPre.occasionType || 'Social';
+    const message = `${hostName} invited you: ${invTitle}`.slice(0, 500);
+    const title = 'Private invitation'.slice(0, 120);
+    const actionUrl = `/invitation/private/${invitationId}`.slice(0, 256);
 
-    const uid = context.auth.uid;
-    await enforceCallableRateLimit(uid, 'publish_private_invitation', {
-        perMinute: 8,
-        perHour: 100,
-        perDay: 300,
-        cooldownMs: 3000
-    });
-    const invitationRef = db.collection('private_invitations').doc(invitationId);
-    const userRef = db.collection('users').doc(uid);
-
-    const result = await db.runTransaction(async (tx) => {
-        const [invSnap, userSnap] = await Promise.all([tx.get(invitationRef), tx.get(userRef)]);
-        if (!invSnap.exists) {
-            throw new functions.https.HttpsError('not-found', 'Private invitation draft not found.');
+    let sent = 0;
+    const chunkSize = 400;
+    for (let i = 0; i < inviteeIds.length; i += chunkSize) {
+        const chunk = inviteeIds.slice(i, i + chunkSize);
+        const batch = db.batch();
+        for (const friendId of chunk) {
+            if (!friendId || typeof friendId !== 'string') continue;
+            const ref = db.collection('notifications').doc();
+            batch.set(ref, {
+                userId: friendId,
+                type: 'private_invitation',
+                title,
+                message,
+                actionUrl,
+                invitationId,
+                style: null,
+                status: null,
+                metadata: { occasionType: occasion },
+                fromUserId: uid,
+                fromUserName: hostName,
+                fromUserAvatar: senderAvatar,
+                senderId: uid,
+                senderName: hostName,
+                senderAvatar: senderAvatar,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                read: false
+            });
+            sent += 1;
         }
-        if (!userSnap.exists) {
-            throw new functions.https.HttpsError('not-found', 'User not found.');
-        }
-
-        const inv = invSnap.data() || {};
-        const user = userSnap.data() || {};
-        const hostId = inv.authorId || inv.author?.id;
-
-        if (hostId !== uid) {
-            throw new functions.https.HttpsError('permission-denied', 'Only the invitation host can publish this draft.');
-        }
-
-        // Idempotent publish: do not double charge.
-        if (inv.publishedAt) {
-            return { alreadyPublished: true, chargedSource: null };
-        }
-
-        const isBypassUser = user.role === 'admin';
-        let chargedSource = null;
-
-        if (!isBypassUser) {
-            const tier = user.subscriptionTier || 'free';
-            const quota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
-            const now = new Date();
-            const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
-
-            let usedThisMonth = user.usedPrivateCreditsThisMonth || 0;
-            const lastResetMonth = user.lastPrivateResetMonth || '';
-            if (quota > 0 && lastResetMonth !== currentMonth) {
-                usedThisMonth = 0;
-                tx.update(userRef, {
-                    usedPrivateCreditsThisMonth: 0,
-                    lastPrivateResetMonth: currentMonth
-                });
-            }
-
-            const purchasedCredits = user.purchasedPrivateCredits || 0;
-            if (quota > 0 && usedThisMonth < quota) {
-                tx.update(userRef, {
-                    usedPrivateCreditsThisMonth: usedThisMonth + 1,
-                    lastPrivateResetMonth: currentMonth
-                });
-                chargedSource = 'monthly';
-            } else if (purchasedCredits > 0) {
-                tx.update(userRef, {
-                    purchasedPrivateCredits: purchasedCredits - 1
-                });
-                chargedSource = 'purchased';
-            } else {
-                throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
-            }
-        }
-
-        tx.update(invitationRef, {
-            status: admin.firestore.FieldValue.delete(),
-            publishedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        return { alreadyPublished: false, chargedSource };
-    });
-
-    return { success: true, ...result };
-});
-
-function mapInvitationCardCallableError(err, logLabel) {
-    if (err instanceof functions.https.HttpsError) {
-        return err;
+        await batch.commit();
     }
-    const msg = err && err.message ? String(err.message) : 'Request failed.';
-    functions.logger.error(logLabel, err);
-    if (msg.includes('Maximum attempts')) {
-        return new functions.https.HttpsError('failed-precondition', msg);
-    }
-    if (
-        msg.includes('does not belong') ||
-        msg.includes('DraftLifecycleManager: forbidden') ||
-        msg.includes('invitationKind does not match')
-    ) {
-        return new functions.https.HttpsError('permission-denied', msg);
-    }
-    if (msg.includes('Invalid or unknown draftGroupId') || msg.includes('DraftLifecycleManager: session not found')) {
-        return new functions.https.HttpsError('not-found', msg);
-    }
-    if (
-        err instanceof ImageProviderError ||
-        msg.includes('INVITATION_CARD_IMAGE_PROVIDER not supported') ||
-        msg.includes('CardVisualGeneratorGateway:')
-    ) {
-        return new functions.https.HttpsError('internal', 'Image generation is temporarily unavailable.');
-    }
-    return new functions.https.HttpsError('invalid-argument', msg);
+    return sent;
 }
 
-// ─── Invitation card drafts (one draftGroupId per session, max 3 attempts × 3 cards) ───
-// NOTE: Not wired from the private-invitation UI (removed); kept for future reuse or admin/tools.
-// Each attempt runs 3 sequential OpenAI image calls; default 60s function + ~70s client timeouts are too short.
-exports.generateInvitationCards = functions
-    .runWith({ timeoutSeconds: 300, memory: '512MB' })
-    .https.onCall(async (data, context) => {
+// ─── Trusted callable: publish private invitation draft + consume credit ───
+exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, context) => {
+    try {
         if (!context.auth) {
             throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
         }
-        const uid = context.auth.uid;
-        await enforceCallableRateLimit(uid, 'generate_invitation_cards', {
-            perMinute: 8,
-            perHour: 40,
-            perDay: 120,
-            cooldownMs: 2000
-        });
-        try {
-            return await runInvitationCardGeneration(data, context);
-        } catch (err) {
-            throw mapInvitationCardCallableError(err, 'generateInvitationCards');
-        }
-    });
 
-// NOTE: Companion to generateInvitationCards; same — retained for future use, not used by current app UI.
-exports.finalizeInvitationCardDraft = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
-    }
-    const uid = context.auth.uid;
-    await enforceCallableRateLimit(uid, 'finalize_invitation_card_draft', {
-        perMinute: 20,
-        perHour: 100,
-        perDay: 300,
-        cooldownMs: 1000
-    });
-    try {
-        return await runFinalizeInvitationCardDraft(data, context);
+        const invitationId = data?.invitationId;
+        if (!invitationId || typeof invitationId !== 'string') {
+            throw new functions.https.HttpsError('invalid-argument', 'invitationId is required.');
+        }
+
+        const uid = context.auth.uid;
+        functions.logger.info('publishPrivateInvitationDraft:start', {
+            invitationId,
+            uid
+        });
+        await enforceCallableRateLimit(uid, 'publish_private_invitation', {
+            perMinute: 8,
+            perHour: 100,
+            perDay: 300,
+            cooldownMs: 3000
+        });
+
+        const invitationRef = db.collection('private_invitations').doc(invitationId);
+        const userRef = db.collection('users').doc(uid);
+
+        // Pre-filter invitees outside the transaction (plain reads). Keeps the transaction to 2 reads + writes only,
+        // avoids Firestore transaction read/write ordering issues and large read batches inside one txn.
+        const invSnapPre = await invitationRef.get();
+        if (!invSnapPre.exists) {
+            throw new functions.https.HttpsError('not-found', 'Private invitation draft not found.');
+        }
+        const invPre = invSnapPre.data() || {};
+        const hostPre = invPre.authorId || invPre.author?.id;
+        if (hostPre !== uid) {
+            throw new functions.https.HttpsError('permission-denied', 'Only the invitation host can publish this draft.');
+        }
+        if (invPre.publishedAt) {
+            return { success: true, alreadyPublished: true, chargedSource: null };
+        }
+
+        const rawIds = Array.isArray(invPre.invitedFriends) ? invPre.invitedFriends : [];
+        functions.logger.info('publishPrivateInvitationDraft:prefilter_input', {
+            invitationId,
+            hostPre,
+            rawInvitees: rawIds.length,
+            status: invPre.status || null,
+            hasPublishedAt: Boolean(invPre.publishedAt)
+        });
+        const filteredFriends = [];
+        for (const fid of rawIds) {
+            if (!fid || typeof fid !== 'string') continue;
+            const fSnap = await db.collection('users').doc(fid).get();
+            if (!fSnap.exists) continue;
+            const fd = fSnap.data() || {};
+            const role = (fd.role || '').toLowerCase();
+            if (role === 'business' || role === 'guest' || fd.isBusiness === true || fd.isGuest === true) continue;
+            const blocked = Array.isArray(fd.blockedUserIds) ? fd.blockedUserIds : [];
+            const muted = Array.isArray(fd.mutedUserIds) ? fd.mutedUserIds : [];
+            if (blocked.includes(uid)) continue;
+            if (muted.includes(uid)) continue;
+            filteredFriends.push(fid);
+        }
+        functions.logger.info('publishPrivateInvitationDraft:prefilter_output', {
+            invitationId,
+            validInvitees: filteredFriends.length
+        });
+        if (rawIds.length > 0 && filteredFriends.length === 0) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'No valid invitees remained (blocked, muted, missing, or non-user account).'
+            );
+        }
+
+        const result = await db.runTransaction(async (tx) => {
+            const [invSnap, userSnap] = await Promise.all([tx.get(invitationRef), tx.get(userRef)]);
+            if (!invSnap.exists) {
+                throw new functions.https.HttpsError('not-found', 'Private invitation draft not found.');
+            }
+            if (!userSnap.exists) {
+                throw new functions.https.HttpsError('not-found', 'User not found.');
+            }
+
+            const inv = invSnap.data() || {};
+            const user = userSnap.data() || {};
+            const hostId = inv.authorId || inv.author?.id;
+
+            if (hostId !== uid) {
+                throw new functions.https.HttpsError('permission-denied', 'Only the invitation host can publish this draft.');
+            }
+
+            if (inv.publishedAt) {
+                return { alreadyPublished: true, chargedSource: null };
+            }
+
+            const currentRsvps = inv.rsvps && typeof inv.rsvps === 'object' ? inv.rsvps : {};
+            const nextRsvps = {};
+            filteredFriends.forEach((fid) => {
+                const raw = currentRsvps[fid];
+                const normalized = typeof raw === 'string' ? raw.toLowerCase() : 'pending';
+                nextRsvps[fid] = normalized === 'accepted' || normalized === 'declined' ? normalized : 'pending';
+            });
+
+            const isBypassUser = user.role === 'admin';
+            let chargedSource = null;
+            /** @type {Record<string, unknown> | null} */
+            let userCreditPatch = null;
+
+            if (!isBypassUser) {
+                const tier = user.subscriptionTier || 'free';
+                const quota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
+                const now = new Date();
+                const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
+                let usedThisMonth = Number(user.usedPrivateCreditsThisMonth) || 0;
+                const lastResetMonth = user.lastPrivateResetMonth || '';
+                if (quota > 0 && lastResetMonth !== currentMonth) {
+                    usedThisMonth = 0;
+                }
+                const purchasedCredits = Math.max(0, Number(user.purchasedPrivateCredits) || 0);
+                if (quota > 0 && usedThisMonth < quota) {
+                    chargedSource = 'monthly';
+                    userCreditPatch = {
+                        usedPrivateCreditsThisMonth: usedThisMonth + 1,
+                        lastPrivateResetMonth: currentMonth
+                    };
+                } else if (purchasedCredits > 0) {
+                    chargedSource = 'purchased';
+                    userCreditPatch = {
+                        purchasedPrivateCredits: purchasedCredits - 1
+                    };
+                } else {
+                    throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
+                }
+            }
+
+            tx.update(invitationRef, {
+                invitedFriends: filteredFriends,
+                rsvps: nextRsvps,
+                status: 'published',
+                publishedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            if (userCreditPatch) {
+                tx.update(userRef, userCreditPatch);
+            }
+
+            return { alreadyPublished: false, chargedSource };
+        });
+        functions.logger.info('publishPrivateInvitationDraft:published', {
+            invitationId,
+            alreadyPublished: result.alreadyPublished,
+            chargedSource: result.chargedSource || null,
+            finalInvitees: filteredFriends.length
+        });
+
+        let notificationsSent = 0;
+        if (!result.alreadyPublished && filteredFriends.length > 0) {
+            try {
+                notificationsSent = await sendPrivateInvitationInviteeNotifications({
+                    uid,
+                    invitationId,
+                    inviteeIds: filteredFriends,
+                    invPre,
+                    userRef
+                });
+                functions.logger.info('publishPrivateInvitationDraft notifications', {
+                    invitationId,
+                    notificationsSent
+                });
+            } catch (notifyErr) {
+                functions.logger.error('publishPrivateInvitationDraft: invitee notifications failed', invitationId, notifyErr);
+            }
+        }
+
+        return { success: true, ...result, notificationsSent };
     } catch (err) {
-        throw mapInvitationCardCallableError(err, 'finalizeInvitationCardDraft');
+        if (err instanceof functions.https.HttpsError) {
+            throw err;
+        }
+        console.error('publishPrivateInvitationDraft unexpected error', data?.invitationId, err);
+        throw new functions.https.HttpsError(
+            'internal',
+            err?.message || 'Publish failed unexpectedly.'
+        );
     }
 });
+
+// ─── AI one-line message suggestions (OpenAI chat; requires OPENAI_API_KEY) ───
+// Gen2 callable with explicit CORS: Gen1 endpoints sometimes fail browser preflight from
+// the hosted web app (no Access-Control-Allow-Origin). Gen2 onCall handles OPTIONS reliably.
+exports.suggestInvitationMessages = onCallV2(
+    {
+        region: 'us-central1',
+        timeoutSeconds: 60,
+        memory: '256MiB',
+        cors: true
+    },
+    async (request) => {
+        if (!request.auth) {
+            throw new HttpsErrorV2('unauthenticated', 'Authentication required.');
+        }
+        const uid = request.auth.uid;
+        await enforceCallableRateLimit(uid, 'suggest_invitation_messages', {
+            perMinute: 8,
+            perHour: 60,
+            perDay: 150,
+            cooldownMs: 3000
+        });
+        return runSuggestInvitationMessages(request.data, { auth: request.auth });
+    }
+);
 
 // ─── Trusted callable: create/get conversation with anti-spam limits ────────
 exports.createOrGetConversation = functions.https.onCall(async (data, context) => {
@@ -682,6 +797,23 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
 
     if (existingSnap.exists) {
         return { success: true, conversationId, created: false };
+    }
+
+    const [reqSnap, othSnap] = await Promise.all([
+        db.collection('users').doc(uid).get(),
+        db.collection('users').doc(otherUserId).get()
+    ]);
+    const reqData = reqSnap.data() || {};
+    const othData = othSnap.data() || {};
+    const reqBlocked = reqData.blockedUserIds || [];
+    const reqMuted = reqData.mutedUserIds || [];
+    const othBlocked = othData.blockedUserIds || [];
+    const othMuted = othData.mutedUserIds || [];
+    if (reqBlocked.includes(otherUserId) || reqMuted.includes(otherUserId)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Messaging is not available with this user.');
+    }
+    if (othBlocked.includes(uid) || othMuted.includes(uid)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Messaging is not available with this user.');
     }
 
     await convRef.set({

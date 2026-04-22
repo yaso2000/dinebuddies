@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { FaCamera, FaTrash, FaTimes, FaCheck } from 'react-icons/fa';
+import { FaCamera, FaTimes } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 import './ImageUpload.css';
 
@@ -100,17 +100,6 @@ const ImageUpload = ({
                 {showPreview && preview ? (
                     <div className="image-preview">
                         <img src={preview} alt="Preview" />
-                        {allowRemove && (
-                            <button
-                                className="remove-btn"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemove();
-                                }}
-                            >
-                                <FaTimes />
-                            </button>
-                        )}
                     </div>
                 ) : (
                     <div className="upload-placeholder">
@@ -119,6 +108,37 @@ const ImageUpload = ({
                     </div>
                 )}
             </div>
+
+            {showPreview && preview && (
+                <div className="image-upload-actions">
+                    <button
+                        type="button"
+                        className="change-btn"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleClick();
+                        }}
+                        title={label}
+                        aria-label={label}
+                    >
+                        <FaCamera className="change-btn__icon" aria-hidden />
+                    </button>
+                    {allowRemove && (
+                        <button
+                            type="button"
+                            className="remove-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemove();
+                            }}
+                            title="Remove photo"
+                            aria-label="Remove photo"
+                        >
+                            <FaTimes className="remove-btn__icon" aria-hidden />
+                        </button>
+                    )}
+                </div>
+            )}
 
             <input
                 ref={fileInputRef}

@@ -18,6 +18,16 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
     ) : null;
 
     const themeColor = templateStyles?.badge?.color || 'var(--primary)';
+    const normalizedThemeColor = String(themeColor || '').trim().toLowerCase();
+    const isVeryLightThemeColor =
+        normalizedThemeColor === '#fff' ||
+        normalizedThemeColor === '#ffffff' ||
+        normalizedThemeColor === 'white' ||
+        normalizedThemeColor === 'rgb(255, 255, 255)' ||
+        normalizedThemeColor === 'rgba(255, 255, 255, 1)';
+    const activeStepBackground = isVeryLightThemeColor ? 'var(--bg-body)' : themeColor;
+    const activeStepBorder = isVeryLightThemeColor ? 'var(--text-main)' : themeColor;
+    const activeStepIconColor = isVeryLightThemeColor ? 'var(--text-main)' : 'white';
 
     // Calculate progress width based on status
     const getProgressWidth = () => {
@@ -79,14 +89,14 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
                                     width: '32px',
                                     height: '32px',
                                     borderRadius: '50%',
-                                    background: active ? themeColor : 'var(--bg-body)',
-                                    border: `2px solid ${active ? themeColor : 'var(--border-color)'}`,
+                                    background: active ? activeStepBackground : 'var(--bg-body)',
+                                    border: `2px solid ${active ? activeStepBorder : 'var(--border-color)'}`,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginBottom: '8px',
                                     transition: 'all 0.3s ease',
-                                    color: active ? 'white' : 'var(--text-muted)',
+                                    color: active ? activeStepIconColor : 'var(--text-muted)',
                                     boxShadow: active ? `0 0 15px ${themeColor}66` : 'none'
                                 }}>
                                     <Icon size={14} />
