@@ -5,8 +5,26 @@
  * GET /api/place-autocomplete?input=...&sessionToken=...&countryCode=sa&minLat=...&minLon=...&maxLat=...&maxLon=...
  */
 const AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
+import { takeRateLimit } from './_rateLimit.js';
 
 export default async function handler(req, res) {
+    const rl = takeRateLimit(req, {
+        key: 'place-autocomplete',
+        limit: 40,
+        windowMs: 60_000,
+    });
+    res.setHeader('X-RateLimit-Limit', '40');
+    res.setHeader('X-RateLimit-Remaining', String(rl.remaining));
+    res.setHeader('X-RateLimit-Reset', String(rl.resetAt));
+    if (!rl.ok) {
+        res.setHeader('Retry-After', String(rl.retryAfterSec));
+        return res.status(429).json({
+            status: 'RATE_LIMITED',
+            predictions: [],
+            error: 'Too many requests. Please slow down and try again.',
+        });
+    }
+
     if (req.method !== 'GET') {
         res.setHeader('Allow', 'GET');
         return res.status(405).json({ error: 'Method not allowed' });

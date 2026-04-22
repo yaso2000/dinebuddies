@@ -5,6 +5,7 @@
  * GET /api/place-details?placeId=ChIJ...&sessionToken=...
  */
 const DETAILS_URL = 'https://places.googleapis.com/v1/places';
+import { takeRateLimit } from './_rateLimit.js';
 
 function parseAddressComponents(components) {
     let city = '';
@@ -25,6 +26,21 @@ function parseAddressComponents(components) {
 }
 
 export default async function handler(req, res) {
+    const rl = takeRateLimit(req, {
+        key: 'place-details',
+        limit: 12,
+        windowMs: 60_000,
+    });
+    res.setHeader('X-RateLimit-Limit', '12');
+    res.setHeader('X-RateLimit-Remaining', String(rl.remaining));
+    res.setHeader('X-RateLimit-Reset', String(rl.resetAt));
+    if (!rl.ok) {
+        res.setHeader('Retry-After', String(rl.retryAfterSec));
+        return res.status(429).json({
+            error: 'Too many detail requests. Please wait a bit.',
+        });
+    }
+
     if (req.method !== 'GET') {
         res.setHeader('Allow', 'GET');
         return res.status(405).json({ error: 'Method not allowed' });

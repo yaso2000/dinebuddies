@@ -9,7 +9,7 @@ import './venue-search.css';
 
 /**
  * VenueLocationPicker
- * Toggle between DineBuddies registered venues and OpenStreetMap (Photon) search.
+ * Toggle between DineBuddies registered venues and Google Places search.
  *
  * Props mirror LocationAutocomplete:
  *   value, onChange, onSelect, city, countryCode, userLat, userLng, className
@@ -31,7 +31,7 @@ const VenueLocationPicker = ({
     className = ''
 }) => {
     const { t } = useTranslation();
-    const [source, setSource] = useState('dinebuddies'); // 'dinebuddies' | 'osm'
+    const [source, setSource] = useState('dinebuddies'); // 'dinebuddies' | 'google'
     const [dbQuery, setDbQuery] = useState('');
     const [dbResults, setDbResults] = useState([]);
     const [dbLoading, setDbLoading] = useState(false);
@@ -173,22 +173,22 @@ const VenueLocationPicker = ({
 
                 <button
                     type="button"
-                    onClick={() => switchSource('osm')}
-                    className={`venue-search-segment__btn${source === 'osm' ? ' venue-search-segment__btn--active' : ''}`}
+                    onClick={() => switchSource('google')}
+                    className={`venue-search-segment__btn${source === 'google' ? ' venue-search-segment__btn--active' : ''}`}
                 >
                     <FaGlobe style={{ fontSize: '0.85rem' }} />
-                    {t('openstreetmap_places', 'All places (OpenStreetMap)')}
+                    {t('google_places', 'Google Places')}
                 </button>
             </div>
 
-            {source === 'osm' && (
+            {source === 'google' && (
                 <p style={{
                     fontSize: '0.72rem',
                     color: 'var(--text-muted)',
                     margin: '0 0 8px 0',
                     lineHeight: 1.35,
                 }}>
-                    {t('venue_osm_search_hint', 'Search powered by OpenStreetMap — no Google Places fees.')}
+                    {t('venue_google_search_hint', 'Search by Google Places within your detected city.')}
                 </p>
             )}
 
@@ -280,13 +280,13 @@ const VenueLocationPicker = ({
                             {/* Hint to switch to Google */}
                             {!dbLoading && (
                                 <div
-                                    onClick={() => switchSource('osm')}
+                                    onClick={() => switchSource('google')}
                                     className="venue-search-footer-hint"
                                 >
                                     <FaGlobe style={{ color: 'var(--text-muted)', fontSize: '1rem' }} />
                                     <div>
                                         <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                                            {t('switch_to_osm', 'Search OpenStreetMap instead')}
+                                            {t('switch_to_google', 'Search Google Places instead')}
                                         </div>
                                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                                             {t('for_unregistered_venues', 'For venues not yet on DineBuddies')}
@@ -299,8 +299,8 @@ const VenueLocationPicker = ({
                 </div>
             )}
 
-            {/* Mount OSM field only when active — avoids hidden `required` input (browser "not focusable" bug). */}
-            {source === 'osm' && (
+            {/* Mount Google field only when active — avoids hidden `required` input (browser "not focusable" bug). */}
+            {source === 'google' && (
                 <LocationAutocomplete
                     value={value}
                     onChange={onChange}
@@ -311,6 +311,7 @@ const VenueLocationPicker = ({
                     userLng={userLng}
                     invitationType={invitationType}
                     className={className}
+                    useGooglePlacesMinimal
                 />
             )}
         </div>
