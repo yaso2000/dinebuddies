@@ -218,7 +218,9 @@ service firebase.storage {
     // Business feedback/complaint proof media
     match /feedback_media/{businessId}/{fileName} {
       allow read: if true;
-      allow write: if (isImage() || isVideo() || isAudio())
+      allow write: if isSignedIn()
+                   && uidPrefixed(fileName)
+                   && (isImage() || isVideo() || isAudio())
                    && request.resource.size < 30 * 1024 * 1024;
     }
 
