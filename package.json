@@ -11,6 +11,7 @@
     "vercel-build": "node scripts/ensure-maps-key-for-build.mjs && vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
+    "preview:live": "npx --yes serve dist -p 4173",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
     "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute"
   },
