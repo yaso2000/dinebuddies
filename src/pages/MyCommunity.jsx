@@ -4,10 +4,10 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
-import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope } from 'react-icons/fa';
+import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope, FaMagic, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import './MyCommunity.css';
-
 
 const MyCommunity = () => {
     const navigate = useNavigate();
@@ -24,7 +24,7 @@ const MyCommunity = () => {
 
     // Check if user is a business account (unified flag)
     const isBusinessAccount = userProfile?.isBusiness || false;
-
+    const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
 
     useEffect(() => {
         if (!isBusinessAccount || !currentUser?.uid) {
@@ -180,14 +180,15 @@ const MyCommunity = () => {
                 </button>
                 <div style={{ flex: 1, textAlign: 'center' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                        {t('my_community', 'My Community')}
+                        {t('business_hub', 'Business Hub')}
                     </h3>
                 </div>
                 <button
                     className="back-btn"
                     onClick={() => navigate(`/business/${currentUser.uid}`)}
+                    aria-label={t('business_profile', 'Business profile')}
                 >
-                    <FaUsers />
+                    <FaStore />
                 </button>
             </header>
 
@@ -233,6 +234,32 @@ const MyCommunity = () => {
                 >
                     <FaComments style={{ fontSize: '0.8rem' }} />
                     Chat
+                </button>
+            </div>
+
+            {/* Hub shortcuts (tier-aware) */}
+            <div className="my-community-actions">
+                {tierAccess.isPaid ? (
+                    <button
+                        onClick={() => navigate('/rankings')}
+                        className="my-community-btn my-community-btn--post"
+                    >
+                        {t('analytics', 'Analytics')}
+                    </button>
+                ) : null}
+                {tierAccess.isPaid ? (
+                    <button
+                        onClick={() => navigate('/notifications')}
+                        className="my-community-btn my-community-btn--story"
+                    >
+                        {t('inbox', 'Inbox')}
+                    </button>
+                ) : null}
+                <button
+                    onClick={() => navigate('/invitations')}
+                    className="my-community-btn my-community-btn--chat"
+                >
+                    {t('archive', 'Archive')}
                 </button>
             </div>
 
@@ -290,6 +317,23 @@ const MyCommunity = () => {
                             ))}
                         </ul>
                     )}
+                </div>
+            </div>
+
+            <div className="my-community-section">
+                <div className="my-community-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                        <h3 style={{ margin: '0 0 6px', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <FaMagic style={{ color: '#8b5cf6' }} />
+                            {t('ai_motion_studio_card_title', 'AI & Motion posts')}
+                        </h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                            {t('ai_motion_studio_card_desc', 'Create animated marketing posts and AI-generated copy on a separate page.')}
+                        </p>
+                    </div>
+                    <button type="button" onClick={() => navigate('/ai-marketing-studio')} className="my-community-btn my-community-btn--post">
+                        {t('open_ai_marketing_studio', 'Open AI studio')}
+                    </button>
                 </div>
             </div>
 

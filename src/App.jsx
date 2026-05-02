@@ -62,6 +62,8 @@ const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const CommunityGuidelines = lazy(() => import('./pages/CommunityGuidelines'));
 const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest'));
 const MyCommunity = lazy(() => import('./pages/MyCommunity'));
+const AiMarketingStudio = lazy(() => import('./pages/AiMarketingStudio'));
+const AiMarketingSavedPosts = lazy(() => import('./pages/AiMarketingSavedPosts'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
 const BusinessManagement = lazy(() => import('./pages/admin/BusinessManagement'));
@@ -208,6 +210,8 @@ function App() {
 
                                                     <Route path="/plans" element={<Navigate to="/pricing" replace />} />
                                                     <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><AiMarketingSavedPosts /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-marketing-studio" element={<GuestBlockedRoute><AiMarketingStudio /></GuestBlockedRoute>} />
 
                                                     <Route path="/payment-success" element={<GuestBlockedRoute><PaymentSuccess /></GuestBlockedRoute>} />
 
