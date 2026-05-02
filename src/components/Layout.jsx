@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt } from 'react-icons/fa';
+import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaMagic, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
@@ -36,12 +36,16 @@ const Layout = ({ children }) => {
     const totalChatUnread = chatUnreadCount + unreadMessageCount;
     const { themeMode } = useTheme();
 
-    const [layoutWinW, setLayoutWinW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024));
+    const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
+
     useEffect(() => {
-        const onR = () => setLayoutWinW(window.innerWidth);
-        window.addEventListener('resize', onR);
-        return () => window.removeEventListener('resize', onR);
-    }, []);
+        if (!businessCreateOpen) return;
+        const onKey = (e) => {
+            if (e.key === 'Escape') setBusinessCreateOpen(false);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [businessCreateOpen]);
 
     // Right sidebar data
     const [trendingPartners, setTrendingPartners] = useState([]);
@@ -163,6 +167,11 @@ const Layout = ({ children }) => {
     const isCommunityRoute = location.pathname.startsWith('/community/');
     const isStoryRoute = location.pathname === '/create-story';
     const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
+
+    const businessCreateFabActive =
+        location.pathname === '/create-post' ||
+        location.pathname.startsWith('/ai-marketing-studio') ||
+        location.pathname.startsWith('/business-pro');
 
     const changeLanguage = (lang) => i18n.changeLanguage(lang);
 
@@ -561,9 +570,16 @@ const Layout = ({ children }) => {
                         </Link>
                     ) : null}
                     {isBusinessAccount && (
-                        <Link to="/create-post" className={`nav-item fab-nav-item ${isActive('/create-post') ? 'active' : ''}`}>
+                        <button
+                            type="button"
+                            className={`nav-item fab-nav-item${businessCreateFabActive ? ' active' : ''}`}
+                            onClick={() => setBusinessCreateOpen(true)}
+                            aria-haspopup="dialog"
+                            aria-expanded={businessCreateOpen}
+                            aria-label={t('business_create_menu', 'Create')}
+                        >
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
-                        </Link>
+                        </button>
                     )}
                     <Link to="/restaurants" className={`nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
                         <FaStore className="nav-icon" />
@@ -588,6 +604,95 @@ const Layout = ({ children }) => {
                         </Link>
                     )}
                 </nav>
+            )}
+
+            {isBusinessAccount && businessCreateOpen && (
+                <div
+                    className="business-create-overlay"
+                    role="presentation"
+                    onClick={() => setBusinessCreateOpen(false)}
+                >
+                    <div
+                        className="business-create-sheet"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="business-create-title"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="business-create-sheet__header">
+                            <div className="business-create-sheet__titles">
+                                <h2 id="business-create-title" className="business-create-sheet__title">
+                                    {t('business_create_title', 'Create')}
+                                </h2>
+                                <p className="business-create-sheet__subtitle">
+                                    {t('business_create_subtitle', 'Choose what you want to publish')}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="business-create-sheet__close"
+                                onClick={() => setBusinessCreateOpen(false)}
+                                aria-label={t('close', 'Close')}
+                            >
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <div className="business-create-sheet__options">
+                            <button
+                                type="button"
+                                className="business-create-option"
+                                onClick={() => {
+                                    setBusinessCreateOpen(false);
+                                    const tier = String(userProfile?.subscriptionTier || 'free').toLowerCase();
+                                    const wide = typeof window !== 'undefined' && window.innerWidth >= 1024;
+                                    if (tier === 'elite' && wide) {
+                                        navigate('/business-pro', { state: { defaultTab: 'featured' } });
+                                    } else {
+                                        navigate('/create-post');
+                                    }
+                                }}
+                            >
+                                <span className="business-create-option__icon business-create-option__icon--featured">
+                                    <FaStar />
+                                </span>
+                                <span className="business-create-option__text">
+                                    <span className="business-create-option__label">
+                                        {t('business_create_featured_title', 'Featured Post')}
+                                    </span>
+                                    <span className="business-create-option__desc">
+                                        {t(
+                                            'business_create_featured_desc',
+                                            'Create a regular or featured business post.'
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                className="business-create-option"
+                                onClick={() => {
+                                    setBusinessCreateOpen(false);
+                                    navigate('/ai-marketing-studio');
+                                }}
+                            >
+                                <span className="business-create-option__icon business-create-option__icon--motion">
+                                    <FaMagic />
+                                </span>
+                                <span className="business-create-option__text">
+                                    <span className="business-create-option__label">
+                                        {t('business_create_motion_title', 'AI Motion Post')}
+                                    </span>
+                                    <span className="business-create-option__desc">
+                                        {t(
+                                            'business_create_motion_desc',
+                                            'Create an AI-powered animated marketing post.'
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

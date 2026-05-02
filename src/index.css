@@ -962,6 +962,16 @@ html:not([data-theme='light']) .app-header .app-name {
   /* Reduced padding */
 }
 
+.bottom-nav button.nav-item {
+  background: transparent;
+  border: none;
+  font: inherit;
+  text-decoration: none;
+  width: auto;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 .nav-item:hover {
   color: var(--primary);
   transform: translateY(-2px);
@@ -3005,4 +3015,149 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
+}
+
+/* Business account: bottom-nav FAB → create sheet (Featured Post / AI Motion Post) */
+.business-create-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120000;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation: fadeIn 0.2s ease;
+}
+
+.business-create-sheet {
+  position: relative;
+  width: 100%;
+  max-width: var(--max-width, 560px);
+  background: linear-gradient(180deg, #151a2a 0%, #0c0f18 100%);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 18px 28px;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.business-create-sheet__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.business-create-sheet__titles {
+  flex: 1;
+  text-align: center;
+  padding: 0 36px;
+}
+
+.business-create-sheet__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.business-create-sheet__subtitle {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.95);
+  font-weight: 500;
+}
+
+.business-create-sheet__close {
+  position: absolute;
+  top: 16px;
+  inset-inline-end: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(226, 232, 240, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.business-create-sheet__options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.business-create-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  color: inherit;
+  font: inherit;
+}
+
+.business-create-option:hover {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+.business-create-option:active {
+  transform: scale(0.99);
+}
+
+.business-create-option__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  color: #fff;
+}
+
+.business-create-option__icon--featured {
+  background: linear-gradient(135deg, #ea580c, #f97316);
+}
+
+.business-create-option__icon--motion {
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+}
+
+.business-create-option__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.business-create-option__label {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+.business-create-option__desc {
+  font-size: 0.8rem;
+  color: rgba(148, 163, 184, 0.95);
+  line-height: 1.35;
 }
