@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import app, { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCheck, FaStar, FaCrown, FaFire } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -102,7 +102,7 @@ const PricingPage = () => {
         setLoading(plan.id);
 
         try {
-            const functions = getFunctions();
+            const functions = getFunctions(app, 'us-central1');
             const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 
             const result = await createCheckoutSession({

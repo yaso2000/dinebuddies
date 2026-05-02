@@ -258,6 +258,31 @@ const Settings = () => {
         });
     }
 
+    if (!isBusiness) {
+        const creditTotal =
+            Math.max(0, Number(userProfile?.freeCredits) || 0) +
+            Math.max(0, Number(userProfile?.paidCredits) || 0);
+        settingsSections.unshift({
+            title: t('subscription_billing', 'Subscription & Billing'),
+            items: [
+                {
+                    icon: '💎',
+                    label: t('dine_credits', 'Dine Credits'),
+                    value: String(creditTotal),
+                    onClick: () => navigate('/settings/credits'),
+                    color: '#0ea5e9'
+                },
+                {
+                    icon: '📋',
+                    label: t('plans_pricing', 'Plans & pricing'),
+                    value: t('view_inline', 'View'),
+                    onClick: () => navigate('/settings/subscription'),
+                    color: '#8b5cf6'
+                }
+            ]
+        });
+    }
+
     // Check if user is guest (unified flag)
     const isGuest = userProfile?.isGuest || false;
 

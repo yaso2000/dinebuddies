@@ -1,6 +1,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -87,6 +88,49 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
 // ===== Event Handlers =====
 
+async function handleDineCreditsPurchase(session) {
+    const userId = session.metadata?.userId;
+    const credits = Math.floor(Number(session.metadata?.credits));
+    const packageId = String(session.metadata?.packageId || '');
+
+    if (!userId || !Number.isFinite(credits) || credits <= 0) {
+        console.error('Invalid dine credits checkout metadata', session.metadata);
+        return;
+    }
+
+    const fulfillRef = db.collection('stripe_dine_credit_fulfillments').doc(session.id);
+    const userRef = db.collection('users').doc(userId);
+
+    await db.runTransaction(async (tx) => {
+        const done = await tx.get(fulfillRef);
+        if (done.exists) return;
+
+        const snap = await tx.get(userRef);
+        if (!snap.exists) {
+            console.error('User not found for dine credits:', userId);
+            return;
+        }
+        const d = snap.data();
+        const accountRole = isBusinessUserDoc(d) ? 'business' : 'user';
+        grantPaidCreditsInTransaction(tx, userRef, d, {
+            uid: userId,
+            accountRole,
+            credits,
+            type: 'purchase',
+            reason: `stripe_${packageId || 'credits'}`,
+            relatedId: session.id,
+        });
+        tx.set(fulfillRef, {
+            userId,
+            credits,
+            packageId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+
+    console.log(`✅ Granted ${credits} dine credits to ${userId}`);
+}
+
 async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
 
@@ -96,6 +140,11 @@ async function handleCheckoutComplete(session) {
 
     if (!userId) {
         console.error('No userId in session metadata');
+        return;
+    }
+
+    if (session.mode === 'payment' && session.metadata?.purchaseType === 'dine_credits') {
+        await handleDineCreditsPurchase(session);
         return;
     }
 

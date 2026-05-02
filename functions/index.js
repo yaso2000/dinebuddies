@@ -409,6 +409,7 @@ async function getPublicProfilesByIds(ids) {
 // ─── Stripe Functions ───────────────────────────────────
 exports.createCheckoutSession = stripeModule.createCheckoutSession;
 exports.createPortalSession = stripeModule.createPortalSession;
+exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
 
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;

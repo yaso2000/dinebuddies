@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../../firebase/config';
 import { FaCrown, FaBolt, FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
 import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
 import { useToast } from '../../context/ToastContext';
@@ -26,7 +27,7 @@ const ProSubscription = () => {
         }
         setLoading(plan.id);
         try {
-            const functions = getFunctions();
+            const functions = getFunctions(app, 'us-central1');
             const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
             const result = await createCheckoutSession({
                 priceId: plan.stripePriceId,

@@ -54,6 +54,7 @@ const LanguageSettings = lazy(() => import('./pages/LanguageSettings'));
 const PrivacySettings = lazy(() => import('./pages/PrivacySettings'));
 const BlockedUsersSettings = lazy(() => import('./pages/BlockedUsersSettings'));
 const SubscriptionSettings = lazy(() => import('./pages/SubscriptionSettings'));
+const CreditsWallet = lazy(() => import('./pages/CreditsWallet'));
 const PaymentSettings = lazy(() => import('./pages/PaymentSettings'));
 const BillingSettings = lazy(() => import('./pages/BillingSettings'));
 const HelpSupport = lazy(() => import('./pages/HelpSupport'));
@@ -164,7 +165,7 @@ function App() {
                                                     <Route path="/invitation/:id" element={<InvitationDetails />} />
 
                                                     <Route path="/business/onboarding" element={<GuestBlockedRoute><BusinessOnboarding /></GuestBlockedRoute>} />
-                                                    <Route path="/business/pricing" element={<Navigate to="/pricing" replace />} />
+                                                    <Route path="/business/pricing" element={<PricingPage />} />
                                                     <Route path="/business/:businessId/invitations" element={<RedirectBusinessInvitationsToCommunity />} />
                                                     <Route path="/business/:businessId" element={<BusinessProfile />} />
 
@@ -198,6 +199,7 @@ function App() {
                                                     <Route path="/settings/privacy" element={<GuestBlockedRoute><PrivacySettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/blocked-users" element={<GuestBlockedRoute><BlockedUsersSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/subscription" element={<GuestBlockedRoute><SubscriptionSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/credits" element={<GuestBlockedRoute><CreditsWallet /></GuestBlockedRoute>} />
                                                     <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/billing" element={<GuestBlockedRoute><BillingSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings" element={<GuestBlockedRoute><Settings /></GuestBlockedRoute>} />
