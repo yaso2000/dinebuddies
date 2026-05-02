@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npx --yes serve dist -p 4173",
+    "dev:src": "vite",
     "dev:network": "vite --host",
     "build": "vite build",
     "build:firebase": "node scripts/ensure-maps-key-for-build.mjs && vite build",
