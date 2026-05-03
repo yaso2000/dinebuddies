@@ -2002,7 +2002,11 @@ const BusinessProfile = () => {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                         <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-main)' }}>{typeof t('offers', 'Offers') === 'string' ? t('offers', 'Offers') : 'Offers'}</h3>
                                         {highlights.offers.map(offer => (
-                                            <div key={offer.id || Math.random().toString()} style={{ width: '100%' }}
+                                            <div key={offer.id || Math.random().toString()}
+                                                onClick={() => {
+                                                    if (isOwner && !isMobileView) navigate('/business-pro', { state: { openDesign: true, editOffer: offer } });
+                                                }}
+                                                style={{ cursor: isOwner && !isMobileView ? 'pointer' : 'default', width: '100%' }}
                                             >
                                                 <PremiumOfferCard offer={offer} isOwnerView={false} compactHeight={true} />
                                             </div>
@@ -2036,7 +2040,11 @@ const BusinessProfile = () => {
                                                 return (
                                                     <div key={post.id || Math.random().toString()} 
                                                         onClick={() => {
-                                                            navigate(`/post/featured/${post.id}`);
+                                                            if (isOwner && !isMobileView) {
+                                                                navigate('/business-pro', { state: { defaultTab: 'featured', editPost: post } });
+                                                            } else {
+                                                                navigate(`/post/featured/${post.id}`);
+                                                            }
                                                         }}
                                                         style={{ 
                                                             cursor: 'pointer',
@@ -2085,7 +2093,11 @@ const BusinessProfile = () => {
                                             return (
                                                 <div key={event.id || Math.random().toString()}
                                                     onClick={() => {
-                                                        navigate(`/post/${event.id}`);
+                                                        if (isOwner && !isMobileView) {
+                                                            navigate('/business-pro', { state: { defaultTab: 'event', editEvent: event } });
+                                                        } else {
+                                                            navigate(`/post/${event.id}`);
+                                                        }
                                                     }}
                                                     style={{ cursor: 'pointer', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '12px', display: 'flex', gap: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', width: '100%' }}
                                                 >
