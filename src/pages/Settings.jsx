@@ -6,10 +6,15 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
+import { BASE_SUBSCRIPTION_PLANS } from '../config/planDefaults';
+
+const BUSINESS_PAID_MONTHLY_USD =
+    BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite')?.price ?? 29;
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -222,39 +227,52 @@ const Settings = () => {
     }
 
 
-    // Add Subscription section for business accounts (business tiers: free, professional, elite only)
+    // Business: subscription + billing (matches prod: Business plan, payment, billing) + Dine Credits wallet
     if (isBusiness) {
-        const subscriptionTier = (userProfile?.subscriptionTier || 'free').toLowerCase();
-        const isElite = subscriptionTier === 'elite';
-        const isProfessional = subscriptionTier === 'professional';
-        const isPaidBusiness = isElite || isProfessional;
+        const normalizedBiz = normalizeBusinessTier(userProfile?.subscriptionTier);
+        const isPaidBiz = normalizedBiz === 'paid';
+        const planValue = isPaidBiz
+            ? t('settings_business_plan_value_paid', `Paid ($${BUSINESS_PAID_MONTHLY_USD}/mo)`)
+            : t('settings_business_plan_value_free', 'Free');
 
         settingsSections.unshift({
             title: t('subscription_billing', 'Subscription & Billing'),
             items: [
                 {
-                    icon: isElite ? '👑' : isProfessional ? '⚡' : '📦',
-                    label: t('current_plan', 'Current Plan'),
-                    value: isElite ? t('elite', 'Elite') : isProfessional ? t('professional', 'Professional') : t('free', 'Free'),
+                    icon: <FaCrown />,
+                    label: t('settings_business_plan_row', 'Business plan'),
+                    value: planValue,
                     onClick: () => navigate('/settings/subscription'),
-                    color: isElite ? '#f59e0b' : isProfessional ? '#8b5cf6' : '#6b7280',
-                    badge: isPaidBusiness ? null : t('upgrade_available', 'Upgrade Available')
+                    color: '#f59e0b',
+                    badge: isPaidBiz ? null : t('upgrade_available', 'Upgrade Available'),
                 },
-                ...(isPaidBusiness ? [{
-                    icon: '💳',
+                {
+                    icon: <FaCreditCard />,
                     label: t('payment_method', 'Payment Method'),
                     value: userProfile?.paymentMethod || t('not_set', 'Not set'),
                     onClick: () => navigate('/settings/payment'),
-                    color: '#8b5cf6'
-                }] : []),
-                ...(isPaidBusiness ? [{
-                    icon: '📄',
+                    color: '#3b82f6',
+                },
+                {
+                    icon: <FaFileInvoice />,
                     label: t('billing_history', 'Billing History'),
                     value: '',
                     onClick: () => navigate('/settings/billing'),
-                    color: '#10b981'
-                }] : [])
-            ]
+                    color: '#10b981',
+                },
+            ],
+        });
+        settingsSections.splice(1, 0, {
+            title: t('dine_credits_section', 'Dine Credits'),
+            items: [
+                {
+                    icon: <FaWallet />,
+                    label: t('wallet', 'Wallet'),
+                    value: '',
+                    onClick: () => navigate('/settings/credits'),
+                    color: '#0ea5e9',
+                },
+            ],
         });
     }
 
@@ -440,13 +458,14 @@ const Settings = () => {
                                 {t('business_account_badge', 'Business Account')}
                             </div>
                         )}
-                        {isBusiness && (userProfile?.subscriptionTier === 'elite' || userProfile?.subscriptionTier === 'professional') && (
-                            <div className={
-                                userProfile?.subscriptionTier === 'elite'
-                                    ? 'settings-badge-pill settings-badge-pill--tier-elite'
-                                    : 'settings-badge-pill settings-badge-pill--tier-pro'
-                            }>
-                                {userProfile?.subscriptionTier === 'elite' ? '👑 Elite' : '⚡ Professional'}
+                        {isBusiness && normalizeBusinessTier(userProfile?.subscriptionTier) === 'paid' && (
+                            <div className="settings-badge-pill settings-badge-pill--tier-elite">
+                                {t('biz_plan_paid_name', 'Paid Business')}
+                            </div>
+                        )}
+                        {isBusiness && normalizeBusinessTier(userProfile?.subscriptionTier) === 'free' && (
+                            <div className="settings-badge-pill settings-badge-pill--tier-pro">
+                                {t('biz_plan_free_name', 'Free Business')}
                             </div>
                         )}
                     </div>
