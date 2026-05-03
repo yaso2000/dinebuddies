@@ -4,6 +4,13 @@
     margin: 0 auto;
 }
 
+@media (min-width: 1024px) {
+    .ai-marketing-studio {
+        max-width: min(1180px, 100%);
+        padding-inline: clamp(16px, 2.5vw, 28px);
+    }
+}
+
 .ai-marketing-studio--loading {
     min-height: 50dvh;
     display: flex;

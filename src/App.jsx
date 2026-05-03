@@ -14,7 +14,6 @@ import SearchPage from './pages/SearchPage';
 import PostsFeed from './pages/PostsFeed';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
-const BusinessProDashboard = lazy(() => import('./pages/BusinessProDashboard'));
 const Profile = lazy(() => import('./pages/Profile'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
@@ -149,9 +148,11 @@ function App() {
 
                                             <Route path="/" element={<HomeRouter />} />
 
+                                            <Route path="/business-pro" element={<Navigate to="/business-dashboard" replace />} />
+                                            <Route path="/business-pro/*" element={<Navigate to="/business-dashboard" replace />} />
+
                                             <Route element={<RouteSuspenseLayout />}>
                                                 <Route path="/business/signup" element={<BusinessSignup />} />
-                                                <Route path="/business-pro/*" element={<GuestBlockedRoute><BusinessProDashboard /></GuestBlockedRoute>} />
 
                                                 <Route element={<Layout />}>
                                                     {/* More specific paths first */}

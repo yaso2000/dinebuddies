@@ -59,8 +59,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     if (showAlreadySignedIn) {
         if (needsEmailPasswordVerification(currentUser, userProfile)) continueHref = '/verify-email';
         else if (isBusinessUser(userProfile)) {
-            continueHref =
-                typeof window !== 'undefined' && window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard';
+            continueHref = '/business-dashboard';
         } else if (!isComplete) {
             continueHref = '/complete-profile';
         } else {
@@ -74,7 +73,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         // If userProfile is loaded, make a smart decision
         if (userProfile) {
             if (isBusinessUser(userProfile)) {
-                navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
+                navigate('/business-dashboard', { replace: true });
             } else if (needsEmailPasswordVerification(currentUser, userProfile)) {
                 navigate('/verify-email', { replace: true });
             } else {

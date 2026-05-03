@@ -54,7 +54,7 @@ const CompleteProfile = () => {
         }
         // Full business account → dashboard
         if (userProfile?.isBusiness) {
-            navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
+            navigate('/business-dashboard', { replace: true });
             return;
         }
 
@@ -111,7 +111,7 @@ const CompleteProfile = () => {
                     return;
                 }
                 if (isFullBiz) {
-                    navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
+                    navigate('/business-dashboard', { replace: true });
                     return;
                 }
             } catch {

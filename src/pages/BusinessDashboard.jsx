@@ -33,15 +33,6 @@ const BusinessDashboard = () => {
     const [offers, setOffers] = useState([]);
     const [offersLoading, setOffersLoading] = useState(false);
 
-    // Desktop redirect — Elite uses /business-pro once published. Keep unpublished users here so they can use "Publish Profile".
-    useEffect(() => {
-        const tier = (userProfile?.subscriptionTier || 'free').toLowerCase();
-        const published = userProfile?.businessInfo?.isPublished === true;
-        if (window.innerWidth >= 1024 && tier === 'elite' && published) {
-            navigate('/business-pro', { replace: true });
-        }
-    }, [navigate, userProfile?.subscriptionTier, userProfile?.businessInfo?.isPublished]);
-
     const PUBLISH_ANCHOR = 'business-publish-profile';
     useEffect(() => {
         if (location.hash !== `#${PUBLISH_ANCHOR}`) return;

@@ -2849,6 +2849,11 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     flex: 0 0 auto !important;
   }
 
+  /* AI Marketing Studio: two-column composer + preview needs real width */
+  .app-main > .page-container.ai-marketing-studio {
+    max-width: min(1180px, 100%) !important;
+  }
+
   /* Chat / fullscreen routes: let the shell fill vertical space */
   .app-main--chat > .chat-root.chat-container,
   .app-main--chat > .invitation-chat-root.chat-screen,

@@ -207,9 +207,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         e.stopPropagation();
         setShowMenu(false);
         if (post.type === 'event') {
-            navigate('/business-pro', { state: { defaultTab: 'event', editEvent: post } });
+            navigate('/business-dashboard');
         } else if (post.type === 'elite_slide') {
-            navigate('/business-pro', { state: { defaultTab: 'featured', editPost: post } });
+            navigate('/business-dashboard');
         } else {
             setEditedContent(post.content || post.caption || '');
             setIsEditing(true);
