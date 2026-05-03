@@ -112,10 +112,7 @@ export default function BusinessOnboarding() {
                 }
                 const d = snap.data();
                 if (d.pendingBusinessRegistration !== true) {
-                    navigate(
-                        window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard',
-                        { replace: true }
-                    );
+                    navigate('/business-dashboard', { replace: true });
                     return;
                 }
                 const bi = d.businessInfo || {};

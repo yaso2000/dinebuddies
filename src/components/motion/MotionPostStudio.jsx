@@ -299,7 +299,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
     const [selectedColorThemeId, setSelectedColorThemeId] = useState('sunset-glow');
     const [selectedPostTemplateId, setSelectedPostTemplateId] = useState('classic_split');
     const [selectedAspectRatio, setSelectedAspectRatio] = useState('1:1');
-    const [isDesktopLayout, setIsDesktopLayout] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 980 : false));
+    const [isDesktopLayout, setIsDesktopLayout] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
     const previewAutoReplayBootedRef = useRef(false);
 
     useEffect(() => {
@@ -309,7 +309,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
 
     useEffect(() => {
         if (typeof window === 'undefined') return undefined;
-        const onResize = () => setIsDesktopLayout(window.innerWidth >= 980);
+        const onResize = () => setIsDesktopLayout(window.innerWidth >= 1024);
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
     }, []);
@@ -1261,13 +1261,14 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                 isDesktopLayout
                                     ? {
                                           display: 'grid',
-                                          gap: 14,
-                                          gridTemplateColumns: 'minmax(320px, 1fr) minmax(460px, 1.25fr)',
+                                          gap: 16,
+                                          gridTemplateColumns: 'minmax(300px, 1fr) minmax(340px, min(520px, 44vw))',
                                           gridTemplateAreas: `
                                             "theme theme"
                                             "template aspect"
                                             "left right"
                                             "bottom bottom"
+                                            "alerts alerts"
                                             "actions actions"
                                           `,
                                           alignItems: 'start',
@@ -1278,7 +1279,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                             <div style={isDesktopLayout ? { display: 'grid', gap: 8, gridArea: 'left' } : { display: 'grid', gap: 8 }}>
                             <div style={{ display: 'grid', gap: '8px' }}>
                                 <label style={motionStepLabelStyle}>{t('post_type', 'Post Type')}</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(100px, 1fr))', gap: '8px', padding: '6px', borderRadius: 12 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isDesktopLayout ? 'repeat(3, minmax(0, 1fr))' : 'repeat(3, minmax(100px, 1fr))', gap: '8px', padding: '6px', borderRadius: 12 }}>
                                     {CREATION_TYPES.map((item) => (
                                         <button
                                             key={item.id}
@@ -1366,7 +1367,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                         display: 'flex',
                                         gap: 12,
                                         overflowX: 'auto',
-                                        padding: '4px 11% 10px',
+                                        padding: isDesktopLayout ? '4px 4px 10px' : '4px 11% 10px',
                                         scrollSnapType: 'x mandatory',
                                         scrollbarWidth: 'none',
                                         msOverflowStyle: 'none',
@@ -1398,7 +1399,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                                 }}
                                                 style={{
                                                     scrollSnapAlign: 'center',
-                                                    flex: '0 0 min(78%, 250px)',
+                                                    flex: isDesktopLayout ? '0 0 clamp(150px, 30%, 210px)' : '0 0 min(78%, 250px)',
                                                     borderRadius: 16,
                                                     border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                                                     background: 'rgba(15,23,42,0.88)',
@@ -1414,7 +1415,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                             >
                                                 <div
                                                     style={{
-                                                        minHeight: 116,
+                                                        minHeight: isDesktopLayout ? 96 : 116,
                                                         borderRadius: 12,
                                                         border: '1px solid rgba(255,255,255,0.18)',
                                                         background: theme.preview,
@@ -1452,7 +1453,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                             display: 'flex',
                                             gap: 12,
                                             overflowX: 'auto',
-                                            padding: '4px 11% 10px',
+                                            padding: isDesktopLayout ? '4px 4px 10px' : '4px 11% 10px',
                                             scrollSnapType: 'x mandatory',
                                             scrollbarWidth: 'none',
                                             msOverflowStyle: 'none',
@@ -1480,7 +1481,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                                     }}
                                                     style={{
                                                         scrollSnapAlign: 'center',
-                                                        flex: '0 0 min(78%, 250px)',
+                                                        flex: isDesktopLayout ? '0 0 clamp(150px, 32%, 220px)' : '0 0 min(78%, 250px)',
                                                         borderRadius: 16,
                                                         border: isSel ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                                                         background: 'rgba(15,23,42,0.88)',
@@ -1514,7 +1515,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                             display: 'flex',
                                             gap: 12,
                                             overflowX: 'auto',
-                                            padding: '4px 11% 10px',
+                                            padding: isDesktopLayout ? '4px 4px 10px' : '4px 11% 10px',
                                             scrollSnapType: 'x mandatory',
                                             scrollbarWidth: 'none',
                                             msOverflowStyle: 'none',
@@ -1542,7 +1543,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                                     }}
                                                     style={{
                                                         scrollSnapAlign: 'center',
-                                                        flex: '0 0 min(78%, 250px)',
+                                                        flex: isDesktopLayout ? '0 0 clamp(150px, 32%, 220px)' : '0 0 min(78%, 250px)',
                                                         borderRadius: 16,
                                                         border: isSel ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                                                         background: 'rgba(15,23,42,0.88)',
@@ -1576,7 +1577,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                             display: 'flex',
                                             gap: 12,
                                             overflowX: 'auto',
-                                            padding: '4px 11% 10px',
+                                            padding: isDesktopLayout ? '4px 4px 10px' : '4px 11% 10px',
                                             scrollSnapType: 'x mandatory',
                                             scrollbarWidth: 'none',
                                             msOverflowStyle: 'none',
@@ -1604,7 +1605,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                                     }}
                                                     style={{
                                                         scrollSnapAlign: 'center',
-                                                        flex: '0 0 min(78%, 250px)',
+                                                        flex: isDesktopLayout ? '0 0 clamp(150px, 32%, 220px)' : '0 0 min(78%, 250px)',
                                                         borderRadius: 16,
                                                         border: isSel ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                                                         background: 'rgba(15,23,42,0.88)',
@@ -1657,25 +1658,32 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                     </div>
                                 </div>
                             ) : null}
+
+                        <div
+                            style={
+                                isDesktopLayout
+                                    ? { display: 'grid', gap: 10, gridArea: 'alerts' }
+                                    : { display: 'grid', gap: 10 }
+                            }
+                        >
+                            {!validation.valid && (
+                                <div style={{ border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.1)', borderRadius: 10, padding: '10px 12px' }}>
+                                    <div style={{ color: '#ef4444', fontWeight: 800, marginBottom: 6, fontSize: '0.85rem' }}>{t('validation_errors', 'Validation errors')}</div>
+                                    <ul style={{ margin: 0, paddingInlineStart: 18, color: '#fecaca', fontSize: '0.8rem' }}>
+                                        {validation.errors.map((err, i) => <li key={`${err}-${i}`}>{err}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {draftActionError ? (
+                                <div style={{ border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.1)', borderRadius: 10, padding: '10px 12px', color: '#fecaca', fontSize: '0.85rem' }}>{draftActionError}</div>
+                            ) : null}
+                            {draftActionMessage ? (
+                                <div style={{ border: '1px solid rgba(34,197,94,0.45)', background: 'rgba(34,197,94,0.1)', borderRadius: 10, padding: '10px 12px', color: '#bbf7d0', fontSize: '0.85rem' }}>{draftActionMessage}</div>
+                            ) : null}
                         </div>
 
-                        {!validation.valid && (
-                            <div style={{ border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.1)', borderRadius: 10, padding: '10px 12px' }}>
-                                <div style={{ color: '#ef4444', fontWeight: 800, marginBottom: 6, fontSize: '0.85rem' }}>{t('validation_errors', 'Validation errors')}</div>
-                                <ul style={{ margin: 0, paddingInlineStart: 18, color: '#fecaca', fontSize: '0.8rem' }}>
-                                    {validation.errors.map((err, i) => <li key={`${err}-${i}`}>{err}</li>)}
-                                </ul>
-                            </div>
-                        )}
-
-                        {draftActionError ? (
-                            <div style={{ border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.1)', borderRadius: 10, padding: '10px 12px', color: '#fecaca', fontSize: '0.85rem' }}>{draftActionError}</div>
-                        ) : null}
-                        {draftActionMessage ? (
-                            <div style={{ border: '1px solid rgba(34,197,94,0.45)', background: 'rgba(34,197,94,0.1)', borderRadius: 10, padding: '10px 12px', color: '#bbf7d0', fontSize: '0.85rem' }}>{draftActionMessage}</div>
-                        ) : null}
-
-                        <div style={isDesktopLayout ? { display: 'grid', gap: 8, gridArea: 'right' } : { display: 'grid', gap: '8px' }}>
+                        <div style={isDesktopLayout ? { display: 'grid', gap: 8, gridArea: 'right', alignSelf: 'start' } : { display: 'grid', gap: '8px' }}>
                             <div style={{ display: isDesktopLayout ? 'none' : 'grid', gap: '8px' }}>
                                 <label style={motionStepLabelStyle}>{t('post_size', 'Post Size')}</label>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -1706,6 +1714,11 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{t('post_size_ui_only', 'Size is currently a UI-only selection and does not change template storage yet.')}</div>
                             </div>
+                            {isDesktopLayout ? (
+                                <div style={motionStepLabelStyle} role="heading" aria-level={3}>
+                                    {t('motion_live_preview', 'Live preview')}
+                                </div>
+                            ) : null}
                             <div
                                 style={{
                                     borderRadius: 14,
@@ -1716,8 +1729,9 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                     alignContent: 'start',
                                     justifyItems: 'center',
                                     gap: 8,
-                                    overflow: 'visible',
-                                    minHeight: isDesktopLayout ? 640 : undefined,
+                                    overflow: 'auto',
+                                    minHeight: isDesktopLayout ? 320 : undefined,
+                                    maxHeight: isDesktopLayout ? 'min(72vh, 720px)' : undefined,
                                 }}
                             >
                                 <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1830,6 +1844,7 @@ const MotionPostStudio = ({ showComposer = true, showSavedPosts = true, savedPos
                                     </button>
                                 ) : null}
                             </div>
+                        </div>
                         </div>
 
                         {savedPostsPagePath ? (

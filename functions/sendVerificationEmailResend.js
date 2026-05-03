@@ -20,7 +20,7 @@ const FLOW_PATHS = {
     business_signup: '/business/login?fromVerify=1',
     business_login: '/business/login',
     settings_email: '/settings/email',
-    pro_settings: '/business-pro/settings',
+    pro_settings: '/settings',
     home: '/',
 };
 

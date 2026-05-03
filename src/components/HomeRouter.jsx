@@ -21,10 +21,7 @@ const HomeRouter = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    const businessHomeDest = () => {
-        if (typeof window === 'undefined') return '/business-dashboard';
-        return window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard';
-    };
+    const businessHomeDest = () => '/business-dashboard';
 
     // Wait for auth + profile listener — Firebase often reports currentUser=null briefly while
     // persistence restores. The old guard only did (currentUser && loading), so on mobile we fell

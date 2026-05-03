@@ -30,7 +30,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
         if (!userProfile) return;
         const isBiz = userProfile.isBusiness || userProfile.role === 'business';
         if (isBiz) {
-            navigate(window.innerWidth >= 1024 ? '/business-pro' : '/business-dashboard', { replace: true });
+            navigate('/business-dashboard', { replace: true });
         } else {
             setError(t('business_login_only', 'This login is for business accounts only. Use the regular sign-in for personal accounts.'));
             setJustLoggedIn(false);

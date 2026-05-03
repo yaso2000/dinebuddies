@@ -80,7 +80,7 @@ const PremiumPaywallModal = ({ isOpen, onClose, featureName = "Premium Feature" 
                     <button
                         onClick={() => {
                             onClose();
-                            navigate('/business-pro/subscription');
+                            navigate('/settings/subscription');
                         }}
                         style={{
                             width: '100%', padding: '14px', borderRadius: '12px',

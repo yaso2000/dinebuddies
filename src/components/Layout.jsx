@@ -171,7 +171,7 @@ const Layout = ({ children }) => {
     const businessCreateFabActive =
         location.pathname === '/create-post' ||
         location.pathname.startsWith('/ai-marketing-studio') ||
-        location.pathname.startsWith('/business-pro');
+        location.pathname === '/business-dashboard';
 
     const changeLanguage = (lang) => i18n.changeLanguage(lang);
 
@@ -500,9 +500,20 @@ const Layout = ({ children }) => {
                                         </Link>
                                     </>
                                 )}
-                                <Link to={isBusinessAccount ? '/business-dashboard' : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-dashboard') || isActive('/business-pro') ? 'active' : ''}`}>
+                                <Link to={isBusinessAccount ? '/business-dashboard' : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-dashboard') ? 'active' : ''}`}>
                                     <FaUser /><span>{isBusinessAccount ? t('dashboard', 'Dashboard') : t('profile', 'Profile')}</span>
                                 </Link>
+                                {isBusinessAccount && currentUser && (
+                                    <button
+                                        type="button"
+                                        className={`ds-nav-item${businessCreateFabActive ? ' active' : ''}`}
+                                        onClick={() => setBusinessCreateOpen(true)}
+                                        aria-haspopup="dialog"
+                                        aria-expanded={businessCreateOpen}
+                                    >
+                                        <FaPlusCircle /><span>{t('business_nav_create_posts', 'Create posts')}</span>
+                                    </button>
+                                )}
                                 {isBusinessAccount && currentUser && (
                                     <Link
                                         to={`/business/${currentUser.uid}`}
@@ -643,13 +654,7 @@ const Layout = ({ children }) => {
                                 className="business-create-option"
                                 onClick={() => {
                                     setBusinessCreateOpen(false);
-                                    const tier = String(userProfile?.subscriptionTier || 'free').toLowerCase();
-                                    const wide = typeof window !== 'undefined' && window.innerWidth >= 1024;
-                                    if (tier === 'elite' && wide) {
-                                        navigate('/business-pro', { state: { defaultTab: 'featured' } });
-                                    } else {
-                                        navigate('/create-post');
-                                    }
+                                    navigate('/create-post');
                                 }}
                             >
                                 <span className="business-create-option__icon business-create-option__icon--featured">

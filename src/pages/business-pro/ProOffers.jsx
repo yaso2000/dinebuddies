@@ -144,8 +144,8 @@ const ProOffers = ({ onNavigate }) => {
                 priceId: OFFER_SLOT_PACK.stripePriceId,
                 planId: OFFER_SLOT_PACK.id,
                 planName: OFFER_SLOT_PACK.name,
-                successUrl: `${window.location.origin}/business-pro?tab=offers&purchase=success`,
-                cancelUrl: `${window.location.origin}/business-pro?tab=offers`
+                successUrl: `${window.location.origin}/business-dashboard?purchase=success`,
+                cancelUrl: `${window.location.origin}/business-dashboard`
             });
             window.location.href = result.data.url;
         } catch (e) {
