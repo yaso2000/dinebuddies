@@ -1,201 +1,290 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../firebase/config';
-import { FaCrown, FaBolt, FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
 import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
+import { normalizeBusinessTier } from '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
 
-const PARTNER_PLANS = BASE_SUBSCRIPTION_PLANS.filter(p => p.type === 'business' && p.price > 0);
+/** Stripe Checkout + webhook use legacy planId for tier resolution — keep `elite` for $29 business paid. */
+const PAID_STRIPE_PLAN = BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite');
+
+const FREE_FEATURES = [
+    ['biz_plan_free_feat_profile', 'Business profile & basic photos'],
+    ['biz_plan_free_feat_community', 'Community access'],
+    ['biz_plan_free_feat_motion_5', '5 manual motion posts / month'],
+    ['biz_plan_free_feat_ai_credits', 'AI requires Dine Credits'],
+];
+
+const PAID_FEATURES = [
+    ['biz_plan_paid_feat_motion_unlimited', 'Unlimited manual motion posts'],
+    ['biz_plan_paid_feat_priority', 'Priority visibility'],
+    ['biz_plan_paid_feat_community_tools', 'Community management tools'],
+    ['biz_plan_paid_feat_analytics', 'Advanced analytics'],
+    ['biz_plan_paid_feat_member_notifs', 'Member notifications'],
+    ['biz_plan_paid_feat_profile_tools', 'Enhanced profile tools'],
+    ['biz_plan_paid_feat_ai_credits_note', 'AI still uses Dine Credits — not unlimited'],
+];
 
 const ProSubscription = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
+    const location = useLocation();
     const { userProfile } = useAuth();
     const { showToast } = useToast();
     const [loading, setLoading] = useState(null);
+    const [portalLoading, setPortalLoading] = useState(false);
 
-    const tier = userProfile?.subscriptionTier || 'free';
-    const isElite = tier === 'elite';
-    const isProfessional = tier === 'professional';
+    const normalized = normalizeBusinessTier(userProfile?.subscriptionTier);
+    const isPaid = normalized === 'paid';
+    const isFree = normalized === 'free';
 
-    const handleUpgrade = async (plan) => {
-        if (!plan.stripePriceId) {
-            showToast('Please contact support to upgrade your plan.', 'warning');
+    const billingReturnUrl = `${window.location.origin}${location.pathname || '/settings/subscription'}`;
+
+    const handleUpgrade = async () => {
+        const plan = PAID_STRIPE_PLAN;
+        if (!plan?.stripePriceId) {
+            showToast(t('biz_plan_checkout_missing', 'Paid plan is not configured. Please contact support.'), 'warning');
             return;
         }
-        setLoading(plan.id);
+        setLoading('paid');
         try {
             const functions = getFunctions(app, 'us-central1');
             const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
             const result = await createCheckoutSession({
                 priceId: plan.stripePriceId,
-                planId: plan.id,
-                planName: plan.name,
-                successUrl: `${window.location.origin}/business-pro?section=subscription&purchase=success`,
-                cancelUrl: `${window.location.origin}/business-pro?section=subscription`
+                planId: 'elite',
+                planName: t('biz_plan_paid_name', 'Paid Business'),
+                successUrl: `${window.location.origin}/payment-success`,
+                cancelUrl: billingReturnUrl,
             });
-            window.location.href = result.data.url;
+            if (result.data?.url) window.location.href = result.data.url;
         } catch (e) {
             console.error('Checkout error:', e);
-            showToast('Could not start checkout: ' + e.message, 'error');
+            showToast(t('biz_plan_checkout_error', 'Could not start checkout: ') + (e.message || String(e)), 'error');
         } finally {
             setLoading(null);
         }
     };
 
-    const handleManageBilling = () => {
-        window.open('https://billing.stripe.com/p/login/test_...', '_blank');
+    const handleManageBilling = async () => {
+        setPortalLoading(true);
+        try {
+            const functions = getFunctions(app, 'us-central1');
+            const createPortalSession = httpsCallable(functions, 'createPortalSession');
+            const result = await createPortalSession({ returnUrl: billingReturnUrl });
+            if (result.data?.url) window.location.href = result.data.url;
+            else showToast(t('biz_plan_portal_no_url', 'Could not open billing portal.'), 'error');
+        } catch (e) {
+            console.error('Portal error:', e);
+            showToast(t('biz_plan_portal_error', 'Could not open billing: ') + (e.message || String(e)), 'error');
+        } finally {
+            setPortalLoading(false);
+        }
     };
 
-    const currentPlanLabel = isElite ? '👑 ' + t('Elite Business', 'Elite Business') : isProfessional ? '⚡ ' + t('Professional Business', 'Professional Business') : '🎁 ' + t('Free Business', 'Free Business');
+    const paidPrice = PAID_STRIPE_PLAN?.price ?? 29;
+
+    const bannerBorder = isPaid ? 'color-mix(in srgb, var(--primary) 45%, transparent)' : 'var(--border-color)';
+    const bannerBg = isPaid
+        ? 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, transparent), color-mix(in srgb, var(--primary) 8%, transparent))'
+        : 'var(--hover-overlay)';
+
+    const planCard = (key, { titleKey, titleDefault, priceLabel, features, tierKey }) => {
+        const current = tierKey === 'free' ? isFree : isPaid;
+        const isPaidCard = tierKey === 'paid';
+        const showUpgradeOnPaidCard = isFree && isPaidCard;
+
+        return (
+            <div
+                key={key}
+                style={{
+                    background: current ? 'color-mix(in srgb, var(--primary) 10%, var(--bg-card))' : 'var(--bg-card)',
+                    border: `2px solid ${current ? 'var(--primary)' : 'var(--border-color)'}`,
+                    borderRadius: 16,
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}
+            >
+                <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: 4 }}>
+                        {t(titleKey, titleDefault)}
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: current ? 'var(--primary)' : 'var(--text-main)' }}>
+                        {priceLabel}
+                    </span>
+                    {isPaidCard && (
+                        <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginInlineStart: 6 }}>
+                            / {t('month', 'month')}
+                        </span>
+                    )}
+                </div>
+
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {features.map(([fk, def]) => (
+                        <li key={fk} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            <FaCheck style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: 2 }} />
+                            {t(fk, def)}
+                        </li>
+                    ))}
+                </ul>
+
+                {current ? (
+                    <button
+                        type="button"
+                        className="ui-btn"
+                        disabled
+                        style={{
+                            padding: '12px',
+                            fontSize: '0.875rem',
+                            cursor: 'default',
+                            background: isPaidCard ? 'linear-gradient(135deg, var(--primary), #ea580c)' : 'var(--bg-muted, #1e293b)',
+                            color: isPaidCard ? '#fff' : 'var(--text-muted)',
+                            border: 'none',
+                            fontWeight: 800,
+                            opacity: isPaidCard ? 1 : 0.95,
+                        }}
+                    >
+                        {t('biz_plan_btn_current', 'Current Plan')}
+                    </button>
+                ) : showUpgradeOnPaidCard ? (
+                    <button
+                        type="button"
+                        onClick={handleUpgrade}
+                        disabled={loading === 'paid'}
+                        className="ui-btn ui-btn--primary"
+                        style={{
+                            padding: '12px',
+                            fontSize: '0.875rem',
+                            fontWeight: 800,
+                            opacity: loading === 'paid' ? 0.65 : 1,
+                        }}
+                    >
+                        {loading === 'paid' ? t('loading', 'Loading...') : `${t('biz_plan_upgrade_cta', 'Upgrade to Paid')} →`}
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        className="ui-btn ui-btn--secondary"
+                        disabled
+                        style={{ padding: '12px', fontSize: '0.875rem', cursor: 'default', opacity: 0.85 }}
+                    >
+                        {t('biz_plan_btn_not_current', 'Not current')}
+                    </button>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div>
-            {/* Current Plan Banner - uses theme tokens for light/dark */}
-            <div style={{
-                background: isElite
-                    ? 'linear-gradient(135deg, color-mix(in srgb, var(--stat-reviews) 18%, transparent), color-mix(in srgb, var(--stat-reviews) 10%, transparent))'
-                    : isProfessional
-                        ? 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, transparent), color-mix(in srgb, var(--primary) 10%, transparent))'
-                        : 'var(--hover-overlay)',
-                border: `1px solid ${isElite ? 'color-mix(in srgb, var(--stat-reviews) 40%, transparent)' : isProfessional ? 'color-mix(in srgb, var(--primary) 35%, transparent)' : 'var(--border-color)'}`,
-                borderRadius: 16,
-                padding: '24px 28px',
-                marginBottom: 28,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 16
-            }}>
+            <div
+                style={{
+                    background: bannerBg,
+                    border: `1px solid ${bannerBorder}`,
+                    borderRadius: 16,
+                    padding: '24px 28px',
+                    marginBottom: 28,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 16,
+                }}
+            >
                 <div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                        {t('Current Plan', 'Current Plan')}
+                        {t('biz_plan_current_label', 'Current Plan')}
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isElite ? 'var(--stat-reviews)' : isProfessional ? 'var(--primary)' : 'var(--text-muted)' }}>
-                        {currentPlanLabel}
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isPaid ? 'var(--primary)' : 'var(--text-muted)' }}>
+                        {isPaid ? t('biz_plan_paid_name', 'Paid Business') : t('biz_plan_free_name', 'Free Business')}
                     </div>
-                    {(isElite || isProfessional) && (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6 }}>
-                            {isElite
-                                ? t('Elite_Plan_Features', '1 permanent offer slot • Unlimited display time • Priority placement')
-                                : t('Pro_Business_Plan_Features', '1 offer slot × 50h/week • Buy extra hours or slots as needed')}
-                        </div>
-                    )}
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 8, maxWidth: 420, lineHeight: 1.45 }}>
+                        {isPaid ? (
+                            <>
+                                ${paidPrice}
+                                {t(
+                                    'biz_plan_paid_banner_suffix',
+                                    '/month — full manual feature set. Buy Dine Credits for AI.'
+                                )}
+                            </>
+                        ) : (
+                            t(
+                                'biz_plan_free_banner_desc',
+                                'Core profile and community. Motion limits apply; AI uses Dine Credits.'
+                            )
+                        )}
+                    </div>
                 </div>
-                {(isElite || isProfessional) && (
+                {isPaid && (
                     <button
                         type="button"
                         className="ui-btn ui-btn--secondary"
                         onClick={handleManageBilling}
+                        disabled={portalLoading}
                         style={{ padding: '10px 18px', gap: 8, fontSize: '0.875rem' }}
                     >
-                        <FaExternalLinkAlt size={12} /> {t('Manage Billing', 'Manage Billing')}
+                        <FaExternalLinkAlt size={12} /> {portalLoading ? t('loading', 'Loading...') : t('biz_plan_manage_billing', 'Manage billing')}
                     </button>
                 )}
             </div>
 
-            {/* Plans Comparison - theme tokens for text/surfaces */}
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 20, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {isElite ? t('Plan Overview', 'Plan Overview') : t('Available Plans', 'Available Plans')}
+            <h3
+                style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    marginBottom: 16,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                }}
+            >
+                {t('biz_plan_compare_heading', 'Plans')}
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-                {PARTNER_PLANS.map(plan => {
-                    const isCurrent = plan.tier === tier;
-                    const isRecommended = plan.recommended;
-
-                    return (
-                        <div key={plan.id} style={{
-                            background: isCurrent ? 'color-mix(in srgb, var(--stat-reviews) 12%, var(--bg-card))' : 'var(--bg-card)',
-                            border: `1px solid ${isCurrent ? 'color-mix(in srgb, var(--stat-reviews) 45%, transparent)' : isRecommended ? 'color-mix(in srgb, var(--primary) 35%, transparent)' : 'var(--border-color)'}`,
-                            borderRadius: 16,
-                            padding: '24px',
-                            position: 'relative',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}>
-                            {isCurrent && (
-                                <div style={{
-                                    position: 'absolute', top: -10, right: 16,
-                                    background: 'linear-gradient(135deg, var(--stat-reviews), var(--primary-hover))',
-                                    color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
-                                    fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em'
-                                }}>
-                                    {t('CURRENT', 'CURRENT')}
-                                </div>
-                            )}
-                            {isRecommended && !isCurrent && (
-                                <div style={{
-                                    position: 'absolute', top: -10, right: 16,
-                                    background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))',
-                                    color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
-                                    fontSize: '0.7rem', fontWeight: 800
-                                }}>
-                                    {t('RECOMMENDED', 'RECOMMENDED')}
-                                </div>
-                            )}
-
-                            {/* Plan header */}
-                            <div style={{ marginBottom: 16 }}>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
-                                    {t(plan.name, plan.name)}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    {t(plan.description, plan.description)}
-                                </div>
-                            </div>
-
-                            {/* Price */}
-                            <div style={{ marginBottom: 20 }}>
-                                <span style={{ fontSize: '2.2rem', fontWeight: 900, color: isCurrent ? 'var(--stat-reviews)' : 'var(--text-main)' }}>
-                                    ${Math.round(plan.price * 1.53)} AUD
-                                </span>
-                                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginLeft: 6 }}>/ {t('month', 'month')}</span>
-                                {plan.discount > 0 && (
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-success)', marginTop: 4 }}>
-                                        ✨ {t('First month FREE', 'First month FREE')}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Features */}
-                            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                {(plan.features || []).map((f, i) => (
-                                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                                        <FaCheck style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: 2 }} />
-                                        {t(f, f)}
-                                    </li>
-                                ))}
-                            </ul>
-
-                            {/* CTA */}
-                            {isCurrent ? (
-                                <button type="button" className="ui-btn ui-btn--secondary" disabled style={{ padding: '12px', fontSize: '0.875rem', cursor: 'default', opacity: 0.8 }}>
-                                    {t('Current Plan', 'Current Plan')}
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => handleUpgrade(plan)}
-                                    disabled={loading === plan.id}
-                                    className="ui-btn ui-btn--primary"
-                                    style={{
-                                        padding: '12px', borderRadius: 10, fontSize: '0.875rem',
-                                        opacity: loading === plan.id ? 0.6 : 1,
-                                        background: isRecommended ? 'linear-gradient(135deg, var(--stat-reviews), var(--primary-hover))' : undefined,
-                                        color: isRecommended ? 'var(--text-white)' : undefined
-                                    }}
-                                >
-                                    {loading === plan.id ? t('loading', 'Loading...') : plan.tier === 'elite' ? t('Upgrade to Elite', 'Upgrade to Elite') + ' →' : t('Start with Professional', 'Start with Professional') + ' →'}
-                                </button>
-                            )}
-                        </div>
-                    );
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
+                {planCard('free', {
+                    titleKey: 'biz_plan_free_name',
+                    titleDefault: 'Free Business',
+                    priceLabel: '$0',
+                    features: FREE_FEATURES,
+                    tierKey: 'free',
+                })}
+                {planCard('paid', {
+                    titleKey: 'biz_plan_paid_name',
+                    titleDefault: 'Paid Business',
+                    priceLabel: `$${paidPrice}`,
+                    features: PAID_FEATURES,
+                    tierKey: 'paid',
                 })}
             </div>
+
+            <p style={{ marginTop: 24, fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                {t('biz_plan_credits_lead', 'Need AI?')}{' '}
+                <button
+                    type="button"
+                    onClick={() => navigate('/settings/credits')}
+                    style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: 'var(--primary)',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        font: 'inherit',
+                    }}
+                >
+                    {t('biz_plan_credits_link', 'Open Dine Credits wallet')}
+                </button>
+            </p>
         </div>
     );
 };
