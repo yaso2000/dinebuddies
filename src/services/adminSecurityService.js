@@ -46,6 +46,11 @@ export const adminSecurityService = {
 
     sendEmailCampaign: (payload) =>
         call('adminSendEmailCampaign', payload),
+
+    getDashboardStats: () => call('adminGetDashboardStats', {}),
+
+    setReportStatus: (reportId, status) =>
+        call('adminSetReportStatus', { reportId, status }),
 };
 
 export const consumeOfferCredit = () => call('consumeOfferCredit', {});

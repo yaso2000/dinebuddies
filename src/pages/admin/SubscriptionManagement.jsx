@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
+import { collection, getDocs, query, orderBy, limit, documentId } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { FaSearch, FaFilter, FaCheckCircle, FaTimesCircle, FaCreditCard, FaCalendar, FaDollarSign, FaUser } from 'react-icons/fa';
 import { adminSecurityService } from '../../services/adminSecurityService';
@@ -23,16 +24,24 @@ const SubscriptionManagement = () => {
         try {
             setLoading(true);
             // Fetch all users with subscriptions
-            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const usersSnapshot = await getDocs(
+                query(collection(db, 'users'), orderBy(documentId()), limit(500))
+            );
             const usersWithSubs = usersSnapshot.docs
-                .map(doc => ({
-                    userId: doc.id,
-                    userName: doc.data().displayName || 'No Name',
-                    userEmail: doc.data().email,
-                    subscription: doc.data().subscription,
-                    role: doc.data().role
+                .map((d) => ({
+                    userId: d.id,
+                    userName: d.data().display_name || d.data().displayName || 'No Name',
+                    userEmail: d.data().email,
+                    subscription: d.data().subscription,
+                    role: d.data().role,
+                    isBusiness: d.data().isBusiness === true,
                 }))
-                .filter(user => user.subscription && user.subscription.active);
+                .filter(
+                    (user) =>
+                        user.subscription &&
+                        user.subscription.active &&
+                        (user.role === 'business' || user.isBusiness)
+                );
 
             console.log('Subscriptions:', usersWithSubs);
             setSubscriptions(usersWithSubs);
@@ -115,8 +124,11 @@ const SubscriptionManagement = () => {
         <div>
             {/* Header */}
             <div className="admin-page-header admin-mb-4">
-                <h1 className="admin-page-title">Subscription Management</h1>
-                <p className="admin-page-subtitle">Monitor and manage all active subscriptions</p>
+                <h1 className="admin-page-title">Subscription management</h1>
+                <p className="admin-page-subtitle">
+                    <strong>Business</strong> recurring subscriptions only. Consumer accounts use Dine credits — manage them under{' '}
+                    <Link to="/admin/grant-credits" style={{ color: 'var(--admin-accent)' }}>Grant credits</Link>.
+                </p>
             </div>
 
             {/* Stats */}

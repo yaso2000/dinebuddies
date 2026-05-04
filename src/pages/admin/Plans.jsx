@@ -5,7 +5,8 @@ import { FaPlus, FaEdit, FaTrash, FaSync, FaSave, FaTimes } from 'react-icons/fa
 import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../../config/planDefaults';
 
 const Plans = () => {
-    const [tab, setTab] = useState('plans');
+    /** Default to credit packs — primary monetization for consumers today. */
+    const [tab, setTab] = useState('packs');
     const [plans, setPlans] = useState([]);
     const [packs, setPacks] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -19,8 +20,8 @@ const Plans = () => {
             name: '',
             title: '',
             description: '',
-            type: 'user',
-            tier: 'free',
+            type: 'business',
+            tier: 'professional',
             price: 0,
             originalPrice: 0,
             discount: 0,
@@ -58,7 +59,8 @@ const Plans = () => {
             setLoading(true);
             let planImported = 0, planUpdated = 0, packImported = 0, packUpdated = 0;
 
-            for (const plan of BASE_SUBSCRIPTION_PLANS) {
+            // Consumer `type: user` plans are legacy (app uses Dine credits + free tier). Only sync business tiers from code.
+            for (const plan of BASE_SUBSCRIPTION_PLANS.filter((p) => p.type === 'business')) {
                 let existing = { empty: true };
                 if (plan.stripePriceId) {
                     const q = query(collection(db, 'subscriptionPlans'), where('stripePriceId', '==', plan.stripePriceId));
@@ -93,7 +95,9 @@ const Plans = () => {
                 }
             }
 
-            alert(`Synced. Plans: ${planImported} new, ${planUpdated} updated. Packs: ${packImported} new, ${packUpdated} updated.`);
+            alert(
+                `Synced. Business plans: ${planImported} new, ${planUpdated} updated. Packs: ${packImported} new, ${packUpdated} updated. (Consumer subscription rows in code were skipped.)`
+            );
             load();
         } catch (e) {
             alert('Error: ' + e.message);
@@ -204,16 +208,20 @@ const Plans = () => {
     return (
         <div dir="ltr">
             <div className="admin-page-header">
-                <h1 className="admin-page-title">Plans & Packs</h1>
-                <p className="admin-page-subtitle">Subscription plans and credit packs. All content in English.</p>
+                <h1 className="admin-page-title">Plans & packs</h1>
+                <p className="admin-page-subtitle">
+                    <strong>Credit packs</strong> back Dine credits for all members. <strong>Business</strong> subscription rows
+                    are the active recurring tiers. Legacy <code>type: user</code> subscription documents may still exist in
+                    Firestore for history — they are no longer synced from code.
+                </p>
             </div>
 
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-                <button type="button" className={`admin-btn ${tab === 'plans' ? 'admin-btn-primary' : 'admin-btn-secondary'}`} onClick={() => setTab('plans')}>
-                    Subscription Plans ({plans.length})
-                </button>
                 <button type="button" className={`admin-btn ${tab === 'packs' ? 'admin-btn-primary' : 'admin-btn-secondary'}`} onClick={() => setTab('packs')}>
-                    Credit Packs ({packs.length})
+                    Credit packs ({packs.length})
+                </button>
+                <button type="button" className={`admin-btn ${tab === 'plans' ? 'admin-btn-primary' : 'admin-btn-secondary'}`} onClick={() => setTab('plans')}>
+                    Business plans ({plans.filter((p) => p.type === 'business').length})
                 </button>
                 <button type="button" className="admin-btn admin-btn-secondary" onClick={syncFromCode}>
                     <FaSync /> Sync from Code
@@ -226,44 +234,81 @@ const Plans = () => {
             </div>
 
             {tab === 'plans' && (
-                <div className="admin-grid admin-grid-3">
-                    {plans.length === 0 ? (
-                        <div className="admin-card">
-                            <div className="admin-empty">
-                                <p className="admin-empty-text">No plans yet. Click "Sync from Code" or "Create New Plan".</p>
-                            </div>
-                        </div>
-                    ) : (
-                        plans.map((p) => (
-                            <div key={p.id} className="admin-card">
-                                <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--admin-text-primary)', marginBottom: '0.25rem' }}>
-                                    {p.name || p.id}
-                                </h3>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-muted)', marginBottom: '0.75rem', minHeight: '2.5rem' }}>
-                                    {p.description || '—'}
-                                </p>
-                                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--admin-text-primary)', marginBottom: '0.5rem' }}>
-                                    ${Number(p.price || 0).toFixed(2)}
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', fontWeight: '500' }}>
-                                        {' '}/ {p.duration?.type || 'month'}
-                                    </span>
-                                </div>
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <span className={`admin-badge ${p.type === 'business' ? 'admin-badge-warning' : 'admin-badge-primary'}`}>
-                                        {p.type === 'business' ? 'Business' : 'User'}
-                                    </span>
-                                    {p.recommended && <span className="admin-badge admin-badge-success" style={{ marginLeft: '0.5rem' }}>Recommended</span>}
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" style={{ flex: 1 }} onClick={() => openEdit(p.id)}>
-                                        <FaEdit /> Edit
-                                    </button>
-                                    <button type="button" className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => deletePlan(p.id)}>
-                                        <FaTrash />
-                                    </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div className="admin-grid admin-grid-3">
+                        {plans.filter((p) => p.type === 'business').length === 0 ? (
+                            <div className="admin-card">
+                                <div className="admin-empty">
+                                    <p className="admin-empty-text">No business plans. Use &quot;Sync from Code&quot; or create one.</p>
                                 </div>
                             </div>
-                        ))
+                        ) : (
+                            plans
+                                .filter((p) => p.type === 'business')
+                                .map((p) => (
+                                    <div key={p.id} className="admin-card">
+                                        <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--admin-text-primary)', marginBottom: '0.25rem' }}>
+                                            {p.name || p.id}
+                                        </h3>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-muted)', marginBottom: '0.75rem', minHeight: '2.5rem' }}>
+                                            {p.description || '—'}
+                                        </p>
+                                        <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--admin-text-primary)', marginBottom: '0.5rem' }}>
+                                            ${Number(p.price || 0).toFixed(2)}
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', fontWeight: '500' }}>
+                                                {' '}/ {p.duration?.type || 'month'}
+                                            </span>
+                                        </div>
+                                        <div style={{ marginBottom: '1rem' }}>
+                                            <span className="admin-badge admin-badge-warning">Business</span>
+                                            {p.recommended && (
+                                                <span className="admin-badge admin-badge-success" style={{ marginLeft: '0.5rem' }}>
+                                                    Recommended
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <button
+                                                type="button"
+                                                className="admin-btn admin-btn-secondary admin-btn-sm"
+                                                style={{ flex: 1 }}
+                                                onClick={() => openEdit(p.id)}
+                                            >
+                                                <FaEdit /> Edit
+                                            </button>
+                                            <button type="button" className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => deletePlan(p.id)}>
+                                                <FaTrash />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
+                        )}
+                    </div>
+
+                    {plans.some((p) => p.type === 'user') && (
+                        <details className="admin-card" style={{ padding: '1rem' }}>
+                            <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--admin-text-muted)' }}>
+                                Legacy consumer subscription rows ({plans.filter((p) => p.type === 'user').length}) — not sold; delete when safe
+                            </summary>
+                            <div className="admin-grid admin-grid-3" style={{ marginTop: '1rem' }}>
+                                {plans
+                                    .filter((p) => p.type === 'user')
+                                    .map((p) => (
+                                        <div key={p.id} className="admin-card" style={{ opacity: 0.92 }}>
+                                            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--admin-text-primary)' }}>{p.name || p.id}</h3>
+                                            <p style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{p.tier || '—'}</p>
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                                                <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => openEdit(p.id)}>
+                                                    <FaEdit /> Edit
+                                                </button>
+                                                <button type="button" className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => deletePlan(p.id)}>
+                                                    <FaTrash />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        </details>
                     )}
                 </div>
             )}
@@ -310,11 +355,14 @@ const Plans = () => {
                                 <textarea className="admin-input" rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Plan benefits..." />
                             </div>
                             <div>
-                                <label className="admin-label">Type</label>
+                                <label className="admin-label">Account type</label>
                                 <select className="admin-select" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                                    <option value="user">User</option>
-                                    <option value="business">Business</option>
+                                    <option value="business">Business (venues)</option>
+                                    <option value="user">Legacy consumer (deprecated)</option>
                                 </select>
+                                <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)', marginTop: '6px' }}>
+                                    Members use Dine credits, not consumer subscription tiers. Only use &quot;Legacy consumer&quot; to edit old Firestore rows.
+                                </p>
                             </div>
                             <div>
                                 <label className="admin-label">Tier</label>

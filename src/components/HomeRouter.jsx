@@ -4,21 +4,23 @@ import DesktopLanding from '../pages/DesktopLanding';
 import { useAuth } from '../context/AuthContext';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
-import { isAdminIdentity } from '../utils/adminAccess';
+import { isAdminIdentity, shouldLandOnAdminDashboard } from '../utils/adminAccess';
+
+const MOBILE_MQ = '(max-width: 768px)';
 
 const HomeRouter = () => {
     const { currentUser, userProfile, loading } = useAuth();
-    const [isMobile, setIsMobile] = useState(
-        typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' ? window.matchMedia(MOBILE_MQ).matches : false
     );
 
     useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth <= 768);
-        };
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
+        if (typeof window === 'undefined') return undefined;
+        const mq = window.matchMedia(MOBILE_MQ);
+        const onChange = () => setIsMobile(mq.matches);
+        onChange();
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
     }, []);
 
     const businessHomeDest = () => '/business-dashboard';
@@ -34,8 +36,21 @@ const HomeRouter = () => {
         );
     }
 
+    // Signed in but Firestore profile not yet: never use the guest `isMobile` branch below — scrollbar /
+    // widths near 768px caused rapid Navigate ↔ DesktopLanding (felt like desktop↔mobile) and wrong /posts-feed.
+    if (currentUser && !userProfile) {
+        if (isAdminIdentity(currentUser, null)) {
+            return <Navigate to="/admin/dashboard" replace />;
+        }
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+                <div style={{ width: 38, height: 38, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            </div>
+        );
+    }
+
     if (currentUser && userProfile) {
-        if (isAdminIdentity(currentUser, userProfile)) {
+        if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
             return <Navigate to="/admin/dashboard" replace />;
         }
         if (needsConsumerEmailVerification(currentUser, userProfile)) {

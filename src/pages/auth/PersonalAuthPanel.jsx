@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { needsEmailPasswordVerification } from '../../utils/emailVerification';
 import { isBusinessUser } from '../../utils/accountRole';
+import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 
 /**
  * Consumer (personal) account only: Google, Facebook, email/password, guest.
@@ -58,6 +59,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     let continueHref = '/posts-feed';
     if (showAlreadySignedIn) {
         if (needsEmailPasswordVerification(currentUser, userProfile)) continueHref = '/verify-email';
+        else if (shouldLandOnAdminDashboard(currentUser, userProfile)) continueHref = '/admin/dashboard';
         else if (isBusinessUser(userProfile)) {
             continueHref = '/business-dashboard';
         } else if (!isComplete) {
@@ -72,30 +74,39 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
         // If userProfile is loaded, make a smart decision
         if (userProfile) {
+            if (needsEmailPasswordVerification(currentUser, userProfile)) {
+                navigate('/verify-email', { replace: true });
+                return;
+            }
+            if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
+                navigate('/admin/dashboard', { replace: true });
+                return;
+            }
             if (isBusinessUser(userProfile)) {
                 navigate('/business-dashboard', { replace: true });
-            } else if (needsEmailPasswordVerification(currentUser, userProfile)) {
-                navigate('/verify-email', { replace: true });
+                return;
+            }
+            const isCompleteAfterVerify = userProfile.isProfileComplete || (
+                (userProfile.displayName || userProfile.display_name || userProfile.nickname) &&
+                userProfile.gender &&
+                (userProfile.ageCategory || userProfile.age)
+            );
+            if (!isCompleteAfterVerify) {
+                navigate('/complete-profile', { replace: true });
             } else {
-                // Check if profile is complete (second layer)
-                const isComplete = userProfile.isProfileComplete || (
-                    (userProfile.displayName || userProfile.display_name || userProfile.nickname) &&
-                    userProfile.gender &&
-                    (userProfile.ageCategory || userProfile.age)
-                );
-                
-                if (!isComplete) {
-                    navigate('/complete-profile', { replace: true });
-                } else {
-                    navigate('/posts-feed', { replace: true });
-                }
+                navigate('/posts-feed', { replace: true });
             }
             return;
         }
 
-        // Fail-safe: if profile doesn't load in 1.5s, go to HomeRouter (/) and let it decide 
-        // instead of blindly going to /posts-feed which bypasses the Complete Profile layer.
-        const tmr = setTimeout(() => navigate('/', { replace: true }), 1500);
+        // Fail-safe: if profile doesn't load quickly, avoid sending known admins through `/` + HomeRouter churn.
+        const tmr = setTimeout(() => {
+            if (shouldLandOnAdminDashboard(currentUser, null)) {
+                navigate('/admin/dashboard', { replace: true });
+            } else {
+                navigate('/', { replace: true });
+            }
+        }, 1500);
         return () => clearTimeout(tmr);
     }, [justLoggedIn, currentUser, userProfile, navigate]);
 
@@ -210,8 +221,12 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         setLoading(true);
         setError('');
         try {
-            if (provider === 'google') await signInWithGoogle();
-            else await signInWithFacebook();
+            if (provider === 'google') {
+                await signInWithGoogle();
+            } else {
+                const fbRes = await signInWithFacebook();
+                if (fbRes && fbRes.__oauthRedirect) return;
+            }
             setJustLoggedIn(true);
         } catch (err) {
             if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {

@@ -52,8 +52,8 @@ export default function CreditsWallet() {
     };
 
     return (
-        <div className="settings-page">
-            <div className="settings-header">
+        <div className="settings-page credits-wallet-page">
+            <div className="settings-header credits-wallet__header">
                 <button type="button" onClick={() => navigate('/settings')} className="back-btn">
                     <FaArrowLeft />
                 </button>
@@ -61,70 +61,56 @@ export default function CreditsWallet() {
                 <div style={{ width: 40 }} />
             </div>
 
-            <div className="settings-content">
-                <div className="settings-card">
-                    <h2>{t('your_balance', 'Your balance')}</h2>
-                    <p className="settings-description">
-                        {t('credit_value_note', '1 credit = $0.01 USD. Free credits are capped at 20 and refresh monthly (10/mo). Paid credits never expire.')}
-                    </p>
-                    <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>
-                            {t('free_credits', 'Free credits')}: <span style={{ color: 'var(--primary)' }}>{free}</span>
-                        </div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>
-                            {t('paid_credits', 'Paid credits')}: <span style={{ color: 'var(--primary)' }}>{paid}</span>
-                        </div>
-                        <div style={{ fontSize: '1.35rem', fontWeight: 900 }}>
-                            {t('total_credits', 'Total')}: {total}
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            {t('lifetime_stats', 'Lifetime purchased')}: {purchased} · {t('lifetime_spent', 'spent')}: {spent}
+            <div className="settings-content credits-wallet__content">
+                <div className="credits-wallet__column">
+                    <div className="settings-card credits-wallet__balance">
+                        <h2>{t('your_balance', 'Your balance')}</h2>
+                        <p className="settings-description credits-wallet__note">
+                            {t('credit_value_note', '1 credit = $0.01 USD. Free credits are capped at 20 and refresh monthly (10/mo). Paid credits never expire.')}
+                        </p>
+                        <div className="credits-wallet__stats">
+                            <div className="credits-wallet__stat-row">
+                                <span>{t('free_credits', 'Free credits')}</span>
+                                <strong>{free}</strong>
+                            </div>
+                            <div className="credits-wallet__stat-row">
+                                <span>{t('paid_credits', 'Paid credits')}</span>
+                                <strong>{paid}</strong>
+                            </div>
+                            <div className="credits-wallet__stat-row credits-wallet__stat-row--total">
+                                <span>{t('total_credits', 'Total')}</span>
+                                <strong>{total}</strong>
+                            </div>
+                            <div className="credits-wallet__stat-meta">
+                                {t('lifetime_stats', 'Lifetime purchased')}: {purchased} · {t('lifetime_spent', 'spent')}: {spent}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <h3 style={{ marginTop: 24, marginBottom: 12, fontSize: '1.05rem' }}>{t('buy_credits', 'Buy credits')}</h3>
-                <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-                    {PACKS.map((pack) => (
-                        <div
-                            key={pack.id}
-                            className="settings-card"
-                            style={{
-                                border: pack.highlight ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                position: 'relative',
-                            }}
-                        >
-                            {pack.highlight ? (
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        top: -10,
-                                        right: 12,
-                                        background: 'var(--primary)',
-                                        color: '#fff',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 800,
-                                        padding: '4px 10px',
-                                        borderRadius: 8,
-                                    }}
-                                >
-                                    {t('best_value', 'Best value')}
-                                </span>
-                            ) : null}
-                            <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{pack.label}</div>
-                            <div style={{ fontSize: '1.6rem', fontWeight: 900, marginTop: 8 }}>{pack.price}</div>
-                            {pack.sub ? <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{pack.sub}</div> : null}
-                            <button
-                                type="button"
-                                className="my-community-btn my-community-btn--post"
-                                style={{ marginTop: 14, width: '100%' }}
-                                disabled={loadingId !== null}
-                                onClick={() => buyPack(pack)}
+                    <h3 className="credits-wallet__buy-heading">{t('buy_credits', 'Buy credits')}</h3>
+                    <div className="credits-wallet__pack-grid">
+                        {PACKS.map((pack) => (
+                            <div
+                                key={pack.id}
+                                className={`settings-card credits-wallet__pack${pack.highlight ? ' credits-wallet__pack--highlight' : ''}`}
                             >
-                                {loadingId === pack.id ? t('loading', 'Loading…') : t('buy_now', 'Buy now')}
-                            </button>
-                        </div>
-                    ))}
+                                {pack.highlight ? (
+                                    <span className="credits-wallet__badge">{t('best_value', 'Best value')}</span>
+                                ) : null}
+                                <div className="credits-wallet__pack-label">{pack.label}</div>
+                                <div className="credits-wallet__pack-price">{pack.price}</div>
+                                {pack.sub ? <div className="credits-wallet__pack-sub">{pack.sub}</div> : null}
+                                <button
+                                    type="button"
+                                    className="credits-wallet__buy-btn"
+                                    disabled={loadingId !== null}
+                                    onClick={() => buyPack(pack)}
+                                >
+                                    {loadingId === pack.id ? t('loading', 'Loading…') : t('buy_now_short', 'Buy')}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>

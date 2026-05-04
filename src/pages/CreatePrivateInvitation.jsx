@@ -5,7 +5,7 @@ import {
     FaClock, FaUserFriends, FaLock, FaChevronLeft, FaSearch,
     FaMoneyBillWave, FaUsers, FaBriefcase,
     FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
-    FaStar, FaHome, FaFilm, FaFutbol, FaFire
+    FaStar, FaHome, FaFilm, FaFutbol, FaFire, FaMagic
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -30,6 +30,9 @@ import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/pr
 import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
 import { resolveOccasionCategoryId } from '../components/Invitations/privateCard/privateCardOccasionMap';
 import { getCardBackgroundOptions } from '../components/Invitations/privateCard/privateCardBackgrounds';
+import { callGenerateInvitationImage } from '../utils/callGenerateInvitationImage';
+import { createAiInvitationCoverMediaData } from '../utils/createAiInvitationCoverMediaData';
+import { PRIVATE_CARD_FRAME_COLORS } from '../components/Invitations/privateCard/privateCardFrameColors';
 
 const CreatePrivateInvitation = () => {
     const { t } = useTranslation();
@@ -44,6 +47,7 @@ const CreatePrivateInvitation = () => {
     // UI State
     const [mediaData, setMediaData] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [magicImageLoading, setMagicImageLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [mutualFriends, setMutualFriends] = useState([]);
     const [friendSearchQuery, setFriendSearchQuery] = useState('');
@@ -293,6 +297,38 @@ const CreatePrivateInvitation = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleMagicCoverImage = async () => {
+        if (!authUser || currentUser?.id === 'guest') {
+            showToast(t('login_to_create') || 'Please sign in', 'error');
+            goToLogin();
+            return;
+        }
+        setMagicImageLoading(true);
+        try {
+            const prompt =
+                [formData.title, formData.location, formData.restaurantName, formData.description]
+                    .filter((x) => String(x || '').trim())
+                    .join(' — ')
+                    .slice(0, 2400) ||
+                `${String(formData.occasionType || 'social')} private invitation`;
+            const frame = PRIVATE_CARD_FRAME_COLORS.find((f) => f.id === cardFrameColorId);
+            const frameLabel = frame ? t(frame.labelKey, frame.defaultLabel) : cardFrameColorId;
+            const style = [String(formData.occasionType || ''), frameLabel].filter(Boolean).join(' · ');
+            const apiResult = await callGenerateInvitationImage({ prompt, style });
+            const mediaPayload = await createAiInvitationCoverMediaData(apiResult);
+            setMediaData(mediaPayload);
+            showToast(t('invitation_magic_image_success'), 'success');
+        } catch (e) {
+            if (e.code === 'insufficient_credits') {
+                showToast(t('invitation_magic_image_insufficient'), 'error');
+            } else {
+                showToast(e.message || t('invitation_magic_image_error'), 'error');
+            }
+        } finally {
+            setMagicImageLoading(false);
+        }
     };
 
     const handlePreview = async (e) => {
@@ -615,6 +651,41 @@ const CreatePrivateInvitation = () => {
                             mediaData={mediaData}
                             onMediaSelect={(data) => setMediaData(data)}
                         />
+                        <div style={{ marginTop: '14px' }}>
+                            <button
+                                type="button"
+                                onClick={handleMagicCoverImage}
+                                disabled={magicImageLoading || !authUser || currentUser?.id === 'guest'}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    width: '100%',
+                                    maxWidth: '360px',
+                                    padding: '10px 14px',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    fontWeight: 600,
+                                    fontSize: '0.9rem',
+                                    cursor:
+                                        magicImageLoading || !authUser || currentUser?.id === 'guest'
+                                            ? 'not-allowed'
+                                            : 'pointer',
+                                    opacity: magicImageLoading ? 0.85 : 1,
+                                    background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                                    color: '#fff',
+                                }}
+                            >
+                                <FaMagic aria-hidden />
+                                {magicImageLoading
+                                    ? t('invitation_magic_image_loading')
+                                    : t('invitation_magic_image_btn')}
+                            </button>
+                            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+                                {t('invitation_magic_image_hint')}
+                            </p>
+                        </div>
                     </div>
 
                     {/* Payment Type */}

@@ -30,7 +30,7 @@ const Chat = lazy(() => import('./pages/Chat'));
 const MyCommunities = lazy(() => import('./pages/MyCommunities'));
 const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
-const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const AccountsManager = lazy(() => import('./pages/admin/AccountsManager'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
 
 const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
@@ -223,26 +223,27 @@ function App() {
                                                     <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<HomeInvitations />} />
-                                                </Route>
 
-                                                <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                                                    <Route path="dashboard" element={<AdminHome />} />
-                                                    <Route path="users" element={<UserManagement />} />
-                                                    <Route path="businesses" element={<BusinessManagement />} />
-                                                    <Route path="business-limits" element={<Navigate to="/admin/businesses" replace />} />
-                                                    <Route path="invitations" element={<InvitationManagement />} />
-                                                    <Route path="subscriptions" element={<SubscriptionManagement />} />
-                                                    <Route path="plans" element={<Plans />} />
-                                                    <Route path="grant-credits" element={<AdminGrantCredits />} />
-                                                    <Route path="reports" element={<ReportsAnalytics />} />
-                                                    <Route path="chat-community" element={<AdminChatCommunity />} />
-                                                    <Route path="notifications" element={<AdminNotifications />} />
-                                                    <Route path="migration" element={<MigrationTools />} />
-                                                    <Route path="system-tools" element={<AdminSystemTools />} />
-                                                    <Route path="audit-log" element={<AdminAuditLog />} />
-                                                    <Route path="backups" element={<CodeBackups />} />
-                                                    <Route path="settings" element={<AdminSettings />} />
-                                                    <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                                                    <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+                                                        <Route path="dashboard" element={<AdminHome />} />
+                                                        <Route path="accounts" element={<AccountsManager />} />
+                                                        <Route path="users" element={<Navigate to="/admin/accounts?tab=consumers" replace />} />
+                                                        <Route path="businesses" element={<Navigate to="/admin/accounts?tab=business" replace />} />
+                                                        <Route path="business-limits" element={<Navigate to="/admin/accounts?tab=business" replace />} />
+                                                        <Route path="invitations" element={<InvitationManagement />} />
+                                                        <Route path="subscriptions" element={<SubscriptionManagement />} />
+                                                        <Route path="plans" element={<Plans />} />
+                                                        <Route path="grant-credits" element={<AdminGrantCredits />} />
+                                                        <Route path="reports" element={<ReportsAnalytics />} />
+                                                        <Route path="chat-community" element={<AdminChatCommunity />} />
+                                                        <Route path="notifications" element={<AdminNotifications />} />
+                                                        <Route path="migration" element={<MigrationTools />} />
+                                                        <Route path="system-tools" element={<AdminSystemTools />} />
+                                                        <Route path="audit-log" element={<AdminAuditLog />} />
+                                                        <Route path="backups" element={<CodeBackups />} />
+                                                        <Route path="settings" element={<AdminSettings />} />
+                                                        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                                                    </Route>
                                                 </Route>
                                             </Route>
 

@@ -21,6 +21,7 @@
         flex-direction: column;
         height: 100%;
         width: 100%;
+        min-height: 0;
         overflow: hidden;
         /* Prevent double scrollbars */
     }
@@ -28,12 +29,16 @@
     /* The actual scrollable content area */
     .app-main {
         flex: 1;
+        min-height: 0;
+        /* Critical: without min-height:0 flex children won't shrink → no wheel/touch scroll */
         overflow-y: auto;
+        overflow-x: hidden;
         /* Allow internal scrolling */
         -webkit-overflow-scrolling: touch;
         /* Smooth scroll on iOS */
         width: 100%;
         position: relative;
+        touch-action: pan-y;
     }
 
     /* Chat screens: remove the bottom-nav padding and lock scroll

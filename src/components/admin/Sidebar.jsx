@@ -1,13 +1,12 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { isAdminIdentity } from '../../utils/adminAccess';
 import {
     FaTachometerAlt,
     FaUsers,
     FaEnvelope,
-    FaStore,
-    FaHistory,
     FaTimes,
     FaCreditCard,
     FaBox,
@@ -18,75 +17,72 @@ import {
     FaDatabase,
     FaTools,
     FaCopy,
-    FaSlidersH,
+    FaHistory,
     FaGift,
 } from 'react-icons/fa';
 
 const Sidebar = ({ isOpen, onClose }) => {
     const { currentUser, userProfile } = useAuth();
+    const { t } = useTranslation();
+    const location = useLocation();
     const userRole = userProfile?.role;
     const isAdmin = isAdminIdentity(currentUser, userProfile);
 
     const navGroups = [
         {
-            title: 'Overview',
+            titleKey: 'admin_nav_overview',
             items: [
-                { path: '/admin/dashboard', icon: FaTachometerAlt, label: 'Dashboard', roles: ['admin', 'moderator', 'support'] },
+                { path: '/admin/dashboard', icon: FaTachometerAlt, labelKey: 'admin_nav_dashboard', roles: ['admin', 'moderator', 'support'] },
             ],
         },
         {
-            title: 'Users & businesses',
+            titleKey: 'admin_nav_group_accounts',
             items: [
-                { path: '/admin/users', icon: FaUsers, label: 'Users', roles: ['admin', 'moderator', 'support'] },
-                { path: '/admin/businesses', icon: FaStore, label: 'Businesses', roles: ['admin', 'moderator'] },
-                { path: '/admin/business-limits', icon: FaSlidersH, label: 'Business limits', roles: ['admin'] },
+                { path: '/admin/accounts', icon: FaUsers, labelKey: 'admin_nav_item_accounts', roles: ['admin', 'moderator', 'support'] },
             ],
         },
         {
-            title: 'Invitations',
+            titleKey: 'admin_nav_billing',
             items: [
-                { path: '/admin/invitations', icon: FaEnvelope, label: 'Invitations', roles: ['admin', 'moderator'] },
+                { path: '/admin/subscriptions', icon: FaCreditCard, labelKey: 'admin_nav_subscriptions', roles: ['admin'] },
+                { path: '/admin/plans', icon: FaBox, labelKey: 'admin_nav_plans', roles: ['admin'] },
+                { path: '/admin/grant-credits', icon: FaGift, labelKey: 'admin_nav_grant_credits', roles: ['admin'] },
             ],
         },
         {
-            title: 'Subscriptions & Plans',
+            titleKey: 'admin_nav_safety',
             items: [
-                { path: '/admin/subscriptions', icon: FaCreditCard, label: 'Subscriptions', roles: ['admin'] },
-                { path: '/admin/plans', icon: FaBox, label: 'Plans & Packs', roles: ['admin'] },
-                { path: '/admin/grant-credits', icon: FaGift, label: 'Grant Credits', roles: ['admin'] },
+                { path: '/admin/reports', icon: FaFlag, labelKey: 'admin_nav_reports', roles: ['admin', 'moderator'] },
+                { path: '/admin/audit-log', icon: FaHistory, labelKey: 'admin_nav_audit', roles: ['admin'] },
             ],
         },
         {
-            title: 'Content & Moderation',
+            titleKey: 'admin_nav_content',
             items: [
-                { path: '/admin/reports', icon: FaFlag, label: 'Reports', roles: ['admin', 'moderator'] },
-                { path: '/admin/chat-community', icon: FaComments, label: 'Chat & Community', roles: ['admin', 'moderator'] },
+                { path: '/admin/invitations', icon: FaEnvelope, labelKey: 'admin_nav_invitations', roles: ['admin', 'moderator'] },
+                { path: '/admin/chat-community', icon: FaComments, labelKey: 'admin_nav_chat', roles: ['admin', 'moderator'] },
             ],
         },
         {
-            title: 'Notifications',
+            titleKey: 'admin_nav_ops',
             items: [
-                { path: '/admin/notifications', icon: FaBell, label: 'Notifications', roles: ['admin'] },
+                { path: '/admin/notifications', icon: FaBell, labelKey: 'admin_nav_notifications', roles: ['admin'] },
+                { path: '/admin/migration', icon: FaDatabase, labelKey: 'admin_nav_migration', roles: ['admin'] },
+                { path: '/admin/system-tools', icon: FaTools, labelKey: 'admin_nav_system_tools', roles: ['admin'] },
+                { path: '/admin/backups', icon: FaCopy, labelKey: 'admin_nav_backups', roles: ['admin'] },
             ],
         },
         {
-            title: 'Data & Tools',
+            titleKey: 'admin_nav_settings',
             items: [
-                { path: '/admin/migration', icon: FaDatabase, label: 'Migration', roles: ['admin'] },
-                { path: '/admin/system-tools', icon: FaTools, label: 'System Tools', roles: ['admin'] },
-                { path: '/admin/audit-log', icon: FaHistory, label: 'Audit Log', roles: ['admin'] },
-                { path: '/admin/backups', icon: FaCopy, label: 'Code Snapshots', roles: ['admin'] },
-            ],
-        },
-        {
-            title: 'Settings',
-            items: [
-                { path: '/admin/settings', icon: FaCog, label: 'Settings', roles: ['admin'] },
+                { path: '/admin/settings', icon: FaCog, labelKey: 'admin_nav_settings', roles: ['admin'] },
             ],
         },
     ];
 
     const canSee = (roles) => isAdmin || (roles && roles.includes(userRole));
+
+    const isAccountsActive = location.pathname.startsWith('/admin/accounts');
 
     return (
         <>
@@ -115,18 +111,21 @@ const Sidebar = ({ isOpen, onClose }) => {
                         const visibleItems = group.items.filter((item) => canSee(item.roles));
                         if (visibleItems.length === 0) return null;
                         return (
-                            <div key={group.title} className="admin-nav-group">
-                                <div className="admin-nav-group-title">{group.title}</div>
+                            <div key={group.titleKey} className="admin-nav-group">
+                                <div className="admin-nav-group-title">{t(group.titleKey)}</div>
                                 {visibleItems.map((item) => (
                                     <NavLink
                                         key={item.path}
                                         to={item.path}
                                         onClick={onClose}
-                                        className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+                                        className={({ isActive }) => {
+                                            const accountsMatch = item.path === '/admin/accounts' && isAccountsActive;
+                                            return `admin-nav-item ${isActive || accountsMatch ? 'active' : ''}`;
+                                        }}
                                         style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', borderRadius: 'var(--admin-radius-sm)', textDecoration: 'none', color: 'inherit', fontWeight: '500', fontSize: '0.9rem' }}
                                     >
                                         <item.icon className="admin-nav-icon" style={{ fontSize: '1rem', flexShrink: 0 }} />
-                                        <span>{item.label}</span>
+                                        <span>{t(item.labelKey)}</span>
                                     </NavLink>
                                 ))}
                             </div>

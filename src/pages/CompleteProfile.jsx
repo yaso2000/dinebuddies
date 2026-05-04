@@ -13,7 +13,7 @@ import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 import { needsEmailPasswordVerification } from '../utils/emailVerification';
-import { isAdminIdentity } from '../utils/adminAccess';
+import { shouldLandOnAdminDashboard } from '../utils/adminAccess';
 
 const CompleteProfile = () => {
     const { t } = useTranslation();
@@ -36,7 +36,7 @@ const CompleteProfile = () => {
 
     useEffect(() => {
         if (loading) return;
-        if (isAdminIdentity(currentUser, userProfile)) {
+        if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
             navigate('/admin/dashboard', { replace: true });
             return;
         }

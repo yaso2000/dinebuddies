@@ -2181,6 +2181,58 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     );
 }
 
+/* Corner switch: personal (default) ↔ business — replaces in-card tab strip */
+.login-hub-page .login-hub-account-toggle {
+  position: fixed;
+  top: max(0.65rem, env(safe-area-inset-top, 0px));
+  inset-inline-end: max(0.65rem, env(safe-area-inset-right, 0px));
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(28, 25, 23, 0.12);
+  background: rgba(255, 254, 251, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #44403c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 6px 20px -8px rgba(28, 25, 23, 0.18);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.login-hub-page .login-hub-account-toggle:hover {
+  background: #fffefb;
+  color: #1c1917;
+  border-color: rgba(28, 25, 23, 0.18);
+  transform: translateY(-1px);
+}
+
+.login-hub-page .login-hub-account-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary, #e86e2e) 55%, #a8a29e);
+  outline-offset: 2px;
+}
+
+.login-hub-page .login-hub-account-toggle svg {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+.login-hub-tabpanel--solo {
+  border-radius: 14px 14px 0 0;
+}
+
 .login-hub-header {
   text-align: center;
   margin-bottom: clamp(1.1rem, 3vw, 1.5rem);
@@ -2761,6 +2813,11 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     align-items: stretch;
   }
 
+  /* Admin panel embedded in main shell: single full-width column */
+  .ds-body-grid--admin {
+    grid-template-columns: 1fr !important;
+  }
+
   /* ── Column 1: Left nav (scrolls if tall) ── */
   .ds-left-sidebar {
     overflow-y: auto;
@@ -2847,6 +2904,10 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     max-width: var(--desktop-content-max) !important;
     box-sizing: border-box !important;
     flex: 0 0 auto !important;
+  }
+
+  .app-main--admin > * {
+    max-width: 100% !important;
   }
 
   /* AI Marketing Studio: two-column composer + preview needs real width */

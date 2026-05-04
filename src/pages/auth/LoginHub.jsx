@@ -1,36 +1,72 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaUser } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import PersonalAuthPanel from './PersonalAuthPanel';
 import BusinessLoginPanel from './BusinessLoginPanel';
 
-/** Login hub with tabs: personal (default) | business */
+function readLoginTabFromLocation(location) {
+    const q = new URLSearchParams(location.search || '');
+    const businessFromQuery = q.get('tab') === 'business';
+    const businessFromPath = location.pathname.startsWith('/business/login');
+    return businessFromQuery || businessFromPath ? 'business' : 'personal';
+}
+
+/** Login hub — personal (default) with a corner toggle to business. */
 export default function LoginHub() {
     const { t } = useTranslation();
     const location = useLocation();
-    const [tab, setTab] = useState('personal');
+    const navigate = useNavigate();
+    const [tab, setTab] = useState(() => readLoginTabFromLocation(location));
 
     useEffect(() => {
-        const q = new URLSearchParams(location.search);
-        const businessFromQuery = q.get('tab') === 'business';
-        const businessFromPath = location.pathname.startsWith('/business/login');
-        if (!businessFromQuery && !businessFromPath) return;
-        setTab('business');
-        const id = window.setTimeout(() => {
-            document.getElementById('business-login-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 100);
-        return () => window.clearTimeout(id);
+        setTab(readLoginTabFromLocation(location));
     }, [location.pathname, location.search]);
 
-    const tabIdPersonal = 'login-hub-tab-personal';
-    const tabIdBusiness = 'login-hub-tab-business';
     const panelIdPersonal = 'login-hub-panel-personal';
     const panelIdBusiness = 'business-login-section';
 
+    const goPersonal = () => {
+        setTab('personal');
+        const q = new URLSearchParams(location.search || '');
+        q.delete('tab');
+        const s = q.toString();
+        navigate(s ? `/login?${s}` : '/login', { replace: true });
+    };
+
+    const goBusiness = () => {
+        setTab('business');
+        const q = new URLSearchParams(location.search || '');
+        q.set('tab', 'business');
+        navigate(`/login?${q.toString()}`, { replace: true });
+    };
+
     return (
         <div className="auth-route-scroll login-hub login-hub-page">
+            <button
+                type="button"
+                className="login-hub-account-toggle"
+                onClick={() => (tab === 'personal' ? goBusiness() : goPersonal())}
+                aria-label={
+                    tab === 'personal'
+                        ? t('login_toggle_open_business_a11y', 'Switch to business account sign-in')
+                        : t('login_toggle_open_personal_a11y', 'Switch to personal account sign-in')
+                }
+            >
+                {tab === 'personal' ? (
+                    <>
+                        <HiBuildingStorefront aria-hidden />
+                        <span>{t('login_toggle_business', 'Business')}</span>
+                    </>
+                ) : (
+                    <>
+                        <FaUser aria-hidden />
+                        <span>{t('login_toggle_personal', 'Personal')}</span>
+                    </>
+                )}
+            </button>
+
             <div className="login-hub-wrap">
                 <header className="login-hub-header">
                     <h1 className="login-hub-brand">DineBuddies</h1>
@@ -40,66 +76,31 @@ export default function LoginHub() {
                             : t('account_type_personal_title', 'Personal account')}
                     </span>
                     <p className="login-hub-tagline">
-                        {t('login_hub_subtitle_unified', 'Choose the tab that matches your account, then sign in.')}
+                        {tab === 'business'
+                            ? t(
+                                'login_hub_subtitle_business',
+                                'Sign in with your business email and password.'
+                            )
+                            : t(
+                                'login_hub_subtitle_personal',
+                                'Sign in with email, Google, or Facebook — or create a personal account.'
+                            )}
                     </p>
                 </header>
 
                 <div className={`login-hub-card login-hub-card--${tab}`}>
                     <div
-                        className="login-hub-tabs"
-                        role="tablist"
-                        aria-label={t('login_tablist_label', 'Account type')}
-                    >
-                        <button
-                            type="button"
-                            id={tabIdPersonal}
-                            role="tab"
-                            aria-selected={tab === 'personal'}
-                            aria-controls={panelIdPersonal}
-                            tabIndex={tab === 'personal' ? 0 : -1}
-                            className={`login-hub-tab${tab === 'personal' ? ' login-hub-tab--active' : ''}`}
-                            onClick={() => setTab('personal')}
-                        >
-                            <FaUser aria-hidden />
-                            {t('account_type_personal_title', 'Personal account')}
-                            <span className="login-hub-tab-subline">
-                                {t('personal_auth_tab_hint', 'For individuals and social sign-in')}
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            id={tabIdBusiness}
-                            role="tab"
-                            aria-selected={tab === 'business'}
-                            aria-controls={panelIdBusiness}
-                            tabIndex={tab === 'business' ? 0 : -1}
-                            className={`login-hub-tab${tab === 'business' ? ' login-hub-tab--active' : ''}`}
-                            onClick={() => setTab('business')}
-                        >
-                            <HiBuildingStorefront aria-hidden />
-                            {t('business_login', 'Business')}
-                            <span className="login-hub-tab-subline">
-                                {t('business_auth_tab_hint', 'For restaurants and brand teams')}
-                            </span>
-                        </button>
-                    </div>
-
-                    <div
                         id={panelIdPersonal}
-                        role="tabpanel"
-                        aria-labelledby={tabIdPersonal}
                         hidden={tab !== 'personal'}
-                        className="login-hub-tabpanel"
+                        className="login-hub-tabpanel login-hub-tabpanel--solo"
                     >
                         <PersonalAuthPanel singleCardShell />
                     </div>
 
                     <div
                         id={panelIdBusiness}
-                        role="tabpanel"
-                        aria-labelledby={tabIdBusiness}
                         hidden={tab !== 'business'}
-                        className="login-hub-tabpanel"
+                        className="login-hub-tabpanel login-hub-tabpanel--solo"
                     >
                         <BusinessLoginPanel embedInHub embeddedInSingleCard />
                     </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FaExclamationTriangle, FaChartLine, FaUsers, FaEnvelope, FaStore, FaDollarSign, FaArrowUp, FaFlag, FaEye, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { FaExclamationTriangle, FaChartLine, FaUsers, FaEnvelope, FaStore, FaArrowUp, FaFlag, FaCheckCircle, FaTimesCircle, FaCreditCard } from 'react-icons/fa';
+import { collection, getDocs, query, where, orderBy, limit, documentId } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { adminSecurityService } from '../../services/adminSecurityService';
 
 const ReportsAnalytics = () => {
     const [activeTab, setActiveTab] = useState('analytics');
@@ -44,7 +45,9 @@ const ReportsAnalytics = () => {
             setLoading(true);
 
             // Fetch Users
-            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const usersSnapshot = await getDocs(
+                query(collection(db, 'users'), orderBy(documentId()), limit(500))
+            );
             const totalUsers = usersSnapshot.size;
 
             // Fetch Invitations
@@ -52,25 +55,14 @@ const ReportsAnalytics = () => {
             const totalInvitations = invitationsSnapshot.size;
 
             // Fetch Partners (business accounts)
-            const partnersQuery = query(collection(db, 'users'), where('role', '==', 'business'));
+            const partnersQuery = query(
+                collection(db, 'users'),
+                where('role', '==', 'business'),
+                limit(500)
+            );
 
             const partnersSnapshot = await getDocs(partnersQuery);
             const totalPartners = partnersSnapshot.size;
-
-            // Fetch Subscriptions for revenue
-            let totalRevenue = 0;
-            try {
-                const subscriptionsSnapshot = await getDocs(collection(db, 'subscriptions'));
-                subscriptionsSnapshot.forEach(doc => {
-                    const sub = doc.data();
-                    if (sub.amount) {
-                        totalRevenue += sub.amount;
-                    }
-                });
-            } catch (err) {
-                // Subscriptions collection may not exist yet
-                console.log('Subscriptions collection not accessible');
-            }
 
             setAnalytics({
                 users: {
@@ -89,7 +81,7 @@ const ReportsAnalytics = () => {
                     newThisMonth: 0
                 },
                 revenue: {
-                    total: totalRevenue,
+                    total: 0,
                     growth: 0,
                     thisMonth: 0
                 }
@@ -103,14 +95,44 @@ const ReportsAnalytics = () => {
 
     const fetchReports = async () => {
         try {
-            // You can add reports collection later
-            // const reportsSnapshot = await getDocs(collection(db, 'reports'));
-            // setReports(reportsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-            // Currently no reports
-            setReports([]);
+            let reportsSnapshot;
+            try {
+                reportsSnapshot = await getDocs(
+                    query(collection(db, 'reports'), orderBy('timestamp', 'desc'), limit(200))
+                );
+            } catch {
+                reportsSnapshot = await getDocs(query(collection(db, 'reports'), limit(200)));
+            }
+            const rows = reportsSnapshot.docs.map((docSnap) => {
+                const r = docSnap.data();
+                const ts = r.timestamp?.toDate?.() || r.createdAt?.toDate?.() || null;
+                return {
+                    id: docSnap.id,
+                    type: r.type || 'content',
+                    targetId: r.targetId,
+                    targetName: r.targetName || '',
+                    reason: r.reason || '',
+                    details: r.details || '',
+                    status: r.status || 'pending',
+                    reporterId: r.reporterId,
+                    reporterName: r.reporterName || r.reporterId,
+                    createdAt: ts,
+                };
+            });
+            setReports(rows);
         } catch (error) {
             console.error('Error fetching reports:', error);
+            setReports([]);
+        }
+    };
+
+    const handleReportStatus = async (reportId, status) => {
+        if (!window.confirm(`Set report to "${status}"?`)) return;
+        try {
+            await adminSecurityService.setReportStatus(reportId, status);
+            setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
+        } catch (e) {
+            alert(e.message || 'Failed to update report');
         }
     };
 
@@ -275,7 +297,7 @@ const ReportsAnalytics = () => {
                             </div>
                         </div>
 
-                        {/* Revenue */}
+                        {/* Billing snapshot (credits + Stripe live in user docs / Stripe dashboard) */}
                         <div className="admin-card">
                             <div className="admin-flex-between admin-mb-2">
                                 <div style={{
@@ -287,23 +309,17 @@ const ReportsAnalytics = () => {
                                     alignItems: 'center',
                                     justifyContent: 'center'
                                 }}>
-                                    <FaDollarSign style={{ fontSize: '1.5rem', color: '#22c55e' }} />
-                                </div>
-                                <div className="admin-flex admin-gap-1" style={{ alignItems: 'center' }}>
-                                    <FaArrowUp style={{ color: '#22c55e', fontSize: '0.875rem' }} />
-                                    <span style={{ color: '#22c55e', fontSize: '0.875rem', fontWeight: '600' }}>
-                                        +{analytics.revenue.growth}%
-                                    </span>
+                                    <FaCreditCard style={{ fontSize: '1.5rem', color: '#22c55e' }} />
                                 </div>
                             </div>
-                            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#ffffff', marginBottom: '0.25rem' }}>
-                                ${analytics.revenue.total}
+                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#ffffff', marginBottom: '0.35rem', lineHeight: 1.35 }}>
+                                Credits & subscriptions
                             </div>
                             <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
-                                Total Revenue
+                                Consumer balances: <strong style={{ color: '#e2e8f0' }}>freeCredits</strong> / <strong style={{ color: '#e2e8f0' }}>paidCredits</strong> on each user doc. Business: <strong style={{ color: '#e2e8f0' }}>subscription</strong> + <strong style={{ color: '#e2e8f0' }}>subscriptionTier</strong>.
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                ${analytics.revenue.thisMonth} this month
+                                Use Subscriptions & Grant credits in the sidebar for operational tools.
                             </div>
                         </div>
                     </div>
@@ -439,72 +455,74 @@ const ReportsAnalytics = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {reports.map(report => (
+                                    {reports.map((report) => (
                                         <tr key={report.id}>
                                             <td>
-                                                <span className={
-                                                    report.type === 'user'
-                                                        ? 'admin-badge admin-badge-danger'
-                                                        : 'admin-badge admin-badge-warning'
-                                                }>
-                                                    {report.type === 'user' ? '👤 User' : '✉️ Invitation'}
-                                                </span>
+                                                <span className="admin-badge admin-badge-warning">{report.type}</span>
                                             </td>
                                             <td>
                                                 <div>
-                                                    <div style={{ fontWeight: '600', color: '#ffffff' }}>
-                                                        {report.reportedByName}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                                        ID: {report.reportedBy}
-                                                    </div>
+                                                    <div style={{ fontWeight: '600', color: '#ffffff' }}>{report.reporterName}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {report.reporterId}</div>
                                                 </div>
                                             </td>
                                             <td>
-                                                <div style={{ color: '#ffffff' }}>
-                                                    {report.type === 'user'
-                                                        ? report.reportedUserName
-                                                        : report.invitationTitle}
-                                                </div>
+                                                <div style={{ color: '#ffffff' }}>{report.targetName || report.targetId}</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>Target: {report.targetId}</div>
                                             </td>
                                             <td>
                                                 <div className="admin-flex admin-gap-1" style={{ alignItems: 'center' }}>
                                                     <FaFlag style={{ color: '#ef4444', fontSize: '0.875rem' }} />
-                                                    <span style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                                                        {report.reason}
-                                                    </span>
+                                                    <span style={{ fontSize: '0.875rem', color: '#94a3b8' }}>{report.reason}</span>
                                                 </div>
+                                                {report.details ? (
+                                                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 6, maxWidth: 280 }}>{report.details}</div>
+                                                ) : null}
                                             </td>
                                             <td>
-                                                <span className="admin-badge admin-badge-warning">
-                                                    ⏳ {report.status}
+                                                <span
+                                                    className={
+                                                        report.status === 'pending'
+                                                            ? 'admin-badge admin-badge-warning'
+                                                            : report.status === 'resolved'
+                                                              ? 'admin-badge admin-badge-success'
+                                                              : 'admin-badge admin-badge-secondary'
+                                                    }
+                                                >
+                                                    {report.status}
                                                 </span>
                                             </td>
                                             <td>
                                                 <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                                                    {report.createdAt?.toLocaleDateString?.() || 'N/A'}
+                                                    {report.createdAt instanceof Date && !Number.isNaN(report.createdAt.getTime())
+                                                        ? report.createdAt.toLocaleString()
+                                                        : 'N/A'}
                                                 </div>
                                             </td>
                                             <td>
                                                 <div className="admin-flex admin-gap-1">
-                                                    <button
-                                                        className="admin-btn admin-btn-sm"
-                                                        style={{ background: '#3b82f6', color: '#ffffff', padding: '0.5rem' }}
-                                                    >
-                                                        <FaEye />
-                                                    </button>
-                                                    <button
-                                                        className="admin-btn admin-btn-sm admin-btn-success"
-                                                        style={{ padding: '0.5rem' }}
-                                                    >
-                                                        <FaCheckCircle />
-                                                    </button>
-                                                    <button
-                                                        className="admin-btn admin-btn-sm admin-btn-secondary"
-                                                        style={{ padding: '0.5rem' }}
-                                                    >
-                                                        <FaTimesCircle />
-                                                    </button>
+                                                    {report.status === 'pending' && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="admin-btn admin-btn-sm admin-btn-success"
+                                                                style={{ padding: '0.5rem' }}
+                                                                title="Resolve"
+                                                                onClick={() => handleReportStatus(report.id, 'resolved')}
+                                                            >
+                                                                <FaCheckCircle />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="admin-btn admin-btn-sm admin-btn-secondary"
+                                                                style={{ padding: '0.5rem' }}
+                                                                title="Dismiss"
+                                                                onClick={() => handleReportStatus(report.id, 'dismissed')}
+                                                            >
+                                                                <FaTimesCircle />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

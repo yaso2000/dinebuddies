@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaMagic, FaTimes } from 'react-icons/fa';
+import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaMagic, FaTimes, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
@@ -37,15 +37,19 @@ const Layout = ({ children }) => {
     const { themeMode } = useTheme();
 
     const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
+    const [inviteCreateOpen, setInviteCreateOpen] = useState(false);
 
     useEffect(() => {
-        if (!businessCreateOpen) return;
+        if (!businessCreateOpen && !inviteCreateOpen) return;
         const onKey = (e) => {
-            if (e.key === 'Escape') setBusinessCreateOpen(false);
+            if (e.key === 'Escape') {
+                setBusinessCreateOpen(false);
+                setInviteCreateOpen(false);
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [businessCreateOpen]);
+    }, [businessCreateOpen, inviteCreateOpen]);
 
     // Right sidebar data
     const [trendingPartners, setTrendingPartners] = useState([]);
@@ -107,7 +111,11 @@ const Layout = ({ children }) => {
     // 1. Wait for auth to settle before running guards (must be after all hooks — see React #310).
     // Never return null here: <Outlet /> would not mount, so GuestBlockedRoute never runs and users
     // see a blank screen until refresh (protected routes + guests redirecting to /login).
-    if (loading) {
+    //
+    // IMPORTANT: Do not unmount <Outlet /> on /admin while `loading` flips true (Firestore/auth churn).
+    // That tore down AdminRoute/AdminLayout and felt like "desktop↔mobile" or home↔admin flicker.
+    const isAdminPath = location.pathname.startsWith('/admin');
+    if (loading && !(isAdminPath && currentUser?.uid)) {
         return (
             <div
                 role="status"
@@ -167,11 +175,17 @@ const Layout = ({ children }) => {
     const isCommunityRoute = location.pathname.startsWith('/community/');
     const isStoryRoute = location.pathname === '/create-story';
     const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
+    const isAdminRoute = location.pathname.startsWith('/admin');
 
     const businessCreateFabActive =
         location.pathname === '/create-post' ||
         location.pathname.startsWith('/ai-marketing-studio') ||
         location.pathname === '/business-dashboard';
+
+    const inviteCreateFabActive =
+        location.pathname === '/create' ||
+        location.pathname === '/create-private' ||
+        location.pathname === '/create-dating';
 
     const changeLanguage = (lang) => i18n.changeLanguage(lang);
 
@@ -450,10 +464,10 @@ const Layout = ({ children }) => {
             </header>
 
             {/* ── DESKTOP 3-COLUMN BODY (all routes, incl. chat) ── */}
-            <div className="ds-body-grid">
+            <div className={`ds-body-grid${isAdminRoute ? ' ds-body-grid--admin' : ''}`}>
 
                 {/* Column 1 — contextual left sidebar */}
-                {showConversationSidebar ? (
+                {!isAdminRoute && (showConversationSidebar ? (
                     <ChatSidebar />
                 ) : isCommunityRoute ? (
                     <CommunitySidebar />
@@ -539,16 +553,16 @@ const Layout = ({ children }) => {
                             </Link>
                         )}
                         {isAdminAccount && (
-                            <Link to="/admin" className={`ds-nav-item ${isActive('/admin') ? 'active' : ''}`}>
+                            <Link to="/admin/dashboard" className={`ds-nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
                                 <FaCrown /><span>Admin</span>
                             </Link>
                         )}
 
                     </aside>
-                )}
+                ))}
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}`}>
+                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}`}>
                     <EmailVerificationBusinessBanner />
                     <UnpublishedBusinessReminder />
                     {children}
@@ -556,11 +570,11 @@ const Layout = ({ children }) => {
                 </main>
 
                 {/* Column 3 — Right widgets */}
-                <RightSidebar />
+                {!isAdminRoute && <RightSidebar />}
             </div>
 
-            {/* ── MOBILE BOTTOM NAV ── */}
-            {!isChatScreen && (
+            {/* ── MOBILE BOTTOM NAV (admin uses embedded nav in AdminLayout) ── */}
+            {!isChatScreen && !isAdminRoute && (
                 <nav className="bottom-nav user-nav">
                     <Link to={feedHomePath} className={`nav-item ${isFeedHomeActive ? 'active' : ''}`}>
                         <FaHome className="nav-icon" />
@@ -576,9 +590,16 @@ const Layout = ({ children }) => {
                             <span>{t('nav_login', 'Login')}</span>
                         </Link>
                     ) : !isBusinessAccount ? (
-                        <Link to="/create-post" className={`nav-item fab-nav-item ${isActive('/create-post') ? 'active' : ''}`}>
+                        <button
+                            type="button"
+                            className={`nav-item fab-nav-item${inviteCreateFabActive ? ' active' : ''}`}
+                            onClick={() => setInviteCreateOpen(true)}
+                            aria-haspopup="dialog"
+                            aria-expanded={inviteCreateOpen}
+                            aria-label={t('invite_create_menu', 'Create invitation')}
+                        >
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
-                        </Link>
+                        </button>
                     ) : null}
                     {isBusinessAccount && (
                         <button
@@ -609,12 +630,118 @@ const Layout = ({ children }) => {
                         </Link>
                     )}
                     {isAdminAccount && (
-                        <Link to="/admin" className={`nav-item ${isActive('/admin') ? 'active' : ''}`}>
+                        <Link to="/admin/dashboard" className={`nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
                             <FaCrown className="nav-icon" />
                             <span>Admin</span>
                         </Link>
                     )}
                 </nav>
+            )}
+
+            {!isBusinessAccount && !isGuest && inviteCreateOpen && (
+                <div
+                    className="business-create-overlay"
+                    role="presentation"
+                    onClick={() => setInviteCreateOpen(false)}
+                >
+                    <div
+                        className="business-create-sheet"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="invite-create-title"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="business-create-sheet__header">
+                            <div className="business-create-sheet__titles">
+                                <h2 id="invite-create-title" className="business-create-sheet__title">
+                                    {t('invite_create_title', 'Create invitation')}
+                                </h2>
+                                <p className="business-create-sheet__subtitle">
+                                    {t('invite_create_subtitle', 'Choose the type of invitation you want to create.')}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="business-create-sheet__close"
+                                onClick={() => setInviteCreateOpen(false)}
+                                aria-label={t('close', 'Close')}
+                            >
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <div className="business-create-sheet__options">
+                            <button
+                                type="button"
+                                className="business-create-option"
+                                onClick={() => {
+                                    setInviteCreateOpen(false);
+                                    navigate('/create');
+                                }}
+                            >
+                                <span className="business-create-option__icon business-create-option__icon--featured">
+                                    <FaEnvelope />
+                                </span>
+                                <span className="business-create-option__text">
+                                    <span className="business-create-option__label">
+                                        {t('invite_create_public_title', 'Public invitation')}
+                                    </span>
+                                    <span className="business-create-option__desc">
+                                        {t(
+                                            'invite_create_public_desc',
+                                            'A discoverable invitation others can browse and join.'
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                className="business-create-option"
+                                onClick={() => {
+                                    setInviteCreateOpen(false);
+                                    navigate('/create-private');
+                                }}
+                            >
+                                <span className="business-create-option__icon business-create-option__icon--motion">
+                                    <FaLock />
+                                </span>
+                                <span className="business-create-option__text">
+                                    <span className="business-create-option__label">
+                                        {t('invite_create_private_title', 'Private invitation')}
+                                    </span>
+                                    <span className="business-create-option__desc">
+                                        {t(
+                                            'invite_create_private_desc',
+                                            'Invite specific guests with a private link.'
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                className="business-create-option"
+                                onClick={() => {
+                                    setInviteCreateOpen(false);
+                                    navigate('/create-dating');
+                                }}
+                            >
+                                <span className="business-create-option__icon business-create-option__icon--featured">
+                                    <FaHeart />
+                                </span>
+                                <span className="business-create-option__text">
+                                    <span className="business-create-option__label">
+                                        {t('invite_create_dating_title', 'Dating invitation')}
+                                    </span>
+                                    <span className="business-create-option__desc">
+                                        {t(
+                                            'invite_create_dating_desc',
+                                            'A dating-style invitation for matched dining.'
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {isBusinessAccount && businessCreateOpen && (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +11,8 @@ import {
     ADMIN_USERS_PAGE_SIZE,
     buildUsersBrowseQuery,
     buildUsersBrowseQueryPrev,
+    buildTeamBrowseQuery,
+    buildTeamBrowseQueryPrev,
     searchUsers,
     fetchUserStats,
 } from '../../utils/adminUserQueries';
@@ -17,12 +20,6 @@ import { getUserDocLatLng } from '../../utils/userDocCoords';
 import '../../components/MapStyles.css';
 
 const isBusiness = (u) => u.role === 'business';
-
-const USER_TIERS = [
-    { value: 'free', label: '🆓 Free', color: '#64748b' },
-    { value: 'pro', label: '⚡ Pro', color: '#22c55e' },
-    { value: 'vip', label: '👑 VIP', color: '#f59e0b' },
-];
 
 const BIZ_TIERS = [
     { value: 'free', label: '🆓 Free', color: '#64748b' },
@@ -32,8 +29,11 @@ const BIZ_TIERS = [
 
 const SYSTEM_ROLES = ['user', 'business', 'staff', 'support', 'admin'];
 
-const UserManagement = () => {
+const TEAM_ROLES = new Set(['admin', 'staff', 'support']);
+
+const UserManagement = ({ accountScope } = {}) => {
     const { currentUser } = useAuth();
+    const { t } = useTranslation();
 
     const [listUsers, setListUsers] = useState([]);
     const [searchMode, setSearchMode] = useState(false);
@@ -92,8 +92,13 @@ const UserManagement = () => {
         setSearchMode(false);
         setPageIndex(0);
         try {
-            const q = buildUsersBrowseQuery(db, { roleFilter: filterRole, cursorLast: null });
-            const snap = await getDocs(q);
+            let snap;
+            if (accountScope === 'team') {
+                snap = await getDocs(buildTeamBrowseQuery(db, { cursorLast: null }));
+            } else {
+                const roleFilter = accountScope === 'consumer' ? 'user' : filterRole;
+                snap = await getDocs(buildUsersBrowseQuery(db, { roleFilter, cursorLast: null }));
+            }
             processBrowseSnap(snap);
         } catch (err) {
             console.error(err);
@@ -101,7 +106,7 @@ const UserManagement = () => {
         } finally {
             setPageLoading(false);
         }
-    }, [filterRole, processBrowseSnap]);
+    }, [filterRole, processBrowseSnap, accountScope]);
 
     const skipFilterEffectOnce = useRef(true);
 
@@ -126,15 +131,21 @@ const UserManagement = () => {
             return;
         }
         if (searchMode) return;
+        if (accountScope === 'consumer' || accountScope === 'team') return;
         loadBrowseFirst();
-    }, [filterRole, searchMode, loadBrowseFirst]);
+    }, [filterRole, searchMode, loadBrowseFirst, accountScope]);
 
     const loadNext = async () => {
         if (!lastVisible || !hasNext || searchMode) return;
         setPageLoading(true);
         try {
-            const q = buildUsersBrowseQuery(db, { roleFilter: filterRole, cursorLast: lastVisible });
-            const snap = await getDocs(q);
+            let snap;
+            if (accountScope === 'team') {
+                snap = await getDocs(buildTeamBrowseQuery(db, { cursorLast: lastVisible }));
+            } else {
+                const roleFilter = accountScope === 'consumer' ? 'user' : filterRole;
+                snap = await getDocs(buildUsersBrowseQuery(db, { roleFilter, cursorLast: lastVisible }));
+            }
             processBrowseSnap(snap);
             setPageIndex((p) => p + 1);
         } catch (err) {
@@ -149,8 +160,13 @@ const UserManagement = () => {
         if (!firstVisible || pageIndex === 0 || searchMode) return;
         setPageLoading(true);
         try {
-            const q = buildUsersBrowseQueryPrev(db, { roleFilter: filterRole, firstVisible });
-            const snap = await getDocs(q);
+            let snap;
+            if (accountScope === 'team') {
+                snap = await getDocs(buildTeamBrowseQueryPrev(db, { firstVisible }));
+            } else {
+                const roleFilter = accountScope === 'consumer' ? 'user' : filterRole;
+                snap = await getDocs(buildUsersBrowseQueryPrev(db, { roleFilter, firstVisible }));
+            }
             processBrowseSnap(snap);
             setPageIndex((p) => Math.max(0, p - 1));
         } catch (err) {
@@ -168,7 +184,12 @@ const UserManagement = () => {
         setPageLoading(true);
         setSearchMode(true);
         try {
-            const rows = await searchUsers(db, q);
+            let rows = await searchUsers(db, q);
+            if (accountScope === 'team') {
+                rows = rows.filter((u) => TEAM_ROLES.has(u.role));
+            } else if (accountScope === 'consumer') {
+                rows = rows.filter((u) => (u.role || 'user') === 'user');
+            }
             setListUsers(rows);
             setPageIndex(0);
             setHasNext(false);
@@ -265,12 +286,25 @@ const UserManagement = () => {
     };
 
     const handleDeleteUser = async (userId) => {
-        if (!window.confirm('Delete this user? This cannot be undone!')) return;
+        if (
+            !window.confirm(
+                t('admin_delete_user_confirm', {
+                    defaultValue:
+                        'Permanently delete this account? This removes the user from Authentication, Firestore, related content, and known Storage folders. This cannot be undone.',
+                })
+            )
+        ) {
+            return;
+        }
         try {
             const res = await adminSecurityService.deleteUser(userId);
             removeUserFromList(userId);
             refreshStats();
-            alert(`Deleted user + ${res?.deletedItems || 0} associated items.`);
+            const n = res?.deletedItems ?? 0;
+            const st = res?.storageObjectsDeleted;
+            const storageNote =
+                typeof st === 'number' && st > 0 ? t('admin_delete_user_storage', { count: st }) : '';
+            alert(t('admin_delete_user_done', { count: n, storage: storageNote ? ` ${storageNote}` : '' }));
         } catch (err) {
             alert('Failed: ' + err.message);
         }
@@ -329,12 +363,41 @@ const UserManagement = () => {
         <div>
             <div className="admin-flex-between admin-mb-4">
                 <div className="admin-page-header" style={{ marginBottom: 0 }}>
-                    <h1 className="admin-page-title">User Management</h1>
+                    <h1 className="admin-page-title">
+                        {accountScope === 'consumer'
+                            ? t('admin_user_mgmt_title_consumers')
+                            : accountScope === 'team'
+                              ? t('admin_user_mgmt_title_team')
+                              : t('admin_user_mgmt_title')}
+                    </h1>
                     <p className="admin-page-subtitle">
-                        Paginated browse (no full collection load). Search: exact email, user ID, or prefix on <code>display_name</code>. Business limits:{' '}
-                        <Link to="/admin/business-limits" style={{ color: 'var(--admin-accent)' }}>Business limits</Link>
-                        . Feed tools:{' '}
-                        <Link to="/admin/system-tools" style={{ color: 'var(--admin-accent)' }}>System tools</Link>.
+                        {accountScope === 'consumer' ? (
+                            <>
+                                {t('admin_user_mgmt_sub_consumers')}{' '}
+                                <Link to="/admin/grant-credits" style={{ color: 'var(--admin-accent)' }}>
+                                    {t('admin_link_grant_credits')}
+                                </Link>
+                                .
+                            </>
+                        ) : accountScope === 'team' ? (
+                            t('admin_user_mgmt_sub_team')
+                        ) : (
+                            <>
+                                {t('admin_user_mgmt_sub_full')}{' '}
+                                <Link to="/admin/accounts?tab=business" style={{ color: 'var(--admin-accent)' }}>
+                                    {t('admin_link_accounts_business')}
+                                </Link>
+                                . {t('admin_user_mgmt_sub_credits')}{' '}
+                                <Link to="/admin/grant-credits" style={{ color: 'var(--admin-accent)' }}>
+                                    {t('admin_link_grant_credits')}
+                                </Link>
+                                . {t('admin_user_mgmt_sub_tools')}{' '}
+                                <Link to="/admin/system-tools" style={{ color: 'var(--admin-accent)' }}>
+                                    {t('admin_link_system_tools')}
+                                </Link>
+                                .
+                            </>
+                        )}
                     </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -379,23 +442,25 @@ const UserManagement = () => {
 
             <div className="admin-card admin-mb-4">
                 <div className="admin-flex admin-gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ROLE (browse)</label>
-                        <select
-                            value={filterRole}
-                            onChange={(e) => setFilterRole(e.target.value)}
-                            className="admin-select"
-                            style={{ width: 160 }}
-                            disabled={searchMode}
-                        >
-                            <option value="all">All roles</option>
-                            <option value="user">User</option>
-                            <option value="business">Business</option>
-                            <option value="staff">Staff</option>
-                            <option value="support">Support</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
+                    {!accountScope && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold' }}>ROLE (browse)</label>
+                            <select
+                                value={filterRole}
+                                onChange={(e) => setFilterRole(e.target.value)}
+                                className="admin-select"
+                                style={{ width: 160 }}
+                                disabled={searchMode}
+                            >
+                                <option value="all">All roles</option>
+                                <option value="user">User</option>
+                                <option value="business">Business</option>
+                                <option value="staff">Staff</option>
+                                <option value="support">Support</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                    )}
 
                     {!searchMode && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
@@ -513,7 +578,7 @@ const UserManagement = () => {
                                 <th>User</th>
                                 <th>Role</th>
                                 <th>Change role</th>
-                                <th>Subscription</th>
+                                <th>Wallet / plan</th>
                                 <th>Status</th>
                                 <th>Joined</th>
                                 <th>Actions</th>
@@ -522,8 +587,9 @@ const UserManagement = () => {
                         <tbody>
                             {listUsers.map((user) => {
                                 const bizUser = isBusiness(user);
-                                const tiers = bizUser ? BIZ_TIERS : USER_TIERS;
-                                const currentTier = tiers.find((t) => t.value === (user.subscriptionTier || 'free')) || tiers[0];
+                                const bizTiers = BIZ_TIERS;
+                                const currentBizTier =
+                                    bizTiers.find((t) => t.value === (user.subscriptionTier || 'free')) || bizTiers[0];
 
                                 return (
                                     <tr key={user.id}>
@@ -605,27 +671,50 @@ const UserManagement = () => {
                                             )}
                                         </td>
                                         <td>
-                                            <select
-                                                value={user.subscriptionTier || 'free'}
-                                                onChange={(e) => handleUpdateSubscription(user.id, e.target.value, bizUser)}
-                                                style={{
-                                                    background: '#1e293b',
-                                                    border: '1px solid #334155',
-                                                    borderRadius: 6,
-                                                    color: currentTier.color,
-                                                    padding: '6px 10px',
-                                                    fontSize: '0.875rem',
-                                                    fontWeight: 600,
-                                                    cursor: 'pointer',
-                                                    width: 150,
-                                                }}
-                                            >
-                                                {tiers.map((t) => (
-                                                    <option key={t.value} value={t.value}>
-                                                        {t.label}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            {bizUser ? (
+                                                <select
+                                                    value={user.subscriptionTier || 'free'}
+                                                    onChange={(e) => handleUpdateSubscription(user.id, e.target.value, true)}
+                                                    style={{
+                                                        background: '#1e293b',
+                                                        border: '1px solid #334155',
+                                                        borderRadius: 6,
+                                                        color: currentBizTier.color,
+                                                        padding: '6px 10px',
+                                                        fontSize: '0.875rem',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer',
+                                                        width: 160,
+                                                    }}
+                                                >
+                                                    {bizTiers.map((t) => (
+                                                        <option key={t.value} value={t.value}>
+                                                            {t.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <div style={{ fontSize: '0.78rem', color: '#94a3b8', maxWidth: 200, lineHeight: 1.45 }}>
+                                                    <div style={{ fontWeight: 600, color: '#cbd5e1' }}>Dine wallet</div>
+                                                    <div>
+                                                        paid{' '}
+                                                        <strong style={{ color: '#a5b4fc' }}>
+                                                            {Math.max(0, Math.floor(Number(user.paidCredits) || 0))}
+                                                        </strong>
+                                                        {' · '}
+                                                        free{' '}
+                                                        <strong style={{ color: '#86efac' }}>
+                                                            {Math.max(0, Math.floor(Number(user.freeCredits) || 0))}
+                                                        </strong>
+                                                    </div>
+                                                    <Link
+                                                        to="/admin/grant-credits"
+                                                        style={{ color: 'var(--admin-accent)', fontSize: '0.72rem', fontWeight: 600 }}
+                                                    >
+                                                        Grant credits →
+                                                    </Link>
+                                                </div>
+                                            )}
                                         </td>
                                         <td>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -723,7 +812,15 @@ const UserManagement = () => {
                                 { label: 'Email', value: selectedUser.email },
                                 { label: 'User ID', value: selectedUser.id, mono: true },
                                 { label: 'Role', value: isBusiness(selectedUser) ? 'Business' : selectedUser.role || 'user' },
-                                { label: 'Subscription', value: selectedUser.subscriptionTier || 'free' },
+                                isBusiness(selectedUser)
+                                    ? {
+                                          label: 'Business tier',
+                                          value: selectedUser.subscriptionTier || 'free',
+                                      }
+                                    : {
+                                          label: 'Dine credits (paid / free)',
+                                          value: `${Math.max(0, Math.floor(Number(selectedUser.paidCredits) || 0))} / ${Math.max(0, Math.floor(Number(selectedUser.freeCredits) || 0))}`,
+                                      },
                                 { label: 'Status', value: selectedUser.banned ? 'Banned' : 'Active', color: selectedUser.banned ? '#ef4444' : '#22c55e' },
                             ].map((f) => (
                                 <div key={f.label}>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaCocktail, FaSearch } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaImage, FaTimes, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaCocktail, FaSearch, FaMagic } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale, IoPeople } from 'react-icons/io5';
 import { HiUserGroup, HiUser } from 'react-icons/hi2';
 import { useInvitations } from '../context/InvitationContext';
@@ -19,6 +19,8 @@ import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { callSuggestInvitationMessages } from '../utils/callSuggestInvitationMessages';
+import { callGenerateInvitationImage } from '../utils/callGenerateInvitationImage';
+import { createAiInvitationCoverMediaData } from '../utils/createAiInvitationCoverMediaData';
 import { detectUserLocationContext } from '../utils/locationUtils';
 import { COLOR_SCHEMES, TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS } from '../utils/invitationTemplates';
 import InvitationTemplateSwatch from '../components/InvitationTemplateSwatch';
@@ -63,6 +65,7 @@ const CreateInvitation = () => {
     const [smartBioOptions, setSmartBioOptions] = useState(() => defaultSmartBioOptions());
     const [smartSuggestionsOpen, setSmartSuggestionsOpen] = useState(false);
     const [smartSuggestionsLoading, setSmartSuggestionsLoading] = useState(false);
+    const [magicImageLoading, setMagicImageLoading] = useState(false);
     const [smartSuggestions, setSmartSuggestions] = useState([]);
     /** True when AI returned nothing usable and built-in lines are shown (non-technical hint only). */
     const [headlineSuggestionsAreFallback, setHeadlineSuggestionsAreFallback] = useState(false);
@@ -455,6 +458,43 @@ const CreateInvitation = () => {
     const closeSmartSuggestions = () => {
         setSmartSuggestionsOpen(false);
         setHeadlineSuggestionsAreFallback(false);
+    };
+
+    const handleMagicCoverImage = async () => {
+        if (!authUser || currentUser?.id === 'guest') {
+            showToast(t('login_to_create') || 'Please sign in', 'error');
+            goToLogin();
+            return;
+        }
+        setMagicImageLoading(true);
+        try {
+            const prompt =
+                [
+                    formData.title,
+                    formData.location,
+                    formData.restaurantName,
+                    formData.description,
+                ]
+                    .filter((x) => String(x || '').trim())
+                    .join(' — ')
+                    .slice(0, 2400) || `${formData.type} social meetup invitation`;
+            const scheme = COLOR_SCHEMES[formData.colorScheme];
+            const style = [scheme?.name, formData.templateType, formData.type]
+                .filter((x) => String(x || '').trim())
+                .join(' · ');
+            const apiResult = await callGenerateInvitationImage({ prompt, style });
+            const mediaPayload = await createAiInvitationCoverMediaData(apiResult);
+            await handleMediaSelect(mediaPayload);
+            showToast(t('invitation_magic_image_success'), 'success');
+        } catch (e) {
+            if (e.code === 'insufficient_credits') {
+                showToast(t('invitation_magic_image_insufficient'), 'error');
+            } else {
+                showToast(e.message || t('invitation_magic_image_error'), 'error');
+            }
+        } finally {
+            setMagicImageLoading(false);
+        }
     };
 
     const handlePreview = async (e) => {
@@ -1111,6 +1151,41 @@ const CreateInvitation = () => {
                         onDeleteLibraryImage={deleteLibraryImage}
                         onMediaSelect={handleMediaSelect}
                     />
+                    <div style={{ marginTop: '14px' }}>
+                        <button
+                            type="button"
+                            onClick={handleMagicCoverImage}
+                            disabled={magicImageLoading || !authUser || currentUser?.id === 'guest'}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                width: '100%',
+                                maxWidth: '360px',
+                                padding: '10px 14px',
+                                borderRadius: '12px',
+                                border: 'none',
+                                fontWeight: 600,
+                                fontSize: '0.9rem',
+                                cursor:
+                                    magicImageLoading || !authUser || currentUser?.id === 'guest'
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                opacity: magicImageLoading ? 0.85 : 1,
+                                background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                                color: '#fff',
+                            }}
+                        >
+                            <FaMagic aria-hidden />
+                            {magicImageLoading
+                                ? t('invitation_magic_image_loading')
+                                : t('invitation_magic_image_btn')}
+                        </button>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+                            {t('invitation_magic_image_hint')}
+                        </p>
+                    </div>
                     {uploadProgress > 0 && uploadProgress < 100 && (
                         <div style={{
                             marginTop: '12px',

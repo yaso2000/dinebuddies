@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { getDocs } from 'firebase/firestore';
+import { getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { FaSearch, FaStore, FaCheckCircle, FaTimesCircle, FaBan, FaTrash, FaEye, FaMapMarkerAlt, FaPhone, FaChevronLeft, FaChevronRight, FaList, FaMapMarkedAlt } from 'react-icons/fa';
+import { FaSearch, FaStore, FaCheckCircle, FaTimesCircle, FaBan, FaTrash, FaEye, FaMapMarkerAlt, FaPhone, FaChevronLeft, FaChevronRight, FaList, FaMapMarkedAlt, FaSlidersH } from 'react-icons/fa';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { adminSecurityService } from '../../services/adminSecurityService';
+import BusinessLimitsEditor from '../../components/BusinessLimitsEditor';
 import {
     ADMIN_USERS_PAGE_SIZE,
     buildBusinessBrowseQuery,
@@ -46,8 +48,9 @@ const processPageSnap = (snap, setRows, setHasNext, setFirst, setLast) => {
     }
 };
 
-const BusinessManagement = () => {
+const BusinessManagement = ({ embedded } = {}) => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
 
     const [listBusinesses, setListBusinesses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -66,6 +69,7 @@ const BusinessManagement = () => {
 
     const [selectedBusiness, setSelectedBusiness] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [showLimitsEditor, setShowLimitsEditor] = useState(false);
 
     const [viewMode, setViewMode] = useState('list');
     const mapRef = useRef(null);
@@ -309,12 +313,27 @@ const BusinessManagement = () => {
     return (
         <div>
             <div className="admin-page-header admin-mb-4">
-                <h1 className="admin-page-title">Business Management</h1>
+                <h1 className="admin-page-title">
+                    {embedded ? t('admin_business_mgmt_title_embedded') : t('admin_business_mgmt_title')}
+                </h1>
                 <p className="admin-page-subtitle">
-                    Paginated <code style={{ fontSize: '0.85em' }}>role: business</code> accounts. Search: exact email or Firebase UID.
-                    List / Map: map pins use the same stored coordinates as the app (<code>coordinates</code>, GeoPoint, or <code>businessInfo</code>).
-                    Limits: <Link to="/admin/business-limits" style={{ color: 'var(--admin-accent)' }}>Business limits</Link>.
-                    All users: <Link to="/admin/users" style={{ color: 'var(--admin-accent)' }}>Users</Link>.
+                    {embedded ? (
+                        <>
+                            {t('admin_business_mgmt_sub_embedded')}{' '}
+                            <Link to="/admin/accounts?tab=consumers" style={{ color: 'var(--admin-accent)' }}>
+                                {t('admin_link_accounts_consumers')}
+                            </Link>
+                            .
+                        </>
+                    ) : (
+                        <>
+                            {t('admin_business_mgmt_sub_full')}{' '}
+                            <Link to="/admin/accounts?tab=consumers" style={{ color: 'var(--admin-accent)' }}>
+                                {t('admin_link_accounts_consumers')}
+                            </Link>
+                            .
+                        </>
+                    )}
                 </p>
             </div>
 
@@ -665,25 +684,74 @@ const BusinessManagement = () => {
                                 <label className="admin-label">Joined</label>
                                 <div style={{ color: '#ffffff' }}>{selectedBusiness.createdAt?.toDate?.()?.toLocaleString() || 'N/A'}</div>
                             </div>
+                            <div>
+                                <label className="admin-label">{t('admin_business_field_tier')}</label>
+                                <div style={{ color: '#ffffff' }}>{selectedBusiness.subscriptionTier || 'free'}</div>
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label className="admin-label">{t('admin_business_field_subscription')}</label>
+                                <pre
+                                    style={{
+                                        color: '#e2e8f0',
+                                        fontSize: '0.75rem',
+                                        background: '#0f172a',
+                                        padding: '0.75rem',
+                                        borderRadius: 8,
+                                        overflow: 'auto',
+                                        maxHeight: 160,
+                                        margin: 0,
+                                    }}
+                                >
+                                    {JSON.stringify(selectedBusiness.subscription || {}, null, 2)}
+                                </pre>
+                            </div>
                         </div>
 
-                        <div className="admin-flex admin-gap-2 admin-mt-4">
+                        <div className="admin-flex admin-gap-2 admin-mt-4" style={{ flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                className="admin-btn admin-btn-secondary"
+                                style={{ flex: 1, minWidth: 140 }}
+                                onClick={() => setShowLimitsEditor(true)}
+                            >
+                                <FaSlidersH style={{ marginRight: 6 }} />
+                                {t('admin_business_limits_button')}
+                            </button>
                             <button
                                 onClick={() => {
                                     handleBanBusiness(selectedBusiness.id, selectedBusiness.banned);
                                     setShowModal(false);
                                 }}
                                 className={`admin-btn ${selectedBusiness.banned ? 'admin-btn-success' : 'admin-btn-danger'}`}
-                                style={{ flex: 1 }}
+                                style={{ flex: 1, minWidth: 140 }}
                             >
                                 {selectedBusiness.banned ? 'Unban Business' : 'Ban Business'}
                             </button>
-                            <button type="button" className="admin-btn admin-btn-secondary" style={{ flex: 1 }} onClick={() => navigate(`/business/${selectedBusiness.id}`)}>
+                            <button type="button" className="admin-btn admin-btn-secondary" style={{ flex: 1, minWidth: 140 }} onClick={() => navigate(`/business/${selectedBusiness.id}`)}>
                                 Open public profile
                             </button>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showLimitsEditor && selectedBusiness && (
+                <BusinessLimitsEditor
+                    business={{ ...selectedBusiness, uid: selectedBusiness.id }}
+                    onClose={() => setShowLimitsEditor(false)}
+                    onSave={async () => {
+                        try {
+                            const fresh = await getDoc(doc(db, 'users', selectedBusiness.id));
+                            if (fresh.exists()) {
+                                const next = { id: fresh.id, ...fresh.data() };
+                                setSelectedBusiness(next);
+                                patchBusiness(selectedBusiness.id, fresh.data());
+                            }
+                        } catch (e) {
+                            console.warn(e);
+                        }
+                    }}
+                />
             )}
         </div>
     );

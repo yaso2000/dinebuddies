@@ -202,7 +202,7 @@ const BusinessLimitsEditor = ({ business, onClose, onSave }) => {
             });
 
             await adminSecurityService.updateBusinessLimits(
-                business.uid,
+                business.uid || business.id,
                 finalCustomLimits,
                 finalExpiry,
                 adminNotes

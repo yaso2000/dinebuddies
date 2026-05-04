@@ -756,3 +756,234 @@
 .admin-nav::-webkit-scrollbar-thumb:hover {
     background: var(--admin-text-muted);
 }
+
+/* ── Embedded admin (inside main app Layout): horizontal nav + scroll ── */
+.admin-embedded {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    width: 100%;
+    max-width: 100%;
+    background: var(--admin-bg-base);
+    color: var(--admin-text-primary);
+    border-radius: var(--admin-radius-sm);
+    overflow: hidden;
+}
+
+.admin-embedded-header {
+    flex-shrink: 0;
+    background: var(--admin-bg-surface);
+    border-bottom: 1px solid var(--admin-border);
+    z-index: 20;
+}
+
+.admin-embedded-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.65rem 1rem;
+    min-height: 3rem;
+}
+
+.admin-embedded-back {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--admin-accent);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.admin-embedded-back:hover {
+    color: var(--admin-accent-hover);
+}
+
+.admin-breadcrumb--embedded {
+    flex: 1 1 120px;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.admin-embedded-toolbar-spacer {
+    display: none;
+}
+
+@media (min-width: 640px) {
+    .admin-embedded-toolbar-spacer {
+        display: block;
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+.admin-embedded-userbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-bg-elevated);
+    color: var(--admin-text-primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    max-width: min(200px, 42vw);
+}
+
+.admin-topbar-avatar--sm {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+}
+
+.admin-embedded-userlabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-embedded-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.admin-embedded-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 200px;
+    max-width: min(280px, 92vw);
+    padding: 0.75rem;
+    background: var(--admin-bg-elevated);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-sm);
+    box-shadow: var(--admin-shadow-lg);
+    z-index: 90;
+}
+
+.admin-embedded-menu-meta {
+    padding-bottom: 0.65rem;
+    margin-bottom: 0.65rem;
+    border-bottom: 1px solid var(--admin-border);
+    word-break: break-word;
+}
+
+.admin-embedded-menu-signout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: var(--admin-radius-sm);
+    border: none;
+    background: var(--admin-danger);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.admin-embedded-menu-signout:hover {
+    filter: brightness(1.08);
+}
+
+.admin-embedded-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem 0.75rem;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.admin-embedded-pill {
+    flex: 0 0 auto;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--admin-text-secondary);
+    background: var(--admin-bg-elevated);
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.admin-embedded-pill:hover {
+    color: var(--admin-text-primary);
+    border-color: var(--admin-border);
+}
+
+.admin-embedded-pill--active {
+    color: #fff;
+    background: var(--admin-accent);
+    border-color: transparent;
+}
+
+.admin-embedded-main {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+}
+
+/* Desktop: admin content column still scrolls inside the middle pane */
+@media (min-width: 1024px) {
+    .app-main--admin .admin-embedded {
+        min-height: 0;
+        max-height: 100%;
+    }
+
+    .app-main--admin .admin-embedded-main {
+        min-height: 0;
+        touch-action: pan-y;
+    }
+}
+
+/* Mobile / narrow: flex chain so admin shell gets a bounded height and inner main scrolls (wheel + drag) */
+@media (max-width: 1023px) {
+    .app-main--admin {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        /* Bottom nav hidden on /admin — avoid phantom gap */
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .app-main--admin .admin-embedded {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .app-main--admin .admin-embedded-main {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        overscroll-behavior-y: auto;
+    }
+}

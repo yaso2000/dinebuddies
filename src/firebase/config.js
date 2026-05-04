@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 import { getMessaging, isSupported } from 'firebase/messaging';
@@ -34,7 +34,11 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Stabilize Firestore WebChannel when proxies, VPNs, or browser extensions break streaming/long-poll
+// (symptoms: net::ERR_ABORTED / 400 on .../Listen/channel and .../Write/channel, flaky userProfile).
+export const db = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+});
 export const storage = getStorage(app);
 // Realtime Database — used for low-cost presence tracking (online/offline)
 export const rtdb = getDatabase(app);

@@ -25,6 +25,8 @@ import {
 import {
     signInWithPopup,
     signInWithCredential,
+    signInWithRedirect,
+    getRedirectResult,
     GoogleAuthProvider,
     OAuthProvider,
     signOut as firebaseSignOut,
@@ -52,6 +54,21 @@ const isInAppBrowser = () => {
         /Snapchat/i.test(ua) ||                         // Snapchat
         /Line\//i.test(ua)                              // LINE
     );
+};
+
+/**
+ * Facebook JS SDK `FB.login` relies on third-party cookies; Safari / iOS WebKit often return
+ * `unknown` with no token. Firebase `signInWithRedirect` uses a first-party round-trip and works.
+ */
+const preferFacebookRedirectAuth = () => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/i.test(ua)) return true;
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+    if (!/Macintosh|Mac OS X/i.test(ua)) return false;
+    if (/Chrome|Chromium|Edg[/\s]|Firefox|OPR|Brave/i.test(ua)) return false;
+    const vendor = navigator.vendor || '';
+    return /Safari/i.test(ua) && /Apple/i.test(vendor);
 };
 
 // Try to open the current URL in an external browser.
@@ -106,6 +123,43 @@ import {
 
 const AuthContext = createContext();
 
+/**
+ * Firebase `User` must not be spread into context: getters like `email` often do not copy,
+ * which breaks admin routing (`isAdminIdentity`) and verification helpers that read `email` / `providerData`.
+ */
+function toSessionAuthUser(user) {
+    if (!user) return null;
+    const pd = user.providerData;
+    const providerData = [];
+    if (pd && typeof pd.length === 'number') {
+        for (let i = 0; i < pd.length; i++) {
+            const p = pd[i];
+            if (p) {
+                providerData.push({
+                    providerId: p.providerId,
+                    uid: p.uid,
+                    displayName: p.displayName,
+                    email: p.email,
+                    phoneNumber: p.phoneNumber,
+                    photoURL: p.photoURL,
+                });
+            }
+        }
+    }
+    return {
+        uid: user.uid,
+        id: user.uid,
+        email: user.email ?? null,
+        emailVerified: user.emailVerified === true,
+        displayName: user.displayName ?? null,
+        photoURL: user.photoURL ?? null,
+        phoneNumber: user.phoneNumber ?? null,
+        providerData,
+        name: user.displayName ?? null,
+        avatar: user.photoURL ?? null,
+    };
+}
+
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {
@@ -123,6 +177,8 @@ export const AuthProvider = ({ children }) => {
     const isDeletingAccountRef = useRef(false);
     /** Cleared when Firestore profile snapshot resolves so the 5s fail-safe cannot fire after real data. */
     const authLoadingTimeoutRef = useRef(null);
+    /** Avoid setLoading(true) on duplicate onAuthStateChanged for the same uid (unmounts Layout /admin). */
+    const lastAuthUidRef = useRef(null);
 
     // Guest profile template
     const guestProfile = {
@@ -144,6 +200,10 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
 
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            const nextUid = user?.uid ?? null;
+            const prevUid = lastAuthUidRef.current;
+            lastAuthUidRef.current = nextUid;
+
             setCurrentUser(user);
 
             if (user) {
@@ -164,23 +224,27 @@ export const AuthProvider = ({ children }) => {
                         localStorage.removeItem('guestMode');
                     } catch { /* ignore */ }
                 }
-                // Always wait for Firestore profile (or fail-safe timeout) after any sign-in.
-                // If we only set loading when leaving guest mode, loading stays false while currentUser is set
-                // and userProfile is still null → HomeRouter / redirects break (wrong route or blank states).
-                setLoading(true);
-                if (authLoadingTimeoutRef.current) {
-                    clearTimeout(authLoadingTimeoutRef.current);
-                    authLoadingTimeoutRef.current = null;
+                // Always wait for Firestore profile (or fail-safe timeout) after a real session change.
+                // Skip setLoading(true) when Firebase re-emits the same signed-in user — that was blanking
+                // the whole Layout (including /admin) and caused visible route flicker.
+                const sameSignedInUser = prevUid === nextUid && nextUid != null;
+                if (!sameSignedInUser) {
+                    setLoading(true);
+                    if (authLoadingTimeoutRef.current) {
+                        clearTimeout(authLoadingTimeoutRef.current);
+                        authLoadingTimeoutRef.current = null;
+                    }
+                    // Profile listener will handle setLoading(false)
+                    // Fail-safe: if profile doesn't load in 5s, release the UI
+                    authLoadingTimeoutRef.current = setTimeout(() => {
+                        setLoading(false);
+                        authLoadingTimeoutRef.current = null;
+                    }, 5000);
                 }
-                // Profile listener will handle setLoading(false)
-                // Fail-safe: if profile doesn't load in 5s, release the UI
-                authLoadingTimeoutRef.current = setTimeout(() => {
-                    setLoading(false);
-                    authLoadingTimeoutRef.current = null;
-                }, 5000);
                 // Initialize push notifications (request permission + save FCM token)
                 initNotifications(user.uid).catch(() => { });
             } else {
+                lastAuthUidRef.current = null;
                 if (authLoadingTimeoutRef.current) {
                     clearTimeout(authLoadingTimeoutRef.current);
                     authLoadingTimeoutRef.current = null;
@@ -551,6 +615,14 @@ export const AuthProvider = ({ children }) => {
             return null;
         }
         // ─────────────────────────────────────────────────────────────────
+        if (preferFacebookRedirectAuth()) {
+            const provider = new FacebookAuthProvider();
+            provider.addScope('email');
+            provider.addScope('public_profile');
+            // Do not await — navigation may unload the page before the promise settles.
+            signInWithRedirect(auth, provider);
+            return { __oauthRedirect: true };
+        }
         try {
             // Step 1: Load the Facebook JS SDK and get access token
             const FB = await loadFacebookSDK();
@@ -723,6 +795,53 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Complete Facebook sign-in after `signInWithRedirect` (Safari / iOS).
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const result = await getRedirectResult(auth);
+                if (cancelled || !result?.user) return;
+                const pid = result.providerId || result.user?.providerData?.[0]?.providerId;
+                if (pid !== 'facebook.com') return;
+
+                const u = result.user;
+                const userDoc = await getDoc(doc(db, 'users', u.uid));
+                if (!userDoc.exists()) {
+                    await createUserProfile(u.uid, {
+                        display_name: u.displayName,
+                        email: u.email,
+                        photo_url: u.photoURL,
+                        authProvider: 'facebook',
+                    });
+                } else if (u.photoURL) {
+                    const data = userDoc.data();
+                    const currentPhoto = data.photoURL || data.photo_url;
+                    if (!currentPhoto || String(currentPhoto).includes('data:image/svg+xml') || String(currentPhoto).length < 10) {
+                        await updateDoc(doc(db, 'users', u.uid), {
+                            photoURL: u.photoURL,
+                            photo_url: u.photoURL,
+                            updatedAt: serverTimestamp(),
+                        });
+                    }
+                }
+            } catch (error) {
+                if (error?.code === 'auth/account-exists-with-different-credential') {
+                    const email = error.customData?.email;
+                    if (email) {
+                        try {
+                            if (await isEmailRegisteredAsBusiness(email)) {
+                                console.warn('[Auth] Facebook redirect: business email conflict', email);
+                            }
+                        } catch { /* ignore */ }
+                    }
+                } else if (error?.code && error.code !== 'auth/no-auth-event') {
+                    console.warn('[Auth] getRedirectResult (Facebook):', error.code, error.message);
+                }
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
 
     // Update user profile
@@ -867,13 +986,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const value = {
-        currentUser: currentUser ? {
-            ...currentUser,
-            uid: currentUser.uid,
-            id: currentUser.uid,
-            name: currentUser.displayName,
-            avatar: currentUser.photoURL
-        } : null,
+        currentUser: toSessionAuthUser(currentUser),
         userProfile,
         loading,
         // Derive from normalised profile so there is ONE source of truth

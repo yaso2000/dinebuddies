@@ -6,6 +6,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const admin = require('firebase-admin');
 admin.initializeApp();
 
+const { registerAdminSearchUsers } = require('./adminSearchUsers');
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
@@ -250,6 +251,9 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
     return false;
 }
 
+/** Matches client AdminRoute / Firestore isAdminOrPanelStaff — staff must reach adminSearchUsers & other callables. */
+const ADMIN_PANEL_ROLES = new Set(['admin', 'moderator', 'support', 'staff']);
+
 async function assertAdminContext(context) {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
@@ -260,11 +264,13 @@ async function assertAdminContext(context) {
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
 
     const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
+    const requesterRole = requesterDoc.exists ? String(requesterDoc.data()?.role || '').toLowerCase() : '';
+    if (ADMIN_PANEL_ROLES.has(requesterRole)) return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
+
+registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
 
 function asTrimmedString(value) {
     if (typeof value !== 'string') return null;
@@ -431,7 +437,14 @@ exports.syncPublicProfileOnUserWrite = functions.firestore
             return null;
         }
 
-        const mapped = toPublicProfile(change.after.data(), uid);
+        const afterData = change.after.data() || {};
+        // Moderation: banned accounts must not remain in directory / public projection.
+        if (afterData.banned === true) {
+            await publicRef.delete().catch(() => { });
+            return null;
+        }
+
+        const mapped = toPublicProfile(afterData, uid);
         if (!mapped) {
             functions.logger.warn('Skipping public profile sync: invalid uid', { uid });
             return null;
@@ -1211,6 +1224,12 @@ exports.adminSetUserBanStatus = functions.https.onCall(async (data, context) => 
         bannedAt: banned ? admin.firestore.FieldValue.serverTimestamp() : null
     }, { merge: true });
 
+    try {
+        await admin.auth().updateUser(targetUid, { disabled: banned });
+    } catch (e) {
+        functions.logger.warn('adminSetUserBanStatus: auth updateUser failed', targetUid, e.message);
+    }
+
     return { success: true, targetUid, banned };
 });
 
@@ -1229,6 +1248,22 @@ exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
     }
     if (role === 'admin' && !isSuperOwner) {
         throw new functions.https.HttpsError('permission-denied', 'Only super owners can assign admin role.');
+    }
+
+    const targetSnap = await db.collection('users').doc(targetUid).get();
+    const prior = targetSnap.exists ? targetSnap.data() : {};
+    const priorRole = asTrimmedString(prior.role) || 'user';
+    if (role === 'business' && priorRole !== 'business' && priorRole !== 'partner') {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Cannot promote a consumer to business via admin role. Use the business signup / billing flow.'
+        );
+    }
+    if ((priorRole === 'business' || priorRole === 'partner') && role === 'user') {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Cannot demote a business account to consumer via this endpoint.'
+        );
     }
 
     await db.collection('users').doc(targetUid).set({
@@ -1714,6 +1749,64 @@ exports.createReport = functions.https.onCall(async (data, context) => {
     return { success: true, reportId: reportRef.id };
 });
 
+// ─── Trusted admin callable: aggregated dashboard counts (no full collection scan on client) ─
+exports.adminGetDashboardStats = functions.https.onCall(async (_data, context) => {
+    await assertAdminContext(context);
+    const usersCol = db.collection('users');
+    const [
+        totalAgg,
+        userAgg,
+        bizAgg,
+        teamAgg,
+        invPub,
+        invPriv,
+        repPend,
+    ] = await Promise.all([
+        usersCol.count().get(),
+        usersCol.where('role', '==', 'user').count().get(),
+        usersCol.where('role', '==', 'business').count().get(),
+        usersCol.where('role', 'in', ['admin', 'staff', 'support']).count().get(),
+        db.collection('invitations').count().get(),
+        db.collection('private_invitations').count().get(),
+        db.collection('reports').where('status', '==', 'pending').count().get(),
+    ]);
+    const rawCost = process.env.INVITATION_AI_IMAGE_CREDIT_COST;
+    let invitationAiImageCreditCost = 5;
+    if (rawCost !== undefined && rawCost !== null && String(rawCost).trim() !== '') {
+        const n = Math.floor(Number(rawCost));
+        if (Number.isFinite(n) && n >= 0) invitationAiImageCreditCost = n;
+    }
+
+    return {
+        success: true,
+        usersTotal: totalAgg.data().count,
+        usersConsumer: userAgg.data().count,
+        usersBusiness: bizAgg.data().count,
+        usersTeam: teamAgg.data().count,
+        invitationsPublic: invPub.data().count,
+        invitationsPrivate: invPriv.data().count,
+        reportsPending: repPend.data().count,
+        invitationAiImageCreditCost,
+    };
+});
+
+// ─── Trusted admin callable: moderation report status ───────────────────────
+exports.adminSetReportStatus = functions.https.onCall(async (data, context) => {
+    await assertAdminContext(context);
+    const reportId = asTrimmedString(data?.reportId);
+    const status = asTrimmedString(data?.status);
+    const allowed = new Set(['pending', 'resolved', 'dismissed']);
+    if (!reportId || !allowed.has(status)) {
+        throw new functions.https.HttpsError('invalid-argument', 'reportId and a valid status are required.');
+    }
+    await db.collection('reports').doc(reportId).set({
+        status,
+        moderationUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        moderationUpdatedBy: context.auth.uid,
+    }, { merge: true });
+    return { success: true, reportId, status };
+});
+
 // ─── Temporary admin callable: one-time public_profiles backfill ─────────────
 exports.adminBackfillPublicProfiles = functions.https.onCall(async (data, context) => {
     await assertAdminContext(context);
@@ -1802,13 +1895,34 @@ async function adminDeleteUserCascade(targetUid) {
     await userRef.delete();
     deletedItems++;
 
+    let storageObjectsDeleted = 0;
+    try {
+        const bucket = admin.storage().bucket();
+        const prefixes = [
+            `users/${targetUid}/`,
+            `chat_images/${targetUid}/`,
+            `chat_files/${targetUid}/`,
+            `voice_messages/${targetUid}/`,
+        ];
+        for (const prefix of prefixes) {
+            try {
+                await bucket.deleteFiles({ prefix, force: true });
+                storageObjectsDeleted += 1;
+            } catch (e) {
+                functions.logger.warn('adminDeleteUserCascade storage prefix', prefix, e.message);
+            }
+        }
+    } catch (e) {
+        functions.logger.warn('adminDeleteUserCascade storage', e.message);
+    }
+
     try {
         await admin.auth().deleteUser(targetUid);
     } catch (e) {
         // Firestore deletion is primary; auth user may already be removed.
     }
 
-    return { deletedItems };
+    return { deletedItems, storageObjectsDeleted };
 }
 
 // ─── Trusted admin callable: delete user (destructive) ──────────────────────
