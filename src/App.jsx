@@ -66,7 +66,6 @@ const AiMarketingStudio = lazy(() => import('./pages/AiMarketingStudio'));
 const AiMarketingSavedPosts = lazy(() => import('./pages/AiMarketingSavedPosts'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
-const BusinessManagement = lazy(() => import('./pages/admin/BusinessManagement'));
 const InvitationManagement = lazy(() => import('./pages/admin/InvitationManagement'));
 const SubscriptionManagement = lazy(() => import('./pages/admin/SubscriptionManagement'));
 const Plans = lazy(() => import('./pages/admin/Plans'));

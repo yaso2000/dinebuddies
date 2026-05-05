@@ -1,7 +1,7 @@
 /**
  * OfferTemplateRenderer.jsx
  * Shared renderer for the 6 desktop offer templates.
- * Used by both ProOfferTemplates (editor) and PremiumOfferCard (display).
+ * Used by PremiumOfferCard (display).
  *
  * Props:
  *   offer  — the Firestore offer object (or live editor data)
@@ -13,7 +13,7 @@ import { FaImage } from 'react-icons/fa';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 
 /* ══════════════════════════════════════════════════════════════════
-   INLINE ICON LIBRARY (copied from ProOfferTemplates)
+   INLINE ICON LIBRARY (legacy ProOfferTemplates parity)
    ══════════════════════════════════════════════════════════════════*/
 const ICON_CSS = `
 @keyframes crownFloat   { 0%,100%{transform:translateY(0) rotate(-2deg)} 50%{transform:translateY(-5px) rotate(2deg)} }
