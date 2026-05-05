@@ -1,5 +1,6 @@
 /**
- * Client-side publish/boost costs — must match `functions/creditsCore.js` CREDIT_COSTS.
+ * Publish costs for private / dating invitations — must match `functions/creditsCore.js` CREDIT_COSTS.
+ * Spending uses the unified Dine Credits wallet (`freeCredits` + `paidCredits`), same as AI.
  * Public invitations (`invitations` collection) = 0 credits (not listed here).
  */
 export const PRIVATE_INVITATION_PUBLISH_CREDITS = 90;
@@ -10,7 +11,8 @@ export const INVITATION_BOOST_CREDITS = 50;
 export const MIN_HOST_INVITATION_DRAFT_CREDITS = PRIVATE_INVITATION_PUBLISH_CREDITS;
 
 /**
- * Mirrors server logic in `publishPrivateInvitationDraft` for pricing UI.
+ * Client-side cost hints. Server `publishPrivateInvitationDraft` charges **one purchased
+ * private invitation credit** per publish (no subscription monthly allowance).
  * @param {Record<string, unknown>} inv
  */
 export function isDatingInvitationDoc(inv) {

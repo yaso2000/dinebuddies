@@ -1,3 +1,27 @@
+/* Create private: card preview + vertical background thumbnails */
+.private-card-preview-with-bg {
+    --private-preview-w: clamp(196px, 46vw, 252px);
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto 4px;
+}
+
+.private-card-preview-with-bg__preview-wrap {
+    flex: 0 1 auto;
+    width: var(--private-preview-w);
+    max-width: var(--private-preview-w);
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+}
+
 .private-create-wrapper {
     background: var(--bg-body);
     min-height: 100vh;

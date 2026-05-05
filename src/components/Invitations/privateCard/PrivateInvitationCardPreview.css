@@ -85,6 +85,44 @@
     }
 }
 
+/* Slightly smaller showcase when shown beside vertical background picker */
+.private-invitation-card-preview--showcase.private-invitation-card-preview--showcase-compact {
+    max-width: var(--private-preview-w, 248px);
+    width: 100%;
+    margin: 0 auto;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__inner {
+    padding: 16px 14px 14px;
+    border-radius: 20px;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__bg {
+    border-radius: 18px;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__title {
+    font-size: 1rem;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__message {
+    font-size: 0.82rem;
+    margin-bottom: 10px;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__icon-wrap {
+    margin-bottom: 8px;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__host {
+    margin-bottom: 10px;
+}
+
+.private-invitation-card-preview--showcase-compact .private-invitation-card-preview__meta {
+    margin-top: 8px;
+    font-size: 0.78rem;
+}
+
 .private-invitation-card-preview__inner {
     position: relative;
     border-radius: 20px;

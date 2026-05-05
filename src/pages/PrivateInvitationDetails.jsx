@@ -132,7 +132,8 @@ const PrivateInvitationDetails = () => {
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     );
 
     // Helpers for status badges

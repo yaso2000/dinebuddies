@@ -17,6 +17,7 @@ function syncBusinessNavHint(profile, uid) {
 import { sendPasswordResetViaResend } from '../services/passwordResetEmailService';
 import { sendVerificationEmailResend } from '../services/verificationEmailService';
 import { isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
+import { PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
     auth,
@@ -119,6 +120,7 @@ import {
     serverTimestamp,
     onSnapshot,
     collection,
+    increment,
 } from 'firebase/firestore';
 
 const AuthContext = createContext();
@@ -752,21 +754,25 @@ export const AuthProvider = ({ children }) => {
             const pendingBusinessFlow =
                 String(existing?.registrationIntent || '').toLowerCase() === 'business';
 
+            const welcomeDinePaid =
+                grantedCredits > 0 ? grantedCredits * PRIVATE_INVITATION_PUBLISH_CREDITS : 0;
             const baseProfile = {
                 uid: userId,
                 display_name: finalDisplayName,
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
                 reputation: 100,
-                purchasedPrivateCredits: grantedCredits,
-                usedPrivateCreditsThisMonth: 0,
-                lastPrivateResetMonth: '',
+                freeCredits: Math.max(0, Number(existing?.freeCredits) || 0),
+                paidCredits: Math.max(0, Number(existing?.paidCredits) || 0) + welcomeDinePaid,
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 lastSeen: serverTimestamp(),
                 isProfileComplete: false
             };
+            if (welcomeDinePaid > 0) {
+                baseProfile.totalCreditsPurchased = increment(welcomeDinePaid);
+            }
             // Do not stamp role:user on top of an in-progress /business/signup stub (Firestore allows first business write only when role is absent or via registrationIntent completion rule).
             if (!pendingBusinessFlow) {
                 baseProfile.role = 'user';
@@ -780,7 +786,7 @@ export const AuthProvider = ({ children }) => {
                         userId,
                         type: 'system_announcement',
                         title: '🎁 Welcome Gift!',
-                        message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
+                        message: `Welcome to DineBuddies! You received ${welcomeDinePaid} Dine Credits to use for private invites, dates, and AI. Enjoy!`,
                         style: 'success'
                     });
                 } catch (notifErr) {

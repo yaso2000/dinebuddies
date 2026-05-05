@@ -119,69 +119,53 @@ const devOperations = () => ({
                 devUrl = null
             }
 
-            // Same-origin proxy for Firebase Callable (avoids browser CORS to cloudfunctions.net)
-            if (req.method === 'POST' && devUrl && devUrl.pathname === '/api/suggest-invitation-messages') {
+            // Proxy /api/generate-image to a deployed Vercel origin (Gemini + Admin on server; not bundled in Vite).
+            if (req.method === 'POST' && devUrl && devUrl.pathname === '/api/generate-image') {
                 const env = loadEnv(process.env.MODE || 'development', process.cwd(), '')
-                const projectId = env.VITE_FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies'
-                const cfUrl = `https://us-central1-${projectId}.cloudfunctions.net/suggestInvitationMessages`
-                const chunks = []
-                for await (const chunk of req) chunks.push(chunk)
-                const rawBody = Buffer.concat(chunks).toString('utf8')
-                let parsed = {}
-                try {
-                    parsed = rawBody ? JSON.parse(rawBody) : {}
-                } catch {
-                    res.statusCode = 400
+                const apiOrigin = String(
+                    env.VITE_DEV_VERCEL_API_ORIGIN ||
+                    process.env.VITE_DEV_VERCEL_API_ORIGIN ||
+                    ''
+                ).trim().replace(/\/$/, '')
+                if (!apiOrigin) {
+                    res.statusCode = 503
                     res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ message: 'Invalid JSON', code: 'functions/invalid-argument' }))
+                    res.end(JSON.stringify({
+                        code: 'dev_api_unavailable',
+                        message: 'Set VITE_DEV_VERCEL_API_ORIGIN (e.g. https://your-app.vercel.app) in .env.development to proxy AI routes, or run `vercel dev`.'
+                    }))
                     return
                 }
+                const chunks = []
+                for await (const chunk of req) chunks.push(chunk)
+                const rawBody = Buffer.concat(chunks)
                 const authHeader = req.headers.authorization
                 if (!authHeader || !String(authHeader).startsWith('Bearer ')) {
                     res.statusCode = 401
                     res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ message: 'Authentication required.', code: 'functions/unauthenticated' }))
+                    res.end(JSON.stringify({ message: 'Authentication required.', code: 'unauthenticated' }))
                     return
                 }
-                const payload = parsed.data !== undefined ? parsed.data : parsed
                 try {
-                    const upstream = await fetch(cfUrl, {
+                    const upstream = await fetch(`${apiOrigin}/api/generate-image`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             Authorization: authHeader
                         },
-                        body: JSON.stringify({ data: payload })
+                        body: rawBody
                     })
-                    const text = await upstream.text()
-                    let json
-                    try {
-                        json = text ? JSON.parse(text) : {}
-                    } catch {
-                        res.statusCode = 502
-                        res.setHeader('Content-Type', 'application/json')
-                        res.end(JSON.stringify({ message: 'Invalid upstream JSON', code: 'functions/internal' }))
-                        return
-                    }
-                    if (json.error) {
-                        const st = String(json.error.status || 'INTERNAL').toUpperCase()
-                        res.statusCode = st === 'UNAUTHENTICATED' ? 401 : st === 'INVALID_ARGUMENT' ? 400 : 500
-                        res.setHeader('Content-Type', 'application/json')
-                        res.end(JSON.stringify({
-                            message: json.error.message || 'Suggestion service error',
-                            code: `functions/${st.toLowerCase().replace(/_/g, '-')}`
-                        }))
-                        return
-                    }
-                    res.statusCode = 200
-                    res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ result: json.result }))
+                    const buf = Buffer.from(await upstream.arrayBuffer())
+                    res.statusCode = upstream.status
+                    const ct = upstream.headers.get('content-type')
+                    if (ct) res.setHeader('Content-Type', ct)
+                    res.end(buf)
                     return
                 } catch (e) {
-                    console.error('Dev suggest-invitation-messages proxy:', e)
+                    console.error('Dev /api/generate-image proxy:', e)
                     res.statusCode = 500
                     res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ message: e?.message || 'Proxy error', code: 'functions/internal' }))
+                    res.end(JSON.stringify({ message: e?.message || 'Proxy error', code: 'internal' }))
                     return
                 }
             }

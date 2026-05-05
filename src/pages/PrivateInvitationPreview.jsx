@@ -107,7 +107,8 @@ const PrivateInvitationPreview = () => {
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     );
 
     const privateHeroImageSrc = pickSafeDisplayImageUrl(

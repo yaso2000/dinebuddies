@@ -22,6 +22,7 @@ import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import { callGenerateInvitationImage } from '../utils/callGenerateInvitationImage';
 import { createAiInvitationCoverMediaData } from '../utils/createAiInvitationCoverMediaData';
+import { getTotalDineCredits, DATING_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 
 const CreateDatingInvitation = () => {
     const { t, i18n } = useTranslation();
@@ -31,7 +32,7 @@ const CreateDatingInvitation = () => {
     const { showToast } = useToast();
     const { currentUser: authUser, userProfile } = useAuth();
 
-    const quotaInfo = canCreatePrivateInvitation();
+    const quotaInfo = canCreatePrivateInvitation('dating');
 
     const [mediaData, setMediaData] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -306,10 +307,13 @@ const CreateDatingInvitation = () => {
                         {t('insufficient_credits')}
                     </h2>
                     <p className="ui-prompt__desc" style={{ marginBottom: '25px' }}>
-                        {t('insufficient_credits_desc')}
+                        {t(
+                            'dine_credits_dating_insufficient',
+                            `Publishing a date invitation costs ${DATING_INVITATION_PUBLISH_CREDITS} Dine Credits. Add credits in your wallet (Settings → Dine Credits).`
+                        )}
                     </p>
-                    <button onClick={() => navigate('/pricing')} className="ui-btn ui-btn--primary" style={{ width: '100%', marginBottom: '12px', background: 'linear-gradient(135deg, #ec4899, #be185d)' }}>
-                        {t('upgrade_now')}
+                    <button onClick={() => navigate('/settings/credits')} className="ui-btn ui-btn--primary" style={{ width: '100%', marginBottom: '12px', background: 'linear-gradient(135deg, #ec4899, #be185d)' }}>
+                        {t('open_dine_credits_wallet', 'Dine Credits wallet')}
                     </button>
                     <button onClick={() => navigate(-1)} className="ui-btn ui-btn--ghost" style={{ width: '100%' }}>
                         {t('go_back')}
@@ -321,6 +325,8 @@ const CreateDatingInvitation = () => {
 
     const quota = quotaInfo.quota;
     const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
+    const dineBalance = getTotalDineCredits(userProfile);
+    const publishCost = DATING_INVITATION_PUBLISH_CREDITS;
 
     return (
         <div className="private-create-wrapper private-theme">
@@ -339,23 +345,26 @@ const CreateDatingInvitation = () => {
                     {t('dating_invitation_desc', 'Send an exclusive private date invitation to one special person.')}
                 </p>
 
-                {/* Quota Banner */}
                 <div style={{
                     margin: '12px 0 0',
                     padding: '10px 16px',
                     borderRadius: '12px',
-                    background: isUnlimited ? 'rgba(236,72,153,0.1)' : quota <= 1 ? 'rgba(239,68,68,0.1)' : 'rgba(236,72,153,0.1)',
-                    border: `1px solid ${isUnlimited ? 'rgba(236,72,153,0.3)' : quota <= 1 ? 'rgba(239,68,68,0.3)' : 'rgba(236,72,153,0.3)'}`,
+                    background: isUnlimited ? 'rgba(236,72,153,0.1)' : dineBalance < publishCost ? 'rgba(239,68,68,0.1)' : 'rgba(236,72,153,0.1)',
+                    border: `1px solid ${isUnlimited ? 'rgba(236,72,153,0.3)' : dineBalance < publishCost ? 'rgba(239,68,68,0.3)' : 'rgba(236,72,153,0.3)'}`,
                     display: 'flex', alignItems: 'center', gap: 8,
                     fontSize: '0.875rem',
-                    color: isUnlimited ? '#ec4899' : quota <= 1 ? '#f87171' : '#ec4899',
+                    color: isUnlimited ? '#ec4899' : dineBalance < publishCost ? '#f87171' : '#ec4899',
                     fontWeight: 600
                 }}>
-                    <span>{isUnlimited ? '∞' : `${quota}`}</span>
-                    <span style={{ opacity: 0.8, fontWeight: 400 }}>
+                    <span>{isUnlimited ? '∞' : `${dineBalance}`}</span>
+                    <span style={{ opacity: 0.85, fontWeight: 400 }}>
                         {isUnlimited
                             ? t('unlimited_date_invitations', 'Unlimited date invitations')
-                            : t('date_invitations_remaining', `date invitation${quota !== 1 ? 's' : ''} remaining this {{period}}`, { period: t(quotaInfo.period || 'month') })}
+                            : t(
+                                  'dine_credits_dating_banner',
+                                  '{{balance}} Dine Credits — publishing uses {{cost}} credits.',
+                                  { balance: dineBalance, cost: publishCost }
+                              )}
                     </span>
                 </div>
             </div>

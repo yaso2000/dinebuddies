@@ -5,7 +5,7 @@ import InvitationSkeleton from '../components/InvitationSkeleton';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar, FaCheck, FaPlus, FaExpand, FaCompress } from 'react-icons/fa';
+import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar, FaCheck, FaExpand, FaCompress } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -16,7 +16,6 @@ import { useTheme } from '../context/ThemeContext';
 import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import OffersBanner from '../components/OffersBanner';
 import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
-import { goToLogin } from '../utils/goToLogin';
 import { asUidArray } from '../utils/userSocialLists';
 
 
@@ -136,8 +135,9 @@ const Home = () => {
         { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
         { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
         { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
-        { id: 'Food Truck', label: t('type_foodtruck', 'Food Truck'), icon: '🚚' },
-        { id: 'Fast Food', label: t('type_fastfood', 'Fast Food'), icon: '🍟' },
+        { id: 'Cinema', label: t('type_cinema', 'Cinema'), icon: '🎬' },
+        { id: 'Concert', label: t('type_concert', 'Concert'), icon: '🎤' },
+        { id: 'Sports Match', label: t('type_sportsmatch', 'Sports match'), icon: '⚽' },
         { id: 'Directory', label: t('directory'), icon: '📖' },
     ];
 
@@ -1145,48 +1145,6 @@ const Home = () => {
                     )}
                 </div>
             </div>
-
-            {/* Create Invitation FAB - Only on invitations/home page, not for business accounts */}
-            {/* Create Invitation FAB - Only on invitations/home page, not for business accounts and not for guests */}
-            {/* Create Invitation FAB - Visible to all, but prompts guests sign up */}
-            {
-                !isBusinessAccount && (
-                    <div
-                        onClick={() => {
-                            if (userProfile?.isGuest) {
-                                if (window.confirm('You need to sign in to create an invitation. Sign up now?')) {
-                                    goToLogin();
-                                }
-                            } else {
-                                setShowSelector(true);
-                            }
-                        }}
-                        style={{
-                            position: 'fixed',
-                            bottom: '5px',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            width: '60px',
-                            height: '60px',
-                            borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 20px rgba(239, 68, 68, 0.5)',
-                            cursor: 'pointer',
-                            zIndex: 100000,
-                            border: '3px solid var(--bg-main)'
-                        }}
-                        role="button"
-                        className="home-fab-btn"
-                    >
-                        <FaPlus size={22} />
-                    </div>
-                )
-            }
-
 
             <CreateInvitationSelector
                 isOpen={showSelector}

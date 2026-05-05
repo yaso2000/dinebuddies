@@ -14,7 +14,8 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
     const templateStyles = invitation ? getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.inviteMood || invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     ) : null;
 
     const themeColor = templateStyles?.badge?.color || 'var(--primary)';

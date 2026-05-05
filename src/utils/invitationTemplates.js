@@ -252,8 +252,29 @@ export const TEMPLATE_STYLES = {
     },
 };
 
+/** Legacy header+body template names → unified classic split card. */
+const HEADER_BODY_LEGACY = new Set(['modern', 'elegant', 'fun', 'minimal', 'premium', 'editorial']);
+
+/**
+ * Canonical public card layout keys stored on invitations.
+ * (Wide 16:9 hero removed — old `hero_16_9` / `photoBottom` map to square hero for readable content.)
+ * @param {string | undefined | null} raw
+ * @returns {'classic' | 'hero_1_1' | 'hero_9_16'}
+ */
+export function normalizePublicCardTemplateKey(raw) {
+    const s = String(raw || '').trim();
+    if (s === 'hero_16_9' || s === 'fullCanvas' || s === 'photoBottom') return 'hero_1_1';
+    if (s === 'classic' || s === 'hero_1_1' || s === 'hero_9_16') return s;
+    if (HEADER_BODY_LEGACY.has(s)) return 'classic';
+    if (s === 'photoGlass') return 'hero_1_1';
+    if (s === 'photoChips') return 'hero_9_16';
+    return 'hero_1_1';
+}
+
 export const LEGACY_PUBLIC_TEMPLATE_MAP = {
     classic: 'photoBottom',
+    hero_1_1: 'photoBottom',
+    hero_9_16: 'photoBottom',
     modern: 'photoGlass',
     elegant: 'photoChips',
     fun: 'photoBottom',
@@ -261,20 +282,39 @@ export const LEGACY_PUBLIC_TEMPLATE_MAP = {
     premium: 'photoChips',
     fullCanvas: 'photoBottom',
     editorial: 'photoGlass',
+    photoBottom: 'photoBottom',
+    photoGlass: 'photoGlass',
+    photoChips: 'photoChips',
 };
 
 /**
- * Show all prepared templates in the picker (legacy + current).
- * Legacy keys are mapped at render-time by getTemplateStyle().
+ * Public create flow: classic split + two full-bleed hero ratios (square + vertical).
  */
-export const TEMPLATE_PICKER_KEYS = [
-    // Real distinct layouts only (avoid multiple names for same visual structure)
-    'classic',      // Header + body
-    'fullCanvas',   // Full-bleed
-    'photoBottom',
-    'photoGlass',
-    'photoChips',
-];
+export const TEMPLATE_PICKER_KEYS = ['classic', 'hero_1_1', 'hero_9_16'];
+
+/** Public magic-cover bitmap aspects (match remaining hero layouts; wide 16:9 removed). */
+export const MAGIC_COVER_ASPECT_RATIOS = ['1:1', '9:16'];
+
+/**
+ * @param {string | undefined | null} templateType
+ * @returns {'1:1'|'9:16'}
+ */
+export function templateTypeToMagicCoverAspect(templateType) {
+    const k = normalizePublicCardTemplateKey(templateType);
+    if (k === 'hero_9_16') return '9:16';
+    return '1:1';
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {'1:1'|'9:16'}
+ */
+export function normalizeMagicCoverAspectRatio(raw) {
+    const s = String(raw ?? '').trim();
+    if (s === '16:9') return '1:1';
+    if (s === '1:1' || s === '9:16') return s;
+    return '1:1';
+}
 
 export const OCCASION_PRESETS = {
     Birthday: {
@@ -344,9 +384,29 @@ export const OCCASION_PRESETS = {
     }
 };
 
-export const getTemplateStyle = (templateType, colorScheme, occasionType) => {
-    const mapped = LEGACY_PUBLIC_TEMPLATE_MAP[templateType] || templateType;
-    const template = TEMPLATE_STYLES[mapped] || TEMPLATE_STYLES.photoBottom;
+/**
+ * @param {string} templateType
+ * @param {string} colorScheme
+ * @param {string} [occasionType]
+ * @param {{ cardFontFamily?: string }} [opts] — optional overrides from AI or user (public card typography)
+ */
+export const getTemplateStyle = (templateType, colorScheme, occasionType, opts) => {
+    const canonical = normalizePublicCardTemplateKey(templateType);
+    const mapped = LEGACY_PUBLIC_TEMPLATE_MAP[canonical] || LEGACY_PUBLIC_TEMPLATE_MAP[templateType] || templateType;
+    const resolvedKey = TEMPLATE_STYLES[mapped] ? mapped : 'photoBottom';
+    const template = TEMPLATE_STYLES[resolvedKey] || TEMPLATE_STYLES.photoBottom;
     const colors = COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.oceanBlue;
-    return template.getStyles(colors);
+    const base = template.getStyles(colors);
+    const font =
+        opts && typeof opts.cardFontFamily === 'string' && opts.cardFontFamily.trim()
+            ? opts.cardFontFamily.trim()
+            : '';
+    if (!font || !base.layout) return base;
+    return {
+        ...base,
+        layout: {
+            ...base.layout,
+            fontFamily: font,
+        },
+    };
 };

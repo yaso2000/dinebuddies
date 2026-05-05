@@ -37,7 +37,7 @@ function looksLikeTechnicalOrErrorString(s) {
     const lower = t.toLowerCase();
     return (
         /^(error|warning)\b/i.test(t) ||
-        /\b(failed|failure|exception|stack trace|status\s*:\s*\d{3}|bad gateway|internal server|cloud function|openai|firebase|functions\/)/i.test(
+        /\b(failed|failure|exception|stack trace|status\s*:\s*\d{3}|bad gateway|internal server|cloud function|gemini|firebase|functions\/)/i.test(
             lower
         ) ||
         /the ai suggestion service/i.test(lower)
@@ -49,12 +49,13 @@ function looksLikeTechnicalOrErrorString(s) {
  * @param {object} formData
  */
 export function pickHeadlineCategoryKey(formData) {
-    const occ = String(formData?.occasionType || '').toLowerCase();
-    if (occ.includes('game')) return 'gaming';
+    const mood = String(formData?.inviteMood || '').toLowerCase();
+    if (mood === 'friends' || mood === 'new_friends' || mood === 'celebratory') return 'social';
     const typ = String(formData?.type || '').toLowerCase();
     if (typ.includes('cafe')) return 'cafe';
-    if (typ.includes('restaurant') || typ.includes('food truck') || typ.includes('fast food')) return 'dining';
+    if (typ.includes('restaurant')) return 'dining';
     if (typ.includes('bar') || typ.includes('night club') || typ.includes('club')) return 'social';
+    if (typ.includes('cinema') || typ.includes('concert') || typ.includes('sports')) return 'social';
     return 'general';
 }
 
@@ -86,7 +87,7 @@ export function getFallbackHeadlineSuggestions(formData) {
 
 /**
  * Extract `suggestions` from httpsCallable result; return only clean string lines.
- * @param {*} result - `{ data }` from callable
+ * @param {*} result - `{ data }` from `callSuggestInvitationMessages` (API JSON under `data`)
  * @returns {string[]}
  */
 function extractRawSuggestionsArray(result) {
@@ -117,7 +118,7 @@ function extractRawSuggestionsArray(result) {
 /**
  * Normalize API output to a list of valid headline strings (max 7 words each).
  * Invalid entries are dropped.
- * @param {*} result - callable `{ data }`
+ * @param {*} result - `{ data }` from `callSuggestInvitationMessages`
  * @returns {string[]}
  */
 export function normalizeHeadlineSuggestionsFromApi(result) {

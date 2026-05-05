@@ -12,7 +12,8 @@ const InvitationHeader = ({ invitation, isHost, onImageUpdate, onEdit, onDelete,
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.inviteMood || invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     );
 
     const themeColors = COLOR_SCHEMES[invitation.colorScheme || 'oceanBlue'] || COLOR_SCHEMES.oceanBlue;

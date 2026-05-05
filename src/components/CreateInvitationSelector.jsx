@@ -26,20 +26,32 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
         if (type === 'public') {
             navigate('/create', { state: navigationState });
         } else if (type === 'private') {
-            const quotaInfo = canCreatePrivateInvitation();
+            const quotaInfo = canCreatePrivateInvitation('private');
             if (quotaInfo.canCreate) {
                 navigate('/create-private', { state: navigationState });
             } else {
-                showToast(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'), 'error');
-                navigate('/pricing');
+                showToast(
+                    t(
+                        'insufficient_dine_credits_wallet',
+                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
+                    ),
+                    'error'
+                );
+                navigate('/settings/credits');
             }
         } else if (type === 'dating') {
-            const quotaInfo = canCreatePrivateInvitation();
+            const quotaInfo = canCreatePrivateInvitation('dating');
             if (quotaInfo.canCreate) {
                 navigate('/create-dating', { state: navigationState });
             } else {
-                showToast(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'), 'error');
-                navigate('/pricing');
+                showToast(
+                    t(
+                        'insufficient_dine_credits_wallet',
+                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
+                    ),
+                    'error'
+                );
+                navigate('/settings/credits');
             }
         }
         onClose();

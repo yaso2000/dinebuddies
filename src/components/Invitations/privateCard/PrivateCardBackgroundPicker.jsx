@@ -38,33 +38,49 @@ function PrivateCardBgThumb({ categoryId, optionId, selected, onClick, title }) 
     );
 }
 
-export default function PrivateCardBackgroundPicker({ categoryId, value, onChange }) {
+export default function PrivateCardBackgroundPicker({ categoryId, value, onChange, layout = 'row' }) {
     const { t } = useTranslation();
     const options = getCardBackgroundOptions(categoryId);
+    const bgLabel = t('private_card_background_label', { defaultValue: 'Card background' });
 
     if (!options.length) return null;
 
+    const thumbs = options.map((opt) => {
+        const selected =
+            value === opt.id ||
+            (opt.id === 'birthday-candlecake' && value === 'birthday-candlake');
+        return (
+            <PrivateCardBgThumb
+                key={opt.id}
+                categoryId={categoryId}
+                optionId={opt.id}
+                selected={selected}
+                onClick={() => onChange(opt.id)}
+                title={t(`card_bg_${opt.id.replace(/-/g, '_')}`, { defaultValue: opt.id })}
+            />
+        );
+    });
+
+    if (layout === 'beside-preview') {
+        return (
+            <div className="private-card-bg-picker private-card-bg-picker--beside">
+                <p className="private-card-bg-picker__label private-card-bg-picker__label--beside">{bgLabel}</p>
+                <div
+                    className="private-card-bg-picker__scroll"
+                    role="radiogroup"
+                    aria-label={bgLabel}
+                >
+                    {thumbs}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="private-card-bg-picker">
-            <p className="private-card-bg-picker__label">
-                {t('private_card_background_label', { defaultValue: 'Card background' })}
-            </p>
-            <div className="private-card-bg-picker__row" role="radiogroup" aria-label={t('private_card_background_label', { defaultValue: 'Card background' })}>
-                {options.map((opt) => {
-                    const selected =
-                        value === opt.id ||
-                        (opt.id === 'birthday-candlecake' && value === 'birthday-candlake');
-                    return (
-                        <PrivateCardBgThumb
-                            key={opt.id}
-                            categoryId={categoryId}
-                            optionId={opt.id}
-                            selected={selected}
-                            onClick={() => onChange(opt.id)}
-                            title={t(`card_bg_${opt.id.replace(/-/g, '_')}`, { defaultValue: opt.id })}
-                        />
-                    );
-                })}
+            <p className="private-card-bg-picker__label">{bgLabel}</p>
+            <div className="private-card-bg-picker__row" role="radiogroup" aria-label={bgLabel}>
+                {thumbs}
             </div>
         </div>
     );

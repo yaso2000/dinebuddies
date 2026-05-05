@@ -35,21 +35,16 @@ import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { incrementBusinessInvitationCount } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
+import {
+    getTotalDineCredits,
+    PRIVATE_INVITATION_PUBLISH_CREDITS,
+    DATING_INVITATION_PUBLISH_CREDITS,
+} from '../utils/privateInvitationCredits';
 
 const InvitationContext = createContext(null);
 
 export const useInvitations = () => useContext(InvitationContext);
 
-// ── Monthly private invitation quota per subscription tier ─────────────
-// Derived directly from planDefaults.js plan configuration.
-// Key = subscriptionTier value stored in Firestore users/{id}.subscriptionTier
-// ───────────────────────────────────────────────────────────
-const MONTHLY_PRIVATE_QUOTAS = {
-    free: 2,      // Free plan    —  2 private invitations per month
-    pro: 4,       // Pro plan     —  4 private invitations per month
-    premium: 10,  // Premium plan — 10 private invitations per month
-    vip: 10,      // legacy tier alias for premium
-};
 const INVITATIONS_PAGE_SIZE = 20;
 
 const INVITATION_ERROR_MESSAGES = {
@@ -428,8 +423,8 @@ export const InvitationProvider = ({ children }) => {
             }
         });
 
-        // Convert back to array
-        return Object.values(mergedMap);
+        // Consumer subscription tiers removed — keep business plans only for pricing/admin merge.
+        return Object.values(mergedMap).filter((p) => p.type !== 'user');
     }, [dbPlans, baseSubscriptionPlans]);
 
     const allCreditPacks = React.useMemo(() => {
@@ -825,32 +820,19 @@ export const InvitationProvider = ({ children }) => {
         }
     };
 
-    // ── Private Invitation Quota System ──────────────────────────────────────
-    // Quotas are derived from subscriptionTier — no extra Firestore fields needed.
-    // Priority: plan monthly quota → purchased credits → deny
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Private / dating drafts: Dine Credits (free+paid), same pool as AI; admins bypass. ──
 
-    const canCreatePrivateInvitation = () => {
+    const canCreatePrivateInvitation = (kind = 'private') => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
         if (currentUser.role === 'admin') return { canCreate: true, quota: 'unlimited' };
 
-        const tier = firebaseProfile?.subscriptionTier || 'free';
-        const monthlyQuota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
-
-        // 1. Check plan monthly quota
-        if (monthlyQuota > 0) {
-            const usedThisMonth = firebaseProfile?.usedPrivateCreditsThisMonth || 0;
-            const remaining = monthlyQuota - usedThisMonth;
-            if (remaining > 0) return { canCreate: true, quota: remaining, period: 'month', source: 'plan' };
+        const cost =
+            kind === 'dating' ? DATING_INVITATION_PUBLISH_CREDITS : PRIVATE_INVITATION_PUBLISH_CREDITS;
+        const balance = getTotalDineCredits(firebaseProfile);
+        if (balance >= cost) {
+            return { canCreate: true, quota: balance, cost, source: 'dine_credits' };
         }
-
-        // 2. Check purchased credits (available to all tiers)
-        const purchasedCredits = firebaseProfile?.purchasedPrivateCredits || 0;
-        if (purchasedCredits > 0) {
-            return { canCreate: true, quota: purchasedCredits, source: 'purchased' };
-        }
-
-        return { canCreate: false, reason: 'no_credits' };
+        return { canCreate: false, reason: 'no_credits', cost, balance };
     };
 
     const publishPrivateInvitationDraft = async (invitationId) => {

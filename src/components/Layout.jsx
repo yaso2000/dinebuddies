@@ -484,6 +484,17 @@ const Layout = ({ children }) => {
                         <Link to="/invitations" className={`ds-nav-item ${isActive('/invitations') ? 'active' : ''}`}>
                             <FaEnvelope /><span>{t('nav_invitations', 'Invitations')}</span>
                         </Link>
+                        {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' && currentUser && (
+                            <button
+                                type="button"
+                                className={`ds-nav-item${inviteCreateFabActive || inviteCreateOpen ? ' active' : ''}`}
+                                onClick={() => setInviteCreateOpen(true)}
+                                aria-haspopup="dialog"
+                                aria-expanded={inviteCreateOpen}
+                            >
+                                <FaPlusCircle /><span>{t('create_invitation', 'Create Invitation')}</span>
+                            </button>
+                        )}
                         <Link to="/restaurants" className={`ds-nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
                             <FaStore /><span>{t('nav_partners', 'Businesses')}</span>
                         </Link>

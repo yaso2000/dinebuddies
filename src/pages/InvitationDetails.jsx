@@ -149,7 +149,8 @@ const InvitationDetails = () => {
     const templateStyles = invitation ? getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.inviteMood || invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     ) : null;
 
     // Fetch invitation from Firestore if not in context (e.g., deep linking)

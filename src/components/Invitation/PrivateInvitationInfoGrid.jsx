@@ -8,7 +8,8 @@ const PrivateInvitationInfoGrid = ({ invitation, t }) => {
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     );
 
     const themeColor = templateStyles?.badge?.color || 'var(--luxury-gold)';

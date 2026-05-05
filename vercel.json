@@ -36,5 +36,10 @@
         "env": {
             "NODE_OPTIONS": "--max_old_space_size=4096"
         }
+    },
+    "functions": {
+        "api/generate-image.js": {
+            "maxDuration": 60
+        }
     }
 }

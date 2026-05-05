@@ -34,7 +34,6 @@ function isBusinessProfile(u) {
 const GRANT_KIND = {
     DINE_PAID: 'dine_paid',
     DINE_FREE: 'dine_free',
-    PRIVATE_INVITATION: 'private_invitation',
 };
 
 const AdminGrantCredits = () => {
@@ -178,11 +177,7 @@ const AdminGrantCredits = () => {
 
     const setGrantKindAndDefaultAmount = (kind) => {
         setGrantKind(kind);
-        if (kind === GRANT_KIND.PRIVATE_INVITATION) {
-            setAmount(5);
-        } else {
-            setAmount(50);
-        }
+        setAmount(50);
     };
 
     const handleGrant = async (e) => {
@@ -204,8 +199,6 @@ const AdminGrantCredits = () => {
 
             const freeBefore = Math.max(0, Math.floor(Number(before.freeCredits) || 0));
             const paidBefore = Math.max(0, Math.floor(Number(before.paidCredits) || 0));
-            const privateBefore = Math.max(0, Math.floor(Number(before.purchasedPrivateCredits) || 0));
-
             const updates = {
                 lastCreditGrantedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -219,10 +212,6 @@ const AdminGrantCredits = () => {
             } else if (grantKind === GRANT_KIND.DINE_FREE) {
                 Object.assign(updates, {
                     freeCredits: increment(amount),
-                });
-            } else {
-                Object.assign(updates, {
-                    purchasedPrivateCredits: increment(amount),
                 });
             }
 
@@ -245,10 +234,8 @@ const AdminGrantCredits = () => {
                 grantedAt: serverTimestamp(),
                 freeCreditsBefore: freeBefore,
                 paidCreditsBefore: paidBefore,
-                purchasedPrivateCreditsBefore: privateBefore,
                 freeCreditsAfter: Math.max(0, Math.floor(Number(after.freeCredits) || 0)),
                 paidCreditsAfter: Math.max(0, Math.floor(Number(after.paidCredits) || 0)),
-                purchasedPrivateCreditsAfter: Math.max(0, Math.floor(Number(after.purchasedPrivateCredits) || 0)),
             });
 
             if (grantKind === GRANT_KIND.DINE_PAID || grantKind === GRANT_KIND.DINE_FREE) {
@@ -273,7 +260,6 @@ const AdminGrantCredits = () => {
                 user: selectedUser.display_name || selectedUser.displayName || selectedUser.email,
                 free: Math.max(0, Math.floor(Number(after.freeCredits) || 0)),
                 paid: Math.max(0, Math.floor(Number(after.paidCredits) || 0)),
-                private: Math.max(0, Math.floor(Number(after.purchasedPrivateCredits) || 0)),
             });
             setNote('');
             loadHistory(selectedUser.id);
@@ -299,20 +285,16 @@ const AdminGrantCredits = () => {
 
     const freeCr = Math.max(0, Math.floor(Number(selectedUser?.freeCredits) || 0));
     const paidCr = Math.max(0, Math.floor(Number(selectedUser?.paidCredits) || 0));
-    const privateCr = Math.max(0, Math.floor(Number(selectedUser?.purchasedPrivateCredits) || 0));
-
     const dineChips = [25, 50, 100, 200, 500, 1000];
-    const privateChips = [1, 3, 5, 10, 20, 50];
 
     return (
         <div>
             <div className="admin-page-header">
                 <h1 className="admin-page-title">Grant credits</h1>
                 <p className="admin-page-subtitle">
-                    Dine credits (free or paid pool) for AI features, boosts, and in-app spend — or private invitation
-                    credits. Search updates as you type (2+ characters); results sort by match quality, then longer
-                    prefix overlap, then shorter display name. Admin accounts are never listed; staff/support are optional
-                    below.
+                    Dine credits (free or paid pool) — same balance used for AI, private/date invitations, boosts, and
+                    other spend. Search updates as you type (2+ characters). Admin accounts are never listed;
+                    staff/support are optional below.
                 </p>
             </div>
 
@@ -498,7 +480,7 @@ const AdminGrantCredits = () => {
                             <div
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gridTemplateColumns: 'repeat(2, 1fr)',
                                     gap: '10px',
                                     marginBottom: '12px',
                                 }}
@@ -512,10 +494,6 @@ const AdminGrantCredits = () => {
                                     <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--admin-primary)' }}>
                                         {paidCr}
                                     </div>
-                                </div>
-                                <div style={{ padding: '10px', borderRadius: '10px', background: 'var(--admin-bg-hover)' }}>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Private invites</div>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: '800' }}>{privateCr}</div>
                                 </div>
                             </div>
 
@@ -578,7 +556,6 @@ const AdminGrantCredits = () => {
                                 {[
                                     { id: GRANT_KIND.DINE_PAID, label: 'Dine credits — paid pool (purchased-style)' },
                                     { id: GRANT_KIND.DINE_FREE, label: 'Dine credits — free pool (promo / support)' },
-                                    { id: GRANT_KIND.PRIVATE_INVITATION, label: 'Private invitation credits only' },
                                 ].map((opt) => (
                                     <label
                                         key={opt.id}
@@ -688,11 +665,7 @@ const AdminGrantCredits = () => {
                                     }}
                                 >
                                     Grant <strong style={{ color: 'var(--admin-primary)' }}>{amount}</strong>{' '}
-                                    {grantKind === GRANT_KIND.PRIVATE_INVITATION
-                                        ? 'private invitation credit(s)'
-                                        : grantKind === GRANT_KIND.DINE_FREE
-                                          ? 'free Dine credit(s)'
-                                          : 'paid Dine credit(s)'}{' '}
+                                    {grantKind === GRANT_KIND.DINE_FREE ? 'free Dine credit(s)' : 'paid Dine credit(s)'}{' '}
                                     to <strong style={{ color: 'var(--admin-text-primary)' }}>{selectedUser.display_name || selectedUser.displayName || selectedUser.email}</strong>
                                 </div>
                             )}
@@ -731,8 +704,7 @@ const AdminGrantCredits = () => {
                                 </div>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--admin-text-secondary)' }}>
                                     {grantSuccess.user}: Dine free <strong>{grantSuccess.free}</strong>, paid{' '}
-                                    <strong>{grantSuccess.paid}</strong>, private invites <strong>{grantSuccess.private}</strong>{' '}
-                                    (+{grantSuccess.added} to selected pool)
+                                    <strong>{grantSuccess.paid}</strong> (+{grantSuccess.added} to selected pool)
                                 </div>
                             </div>
                         )}
@@ -803,9 +775,7 @@ const AdminGrantCredits = () => {
                                                         ? 'Dine paid'
                                                         : item.grantKind === GRANT_KIND.DINE_FREE
                                                           ? 'Dine free'
-                                                          : item.grantKind === GRANT_KIND.PRIVATE_INVITATION
-                                                            ? 'Private'
-                                                            : item.grantKind || '—'}
+                                                          : item.grantKind || '—'}
                                                 </td>
                                                 <td style={{ padding: '8px', fontWeight: '700', color: '#10b981' }}>
                                                     +{item.amount}

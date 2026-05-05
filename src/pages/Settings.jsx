@@ -292,9 +292,9 @@ const Settings = () => {
                 },
                 {
                     icon: '📋',
-                    label: t('plans_pricing', 'Plans & pricing'),
+                    label: t('top_up_dine_credits', 'Top up Dine Credits'),
                     value: t('view_inline', 'View'),
-                    onClick: () => navigate('/settings/subscription'),
+                    onClick: () => navigate('/settings/credits'),
                     color: '#8b5cf6'
                 }
             ]

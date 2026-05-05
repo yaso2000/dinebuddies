@@ -2,18 +2,39 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
-import { FaArrowLeft } from 'react-icons/fa';
+import {
+    FaArrowLeft,
+    FaWallet,
+    FaGift,
+    FaCoins,
+    FaGem,
+    FaCrown,
+    FaBolt,
+    FaMagic,
+    FaLock,
+    FaHeart,
+    FaInfoCircle,
+} from 'react-icons/fa';
 import './SettingsPages.css';
 
 const FUNCTIONS_REGION = 'us-central1';
 
 const PACKS = [
-    { id: 'credits_200', label: '200 Credits', price: '$2', sub: '' },
-    { id: 'credits_500', label: '500 Credits', price: '$5', sub: '' },
-    { id: 'credits_1000', label: '1000 Credits', price: '$10', sub: '' },
-    { id: 'credits_3000', label: '3000 Credits', price: '$25', sub: 'Best value', highlight: true },
+    { id: 'credits_200', credits: 200, price: '$2', sub: '', icon: FaBolt, accent: 'credits-wallet__pack-icon--sm' },
+    { id: 'credits_500', credits: 500, price: '$5', sub: '', icon: FaCoins, accent: 'credits-wallet__pack-icon--md' },
+    { id: 'credits_1000', credits: 1000, price: '$10', sub: '', icon: FaGem, accent: 'credits-wallet__pack-icon--lg' },
+    {
+        id: 'credits_3000',
+        credits: 3000,
+        price: '$25',
+        sub: 'Best value',
+        icon: FaCrown,
+        accent: 'credits-wallet__pack-icon--xl',
+        highlight: true,
+    },
 ];
 
 /**
@@ -23,6 +44,7 @@ export default function CreditsWallet() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     const [loadingId, setLoadingId] = useState(null);
 
     const free = Math.max(0, Number(userProfile?.freeCredits) || 0);
@@ -45,7 +67,7 @@ export default function CreditsWallet() {
             if (url) window.location.href = url;
         } catch (e) {
             console.error(e);
-            alert(e?.message || 'Could not start checkout.');
+            showToast(e?.message || t('checkout_start_failed', 'Could not start checkout.'), 'error');
         } finally {
             setLoadingId(null);
         }
@@ -57,60 +79,132 @@ export default function CreditsWallet() {
                 <button type="button" onClick={() => navigate('/settings')} className="back-btn">
                     <FaArrowLeft />
                 </button>
-                <h1>{t('dine_credits', 'Dine Credits')}</h1>
-                <div style={{ width: 40 }} />
+                <div className="credits-wallet__title-block">
+                    <h1>{t('dine_credits', 'Dine Credits')}</h1>
+                    <p className="credits-wallet__title-sub">
+                        {t('credits_wallet_subtitle', 'One balance for invites, dates & AI')}
+                    </p>
+                </div>
+                <div className="credits-wallet__header-spacer" aria-hidden />
             </div>
 
             <div className="settings-content credits-wallet__content">
                 <div className="credits-wallet__column">
-                    <div className="settings-card credits-wallet__balance">
-                        <h2>{t('your_balance', 'Your balance')}</h2>
-                        <p className="settings-description credits-wallet__note">
-                            {t('credit_value_note', '1 credit = $0.01 USD. Free credits are capped at 20 and refresh monthly (10/mo). Paid credits never expire.')}
-                        </p>
-                        <div className="credits-wallet__stats">
-                            <div className="credits-wallet__stat-row">
-                                <span>{t('free_credits', 'Free credits')}</span>
-                                <strong>{free}</strong>
+                    <section className="settings-card credits-wallet__balance credits-wallet__balance--elevated">
+                        <div className="credits-wallet__balance-top">
+                            <div className="credits-wallet__hero-ring" aria-hidden>
+                                <FaWallet className="credits-wallet__hero-wallet" />
                             </div>
-                            <div className="credits-wallet__stat-row">
-                                <span>{t('paid_credits', 'Paid credits')}</span>
-                                <strong>{paid}</strong>
-                            </div>
-                            <div className="credits-wallet__stat-row credits-wallet__stat-row--total">
-                                <span>{t('total_credits', 'Total')}</span>
-                                <strong>{total}</strong>
-                            </div>
-                            <div className="credits-wallet__stat-meta">
-                                {t('lifetime_stats', 'Lifetime purchased')}: {purchased} · {t('lifetime_spent', 'spent')}: {spent}
+                            <div className="credits-wallet__hero-copy">
+                                <h2 className="credits-wallet__balance-heading">{t('your_balance', 'Your balance')}</h2>
+                                <div className="credits-wallet__total-display" aria-live="polite">
+                                    <span className="credits-wallet__total-number">{total}</span>
+                                    <span className="credits-wallet__total-suffix">
+                                        {t('credits_unit', 'credits')}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <h3 className="credits-wallet__buy-heading">{t('buy_credits', 'Buy credits')}</h3>
-                    <div className="credits-wallet__pack-grid">
-                        {PACKS.map((pack) => (
-                            <div
-                                key={pack.id}
-                                className={`settings-card credits-wallet__pack${pack.highlight ? ' credits-wallet__pack--highlight' : ''}`}
-                            >
-                                {pack.highlight ? (
-                                    <span className="credits-wallet__badge">{t('best_value', 'Best value')}</span>
-                                ) : null}
-                                <div className="credits-wallet__pack-label">{pack.label}</div>
-                                <div className="credits-wallet__pack-price">{pack.price}</div>
-                                {pack.sub ? <div className="credits-wallet__pack-sub">{pack.sub}</div> : null}
-                                <button
-                                    type="button"
-                                    className="credits-wallet__buy-btn"
-                                    disabled={loadingId !== null}
-                                    onClick={() => buyPack(pack)}
-                                >
-                                    {loadingId === pack.id ? t('loading', 'Loading…') : t('buy_now_short', 'Buy')}
-                                </button>
+                        <div className="credits-wallet__split-stats">
+                            <div className="credits-wallet__split-card">
+                                <span className="credits-wallet__split-icon credits-wallet__split-icon--free">
+                                    <FaGift aria-hidden />
+                                </span>
+                                <span className="credits-wallet__split-label">{t('free_credits', 'Free')}</span>
+                                <span className="credits-wallet__split-value">{free}</span>
                             </div>
-                        ))}
-                    </div>
+                            <div className="credits-wallet__split-card">
+                                <span className="credits-wallet__split-icon credits-wallet__split-icon--paid">
+                                    <FaCoins aria-hidden />
+                                </span>
+                                <span className="credits-wallet__split-label">{t('paid_credits', 'Paid')}</span>
+                                <span className="credits-wallet__split-value">{paid}</span>
+                            </div>
+                        </div>
+
+                        <div className="credits-wallet__lifetime">
+                            <span className="credits-wallet__lifetime-dot" aria-hidden />
+                            {t('lifetime_stats', 'Lifetime purchased')}: <strong>{purchased}</strong>
+                            <span className="credits-wallet__lifetime-sep">·</span>
+                            {t('lifetime_spent', 'spent')}: <strong>{spent}</strong>
+                        </div>
+
+                        <div className="credits-wallet__hints">
+                            <div className="credits-wallet__hints-title">
+                                <FaInfoCircle aria-hidden />
+                                {t('credits_how_title', 'How it works')}
+                            </div>
+                            <ul className="credits-wallet__hints-list">
+                                <li>
+                                    <FaBolt className="credits-wallet__hint-ico" aria-hidden />
+                                    {t('credit_hint_rate', '1 credit ≈ $0.01 USD when you buy packs.')}
+                                </li>
+                                <li>
+                                    <FaGift className="credits-wallet__hint-ico" aria-hidden />
+                                    {t('credit_hint_free', 'Free credits: up to 20, +10 refreshed each month.')}
+                                </li>
+                                <li>
+                                    <FaCoins className="credits-wallet__hint-ico" aria-hidden />
+                                    {t('credit_hint_paid', 'Paid credits never expire. Free pool is used first.')}
+                                </li>
+                                <li>
+                                    <span className="credits-wallet__hint-ico credits-wallet__hint-ico--cluster" aria-hidden>
+                                        <FaLock /><FaHeart /><FaMagic />
+                                    </span>
+                                    {t('credit_hint_uses', 'Same balance for private invites, dates & AI.')}
+                                </li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section className="credits-wallet__buy-section">
+                        <h3 className="credits-wallet__buy-heading">
+                            <FaGem className="credits-wallet__buy-heading-icon" aria-hidden />
+                            {t('buy_credits', 'Buy credits')}
+                        </h3>
+                        <p className="credits-wallet__buy-lead">
+                            {t('buy_credits_lead', 'Pay once — no subscription. Choose a pack below.')}
+                        </p>
+                        <div className="credits-wallet__pack-grid">
+                            {PACKS.map((pack) => {
+                                const Icon = pack.icon;
+                                return (
+                                    <div
+                                        key={pack.id}
+                                        className={`settings-card credits-wallet__pack${pack.highlight ? ' credits-wallet__pack--highlight' : ''}`}
+                                    >
+                                        {pack.highlight ? (
+                                            <span className="credits-wallet__badge">{t('best_value', 'Best value')}</span>
+                                        ) : null}
+                                        <div className={`credits-wallet__pack-icon-wrap ${pack.accent}`}>
+                                            <Icon className="credits-wallet__pack-icon" aria-hidden />
+                                        </div>
+                                        <div className="credits-wallet__pack-amount">
+                                            {pack.credits.toLocaleString()}{' '}
+                                            <span className="credits-wallet__pack-amount-unit">
+                                                {t('credits_unit', 'credits')}
+                                            </span>
+                                        </div>
+                                        <div className="credits-wallet__pack-price">{pack.price}</div>
+                                        {pack.sub ? (
+                                            <div className="credits-wallet__pack-sub">{t('best_value', pack.sub)}</div>
+                                        ) : (
+                                            <div className="credits-wallet__pack-sub credits-wallet__pack-sub--placeholder" />
+                                        )}
+                                        <button
+                                            type="button"
+                                            className="credits-wallet__buy-btn"
+                                            disabled={loadingId !== null}
+                                            onClick={() => buyPack(pack)}
+                                        >
+                                            {loadingId === pack.id ? t('loading', 'Loading…') : t('buy_now_short', 'Buy')}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>

@@ -22,8 +22,6 @@ const PricingPage = () => {
     const isBusinessPage = location.pathname.includes('/business/pricing');
     const [selectedPlanType, setSelectedPlanType] = useState(isBusinessPage ? 'business' : 'user');
     const [loading, setLoading] = useState(null);
-    const [selectedCreditPack, setSelectedCreditPack] = useState(null);
-    const [selectedDatingPack, setSelectedDatingPack] = useState(null);
     const [userCountry, setUserCountry] = useState('United States');
     const { t, i18n } = useTranslation();
 
@@ -34,16 +32,6 @@ const PricingPage = () => {
             .then(data => { if (data?.country_name) setUserCountry(data.country_name); })
             .catch(() => { }); // silently fail — default to USD
     }, []);
-
-    // Set initial selected credit packs
-    useEffect(() => {
-        if (creditPacks && creditPacks.length > 0) {
-            const invPacks = creditPacks.filter(p => p.type === 'invitation');
-            const datePacks = creditPacks.filter(p => p.type === 'dating');
-            if (!selectedCreditPack && invPacks.length > 0) setSelectedCreditPack(invPacks[0]);
-            if (!selectedDatingPack && datePacks.length > 0) setSelectedDatingPack(datePacks[0]);
-        }
-    }, [creditPacks]);
 
     // Auto-detect and sync
     useEffect(() => {
@@ -68,9 +56,6 @@ const PricingPage = () => {
     const subscriptionPlans = contextPlans || [];
     const fetchingPlans = false;
 
-    // Separate packs by type
-    const invitationCreditPacks = creditPacks.filter(pack => pack.type === 'invitation');
-    const datingCreditPacks = creditPacks.filter(pack => pack.type === 'dating');
     const offerSlotPacks = creditPacks.filter(pack => pack.type === 'offer_slot');
 
     const filteredPlans = subscriptionPlans.filter(plan => plan.type === selectedPlanType);
@@ -159,10 +144,17 @@ const PricingPage = () => {
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text-main)' }}>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '0.5rem', textShadow: 'var(--shadow-premium)' }}>
-                        {isBusinessPage ? t('Business Plans', 'Business Plans') : t('Choose Your Plan', 'Choose Your Plan')}
+                        {isBusinessPage
+                            ? t('Business Plans', 'Business Plans')
+                            : t('credits_pricing_page_title', 'Credits & add-ons')}
                     </h1>
                     <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>
-                        {isBusinessPage ? t('Professional solutions to grow your business', 'Professional solutions to grow your business') : t('Flexible plans to suit your needs', 'Flexible plans to suit your needs')}
+                        {isBusinessPage
+                            ? t('Professional solutions to grow your business', 'Professional solutions to grow your business')
+                            : t(
+                                  'credits_pricing_page_subtitle',
+                                  'Dine Credits are shared by all accounts: private invites, date invites, AI, and more. Buy packs in your wallet — final per-use pricing may be announced later.'
+                              )}
                     </p>
                 </div>
 
@@ -173,7 +165,8 @@ const PricingPage = () => {
 
                 {/* Currency Toggle - REMOVED, now automatic */}
 
-                {/* Pricing Cards */}
+                {/* Subscription plan cards — business partners only (no consumer tiers). */}
+                {isBusinessPage && filteredPlans.length > 0 && (
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -388,244 +381,48 @@ const PricingPage = () => {
                         </div>
                     ))}
                 </div>
-
-                {/* Private Invitation Credit Packs - ONLY for Individuals */}
-                {!isBusinessPage && invitationCreditPacks.length > 0 && (
-                    <div style={{ marginTop: '4rem', textAlign: 'center' }}>
-                        <h2 style={{ color: 'var(--text-main)', fontSize: '2rem', fontWeight: '900', marginBottom: '0.75rem' }}>
-                            {t("Add-on Packs", "Add-on Packs")}
-                        </h2>
-                        <p style={{ color: 'var(--text-muted)', opacity: 0.9, marginBottom: '2rem', fontSize: '1rem' }}>
-                            {t("No subscription needed to use these packs", "No subscription needed to use these packs")}
-                        </p>
-
-                        {/* Credit Selector UI */}
-                        <div style={{
-                            background: 'var(--bg-card)',
-                            backdropFilter: 'blur(20px)',
-                            borderRadius: '32px',
-                            padding: '2.5rem',
-                            maxWidth: '800px',
-                            margin: '0 auto',
-                            border: '1px solid var(--border-color)',
-                            boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-                        }}>
-                            {/* Selection Pills */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                gap: '0.75rem',
-                                flexWrap: 'wrap',
-                                marginBottom: '2.5rem'
-                            }}>
-                                {invitationCreditPacks.map(pack => {
-                                    const isSelected = selectedCreditPack?.id === pack.id;
-                                    const getIcon = (amount) => {
-                                        if (amount >= 20) return '🔥';
-                                        if (amount >= 10) return '💎';
-                                        if (amount >= 5) return '✨';
-                                        if (amount >= 3) return '🌟';
-                                        return '📩';
-                                    };
-
-                                    return (
-                                        <div
-                                            key={pack.id}
-                                            onClick={() => setSelectedCreditPack(pack)}
-                                            style={{
-                                                padding: '0.75rem 1.25rem',
-                                                background: isSelected ? 'var(--primary)' : 'var(--hover-overlay)',
-                                                borderRadius: '50px',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.6rem',
-                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border-color)',
-                                                boxShadow: isSelected ? '0 8px 20px rgba(139,92,246,0.25)' : 'none',
-                                                transform: isSelected ? 'scale(1.05)' : 'scale(1)'
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '1.2rem' }}>{getIcon(pack.amount)}</span>
-                                            <span style={{
-                                                fontWeight: '800',
-                                                color: isSelected ? 'white' : 'var(--text-main)'
-                                            }}>
-                                                {pack.amount}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Active Content */}
-                            {selectedCreditPack && (
-                                <div style={{ transition: 'all 0.5s' }}>
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                        <h3 style={{ fontSize: '2rem', fontWeight: '900', color: 'var(--text-main)', marginBottom: '0.5rem' }}>
-                                            {t(selectedCreditPack.name, selectedCreditPack.name)}
-                                        </h3>
-                                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '1.1rem' }}>
-                                            {selectedCreditPack.amount} {t('invitations', 'Invitations')}
-                                        </p>
-                                    </div>
-
-                                    <div style={{
-                                        fontSize: '3.5rem',
-                                        fontWeight: '950',
-                                        color: 'var(--primary)',
-                                        marginBottom: '2rem'
-                                    }}>
-                                        {(() => {
-                                            const conv = convertFromUSD(selectedCreditPack.price, userCountry);
-                                            return <>{conv.symbol}{conv.price}</>;
-                                        })()} <span style={{ fontSize: '1rem', color: 'var(--text-muted)', marginLeft: '0.5rem', fontWeight: '400' }}>{t("One-time payment", "One-time payment")}</span>
-                                    </div>
-
-                                    <button
-                                        onClick={() => handleSubscribe(selectedCreditPack)}
-                                        disabled={loading === selectedCreditPack.id}
-                                        style={{
-                                            width: '100%',
-                                            maxWidth: '350px',
-                                            padding: '1.25rem',
-                                            borderRadius: '20px',
-                                            border: 'none',
-                                            background: 'linear-gradient(135deg, #fff 0%, #f0f0f0 100%)',
-                                            color: '#764ba2',
-                                            fontSize: '1.25rem',
-                                            fontWeight: '900',
-                                            cursor: loading === selectedCreditPack.id ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.3s',
-                                            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-                                            margin: '0 auto'
-                                        }}
-                                    >
-                                        {loading === selectedCreditPack.id ? t('loading', 'Loading...') : t('Buy Now', 'Buy Now')}
-                                    </button>
-
-                                    <div style={{ marginTop: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                        Instant activation after payment
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
                 )}
 
-                {/* Dating Invitation Packs - Separate section */}
-                {!isBusinessPage && datingCreditPacks.length > 0 && (
-                    <div style={{ marginTop: '3rem', textAlign: 'center' }}>
-                        <h2 style={{ color: 'var(--text-main)', fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem' }}>
-                            {t("💕 Dating Invitation Packs", "💕 Dating Invitation Packs")}
+                {/* Consumers: single Dine Credits wallet (no separate invitation / dating packs). */}
+                {!isBusinessPage && (
+                    <div
+                        className="glass-card"
+                        style={{
+                            marginTop: '2rem',
+                            padding: '2rem',
+                            maxWidth: '560px',
+                            marginLeft: 'auto',
+                            marginRight: 'auto',
+                            textAlign: 'center',
+                            border: '1px solid var(--border-color)',
+                        }}
+                    >
+                        <h2 style={{ color: 'var(--text-main)', fontSize: '1.5rem', fontWeight: '900', marginBottom: '0.75rem' }}>
+                            {t('dine_credits_wallet_card_title', 'Dine Credits wallet')}
                         </h2>
-                        <p style={{ color: 'var(--text-muted)', opacity: 0.9, marginBottom: '2rem', fontSize: '1rem' }}>
-                            {t("Send exclusive date invitations — no free tier", "Send exclusive date invitations — no free tier")}
-                        </p>
-
-                        <div style={{
-                            background: 'var(--bg-card)',
-                            backdropFilter: 'blur(20px)',
-                            borderRadius: '32px',
-                            padding: '2.5rem',
-                            maxWidth: '800px',
-                            margin: '0 auto',
-                            border: '1px solid rgba(236, 72, 153, 0.3)',
-                            boxShadow: '0 20px 40px rgba(236, 72, 153, 0.1)'
-                        }}>
-                            {/* Selection Pills */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                gap: '0.75rem',
-                                flexWrap: 'wrap',
-                                marginBottom: '2.5rem'
-                            }}>
-                                {datingCreditPacks.map(pack => {
-                                    const isSelected = selectedDatingPack?.id === pack.id;
-                                    return (
-                                        <div
-                                            key={pack.id}
-                                            onClick={() => setSelectedDatingPack(pack)}
-                                            style={{
-                                                padding: '0.75rem 1.25rem',
-                                                background: isSelected ? 'linear-gradient(135deg, #ec4899, #be185d)' : 'var(--hover-overlay)',
-                                                borderRadius: '50px',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.6rem',
-                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                border: isSelected ? '2px solid #ec4899' : '2px solid var(--border-color)',
-                                                boxShadow: isSelected ? '0 8px 20px rgba(236,72,153,0.3)' : 'none',
-                                                transform: isSelected ? 'scale(1.05)' : 'scale(1)'
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '1.2rem' }}>💕</span>
-                                            <span style={{
-                                                fontWeight: '800',
-                                                color: isSelected ? 'white' : 'var(--text-main)'
-                                            }}>
-                                                {pack.amount}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Active Content */}
-                            {selectedDatingPack && (
-                                <div style={{ transition: 'all 0.5s' }}>
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                        <h3 style={{ fontSize: '2rem', fontWeight: '900', color: 'var(--text-main)', marginBottom: '0.5rem' }}>
-                                            {t(selectedDatingPack.name, selectedDatingPack.name)}
-                                        </h3>
-                                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '1.1rem' }}>
-                                            {selectedDatingPack.amount} {t('dating_invitations', 'Dating Invitations')}
-                                        </p>
-                                    </div>
-
-                                    <div style={{
-                                        fontSize: '3.5rem',
-                                        fontWeight: '950',
-                                        color: '#ec4899',
-                                        marginBottom: '2rem'
-                                    }}>
-                                        {(() => {
-                                            const conv = convertFromUSD(selectedDatingPack.price, userCountry);
-                                            return <>{conv.symbol}{conv.price}</>;
-                                        })()} <span style={{ fontSize: '1rem', color: 'var(--text-muted)', marginLeft: '0.5rem', fontWeight: '400' }}>One-time payment</span>
-                                    </div>
-
-                                    <button
-                                        onClick={() => handleSubscribe(selectedDatingPack)}
-                                        disabled={loading === selectedDatingPack.id}
-                                        style={{
-                                            width: '100%',
-                                            maxWidth: '350px',
-                                            padding: '1.25rem',
-                                            borderRadius: '20px',
-                                            border: 'none',
-                                            background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
-                                            color: 'white',
-                                            fontSize: '1.25rem',
-                                            fontWeight: '900',
-                                            cursor: loading === selectedDatingPack.id ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.3s',
-                                            boxShadow: '0 10px 30px rgba(236,72,153,0.3)',
-                                            margin: '0 auto',
-                                            display: 'block'
-                                        }}
-                                    >
-                                        {loading === selectedDatingPack.id ? t('loading', 'Loading...') : t('💕 Buy Now', '💕 Buy Now')}
-                                    </button>
-
-                                    <div style={{ marginTop: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                        {t("Instant activation after payment", "Instant activation after payment")}
-                                    </div>
-                                </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.55, marginBottom: '1.25rem' }}>
+                            {t(
+                                'dine_credits_wallet_card_body',
+                                'Buy credit packs in one place. The same balance covers private invitations, date invitations, AI tools, and other in-app features.'
                             )}
-                        </div>
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/settings/credits')}
+                            style={{
+                                padding: '0.85rem 1.75rem',
+                                borderRadius: '14px',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                                color: '#fff',
+                                fontWeight: '800',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 8px 24px rgba(139,92,246,0.35)',
+                            }}
+                        >
+                            {t('open_dine_credits_wallet', 'Open Dine Credits wallet')}
+                        </button>
                     </div>
                 )}
 

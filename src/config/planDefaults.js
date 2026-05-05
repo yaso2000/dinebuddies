@@ -1,6 +1,9 @@
 /**
  * Default Subscription Plans and Credit Packs
  * Base currency: USD. Display in local currency via currencyConverter.js.
+ *
+ * Consumer (`type: 'user'`) rows are legacy reference only — the app uses **Dine Credits**
+ * (`freeCredits` + `paidCredits`) for private/date invites and AI, not separate invitation packs.
  */
 
 export const BASE_SUBSCRIPTION_PLANS = [

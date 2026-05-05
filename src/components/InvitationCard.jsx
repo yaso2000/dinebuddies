@@ -6,13 +6,48 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import NewReportModal from './NewReportModal';
-import { getTemplateStyle } from '../utils/invitationTemplates';
+import { getTemplateStyle, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { motion } from 'framer-motion';
+import { getCoverTextMotionProps } from '../utils/invitationCoverTextMotion';
 
 const INVITATION_CARD_IMAGE_FALLBACK =
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
+
+function InvMotionTitle({ mode, style, children }) {
+    const motionProps = getCoverTextMotionProps(mode);
+    if (!motionProps) {
+        return <h3 style={style}>{children}</h3>;
+    }
+    return (
+        <motion.h3
+            style={{ ...style, transformOrigin: 'center top', willChange: 'transform, opacity' }}
+            animate={motionProps.animate}
+            transition={motionProps.transition}
+        >
+            {children}
+        </motion.h3>
+    );
+}
+
+function InvMotionDescription({ mode, style, children }) {
+    const motionProps = getCoverTextMotionProps(mode);
+    if (!motionProps) {
+        return <p style={style}>{children}</p>;
+    }
+    const dur = typeof motionProps.transition.duration === 'number' ? motionProps.transition.duration : 2.5;
+    return (
+        <motion.p
+            style={{ ...style, transformOrigin: 'center top', willChange: 'transform, opacity' }}
+            animate={motionProps.animate}
+            transition={{ ...motionProps.transition, duration: dur * 1.08 }}
+        >
+            {children}
+        </motion.p>
+    );
+}
 
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
@@ -37,14 +72,18 @@ const InvitationCard = ({ invitation }) => {
         image, time, description, genderPreference, ageRange,
         // NEW: Video fields
         mediaSource, mediaType, customVideo, videoThumbnail,
-        customImage, restaurantImage, occasionType
+        customImage, restaurantImage, occasionType, inviteMood,
+        coverAnimationType
     } = invitation;
 
-    // Get template styles
+    const templateKey = normalizePublicCardTemplateKey(invitation.templateType || 'classic');
+
+    // Get template styles (canonical layout key)
     const templateStyles = getTemplateStyle(
-        invitation.templateType || 'classic',
+        templateKey,
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        inviteMood || occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     );
 
     const isHost = author?.id === currentUser?.id;
@@ -240,9 +279,10 @@ const InvitationCard = ({ invitation }) => {
     const isPhotoBottom = cardVariant === 'photoBottom';
     const isPhotoGlass = cardVariant === 'photoGlass';
     const isPhotoChips = cardVariant === 'photoChips';
-    const templateKey = invitation.templateType || 'classic';
-    const headerBodyTemplates = new Set(['classic', 'modern', 'elegant', 'fun', 'minimal', 'premium', 'editorial']);
-    const isHeaderBodyLayout = headerBodyTemplates.has(templateKey);
+    const isHeaderBodyLayout = templateKey === 'classic';
+
+    const CARD_HERO_ASPECT_CSS = { hero_1_1: '1 / 1', hero_9_16: '9 / 16' };
+    const cardHeroAspect = CARD_HERO_ASPECT_CSS[templateKey] || null;
     const accentColor = templateStyles.layout?.accentColor || '#f59e0b';
     const accentGlow = `${accentColor}55`;
 
@@ -278,7 +318,7 @@ const InvitationCard = ({ invitation }) => {
         ...templateStyles.card,
         position: 'relative',
         cursor: 'pointer',
-        minHeight: '500px',
+        minHeight: cardHeroAspect ? 'auto' : '500px',
         display: 'flex',
         flexDirection: 'column',
         transformOrigin: 'center bottom',
@@ -470,8 +510,8 @@ const InvitationCard = ({ invitation }) => {
                     minHeight: 'auto',
                 }}
             >
-                <div style={{ position: 'relative', width: '100%', height: 220, background: '#0b0b0b' }}>
-                    <img src={cardMedia.url} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', background: '#0b0b0b' }}>
+                    <img src={cardMedia.url} alt={title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.08) 100%)' }} />
                     <div
                         style={{
@@ -557,20 +597,28 @@ const InvitationCard = ({ invitation }) => {
                 </div>
 
                 <div style={{ padding: '14px 16px 16px', color: '#111827', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <h3 style={{ margin: '0', fontSize: '1.15rem', fontWeight: 900, color: '#111827', lineHeight: 1.35 }}>{title}</h3>
+                    <InvMotionTitle
+                        mode={coverAnimationType}
+                        style={{ margin: '0', fontSize: '1.15rem', fontWeight: 900, color: '#111827', lineHeight: 1.35 }}
+                    >
+                        {title}
+                    </InvMotionTitle>
                     {description && (
-                        <p style={{
-                            margin: '0',
-                            color: '#4b5563',
-                            fontSize: '0.9rem',
-                            lineHeight: 1.45,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                        }}>
+                        <InvMotionDescription
+                            mode={coverAnimationType}
+                            style={{
+                                margin: '0',
+                                color: '#4b5563',
+                                fontSize: '0.9rem',
+                                lineHeight: 1.45,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                            }}
+                        >
                             {description}
-                        </p>
+                        </InvMotionDescription>
                     )}
 
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 10, background: '#f9fafb', border: '1px solid #e5e7eb', fontWeight: 700, fontSize: '0.88rem' }}>
@@ -587,7 +635,7 @@ const InvitationCard = ({ invitation }) => {
 
     return (
         <div
-            className="smart-invitation-card"
+            className={`smart-invitation-card${cardHeroAspect ? ' invitation-card--aspect-hero' : ''}`}
             onClick={() => navigate(`/invitation/${id}`)}
             style={cardFrameStyle}
             onMouseEnter={(e) => {
@@ -684,30 +732,36 @@ const InvitationCard = ({ invitation }) => {
                         </div>
 
                         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '18px 18px 16px', zIndex: 5 }}>
-                            <h3 style={{
-                                fontSize: templateStyles.layout?.titleSize || '1.35rem',
-                                fontWeight: 900,
-                                color: '#ffffff',
-                                margin: 0,
-                                lineHeight: 1.25,
-                                textShadow: '0 2px 12px rgba(0,0,0,0.5)',
-                            }}>
+                            <InvMotionTitle
+                                mode={coverAnimationType}
+                                style={{
+                                    fontSize: templateStyles.layout?.titleSize || '1.35rem',
+                                    fontWeight: 900,
+                                    color: '#ffffff',
+                                    margin: 0,
+                                    lineHeight: 1.25,
+                                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                                }}
+                            >
                                 {title}
-                            </h3>
+                            </InvMotionTitle>
                             {templateStyles.layout?.displayDescription !== false && description && (
-                                <p style={{
-                                    margin: '8px 0 0',
-                                    fontSize: '0.88rem',
-                                    lineHeight: 1.45,
-                                    color: 'rgba(255,255,255,0.95)',
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                    textShadow: '0 1px 8px rgba(0,0,0,0.45)',
-                                }}>
+                                <InvMotionDescription
+                                    mode={coverAnimationType}
+                                    style={{
+                                        margin: '8px 0 0',
+                                        fontSize: '0.88rem',
+                                        lineHeight: 1.45,
+                                        color: 'rgba(255,255,255,0.95)',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                        textShadow: '0 1px 8px rgba(0,0,0,0.45)',
+                                    }}
+                                >
                                     {description}
-                                </p>
+                                </InvMotionDescription>
                             )}
                         </div>
                     </div>
@@ -759,6 +813,16 @@ const InvitationCard = ({ invitation }) => {
                 </>
             ) : (
             <>
+            <div
+                style={{
+                    width: '100%',
+                    aspectRatio: cardHeroAspect || '1 / 1',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: 'inherit',
+                    flexShrink: 0,
+                }}
+            >
             <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', borderRadius: 'inherit', background: '#000' }}>
                 {isVideo ? (
                     <video
@@ -783,7 +847,7 @@ const InvitationCard = ({ invitation }) => {
             <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(0,0,0,0.32)', pointerEvents: 'none', borderRadius: 'inherit' }} />
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 88, zIndex: 2, background: 'linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, transparent 100%)', pointerEvents: 'none', borderRadius: 'inherit' }} />
 
-            <div style={{ position: 'relative', zIndex: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 500, paddingBottom: 4 }}>
+            <div style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', flexDirection: 'column', minHeight: '100%', paddingBottom: 4 }}>
                 <div style={{
                     position: 'absolute', top: '16px', ...(isRTL ? { right: '16px' } : { left: '16px' }), zIndex: 10,
                     background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)',
@@ -855,30 +919,36 @@ const InvitationCard = ({ invitation }) => {
                     textAlign: isPhotoBottom ? 'left' : 'center',
                     fontFamily: templateStyles.layout?.fontFamily || 'inherit',
                 }}>
-                    <h3 style={{
-                        fontSize: templateStyles.layout?.titleSize || '1.35rem',
-                        fontWeight: 900,
-                        color: '#ffffff',
-                        margin: 0,
-                        lineHeight: 1.25,
-                        textShadow: '0 2px 12px rgba(0,0,0,0.45)',
-                    }}>
+                    <InvMotionTitle
+                        mode={coverAnimationType}
+                        style={{
+                            fontSize: templateStyles.layout?.titleSize || '1.35rem',
+                            fontWeight: 900,
+                            color: '#ffffff',
+                            margin: 0,
+                            lineHeight: 1.25,
+                            textShadow: '0 2px 12px rgba(0,0,0,0.45)',
+                        }}
+                    >
                         {title}
-                    </h3>
+                    </InvMotionTitle>
                     {templateStyles.layout?.displayDescription !== false && description && (
-                        <p style={{
-                            margin: '8px 0 0',
-                            fontSize: '0.88rem',
-                            lineHeight: 1.45,
-                            color: 'rgba(255,255,255,0.9)',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            textShadow: '0 1px 8px rgba(0,0,0,0.5)',
-                        }}>
+                        <InvMotionDescription
+                            mode={coverAnimationType}
+                            style={{
+                                margin: '8px 0 0',
+                                fontSize: '0.88rem',
+                                lineHeight: 1.45,
+                                color: 'rgba(255,255,255,0.9)',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                textShadow: '0 1px 8px rgba(0,0,0,0.5)',
+                            }}
+                        >
                             {description}
-                        </p>
+                        </InvMotionDescription>
                     )}
                 </div>
 
@@ -978,6 +1048,7 @@ const InvitationCard = ({ invitation }) => {
                         {joinButtonEl && <div style={{ alignSelf: 'stretch', marginTop: 6 }}>{joinButtonEl}</div>}
                     </div>
                 )}
+            </div>
             </div>
             </>
             )}

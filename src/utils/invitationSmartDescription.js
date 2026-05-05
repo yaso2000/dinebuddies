@@ -91,10 +91,20 @@ function computeInvitationNarrativeContext(formData, ctx) {
 }
 
 /**
- * Plain object for Cloud Function `suggestInvitationMessages` (null = omit in AI prompt).
+ * Plain object for POST /api/generate-image with body.mode headline_suggestions (null = omit in AI prompt).
  * @param {object} formData
  * @param {object} ctx — same as buildSmartInvitationDescription
  */
+/** Minimal structured hints for Magic Cover — full invitation context comes from userBrief + userPreferences. */
+export function buildMagicCoverHints(formData, ctx) {
+    const { language = 'en' } = ctx;
+    const c = computeInvitationNarrativeContext(formData, ctx);
+    return {
+        language: String(language).slice(0, 12),
+        hostName: c.hostName,
+    };
+}
+
 export function buildInvitationAiPayload(formData, ctx) {
     const { t, language = 'en', options = defaultSmartBioOptions() } = ctx;
     const o = options;

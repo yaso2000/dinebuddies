@@ -742,6 +742,21 @@ html:not([data-theme='light']) .app-header .app-name {
   max-height: none !important;
 }
 
+/* Full-bleed hero layouts: real aspect ratio from CSS (not feed viewport height) */
+.smart-invitation-card.invitation-card--aspect-hero {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+/* Template picker carousel: same card rules without forcing tall feed height */
+.invitation-template-carousel .smart-invitation-card {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin-bottom: 0;
+}
+
 /* Fixed Flicker: Removed scaling, using only Subtle Lift + Shadow */
 .smart-invitation-card:hover {
   transform: translateY(-4px);

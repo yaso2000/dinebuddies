@@ -9,7 +9,8 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.inviteMood || invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     );
 
     const themeColor = templateStyles?.badge?.color || 'var(--primary)';
@@ -50,7 +51,15 @@ const InvitationInfoGrid = ({ invitation, distance, restaurantName, t }) => {
                 <FaUtensils style={{ color: themeColor }} />
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('category', { defaultValue: 'Category' })}</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{invitation.type ? t(invitation.type) : (invitation.businessType ? t(invitation.businessType) : t('venue', { defaultValue: 'Venue' }))}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>
+                        {invitation.type
+                            ? t(`type_${String(invitation.type).toLowerCase().replace(/\s+/g, '')}`, {
+                                  defaultValue: invitation.type,
+                              })
+                            : invitation.businessType
+                              ? t(invitation.businessType)
+                              : t('venue', { defaultValue: 'Venue' })}
+                    </div>
                 </div>
             </div>
 

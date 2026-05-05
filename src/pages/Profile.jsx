@@ -611,57 +611,42 @@ const Profile = () => {
                                         fontSize: '0.75rem',
                                         fontWeight: '800'
                                     }}>
-                                        {userProfile?.role === 'admin' ? 'ADMIN' : (userProfile?.role === 'business' ? (userProfile?.subscriptionTier || 'free').toUpperCase() : (userProfile?.subscriptionPlan || userProfile?.subscriptionTier || 'FREE')).toString()}
+                                        {userProfile?.role === 'admin'
+                                            ? 'ADMIN'
+                                            : userProfile?.role === 'business'
+                                                ? (userProfile?.subscriptionTier || 'free').toUpperCase()
+                                                : t('profile_standard_account', 'Standard')}
                                     </div>
                                     <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
-                                        {t('subscription_plan_label', 'Subscription Plan')}
+                                        {userProfile?.role === 'business'
+                                            ? t('subscription_plan_label', 'Subscription plan')
+                                            : t('credits_wallet_heading', 'Credits')}
                                     </span>
                                 </div>
 
-                                {/* Hide Invitation Quotas for Business Accounts */}
                                 {!userProfile?.isBusiness && (
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <div className="profile-subscription-quota-card" style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                                                {t('private_invites_left', 'Private Invites Left')}
-                                            </div>
-                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--luxury-gold)' }}>
-                                                {userProfile?.weeklyPrivateQuota === -1 ? '∞' :
-                                                    (userProfile?.weeklyPrivateQuota || 0) - (userProfile?.usedPrivateCreditsThisWeek || 0)}
-                                            </div>
-                                            {userProfile?.lastQuotaResetDate && (
-                                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                                    {t('resets_on', 'Resets on: ')} {(() => {
-                                                        const timestamp = userProfile.lastQuotaResetDate;
-                                                        const lastReset = timestamp?.toDate ? timestamp.toDate() : (timestamp instanceof Date ? timestamp : new Date());
-                                                        const nextReset = new Date(lastReset.getTime() + 7 * 24 * 60 * 60 * 1000);
-                                                        return nextReset.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' });
-                                                    })()}
-                                                </div>
+                                    <div className="profile-subscription-quota-card" style={{ width: '100%' }}>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                                            {t('dine_credits', 'Dine Credits')}
+                                        </div>
+                                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                            {Math.max(0, Number(userProfile?.freeCredits) || 0) +
+                                                Math.max(0, Number(userProfile?.paidCredits) || 0)}
+                                        </div>
+                                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.35 }}>
+                                            {t(
+                                                'dine_credits_use_hint',
+                                                'Used for private & date invites, AI, and boosts. Free pool is used first.'
                                             )}
                                         </div>
-                                        <div className="profile-subscription-quota-card" style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                                                {t('extra_credits', 'Extra Credits')}
-                                            </div>
-                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                {userProfile?.purchasedPrivateCredits || 0}
-                                                {userProfile?.purchasedPrivateCredits === 5 && (
-                                                    <span style={{ fontSize: '0.65rem', background: 'var(--color-success)', color: 'white', padding: '1px 6px', borderRadius: '8px', verticalAlign: 'middle' }}>
-                                                        {t('gift_badge', 'GIFT 🎁')}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                className="ui-btn ui-btn--ghost"
-                                                onClick={() => navigate('/pricing')}
-                                                style={{ marginTop: '8px', fontSize: '0.65rem', padding: '2px 8px' }}
-                                            >
-                                                {t('top_up_btn', '+ Top Up')}
-                                            </button>
-                                        </div>
+                                        <button
+                                            type="button"
+                                            className="ui-btn ui-btn--ghost"
+                                            onClick={() => navigate('/settings/credits')}
+                                            style={{ marginTop: '8px', fontSize: '0.65rem', padding: '2px 8px' }}
+                                        >
+                                            {t('open_dine_credits_wallet', 'Wallet')}
+                                        </button>
                                     </div>
                                 )}
 
@@ -671,13 +656,10 @@ const Profile = () => {
                                     </div>
                                 )}
 
-                                {(() => {
-                                    const isBusiness = userProfile?.role === 'business';
-                                    const isFree = isBusiness ? (userProfile?.subscriptionTier || 'free') === 'free' : (!userProfile?.subscriptionPlan || userProfile?.subscriptionPlan === 'free');
-                                    return isFree;
-                                })() && (
-                                        <button onClick={() => navigate('/pricing')} className="profile-subscription-upgrade-btn">
-                                            {t('upgrade_plan_btn', 'Upgrade Plan')}
+                                {userProfile?.role === 'business' &&
+                                    (userProfile?.subscriptionTier || 'free') === 'free' && (
+                                        <button onClick={() => navigate('/business/pricing')} className="profile-subscription-upgrade-btn">
+                                            {t('upgrade_plan_btn', 'Upgrade plan')}
                                         </button>
                                     )}
                             </div>

@@ -28,7 +28,8 @@ const InvitationPreview = () => {
     const templateStyles = invitation ? getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
-        invitation.occasionType
+        invitation.inviteMood || invitation.occasionType,
+        { cardFontFamily: invitation.cardFontFamily }
     ) : null;
     const previewTextColor = templateStyles?.card?.color || 'var(--text-main)';
     const previewMutedColor = templateStyles?.card?.color ? 'rgba(255,255,255,0.82)' : 'var(--text-secondary)';

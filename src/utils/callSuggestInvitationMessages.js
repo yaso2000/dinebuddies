@@ -1,16 +1,11 @@
 import { getAuth } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import app from '../firebase/config';
-
-/** Must match `functions/index.js` — `suggestInvitationMessages` region. */
-const FUNCTIONS_REGION = 'us-central1';
 
 /**
- * AI invitation message suggestions via Firebase Callable (Gen2, `cors: true`).
- * Avoids relying on `/api/suggest-invitation-messages` on the host (Firebase Hosting
- * has no API route → 502; Vercel-only routes do not run on Hosting).
+ * AI headline suggestions via POST /api/generate-image (mode: headline_suggestions, Gemini only).
+ * Local dev: set `VITE_DEV_VERCEL_API_ORIGIN` and use the Vite proxy, or run `vercel dev`.
  *
- * Returns `{ data }` like the callable client API.
+ * @param {Record<string, unknown>} payload — same shape as `buildInvitationAiPayload`
+ * @returns {Promise<{ data: { suggestions: string[], creditsCharged?: number } }>}
  */
 export async function callSuggestInvitationMessages(payload) {
     const auth = getAuth();
@@ -20,9 +15,34 @@ export async function callSuggestInvitationMessages(payload) {
         e.code = 'functions/unauthenticated';
         throw e;
     }
+    const token = await user.getIdToken();
 
-    const functions = getFunctions(app, FUNCTIONS_REGION);
-    const suggest = httpsCallable(functions, 'suggestInvitationMessages');
-    const result = await suggest(payload);
-    return { data: result.data };
+    const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            mode: 'headline_suggestions',
+            ...(payload && typeof payload === 'object' ? payload : {}),
+        }),
+    });
+
+    let json = {};
+    try {
+        json = await res.json();
+    } catch {
+        json = {};
+    }
+
+    if (!res.ok) {
+        const e = new Error(json.message || json.error || `Request failed (${res.status})`);
+        e.code = json.code || `http_${res.status}`;
+        e.status = res.status;
+        e.details = json;
+        throw e;
+    }
+
+    return { data: json };
 }

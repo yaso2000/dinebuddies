@@ -9,16 +9,27 @@ admin.initializeApp();
 const { registerAdminSearchUsers } = require('./adminSearchUsers');
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
-const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const {
+    CREDIT_COSTS,
+    spendCreditsInTransaction,
+    isBusinessUserDoc,
+} = require('./creditsCore');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
-const MONTHLY_PRIVATE_QUOTAS = {
-    free: 3,
-    pro: 4,
-    premium: 10,
-    vip: 10
-};
+/** @param {Record<string, unknown>} inv */
+function isDatingInvitationDocForBilling(inv) {
+    if (!inv || typeof inv !== 'object') return false;
+    const occasionLc = String(inv.occasionType || inv.type || '')
+        .trim()
+        .toLowerCase();
+    return (
+        inv.type === 'Dating' ||
+        occasionLc === 'dating' ||
+        (inv.datingInvitationPreference != null && inv.datingInvitationPreference !== false)
+    );
+}
+
 const USER_WEEKLY_PRIVATE_QUOTAS = {
     free: 0,
     pro: 2,
@@ -674,33 +685,32 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
 
             const isBypassUser = user.role === 'admin';
             let chargedSource = null;
-            /** @type {Record<string, unknown> | null} */
-            let userCreditPatch = null;
 
             if (!isBypassUser) {
-                const tier = user.subscriptionTier || 'free';
-                const quota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
-                const now = new Date();
-                const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
-                let usedThisMonth = Number(user.usedPrivateCreditsThisMonth) || 0;
-                const lastResetMonth = user.lastPrivateResetMonth || '';
-                if (quota > 0 && lastResetMonth !== currentMonth) {
-                    usedThisMonth = 0;
-                }
-                const purchasedCredits = Math.max(0, Number(user.purchasedPrivateCredits) || 0);
-                if (quota > 0 && usedThisMonth < quota) {
-                    chargedSource = 'monthly';
-                    userCreditPatch = {
-                        usedPrivateCreditsThisMonth: usedThisMonth + 1,
-                        lastPrivateResetMonth: currentMonth
-                    };
-                } else if (purchasedCredits > 0) {
-                    chargedSource = 'purchased';
-                    userCreditPatch = {
-                        purchasedPrivateCredits: purchasedCredits - 1
-                    };
-                } else {
-                    throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
+                const cost = isDatingInvitationDocForBilling(inv)
+                    ? CREDIT_COSTS.DATING_INVITATION
+                    : CREDIT_COSTS.PRIVATE_INVITATION;
+                const accountRole = isBusinessUserDoc(user) ? 'business' : 'user';
+                try {
+                    spendCreditsInTransaction(tx, userRef, user, {
+                        uid,
+                        accountRole,
+                        amount: cost,
+                        type: 'private_invitation_publish',
+                        reason: isDatingInvitationDocForBilling(inv)
+                            ? 'dating_invitation_publish'
+                            : 'private_invitation_publish',
+                        relatedId: invitationId,
+                    });
+                    chargedSource = 'dine_credits';
+                } catch (spendErr) {
+                    if (spendErr && spendErr.code === 'INSUFFICIENT_CREDITS') {
+                        throw new functions.https.HttpsError(
+                            'failed-precondition',
+                            'Insufficient Dine Credits. Buy credits in Settings → Dine Credits.'
+                        );
+                    }
+                    throw spendErr;
                 }
             }
 
@@ -710,10 +720,6 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                 status: 'published',
                 publishedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-
-            if (userCreditPatch) {
-                tx.update(userRef, userCreditPatch);
-            }
 
             return { alreadyPublished: false, chargedSource };
         });
@@ -755,31 +761,6 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         );
     }
 });
-
-// ─── AI one-line message suggestions (OpenAI chat; requires OPENAI_API_KEY) ───
-// Gen2 callable with explicit CORS: Gen1 endpoints sometimes fail browser preflight from
-// the hosted web app (no Access-Control-Allow-Origin). Gen2 onCall handles OPTIONS reliably.
-exports.suggestInvitationMessages = onCallV2(
-    {
-        region: 'us-central1',
-        timeoutSeconds: 60,
-        memory: '256MiB',
-        cors: true
-    },
-    async (request) => {
-        if (!request.auth) {
-            throw new HttpsErrorV2('unauthenticated', 'Authentication required.');
-        }
-        const uid = request.auth.uid;
-        await enforceCallableRateLimit(uid, 'suggest_invitation_messages', {
-            perMinute: 8,
-            perHour: 60,
-            perDay: 150,
-            cooldownMs: 3000
-        });
-        return runSuggestInvitationMessages(request.data, { auth: request.auth });
-    }
-);
 
 // ─── Trusted callable: create/get conversation with anti-spam limits ────────
 exports.createOrGetConversation = functions.https.onCall(async (data, context) => {
@@ -1303,7 +1284,7 @@ exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, conte
     }
 
     const updates = { subscriptionTier };
-    if (!isBusinessUser) {
+    if (isBusinessUser) {
         updates.weeklyPrivateQuota = USER_WEEKLY_PRIVATE_QUOTAS[subscriptionTier] ?? 0;
         updates.usedPrivateCreditsThisWeek = 0;
     }

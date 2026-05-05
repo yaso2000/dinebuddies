@@ -23,7 +23,6 @@ import './PrivateInvitation.css';
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
-import PrivateCardFrameColorPicker from '../components/Invitations/privateCard/PrivateCardFrameColorPicker';
 import PrivateCardBackgroundPicker from '../components/Invitations/privateCard/PrivateCardBackgroundPicker';
 import PrivateCardFontPicker from '../components/Invitations/privateCard/PrivateCardFontPicker';
 import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
@@ -32,7 +31,7 @@ import { resolveOccasionCategoryId } from '../components/Invitations/privateCard
 import { getCardBackgroundOptions } from '../components/Invitations/privateCard/privateCardBackgrounds';
 import { callGenerateInvitationImage } from '../utils/callGenerateInvitationImage';
 import { createAiInvitationCoverMediaData } from '../utils/createAiInvitationCoverMediaData';
-import { PRIVATE_CARD_FRAME_COLORS } from '../components/Invitations/privateCard/privateCardFrameColors';
+import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 
 const CreatePrivateInvitation = () => {
     const { t } = useTranslation();
@@ -42,7 +41,7 @@ const CreatePrivateInvitation = () => {
     const { showToast } = useToast();
     const { currentUser: authUser, userProfile } = useAuth();
 
-    const quotaInfo = canCreatePrivateInvitation();
+    const quotaInfo = canCreatePrivateInvitation('private');
 
     // UI State
     const [mediaData, setMediaData] = useState(null);
@@ -55,7 +54,6 @@ const CreatePrivateInvitation = () => {
     const [friendSearchLoading, setFriendSearchLoading] = useState(false);
     const [friendSearchResults, setFriendSearchResults] = useState([]);
     const [existingDraftId, setExistingDraftId] = useState(null);
-    const [cardFrameColorId, setCardFrameColorId] = useState(DEFAULT_FRAME_COLOR_ID);
     const [cardFontId, setCardFontId] = useState(DEFAULT_FONT_ID);
     const [cardBackgroundId, setCardBackgroundId] = useState(null);
 
@@ -119,7 +117,6 @@ const CreatePrivateInvitation = () => {
                 });
             }
 
-            setCardFrameColorId(editInvitation.cardFrameColorId || DEFAULT_FRAME_COLOR_ID);
             setCardFontId(editInvitation.cardFontId || DEFAULT_FONT_ID);
         }
     }, [editInvitation]);
@@ -313,9 +310,7 @@ const CreatePrivateInvitation = () => {
                     .join(' — ')
                     .slice(0, 2400) ||
                 `${String(formData.occasionType || 'social')} private invitation`;
-            const frame = PRIVATE_CARD_FRAME_COLORS.find((f) => f.id === cardFrameColorId);
-            const frameLabel = frame ? t(frame.labelKey, frame.defaultLabel) : cardFrameColorId;
-            const style = [String(formData.occasionType || ''), frameLabel].filter(Boolean).join(' · ');
+            const style = String(formData.occasionType || '').trim() || 'private invitation';
             const apiResult = await callGenerateInvitationImage({ prompt, style });
             const mediaPayload = await createAiInvitationCoverMediaData(apiResult);
             setMediaData(mediaPayload);
@@ -367,7 +362,7 @@ const CreatePrivateInvitation = () => {
             const draftData = {
                 ...formData,
                 ...mediaFields,
-                cardFrameColorId,
+                cardFrameColorId: DEFAULT_FRAME_COLOR_ID,
                 cardFontId,
                 cardBackgroundId: cardBackgroundId || null,
                 rsvps: initialRsvps,
@@ -402,7 +397,6 @@ const CreatePrivateInvitation = () => {
     };
 
     if (!quotaInfo.canCreate && !editInvitation) {
-        const isDesktop = window.innerWidth >= 1024;
         return (
             <div className="private-create-wrapper private-theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
                 <div className="ui-card ui-card--lg" style={{ maxWidth: '400px', width: '100%', textAlign: 'center', padding: '30px' }}>
@@ -411,14 +405,17 @@ const CreatePrivateInvitation = () => {
                         {t('insufficient_credits')}
                     </h2>
                     <p className="ui-prompt__desc" style={{ marginBottom: '25px' }}>
-                        {t('insufficient_credits_desc')}
+                        {t(
+                            'dine_credits_private_insufficient',
+                            `Publishing a private invitation costs ${PRIVATE_INVITATION_PUBLISH_CREDITS} Dine Credits. Add credits in your wallet (Settings → Dine Credits).`
+                        )}
                     </p>
                     <button
-                        onClick={() => navigate(isDesktop ? '/pricing' : '/pricing')}
+                        onClick={() => navigate('/settings/credits')}
                         className="ui-btn ui-btn--primary"
                         style={{ width: '100%', marginBottom: '12px' }}
                     >
-                        {t('upgrade_now')}
+                        {t('open_dine_credits_wallet', 'Dine Credits wallet')}
                     </button>
                     <button
                         onClick={() => navigate(-1)}
@@ -432,11 +429,10 @@ const CreatePrivateInvitation = () => {
         );
     }
 
-    // Quota display helpers
     const quota = quotaInfo.quota;
     const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
-    const usedThisWeek = userProfile?.usedPrivateCreditsThisWeek || 0;
-    const weeklyLimit = userProfile?.weeklyPrivateQuota || 0;
+    const dineBalance = getTotalDineCredits(userProfile);
+    const publishCost = PRIVATE_INVITATION_PUBLISH_CREDITS;
 
     return (
         <div className="private-create-wrapper private-theme">
@@ -455,90 +451,39 @@ const CreatePrivateInvitation = () => {
                     {t('private_invitation_desc', 'This invitation will not be visible to the public. Only people you invite can see and join.')}
                 </p>
 
-                {/* Quota Banner */}
+                {/* Private invitation credits (purchased packs only — no subscription tiers). */}
                 <div style={{
                     margin: '12px 0 0',
                     padding: '10px 16px',
                     borderRadius: '12px',
                     background: isUnlimited
                         ? 'rgba(72,187,120,0.1)'
-                        : quota <= 1
+                        : dineBalance < publishCost
                             ? 'rgba(239,68,68,0.1)'
                             : 'rgba(139,92,246,0.1)',
-                    border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : quota <= 1 ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
+                    border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : dineBalance < publishCost ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
                     fontSize: '0.875rem',
-                    color: isUnlimited ? '#4ade80' : quota <= 1 ? '#f87171' : '#a78bfa',
+                    color: isUnlimited ? '#4ade80' : dineBalance < publishCost ? '#f87171' : '#a78bfa',
                     fontWeight: 600
                 }}>
-                    <span>{isUnlimited ? '∞' : `${quota}`}</span>
-                    <span style={{ opacity: 0.8, fontWeight: 400 }}>
+                    <span>{isUnlimited ? '∞' : `${dineBalance}`}</span>
+                    <span style={{ opacity: 0.85, fontWeight: 400 }}>
                         {isUnlimited
                             ? t('unlimited_private_invitations', 'Unlimited private invitations')
-                            : t('private_invitations_remaining', `private invitation${quota !== 1 ? 's' : ''} remaining this {{period}}`, { period: t(quotaInfo.period || 'month') })}
+                            : t(
+                                  'dine_credits_private_banner',
+                                  '{{balance}} Dine Credits — publishing uses {{cost}} credits (free pool is used first).',
+                                  { balance: dineBalance, cost: publishCost }
+                              )}
                     </span>
-                    {!isUnlimited && (userProfile?.weeklyPrivateQuota > 0 || userProfile?.monthlyPrivateQuota > 0) && (
-                        <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.75rem' }}>
-                            {quotaInfo.period === 'month'
-                                ? t('used_this_month', '{{used}}/{{total}} used this month', { used: userProfile?.usedPrivateCreditsThisMonth || 0, total: userProfile?.monthlyPrivateQuota })
-                                : t('used_this_week', '{{used}}/{{total}} used this week', { used: userProfile?.usedPrivateCreditsThisWeek || 0, total: userProfile?.weeklyPrivateQuota })}
-                        </span>
-                    )}
                 </div>
             </div>
 
             <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
                 <form onSubmit={handlePreview} className="elegant-form">
-                    {/* Location first — venue/place before title */}
-                    <div className="form-group mb-4 venue-search-stack">
-                        <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
-                        <VenueLocationPicker
-                            value={formData.location}
-                            onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                            onSelect={handleLocationSelect}
-                            city={formData.city}
-                            countryCode={resolveVenueCountryIso(formData, userProfile)}
-                            userLat={formData.userLat ?? userProfile?.coordinates?.lat}
-                            userLng={formData.userLng ?? userProfile?.coordinates?.lng}
-                            className="elegant-input"
-                        />
-                    </div>
-
-                    {/* Basic Info */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label">{t('invitation_title')}</label>
-                        <input
-                            type="text"
-                            name="title"
-                            value={formData.title}
-                            onChange={handleChange}
-                            placeholder={t('enter_title')}
-                            className="elegant-input"
-                            required
-                        />
-                    </div>
-
-                    {/* Message to guests — directly under title so card preview updates in a logical order */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            {t('message_to_friends')}
-                            <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= 300 ? '#f87171' : 'var(--text-muted)' }}>
-                                {(formData.description?.length || 0)}/300
-                            </span>
-                        </label>
-                        <textarea
-                            name="description"
-                            value={formData.description}
-                            onChange={handleChange}
-                            placeholder={t('write_something_personal')}
-                            className="elegant-textarea"
-                            rows="3"
-                            maxLength={300}
-                        ></textarea>
-                    </div>
-
                     <div className="form-row mb-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                         <div className="form-group">
                             <label className="elegant-label"><FaCalendarAlt /> {t('date')}</label>
@@ -605,41 +550,51 @@ const CreatePrivateInvitation = () => {
                         </div>
                     </div>
 
-                    {/* Private invitation card preview (non-AI); frame color is preview-only in Phase 1 */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label">
-                            {t('private_card_preview_label', { defaultValue: 'Invitation card' })}
-                        </label>
-                        <PrivateInvitationCardPreview
-                            className="private-invitation-card-preview--showcase"
-                            frameColorId={cardFrameColorId}
-                            cardFontId={cardFontId}
-                            occasionType={formData.occasionType}
-                            cardBackgroundId={cardBackgroundId}
-                            title={formData.title}
-                            description={formData.description}
-                            date={formData.date}
-                            time={formData.time}
-                            location={formData.location}
-                            inviterName={
-                                userProfile?.display_name ||
-                                userProfile?.displayName ||
-                                currentUser?.display_name ||
-                                currentUser?.displayName ||
-                                ''
-                            }
-                            inviterAvatarUrl={getSafeAvatar(userProfile || currentUser || {})}
-                        />
-                        <PrivateCardFrameColorPicker value={cardFrameColorId} onChange={setCardFrameColorId} />
-                        <PrivateCardFontPicker value={cardFontId} onChange={setCardFontId} />
-                        <PrivateCardBackgroundPicker
-                            categoryId={resolveOccasionCategoryId(formData.occasionType)}
-                            value={cardBackgroundId}
-                            onChange={setCardBackgroundId}
+                    <div className="form-group mb-4 venue-search-stack">
+                        <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
+                        <VenueLocationPicker
+                            value={formData.location}
+                            onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                            onSelect={handleLocationSelect}
+                            city={formData.city}
+                            countryCode={resolveVenueCountryIso(formData, userProfile)}
+                            userLat={formData.userLat ?? userProfile?.coordinates?.lat}
+                            userLng={formData.userLng ?? userProfile?.coordinates?.lng}
+                            className="elegant-input"
                         />
                     </div>
 
-                    {/* Media Selector */}
+                    <div className="form-group mb-4">
+                        <label className="elegant-label">{t('invitation_title')}</label>
+                        <input
+                            type="text"
+                            name="title"
+                            value={formData.title}
+                            onChange={handleChange}
+                            placeholder={t('enter_title')}
+                            className="elegant-input"
+                            required
+                        />
+                    </div>
+
+                    <div className="form-group mb-4">
+                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            {t('message_to_friends')}
+                            <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= 300 ? '#f87171' : 'var(--text-muted)' }}>
+                                {(formData.description?.length || 0)}/300
+                            </span>
+                        </label>
+                        <textarea
+                            name="description"
+                            value={formData.description}
+                            onChange={handleChange}
+                            placeholder={t('write_something_personal')}
+                            className="elegant-textarea"
+                            rows="3"
+                            maxLength={300}
+                        ></textarea>
+                    </div>
+
                     <div className="form-group mb-4">
                         <label className="elegant-label">{t('invitation_media')}</label>
                         <MediaSelector
@@ -686,6 +641,43 @@ const CreatePrivateInvitation = () => {
                                 {t('invitation_magic_image_hint')}
                             </p>
                         </div>
+                    </div>
+
+                    <div className="form-group mb-4">
+                        <label className="elegant-label">
+                            {t('private_card_preview_label', { defaultValue: 'Invitation card' })}
+                        </label>
+                        <div className="private-card-preview-with-bg">
+                            <div className="private-card-preview-with-bg__preview-wrap">
+                                <PrivateInvitationCardPreview
+                                    className="private-invitation-card-preview--showcase private-invitation-card-preview--showcase-compact"
+                                    frameColorId={DEFAULT_FRAME_COLOR_ID}
+                                    cardFontId={cardFontId}
+                                    occasionType={formData.occasionType}
+                                    cardBackgroundId={cardBackgroundId}
+                                    title={formData.title}
+                                    description={formData.description}
+                                    date={formData.date}
+                                    time={formData.time}
+                                    location={formData.location}
+                                    inviterName={
+                                        userProfile?.display_name ||
+                                        userProfile?.displayName ||
+                                        currentUser?.display_name ||
+                                        currentUser?.displayName ||
+                                        ''
+                                    }
+                                    inviterAvatarUrl={getSafeAvatar(userProfile || currentUser || {})}
+                                />
+                            </div>
+                            <PrivateCardBackgroundPicker
+                                layout="beside-preview"
+                                categoryId={resolveOccasionCategoryId(formData.occasionType)}
+                                value={cardBackgroundId}
+                                onChange={setCardBackgroundId}
+                            />
+                        </div>
+                        <PrivateCardFontPicker value={cardFontId} onChange={setCardFontId} />
                     </div>
 
                     {/* Payment Type */}

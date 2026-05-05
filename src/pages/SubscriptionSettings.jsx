@@ -35,7 +35,7 @@ const SubscriptionSettings = () => {
                         <p className="settings-description">
                             {t(
                                 'consumer_no_plans',
-                                'Personal accounts are free. Invitations, boosts, and most AI use Dine Credits (with a small daily free allowance for text AI).'
+                                'Your Dine Credits pay for private invites, date invites, AI, and boosts — one balance (free + paid; free is used first). Partners use the same credit model from their wallet. Final per-use prices may be tuned later.'
                             )}
                         </p>
                         <div style={{ marginTop: 12, fontWeight: 800 }}>
