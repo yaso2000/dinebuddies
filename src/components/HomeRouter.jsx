@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import DesktopLanding from '../pages/DesktopLanding';
+import AppRouteLoading from '../components/AppRouteLoading';
 import { useAuth } from '../context/AuthContext';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
@@ -29,11 +30,7 @@ const HomeRouter = () => {
     // persistence restores. The old guard only did (currentUser && loading), so on mobile we fell
     // through to Navigate → /posts-feed before the session existed (breaking / and any redirect to /).
     if (loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
-                <div style={{ width: 38, height: 38, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            </div>
-        );
+        return <AppRouteLoading variant="session" />;
     }
 
     // Signed in but Firestore profile not yet: never use the guest `isMobile` branch below — scrollbar /
@@ -42,11 +39,7 @@ const HomeRouter = () => {
         if (isAdminIdentity(currentUser, null)) {
             return <Navigate to="/admin/dashboard" replace />;
         }
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
-                <div style={{ width: 38, height: 38, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            </div>
-        );
+        return <AppRouteLoading variant="profile" />;
     }
 
     if (currentUser && userProfile) {

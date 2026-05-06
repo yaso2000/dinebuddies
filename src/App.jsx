@@ -91,23 +91,15 @@ import { NotificationProvider } from './context/NotificationContext';
 // Guards & Utils
 import GuestBlockedRoute from './components/GuestBlockedRoute';
 import AdminRoute from './components/AdminRoute';
+import AppRouteLoading from './components/AppRouteLoading';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
-const routeSuspenseFallback = (
-    <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '100vh', 
-        width: '100%',
-        background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)' 
-    }}>
-        <div style={{ width: 44, height: 44, border: '4px solid rgba(148, 163, 184, 0.15)', borderTop: '4px solid var(--primary, #E86E2E)', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
-    </div>
-);
-
 function RouteSuspenseLayout() {
-    return <Suspense fallback={routeSuspenseFallback}><Outlet /></Suspense>;
+    return (
+        <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
+            <Outlet />
+        </Suspense>
+    );
 }
 
 /** /business/:businessId/invitations → community hub for that partner */

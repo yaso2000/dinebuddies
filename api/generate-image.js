@@ -84,7 +84,16 @@ function normalizeAtomicAnimationType(raw) {
     return 'gentle-pulse';
 }
 
-const IMAGE_SYSTEM = `You are the visual director for DineBuddies, a social dining app.
+const COVER_LAYOUT_CONSTITUTION = `LAYOUT CONSTITUTION (non-negotiable for the cover image you paint):
+You are a professional graphic designer. Output exactly ONE invitation hero image.
+- Aspect ratio: strictly follow the COVER IMAGE ASPECT RATIO block in the user message (1:1 or 9:16 portrait).
+- Central negative space: keep a deliberate, calm, mostly EMPTY vertical band in the CENTER of the frame (roughly the middle third of the image height, spanning most of the width) reserved for programmatic text overlays later. This zone must stay visually quiet — only soft gradients, gentle bokeh, or very low-contrast texture; no busy patterns, no strong focal objects, no high-contrast shapes that fight typography.
+- Decorative frame: place richer art, atmosphere, food/drink ambience, venue cues, lens bloom, borders, or illustrated flourishes primarily in the TOP and/or BOTTOM regions (or tasteful side vignettes), framing the empty center like a designed card.
+- Hard rule: do NOT render readable letters, numbers, logos, watermarks, UI chrome, or fake signage anywhere — especially not inside the central negative space (it must remain completely text-free).`;
+
+const IMAGE_SYSTEM = `${COVER_LAYOUT_CONSTITUTION}
+
+You are the visual director for DineBuddies, a social dining app.
 When generating an image: produce exactly one high-quality, artistic cover illustration for a social meetup.
 Requirements:
 - Cinematic composition, warm inviting mood, tasteful color grading.
@@ -103,7 +112,7 @@ const ATOMIC_JSON_RULES = `You MUST respond with candidate content that includes
     "style_suggestion": "string — one token in English e.g. romantic, formal, cozy, celebratory"
   },
   "media": {
-    "image_prompt": "string — very detailed English description of the hero/cover scene to paint (mood, lighting, setting, palette); reflect the host's stated tone and color mood when provided; this drives the image you generate next in the same response"
+    "image_prompt": "string — very detailed English description of the hero/cover scene to paint (mood, lighting, setting, palette). MUST explain how decorative elements occupy the top and/or bottom (or side vignettes) while the CENTER remains a calm empty negative-space band for UI text overlays. Reflect the host's stated tone and color mood when provided; this drives the image you generate next in the same response"
   },
   "theme": {
     "frame_text_color": "string — EXACTLY one label from this list: ${DINE_FRAME_COLOR_LABELS.join(', ')}",
@@ -497,7 +506,7 @@ function buildUserPreferencesContext(prefs) {
     }
     if (venue) {
         lines.push(
-            `VENUE / PLACE TYPE (visual backdrop only): "${venue}". The hero cover image should clearly evoke this kind of place (environment, architecture, typical setting, lighting that fits the venue category). Do not add readable text in the image.`
+            `VENUE / PLACE TYPE (visual backdrop only): "${venue}". The hero cover image should clearly evoke this kind of place (environment, architecture, typical setting, lighting that fits the venue category) while preserving the central negative space for overlays. Do not add readable text in the image.`
         );
         lines.push(
             'Use the venue category mainly to shape the scene/setting; keep copy and motion aligned with the INVITE VIBE / MOOD above. If venue and mood could clash, prioritize the MOOD for typography/motion/copy tone, and blend the venue as a softer backdrop.'
@@ -556,7 +565,7 @@ function buildReferenceImageInstruction(hasRef) {
     return `
 
 REFERENCE IMAGE (in this same user message: instruction text first, then the inline image part per Gemini image-editing format):
-The host uploaded a reference picture. Use it as inspiration for mood, color harmony, lighting, composition, and type of setting — then produce a NEW original cover that fits the invitation brief and HOST CONTEXT. Do not copy readable text, logos, brand marks, or watermarks from the reference. The generated cover must still have absolutely no readable text (per IMAGE_SYSTEM). If the reference conflicts with venue type or vibe, blend sensibly and prioritize the written brief + HOST CONTEXT.`;
+The host uploaded a reference picture. Use it as inspiration for mood, color harmony, lighting, composition, and type of setting — then produce a NEW original cover that fits the invitation brief and HOST CONTEXT. Do not copy readable text, logos, brand marks, or watermarks from the reference. The generated cover must still obey LAYOUT CONSTITUTION: central negative space for overlays, decorative richness mainly top/bottom, and absolutely no readable text anywhere. If the reference conflicts with venue type or vibe, blend sensibly and prioritize the written brief + HOST CONTEXT.`;
 }
 
 /** @param {unknown} body */
@@ -573,15 +582,15 @@ function parseCoverAspectRatio(body) {
 function buildCoverAspectInstruction(aspect) {
     const lines = {
         '1:1':
-            'Square framing (1:1). Center-weighted composition; balanced vertical and horizontal interest; suitable for a square invitation hero.',
+            'Square framing (1:1). Still reserve a calm central negative-space region for overlay text; place stronger decorative interest toward edges (top/bottom/left/right) rather than crowding the middle.',
         '9:16':
-            'Vertical portrait framing (9:16). Story/reel-style composition; clear vertical flow; keep the main subject in the central vertical band.',
+            'Vertical portrait framing (9:16), phone-first. Strong vertical flow; keep the geometric CENTER as a tall, calm negative-space column for programmatic title/message overlays; cluster ornate scenery, food, venue atmosphere, and lighting drama primarily in upper and lower decorative bands.',
     };
     return `
 
 COVER IMAGE ASPECT RATIO (mandatory): ${aspect}.
 ${lines[aspect] || lines['1:1']}
-media.image_prompt must explicitly describe a scene composed for ${aspect} (not a different aspect).`;
+media.image_prompt must explicitly describe a scene composed for ${aspect} (not a different aspect) AND must state how top/bottom decoration frames the empty center.`;
 }
 
 function buildHeadlineSystemPrompt(isAr) {

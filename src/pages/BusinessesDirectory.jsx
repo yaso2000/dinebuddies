@@ -1129,7 +1129,7 @@ const BusinessesDirectory = () => {
 
 
     return (
-        <div className="directory-page" style={{ paddingBottom: '100px', minHeight: '100vh' }}>
+        <div className="directory-page" style={{ paddingBottom: '100px', minHeight: '100%' }}>
 
 
             <div style={{ padding: '1rem 1.5rem 0' }}>

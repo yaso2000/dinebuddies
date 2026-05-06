@@ -1259,13 +1259,12 @@ const BusinessProfile = () => {
                 justifyContent: 'center'
             }}>
                 <div className="loader-ring"></div>
-                <p style={{ marginTop: '20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    {t('loading_business', 'Finding business...')}
+                <p style={{ marginTop: '20px', color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 600, textAlign: 'center', maxWidth: '300px', lineHeight: 1.45 }}>
+                    {t('loading_business', 'Loading this profile…')}
                 </p>
-                {/* Debug info if stuck */}
-                <div style={{ marginTop: '30px', fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>
-                    ID: {profileId} | Auth: {authLoading ? 'Loading' : 'Ready'} | User: {currentUser?.uid || 'None'}
-                </div>
+                <p style={{ marginTop: '10px', color: 'var(--text-muted)', fontSize: '0.8rem', opacity: 0.85, textAlign: 'center', maxWidth: '320px', lineHeight: 1.5 }}>
+                    {t('loading_business_hint', 'This usually takes a moment.')}
+                </p>
             </div>
         );
     }

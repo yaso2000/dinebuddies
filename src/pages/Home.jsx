@@ -674,7 +674,7 @@ const Home = () => {
 
     // Return statement
     return (
-        <div className="home-page" style={{ minHeight: '100vh', animation: 'fadeIn 0.5s ease-out' }}>
+        <div className="home-page" style={{ minHeight: '100%', animation: 'fadeIn 0.5s ease-out' }}>
 
             <style>{`
                 .filter-select {

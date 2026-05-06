@@ -15,6 +15,7 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import OffersBanner from './OffersBanner';
+import AppRouteLoading from './AppRouteLoading';
 import RankingSidebarWidget from './RankingSidebarWidget';
 import PushNotificationPrompt from './PushNotificationPrompt';
 import { isBusinessUser } from '../utils/accountRole';
@@ -116,31 +117,7 @@ const Layout = ({ children }) => {
     // That tore down AdminRoute/AdminLayout and felt like "desktop↔mobile" or home↔admin flicker.
     const isAdminPath = location.pathname.startsWith('/admin');
     if (loading && !(isAdminPath && currentUser?.uid)) {
-        return (
-            <div
-                role="status"
-                aria-busy="true"
-                style={{
-                    minHeight: '100dvh',
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)',
-                }}
-            >
-                <div
-                    style={{
-                        width: 44,
-                        height: 44,
-                        border: '4px solid rgba(148, 163, 184, 0.15)',
-                        borderTopColor: 'var(--primary)',
-                        borderRadius: '50%',
-                        animation: 'spin 0.9s linear infinite',
-                    }}
-                />
-            </div>
-        );
+        return <AppRouteLoading variant="session" fullViewport />;
     }
 
     // 2. Email verification — email/password accounts (consumer or business) until verified

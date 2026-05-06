@@ -309,17 +309,22 @@ export const AuthProvider = ({ children }) => {
                 syncBusinessNavHint(null, null);
                 setUserProfile(null);
             }
-            // Local cache can hold an older consumer-shaped doc; routing (HomeRouter) must not run
-            // until we have a server snapshot or a fail-safe timeout.
+            // Cached snapshots used to block setLoading(false) for up to 8s waiting for the server —
+            // that kept Layout + HomeRouter on a full-screen spinner even though profile data was ready.
+            // Release the shell as soon as we have a doc; the listener will fire again from the server.
             if (fromCache) {
                 if (authLoadingTimeoutRef.current) {
                     clearTimeout(authLoadingTimeoutRef.current);
                     authLoadingTimeoutRef.current = null;
                 }
-                authLoadingTimeoutRef.current = setTimeout(() => {
-                    setLoading(false);
-                    authLoadingTimeoutRef.current = null;
-                }, 8000);
+                if (!docSnap.exists()) {
+                    authLoadingTimeoutRef.current = setTimeout(() => {
+                        setLoading(false);
+                        authLoadingTimeoutRef.current = null;
+                    }, 2500);
+                    return;
+                }
+                setLoading(false);
                 return;
             }
             if (authLoadingTimeoutRef.current) {

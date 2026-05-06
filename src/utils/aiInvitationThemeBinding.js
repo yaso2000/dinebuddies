@@ -122,6 +122,35 @@ export function slugifyCoverAnimationType(raw) {
 }
 
 /**
+ * Apply Gemini atomic pack (`/api/generate-image`) to public invitation composer state.
+ * Title and message are overlaid on the hero in the UI; the generated image keeps a central negative space for legibility.
+ *
+ * @param {Record<string, unknown>} apiResult
+ * @param {Record<string, unknown>} prevFormData
+ * @param {number} [messageMaxLength]
+ * @returns {Record<string, unknown>}
+ */
+export function buildFormPatchFromAtomicInvitationApi(apiResult, prevFormData, messageMaxLength = 2000) {
+    const prev = prevFormData && typeof prevFormData === 'object' ? prevFormData : {};
+    const maxLen = Math.max(1, Math.floor(Number(messageMaxLength) || 2000));
+    const colorKey = mapAiFrameTextColorToColorSchemeKey(apiResult?.theme?.frame_text_color);
+    const fontCss = mapAiFontNameToCssFamily(apiResult?.theme?.font_name);
+    const anim = normalizeCoverAnimationType(apiResult?.animation_meta?.type);
+    const title = String(apiResult?.basic_info?.title || '').trim();
+    const message = String(apiResult?.basic_info?.message || '')
+        .trim()
+        .slice(0, maxLen);
+    return {
+        ...prev,
+        title: title || prev.title,
+        description: message || prev.description,
+        colorScheme: colorKey || prev.colorScheme,
+        cardFontFamily: fontCss || prev.cardFontFamily,
+        coverAnimationType: anim,
+    };
+}
+
+/**
  * Normalize for composer / API apply: always one of {@link INVITATION_COVER_ANIMATION_TYPES}.
  * Empty input defaults to gentle-pulse.
  * @param {string | undefined | null} raw
