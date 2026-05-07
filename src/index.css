@@ -96,9 +96,6 @@
   --shadow-glow: 0 0 15px rgba(232, 110, 46, 0.25);
   --luxury-gradient: linear-gradient(135deg, var(--primary) 0%, #d85a20 100%);
 
-  /* iOS PWA / viewport letterboxing — unified canvas (see mobile-optimizations.css) */
-  --color-background-dainbody: #0a0a0a;
-
   /* Layout */
   --header-height: 60px;
   --nav-height: 70px;
@@ -131,9 +128,6 @@
   --brand-primary: #6d28d9;
   --brand-glow: rgba(109, 40, 217, 0.4);
   --text-on-brand: #ffffff;
-
-  /* Viewport canvas (iOS PWA) — matches light shell */
-  --color-background-dainbody: #f8fafc;
 
   /* Backgrounds - Light surfaces */
   --bg-body: var(--bg-primary);
@@ -223,7 +217,6 @@
 
 /* Dark theme - Explicit (matches :root) */
 [data-theme='dark'] {
-  --color-background-dainbody: #0a0a0a;
   --bg-body: #0b0812;
   --bg-body-gradient: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%);
   --bg-card: rgba(22, 14, 35, 0.85);
@@ -405,11 +398,11 @@ body {
   height: 100%;
 }
 
-/* Mobile: narrow centered card — min-height uses % so nested 100vh pages do not stack under iOS */
+/* Mobile: narrow centered card */
 .app-layout {
   max-width: var(--max-width);
   margin: 0 auto;
-  min-height: 100%;
+  min-height: 100vh;
   position: relative;
   background: var(--bg-body-gradient);
   background-attachment: fixed;
@@ -421,8 +414,7 @@ body {
 /* Main Content Wrapper - Ensures content isn't hidden behind fixed bottom nav */
 .app-main {
   padding-bottom: calc(var(--nav-height) + 40px);
-  /* Avoid 100vh here: inside fixed #root it fights iOS and stacks with child min-height:100vh → huge gap */
-  min-height: 0;
+  min-height: calc(100vh - var(--header-height) - var(--nav-height));
   position: relative;
 }
 
@@ -461,8 +453,6 @@ body {
   .app-layout {
     display: flex !important;
     flex-direction: column !important;
-    min-height: 100vh !important;
-    min-height: 100dvh !important;
     height: 100vh !important;
     max-width: 1280px !important;
     /* matches ds-body-grid exactly */
@@ -1934,31 +1924,6 @@ select.input-field {
   .app-header .header-actions .header-profile-pic {
     margin-inline-start: 2px;
   }
-
-  /* Leave room for logo when many header icons on narrow phones */
-  .logo-wrapper {
-    flex-shrink: 1;
-    min-width: 0;
-  }
-
-  .logo-wrapper .app-logo-img {
-    max-height: 30px;
-    width: auto;
-    object-fit: contain;
-  }
-}
-
-/* Extra-tight: prevent search/messages/bell/settings/profile crowding each other */
-@media (max-width: 380px) {
-  .app-header .header-actions {
-    gap: 2px;
-  }
-
-  .app-header .header-actions .notification-bell {
-    min-width: 40px;
-    min-height: 40px;
-    padding: 8px;
-  }
 }
 
 /* Logo Wrapper Alignment */
@@ -2166,24 +2131,6 @@ button.notification-bell {
   /* Form pages keep side padding on mobile */
   .page-container.form-page {
     padding: 1rem 1rem 6rem !important;
-  }
-
-  /*
-   * Public create invitation: .app-main already reserves bottom nav + safe-area (mobile-optimizations.css).
-   * Do not add nav-height/safe-area again here — that caused a visible empty strip above the tab bar on iPhone.
-   * Keep only a small tail so the last field is not flush against the scroll edge.
-   */
-  .page-container.form-page.create-public-invitation {
-    padding-bottom: 1.25rem !important;
-  }
-
-  .page-container.form-page.create-public-invitation .create-form {
-    padding-bottom: 0;
-  }
-
-  #invitation-ai-gateway {
-    scroll-margin-top: 0.75rem;
-    scroll-margin-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 12px);
   }
 
 

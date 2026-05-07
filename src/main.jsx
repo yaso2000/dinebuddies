@@ -9,7 +9,6 @@ import './i18n';
 import './utils/numberFormatOverrides';
 import ErrorBoundary from './components/ErrorBoundary';
 import App from './App.jsx';
-import { syncMobileShellViewport } from './utils/syncMobileShellViewport';
 
 function escapeHtml(s) {
     return String(s)
@@ -82,5 +81,4 @@ function boot() {
     }
 }
 
-syncMobileShellViewport();
 boot();
