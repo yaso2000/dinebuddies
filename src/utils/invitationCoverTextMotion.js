@@ -1,6 +1,6 @@
 /**
  * Framer Motion props for invitation hero title / message on image layouts.
- * Canonical modes match `INVITATION_COVER_ANIMATION_TYPES` in `aiInvitationThemeBinding.js` and `api/generate-image.js`.
+ * Canonical modes match `INVITATION_COVER_ANIMATION_TYPES` in `aiInvitationThemeBinding.js`.
  */
 
 import { resolveCoverAnimationForMotion } from './aiInvitationThemeBinding';

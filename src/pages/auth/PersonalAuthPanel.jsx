@@ -31,6 +31,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         currentUser,
         isGuest,
         loading: authLoading,
+        profileServerSynced,
     } = useAuth();
 
     const [loading, setLoading] = useState(false);
@@ -71,6 +72,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
     useEffect(() => {
         if (!justLoggedIn || !currentUser) return;
+        if (userProfile && !profileServerSynced) return;
 
         // If userProfile is loaded, make a smart decision
         if (userProfile) {
@@ -108,7 +110,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
             }
         }, 1500);
         return () => clearTimeout(tmr);
-    }, [justLoggedIn, currentUser, userProfile, navigate]);
+    }, [justLoggedIn, currentUser, userProfile, profileServerSynced, navigate]);
 
     useEffect(() => {
         try {

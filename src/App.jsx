@@ -42,6 +42,7 @@ const PrivateInvitationPreview = lazy(() => import('./pages/PrivateInvitationPre
 const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
 const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
+const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
 const CreatePrivateInvitation = lazy(() => import('./pages/CreatePrivateInvitation'));
 const CreateDatingInvitation = lazy(() => import('./pages/CreateDatingInvitation'));
 const CreatePost = lazy(() => import('./pages/CreatePost'));
@@ -62,8 +63,6 @@ const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const CommunityGuidelines = lazy(() => import('./pages/CommunityGuidelines'));
 const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest'));
 const MyCommunity = lazy(() => import('./pages/MyCommunity'));
-const AiMarketingStudio = lazy(() => import('./pages/AiMarketingStudio'));
-const AiMarketingSavedPosts = lazy(() => import('./pages/AiMarketingSavedPosts'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
 const InvitationManagement = lazy(() => import('./pages/admin/InvitationManagement'));
@@ -178,6 +177,15 @@ function App() {
                                                     <Route path="/followers/:userId" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
                                                     <Route path="/followers" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
 
+                                                    <Route path="/create/manual" element={<GuestBlockedRoute><CreateInvitationManualHub /></GuestBlockedRoute>} />
+                                                    <Route
+                                                        path="/create/ai"
+                                                        element={
+                                                            <GuestBlockedRoute>
+                                                                <Navigate to="/create/manual" replace />
+                                                            </GuestBlockedRoute>
+                                                        }
+                                                    />
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-dating" element={<GuestBlockedRoute><CreateDatingInvitation /></GuestBlockedRoute>} />
@@ -204,8 +212,8 @@ function App() {
 
                                                     <Route path="/plans" element={<Navigate to="/pricing" replace />} />
                                                     <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
-                                                    <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><AiMarketingSavedPosts /></GuestBlockedRoute>} />
-                                                    <Route path="/ai-marketing-studio" element={<GuestBlockedRoute><AiMarketingStudio /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-marketing-studio" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />
 
                                                     <Route path="/payment-success" element={<GuestBlockedRoute><PaymentSuccess /></GuestBlockedRoute>} />
 

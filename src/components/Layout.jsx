@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaMagic, FaTimes, FaLock, FaHeart } from 'react-icons/fa';
+import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaTimes, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
@@ -22,6 +22,7 @@ import { isBusinessUser } from '../utils/accountRole';
 import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
 import { goToLogin } from '../utils/goToLogin';
 import { isAdminIdentity } from '../utils/adminAccess';
+import { useToast } from '../context/ToastContext';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -29,7 +30,8 @@ const Layout = ({ children }) => {
     const { t, i18n } = useTranslation();
     const { currentUser, userProfile, isGuest, isBusiness, loading } = useAuth();
     const invContext = useInvitations();
-    const { invitations = [], getFollowingInvitations = () => [] } = invContext || {};
+    const { invitations = [], getFollowingInvitations = () => [], canCreatePrivateInvitation } = invContext || {};
+    const { showToast } = useToast();
     const { unreadCount: chatUnreadCount, conversations = [] } = useChat();
     const { unreadCount, unreadBellCount = 0, unreadMessageCount = 0, markMessageNotificationsAsRead } = useNotifications();
     
@@ -39,6 +41,57 @@ const Layout = ({ children }) => {
 
     const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
     const [inviteCreateOpen, setInviteCreateOpen] = useState(false);
+
+    const openInviteCreate = () => {
+        setInviteCreateOpen(true);
+    };
+
+    const closeInviteCreate = () => {
+        setInviteCreateOpen(false);
+    };
+
+    const finishInviteCreateManual = (kind) => {
+        if (kind === 'public') {
+            navigate('/create');
+            closeInviteCreate();
+            return;
+        }
+        if (kind === 'private') {
+            const q = canCreatePrivateInvitation?.('private');
+            if (q && !q.canCreate) {
+                showToast(
+                    t(
+                        'insufficient_dine_credits_wallet',
+                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
+                    ),
+                    'error'
+                );
+                navigate('/settings/credits');
+                closeInviteCreate();
+                return;
+            }
+            navigate('/create-private');
+            closeInviteCreate();
+            return;
+        }
+        if (kind === 'dating') {
+            const q = canCreatePrivateInvitation?.('dating');
+            if (q && !q.canCreate) {
+                showToast(
+                    t(
+                        'insufficient_dine_credits_wallet',
+                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
+                    ),
+                    'error'
+                );
+                navigate('/settings/credits');
+                closeInviteCreate();
+                return;
+            }
+            navigate('/create-dating');
+            closeInviteCreate();
+        }
+    };
 
     useEffect(() => {
         if (!businessCreateOpen && !inviteCreateOpen) return;
@@ -156,10 +209,10 @@ const Layout = ({ children }) => {
 
     const businessCreateFabActive =
         location.pathname === '/create-post' ||
-        location.pathname.startsWith('/ai-marketing-studio') ||
         location.pathname === '/business-dashboard';
 
     const inviteCreateFabActive =
+        location.pathname === '/create/manual' ||
         location.pathname === '/create' ||
         location.pathname === '/create-private' ||
         location.pathname === '/create-dating';
@@ -465,7 +518,7 @@ const Layout = ({ children }) => {
                             <button
                                 type="button"
                                 className={`ds-nav-item${inviteCreateFabActive || inviteCreateOpen ? ' active' : ''}`}
-                                onClick={() => setInviteCreateOpen(true)}
+                                onClick={openInviteCreate}
                                 aria-haspopup="dialog"
                                 aria-expanded={inviteCreateOpen}
                             >
@@ -581,7 +634,7 @@ const Layout = ({ children }) => {
                         <button
                             type="button"
                             className={`nav-item fab-nav-item${inviteCreateFabActive ? ' active' : ''}`}
-                            onClick={() => setInviteCreateOpen(true)}
+                            onClick={openInviteCreate}
                             aria-haspopup="dialog"
                             aria-expanded={inviteCreateOpen}
                             aria-label={t('invite_create_menu', 'Create invitation')}
@@ -630,7 +683,7 @@ const Layout = ({ children }) => {
                 <div
                     className="business-create-overlay"
                     role="presentation"
-                    onClick={() => setInviteCreateOpen(false)}
+                    onClick={closeInviteCreate}
                 >
                     <div
                         className="business-create-sheet"
@@ -645,13 +698,16 @@ const Layout = ({ children }) => {
                                     {t('invite_create_title', 'Create invitation')}
                                 </h2>
                                 <p className="business-create-sheet__subtitle">
-                                    {t('invite_create_subtitle', 'Choose the type of invitation you want to create.')}
+                                    {t(
+                                        'invite_create_subtitle',
+                                        'Choose the type of invitation you want to create.'
+                                    )}
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 className="business-create-sheet__close"
-                                onClick={() => setInviteCreateOpen(false)}
+                                onClick={closeInviteCreate}
                                 aria-label={t('close', 'Close')}
                             >
                                 <FaTimes />
@@ -661,10 +717,7 @@ const Layout = ({ children }) => {
                             <button
                                 type="button"
                                 className="business-create-option"
-                                onClick={() => {
-                                    setInviteCreateOpen(false);
-                                    navigate('/create');
-                                }}
+                                onClick={() => finishInviteCreateManual('public')}
                             >
                                 <span className="business-create-option__icon business-create-option__icon--featured">
                                     <FaEnvelope />
@@ -684,10 +737,7 @@ const Layout = ({ children }) => {
                             <button
                                 type="button"
                                 className="business-create-option"
-                                onClick={() => {
-                                    setInviteCreateOpen(false);
-                                    navigate('/create-private');
-                                }}
+                                onClick={() => finishInviteCreateManual('private')}
                             >
                                 <span className="business-create-option__icon business-create-option__icon--motion">
                                     <FaLock />
@@ -707,10 +757,7 @@ const Layout = ({ children }) => {
                             <button
                                 type="button"
                                 className="business-create-option"
-                                onClick={() => {
-                                    setInviteCreateOpen(false);
-                                    navigate('/create-dating');
-                                }}
+                                onClick={() => finishInviteCreateManual('dating')}
                             >
                                 <span className="business-create-option__icon business-create-option__icon--featured">
                                     <FaHeart />
@@ -783,29 +830,6 @@ const Layout = ({ children }) => {
                                         {t(
                                             'business_create_featured_desc',
                                             'Create a regular or featured business post.'
-                                        )}
-                                    </span>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                className="business-create-option"
-                                onClick={() => {
-                                    setBusinessCreateOpen(false);
-                                    navigate('/ai-marketing-studio');
-                                }}
-                            >
-                                <span className="business-create-option__icon business-create-option__icon--motion">
-                                    <FaMagic />
-                                </span>
-                                <span className="business-create-option__text">
-                                    <span className="business-create-option__label">
-                                        {t('business_create_motion_title', 'AI Motion Post')}
-                                    </span>
-                                    <span className="business-create-option__desc">
-                                        {t(
-                                            'business_create_motion_desc',
-                                            'Create an AI-powered animated marketing post.'
                                         )}
                                     </span>
                                 </span>

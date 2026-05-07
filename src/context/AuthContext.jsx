@@ -174,6 +174,8 @@ export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    /** True after first users/{uid} snapshot from server OR listener error — avoids routing on stale local cache. */
+    const [profileServerSynced, setProfileServerSynced] = useState(false);
     const [isGuest, setIsGuest] = useState(false);
     const nominatimFailed = useRef(false);
     const isDeletingAccountRef = useRef(false);
@@ -291,10 +293,20 @@ export const AuthProvider = ({ children }) => {
     // fell through to HomeRouter → /posts-feed while on /business/:id.
     useEffect(() => {
         const uid = currentUser?.uid;
-        if (!uid) return;
+        if (!uid) {
+            setProfileServerSynced(false);
+            return;
+        }
+        setProfileServerSynced(false);
+        /** Offline / flaky networks: never block completion routing forever waiting for server. */
+        const failSafe = setTimeout(() => setProfileServerSynced(true), 6000);
         const userRef = doc(db, 'users', uid);
         const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
             const fromCache = docSnap.metadata.fromCache;
+            if (!fromCache) {
+                clearTimeout(failSafe);
+                setProfileServerSynced(true);
+            }
             if (docSnap.exists()) {
                 const normalized = normalizeProfile({
                     id: docSnap.id,
@@ -334,13 +346,18 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
         }, (error) => {
             console.error("Profile Error:", error);
+            clearTimeout(failSafe);
+            setProfileServerSynced(true);
             if (authLoadingTimeoutRef.current) {
                 clearTimeout(authLoadingTimeoutRef.current);
                 authLoadingTimeoutRef.current = null;
             }
             setLoading(false);
         });
-        return () => unsubscribeSnapshot();
+        return () => {
+            clearTimeout(failSafe);
+            unsubscribeSnapshot();
+        };
     }, [currentUser?.uid]);
 
     // Update lastSeen and location
@@ -951,7 +968,14 @@ export const AuthProvider = ({ children }) => {
     const signOut = async (redirectTo = '/login') => {
         const dest = (redirectTo && String(redirectTo).replace(/\/$/, '')) || '/login';
         try {
-            if (currentUser) await removeFcmToken(currentUser.uid).catch(() => { });
+            // FCM cleanup hits the network (getToken/deleteToken + Firestore). Do not block logout beyond a short cap.
+            if (currentUser?.uid) {
+                const uid = currentUser.uid;
+                await Promise.race([
+                    removeFcmToken(uid),
+                    new Promise((resolve) => setTimeout(resolve, 2000)),
+                ]).catch(() => { });
+            }
             await firebaseSignOut(auth);
             setUserProfile(null);
             syncBusinessNavHint(null, null);
@@ -1000,6 +1024,7 @@ export const AuthProvider = ({ children }) => {
         currentUser: toSessionAuthUser(currentUser),
         userProfile,
         loading,
+        profileServerSynced,
         // Derive from normalised profile so there is ONE source of truth
         isGuest: isGuest || userProfile?.isGuest || false,
         isBusiness: isBusinessUser(userProfile),

@@ -36,7 +36,7 @@ function resolutionFromUserDoc(data) {
 }
 
 const ProfileGuard = ({ children }) => {
-    const { currentUser, userProfile, loading, isGuest, isBusiness } = useAuth();
+    const { currentUser, userProfile, loading, isGuest, isBusiness, profileServerSynced } = useAuth();
     const location = useLocation();
     const [profileWaitDone, setProfileWaitDone] = useState(false);
     /** When Firestore snapshot lags, userProfile stays null; resolve once via getDoc instead of treating as incomplete consumer. */
@@ -175,6 +175,9 @@ const ProfileGuard = ({ children }) => {
     );
 
     if (!isComplete) {
+        if (!profileServerSynced) {
+            return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>Loading...</div>;
+        }
         return <Navigate to="/complete-profile" state={{ from: location }} replace />;
     }
 

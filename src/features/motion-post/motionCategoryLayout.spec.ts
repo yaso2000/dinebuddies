@@ -54,7 +54,7 @@ describe('Motion layout across category-style fixtures', () => {
                 ...rows.sort(),
                 '',
                 'Structural note: special_offer_post uses layout ids (discount_hero, premium_offer, …); event_post uses elegant_invitation, party_night, birthday_celebration, business_event, romantic_dinner.',
-                'For visual comparison, load these payloads in MotionPostStudio (see motionCategoryLayoutFixtures).',
+                'For visual comparison, load these payloads in a motion preview harness (see motionCategoryLayoutFixtures).',
                 'Invitation OCCASION_PRESETS are unrelated to motion template selection.',
             ].join('\n'),
         );

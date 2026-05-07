@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaCalendarAlt, FaMapMarkerAlt, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe, FaPlus, FaMagic, FaImage, FaTimes } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale } from 'react-icons/io5';
 import { HiUser } from 'react-icons/hi2';
 import { useInvitations } from '../context/InvitationContext';
@@ -17,36 +17,12 @@ import { validateInvitationCreation } from '../utils/invitationValidation';
 import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { callGenerateInvitationImage } from '../utils/callGenerateInvitationImage';
-import { createAiInvitationCoverMediaData } from '../utils/createAiInvitationCoverMediaData';
 import { detectUserLocationContext } from '../utils/locationUtils';
-import {
-    COLOR_SCHEMES,
-    TEMPLATE_STYLES,
-    LEGACY_PUBLIC_TEMPLATE_MAP,
-    TEMPLATE_PICKER_KEYS,
-    normalizePublicCardTemplateKey,
-    MAGIC_COVER_ASPECT_RATIOS,
-    templateTypeToMagicCoverAspect,
-} from '../utils/invitationTemplates';
-import {
-    PUBLIC_INVITE_MOOD_KEYS,
-    PUBLIC_VENUE_TYPES,
-    migrateLegacyOccasionToInviteMood,
-    normalizePublicVenueType,
-} from '../utils/publicInvitationVibes';
+import { COLOR_SCHEMES, TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
+import { PUBLIC_VENUE_TYPES, migrateLegacyOccasionToInviteMood, normalizePublicVenueType } from '../utils/publicInvitationVibes';
 import InvitationCard from '../components/InvitationCard';
-import {
-    mapAiFrameTextColorToColorSchemeKey,
-    mapAiFontNameToCssFamily,
-    normalizeCoverAnimationType,
-    buildPublicInvitationUserPreferencesForAi,
-    buildFormPatchFromAtomicInvitationApi,
-    PUBLIC_INVITATION_FONT_OPTIONS,
-} from '../utils/aiInvitationThemeBinding';
-import { buildMagicCoverHints, invitationMessageMaxLength } from '../utils/invitationSmartDescription';
-import { prepareMagicCoverReferenceImage } from '../utils/prepareMagicCoverReferenceImage';
-import { getAdvertisedInvitationAiCoverCreditCost } from '../utils/publicInvitationAiCoverCost';
+import { normalizeCoverAnimationType, PUBLIC_INVITATION_FONT_OPTIONS } from '../utils/aiInvitationThemeBinding';
+import { invitationMessageMaxLength } from '../utils/invitationSmartDescription';
 
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
@@ -73,30 +49,6 @@ const CreateInvitation = () => {
     const [libraryImages, setLibraryImages] = useState([]);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [magicImageLoading, setMagicImageLoading] = useState(false);
-    /** Short occasion description sent to Gemini with “Magic cover” (optional). */
-    const [geminiOccasionBrief, setGeminiOccasionBrief] = useState('');
-    /** Optional reference image for multimodal Magic cover (preview URL + payload for API). */
-    const [magicCoverRefImage, setMagicCoverRefImage] = useState(null);
-    const [magicCoverAspectRatio, setMagicCoverAspectRatio] = useState('9:16');
-    /** After a successful paid generation: user must explicitly apply to the form. */
-    const [magicCoverPending, setMagicCoverPending] = useState(null);
-    const magicCoverRefInputRef = useRef(null);
-    const advertisedAiCoverCost = useMemo(() => getAdvertisedInvitationAiCoverCreditCost(), []);
-    /** True after user picks a place from venue search (or pre-filled / edit / deep link). Required to show Magic Cover on public flow. */
-    const [venuePickConfirmed, setVenuePickConfirmed] = useState(() =>
-        Boolean(
-            location.state?.editingInvitation ||
-                (location.state?.fromRestaurant && location.state?.restaurantData) ||
-                (location.state?.prefilledData && String(location.state.prefilledData.restaurantName || '').trim()) ||
-                (location.state?.offerData &&
-                    String(
-                        location.state.offerData.location ||
-                            location.state.offerData.locationDetails ||
-                            ''
-                    ).trim())
-        )
-    );
 
     const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
 
@@ -403,10 +355,6 @@ const CreateInvitation = () => {
                             type: normalizePublicVenueType(draft.type),
                             templateType: normalizePublicCardTemplateKey(draft.templateType),
                         });
-                        if (String(draft.location || '').trim()) {
-                            setVenuePickConfirmed(true);
-                        }
-                        setMagicCoverAspectRatio(templateTypeToMagicCoverAspect(draft.templateType));
                     }
                 } catch (error) {
                     console.error('Error loading draft:', error);
@@ -438,69 +386,6 @@ const CreateInvitation = () => {
         }
     }, [formData.type]);
 
-    useEffect(() => {
-        const k = normalizePublicCardTemplateKey(formData.templateType);
-        if (k === 'classic') return;
-        setMagicCoverAspectRatio(templateTypeToMagicCoverAspect(k));
-    }, [formData.templateType]);
-
-    useEffect(() => {
-        const loc = String(formData.location || '').trim();
-        if (loc) return;
-        if (editingInvitation || (fromRestaurant && restaurantData) || String(prefilledData?.restaurantName || '').trim()) {
-            return;
-        }
-        setVenuePickConfirmed(false);
-    }, [formData.location, editingInvitation, fromRestaurant, restaurantData, prefilledData?.restaurantName]);
-
-    const canUseMagicCover =
-        !!editingInvitation ||
-        !!(fromRestaurant && restaurantData) ||
-        !!String(prefilledData?.restaurantName || '').trim() ||
-        !!formData.restaurantId ||
-        venuePickConfirmed;
-
-    useEffect(() => {
-        const url = magicCoverRefImage?.previewUrl;
-        return () => {
-            if (url) URL.revokeObjectURL(url);
-        };
-    }, [magicCoverRefImage?.previewUrl]);
-
-    const clearMagicCoverRefImage = useCallback(() => {
-        setMagicCoverRefImage(null);
-    }, []);
-
-    const onMagicCoverReferenceFile = useCallback(
-        async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (!file) return;
-            if (!file.type.startsWith('image/')) {
-                showToast(
-                    t('magic_cover_reference_invalid', { defaultValue: 'Please choose an image file (JPEG, PNG, WebP, or GIF).' }),
-                    'error'
-                );
-                return;
-            }
-            try {
-                const { mimeType, dataBase64, blob } = await prepareMagicCoverReferenceImage(file);
-                setMagicCoverRefImage((prev) => ({
-                    previewUrl: URL.createObjectURL(blob),
-                    mimeType,
-                    dataBase64,
-                }));
-            } catch (err) {
-                console.warn('Magic cover reference image:', err);
-                showToast(
-                    t('magic_cover_reference_error', { defaultValue: 'Could not use this image. Try a smaller file or another format.' }),
-                    'error'
-                );
-            }
-        },
-        [showToast, t]
-    );
-
     // Handle image selection
     const handleImageSelect = (file) => {
         setImageFile(file);
@@ -521,102 +406,6 @@ const CreateInvitation = () => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
-
-    const handleMagicCoverGenerate = async () => {
-        if (!authUser || currentUser?.id === 'guest') {
-            showToast(t('login_to_create') || 'Please sign in', 'error');
-            goToLogin();
-            return;
-        }
-        if (!canUseMagicCover && !editingInvitation) {
-            showToast(
-                t('magic_cover_requires_venue', {
-                    defaultValue: 'Choose a venue from search first, then generate a Magic cover.',
-                }),
-                'error'
-            );
-            return;
-        }
-
-        setMagicImageLoading(true);
-        try {
-            const userBrief =
-                String(geminiOccasionBrief || '').trim() ||
-                t('magic_cover_empty_brief_fallback', {
-                    defaultValue:
-                        'No extra host notes. Infer a short inviting title and message from the stated vibe, venue type, and place.',
-                });
-
-            const scheme = COLOR_SCHEMES[formData.colorScheme];
-            const style = [scheme?.name, formData.templateType]
-                .filter((x) => String(x || '').trim())
-                .join(' · ');
-
-            const hints = buildMagicCoverHints(formData, {
-                t,
-                language: i18n.language,
-                userProfile,
-                currentUser,
-            });
-
-            const apiResult = await callGenerateInvitationImage({
-                userBrief,
-                language: i18n.language,
-                prompt: userBrief,
-                style,
-                hints,
-                coverAspectRatio: magicCoverAspectRatio,
-                referenceImage: magicCoverRefImage
-                    ? { mimeType: magicCoverRefImage.mimeType, dataBase64: magicCoverRefImage.dataBase64 }
-                    : undefined,
-                userPreferences: buildPublicInvitationUserPreferencesForAi(formData),
-            });
-
-            setMagicCoverPending({ apiResult });
-            showToast(
-                t('magic_cover_generated_review', {
-                    defaultValue: 'Cover generated. Review the preview, then apply to your invitation when ready.',
-                }),
-                'success'
-            );
-        } catch (e) {
-            if (e.code === 'insufficient_credits') {
-                showToast(t('invitation_magic_image_insufficient'), 'error');
-            } else {
-                showToast(e.message || t('invitation_magic_image_error'), 'error');
-            }
-        } finally {
-            setMagicImageLoading(false);
-        }
-    };
-
-    const handleMagicCoverApplyToInvitation = useCallback(async () => {
-        const apiResult = magicCoverPending?.apiResult;
-        if (!apiResult) return;
-        try {
-            setFormData((prev) => buildFormPatchFromAtomicInvitationApi(apiResult, prev, invitationMessageMaxLength));
-
-            const mediaPayload = await createAiInvitationCoverMediaData(apiResult);
-            await handleMediaSelect(mediaPayload);
-            setMagicCoverPending(null);
-            showToast(t('magic_cover_applied_toast', { defaultValue: 'AI cover applied to this invitation.' }), 'success');
-        } catch (e) {
-            showToast(e?.message || t('invitation_magic_image_error'), 'error');
-        }
-    }, [magicCoverPending, handleMediaSelect, t]);
-
-    const handleMagicCoverDiscardPending = useCallback(() => {
-        setMagicCoverPending(null);
-    }, []);
-
-    const openInvitationAiStudio = useCallback(() => {
-        const el = document.getElementById('invitation-ai-gateway');
-        if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return;
-        }
-        showToast(t('magic_cover_sign_in_to_scroll', { defaultValue: 'Sign in to use Magic cover above.' }), 'info');
-    }, [showToast, t]);
 
     const handlePreview = async (e) => {
         e.preventDefault();
@@ -1020,7 +809,6 @@ const CreateInvitation = () => {
     };
 
     const handleLocationSelect = (placeData) => {
-        setVenuePickConfirmed(true);
         const name = placeData.name || placeData.fullAddress || '';
         const isDbVenue = !!(placeData.restaurantId || placeData.isDineBuddiesVenue);
         setFormData((prev) => ({
@@ -1089,28 +877,10 @@ const CreateInvitation = () => {
         currentUser?.displayName ||
         t('host', 'Host');
 
-    /** Shared invitation payload for live template carousel (templateType set per slide). Merges pending Magic Cover JSON + image for WYSIWYG before Apply. */
+    /** Shared invitation payload for live template carousel (templateType set per slide). */
     const previewInvitationBase = useMemo(() => {
-        const pending = magicCoverPending?.apiResult;
-        const pendingSrc =
-            pending?.dataBase64 && pending?.mimeType
-                ? `data:${pending.mimeType};base64,${pending.dataBase64}`
-                : null;
-        const heroUrl = pendingSrc || previewHeroUrl;
-        const useVideo = !pendingSrc && mediaData?.type === 'video';
-        const colorKey = pending
-            ? mapAiFrameTextColorToColorSchemeKey(pending.theme?.frame_text_color) || formData.colorScheme
-            : formData.colorScheme;
-        const cardFont = pending
-            ? mapAiFontNameToCssFamily(pending.theme?.font_name) || formData.cardFontFamily
-            : formData.cardFontFamily;
-        const anim = pending
-            ? normalizeCoverAnimationType(pending.animation_meta?.type)
-            : formData.coverAnimationType;
-        const titleAi = String(pending?.basic_info?.title || '').trim();
-        const descAi = String(pending?.basic_info?.message || '').trim();
-        const titleOut = titleAi || formData.title || '\u00A0';
-        const descOut = (descAi || formData.description || '').slice(0, invitationMessageMaxLength);
+        const heroUrl = previewHeroUrl;
+        const useVideo = mediaData?.type === 'video';
 
         return {
             id: '__create_preview__',
@@ -1118,7 +888,7 @@ const CreateInvitation = () => {
                 id: currentUser?.id || authUser?.uid || 'preview',
                 name: previewHostName,
             },
-            title: titleOut,
+            title: formData.title || '\u00A0',
             type: formData.type,
             location: formData.location || '',
             paymentType: formData.paymentType,
@@ -1127,7 +897,7 @@ const CreateInvitation = () => {
             requests: [],
             date: formData.date,
             time: formData.time,
-            description: descOut,
+            description: (formData.description || '').slice(0, invitationMessageMaxLength),
             genderPreference: formData.genderPreference,
             genderGroups: formData.genderGroups,
             ageGroups: formData.ageGroups,
@@ -1138,17 +908,14 @@ const CreateInvitation = () => {
             videoThumbnail: useVideo ? (mediaData.videoThumbnail || mediaData.preview) : undefined,
             customImage: !useVideo && heroUrl ? heroUrl : undefined,
             restaurantImage:
-                !pendingSrc && (mediaData?.source === 'restaurant' || mediaData?.source === 'google_place')
-                    ? previewHeroUrl
-                    : undefined,
-            mediaSource: pendingSrc ? undefined : mediaData?.source,
+                mediaData?.source === 'restaurant' || mediaData?.source === 'google_place' ? previewHeroUrl : undefined,
+            mediaSource: mediaData?.source,
             inviteMood: formData.inviteMood,
-            colorScheme: colorKey,
-            cardFontFamily: cardFont || undefined,
-            coverAnimationType: anim,
+            colorScheme: formData.colorScheme,
+            cardFontFamily: formData.cardFontFamily || undefined,
+            coverAnimationType: normalizeCoverAnimationType(formData.coverAnimationType),
         };
     }, [
-        magicCoverPending,
         formData.title,
         formData.type,
         formData.location,
@@ -1224,11 +991,6 @@ const CreateInvitation = () => {
     }, [formData.templateType]);
 
     const today = new Date().toISOString().split('T')[0];
-
-    const magicCoverPreviewSrc =
-        magicCoverPending?.apiResult?.dataBase64 && magicCoverPending?.apiResult?.mimeType
-            ? `data:${magicCoverPending.apiResult.mimeType};base64,${magicCoverPending.apiResult.dataBase64}`
-            : null;
 
     return (
         <>
@@ -1346,39 +1108,6 @@ const CreateInvitation = () => {
 
             <form onSubmit={editingInvitation ? handleSubmit : handlePreview} className="create-form">
 
-                <div className="ui-card ui-form-surface" style={{ marginBottom: '1rem', padding: '1rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                    <h3 style={{ fontSize: '1.05rem', marginBottom: '0.85rem', fontWeight: 800 }}>
-                        {t('create_section_vibe', { defaultValue: 'Invitation vibe' })}
-                    </h3>
-                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                        {t('create_section_vibe_hint', { defaultValue: 'Sets tone for AI cover, text, and motion — separate from venue type below.' })}
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {PUBLIC_INVITE_MOOD_KEYS.map((moodKey) => {
-                            const selected = formData.inviteMood === moodKey;
-                            return (
-                                <button
-                                    key={moodKey}
-                                    type="button"
-                                    onClick={() => setFormData((prev) => ({ ...prev, inviteMood: moodKey }))}
-                                    style={{
-                                        padding: '10px 14px',
-                                        borderRadius: '999px',
-                                        border: selected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                        background: selected ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                        color: 'var(--text-main)',
-                                        fontSize: '0.82rem',
-                                        fontWeight: selected ? 800 : 600,
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    {t(`invite_mood_${moodKey}`)}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
                 {!editingInvitation && (
                     <div className="ui-card venue-search-stack" style={{ marginBottom: '1rem', padding: '1rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
                         <h3 style={{ fontSize: '1.05rem', marginBottom: '0.35rem', fontWeight: 800 }}>
@@ -1386,7 +1115,7 @@ const CreateInvitation = () => {
                         </h3>
                         <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
                             {t('create_section_venue_location_hint', {
-                                defaultValue: 'Pick a place and venue category — this drives the hero background; vibe above drives tone and copy.',
+                                defaultValue: 'Pick a place and venue category — this drives the hero background and venue image options.',
                             })}
                         </p>
                         <h4 style={{ fontSize: '0.95rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
@@ -1450,412 +1179,6 @@ const CreateInvitation = () => {
                         </p>
                     </div>
                 )}
-
-                {authUser && currentUser?.id !== 'guest' ? (
-                    <div
-                        id="invitation-ai-gateway"
-                        className="ui-card ui-form-surface"
-                        style={{
-                            marginBottom: '1rem',
-                            padding: '1rem',
-                            borderRadius: '16px',
-                            border: '1px solid rgba(245, 158, 11, 0.45)',
-                            background:
-                                'linear-gradient(145deg, rgba(245, 158, 11, 0.1), rgba(168, 85, 247, 0.08), rgba(6, 182, 212, 0.06))',
-                            boxShadow: '0 8px 28px rgba(245, 158, 11, 0.1)',
-                        }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-                            <div
-                                aria-hidden
-                                style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: 12,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    background: 'linear-gradient(135deg, #f59e0b, #d946ef)',
-                                    color: '#fff',
-                                }}
-                            >
-                                <FaMagic style={{ fontSize: '1.2rem' }} />
-                            </div>
-                            <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-                                <h3 style={{ fontSize: '1.05rem', fontWeight: 900, margin: 0, lineHeight: 1.25 }}>
-                                    {t('create_section_ai_gateway', { defaultValue: 'AI gateway — Magic cover' })}
-                                </h3>
-                                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                                    {t('create_section_ai_gateway_hint', {
-                                        defaultValue:
-                                            'Full pack: Gemini proposes title, message, theme, font, motion, and a text-free hero with a clear center area for overlays.',
-                                    })}
-                                </p>
-                            </div>
-                            {magicCoverPending ? (
-                                <span
-                                    style={{
-                                        fontSize: '0.7rem',
-                                        fontWeight: 800,
-                                        textTransform: 'uppercase',
-                                        padding: '4px 8px',
-                                        borderRadius: 999,
-                                        background: 'rgba(251, 191, 36, 0.25)',
-                                        color: '#fbbf24',
-                                        border: '1px solid rgba(251, 191, 36, 0.5)',
-                                    }}
-                                >
-                                    {t('magic_cover_cta_badge_ready', { defaultValue: 'Preview ready' })}
-                                </span>
-                            ) : null}
-                        </div>
-
-                        <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.45 }}>
-                            {t('magic_cover_optional_intro', {
-                                defaultValue:
-                                    'You do not need AI to publish. You can keep a normal photo or venue image from the media picker — this assistant is only if you want an auto-styled cover and copy.',
-                            })}
-                        </p>
-                        <div
-                            style={{
-                                fontSize: '0.82rem',
-                                lineHeight: 1.45,
-                                marginBottom: 12,
-                                padding: '10px 12px',
-                                borderRadius: 12,
-                                border: '1px solid rgba(251, 191, 36, 0.45)',
-                                background: 'rgba(251, 191, 36, 0.1)',
-                                color: 'var(--text-main)',
-                            }}
-                        >
-                            {advertisedAiCoverCost > 0
-                                ? t('magic_cover_paid_notice', {
-                                      cost: advertisedAiCoverCost,
-                                      defaultValue:
-                                          'Paid: about {{cost}} credits per successful generation. Credits are deducted as soon as generation succeeds, even if you discard the preview.',
-                                  })
-                                : t('magic_cover_paid_notice_generic', {
-                                      defaultValue:
-                                          'Paid: credits are charged per successful generation on the server. The exact amount depends on your account and promotions.',
-                                  })}
-                        </div>
-
-                        {magicCoverPending && typeof magicCoverPending.apiResult?.creditsCharged === 'number' ? (
-                            <p style={{ fontSize: '0.82rem', fontWeight: 700, margin: '0 0 12px', color: 'var(--text-main)' }}>
-                                {t('magic_cover_charged_notice', {
-                                    cost: magicCoverPending.apiResult.creditsCharged,
-                                    defaultValue: 'This generation used {{cost}} credits.',
-                                })}
-                            </p>
-                        ) : null}
-
-                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.45 }}>
-                            {t('create_section_ai_cover_hint', {
-                                defaultValue:
-                                    'After choosing a venue, add optional notes for Gemini. Generation sends vibe as tone, venue type as scene, then this text as context.',
-                            })}
-                        </p>
-
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
-                            <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
-                                {t('magic_cover_aspect_label', { defaultValue: 'Cover shape (same as layout ratios)' })}
-                            </label>
-                            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.4 }}>
-                                {t('magic_cover_aspect_hint', {
-                                    defaultValue:
-                                        '1:1 (square) or 9:16 (vertical) — vertical works best for phone-first layouts with a centered text band.',
-                                })}
-                            </p>
-                            <div
-                                role="group"
-                                aria-label={t('magic_cover_aspect_label', { defaultValue: 'Cover shape' })}
-                                style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
-                            >
-                                {MAGIC_COVER_ASPECT_RATIOS.map((ar) => {
-                                    const selected = magicCoverAspectRatio === ar;
-                                    return (
-                                        <button
-                                            key={ar}
-                                            type="button"
-                                            onClick={() => setMagicCoverAspectRatio(ar)}
-                                            style={{
-                                                padding: '8px 14px',
-                                                borderRadius: '10px',
-                                                fontWeight: 700,
-                                                fontSize: '0.85rem',
-                                                cursor: 'pointer',
-                                                border: selected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                                background: selected ? 'color-mix(in srgb, var(--primary) 20%, transparent)' : 'var(--bg-card)',
-                                                color: 'var(--text-main)',
-                                                boxShadow: selected ? '0 0 0 1px var(--primary)' : 'none',
-                                            }}
-                                        >
-                                            {t(`magic_cover_aspect_${ar.replace(':', '_')}`, { defaultValue: ar })}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
-                            <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
-                                {t('gemini_occasion_brief_label', { defaultValue: 'Smart description for Gemini (context)' })}
-                            </label>
-                            <textarea
-                                value={geminiOccasionBrief}
-                                onChange={(e) => setGeminiOccasionBrief(e.target.value.slice(0, 2000))}
-                                rows={3}
-                                className="input-field text-area"
-                                placeholder={t('gemini_occasion_brief_placeholder', {
-                                    defaultValue:
-                                        'Who should join, occasion, or any detail — sent as the host context line to the model.',
-                                })}
-                                style={{ minHeight: '72px' }}
-                            />
-                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '8px' }}>
-                                {t('gemini_occasion_brief_hint', {
-                                    defaultValue:
-                                        'This text is the main “step C” context. If you leave it empty, the model still uses your vibe and venue type.',
-                                })}
-                            </small>
-                        </div>
-
-                        <div
-                            className="form-group"
-                            style={{
-                                marginBottom: '1rem',
-                                padding: '12px',
-                                borderRadius: 12,
-                                border: '1px dashed rgba(139, 92, 246, 0.45)',
-                                background: 'rgba(139, 92, 246, 0.06)',
-                            }}
-                        >
-                            <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block', fontWeight: 800 }}>
-                                {t('magic_cover_reference_section_title', { defaultValue: 'Reference image (optional)' })}
-                            </label>
-                            <input
-                                ref={magicCoverRefInputRef}
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,image/gif"
-                                style={{ display: 'none' }}
-                                onChange={onMagicCoverReferenceFile}
-                            />
-                            {!magicCoverRefImage ? (
-                                <button
-                                    type="button"
-                                    onClick={() => magicCoverRefInputRef.current?.click()}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        padding: '8px 12px',
-                                        borderRadius: '10px',
-                                        cursor: 'pointer',
-                                        fontWeight: 600,
-                                        fontSize: '0.85rem',
-                                        background: 'var(--bg-card)',
-                                        border: '1px solid var(--border-color)',
-                                        color: 'var(--text-main)',
-                                    }}
-                                >
-                                    <FaImage aria-hidden />
-                                    {t('magic_cover_reference_add', { defaultValue: 'Add reference image' })}
-                                </button>
-                            ) : (
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        flexWrap: 'wrap',
-                                        padding: '10px',
-                                        borderRadius: '12px',
-                                        border: '1px solid var(--border-color)',
-                                        background: 'var(--bg-elevated, rgba(255,255,255,0.04))',
-                                    }}
-                                >
-                                    <img
-                                        src={magicCoverRefImage.previewUrl}
-                                        alt=""
-                                        style={{
-                                            width: 76,
-                                            height: 76,
-                                            objectFit: 'cover',
-                                            borderRadius: 10,
-                                            border: '1px solid var(--border-color)',
-                                        }}
-                                    />
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => magicCoverRefInputRef.current?.click()}
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                padding: '8px 12px',
-                                                borderRadius: 10,
-                                                border: '1px solid var(--border-color)',
-                                                background: 'var(--bg-card)',
-                                                color: 'var(--text-main)',
-                                                fontWeight: 600,
-                                                fontSize: '0.82rem',
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            <FaImage aria-hidden />
-                                            {t('magic_cover_reference_replace', { defaultValue: 'Replace' })}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={clearMagicCoverRefImage}
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                padding: '8px 12px',
-                                                borderRadius: 10,
-                                                border: '1px solid rgba(239, 68, 68, 0.45)',
-                                                background: 'rgba(239, 68, 68, 0.1)',
-                                                color: '#f87171',
-                                                fontWeight: 600,
-                                                fontSize: '0.82rem',
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            <FaTimes aria-hidden />
-                                            {t('magic_cover_reference_remove', { defaultValue: 'Remove' })}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '8px' }}>
-                                {t('magic_cover_reference_hint', {
-                                    defaultValue:
-                                        'Optional: attach a photo for Gemini to match mood, colors, or setting. The generated cover stays text-free and original.',
-                                })}
-                            </small>
-                        </div>
-
-                        {!canUseMagicCover && !editingInvitation ? (
-                            <p
-                                style={{
-                                    fontSize: '0.82rem',
-                                    color: '#fbbf24',
-                                    marginBottom: 10,
-                                    padding: '8px 10px',
-                                    borderRadius: 10,
-                                    background: 'rgba(251, 191, 36, 0.12)',
-                                    border: '1px solid rgba(251, 191, 36, 0.35)',
-                                }}
-                            >
-                                {t('magic_cover_requires_venue', {
-                                    defaultValue: 'Choose a venue from search above to enable Generate Magic Cover.',
-                                })}
-                            </p>
-                        ) : null}
-
-                        <button
-                            type="button"
-                            onClick={handleMagicCoverGenerate}
-                            disabled={
-                                magicImageLoading || !authUser || currentUser?.id === 'guest' || (!canUseMagicCover && !editingInvitation)
-                            }
-                            title={
-                                !canUseMagicCover && !editingInvitation
-                                    ? t('magic_cover_requires_venue', {
-                                          defaultValue: 'Choose a venue from search above to enable Generate Magic Cover.',
-                                      })
-                                    : undefined
-                            }
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                width: '100%',
-                                padding: '12px 14px',
-                                borderRadius: '12px',
-                                border: 'none',
-                                fontWeight: 800,
-                                fontSize: '0.95rem',
-                                cursor:
-                                    magicImageLoading || !authUser || currentUser?.id === 'guest' || (!canUseMagicCover && !editingInvitation)
-                                        ? 'not-allowed'
-                                        : 'pointer',
-                                opacity: magicImageLoading || (!canUseMagicCover && !editingInvitation) ? 0.72 : 1,
-                                background: 'linear-gradient(135deg, var(--primary), var(--accent))',
-                                color: '#fff',
-                            }}
-                        >
-                            <FaMagic aria-hidden />
-                            {magicImageLoading
-                                ? t('invitation_magic_image_loading')
-                                : t('invitation_magic_image_btn_generate', { defaultValue: 'Generate Magic Cover' })}
-                        </button>
-
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '12px 0', lineHeight: 1.45 }}>
-                            {t('invitation_magic_image_hint')}
-                        </p>
-
-                        {magicCoverPreviewSrc ? (
-                            <div style={{ marginBottom: 8 }}>
-                                <p style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 8px' }}>
-                                    {t('magic_cover_preview_heading', { defaultValue: 'Preview — not applied yet' })}
-                                </p>
-                                <img
-                                    src={magicCoverPreviewSrc}
-                                    alt=""
-                                    style={{
-                                        width: '100%',
-                                        maxHeight: 240,
-                                        objectFit: 'contain',
-                                        borderRadius: 12,
-                                        border: '1px solid var(--border-color)',
-                                        background: 'var(--bg-elevated, #111)',
-                                    }}
-                                />
-                                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '8px 0 0', lineHeight: 1.4 }}>
-                                    {t('magic_cover_apply_explain', {
-                                        defaultValue:
-                                            'Apply updates the title, message, colors, font, motion, and cover image on this draft. You can still edit everything afterward.',
-                                    })}
-                                </p>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
-                                    <button
-                                        type="button"
-                                        className="ui-btn ui-btn--primary"
-                                        onClick={handleMagicCoverApplyToInvitation}
-                                        style={{ flex: '1 1 160px', fontWeight: 700 }}
-                                    >
-                                        {t('magic_cover_btn_apply', { defaultValue: 'Apply to invitation' })}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleMagicCoverDiscardPending}
-                                        style={{
-                                            flex: '1 1 140px',
-                                            padding: '10px 14px',
-                                            borderRadius: 12,
-                                            fontWeight: 600,
-                                            border: '1px solid var(--border-color)',
-                                            background: 'var(--bg-card)',
-                                            color: 'var(--text-main)',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        {t('magic_cover_btn_discard_result', { defaultValue: 'Discard preview' })}
-                                    </button>
-                                </div>
-                                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '10px 0 0', lineHeight: 1.35 }}>
-                                    {t('magic_cover_discard_credits_note', {
-                                        defaultValue: 'Discarding does not refund credits — they were already charged when generation succeeded.',
-                                    })}
-                                </p>
-                            </div>
-                        ) : null}
-                    </div>
-                ) : null}
 
                 <div className="ui-card ui-form-surface" style={{ marginBottom: '1rem', padding: '1rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
                     <h3 style={{ fontSize: '1.05rem', marginBottom: '0.85rem', fontWeight: 800 }}>
@@ -2159,8 +1482,6 @@ const CreateInvitation = () => {
                         onDeleteLibraryVideo={deleteLibraryVideo}
                         onDeleteLibraryImage={deleteLibraryImage}
                         onMediaSelect={handleMediaSelect}
-                        deviceAndAiTabs
-                        onOpenAiStudio={openInvitationAiStudio}
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
                         <div

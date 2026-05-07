@@ -1,10 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaGlobe, FaLock, FaHeart, FaTimes } from 'react-icons/fa';
+import { FaTimes, FaGlobe, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { useInvitations } from '../context/InvitationContext';
 import './CreateInvitationSelector.css';
 
 const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
@@ -12,89 +12,157 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
     const navigate = useNavigate();
     const { showToast } = useToast();
     const { isBusiness } = useAuth();
-
     const { canCreatePrivateInvitation } = useInvitations();
 
     if (!isOpen) return null;
 
-    const handleSelect = (type) => {
-        if (isBusiness) {
-            showToast(t('business_cannot_create_invitation', 'Business accounts cannot create or publish invitations.'), 'error');
-            onClose();
-            return;
-        }
-        if (type === 'public') {
-            navigate('/create', { state: navigationState });
-        } else if (type === 'private') {
-            const quotaInfo = canCreatePrivateInvitation('private');
-            if (quotaInfo.canCreate) {
-                navigate('/create-private', { state: navigationState });
-            } else {
-                showToast(
-                    t(
-                        'insufficient_dine_credits_wallet',
-                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
-                    ),
-                    'error'
-                );
-                navigate('/settings/credits');
-            }
-        } else if (type === 'dating') {
-            const quotaInfo = canCreatePrivateInvitation('dating');
-            if (quotaInfo.canCreate) {
-                navigate('/create-dating', { state: navigationState });
-            } else {
-                showToast(
-                    t(
-                        'insufficient_dine_credits_wallet',
-                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
-                    ),
-                    'error'
-                );
-                navigate('/settings/credits');
-            }
-        }
+    const baseState =
+        navigationState && typeof navigationState === 'object' ? { ...navigationState } : {};
+
+    const handleClose = () => {
         onClose();
     };
 
+    const goCreate = (kind) => {
+        if (isBusiness) {
+            showToast(
+                t('business_cannot_create_invitation', 'Business accounts cannot create or publish invitations.'),
+                'error'
+            );
+            handleClose();
+            return;
+        }
+        if (kind === 'public') {
+            navigate('/create', { state: baseState });
+            handleClose();
+            return;
+        }
+        if (kind === 'private') {
+            const quotaInfo = canCreatePrivateInvitation('private');
+            if (!quotaInfo.canCreate) {
+                showToast(
+                    t(
+                        'insufficient_dine_credits_wallet',
+                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
+                    ),
+                    'error'
+                );
+                navigate('/settings/credits');
+                handleClose();
+                return;
+            }
+            navigate('/create-private', { state: baseState });
+            handleClose();
+            return;
+        }
+        if (kind === 'dating') {
+            const quotaInfo = canCreatePrivateInvitation('dating');
+            if (!quotaInfo.canCreate) {
+                showToast(
+                    t(
+                        'insufficient_dine_credits_wallet',
+                        'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
+                    ),
+                    'error'
+                );
+                navigate('/settings/credits');
+                handleClose();
+                return;
+            }
+            navigate('/create-dating', { state: baseState });
+            handleClose();
+        }
+    };
+
     return (
-        <div className="selector-overlay" onClick={onClose}>
-            <div className="selector-content" onClick={e => e.stopPropagation()}>
-                <button className="close-btn" onClick={onClose}>
+        <div className="selector-overlay" onClick={handleClose}>
+            <div className="selector-content" onClick={(e) => e.stopPropagation()}>
+                <button type="button" className="close-btn" onClick={handleClose}>
                     <FaTimes />
                 </button>
 
-                <h3 className="selector-title">{t('select_invitation_type')}</h3>
-                <p className="selector-subtitle">{t('choose_invitation_type_to_continue', 'Choose invitation type to continue')}</p>
+                <h3 className="selector-title">{t('invite_create_title', 'Create invitation')}</h3>
+                <p className="selector-subtitle">
+                    {t(
+                        'invite_create_subtitle',
+                        'Choose the type of invitation you want to create.'
+                    )}
+                </p>
 
                 <div className="selector-options">
-                    <div className="selector-card public" onClick={() => handleSelect('public')}>
+                    <div
+                        className="selector-card public"
+                        onClick={() => goCreate('public')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                goCreate('public');
+                            }
+                        }}
+                    >
                         <div className="icon-wrapper">
                             <FaGlobe />
                         </div>
                         <div className="option-info">
-                            <h4>{t('dinebuddy_open', 'DineBuddy Open')}</h4>
-                            <p>{t('public_invitation_desc', 'Open to everyone — find new dining companions')}</p>
+                            <h4>{t('invite_create_public_title', 'Public invitation')}</h4>
+                            <p>
+                                {t(
+                                    'invite_create_public_desc',
+                                    'A discoverable invitation others can browse and join.'
+                                )}
+                            </p>
                         </div>
                     </div>
-
-                    <div className="selector-card private" onClick={() => handleSelect('private')}>
+                    <div
+                        className="selector-card private"
+                        onClick={() => goCreate('private')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                goCreate('private');
+                            }
+                        }}
+                    >
                         <div className="icon-wrapper">
                             <FaLock />
                         </div>
                         <div className="option-info">
-                            <h4>{t('dinebuddy_private', 'DineBuddy Private')}</h4>
-                            <p>{t('private_invitation_desc', 'Invite specific friends for an exclusive gathering')}</p>
+                            <h4>{t('invite_create_private_title', 'Private invitation')}</h4>
+                            <p>
+                                {t(
+                                    'invite_create_private_desc',
+                                    'Invite specific guests with a private link.'
+                                )}
+                            </p>
                         </div>
                     </div>
-
-                    <div className="selector-card dating" onClick={() => handleSelect('dating')}>
+                    <div
+                        className="selector-card dating"
+                        onClick={() => goCreate('dating')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                goCreate('dating');
+                            }
+                        }}
+                    >
                         <div className="icon-wrapper">
                             <FaHeart />
                         </div>
                         <div className="option-info">
-                            <h4>{t('dinebuddy_date', 'DineBuddy Date')}</h4>
-                            <p>{t('dating_invitation_selector_desc', 'Send an exclusive private date to someone special')}</p>
+                            <h4>{t('invite_create_dating_title', 'Dating invitation')}</h4>
+                            <p>
+                                {t(
+                                    'invite_create_dating_desc',
+                                    'A dating-style invitation for matched dining.'
+                                )}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -104,5 +172,3 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
 };
 
 export default CreateInvitationSelector;
-
-

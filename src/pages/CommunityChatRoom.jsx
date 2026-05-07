@@ -18,6 +18,7 @@ import { createNotification } from '../utils/notificationHelpers';
 import SharedContentBubble from '../components/SharedContentBubble';
 import UnifiedCamera from '../components/UnifiedCamera';
 import './CommunityChatRoom.css';
+import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -38,7 +39,6 @@ const CommunityChatRoom = () => {
     const [loading, setLoading] = useState(true);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
-    const [lockTop, setLockTop] = useState(null);
     const [keyboardHeight, setKeyboardHeight] = useState(320); // Dynamic fallback
     const [showCamera, setShowCamera] = useState(false);
 
@@ -51,27 +51,13 @@ const CommunityChatRoom = () => {
     };
 
     const handleEmojiToggle = () => {
-        if (!composerRef.current || !containerRef.current) return;
-        
-        // Lock the absolute pixel position of the composer relative to the container
-        const rect = composerRef.current.getBoundingClientRect();
-        const containerRect = containerRef.current.getBoundingClientRect();
-        setLockTop(rect.top - containerRect.top);
-
         if (showEmojiPanel) {
-            // Close emoji → switch to keyboard
             setShowEmojiPanel(false);
             inputRef.current?.focus();
         } else {
-            // Open emoji → switch away from keyboard
             setShowEmojiPanel(true);
             inputRef.current?.blur();
         }
-
-        // Release the lock after the native keyboard finishes animating (approx 400ms)
-        setTimeout(() => {
-            setLockTop(null);
-        }, 400);
     };
 
     const handleEmojiClick = (emojiData) => {
@@ -114,47 +100,19 @@ const CommunityChatRoom = () => {
 
     const maxVisibleHeight = useRef(typeof window !== 'undefined' ? window.innerHeight : 800);
 
-    // Lock layout to Visual Viewport to prevent Android Chrome scroll glitches (mobile only)
+    // Visual Viewport: phones only — full vv rect (see chatVisualViewportLock)
     useEffect(() => {
-        if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
-        const vv = window.visualViewport;
-        if (!vv) return;
-        
-        const adjustLayout = () => {
-            if (containerRef.current) {
-                containerRef.current.style.height = `${vv.height}px`;
-                containerRef.current.style.top = `${vv.offsetTop}px`;
-            }
-
-            // Track maximum observed height to dynamically calculate real keyboard height
-            if (vv.height > maxVisibleHeight.current) {
-                maxVisibleHeight.current = vv.height;
-            }
-            
-            // If viewport shrinks significantly, use it as the dynamic keyboard height
-            const currentDiff = maxVisibleHeight.current - vv.height;
-            if (currentDiff > 150) {
-                setKeyboardHeight(currentDiff);
-            }
-
-            window.scrollTo(0, 0);
-        };
-
-        vv.addEventListener('resize', adjustLayout);
-        vv.addEventListener('scroll', adjustLayout);
-        
-        // Block body scroll
-        document.body.style.overflow = 'hidden';
-        document.documentElement.style.overflow = 'hidden';
-        
-        adjustLayout();
-
-        return () => {
-            vv.removeEventListener('resize', adjustLayout);
-            vv.removeEventListener('scroll', adjustLayout);
-            document.body.style.overflow = '';
-            document.documentElement.style.overflow = '';
-        };
+        return attachChatShellToVisualViewport(() => containerRef.current, {
+            onViewportChange(vv) {
+                if (vv.height > maxVisibleHeight.current) {
+                    maxVisibleHeight.current = vv.height;
+                }
+                const currentDiff = maxVisibleHeight.current - vv.height;
+                if (currentDiff > 150) {
+                    setKeyboardHeight(currentDiff);
+                }
+            },
+        });
     }, []);
 
 
@@ -555,8 +513,9 @@ const CommunityChatRoom = () => {
                 </button>
             </header>
 
+            <div className="chat-body-column">
             {/* 2. Message List */}
-            <div className="message-list" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 60}px` : '70px', flex: 1, overflowY: 'auto' }}>
+            <div className="message-list" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 16}px` : '16px', flex: 1, overflowY: 'auto' }}>
                 {messages.map((msg, index) => {
                     const isMe = msg.senderId === currentUser.uid;
                     const isBigEmoji = msg.type === 'emoji-big';
@@ -708,23 +667,46 @@ const CommunityChatRoom = () => {
             </div>
 
 
-            {/* ── COMPOSER (Pixel-perfect locked during animation) ── */}
+            <div className="chat-footer-stack">
+            <div
+                style={{
+                    flexShrink: 0,
+                    height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
+                    overflow: 'hidden',
+                    background: 'var(--bg-card)',
+                    borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
+                }}
+            >
+                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
+                    <LazyEmojiPicker
+                        onEmojiClick={handleEmojiClick}
+                        width="100%"
+                        height={`${keyboardHeight}px`}
+                        searchDisabled={true}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                        categories={[
+                            {
+                                name: 'Smileys & Emotion',
+                                category: 'smileys_people'
+                            }
+                        ]}
+                    />
+                </Suspense>
+            </div>
+
+            {/* ── COMPOSER (in-flow for iOS fixed + visualViewport) ── */}
             <div ref={composerRef} style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                zIndex: 100,
+                flexShrink: 0,
+                width: '100%',
+                boxSizing: 'border-box',
                 background: 'var(--bg-darker)',
-                borderTop: '1px solid var(--border-color)',
+                borderTop: showEmojiPanel ? 'none' : '1px solid var(--border-color)',
                 padding: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-                willChange: 'top, bottom',
-                ...(lockTop !== null 
-                    ? { top: `${lockTop}px`, bottom: 'auto' } 
-                    : { top: 'auto', bottom: showEmojiPanel ? `${keyboardHeight}px` : '0px' })
             }}>
                 {/* Input Wrapper */}
                 <div className="input-wrapper" style={{
@@ -769,39 +751,7 @@ const CommunityChatRoom = () => {
                     <FaPaperPlane style={{ marginInlineStart: '-2px' }} />
                 </button>
             </div>
-
-            {/* ── EMOJI PANEL (Pixel-perfect locked behind keyboard) ── */}
-            <div style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
-                overflow: 'hidden',
-                background: 'var(--bg-card)',
-                borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
-                zIndex: 99,
-                willChange: 'top, bottom',
-                ...(lockTop !== null
-                    ? { top: `${lockTop + (composerRef.current?.offsetHeight || 60)}px`, bottom: 'auto' }
-                    : { top: 'auto', bottom: '0px' })
-                }}
-            >
-                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
-                    <LazyEmojiPicker
-                        onEmojiClick={handleEmojiClick}
-                        width="100%"
-                        height={`${keyboardHeight}px`}
-                        searchDisabled={true}
-                        skinTonesDisabled
-                        previewConfig={{ showPreview: false }}
-                        categories={[
-                            {
-                                name: 'Smileys & Emotion',
-                                category: 'smileys_people'
-                            }
-                        ]}
-                    />
-                </Suspense>
+            </div>
             </div>
 
             {/* Camera Overlay */}

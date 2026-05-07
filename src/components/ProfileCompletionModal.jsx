@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { normalizeUserProfile } from '../utils/userProfileNormalize';
 import { IoMale, IoFemale, IoMaleFemale } from 'react-icons/io5';
 import { FaUser, FaCheckCircle, FaVenusMars, FaBirthdayCake } from 'react-icons/fa';
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
@@ -14,7 +15,7 @@ const ProfileCompletionModal = () => {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const location = useLocation();
-    const { currentUser, userProfile, isGuest, loading, isBusiness } = useAuth();
+    const { currentUser, userProfile, isGuest, loading, isBusiness, profileServerSynced } = useAuth();
     const { isDark } = useTheme();
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +39,7 @@ const ProfileCompletionModal = () => {
         ['admin', 'staff', 'support', 'guest', 'partner', 'business'].includes(roleLc) ||
         String(userProfile?.accountType || '').toLowerCase() === 'business';
     useEffect(() => {
-        if (loading || !userProfile || isGuest || skipForRole) {
+        if (loading || !userProfile || isGuest || skipForRole || !profileServerSynced) {
             setIsOpen(false);
             return;
         }
@@ -63,13 +64,50 @@ const ProfileCompletionModal = () => {
                 gender: userProfile.gender || prev.gender || ''
             }));
 
-            // Short delay to ensure it's not a transient state
-            const timer = setTimeout(() => setIsOpen(true), 1000);
-            return () => clearTimeout(timer);
+            // userProfile can be a stale IndexedDB snapshot while Firestore is already complete.
+            let cancelled = false;
+            const timer = setTimeout(async () => {
+                if (cancelled || !currentUser?.uid) return;
+                try {
+                    const snap = await getDoc(doc(db, 'users', currentUser.uid));
+                    if (cancelled) return;
+                    if (!snap.exists()) {
+                        setIsOpen(true);
+                        return;
+                    }
+                    const normalized = normalizeUserProfile({
+                        id: currentUser.uid,
+                        uid: currentUser.uid,
+                        ...snap.data()
+                    });
+                    const r = String(normalized.role || '').toLowerCase();
+                    if (
+                        normalized.isBusiness ||
+                        normalized.pendingBusinessRegistration ||
+                        normalized.isGuest ||
+                        ['admin', 'staff', 'support', 'partner', 'business'].includes(r) ||
+                        String(normalized.accountType || '').toLowerCase() === 'business'
+                    ) {
+                        setIsOpen(false);
+                        return;
+                    }
+                    if (normalized.isProfileComplete) {
+                        setIsOpen(false);
+                        return;
+                    }
+                    setIsOpen(true);
+                } catch {
+                    if (!cancelled) setIsOpen(false);
+                }
+            }, 450);
+            return () => {
+                cancelled = true;
+                clearTimeout(timer);
+            };
         } else {
             setIsOpen(false);
         }
-    }, [userProfile, loading, isGuest, skipForRole]);
+    }, [userProfile, loading, isGuest, skipForRole, profileServerSynced, currentUser?.uid, location.pathname]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

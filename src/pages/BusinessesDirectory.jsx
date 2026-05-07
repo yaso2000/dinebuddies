@@ -351,7 +351,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const handleCreateInvite = (e) => {
         e.stopPropagation();
         // Corrected route to /create and state structure to match CreateInvitation.jsx
-        navigate('/create', { state: { restaurantData: res } });
+        navigate('/create/manual', { state: { restaurantData: res } });
     };
 
     return (

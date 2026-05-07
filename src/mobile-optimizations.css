@@ -1,71 +1,133 @@
-/* Mobile Optimization Tricks for Native App Feel using DVH units */
+/* Mobile — iOS Safari / PWA: full shell respects safe areas (notch + home indicator) */
 
-/* Fix viewport height to handle dynamic address bars — MOBILE ONLY */
 @media (max-width: 1023px) {
 
-    html,
-    body,
-    #root {
+    /*
+     * One outer inset for the whole app column (header + body + scroll area).
+     * viewport-fit=cover + translucent status bar: content must start below the clock / notch.
+     */
+    /*
+     * Do not use 100dvh on the fixed shell: on iOS standalone it often ends *above*
+     * the physical bottom, leaving an empty strip (home-indicator zone) below the tab bar.
+     * -webkit-fill-available tracks the painted viewport; pair with a normal height chain.
+     */
+    html {
         height: 100%;
-        height: 100dvh;
+        height: -webkit-fill-available;
+        /* iOS: layout height can end above the home-indicator strip; lvh uses the largest viewport box */
+        min-height: 100lvh;
         margin: 0;
         padding: 0;
         overflow: hidden;
-        position: fixed;
-        width: 100%;
     }
 
-    /* The scrollable container inside the fixed viewport */
-    .app-layout {
+    body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        min-height: -webkit-fill-available;
+        min-height: 100lvh;
+        overflow: hidden;
+        position: fixed;
+        inset: 0;
+        box-sizing: border-box;
+    }
+
+    #root {
+        height: 100%;
+        min-height: 100%;
+        min-height: -webkit-fill-available;
+        min-height: 100lvh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        width: 100%;
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        height: 100%;
-        width: 100%;
-        min-height: 0;
-        overflow: hidden;
-        /* Prevent double scrollbars */
+        align-items: stretch;
     }
 
-    /* The actual scrollable content area */
-    .app-main {
-        flex: 1;
+    /* Set in main.jsx — bridges React providers that have no DOM node */
+    .app-root-fill {
+        flex: 1 1 auto;
         min-height: 0;
-        /* Critical: without min-height:0 flex children won't shrink → no wheel/touch scroll */
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .app-layout {
+        --sat: env(safe-area-inset-top, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+        padding-top: var(--sat);
+        padding-right: var(--sar);
+        padding-left: var(--sal);
+        box-sizing: border-box;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        width: 100%;
+        max-width: var(--max-width);
+        margin: 0 auto;
+        overflow: hidden;
+    }
+
+    .app-main {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
         overflow-x: hidden;
-        /* Allow internal scrolling */
         -webkit-overflow-scrolling: touch;
-        /* Smooth scroll on iOS */
         width: 100%;
         position: relative;
         touch-action: pan-y;
     }
 
-    /* Chat screens: remove the bottom-nav padding and lock scroll
-       so only the message-list inside scrolls, not the outer page */
     .app-main--chat {
         padding-bottom: 0 !important;
         min-height: 0 !important;
         overflow: hidden !important;
+        overscroll-behavior: none;
+        touch-action: pan-y;
+    }
+
+    /*
+     * Tab bar: flush to the physical bottom (bottom:0). Safe area only via padding inside the bar.
+     * constant() = legacy iOS; env() = current. Never use bottom: env(safe-area…) — that lifts the bar and leaves a gap.
+     */
+    .bottom-nav {
+        box-sizing: border-box !important;
+        bottom: 0 !important;
+        padding-bottom: constant(safe-area-inset-bottom) !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
+        padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
+        min-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px)) !important;
+        height: auto !important;
+        max-width: none !important;
+        width: 100% !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin: 0 !important;
     }
 }
 
 
-/* Ensure Chat Screens ignore safe-area complications */
 .chat-screen {
     height: 100%;
-    height: 100dvh;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
 
-/* Safe Area Insets for iPhone Notch/Home Bar */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-    .bottom-nav {
-        padding-bottom: env(safe-area-inset-bottom);
-        height: calc(65px + env(safe-area-inset-bottom));
-    }
-
     .chat-screen .input-area {
         padding-bottom: max(10px, env(safe-area-inset-bottom));
     }

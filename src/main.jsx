@@ -59,7 +59,9 @@ function boot() {
         ReactDOM.createRoot(rootEl).render(
             <HelmetProvider>
                 <ErrorBoundary>
-                    <App />
+                    <div className="app-root-fill">
+                        <App />
+                    </div>
                 </ErrorBoundary>
             </HelmetProvider>
         );

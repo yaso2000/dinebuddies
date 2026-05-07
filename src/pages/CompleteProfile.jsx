@@ -14,12 +14,13 @@ import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 import { needsEmailPasswordVerification } from '../utils/emailVerification';
 import { shouldLandOnAdminDashboard } from '../utils/adminAccess';
+import { normalizeUserProfile } from '../utils/userProfileNormalize';
 
 const CompleteProfile = () => {
     const { t } = useTranslation();
     const { showToast } = useToast();
     // Destructure updateProfile from context
-    const { currentUser, userProfile, loading, updateProfile } = useAuth();
+    const { currentUser, userProfile, loading, updateProfile, profileServerSynced } = useAuth();
     const { isDark } = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
@@ -112,6 +113,21 @@ const CompleteProfile = () => {
                 }
                 if (isFullBiz) {
                     navigate('/business-dashboard', { replace: true });
+                    return;
+                }
+                // AuthContext userProfile can lag behind Firestore (persisted cache). Do not flash this
+                // screen when the server document is already complete — use the same snapshot as role checks.
+                if (['admin', 'staff', 'support'].includes(rl)) {
+                    navigate('/', { replace: true });
+                    return;
+                }
+                const normalizedFromServer = normalizeUserProfile({
+                    id: currentUser.uid,
+                    uid: currentUser.uid,
+                    ...data
+                });
+                if (!normalizedFromServer.isBusiness && normalizedFromServer.isProfileComplete) {
+                    navigate('/', { replace: true });
                     return;
                 }
             } catch {
@@ -260,7 +276,7 @@ const CompleteProfile = () => {
         }
     };
 
-    if (loading || (currentUser && !firestoreRoleChecked)) {
+    if (loading || (currentUser && !firestoreRoleChecked) || (currentUser && !profileServerSynced)) {
         return (
             <div style={{ 
                 height: '100vh', 

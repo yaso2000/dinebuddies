@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaVideo, FaStore, FaCamera, FaUpload, FaTrash, FaMagic } from 'react-icons/fa';
+import { FaVideo, FaStore, FaCamera, FaUpload, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import MediaUpload from '../Shared/MediaUpload';
 import UnifiedCamera from '../UnifiedCamera';
@@ -16,20 +16,12 @@ const MediaSelector = ({
     onPersistImage,
     onDeleteLibraryVideo,
     onDeleteLibraryImage,
-    /** When true: two tabs — device upload + AI (no camera / UnifiedCamera). */
-    deviceAndAiTabs = false,
-    /** Scroll user to the inline Magic cover block (CreateInvitation). */
-    onOpenAiStudio,
     initialData = null,
     className = '',
 }) => {
     const { t } = useTranslation();
     /** camera = capture photo/video | upload = image files from device */
     const [source, setSource] = useState(() => {
-        if (deviceAndAiTabs) {
-            if (initialData?.source === 'custom_image') return 'upload';
-            return null;
-        }
         if (initialData?.source === 'custom_video') return 'camera';
         if (initialData?.source === 'custom_image') return 'upload';
         return null;
@@ -43,8 +35,8 @@ const MediaSelector = ({
     }, [parentMediaData]);
 
     useEffect(() => {
-        if (parentMediaData?.type === 'video') setSource(deviceAndAiTabs ? 'upload' : 'camera');
-    }, [parentMediaData?.type, deviceAndAiTabs]);
+        if (parentMediaData?.type === 'video') setSource('camera');
+    }, [parentMediaData?.type]);
 
     /** When editing with an existing uploaded/custom image, show Upload tab + preview. */
     useEffect(() => {
@@ -59,8 +51,8 @@ const MediaSelector = ({
 
     useEffect(() => {
         if (source !== null) return;
-        setSource(deviceAndAiTabs ? 'upload' : 'camera');
-    }, [source, deviceAndAiTabs]);
+        setSource('camera');
+    }, [source]);
 
     const handleSourceChange = (newSource) => {
         setCameraSubMode(null);
@@ -80,7 +72,7 @@ const MediaSelector = ({
     const isVenueSelection = selectedMedia?.source === 'restaurant' || selectedMedia?.source === 'google_place';
     const isUploadSelection = source === 'upload' && selectedMedia?.source === 'custom_image';
     const isCameraPhotoSelection =
-        !deviceAndAiTabs && source === 'camera' && selectedMedia?.source === 'custom_image' && !!selectedMedia?.file;
+        source === 'camera' && selectedMedia?.source === 'custom_image' && !!selectedMedia?.file;
     const isVenueUrlSelected = (url) =>
         isVenueSelection && selectedMedia?.type === 'image' && selectedMedia?.url === url;
 
@@ -280,33 +272,20 @@ const MediaSelector = ({
                     padding: '10px 0',
                 }}
             >
-                {deviceAndAiTabs ? (
-                    <>
-                        <button type="button" onClick={() => handleSourceChange('upload')} style={tabBtnStyle(source === 'upload')}>
-                            <FaUpload />
-                            <span style={{ fontSize: '0.9rem' }}>{t('media_tab_device_upload', { defaultValue: 'From device' })}</span>
-                        </button>
-                        <button type="button" onClick={() => handleSourceChange('ai')} style={tabBtnStyle(source === 'ai')}>
-                            <FaMagic />
-                            <span style={{ fontSize: '0.9rem' }}>{t('media_tab_ai_magic', { defaultValue: 'AI cover' })}</span>
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <button type="button" onClick={() => handleSourceChange('camera')} style={tabBtnStyle(source === 'camera')}>
-                            <FaCamera />
-                            <span style={{ fontSize: '0.9rem' }}>{t('media_tab_camera', 'Camera')}</span>
-                        </button>
-                        <button type="button" onClick={() => handleSourceChange('upload')} style={tabBtnStyle(source === 'upload')}>
-                            <FaUpload />
-                            <span style={{ fontSize: '0.9rem' }}>{t('media_tab_upload_photo', 'Upload photo')}</span>
-                        </button>
-                    </>
-                )}
+                <>
+                    <button type="button" onClick={() => handleSourceChange('camera')} style={tabBtnStyle(source === 'camera')}>
+                        <FaCamera />
+                        <span style={{ fontSize: '0.9rem' }}>{t('media_tab_camera', 'Camera')}</span>
+                    </button>
+                    <button type="button" onClick={() => handleSourceChange('upload')} style={tabBtnStyle(source === 'upload')}>
+                        <FaUpload />
+                        <span style={{ fontSize: '0.9rem' }}>{t('media_tab_upload_photo', 'Upload photo')}</span>
+                    </button>
+                </>
             </div>
 
             <div className="tab-content">
-                {source === 'camera' && !deviceAndAiTabs && (
+                {source === 'camera' && (
                     <div className="custom-video-container">
                         {libraryVideo && (
                             <div style={{ marginBottom: 14 }}>
@@ -570,132 +549,13 @@ const MediaSelector = ({
                     </div>
                 )}
 
-                {source === 'ai' && deviceAndAiTabs && (
-                    <div className="media-selector-ai-tab" style={{ padding: '12px 4px 8px', textAlign: 'center' }}>
-                        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
-                            {t('media_ai_tab_hint', {
-                                defaultValue:
-                                    'Generate a text-free hero, title, message, and theme with Magic cover. We scroll you to the studio above.',
-                            })}
-                        </p>
-                        <button
-                            type="button"
-                            className="ui-btn ui-btn--primary"
-                            onClick={() => onOpenAiStudio?.()}
-                            style={{ width: '100%', maxWidth: 320, margin: '0 auto', fontWeight: 800 }}
-                        >
-                            <FaMagic style={{ marginInlineEnd: 8 }} aria-hidden />
-                            {t('media_open_ai_studio', { defaultValue: 'Open Magic cover studio' })}
-                        </button>
-                    </div>
-                )}
-
                 {source === 'upload' && (
                     <div className="custom-image-container">
-                        {deviceAndAiTabs && libraryVideo && (
-                            <div style={{ marginBottom: 14 }}>
-                                <p
-                                    style={{
-                                        fontSize: '0.85rem',
-                                        color: 'var(--text-muted)',
-                                        marginBottom: 10,
-                                        lineHeight: 1.45,
-                                    }}
-                                >
-                                    {t('video_library_hint', {
-                                        defaultValue:
-                                            'Your selfie video is saved. Tap to use it on the card, or delete it permanently to use a different video.',
-                                    })}
-                                </p>
-                                <div
-                                    style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                                        gap: 10,
-                                    }}
-                                >
-                                    <div
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            selectLibraryVideo();
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') selectLibraryVideo();
-                                        }}
-                                        style={{
-                                            position: 'relative',
-                                            borderRadius: 12,
-                                            overflow: 'hidden',
-                                            height: 120,
-                                            cursor: 'pointer',
-                                            border: isLibraryTileSelected ? '3px solid var(--primary)' : '2px solid var(--border-color)',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                                            background: '#111',
-                                        }}
-                                    >
-                                        <img
-                                            src={libraryVideo.thumbnailUrl}
-                                            alt=""
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                bottom: 0,
-                                                left: 0,
-                                                right: 0,
-                                                padding: '6px 8px',
-                                                background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
-                                                color: '#fff',
-                                                fontSize: '0.72rem',
-                                                fontWeight: 800,
-                                            }}
-                                        >
-                                            {t('selfie_video', { defaultValue: 'Selfie video' })}
-                                        </div>
-                                        {onDeleteLibraryVideo && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onDeleteLibraryVideo();
-                                                }}
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: 8,
-                                                    right: 8,
-                                                    background: 'rgba(220,38,38,0.92)',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 10,
-                                                    padding: '6px 10px',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: 800,
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 6,
-                                                }}
-                                                title={t('delete_video_permanent', { defaultValue: 'Delete video permanently' })}
-                                            >
-                                                <FaTrash size={12} /> {t('delete', { defaultValue: 'Delete' })}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12, textAlign: 'center' }}>
-                            {t(
-                                deviceAndAiTabs ? 'upload_photo_device_ai_hint' : 'upload_photo_only_hint',
-                                {
-                                    defaultValue: deviceAndAiTabs
-                                        ? 'Pick an image from your gallery. For AI-generated art, use the AI cover tab.'
-                                        : 'Choose an image from your device. Videos are not accepted here — use the Camera tab to record.',
-                                }
-                            )}
+                            {t('upload_photo_only_hint', {
+                                defaultValue:
+                                    'Choose an image from your device. Videos are not accepted here — use the Camera tab to record.',
+                            })}
                         </p>
                         {libraryImages.length > 0 && (
                             <div style={{ marginBottom: 14 }}>

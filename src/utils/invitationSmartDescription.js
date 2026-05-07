@@ -91,51 +91,6 @@ function computeInvitationNarrativeContext(formData, ctx) {
 }
 
 /**
- * Plain object for POST /api/generate-image with body.mode headline_suggestions (null = omit in AI prompt).
- * @param {object} formData
- * @param {object} ctx — same as buildSmartInvitationDescription
- */
-/** Minimal structured hints for Magic Cover — full invitation context comes from userBrief + userPreferences. */
-export function buildMagicCoverHints(formData, ctx) {
-    const { language = 'en' } = ctx;
-    const c = computeInvitationNarrativeContext(formData, ctx);
-    return {
-        language: String(language).slice(0, 12),
-        hostName: c.hostName,
-    };
-}
-
-export function buildInvitationAiPayload(formData, ctx) {
-    const { t, language = 'en', options = defaultSmartBioOptions() } = ctx;
-    const o = options;
-    const c = computeInvitationNarrativeContext(formData, ctx);
-
-    const whenForAi =
-        o.includeDateTime && c.whenLine && c.whenLine !== c.tbd ? c.whenLine : null;
-
-    let guestsNeeded = null;
-    if (o.includeGuests && c.guestsNeeded != null && c.guestsNeeded !== '') {
-        const n = Number(c.guestsNeeded);
-        guestsNeeded = Number.isFinite(n) ? n : null;
-    }
-
-    return {
-        language: String(language).slice(0, 12),
-        hostName: c.hostName,
-        venueName: c.venueDisplay,
-        title: o.includeTitle && (c.title || '').trim() ? (c.title || '').trim() : null,
-        city: o.includeCity && (c.city || '').trim() ? (c.city || '').trim() : null,
-        locationDetail: (c.location || '').trim() ? (c.location || '').trim().slice(0, 220) : null,
-        whenLine: whenForAi,
-        venueType: o.includeVenueType ? (c.type || 'Restaurant') : null,
-        genderSummary: o.includeGender ? c.inviteesGenderSummary : null,
-        ageSummary: o.includeAge ? c.ageSummary : null,
-        guestsNeeded,
-        paymentType: o.includePayment && c.paymentType ? String(c.paymentType) : null
-    };
-}
-
-/**
  * @param {object} formData — CreateInvitation form slice
  * @param {object} ctx
  * @param {Function} ctx.t — i18n t

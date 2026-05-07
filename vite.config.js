@@ -119,57 +119,6 @@ const devOperations = () => ({
                 devUrl = null
             }
 
-            // Proxy /api/generate-image to a deployed Vercel origin (Gemini + Admin on server; not bundled in Vite).
-            if (req.method === 'POST' && devUrl && devUrl.pathname === '/api/generate-image') {
-                const env = loadEnv(process.env.MODE || 'development', process.cwd(), '')
-                const apiOrigin = String(
-                    env.VITE_DEV_VERCEL_API_ORIGIN ||
-                    process.env.VITE_DEV_VERCEL_API_ORIGIN ||
-                    ''
-                ).trim().replace(/\/$/, '')
-                if (!apiOrigin) {
-                    res.statusCode = 503
-                    res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({
-                        code: 'dev_api_unavailable',
-                        message: 'Set VITE_DEV_VERCEL_API_ORIGIN (e.g. https://your-app.vercel.app) in .env.development to proxy AI routes, or run `vercel dev`.'
-                    }))
-                    return
-                }
-                const chunks = []
-                for await (const chunk of req) chunks.push(chunk)
-                const rawBody = Buffer.concat(chunks)
-                const authHeader = req.headers.authorization
-                if (!authHeader || !String(authHeader).startsWith('Bearer ')) {
-                    res.statusCode = 401
-                    res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ message: 'Authentication required.', code: 'unauthenticated' }))
-                    return
-                }
-                try {
-                    const upstream = await fetch(`${apiOrigin}/api/generate-image`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: authHeader
-                        },
-                        body: rawBody
-                    })
-                    const buf = Buffer.from(await upstream.arrayBuffer())
-                    res.statusCode = upstream.status
-                    const ct = upstream.headers.get('content-type')
-                    if (ct) res.setHeader('Content-Type', ct)
-                    res.end(buf)
-                    return
-                } catch (e) {
-                    console.error('Dev /api/generate-image proxy:', e)
-                    res.statusCode = 500
-                    res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ message: e?.message || 'Proxy error', code: 'internal' }))
-                    return
-                }
-            }
-
             if (req.method === 'GET') {
                 let url
                 try {

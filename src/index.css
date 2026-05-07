@@ -497,21 +497,75 @@ body {
   }
 }
 
-/* Chat shells: mobile = fixed fullscreen; desktop = in-flow (no viewport-fixed layer) */
+/*
+ * Mobile chat shell: CSS sets fixed + safe-area as fallback; JS pins left/top/width/height to
+ * visualViewport on resize so the shell shrinks above the keyboard (iOS + Android).
+ */
 @media (max-width: 1023px) {
 
   .chat-root.chat-container,
   .invitation-chat-root.chat-screen,
   .community-chat-root.chat-room-container {
     position: fixed;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
     z-index: 50;
-    width: 100%;
-    max-height: 100dvh;
+    box-sizing: border-box;
+    overscroll-behavior: none;
+    touch-action: pan-y;
+    left: env(safe-area-inset-left, 0px);
+    right: env(safe-area-inset-right, 0px);
+    top: env(safe-area-inset-top, 0px);
+    bottom: env(safe-area-inset-bottom, 0px);
+    width: auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   }
+
+  .chat-root.chat-container>.chat-body-column,
+  .community-chat-root>.chat-body-column,
+  .invitation-chat-root>.chat-body-column {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .chat-root .messages-area,
+  .community-chat-root .message-list,
+  .invitation-chat-root .message-list {
+    overscroll-behavior: contain;
+  }
+
+  .invitation-chat-root>header.chat-header {
+    flex-shrink: 0;
+  }
+
+  /* In-flow header (do not use sticky/fixed here — iOS keyboard + fixed shell breaks layout). */
+  .chat-root.chat-container>.chat-header,
+  .community-chat-root>.chat-header {
+    position: relative;
+    top: auto;
+  }
+}
+
+/* Chat composer + emoji: in-flow column at bottom */
+.chat-footer-stack {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+  z-index: 100;
 }
 
 @media (min-width: 1024px) {
@@ -526,7 +580,10 @@ body {
     bottom: auto !important;
     z-index: auto !important;
     width: 100% !important;
+    height: auto !important;
     max-height: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
   }
 }
 
@@ -2923,11 +2980,6 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 
   .app-main--admin > * {
     max-width: 100% !important;
-  }
-
-  /* AI Marketing Studio: two-column composer + preview needs real width */
-  .app-main > .page-container.ai-marketing-studio {
-    max-width: min(1180px, 100%) !important;
   }
 
   /* Chat / fullscreen routes: let the shell fill vertical space */

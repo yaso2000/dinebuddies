@@ -39,6 +39,14 @@ const VenueLocationPicker = ({
     const wrapperRef = useRef(null);
     const debounceRef = useRef(null);
 
+    // When parent prefills `location` (offers, deep links), mirror it into the DineBuddies field.
+    useEffect(() => {
+        if (source !== 'dinebuddies') return;
+        const v = String(value ?? '').trim();
+        if (!v) return;
+        setDbQuery((prev) => (String(prev ?? '').trim() === v ? prev : String(value ?? '')));
+    }, [source, value]);
+
     // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (e) => {

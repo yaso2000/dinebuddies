@@ -4,7 +4,7 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
-import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope, FaMagic, FaStore } from 'react-icons/fa';
+import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import './MyCommunity.css';
@@ -317,23 +317,6 @@ const MyCommunity = () => {
                             ))}
                         </ul>
                     )}
-                </div>
-            </div>
-
-            <div className="my-community-section">
-                <div className="my-community-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                        <h3 style={{ margin: '0 0 6px', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <FaMagic style={{ color: '#8b5cf6' }} />
-                            {t('ai_motion_studio_card_title', 'AI & Motion posts')}
-                        </h3>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                            {t('ai_motion_studio_card_desc', 'Create animated marketing posts and AI-generated copy on a separate page.')}
-                        </p>
-                    </div>
-                    <button type="button" onClick={() => navigate('/ai-marketing-studio')} className="my-community-btn my-community-btn--post">
-                        {t('open_ai_marketing_studio', 'Open AI studio')}
-                    </button>
                 </div>
             </div>
 

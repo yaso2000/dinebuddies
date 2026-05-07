@@ -19,6 +19,7 @@ import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from 
 import NewReportModal from '../components/NewReportModal';
 import SharedContentBubble from '../components/SharedContentBubble';
 import './Chat.css';
+import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -74,57 +75,26 @@ const Chat = () => {
     // Dynamic Viewport & Emoji States
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     const [keyboardHeight, setKeyboardHeight] = useState(320);
-    const [lockTop, setLockTop] = useState(null);
     const containerRef = useRef(null);
     const composerRef = useRef(null);
     const maxVisibleHeight = useRef(typeof window !== 'undefined' ? window.innerHeight : 800);
 
-    // Visual Viewport tracking (mobile only — avoids locking body scroll on desktop)
+    // Visual Viewport: phones only — full vv rect + clear right/bottom (see chatVisualViewportLock)
     useEffect(() => {
-        if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
-        if (!window.visualViewport) return;
-        const vv = window.visualViewport;
-
-        const handleResize = () => {
-            if (containerRef.current) {
-                containerRef.current.style.height = `${vv.height}px`;
-                containerRef.current.style.top = `${vv.offsetTop}px`;
-            }
-
-            if (vv.height > maxVisibleHeight.current) {
-                maxVisibleHeight.current = vv.height;
-            }
-
-            const diff = maxVisibleHeight.current - vv.height;
-            if (diff > 150) {
-                setKeyboardHeight(diff);
-            }
-
-            window.scrollTo(0, 0);
-        };
-
-        vv.addEventListener('resize', handleResize);
-        vv.addEventListener('scroll', handleResize);
-        handleResize();
-
-        document.body.style.overflow = 'hidden';
-        document.documentElement.style.overflow = 'hidden';
-
-        return () => {
-            vv.removeEventListener('resize', handleResize);
-            vv.removeEventListener('scroll', handleResize);
-            document.body.style.overflow = '';
-            document.documentElement.style.overflow = '';
-        };
+        return attachChatShellToVisualViewport(() => containerRef.current, {
+            onViewportChange(vv) {
+                if (vv.height > maxVisibleHeight.current) {
+                    maxVisibleHeight.current = vv.height;
+                }
+                const diff = maxVisibleHeight.current - vv.height;
+                if (diff > 150) {
+                    setKeyboardHeight(diff);
+                }
+            },
+        });
     }, []);
 
     const handleEmojiToggle = () => {
-        if (!composerRef.current || !containerRef.current) return;
-        
-        const rect = composerRef.current.getBoundingClientRect();
-        const containerRect = containerRef.current.getBoundingClientRect();
-        setLockTop(rect.top - containerRect.top);
-
         if (showEmojiPanel) {
             setShowEmojiPanel(false);
             inputRef.current?.focus();
@@ -132,10 +102,6 @@ const Chat = () => {
             setShowEmojiPanel(true);
             inputRef.current?.blur();
         }
-
-        setTimeout(() => {
-            setLockTop(null);
-        }, 400);
     };
 
     const handleEmojiClick = (emojiData) => {
@@ -523,8 +489,9 @@ const Chat = () => {
                 <button className="options-btn" style={{ color: 'var(--text-main)' }}><FaEllipsisV /></button>
             </div>
 
+            <div className="chat-body-column">
             {/* Messages */}
-            <div className="messages-area" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 80}px` : '80px' }}>
+            <div className="messages-area" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 16}px` : '16px' }}>
                 {messages.map((msg, index) => {
                     const isOwn = msg.senderId === currentUser?.uid;
                     const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
@@ -706,24 +673,43 @@ const Chat = () => {
                 )
             }
 
-            {/* ── COMPOSER (Pixel-perfect locked) ── */}
+            <div className="chat-footer-stack">
+            {/* Emoji above composer in column order */}
+            <div
+                style={{
+                    flexShrink: 0,
+                    height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
+                    overflow: 'hidden',
+                    background: 'var(--bg-card)',
+                    borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
+                }}
+            >
+                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
+                    <LazyEmojiPicker
+                        onEmojiClick={handleEmojiClick}
+                        width="100%"
+                        height={`${keyboardHeight}px`}
+                        searchDisabled={true}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                        categories={[{ name: 'Smileys & Emotion', category: 'smileys_people' }]}
+                    />
+                </Suspense>
+            </div>
+
+            {/* ── COMPOSER (in-flow: reliable with iOS fixed + visualViewport) ── */}
             <div ref={composerRef} style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                zIndex: 100,
+                flexShrink: 0,
+                width: '100%',
+                boxSizing: 'border-box',
                 background: 'var(--bg-darker)',
-                borderTop: '1px solid var(--border-color)',
+                borderTop: showEmojiPanel ? 'none' : '1px solid var(--border-color)',
                 padding: '8px',
                 display: 'flex',
                 flexDirection: messagingRestricted ? 'column' : 'row',
                 alignItems: 'center',
                 gap: '8px',
                 paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-                willChange: 'top, bottom',
-                ...(lockTop !== null 
-                    ? { top: `${lockTop}px`, bottom: 'auto' } 
-                    : { top: 'auto', bottom: showEmojiPanel ? `${keyboardHeight}px` : '0px' })
             }}>
                 {messagingRestricted && (
                     <div style={{
@@ -801,34 +787,7 @@ const Chat = () => {
                     {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />)}
                 </button>
             </div>
-
-            {/* ── EMOJI PANEL ── */}
-            <div style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
-                overflow: 'hidden',
-                background: 'var(--bg-card)',
-                borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
-                zIndex: 99,
-                willChange: 'top, bottom',
-                ...(lockTop !== null
-                    ? { top: `${lockTop + (composerRef.current?.offsetHeight || 60)}px`, bottom: 'auto' }
-                    : { top: 'auto', bottom: '0px' })
-                }}
-            >
-                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
-                    <LazyEmojiPicker
-                        onEmojiClick={handleEmojiClick}
-                        width="100%"
-                        height={`${keyboardHeight}px`}
-                        searchDisabled={true}
-                        skinTonesDisabled
-                        previewConfig={{ showPreview: false }}
-                        categories={[{ name: 'Smileys & Emotion', category: 'smileys_people' }]}
-                    />
-                </Suspense>
+            </div>
             </div>
         </div>
     );

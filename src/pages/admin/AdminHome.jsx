@@ -147,14 +147,6 @@ const AdminHome = () => {
                         </Link>
                     </>
                 )}
-                {typeof agg?.invitationAiImageCreditCost === 'number' && (
-                    <>
-                        <br />
-                        <span style={{ display: 'inline-block', marginTop: '0.35rem' }}>
-                            {t('admin_home_ai_cover_cost', { cost: agg.invitationAiImageCreditCost })}
-                        </span>
-                    </>
-                )}
             </p>
 
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>

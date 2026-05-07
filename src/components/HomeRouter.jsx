@@ -10,7 +10,7 @@ import { isAdminIdentity, shouldLandOnAdminDashboard } from '../utils/adminAcces
 const MOBILE_MQ = '(max-width: 768px)';
 
 const HomeRouter = () => {
-    const { currentUser, userProfile, loading } = useAuth();
+    const { currentUser, userProfile, loading, profileServerSynced } = useAuth();
     const [isMobile, setIsMobile] = useState(() =>
         typeof window !== 'undefined' ? window.matchMedia(MOBILE_MQ).matches : false
     );
@@ -64,6 +64,9 @@ const HomeRouter = () => {
         );
 
         if (!isComplete) {
+            if (!profileServerSynced) {
+                return <AppRouteLoading variant="profile" />;
+            }
             return <Navigate to="/complete-profile" replace />;
         }
 

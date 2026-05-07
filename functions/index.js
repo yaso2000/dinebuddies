@@ -1751,13 +1751,6 @@ exports.adminGetDashboardStats = functions.https.onCall(async (_data, context) =
         db.collection('private_invitations').count().get(),
         db.collection('reports').where('status', '==', 'pending').count().get(),
     ]);
-    const rawCost = process.env.INVITATION_AI_IMAGE_CREDIT_COST;
-    let invitationAiImageCreditCost = 5;
-    if (rawCost !== undefined && rawCost !== null && String(rawCost).trim() !== '') {
-        const n = Math.floor(Number(rawCost));
-        if (Number.isFinite(n) && n >= 0) invitationAiImageCreditCost = n;
-    }
-
     return {
         success: true,
         usersTotal: totalAgg.data().count,
@@ -1767,7 +1760,6 @@ exports.adminGetDashboardStats = functions.https.onCall(async (_data, context) =
         invitationsPublic: invPub.data().count,
         invitationsPrivate: invPriv.data().count,
         reportsPending: repPend.data().count,
-        invitationAiImageCreditCost,
     };
 });
 

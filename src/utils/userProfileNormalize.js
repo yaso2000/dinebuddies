@@ -49,7 +49,7 @@ export function normalizeUserProfile(data) {
                 : isBusiness
                     ? true
                     : data.isProfileComplete === true || (
-                        (data.displayName || data.display_name) &&
+                        (data.displayName || data.display_name || data.nickname) &&
                         data.gender &&
                         (data.ageCategory || data.age)
                     )

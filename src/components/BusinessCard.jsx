@@ -34,7 +34,7 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
 
     const handleCreateInvitation = (e) => {
         e.stopPropagation();
-        navigate('/create', {
+        navigate('/create/manual', {
             state: {
                 restaurantData: {
                     id: business.uid,

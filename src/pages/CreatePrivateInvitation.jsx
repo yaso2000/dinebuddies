@@ -5,7 +5,7 @@ import {
     FaClock, FaUserFriends, FaLock, FaChevronLeft, FaSearch,
     FaMoneyBillWave, FaUsers, FaBriefcase,
     FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
-    FaStar, FaHome, FaFilm, FaFutbol, FaFire, FaMagic
+    FaStar, FaHome, FaFilm, FaFutbol, FaFire
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -25,17 +25,14 @@ import { resolveVenueCountryIso } from '../utils/countryIso';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
 import PrivateCardBackgroundPicker from '../components/Invitations/privateCard/PrivateCardBackgroundPicker';
 import PrivateCardFontPicker from '../components/Invitations/privateCard/PrivateCardFontPicker';
-import PrivateAiCoverVariants from '../components/Invitations/privateCard/PrivateAiCoverVariants';
 import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
 import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
 import { resolveOccasionCategoryId } from '../components/Invitations/privateCard/privateCardOccasionMap';
 import { getCardBackgroundOptions } from '../components/Invitations/privateCard/privateCardBackgrounds';
-import { callGenerateInvitationImage } from '../utils/callGenerateInvitationImage';
-import { createAiInvitationCoverMediaData } from '../utils/createAiInvitationCoverMediaData';
 import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 
 const CreatePrivateInvitation = () => {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const { addPrivateInvitation, currentUser, canCreatePrivateInvitation } = useInvitations();
@@ -57,9 +54,6 @@ const CreatePrivateInvitation = () => {
     const [existingDraftId, setExistingDraftId] = useState(null);
     const [cardFontId, setCardFontId] = useState(DEFAULT_FONT_ID);
     const [cardBackgroundId, setCardBackgroundId] = useState(null);
-    const [aiCoverItems, setAiCoverItems] = useState(null);
-    const [selectedAiVariantIndex, setSelectedAiVariantIndex] = useState(0);
-    const [showAiCoverModal, setShowAiCoverModal] = useState(false);
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
     const editInvitation = location.state?.editInvitation;
@@ -195,22 +189,6 @@ const CreatePrivateInvitation = () => {
         detectLocation();
     }, [restaurantData, userProfile]);
 
-    useEffect(() => {
-        if (!showAiCoverModal) return undefined;
-        const onKeyDown = (e) => {
-            if (e.key === 'Escape' && !magicImageLoading) {
-                setShowAiCoverModal(false);
-            }
-        };
-        document.addEventListener('keydown', onKeyDown);
-        const prevOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.removeEventListener('keydown', onKeyDown);
-            document.body.style.overflow = prevOverflow;
-        };
-    }, [showAiCoverModal, magicImageLoading]);
-
     const handleLocationSelect = (placeData) => {
         setFormData(prev => ({
             ...prev,
@@ -315,142 +293,6 @@ const CreatePrivateInvitation = () => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
-
-    const canUsePrivateMagicCover =
-        Boolean(String(formData.date || '').trim()) &&
-        Boolean(String(formData.time || '').trim()) &&
-        Boolean(String(formData.occasionType || '').trim()) &&
-        Boolean(String(formData.location || '').trim()) &&
-        Boolean(String(formData.title || '').trim()) &&
-        Boolean(String(formData.description || '').trim());
-
-    const handleSelectAiVariant = async (index) => {
-        const slot = aiCoverItems?.[index];
-        if (!slot?.mimeType || !slot?.dataBase64) return;
-        setSelectedAiVariantIndex(index);
-        try {
-            const mediaPayload = await createAiInvitationCoverMediaData(slot);
-            setMediaData(mediaPayload);
-        } catch (err) {
-            showToast(err.message || t('invitation_magic_image_error'), 'error');
-        }
-    };
-
-    const handleMagicThreeCovers = async () => {
-        if (!authUser || currentUser?.id === 'guest') {
-            showToast(t('login_to_create') || 'Please sign in', 'error');
-            goToLogin();
-            return;
-        }
-        if (!canUsePrivateMagicCover) {
-            showToast(
-                t('private_magic_requires_title_location', {
-                    defaultValue:
-                        'Complete date, time, occasion, location, title, and your message before using AI.',
-                }),
-                'error'
-            );
-            return;
-        }
-        setMagicImageLoading(true);
-        setAiCoverItems(null);
-        const basePrompt =
-            [formData.title, formData.location, formData.restaurantName, formData.description]
-                .filter((x) => String(x || '').trim())
-                .join(' — ')
-                .slice(0, 2400) ||
-            `${String(formData.occasionType || 'social')} private invitation`;
-        const style = String(formData.occasionType || '').trim() || 'private invitation';
-        const lang = typeof i18n.language === 'string' ? i18n.language.split('-')[0] : 'en';
-        const lanes = [
-            t('private_magic_variant_lane_a', {
-                defaultValue:
-                    'Vertical 9:16 mobile hero — warm intimate candlelit social dining, soft gold light, elegant depth, no text.',
-            }),
-            t('private_magic_variant_lane_b', {
-                defaultValue:
-                    'Vertical 9:16 mobile hero — stylish night-out energy, tasteful neon accents, premium nightlife mood, no text.',
-            }),
-            t('private_magic_variant_lane_c', {
-                defaultValue:
-                    'Vertical 9:16 mobile hero — fresh airy daytime brunch or patio, botanical hints, natural soft light, no text.',
-            }),
-        ];
-        try {
-            const settled = await Promise.allSettled(
-                [0, 1, 2].map((i) =>
-                    callGenerateInvitationImage({
-                        prompt: basePrompt,
-                        style,
-                        coverAspectRatio: '9:16',
-                        language: lang,
-                        userBrief: lanes[i],
-                        hints: {
-                            privateCoverVariant: i + 1,
-                            invitationKind: 'private',
-                        },
-                    })
-                )
-            );
-            const next = settled.map((s) => {
-                if (s.status !== 'fulfilled') return null;
-                const v = s.value;
-                if (v?.dataBase64 && v?.mimeType) {
-                    return { mimeType: v.mimeType, dataBase64: v.dataBase64 };
-                }
-                return null;
-            });
-            setAiCoverItems(next);
-            const ok = next.filter(Boolean).length;
-            if (ok === 3) {
-                showToast(t('private_magic_three_success_all'), 'success');
-            } else if (ok > 0) {
-                showToast(
-                    t('private_magic_three_success_partial', { count: ok, total: 3 }),
-                    'success'
-                );
-            } else {
-                const firstErr = settled.find((s) => s.status === 'rejected');
-                const code = firstErr?.status === 'rejected' ? firstErr.reason?.code : null;
-                if (code === 'insufficient_credits') {
-                    showToast(t('invitation_magic_image_insufficient'), 'error');
-                } else {
-                    showToast(
-                        firstErr?.status === 'rejected'
-                            ? firstErr.reason?.message || t('invitation_magic_image_error')
-                            : t('invitation_magic_image_error'),
-                        'error'
-                    );
-                }
-            }
-        } catch (e) {
-            if (e.code === 'insufficient_credits') {
-                showToast(t('invitation_magic_image_insufficient'), 'error');
-            } else {
-                showToast(e.message || t('invitation_magic_image_error'), 'error');
-            }
-        } finally {
-            setMagicImageLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!aiCoverItems || magicImageLoading) return;
-        const idx = aiCoverItems.findIndex((x) => x != null);
-        if (idx < 0) return;
-        setSelectedAiVariantIndex(idx);
-        let cancelled = false;
-        createAiInvitationCoverMediaData(aiCoverItems[idx])
-            .then((m) => {
-                if (!cancelled) setMediaData(m);
-            })
-            .catch(() => {
-                if (!cancelled) showToast(t('invitation_magic_image_error'), 'error');
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [aiCoverItems, magicImageLoading]);
 
     const handlePreview = async (e) => {
         e.preventDefault();
@@ -771,84 +613,26 @@ const CreatePrivateInvitation = () => {
                         </div>
                     </div>
 
-                    {/* 5) Cover media — manual upload + AI (AI opens in floating sheet) */}
+                    {/* 5) Cover media */}
                     <div className="private-section-card private-section-card--media mb-4">
                         <h3 className="private-section-card__title">
                             <span aria-hidden>🎬</span>{' '}
                             {t('private_section_five_media_title', { defaultValue: 'Cover media' })}
                         </h3>
                         <p className="private-section-card__hint">
-                            {t('private_section_five_media_hint', {
-                                defaultValue:
-                                    'Add a photo or video yourself, or open the AI studio to generate three vertical cover options.',
+                            {t('private_section_media_hint', {
+                                defaultValue: 'Upload your own image or video for the invitation.',
                             })}
                         </p>
-
-                        <div className="private-media-split">
-                            <div className="private-media-split__panel private-media-split__panel--manual">
-                                <h4 className="private-media-split__subtitle">
-                                    {t('private_media_manual_title', { defaultValue: 'Manual upload' })}
-                                </h4>
-                                <p className="private-media-split__micro">
-                                    {t('private_section_media_hint', {
-                                        defaultValue:
-                                            'Upload your own image or video for the invitation. You can publish without using AI.',
-                                    })}
-                                </p>
-                                <MediaSelector
-                                    restaurant={{
-                                        image: formData.restaurantImage || formData.image,
-                                        restaurantImage: formData.restaurantImage || formData.image,
-                                        name: formData.restaurantName
-                                    }}
-                                    mediaData={mediaData}
-                                    onMediaSelect={(data) => setMediaData(data)}
-                                />
-                            </div>
-
-                            {authUser && currentUser?.id !== 'guest' ? (
-                                <div className="private-media-split__panel private-media-split__panel--ai">
-                                    <h4 className="private-media-split__subtitle">
-                                        <FaMagic style={{ marginInlineEnd: 6, opacity: 0.9 }} aria-hidden />
-                                        {t('private_media_ai_title', { defaultValue: 'AI covers' })}
-                                        <span className="private-media-split__badge">
-                                            {t('private_section_ai_optional_badge', { defaultValue: 'Optional' })}
-                                        </span>
-                                    </h4>
-                                    <p className="private-media-split__micro">
-                                        {t('private_media_ai_blurb', {
-                                            defaultValue:
-                                                'Opens a floating studio. Three 9:16 options; tap one to set as your cover.',
-                                        })}
-                                    </p>
-                                    <button
-                                        type="button"
-                                        className="private-media-split__open-ai"
-                                        onClick={() => setShowAiCoverModal(true)}
-                                        disabled={!canUsePrivateMagicCover}
-                                        title={
-                                            !canUsePrivateMagicCover
-                                                ? t('private_magic_requires_title_location', {
-                                                      defaultValue:
-                                                          'Complete date, time, occasion, location, title, and your message before using AI.',
-                                                  })
-                                                : undefined
-                                        }
-                                    >
-                                        <FaMagic aria-hidden style={{ marginInlineEnd: 8 }} />
-                                        {t('private_media_open_ai_modal', { defaultValue: 'Open AI studio' })}
-                                    </button>
-                                    {!canUsePrivateMagicCover ? (
-                                        <p className="private-section-card__ai-warn private-media-split__warn">
-                                            {t('private_magic_requires_title_location', {
-                                                defaultValue:
-                                                    'Complete date, time, occasion, location, title, and your message before using AI.',
-                                            })}
-                                        </p>
-                                    ) : null}
-                                </div>
-                            ) : null}
-                        </div>
+                        <MediaSelector
+                            restaurant={{
+                                image: formData.restaurantImage || formData.image,
+                                restaurantImage: formData.restaurantImage || formData.image,
+                                name: formData.restaurantName
+                            }}
+                            mediaData={mediaData}
+                            onMediaSelect={(data) => setMediaData(data)}
+                        />
                     </div>
 
                     {/* Payment Type */}
@@ -991,84 +775,6 @@ const CreatePrivateInvitation = () => {
                 </form>
             </div>
 
-            {showAiCoverModal && authUser && currentUser?.id !== 'guest' ? (
-                <div
-                    className="private-ai-modal-backdrop"
-                    role="presentation"
-                    onClick={() => {
-                        if (!magicImageLoading) setShowAiCoverModal(false);
-                    }}
-                >
-                    <div
-                        className="private-ai-modal-panel"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="private-ai-modal-title"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="private-ai-modal-header">
-                            <h2 id="private-ai-modal-title" className="private-ai-modal-title">
-                                {t('private_ai_modal_title', { defaultValue: 'AI cover studio' })}
-                            </h2>
-                            <button
-                                type="button"
-                                className="private-ai-modal-close"
-                                disabled={magicImageLoading}
-                                onClick={() => setShowAiCoverModal(false)}
-                                aria-label={t('close', { defaultValue: 'Close' })}
-                            >
-                                <FaTimes />
-                            </button>
-                        </div>
-                        <div className="private-ai-modal-body">
-                            <p className="private-section-card__ai-intro private-ai-modal-intro">
-                                {t('private_magic_three_intro', {
-                                    defaultValue:
-                                        'We generate three vertical (9:16) covers suited for phones. Tap a thumbnail to use it as your invitation cover.',
-                                })}
-                            </p>
-                            <p className="private-section-card__ai-note private-ai-modal-note">
-                                {t('private_magic_replaces_cover_note', {
-                                    defaultValue:
-                                        'When generation succeeds, it fills the same cover slot as your manual upload (you can switch back by picking media again).',
-                                })}
-                            </p>
-                            <button
-                                type="button"
-                                className="private-section-card__ai-cta private-ai-modal-generate"
-                                onClick={handleMagicThreeCovers}
-                                disabled={magicImageLoading || !canUsePrivateMagicCover}
-                            >
-                                <FaMagic aria-hidden style={{ marginInlineEnd: 6 }} />
-                                {magicImageLoading
-                                    ? t('invitation_magic_image_loading')
-                                    : t('private_magic_generate_three', { defaultValue: 'Generate 3 covers' })}
-                            </button>
-                            {!canUsePrivateMagicCover ? (
-                                <p className="private-section-card__ai-warn">
-                                    {t('private_magic_requires_title_location', {
-                                        defaultValue:
-                                            'Complete date, time, occasion, location, title, and your message before using AI.',
-                                    })}
-                                </p>
-                            ) : null}
-                            <p className="private-section-card__ai-credits">
-                                {t('private_magic_three_credits', {
-                                    defaultValue:
-                                        'Up to three credits may be charged (one per successful image). Optional — not required to publish.',
-                                })}
-                            </p>
-                            <PrivateAiCoverVariants
-                                loading={magicImageLoading}
-                                items={aiCoverItems}
-                                selectedIndex={selectedAiVariantIndex}
-                                onSelect={handleSelectAiVariant}
-                                dir={i18n.dir()}
-                            />
-                        </div>
-                    </div>
-                </div>
-            ) : null}
         </div>
     );
 };
