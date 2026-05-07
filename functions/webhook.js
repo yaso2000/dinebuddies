@@ -94,21 +94,19 @@ async function handleDineCreditsPurchase(session) {
     const packageId = String(session.metadata?.packageId || '');
 
     if (!userId || !Number.isFinite(credits) || credits <= 0) {
-        console.error('Invalid dine credits checkout metadata', session.metadata);
-        return;
+        throw new Error(`Invalid dine credits checkout metadata for session ${session.id}`);
     }
 
     const fulfillRef = db.collection('stripe_dine_credit_fulfillments').doc(session.id);
     const userRef = db.collection('users').doc(userId);
 
-    await db.runTransaction(async (tx) => {
+    const granted = await db.runTransaction(async (tx) => {
         const done = await tx.get(fulfillRef);
-        if (done.exists) return;
+        if (done.exists) return false;
 
         const snap = await tx.get(userRef);
         if (!snap.exists) {
-            console.error('User not found for dine credits:', userId);
-            return;
+            throw new Error(`User ${userId} not found for dine credits session ${session.id}`);
         }
         const d = snap.data();
         const accountRole = isBusinessUserDoc(d) ? 'business' : 'user';
@@ -126,9 +124,14 @@ async function handleDineCreditsPurchase(session) {
             packageId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        return true;
     });
 
-    console.log(`✅ Granted ${credits} dine credits to ${userId}`);
+    if (granted) {
+        console.log(`✅ Granted ${credits} dine credits to ${userId}`);
+    } else {
+        console.log(`ℹ️ Dine credits session already fulfilled: ${session.id}`);
+    }
 }
 
 async function handleCheckoutComplete(session) {
@@ -139,8 +142,7 @@ async function handleCheckoutComplete(session) {
     const subscriptionId = session.subscription;
 
     if (!userId) {
-        console.error('No userId in session metadata');
-        return;
+        throw new Error(`No userId in checkout session metadata for ${session.id}`);
     }
 
     if (session.mode === 'payment' && session.metadata?.purchaseType === 'dine_credits') {
@@ -188,6 +190,7 @@ async function handleCheckoutComplete(session) {
 
     } catch (error) {
         console.error('Error updating user subscription:', error);
+        throw error;
     }
 }
 
