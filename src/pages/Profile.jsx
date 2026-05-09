@@ -13,7 +13,6 @@ import { db } from '../firebase/config';
 // Profile Enhancements
 import { StatisticsCards, Achievements } from '../components/ProfileEnhancements';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
-import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -51,7 +50,6 @@ const Profile = () => {
     const navigate = useNavigate();
     const { currentUser, updateProfile, invitations, privateInvitations, restaurants, updateRestaurant, toggleFollow, deleteInvitation } = useInvitations();
     const { signOut, userProfile, loading } = useAuth();
-    const { setActivePrivateInvitation } = useNotifications();
     const { isDark, toggleTheme } = useTheme();
     const [isEditing, setIsEditing] = useState(false);
 

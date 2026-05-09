@@ -1,10 +1,10 @@
 /* Create private: card preview + vertical background thumbnails */
 .private-card-preview-with-bg {
-    --private-preview-w: clamp(196px, 46vw, 252px);
+    --private-preview-w: clamp(218px, 56vw, 292px);
     display: flex;
     flex-direction: row;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 12px;
     width: 100%;
     max-width: 100%;

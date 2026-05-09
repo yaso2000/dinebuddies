@@ -8,7 +8,13 @@ import {
     resolveCanonicalBackgroundId,
     DARK_TEMPLATE_BACKGROUND_IDS
 } from './privateCardBackgrounds';
+import {
+    resolveDatingCardBackgroundUrlCandidates,
+    resolveCanonicalDatingBackgroundId,
+    DATING_DARK_TEMPLATE_BACKGROUND_IDS
+} from '../datingCard/datingCardBackgrounds';
 import { getPrivateCardFontById, DEFAULT_FONT_ID } from './privateCardFonts';
+import { DEFAULT_MOTION_ID, isPrivateCardMotionId } from './privateCardMotions';
 import {
     adjustFrameTextForDarkTemplate,
     DARK_TEMPLATE_TEXT_SHADOW
@@ -39,12 +45,24 @@ function formatPreviewTime(timeStr, locale) {
     }
 }
 
+function hexToRgbaString(hex, alpha) {
+    if (!hex || typeof hex !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return `rgba(0,0,0,${alpha})`;
+    const h = hex.slice(1);
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
 /**
  * Non-AI visual card preview: gradient or template bg + frame + text + avatar + meta.
- * Frame color controls both border and all text colors; optional template bg is art only.
+ * Frame preset sets border + text tints. Optional `cardThemeColor` (#rrggbb) uses one flat color
+ * for the border and all copy, with no text-shadow.
  */
 export default function PrivateInvitationCardPreview({
     frameColorId = DEFAULT_FRAME_COLOR_ID,
+    /** When #rrggbb, border + all card copy use this color (flat, no text-shadow). */
+    cardThemeColor = null,
     cardFontId = DEFAULT_FONT_ID,
     occasionType,
     occasionCategoryId: occasionCategoryIdProp,
@@ -56,7 +74,18 @@ export default function PrivateInvitationCardPreview({
     location = '',
     inviterName = '',
     inviterAvatarUrl = '',
-    className = ''
+    className = '',
+    cardMotionId = DEFAULT_MOTION_ID,
+    freezeMotion = false,
+    /** @type {'private' | 'dating'} */
+    cardTemplateSet = 'private',
+    /** Full-bleed hero (dating: user photo/video); same layout as template art */
+    heroCoverSrc = null,
+    /** @type {'image' | 'video' | null} */
+    heroCoverMediaType = null,
+    heroCoverPoster = null,
+    /** When false, hide personal message and host row (avatar + name); title, occasion, meta stay. */
+    showHostAndMessage = true
 }) {
     const { t } = useTranslation();
     const frame = useMemo(() => getFrameColorById(frameColorId), [frameColorId]);
@@ -67,10 +96,12 @@ export default function PrivateInvitationCardPreview({
         return resolveOccasionCategoryId(occasionType);
     }, [occasionType, occasionCategoryIdProp]);
 
-    const bgCandidates = useMemo(
-        () => resolveCardBackgroundUrlCandidates(categoryId, cardBackgroundId),
-        [categoryId, cardBackgroundId]
-    );
+    const bgCandidates = useMemo(() => {
+        if (cardTemplateSet === 'dating') {
+            return resolveDatingCardBackgroundUrlCandidates(cardBackgroundId);
+        }
+        return resolveCardBackgroundUrlCandidates(categoryId, cardBackgroundId);
+    }, [cardTemplateSet, categoryId, cardBackgroundId]);
     const hasTemplateBg = bgCandidates.length > 0;
     const [bgSrcIndex, setBgSrcIndex] = useState(0);
 
@@ -82,18 +113,46 @@ export default function PrivateInvitationCardPreview({
     /** Active when a candidate URL exists; after all fail, index points past last → bgSrc undefined → gradient card */
     const templateArtActive = hasTemplateBg && Boolean(bgSrc);
     const canonicalBackgroundId = useMemo(() => {
+        if (cardTemplateSet === 'dating') {
+            if (!cardBackgroundId) return null;
+            return resolveCanonicalDatingBackgroundId(cardBackgroundId);
+        }
         if (!categoryId || !cardBackgroundId) return null;
         return resolveCanonicalBackgroundId(categoryId, cardBackgroundId);
-    }, [categoryId, cardBackgroundId]);
+    }, [cardTemplateSet, categoryId, cardBackgroundId]);
+    const hasHeroCover = Boolean(heroCoverSrc && heroCoverMediaType);
     const darkTemplateArt =
+        !hasHeroCover &&
         templateArtActive &&
-        DARK_TEMPLATE_BACKGROUND_IDS.has(String(canonicalBackgroundId || '').toLowerCase());
+        (cardTemplateSet === 'dating'
+            ? DATING_DARK_TEMPLATE_BACKGROUND_IDS.has(String(canonicalBackgroundId || '').toLowerCase())
+            : DARK_TEMPLATE_BACKGROUND_IDS.has(String(canonicalBackgroundId || '').toLowerCase()));
+
+    const resolvedThemeHex = useMemo(() => {
+        if (!cardThemeColor || typeof cardThemeColor !== 'string') return null;
+        const s = cardThemeColor.trim();
+        return /^#[0-9A-Fa-f]{6}$/.test(s) ? s : null;
+    }, [cardThemeColor]);
+
+    const innerChromeStyle = useMemo(() => {
+        if (resolvedThemeHex) {
+            return {
+                borderColor: resolvedThemeHex,
+                boxShadow: `0 0 0 1px ${hexToRgbaString(resolvedThemeHex, 0.4)}, 0 10px 28px rgba(0, 0, 0, 0.26)`
+            };
+        }
+        return { borderColor: frame.border, boxShadow: frame.shadow };
+    }, [resolvedThemeHex, frame]);
 
     /**
      * On template art, use frame palette. Dark artwork needs lifted tints + shadow or
      * the (intentionally dark) frame colors vanish on the photo.
      */
     const textStyles = useMemo(() => {
+        if (resolvedThemeHex) {
+            const flat = { color: resolvedThemeHex, textShadow: 'none' };
+            return { occasion: flat, title: flat, message: flat, host: flat };
+        }
         if (templateArtActive) {
             if (darkTemplateArt) {
                 const shadow = DARK_TEMPLATE_TEXT_SHADOW;
@@ -130,7 +189,9 @@ export default function PrivateInvitationCardPreview({
             message: { color: 'rgba(255, 255, 255, 0.78)', textShadow: 'none' },
             host: { color: 'rgba(255, 255, 255, 0.9)', textShadow: 'none' }
         };
-    }, [frame, templateArtActive, darkTemplateArt]);
+    }, [frame, templateArtActive, darkTemplateArt, resolvedThemeHex]);
+
+    const metaLineStyle = resolvedThemeHex ? { color: resolvedThemeHex, textShadow: 'none' } : undefined;
 
     const locale = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
@@ -141,7 +202,8 @@ export default function PrivateInvitationCardPreview({
         return a || b || '';
     }, [date, time, locale]);
 
-    const titleText = (title || '').trim() || '—';
+    const titleTrimmed = (title || '').trim();
+    const hasCardTitle = Boolean(titleTrimmed);
     const descText = (description || '').trim();
     const locText = (location || '').trim();
 
@@ -155,18 +217,46 @@ export default function PrivateInvitationCardPreview({
         setBgSrcIndex((prev) => prev + 1);
     };
 
+    const motionClass =
+        !freezeMotion &&
+        cardMotionId &&
+        cardMotionId !== DEFAULT_MOTION_ID &&
+        isPrivateCardMotionId(cardMotionId)
+            ? ` private-invitation-card-preview--card-motion-${cardMotionId}`
+            : '';
+
+    const minimalBodyClass = showHostAndMessage ? '' : ' private-invitation-card-preview--host-message-hidden';
+
     return (
         <div
-            className={`private-invitation-card-preview ${className}${templateArtActive ? ' private-invitation-card-preview--photo-bg' : ''}${darkTemplateArt ? ' private-invitation-card-preview--dark-template-bg' : ''}`.trim()}
+            className={`private-invitation-card-preview ${className}${templateArtActive ? ' private-invitation-card-preview--photo-bg' : ''}${darkTemplateArt ? ' private-invitation-card-preview--dark-template-bg' : ''}${motionClass}${minimalBodyClass}`.trim()}
         >
             <div
                 className={`private-invitation-card-preview__inner${templateArtActive ? ' private-invitation-card-preview__inner--photo-bg' : ''}`}
-                style={{
-                    borderColor: frame.border,
-                    boxShadow: frame.shadow
-                }}
+                style={innerChromeStyle}
             >
-                {templateArtActive && bgSrc ? (
+                {templateArtActive && hasHeroCover && heroCoverMediaType === 'video' ? (
+                    <video
+                        key={heroCoverSrc}
+                        className="private-invitation-card-preview__bg private-invitation-card-preview__bg--video"
+                        src={heroCoverSrc}
+                        poster={heroCoverPoster || undefined}
+                        autoPlay={!freezeMotion}
+                        muted
+                        loop={!freezeMotion}
+                        playsInline
+                        preload="metadata"
+                        aria-hidden
+                    />
+                ) : templateArtActive && hasHeroCover && heroCoverMediaType === 'image' ? (
+                    <img
+                        className="private-invitation-card-preview__bg private-invitation-card-preview__bg--image"
+                        src={heroCoverSrc}
+                        alt=""
+                        decoding="async"
+                        draggable={false}
+                    />
+                ) : templateArtActive && bgSrc ? (
                     <img
                         className="private-invitation-card-preview__bg private-invitation-card-preview__bg--image"
                         src={bgSrc}
@@ -193,44 +283,56 @@ export default function PrivateInvitationCardPreview({
                         </div>
                     )}
 
-                    <h3 className="private-invitation-card-preview__title" style={textStyles.title}>
-                        {titleText}
-                    </h3>
+                    {hasCardTitle ? (
+                        <h3 className="private-invitation-card-preview__title" style={textStyles.title}>
+                            {titleTrimmed}
+                        </h3>
+                    ) : null}
 
-                    {descText ? (
-                        <p className="private-invitation-card-preview__message" style={textStyles.message}>
-                            {descText.length > 120 ? `${descText.slice(0, 117)}…` : descText}
-                        </p>
-                    ) : (
-                        <p
-                            className="private-invitation-card-preview__message private-invitation-card-preview__message--placeholder"
-                            aria-hidden="true"
-                            style={textStyles.message}
-                        >
-                            &nbsp;
-                        </p>
-                    )}
+                    {showHostAndMessage ? (
+                        <>
+                            {descText ? (
+                                <p className="private-invitation-card-preview__message" style={textStyles.message}>
+                                    {descText.length > 120 ? `${descText.slice(0, 117)}…` : descText}
+                                </p>
+                            ) : (
+                                <p
+                                    className="private-invitation-card-preview__message private-invitation-card-preview__message--placeholder"
+                                    aria-hidden="true"
+                                    style={textStyles.message}
+                                >
+                                    &nbsp;
+                                </p>
+                            )}
 
-                    <div className="private-invitation-card-preview__host">
-                        {inviterAvatarUrl ? (
-                            <img src={inviterAvatarUrl} alt="" className="private-invitation-card-preview__avatar" />
-                        ) : (
-                            <div className="private-invitation-card-preview__avatar private-invitation-card-preview__avatar--empty" />
-                        )}
-                        <span className="private-invitation-card-preview__host-name" style={textStyles.host}>
-                            {inviterName || '—'}
-                        </span>
-                    </div>
+                            <div className="private-invitation-card-preview__host">
+                                {inviterAvatarUrl ? (
+                                    <img src={inviterAvatarUrl} alt="" className="private-invitation-card-preview__avatar" />
+                                ) : (
+                                    <div className="private-invitation-card-preview__avatar private-invitation-card-preview__avatar--empty" />
+                                )}
+                                <span className="private-invitation-card-preview__host-name" style={textStyles.host}>
+                                    {inviterName || '—'}
+                                </span>
+                            </div>
+                        </>
+                    ) : null}
                 </div>
 
                 <div className="private-invitation-card-preview__meta">
                     {dateLine && (
-                        <span className="private-invitation-card-preview__meta-line private-invitation-card-preview__meta-line--datetime">
+                        <span
+                            className="private-invitation-card-preview__meta-line private-invitation-card-preview__meta-line--datetime"
+                            style={metaLineStyle}
+                        >
                             {dateLine}
                         </span>
                     )}
                     {locText && (
-                        <span className="private-invitation-card-preview__meta-line private-invitation-card-preview__meta-line--location">
+                        <span
+                            className="private-invitation-card-preview__meta-line private-invitation-card-preview__meta-line--location"
+                            style={metaLineStyle}
+                        >
                             {locText}
                         </span>
                     )}

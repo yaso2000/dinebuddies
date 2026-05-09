@@ -42,6 +42,14 @@ if (maps.status !== 0 && maps.status !== null) {
     process.exit(maps.status);
 }
 
+const datingTemplates = spawnSync(process.execPath, ['scripts/sync-dating-invitation-templates.mjs'], {
+    stdio: 'inherit',
+    cwd: process.cwd()
+});
+if (datingTemplates.status !== 0 && datingTemplates.status !== null) {
+    process.exit(datingTemplates.status);
+}
+
 const vite = spawnSync('npx', ['vite', 'build'], {
     stdio: 'inherit',
     cwd: process.cwd(),

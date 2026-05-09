@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -37,8 +37,6 @@ export const NotificationProvider = ({ children }) => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [unreadBellCount, setUnreadBellCount] = useState(0);
     const [unreadMessageCount, setUnreadMessageCount] = useState(0);
-    const [activePrivateInvitation, setActivePrivateInvitation] = useState(null);
-    const [dismissedNotificationIds, setDismissedNotificationIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
 
     const navigate = useNavigate();
@@ -84,8 +82,6 @@ export const NotificationProvider = ({ children }) => {
                 setUnreadMessageCount(unreadMsgs);
                 setUnreadBellCount(unread - unreadMsgs);
 
-                // Active private-invitation overlay is synced in useEffect from sorted unreadPrivateInvitations
-
                 // Trigger in-app floating notifications for new items
                 if (!isInitialLoad) {
                     snapshot.docChanges().forEach((change) => {
@@ -96,9 +92,6 @@ export const NotificationProvider = ({ children }) => {
                             const isAlreadyRead = newNotif.read;
                             // Don't toast if the user is currently on the exact page the notification refers to
                             const isCurrentlyOnPage = location.pathname === newNotif.actionUrl;
-                            
-                            // Full-screen PrivateInvitationOverlay handles private_invitation; skip duplicate toast
-                            if (newNotif.type === 'private_invitation') return;
 
                             if (!isAlreadyRead && !isCurrentlyOnPage) {
                                 showToast({
@@ -128,7 +121,7 @@ export const NotificationProvider = ({ children }) => {
         );
 
         return () => unsubscribe();
-    }, [currentUser?.uid]); // ← dismissedNotificationIds intentionally excluded to prevent re-subscription on every dismiss
+    }, [currentUser?.uid]);
 
     // Helper: Check if current time is in Do Not Disturb period
     const isInDNDPeriod = (dndSettings) => {
@@ -327,12 +320,6 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    // Dismiss notification (hide for current session)
-    const dismissNotification = (notificationId) => {
-        if (!notificationId) return;
-        setDismissedNotificationIds(prev => new Set(prev).add(notificationId));
-    };
-
     // Format time — language-aware
     const formatTime = (date) => {
         if (!date) return '';
@@ -352,39 +339,6 @@ export const NotificationProvider = ({ children }) => {
         return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
     };
 
-    // Computed outside onSnapshot to avoid re-subscription when dismissed set changes
-    const unreadPrivateInvitations = useMemo(() => {
-        const list = notifications.filter(
-            (n) =>
-                n.type === 'private_invitation' &&
-                !n.read &&
-                !dismissedNotificationIds.has(n.id)
-        );
-        const t = (d) =>
-            d instanceof Date
-                ? d.getTime()
-                : typeof d?.toDate === 'function'
-                  ? d.toDate().getTime()
-                  : typeof d?.seconds === 'number'
-                    ? d.seconds * 1000
-                    : 0;
-        return [...list].sort((a, b) => t(a.createdAt) - t(b.createdAt));
-    }, [notifications, dismissedNotificationIds]);
-
-    // Queue: oldest unread private invitation first; keep selection stable while still valid
-    useEffect(() => {
-        if (unreadPrivateInvitations.length === 0) {
-            setActivePrivateInvitation(null);
-            return;
-        }
-        setActivePrivateInvitation((prev) => {
-            if (prev && unreadPrivateInvitations.some((n) => n.id === prev.id)) {
-                return prev;
-            }
-            return unreadPrivateInvitations[0];
-        });
-    }, [unreadPrivateInvitations]);
-
     const value = {
         notifications,
         unreadCount,
@@ -397,10 +351,6 @@ export const NotificationProvider = ({ children }) => {
         markAllAsRead,
         deleteNotification,
         deleteAllNotifications,
-        activePrivateInvitation,
-        setActivePrivateInvitation,
-        unreadPrivateInvitations,
-        dismissNotification,
         formatTime
     };
 

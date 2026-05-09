@@ -1,18 +1,24 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCardBackgroundOptions, resolveCardBackgroundUrlCandidates } from './privateCardBackgrounds';
+import {
+    getDatingCardBackgroundOptions,
+    resolveDatingCardBackgroundUrlCandidates
+} from '../datingCard/datingCardBackgrounds';
 import './PrivateCardBackgroundPicker.css';
 
-function PrivateCardBgThumb({ categoryId, optionId, selected, onClick, title }) {
-    const candidates = useMemo(
-        () => resolveCardBackgroundUrlCandidates(categoryId, optionId),
-        [categoryId, optionId]
-    );
+function PrivateCardBgThumb({ templateSet, categoryId, optionId, selected, onClick, title }) {
+    const candidates = useMemo(() => {
+        if (templateSet === 'dating') {
+            return resolveDatingCardBackgroundUrlCandidates(optionId);
+        }
+        return resolveCardBackgroundUrlCandidates(categoryId, optionId);
+    }, [templateSet, categoryId, optionId]);
     const [idx, setIdx] = useState(0);
 
     useEffect(() => {
         setIdx(0);
-    }, [categoryId, optionId]);
+    }, [templateSet, categoryId, optionId]);
 
     const url = candidates[idx];
 
@@ -38,9 +44,16 @@ function PrivateCardBgThumb({ categoryId, optionId, selected, onClick, title }) 
     );
 }
 
-export default function PrivateCardBackgroundPicker({ categoryId, value, onChange, layout = 'row' }) {
+export default function PrivateCardBackgroundPicker({
+    templateSet = 'private',
+    categoryId,
+    value,
+    onChange,
+    layout = 'row'
+}) {
     const { t } = useTranslation();
-    const options = getCardBackgroundOptions(categoryId);
+    const options =
+        templateSet === 'dating' ? getDatingCardBackgroundOptions() : getCardBackgroundOptions(categoryId);
     const bgLabel = t('private_card_background_label', { defaultValue: 'Card background' });
 
     if (!options.length) return null;
@@ -52,6 +65,7 @@ export default function PrivateCardBackgroundPicker({ categoryId, value, onChang
         return (
             <PrivateCardBgThumb
                 key={opt.id}
+                templateSet={templateSet}
                 categoryId={categoryId}
                 optionId={opt.id}
                 selected={selected}

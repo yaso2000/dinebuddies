@@ -2,17 +2,16 @@ import React, { Suspense, lazy, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
-// Emoji picker is for DESKTOP only.
-// Mobile users have native emoji keyboard built-in.
-const isMobile = typeof window !== 'undefined' && (
-    'ontouchstart' in window || window.matchMedia('(pointer: coarse)').matches
-);
+// Emoji picker is for DESKTOP / fine pointer only — touch uses the system emoji keyboard.
+export function isTouchOrCoarsePointer() {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window || window.matchMedia('(pointer: coarse)').matches;
+}
 
 const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
     const pickerRef = useRef(null);
 
-    // Never render on mobile — prevents keyboard/picker conflict entirely
-    const shouldRender = open && !isMobile;
+    const shouldRender = open && !isTouchOrCoarsePointer();
 
     // Close on outside click (desktop only)
     useEffect(() => {
@@ -102,5 +101,4 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
     );
 };
 
-export { isMobile };
 export default EmojiPickerPortal;

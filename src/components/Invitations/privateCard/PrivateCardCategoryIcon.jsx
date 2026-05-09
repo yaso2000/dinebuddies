@@ -108,6 +108,16 @@ export default function PrivateCardCategoryIcon({ categoryId = 'social' }) {
                     <path d="M18 18l4-6 4 6M26 18l4-6 4 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="private-card-cat-flame" />
                 </SvgWrap>
             );
+        case 'dating':
+            return (
+                <SvgWrap categoryId={id}>
+                    <path
+                        d="M24 36c-8-9-16-14-16-22a8 8 0 0116-4 8 8 0 0116 4c0 8-8 13-16 22z"
+                        fill="currentColor"
+                        opacity="0.88"
+                    />
+                </SvgWrap>
+            );
         case 'social':
         default:
             return (

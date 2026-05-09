@@ -18,6 +18,12 @@ const MediaSelector = ({
     onDeleteLibraryImage,
     initialData = null,
     className = '',
+    /** Hide venue cover block (e.g. dating flow). */
+    hideVenueCover = false,
+    /** Hide Camera / Upload tabs — parent supplies `externalSource`. */
+    hideTabBar = false,
+    /** When set to `camera` or `upload`, that panel is shown regardless of internal tab state. */
+    externalSource = null,
 }) => {
     const { t } = useTranslation();
     /** camera = capture photo/video | upload = image files from device */
@@ -50,9 +56,12 @@ const MediaSelector = ({
     }, [parentMediaData?.source, parentMediaData?.type, parentMediaData?.preview, parentMediaData?.url]);
 
     useEffect(() => {
+        if (hideTabBar && externalSource) return;
         if (source !== null) return;
         setSource('camera');
-    }, [source]);
+    }, [source, hideTabBar, externalSource]);
+
+    const effectiveSource = externalSource || source;
 
     const handleSourceChange = (newSource) => {
         setCameraSubMode(null);
@@ -70,9 +79,9 @@ const MediaSelector = ({
     };
 
     const isVenueSelection = selectedMedia?.source === 'restaurant' || selectedMedia?.source === 'google_place';
-    const isUploadSelection = source === 'upload' && selectedMedia?.source === 'custom_image';
+    const isUploadSelection = effectiveSource === 'upload' && selectedMedia?.source === 'custom_image';
     const isCameraPhotoSelection =
-        source === 'camera' && selectedMedia?.source === 'custom_image' && !!selectedMedia?.file;
+        effectiveSource === 'camera' && selectedMedia?.source === 'custom_image' && !!selectedMedia?.file;
     const isVenueUrlSelected = (url) =>
         isVenueSelection && selectedMedia?.type === 'image' && selectedMedia?.url === url;
 
@@ -187,7 +196,7 @@ const MediaSelector = ({
 
     return (
         <div className={`media-selector ${className}`}>
-            {hasRestaurantImage && restaurantCoverUrl && (
+            {!hideVenueCover && hasRestaurantImage && restaurantCoverUrl && (
                 <div
                     className="media-selector-venue-cover"
                     style={{
@@ -549,7 +558,7 @@ const MediaSelector = ({
                     </div>
                 )}
 
-                {source === 'upload' && (
+                {effectiveSource === 'upload' && (
                     <div className="custom-image-container">
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12, textAlign: 'center' }}>
                             {t('upload_photo_only_hint', {

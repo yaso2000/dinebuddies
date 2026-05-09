@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaComments, FaLock, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
@@ -15,12 +15,23 @@ import './PrivateInvitation.css';
 import Lottie from 'lottie-react';
 import { OCCASION_PRESETS } from '../utils/invitationTemplates';
 import { asUidArray } from '../utils/userSocialLists';
+import { goToLogin } from '../utils/goToLogin';
 
+/** Stable string uid for Firestore comparisons (rules use request.auth.uid as string). */
+function normUid(v) {
+    if (v == null || v === '') return '';
+    return typeof v === 'string' ? v : String(v);
+}
+
+/**
+ * Classic private invites and DineBuddy dating invites both live in `private_invitations`
+ * and use this route — same access rules for host + invitees.
+ */
 const PrivateInvitationDetails = () => {
     const { id } = useParams();
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, loading: authLoading } = useAuth();
     const { respondToPrivateInvitation, deleteInvitation } = useInvitations();
 
     const [invitation, setInvitation] = useState(null);
@@ -32,59 +43,103 @@ const PrivateInvitationDetails = () => {
     useEffect(() => {
         if (!id) return;
 
-        const unsubscribe = onSnapshot(doc(db, 'private_invitations', id), async (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.id ? { id: docSnap.id, ...docSnap.data() } : docSnap.data();
+        // Wait for Firebase auth to settle — otherwise viewerId is undefined and we wrongly redirect.
+        if (authLoading) {
+            setLoading(true);
+            return undefined;
+        }
 
-                // SECURITY CHECK: Only host or invited friends can see this
-                const viewerId = currentUser?.uid || currentUser?.id;
-                const authorId = data.authorId || data.author?.id;
-                const isHost = viewerId === authorId;
-                const isInvited = data.invitedFriends?.includes(viewerId);
-
-                const myBlocked = asUidArray(userProfile?.blockedUserIds);
-                const myMuted = asUidArray(userProfile?.mutedUserIds);
-                if (!isHost && authorId && (myBlocked.includes(authorId) || myMuted.includes(authorId))) {
-                    navigate('/', { replace: true });
-                    return;
-                }
-
-                // For private invitations, we are VERY strict
-                if (!isHost && !isInvited && viewerId !== 'guest') {
-                    console.warn('🚫 Unauthorized access to private invitation');
-                    navigate('/');
-                    return;
-                }
-
-                setInvitation(data);
-
-                // Fetch basic info for invited friends
-                if (data.invitedFriends?.length > 0) {
-                    const users = [];
-                    for (const uid of data.invitedFriends) {
-                        try {
-                            const uSnap = await getDoc(doc(db, 'users', uid));
-                            if (uSnap.exists()) {
-                                users.push({
-                                    id: uid,
-                                    ...uSnap.data(),
-                                    rsvpStatus: data.rsvps?.[uid] || 'pending'
-                                });
-                            }
-                        } catch (e) {
-                            console.error(e);
-                        }
-                    }
-                    setInvitedUsers(users);
-                }
-            } else {
-                navigate('/', { replace: true, state: { message: t('invitation_ended') } });
-            }
+        // Use Firebase session uid only — NOT `isGuest` from context (that ORs userProfile?.isGuest
+        // and can false-positive while the real account is signed in).
+        const sessionUid = normUid(currentUser?.uid || currentUser?.id);
+        if (!sessionUid || sessionUid === 'guest') {
             setLoading(false);
+            goToLogin({ replace: true });
+            return undefined;
+        }
+
+        let cancelled = false;
+        let unsubscribe = () => {};
+
+        auth.authStateReady().then(() => {
+            if (cancelled) return;
+            unsubscribe = onSnapshot(
+                doc(db, 'private_invitations', id),
+                async (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.id ? { id: docSnap.id, ...docSnap.data() } : docSnap.data();
+
+                    // Access control is enforced by Firestore rules (host, invitee, or admin/staff).
+                    // Do NOT duplicate "host || invitee" here — subtle mismatches (legacy fields, shapes)
+                    // caused false redirects to home while reads were actually allowed.
+                    const authorIdRaw = data.authorId ?? data.author?.id;
+                    const isHost =
+                        sessionUid === normUid(data.authorId) || sessionUid === normUid(data.author?.id);
+                    const myBlocked = asUidArray(userProfile?.blockedUserIds);
+                    const myMuted = asUidArray(userProfile?.mutedUserIds);
+                    const authorBlockedKey = normUid(authorIdRaw);
+                    if (
+                        !isHost &&
+                        authorBlockedKey &&
+                        (myBlocked.includes(authorBlockedKey) || myMuted.includes(authorBlockedKey))
+                    ) {
+                        navigate('/', { replace: true });
+                        return;
+                    }
+
+                    setInvitation(data);
+
+                    // Fetch basic info for invited friends
+                    if (!data.invitedFriends?.length) {
+                        setInvitedUsers([]);
+                    } else {
+                        const users = [];
+                        for (const fid of data.invitedFriends) {
+                            const friendUid = normUid(typeof fid === 'string' ? fid : fid?.id);
+                            if (!friendUid) continue;
+                            try {
+                                const uSnap = await getDoc(doc(db, 'users', friendUid));
+                                if (uSnap.exists()) {
+                                    users.push({
+                                        id: friendUid,
+                                        ...uSnap.data(),
+                                        rsvpStatus: data.rsvps?.[friendUid] || 'pending'
+                                    });
+                                }
+                            } catch (e) {
+                                console.error(e);
+                            }
+                        }
+                        setInvitedUsers(users);
+                    }
+                } else {
+                    navigate('/', { replace: true, state: { message: t('invitation_ended') } });
+                }
+                setLoading(false);
+            },
+            (err) => {
+                console.error('private_invitations listener:', err);
+                setLoading(false);
+                if (err?.code === 'permission-denied') {
+                    navigate('/', { replace: true, state: { message: t('invitation_ended') } });
+                }
+            }
+            );
         });
 
-        return () => unsubscribe();
-    }, [id, navigate, currentUser, t, userProfile?.blockedUserIds, userProfile?.mutedUserIds]);
+        return () => {
+            cancelled = true;
+            unsubscribe();
+        };
+    }, [
+        id,
+        navigate,
+        currentUser,
+        authLoading,
+        t,
+        userProfile?.blockedUserIds,
+        userProfile?.mutedUserIds
+    ]);
 
     // Optional background animation (skip failed / blocked CDN responses)
     useEffect(() => {
@@ -120,9 +175,15 @@ const PrivateInvitationDetails = () => {
     if (loading) return <div className="loading-container">{t('loading')}</div>;
     if (!invitation) return null;
 
-    const viewerId = currentUser?.uid || currentUser?.id;
-    const isHost = viewerId === (invitation.authorId || invitation.author?.id);
-    const myRSVP = invitation.rsvps?.[viewerId] || 'pending';
+    const viewerId = normUid(currentUser?.uid || currentUser?.id);
+    const isHost =
+        viewerId === normUid(invitation.authorId) || viewerId === normUid(invitation.author?.id);
+    const rsvpMap = invitation.rsvps || {};
+    const myRSVP =
+        rsvpMap[viewerId] ||
+        rsvpMap[currentUser?.uid] ||
+        rsvpMap[currentUser?.id] ||
+        'pending';
     const canChat = isHost || myRSVP === 'accepted';
 
     // Edit is allowed only if NO ONE has accepted yet
@@ -238,13 +299,15 @@ const PrivateInvitationDetails = () => {
 
                 {isHost && <HostPrivateInvitationCardExport invitation={invitation} />}
 
-                {/* Description - Glassy card */}
-                {invitation.description && (
-                    <div className="reveal-text premium-glass-card reveal-delay-2" style={{ marginBottom: '2rem', padding: '1.2rem', borderRadius: '24px' }}>
-                        <h3 style={{ fontSize: '0.75rem', color: 'var(--luxury-gold)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '10px' }}>{t('message_to_friends', 'Message to Friends')}</h3>
-                        <p style={{ color: 'var(--text-main)', lineHeight: '1.6', fontSize: '1.1rem', fontWeight: '500' }}>{invitation.description}</p>
-                    </div>
-                )}
+                {/* Description - Glassy card (dating: hidden when host chose title-only card) */}
+                {invitation.description &&
+                    (invitation.type !== 'Dating' || invitation.datingCardShowHostAndMessage !== false) &&
+                    (invitation.type !== 'Private' || invitation.privateCardShowHostAndMessage !== false) && (
+                        <div className="reveal-text premium-glass-card reveal-delay-2" style={{ marginBottom: '2rem', padding: '1.2rem', borderRadius: '24px' }}>
+                            <h3 style={{ fontSize: '0.75rem', color: 'var(--luxury-gold)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '10px' }}>{t('message_to_friends', 'Message to Friends')}</h3>
+                            <p style={{ color: 'var(--text-main)', lineHeight: '1.6', fontSize: '1.1rem', fontWeight: '500' }}>{invitation.description}</p>
+                        </div>
+                    )}
 
                 {/* RSVP Actions for Invitees */}
                 {!isHost && (
@@ -290,7 +353,7 @@ const PrivateInvitationDetails = () => {
                                 <h4 style={{ color: 'var(--text-main)', marginBottom: '10px', fontWeight: '800' }}>{t('you_are_going!')}</h4>
                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('invitation_accepted_hint')}</p>
                                     <button
-                                        onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
+                                        onClick={() => navigate(`/invitation/private/${invitation.id}/chat`)}
                                         className="vip-btn vip-btn-primary"
                                         style={{
                                             width: '100%', height: '54px', borderRadius: '16px', border: 'none',
@@ -359,7 +422,7 @@ const PrivateInvitationDetails = () => {
                 {isHost && (
                     <div style={{ display: 'flex', gap: '12px', marginTop: '8px', marginBottom: '2rem' }}>
                         <button
-                            onClick={() => navigate(`/invitation/${invitation.id}/chat`)}
+                            onClick={() => navigate(`/invitation/private/${invitation.id}/chat`)}
                             className="vip-btn vip-btn-primary"
                             style={{
                                 flex: 1, height: '54px', borderRadius: '18px', border: 'none',
@@ -374,7 +437,14 @@ const PrivateInvitationDetails = () => {
 
                         {canEdit && (
                             <button
-                                onClick={() => navigate('/create-private', { state: { editInvitation: invitation } })}
+                                onClick={() =>
+                                    navigate(
+                                        invitation.type === 'Dating'
+                                            ? '/create-dating'
+                                            : '/create-private',
+                                        { state: { editInvitation: invitation } }
+                                    )
+                                }
                                 style={{
                                     width: '54px', height: '54px', borderRadius: '18px',
                                     border: '1px solid rgba(139, 92, 246, 0.4)',

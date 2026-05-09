@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import app, { db } from '../firebase/config';
+import app, { auth, db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -112,52 +112,64 @@ export const InvitationProvider = ({ children }) => {
         const userId = currentUser?.uid || currentUser?.id;
         if (!userId || userId === 'guest') return;
 
-        // Query 1: invitations where user is the host
-        const qHost = query(
-            collection(db, 'private_invitations'),
-            where('authorId', '==', userId),
-            orderBy('createdAt', 'desc')
-        );
+        let cancelled = false;
+        let unsubHost = () => {};
+        let unsubInvited = () => {};
 
-        // Query 2: invitations where user is invited
-        const qInvited = query(
-            collection(db, 'private_invitations'),
-            where('invitedFriends', 'array-contains', userId),
-            orderBy('createdAt', 'desc')
-        );
+        // Wait for Auth so Firestore rules see request.auth.uid (avoids permission-denied races).
+        // Omit orderBy here so queries use only auto single-field indexes (composite indexes are
+        // easy to forget to deploy — that produced two console errors for many dev/prod setups).
+        auth.authStateReady().then(() => {
+            if (cancelled) return;
 
-        const mergeResults = (hostDocs, invitedDocs) => {
-            const seen = new Set();
-            const merged = [];
-            [...hostDocs, ...invitedDocs].forEach(doc => {
-                if (!seen.has(doc.id)) {
-                    seen.add(doc.id);
-                    merged.push(doc);
+            const qHost = query(collection(db, 'private_invitations'), where('authorId', '==', userId));
+
+            const qInvited = query(
+                collection(db, 'private_invitations'),
+                where('invitedFriends', 'array-contains', userId)
+            );
+
+            const mergeResults = (hostDocs, invitedDocs) => {
+                const seen = new Set();
+                const merged = [];
+                [...hostDocs, ...invitedDocs].forEach((d) => {
+                    if (!seen.has(d.id)) {
+                        seen.add(d.id);
+                        merged.push(d);
+                    }
+                });
+                merged.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                setPrivateInvitations(merged);
+            };
+
+            let hostDocs = [];
+            let invitedDocs = [];
+
+            unsubHost = onSnapshot(
+                qHost,
+                (snap) => {
+                    hostDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    mergeResults(hostDocs, invitedDocs);
+                },
+                (error) => {
+                    console.error('Error syncing hosted private invitations:', error);
                 }
-            });
-            // Sort by createdAt desc
-            merged.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            setPrivateInvitations(merged);
-        };
+            );
 
-        let hostDocs = [];
-        let invitedDocs = [];
-
-        const unsubHost = onSnapshot(qHost, (snap) => {
-            hostDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            mergeResults(hostDocs, invitedDocs);
-        }, (error) => {
-            console.error("Error syncing hosted private invitations:", error);
-        });
-
-        const unsubInvited = onSnapshot(qInvited, (snap) => {
-            invitedDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            mergeResults(hostDocs, invitedDocs);
-        }, (error) => {
-            console.error("Error syncing invited private invitations:", error);
+            unsubInvited = onSnapshot(
+                qInvited,
+                (snap) => {
+                    invitedDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    mergeResults(hostDocs, invitedDocs);
+                },
+                (error) => {
+                    console.error('Error syncing invited private invitations:', error);
+                }
+            );
         });
 
         return () => {
+            cancelled = true;
             unsubHost();
             unsubInvited();
         };
@@ -824,10 +836,28 @@ export const InvitationProvider = ({ children }) => {
 
     const canCreatePrivateInvitation = (kind = 'private') => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
-        if (currentUser.role === 'admin') return { canCreate: true, quota: 'unlimited' };
+
+        const adminLike =
+            firebaseProfile &&
+            ['admin', 'moderator', 'support', 'staff'].includes(String(firebaseProfile.role || ''));
+        if (adminLike) return { canCreate: true, quota: 'unlimited' };
 
         const cost =
             kind === 'dating' ? DATING_INVITATION_PUBLISH_CREDITS : PRIVATE_INVITATION_PUBLISH_CREDITS;
+
+        // Critical: while `users/{uid}` is still loading, `getTotalDineCredits(null)` is 0 — the app
+        // was treating everyone as broke and sending them to /settings/credits (toast + payment packs UI).
+        if (!firebaseProfile) {
+            return {
+                canCreate: true,
+                quota: 'pending',
+                cost,
+                balance: null,
+                profileLoading: true,
+                source: 'dine_credits'
+            };
+        }
+
         const balance = getTotalDineCredits(firebaseProfile);
         if (balance >= cost) {
             return { canCreate: true, quota: balance, cost, source: 'dine_credits' };

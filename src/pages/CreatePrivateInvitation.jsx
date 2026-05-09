@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
     FaClock, FaUserFriends, FaLock, FaChevronLeft, FaSearch,
     FaMoneyBillWave, FaUsers, FaBriefcase,
     FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
-    FaStar, FaHome, FaFilm, FaFutbol, FaFire
+    FaStar, FaHome, FaFilm, FaFutbol, FaFire,
+    FaCamera, FaUpload, FaImage
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import MediaSelector from '../components/Invitations/MediaSelector';
 import VenueLocationPicker from '../components/VenueLocationPicker';
 import { processInvitationMedia } from '../services/mediaService';
 import { getFollowing } from '../utils/followHelpers';
@@ -23,12 +23,19 @@ import './PrivateInvitation.css';
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
-import PrivateCardBackgroundPicker from '../components/Invitations/privateCard/PrivateCardBackgroundPicker';
-import PrivateCardFontPicker from '../components/Invitations/privateCard/PrivateCardFontPicker';
-import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
-import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
+import PrivateCardDatingTypographySheet from '../components/Invitations/privateCard/PrivateCardDatingTypographySheet';
+import PrivateCardMotionPicker from '../components/Invitations/privateCard/PrivateCardMotionPicker';
+import PrivateInvitationCoverRightRail from '../components/Invitations/privateCard/PrivateInvitationCoverRightRail';
+import { DEFAULT_FRAME_COLOR_ID, getFrameColorById } from '../components/Invitations/privateCard/privateCardFrameColors';
+import { DEFAULT_FONT_ID, PRIVATE_CARD_FONTS } from '../components/Invitations/privateCard/privateCardFonts';
+import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
 import { resolveOccasionCategoryId } from '../components/Invitations/privateCard/privateCardOccasionMap';
-import { getCardBackgroundOptions } from '../components/Invitations/privateCard/privateCardBackgrounds';
+import {
+    getCardBackgroundOptions,
+    parsePrivateInvitationCardBackgroundFromUrl
+} from '../components/Invitations/privateCard/privateCardBackgrounds';
+import { getPrivateHeroCoverFromMediaData } from '../components/Invitations/datingCard/datingCardBackgrounds';
+import DatingCoverCameraPanel from '../components/Invitations/datingCard/DatingCoverCameraPanel';
 import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 
 const CreatePrivateInvitation = () => {
@@ -43,8 +50,6 @@ const CreatePrivateInvitation = () => {
 
     // UI State
     const [mediaData, setMediaData] = useState(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [magicImageLoading, setMagicImageLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [mutualFriends, setMutualFriends] = useState([]);
     const [friendSearchQuery, setFriendSearchQuery] = useState('');
@@ -53,7 +58,39 @@ const CreatePrivateInvitation = () => {
     const [friendSearchResults, setFriendSearchResults] = useState([]);
     const [existingDraftId, setExistingDraftId] = useState(null);
     const [cardFontId, setCardFontId] = useState(DEFAULT_FONT_ID);
+    const [cardFrameColorId, setCardFrameColorId] = useState(DEFAULT_FRAME_COLOR_ID);
+    const [privateCardThemeColor, setPrivateCardThemeColor] = useState(null);
+    const [typographySheetOpen, setTypographySheetOpen] = useState(false);
+    const [cardMotionId, setCardMotionId] = useState(DEFAULT_MOTION_ID);
     const [cardBackgroundId, setCardBackgroundId] = useState(null);
+    const [privateCoverTab, setPrivateCoverTab] = useState('camera');
+    const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
+    const [privateCardShowHostAndMessage, setPrivateCardShowHostAndMessage] = useState(true);
+
+    const privateCoverDraftsRef = useRef({ template: null, upload: null, camera: null });
+    const mediaDataRef = useRef(null);
+    const privateCoverTabRef = useRef('camera');
+
+    useEffect(() => {
+        mediaDataRef.current = mediaData;
+    }, [mediaData]);
+    useEffect(() => {
+        privateCoverTabRef.current = privateCoverTab;
+    }, [privateCoverTab]);
+
+    const privateHeroCover = useMemo(() => getPrivateHeroCoverFromMediaData(mediaData), [mediaData]);
+
+    const privateFontSummary = useMemo(() => {
+        const f = PRIVATE_CARD_FONTS.find((x) => x.id === cardFontId);
+        return f ? t(f.labelKey, { defaultValue: f.defaultLabel }) : cardFontId;
+    }, [cardFontId, t]);
+
+    const privateCardColorSummary = useMemo(() => {
+        const raw = typeof privateCardThemeColor === 'string' ? privateCardThemeColor.trim() : '';
+        if (/^#[0-9A-Fa-f]{6}$/.test(raw)) return raw;
+        const fr = getFrameColorById(cardFrameColorId);
+        return t(fr.labelKey, { defaultValue: fr.defaultLabel });
+    }, [privateCardThemeColor, cardFrameColorId, t]);
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
     const editInvitation = location.state?.editInvitation;
@@ -103,19 +140,53 @@ const CreatePrivateInvitation = () => {
                 occasionType: editInvitation.occasionType || 'social'
             });
 
-            if (editInvitation.customImage || editInvitation.image) {
-                const imgUrl = editInvitation.customImage || editInvitation.image;
-                setMediaData({
-                    source: 'custom_image',
-                    type: 'image',
-                    url: imgUrl,
-                    preview: imgUrl,
+            setPrivateCardShowHostAndMessage(editInvitation.privateCardShowHostAndMessage !== false);
+
+            const videoUrl = editInvitation.customVideo;
+            const imgUrl = editInvitation.customImage || editInvitation.image;
+            if (videoUrl) {
+                const m = {
+                    source: 'custom_video',
+                    type: 'video',
+                    preview: videoUrl,
                     file: null,
-                    isCustom: !!editInvitation.customImage
-                });
+                    videoThumbnail: editInvitation.videoThumbnail
+                };
+                setPrivateCoverTab('camera');
+                setMediaData(m);
+                privateCoverDraftsRef.current = { template: null, upload: null, camera: m };
+            } else if (imgUrl) {
+                const cat = resolveOccasionCategoryId(editInvitation.occasionType);
+                const parsedBg = parsePrivateInvitationCardBackgroundFromUrl(imgUrl);
+                if (parsedBg && parsedBg.categoryId === cat) {
+                    setCardBackgroundId(parsedBg.assetId);
+                    setPrivateCoverTab('template');
+                    setMediaData(null);
+                    privateCoverDraftsRef.current = { template: null, upload: null, camera: null };
+                } else {
+                    const m = {
+                        source: 'custom_image',
+                        type: 'image',
+                        preview: imgUrl,
+                        url: imgUrl,
+                        file: null
+                    };
+                    setPrivateCoverTab('upload');
+                    setMediaData(m);
+                    privateCoverDraftsRef.current = { template: null, upload: m, camera: null };
+                }
+            } else {
+                setPrivateCoverTab('camera');
+                privateCoverDraftsRef.current = { template: null, upload: null, camera: null };
             }
 
             setCardFontId(editInvitation.cardFontId || DEFAULT_FONT_ID);
+            setCardFrameColorId(editInvitation.cardFrameColorId || DEFAULT_FRAME_COLOR_ID);
+            const rawTheme =
+                (typeof editInvitation.privateCardThemeColor === 'string' && editInvitation.privateCardThemeColor.trim()) ||
+                '';
+            setPrivateCardThemeColor(/^#[0-9A-Fa-f]{6}$/.test(rawTheme) ? rawTheme : null);
+            setCardMotionId(editInvitation.cardMotionId || DEFAULT_MOTION_ID);
         }
     }, [editInvitation]);
 
@@ -289,6 +360,87 @@ const CreatePrivateInvitation = () => {
         setFormData(prev => ({ ...prev, invitedFriends: [...(prev.invitedFriends || []), friendId] }));
     };
 
+    const revokeBlobPreview = (prev) => {
+        if (prev?.preview && String(prev.preview).startsWith('blob:')) {
+            try {
+                URL.revokeObjectURL(prev.preview);
+            } catch {
+                /* ignore */
+            }
+        }
+        if (prev?.videoThumbnail && String(prev.videoThumbnail).startsWith('blob:')) {
+            try {
+                URL.revokeObjectURL(prev.videoThumbnail);
+            } catch {
+                /* ignore */
+            }
+        }
+    };
+
+    const setCoverMedia = (next) => {
+        setMediaData((prev) => {
+            let resolved;
+            if (next === null) {
+                revokeBlobPreview(prev);
+                resolved = null;
+            } else if (typeof next === 'function') {
+                resolved = next(prev);
+                if (
+                    prev?.preview &&
+                    String(prev.preview).startsWith('blob:') &&
+                    resolved?.preview !== prev.preview
+                ) {
+                    revokeBlobPreview(prev);
+                }
+            } else {
+                if (
+                    prev?.preview &&
+                    String(prev.preview).startsWith('blob:') &&
+                    prev.preview !== next?.preview
+                ) {
+                    revokeBlobPreview(prev);
+                }
+                resolved = next;
+            }
+            privateCoverDraftsRef.current[privateCoverTabRef.current] = resolved;
+            return resolved;
+        });
+    };
+
+    const handlePrivateCoverTab = (tab) => {
+        if (tab === privateCoverTab) {
+            if (tab === 'camera') setCameraOpenNonce((n) => n + 1);
+            return;
+        }
+        privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
+
+        setPrivateCoverTab(tab);
+        const restored = privateCoverDraftsRef.current[tab];
+        setMediaData(restored ?? null);
+
+        if (tab === 'camera') {
+            setCameraOpenNonce((n) => n + 1);
+        }
+    };
+
+    const privateCoverTabBtnStyle = (active) => ({
+        flex: 1,
+        padding: '10px 8px',
+        borderRadius: 12,
+        border: `1px solid ${active ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.12)'}`,
+        background: active ? 'rgba(212,175,55,0.14)' : 'rgba(255,255,255,0.04)',
+        color: active ? 'var(--luxury-gold)' : 'var(--text-main)',
+        fontWeight: 700,
+        fontSize: '0.8rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        cursor: 'pointer',
+        minWidth: 0,
+        transition: 'all 0.2s'
+    });
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -330,9 +482,12 @@ const CreatePrivateInvitation = () => {
             const draftData = {
                 ...formData,
                 ...mediaFields,
-                cardFrameColorId: DEFAULT_FRAME_COLOR_ID,
+                cardFrameColorId,
                 cardFontId,
+                cardMotionId,
                 cardBackgroundId: cardBackgroundId || null,
+                privateCardThemeColor,
+                privateCardShowHostAndMessage,
                 rsvps: initialRsvps,
                 type: 'Private',
                 status: 'draft',
@@ -399,8 +554,10 @@ const CreatePrivateInvitation = () => {
 
     const quota = quotaInfo.quota;
     const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
+    const profilePending = Boolean(quotaInfo.profileLoading) || quota === 'pending';
     const dineBalance = getTotalDineCredits(userProfile);
     const publishCost = PRIVATE_INVITATION_PUBLISH_CREDITS;
+    const lowCredits = !isUnlimited && !profilePending && dineBalance < publishCost;
 
     return (
         <div className="private-create-wrapper private-theme">
@@ -426,18 +583,18 @@ const CreatePrivateInvitation = () => {
                     borderRadius: '12px',
                     background: isUnlimited
                         ? 'rgba(72,187,120,0.1)'
-                        : dineBalance < publishCost
+                        : lowCredits
                             ? 'rgba(239,68,68,0.1)'
                             : 'rgba(139,92,246,0.1)',
-                    border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : dineBalance < publishCost ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
+                    border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
                     fontSize: '0.875rem',
-                    color: isUnlimited ? '#4ade80' : dineBalance < publishCost ? '#f87171' : '#a78bfa',
+                    color: isUnlimited ? '#4ade80' : lowCredits ? '#f87171' : '#a78bfa',
                     fontWeight: 600
                 }}>
-                    <span>{isUnlimited ? '∞' : `${dineBalance}`}</span>
+                    <span>{isUnlimited ? '∞' : profilePending ? '…' : `${dineBalance}`}</span>
                     <span style={{ opacity: 0.85, fontWeight: 400 }}>
                         {isUnlimited
                             ? t('unlimited_private_invitations', 'Unlimited private invitations')
@@ -563,30 +720,145 @@ const CreatePrivateInvitation = () => {
                         ></textarea>
                     </div>
 
-                    {/* Card look — backgrounds + preview (after details, before cover media). */}
+                    {/* Card + cover: occasion art, then camera / upload / template + preview row (same flow as dating). */}
                     <div className="private-section-card private-section-card--templates mb-4">
                         <h3 className="private-section-card__title">
                             <span aria-hidden>🃏</span>{' '}
                             {t('private_section_templates_title', { defaultValue: 'Ready card looks' })}
                         </h3>
                         <p className="private-section-card__hint">
-                            {t('private_section_templates_hint', {
+                            {t('private_section_card_art_beside_hint', {
                                 defaultValue:
-                                    'Pick a background style for your occasion. This is separate from the cover photo or video below.',
+                                    'Use Template, Upload, or Camera above. Only that tab’s thumbnails appear beside the card; scroll the strip if there are more.'
                             })}
                         </p>
+                        <div
+                            role="tablist"
+                            aria-label={t('dating_cover_tabs_label', { defaultValue: 'Cover source' })}
+                            style={{ display: 'flex', gap: 8, marginBottom: 14 }}
+                        >
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={privateCoverTab === 'camera'}
+                                onClick={() => handlePrivateCoverTab('camera')}
+                                style={privateCoverTabBtnStyle(privateCoverTab === 'camera')}
+                            >
+                                <FaCamera /> {t('dating_cover_tab_camera', { defaultValue: 'Camera' })}
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={privateCoverTab === 'upload'}
+                                onClick={() => handlePrivateCoverTab('upload')}
+                                style={privateCoverTabBtnStyle(privateCoverTab === 'upload')}
+                            >
+                                <FaUpload /> {t('dating_cover_tab_upload', { defaultValue: 'Upload' })}
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={privateCoverTab === 'template'}
+                                onClick={() => handlePrivateCoverTab('template')}
+                                style={privateCoverTabBtnStyle(privateCoverTab === 'template')}
+                            >
+                                <FaImage /> {t('dating_cover_tab_template', { defaultValue: 'Template' })}
+                            </button>
+                        </div>
+
+                        {privateCoverTab === 'camera' && (
+                            <DatingCoverCameraPanel onMediaSelect={setCoverMedia} openNonce={cameraOpenNonce} />
+                        )}
+
+                        <div
+                            className="dating-card-show-content-toggle"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 12,
+                                padding: '10px 12px',
+                                marginBottom: 12,
+                                borderRadius: 12,
+                                border: '1px solid rgba(212,175,55,0.35)',
+                                background: 'rgba(212,175,55,0.08)'
+                            }}
+                            title={t('private_card_show_content_title', {
+                                defaultValue:
+                                    'Off: title, date & place only on the card. On: include your message and profile photo.'
+                            })}
+                        >
+                            <span
+                                style={{
+                                    fontWeight: 800,
+                                    fontSize: '0.88rem',
+                                    color: 'var(--luxury-gold)',
+                                    lineHeight: 1.25
+                                }}
+                            >
+                                {t('private_card_show_content_label', {
+                                    defaultValue: 'Show message & profile on card'
+                                })}
+                            </span>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={privateCardShowHostAndMessage}
+                                aria-label={t('private_card_show_content_label', {
+                                    defaultValue: 'Show message & profile on card'
+                                })}
+                                onClick={() => setPrivateCardShowHostAndMessage((v) => !v)}
+                                style={{
+                                    flexShrink: 0,
+                                    width: 52,
+                                    height: 30,
+                                    borderRadius: 999,
+                                    border: '2px solid rgba(212,175,55,0.5)',
+                                    background: privateCardShowHostAndMessage
+                                        ? 'linear-gradient(135deg,#d4af37,#b8860b)'
+                                        : 'rgba(0,0,0,0.2)',
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                    transition: 'background 0.2s',
+                                    padding: 0
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        top: 3,
+                                        insetInlineStart: privateCardShowHostAndMessage ? 24 : 3,
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: '50%',
+                                        background: '#fff',
+                                        boxShadow: '0 1px 6px rgba(0,0,0,0.25)',
+                                        transition: 'inset-inline-start 0.2s',
+                                        display: 'block'
+                                    }}
+                                />
+                            </button>
+                        </div>
+
                         <div className="form-group mb-0">
                             <label className="elegant-label">
                                 {t('private_card_preview_label', { defaultValue: 'Invitation card' })}
                             </label>
+                            <PrivateCardMotionPicker value={cardMotionId} onChange={setCardMotionId} />
                             <div className="private-card-preview-with-bg">
                                 <div className="private-card-preview-with-bg__preview-wrap">
                                     <PrivateInvitationCardPreview
+                                        cardTemplateSet="private"
                                         className="private-invitation-card-preview--showcase private-invitation-card-preview--showcase-compact"
-                                        frameColorId={DEFAULT_FRAME_COLOR_ID}
+                                        frameColorId={cardFrameColorId}
+                                        cardThemeColor={privateCardThemeColor}
                                         cardFontId={cardFontId}
+                                        cardMotionId={cardMotionId}
                                         occasionType={formData.occasionType}
                                         cardBackgroundId={cardBackgroundId}
+                                        heroCoverSrc={privateHeroCover?.src ?? null}
+                                        heroCoverMediaType={privateHeroCover?.mediaType ?? null}
+                                        heroCoverPoster={privateHeroCover?.poster ?? null}
                                         title={formData.title}
                                         description={formData.description}
                                         date={formData.date}
@@ -600,39 +872,58 @@ const CreatePrivateInvitation = () => {
                                             ''
                                         }
                                         inviterAvatarUrl={getSafeAvatar(userProfile || currentUser || {})}
+                                        showHostAndMessage={privateCardShowHostAndMessage}
                                     />
                                 </div>
-                                <PrivateCardBackgroundPicker
-                                    layout="beside-preview"
+                                <PrivateInvitationCoverRightRail
                                     categoryId={resolveOccasionCategoryId(formData.occasionType)}
-                                    value={cardBackgroundId}
-                                    onChange={setCardBackgroundId}
+                                    cardBackgroundId={cardBackgroundId}
+                                    onCardBackgroundIdChange={setCardBackgroundId}
+                                    mode={privateCoverTab}
+                                    mediaData={mediaData}
+                                    onMediaSelect={setCoverMedia}
                                 />
                             </div>
-                            <PrivateCardFontPicker value={cardFontId} onChange={setCardFontId} />
+                            <div style={{ marginTop: 12 }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTypographySheetOpen(true)}
+                                        style={{
+                                            padding: '10px 16px',
+                                            borderRadius: 12,
+                                            border: '2px solid rgba(212,175,55,0.55)',
+                                            background: 'rgba(212,175,55,0.12)',
+                                            color: 'var(--luxury-gold)',
+                                            fontWeight: 800,
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            touchAction: 'manipulation'
+                                        }}
+                                    >
+                                        {t('dating_card_style_btn', { defaultValue: 'Font & card color' })}
+                                    </button>
+                                    <span
+                                        style={{
+                                            fontSize: '0.78rem',
+                                            color: 'var(--text-muted)',
+                                            flex: '1 1 160px',
+                                            minWidth: 0
+                                        }}
+                                    >
+                                        {privateFontSummary} · {privateCardColorSummary}
+                                    </span>
+                                </div>
+                            </div>
+                            <PrivateCardDatingTypographySheet
+                                open={typographySheetOpen}
+                                onClose={() => setTypographySheetOpen(false)}
+                                fontId={cardFontId}
+                                themeColorHex={privateCardThemeColor}
+                                onFontChange={setCardFontId}
+                                onThemeColorChange={setPrivateCardThemeColor}
+                            />
                         </div>
-                    </div>
-
-                    {/* 5) Cover media */}
-                    <div className="private-section-card private-section-card--media mb-4">
-                        <h3 className="private-section-card__title">
-                            <span aria-hidden>🎬</span>{' '}
-                            {t('private_section_five_media_title', { defaultValue: 'Cover media' })}
-                        </h3>
-                        <p className="private-section-card__hint">
-                            {t('private_section_media_hint', {
-                                defaultValue: 'Upload your own image or video for the invitation.',
-                            })}
-                        </p>
-                        <MediaSelector
-                            restaurant={{
-                                image: formData.restaurantImage || formData.image,
-                                restaurantImage: formData.restaurantImage || formData.image,
-                                name: formData.restaurantName
-                            }}
-                            mediaData={mediaData}
-                            onMediaSelect={(data) => setMediaData(data)}
-                        />
                     </div>
 
                     {/* Payment Type */}

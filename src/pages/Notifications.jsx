@@ -16,11 +16,11 @@ import {
     FaExclamationCircle,
     FaSearch,
     FaCog,
-    FaCheckDouble
+    FaCheckDouble,
+    FaLock
 } from 'react-icons/fa';
 import EmptyState from '../components/EmptyState';
 import UserAvatar from '../components/UserAvatar';
-import PrivateInvitationNotifVisual from '../components/notifications/PrivateInvitationNotifVisual';
 import './Notifications.css';
 import { goToLogin } from '../utils/goToLogin';
 
@@ -44,7 +44,7 @@ const getNotifTitle = (notif, t) => {
         case 'booking_cancelled':return t('notif_title_booking_cancelled', 'Booking Cancelled');
         case 'invitation_completed': return t('notif_title_completed', 'Invitation Completed! 🎉');
         case 'invitation_updated': return t('notif_title_updated', 'Invitation Time Updated');
-        case 'private_invitation': return t('notification_private_invitation_title', '💌 New Private Invitation');
+        case 'private_invitation': return t('notification_private_invitation_title', 'New private invitation');
         case 'join_request':     return t('notif_title_join_request', 'New Join Request');
         case 'request_approved':    return t('notif_title_request_approved', 'Request Approved');
         case 'business_message':    return t('notif_title_business_message', 'Message from Business');
@@ -99,12 +99,6 @@ const getNotifMessage = (notif, t) => {
     }
 };
 
-/** Strip leading envelope emoji from private-invitation titles (large icon carries the visual cue). */
-function privateInvitationDisplayTitle(notif, t) {
-    const raw = getNotifTitle(notif, t);
-    return String(raw).replace(/^💌\s*/u, '').trim() || raw;
-}
-
 const Notifications = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
@@ -148,6 +142,8 @@ const Notifications = () => {
                 return <FaCommentAlt style={{ ...iconStyle, color: '#3b82f6' }} />;
             case 'reminder':
                 return <FaExclamationCircle style={{ ...iconStyle, color: '#f59e0b' }} />;
+            case 'private_invitation':
+                return <FaLock style={{ ...iconStyle, color: '#8b5cf6' }} />;
             default:
                 return <FaBell style={{ ...iconStyle, color: 'var(--text-secondary)' }} />;
         }
@@ -344,43 +340,31 @@ const Notifications = () => {
                     filteredNotifications.map(notif => (
                         <div
                             key={notif.id}
-                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}${notif.type === 'private_invitation' ? ' notification-item--private-invitation' : ''}`}
+                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}
                             onClick={() => handleNotificationClick(notif)}
                         >
                             {/* Unread Indicator */}
                             {!notif.read && <div className="unread-dot"></div>}
 
-                            {notif.type === 'private_invitation' ? (
-                                <PrivateInvitationNotifVisual
-                                    occasionType={notif.metadata?.occasionType}
-                                    hostAvatarUrl={notif.fromUserAvatar || notif.senderAvatar}
-                                    hostName={notif.fromUserName || notif.senderName}
-                                />
-                            ) : (
-                                <div className="notification-icon">
-                                    {notif.fromUserAvatar ? (
-                                        <UserAvatar
-                                            src={notif.fromUserAvatar}
-                                            user={{
-                                                name: notif.fromUserName,
-                                                gender: notif.fromUserGender,
-                                                role: notif.fromUserRole
-                                            }}
-                                            alt={notif.fromUserName || 'User'}
-                                        />
-                                    ) : (
-                                        getIcon(notif.type)
-                                    )}
-                                </div>
-                            )}
+                            <div className="notification-icon">
+                                {notif.fromUserAvatar ? (
+                                    <UserAvatar
+                                        src={notif.fromUserAvatar}
+                                        user={{
+                                            name: notif.fromUserName,
+                                            gender: notif.fromUserGender,
+                                            role: notif.fromUserRole
+                                        }}
+                                        alt={notif.fromUserName || 'User'}
+                                    />
+                                ) : (
+                                    getIcon(notif.type)
+                                )}
+                            </div>
 
                             {/* Content */}
                             <div className="notification-content">
-                                <h4 className="notification-title">
-                                    {notif.type === 'private_invitation'
-                                        ? privateInvitationDisplayTitle(notif, t)
-                                        : getNotifTitle(notif, t)}
-                                </h4>
+                                <h4 className="notification-title">{getNotifTitle(notif, t)}</h4>
                                 <p className="notification-message">{getNotifMessage(notif, t)}</p>
                                 <span className="notification-time">{formatTime(notif.createdAt)}</span>
                             </div>

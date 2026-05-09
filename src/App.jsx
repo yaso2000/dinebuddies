@@ -150,6 +150,10 @@ function App() {
                                                     <Route path="/post/:postId" element={<PostDetails />} />
 
                                                     <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
+                                                    <Route
+                                                        path="/invitation/private/:id/chat"
+                                                        element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>}
+                                                    />
                                                     <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
                                                     <Route path="/invitation/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/invitation/preview/:id" element={<InvitationPreview />} />

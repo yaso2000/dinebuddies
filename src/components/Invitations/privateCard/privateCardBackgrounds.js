@@ -131,3 +131,20 @@ export function getDefaultCardBackgroundId(categoryId) {
     const opts = getCardBackgroundOptions(categoryId);
     return opts[0]?.id ?? null;
 }
+
+/**
+ * If `url` points at `invitation-card-backgrounds/{category}/{file}`, return canonical option id + category.
+ * Used when editing a draft that saved a template asset as `customImage` / `image`.
+ * @returns {{ categoryId: string, assetId: string } | null}
+ */
+export function parsePrivateInvitationCardBackgroundFromUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+    const m = url.match(/invitation-card-backgrounds\/([a-z0-9_-]+)\/([a-z0-9_-]+)\.(webp|jpe?g|png)/i);
+    if (!m) return null;
+    const categoryId = m[1].toLowerCase();
+    const stem = m[2].toLowerCase();
+    const canonical = resolveCanonicalBackgroundId(categoryId, stem) || stem;
+    const opts = getCardBackgroundOptions(categoryId);
+    if (!opts.some((o) => o.id === canonical)) return null;
+    return { categoryId, assetId: canonical };
+}

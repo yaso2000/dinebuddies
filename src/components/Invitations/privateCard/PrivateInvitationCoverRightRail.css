@@ -1,0 +1,59 @@
+/* Same height as compact card preview (9:16 from --private-preview-w); overflow scrolls inside. */
+.private-invite-cover-rail.private-card-bg-picker--beside {
+    height: calc(var(--private-preview-w, 248px) * 16 / 9);
+    max-height: calc(var(--private-preview-w, 248px) * 16 / 9);
+    min-height: 0;
+    align-self: flex-start;
+    margin-top: 0;
+}
+
+/* Template tab: show ~4 thumbs; rest only via vertical scroll (matches .dating-preview-rail__thumb 86px + 10px gap). */
+.private-invite-cover-rail--template-mode.private-card-bg-picker--beside {
+    height: auto;
+}
+
+.private-invite-cover-rail--template-mode .private-card-bg-picker__scroll {
+    flex: 0 1 auto;
+    max-height: calc(
+        4 * 86px + 3 * 10px + 12px
+    ); /* 4 thumbs + gaps + vertical padding (4px+8px) on .private-card-bg-picker__scroll */
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.private-invite-cover-rail {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Gold accents for private invitation cover rail (dating rail defaults are pink). */
+.private-invite-cover-rail .dating-preview-rail__thumb:hover {
+    border-color: rgba(212, 175, 55, 0.55);
+}
+
+.private-invite-cover-rail .dating-preview-rail__thumb--selected {
+    border-color: var(--luxury-gold, #d4af37);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.38);
+}
+
+.private-invite-cover-rail .dating-preview-rail__thumb--action {
+    border-color: rgba(212, 175, 55, 0.42);
+    background: rgba(212, 175, 55, 0.08);
+    color: var(--luxury-gold, #d4af37);
+}
+
+.private-invite-cover-rail__empty {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: var(--text-muted, rgba(255, 255, 255, 0.5));
+    margin: 0;
+    padding: 6px 4px;
+    text-align: center;
+    max-width: 72px;
+}
+
+.private-invite-cover-rail .dating-preview-rail__thumb-wrap--selected .dating-preview-rail__thumb {
+    border-color: var(--luxury-gold, #d4af37);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.35);
+}

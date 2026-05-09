@@ -7,7 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown, FaPause, FaPlay, FaArrowLeft } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import EmojiPickerPortal, { isMobile } from './EmojiPickerPortal';
+import EmojiPickerPortal, { isTouchOrCoarsePointer } from './EmojiPickerPortal';
 import '../pages/CommunityChatRoom.css';
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
@@ -433,7 +433,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                     ) : (
                         <>
                             {/* Emoji Button — desktop only */}
-                            {!isMobile && (
+                            {!isTouchOrCoarsePointer() && (
                                 <button
                                     ref={emojiBtnRef}
                                     type="button"

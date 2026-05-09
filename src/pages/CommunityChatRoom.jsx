@@ -8,9 +8,9 @@ import { useToast } from '../context/ToastContext';
 import {
     FaArrowLeft, FaEllipsisV, FaImage, FaPaperPlane,
     FaCamera, FaMicrophone, FaPlus, FaStop,
-    FaPlay, FaPause, FaTrash, FaArrowDown, FaKeyboard
+    FaPlay, FaPause, FaTrash, FaArrowDown
 } from 'react-icons/fa';
-import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
+import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPickerPortal';
 import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
@@ -38,26 +38,16 @@ const CommunityChatRoom = () => {
     const [isMember, setIsMember] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
-    const [showEmojiPanel, setShowEmojiPanel] = useState(false);
-    const [keyboardHeight, setKeyboardHeight] = useState(320); // Dynamic fallback
+    const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
     const [showCamera, setShowCamera] = useState(false);
 
     const emojiBtnRef = useRef(null);
+    const isTouchUi = isTouchOrCoarsePointer();
 
     const handleScroll = (e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
         const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
         setShowScrollBottom(!isNearBottom);
-    };
-
-    const handleEmojiToggle = () => {
-        if (showEmojiPanel) {
-            setShowEmojiPanel(false);
-            inputRef.current?.focus();
-        } else {
-            setShowEmojiPanel(true);
-            inputRef.current?.blur();
-        }
     };
 
     const handleEmojiClick = (emojiData) => {
@@ -98,24 +88,10 @@ const CommunityChatRoom = () => {
     const composerRef = useRef(null);
     const containerRef = useRef(null);
 
-    const maxVisibleHeight = useRef(typeof window !== 'undefined' ? window.innerHeight : 800);
-
-    // Visual Viewport: phones only — full vv rect (see chatVisualViewportLock)
     useEffect(() => {
-        return attachChatShellToVisualViewport(() => containerRef.current, {
-            onViewportChange(vv) {
-                if (vv.height > maxVisibleHeight.current) {
-                    maxVisibleHeight.current = vv.height;
-                }
-                const currentDiff = maxVisibleHeight.current - vv.height;
-                if (currentDiff > 150) {
-                    setKeyboardHeight(currentDiff);
-                }
-            },
-        });
+        const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
+        return detach;
     }, []);
-
-
 
     // Close Popups on Click Outside
     useEffect(() => {
@@ -293,9 +269,7 @@ const CommunityChatRoom = () => {
             });
 
             setNewMessage('');
-            if (!showEmojiPanel) {
-                setTimeout(() => inputRef.current?.focus(), 100);
-            }
+            setTimeout(() => inputRef.current?.focus(), 100);
 
             // Notify the business owner when a member sends a message (not the owner themselves)
             if (currentUser.uid !== partnerId) {
@@ -515,7 +489,7 @@ const CommunityChatRoom = () => {
 
             <div className="chat-body-column">
             {/* 2. Message List */}
-            <div className="message-list" onScroll={handleScroll} style={{ paddingBottom: showEmojiPanel ? `${keyboardHeight + 16}px` : '16px', flex: 1, overflowY: 'auto' }}>
+            <div className="message-list" onScroll={handleScroll} style={{ paddingBottom: '16px', flex: 1, overflowY: 'auto' }}>
                 {messages.map((msg, index) => {
                     const isMe = msg.senderId === currentUser.uid;
                     const isBigEmoji = msg.type === 'emoji-big';
@@ -604,22 +578,23 @@ const CommunityChatRoom = () => {
                                             {emoji}
                                         </span>
                                     ))}
-                                    {/* Mock Plus Button -> Real Button */}
-                                    <div
-                                        className="reaction-popup-item"
-                                        style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px' }}
-                                        onClick={() => {
-                                            setExtendedReactionPicker(msg.id);
-                                            setActiveReactionId(null);
-                                        }}
-                                    >
-                                        <FaPlus style={{ color: '#9CA3AF' }} />
-                                    </div>
+                                    {!isTouchUi && (
+                                        <div
+                                            className="reaction-popup-item"
+                                            style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px' }}
+                                            onClick={() => {
+                                                setExtendedReactionPicker(msg.id);
+                                                setActiveReactionId(null);
+                                            }}
+                                        >
+                                            <FaPlus style={{ color: '#9CA3AF' }} />
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {/* Extended Emoji Picker for Reactions */}
-                            {extendedReactionPicker === msg.id && (
+                            {/* Extended Emoji Picker for Reactions (desktop) */}
+                            {extendedReactionPicker === msg.id && !isTouchUi && (
                                 <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', insetInlineStart: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
                                     <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
                                         <LazyEmojiPicker
@@ -668,40 +643,12 @@ const CommunityChatRoom = () => {
 
 
             <div className="chat-footer-stack">
-            <div
-                style={{
-                    flexShrink: 0,
-                    height: showEmojiPanel ? `${keyboardHeight}px` : '0px',
-                    overflow: 'hidden',
-                    background: 'var(--bg-card)',
-                    borderTop: showEmojiPanel ? '1px solid var(--border-color)' : 'none',
-                }}
-            >
-                <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: `${keyboardHeight}px`, color: 'var(--text-muted)' }}>Loading...</div>}>
-                    <LazyEmojiPicker
-                        onEmojiClick={handleEmojiClick}
-                        width="100%"
-                        height={`${keyboardHeight}px`}
-                        searchDisabled={true}
-                        skinTonesDisabled
-                        previewConfig={{ showPreview: false }}
-                        categories={[
-                            {
-                                name: 'Smileys & Emotion',
-                                category: 'smileys_people'
-                            }
-                        ]}
-                    />
-                </Suspense>
-            </div>
-
-            {/* ── COMPOSER (in-flow for iOS fixed + visualViewport) ── */}
             <div ref={composerRef} style={{
                 flexShrink: 0,
                 width: '100%',
                 boxSizing: 'border-box',
                 background: 'var(--bg-darker)',
-                borderTop: showEmojiPanel ? 'none' : '1px solid var(--border-color)',
+                borderTop: '1px solid var(--border-color)',
                 padding: '8px',
                 display: 'flex',
                 alignItems: 'center',
@@ -722,12 +669,18 @@ const CommunityChatRoom = () => {
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                        onFocus={() => showEmojiPanel && setShowEmojiPanel(false)}
                     />
-                    {/* Emoji / Keyboard toggle */}
-                    <button type="button" onClick={handleEmojiToggle} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }} title={showEmojiPanel ? 'Keyboard' : 'Emoji'}>
-                        {showEmojiPanel ? <FaKeyboard /> : '😊'}
-                    </button>
+                    {!isTouchUi && (
+                        <button
+                            ref={emojiBtnRef}
+                            type="button"
+                            onClick={() => setEmojiPickerOpen((o) => !o)}
+                            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                            title="Emoji"
+                        >
+                            😊
+                        </button>
+                    )}
                     <button className="composer-icon-btn" onClick={() => setShowCamera(true)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 4px' }}>
                         <FaCamera />
                     </button>
@@ -751,6 +704,15 @@ const CommunityChatRoom = () => {
                     <FaPaperPlane style={{ marginInlineStart: '-2px' }} />
                 </button>
             </div>
+
+            {!isTouchUi && (
+                <EmojiPickerPortal
+                    open={emojiPickerOpen}
+                    onClose={() => setEmojiPickerOpen(false)}
+                    anchorRef={emojiBtnRef}
+                    onEmojiClick={handleEmojiClick}
+                />
+            )}
             </div>
             </div>
 

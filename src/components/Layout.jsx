@@ -10,7 +10,6 @@ import { useTheme } from '../context/ThemeContext';
 import ProfileCompletionModal from './ProfileCompletionModal';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
-import PrivateInvitationOverlay from './Invitation/PrivateInvitationOverlay';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -23,6 +22,7 @@ import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '
 import { goToLogin } from '../utils/goToLogin';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { useToast } from '../context/ToastContext';
+import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -105,6 +105,34 @@ const Layout = ({ children }) => {
         return () => window.removeEventListener('keydown', onKey);
     }, [businessCreateOpen, inviteCreateOpen]);
 
+    // iOS: keep fixed app header aligned with the visual viewport when the keyboard opens (feed, comments, etc.)
+    useEffect(() => {
+        const path = location.pathname;
+        const isChatLike =
+            path.startsWith('/chat/') ||
+            path === '/messages' ||
+            path.startsWith('/messages') ||
+            (path.startsWith('/invitation/') && path.endsWith('/chat')) ||
+            path.startsWith('/community/');
+        const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)') : null;
+
+        let detach = () => {};
+        const attach = () => {
+            detach();
+            detach = () => {};
+            if (isChatLike || !mq?.matches) return;
+            detach = attachIosAppHeaderViewportOffset();
+        };
+
+        attach();
+        const onMq = () => attach();
+        mq?.addEventListener('change', onMq);
+        return () => {
+            mq?.removeEventListener('change', onMq);
+            detach();
+        };
+    }, [location.pathname]);
+
     // Right sidebar data
     const [trendingPartners, setTrendingPartners] = useState([]);
     const [recentCommunities, setRecentCommunities] = useState([]);
@@ -176,7 +204,16 @@ const Layout = ({ children }) => {
     // 2. Email verification — email/password accounts (consumer or business) until verified
     // For business accounts, we allow them to continue but show the EmailVerificationBusinessBanner instead of force redirect.
     const isAdminAccount = isAdminIdentity(currentUser, userProfile);
-    if (!isAdminAccount && !isGuest && currentUser && userProfile && needsConsumerEmailVerification(currentUser, userProfile)) {
+    const privateInvitationPath =
+        location.pathname.startsWith('/invitation/private/');
+    if (
+        !isAdminAccount &&
+        !isGuest &&
+        currentUser &&
+        userProfile &&
+        needsConsumerEmailVerification(currentUser, userProfile) &&
+        !privateInvitationPath
+    ) {
         return <Navigate to="/verify-email" replace />;
     }
 
@@ -338,8 +375,10 @@ const Layout = ({ children }) => {
     const RightSidebar = () => (
         <aside className="ds-right-sidebar">
 
-            {/* ── Offers Banner (desktop only) ── */}
-            <OffersBanner onHasOffers={setHasOffers} />
+            {/* ── Offers Banner (desktop only) — hide on private invite flows (reads as “payment” noise) ── */}
+            {!location.pathname.startsWith('/invitation/private/') && (
+                <OffersBanner onHasOffers={setHasOffers} />
+            )}
 
             {/* Top 3 Elite Ranking (desktop only) */}
             <RankingSidebarWidget />
@@ -443,8 +482,6 @@ const Layout = ({ children }) => {
 
             <ProfileCompletionModal />
             <PushNotificationPrompt />
-            <PrivateInvitationOverlay />
-
             {/* ── HEADER ── always on desktop, hidden on mobile chat ── */}
             <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}`}>
                 <div className="logo-wrapper" onClick={() => navigate(feedHomePath)}>

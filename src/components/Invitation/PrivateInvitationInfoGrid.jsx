@@ -73,16 +73,18 @@ const PrivateInvitationInfoGrid = ({ invitation, t }) => {
                 </div>
             </div>
 
-            {/* Payment */}
-            <div className="premium-glass-badge" style={{ padding: '1rem', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <FaMoneyBillWave style={{ color: themeColor }} size={18} />
-                <div>
-                    <div style={{ fontSize: '0.6rem', color: labelColor, textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: '800' }}>{t('payment')}</div>
-                    <div style={{ fontWeight: '800', fontSize: '0.95rem', color: valueColor }}>
-                        {invitation.paymentType ? (t(invitation.paymentType.toLowerCase().replace(' ', '_')) || invitation.paymentType) : t('not_specified')}
+            {/* Payment — not shown for dating invitations */}
+            {invitation.type !== 'Dating' && (
+                <div className="premium-glass-badge" style={{ padding: '1rem', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <FaMoneyBillWave style={{ color: themeColor }} size={18} />
+                    <div>
+                        <div style={{ fontSize: '0.6rem', color: labelColor, textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: '800' }}>{t('payment')}</div>
+                        <div style={{ fontWeight: '800', fontSize: '0.95rem', color: valueColor }}>
+                            {invitation.paymentType ? (t(invitation.paymentType.toLowerCase().replace(' ', '_')) || invitation.paymentType) : t('not_specified')}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };

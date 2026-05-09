@@ -118,9 +118,9 @@
     margin-bottom: 10px;
 }
 
+/* Create-flow compact preview: hide date/location glass strip so the 9:16 card reads as one piece */
 .private-invitation-card-preview--showcase-compact .private-invitation-card-preview__meta {
-    margin-top: 8px;
-    font-size: 0.78rem;
+    display: none;
 }
 
 .private-invitation-card-preview__inner {
@@ -155,6 +155,14 @@
 
 /* Template art: use <img> so decoding matches file type (PNG/JPEG/WebP) and fallbacks work */
 .private-invitation-card-preview__bg--image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+.private-invitation-card-preview__bg--video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -207,6 +215,81 @@
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
+}
+
+/* Message + profile hidden: pin headline band to the top; keep text centered */
+.private-invitation-card-preview--photo-bg.private-invitation-card-preview--host-message-hidden
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__main {
+    justify-content: flex-start;
+    align-items: center;
+    padding-top: clamp(14px, 4.2vmin, 24px);
+    padding-bottom: 8px;
+}
+
+.private-invitation-card-preview--photo-bg.private-invitation-card-preview--host-message-hidden
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__occasion {
+    text-align: center;
+    margin-bottom: 8px;
+    width: 100%;
+    max-width: min(92%, 280px);
+}
+
+.private-invitation-card-preview--photo-bg.private-invitation-card-preview--host-message-hidden
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__title {
+    text-align: center;
+    align-self: center;
+    width: 100%;
+    max-width: min(84%, 264px);
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0;
+    border: 0;
+    box-shadow: none;
+    text-decoration: none;
+}
+
+/* Gradient / non-photo cards: same top alignment when body is minimal */
+.private-invitation-card-preview--host-message-hidden:not(.private-invitation-card-preview--photo-bg)
+    .private-invitation-card-preview__inner
+    > .private-invitation-card-preview__main {
+    align-self: stretch;
+    width: 100%;
+    padding-top: 10px;
+    box-sizing: border-box;
+}
+
+.private-invitation-card-preview--host-message-hidden:not(.private-invitation-card-preview--photo-bg)
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__occasion,
+.private-invitation-card-preview--host-message-hidden:not(.private-invitation-card-preview--photo-bg)
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__title {
+    text-align: center;
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0;
+    border: 0;
+    box-shadow: none;
+    text-decoration: none;
+}
+
+/* Title-only: drop extra title margins + meta’s top inset line (read as a thin rule under the heading) */
+.private-invitation-card-preview--host-message-hidden .private-invitation-card-preview__title {
+    margin-bottom: 0 !important;
+}
+
+.private-invitation-card-preview--host-message-hidden .private-invitation-card-preview__meta {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.private-invitation-card-preview--host-message-hidden .private-invitation-card-preview__occasion {
+    border: 0;
+    text-decoration: none;
 }
 
 .private-invitation-card-preview--photo-bg .private-invitation-card-preview__main .private-invitation-card-preview__title {
@@ -460,6 +543,10 @@
     animation: private-card-flame 1.4s ease-in-out infinite;
 }
 
+.private-card-cat-icon--dating {
+    animation: private-card-pulse 2s ease-in-out infinite;
+}
+
 .private-card-cat-spark {
     animation: private-card-spark 1.2s ease-in-out infinite;
 }
@@ -593,4 +680,63 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* --- Card content motion (title, body, host + avatar); background art stays still --- */
+@keyframes private-card-motion-sway {
+    0%,
+    100% {
+        transform: rotate(-1.2deg);
+    }
+    50% {
+        transform: rotate(1.2deg);
+    }
+}
+
+@keyframes private-card-motion-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.028);
+    }
+}
+
+@keyframes private-card-motion-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+.private-invitation-card-preview--card-motion-sway .private-invitation-card-preview__main {
+    animation: private-card-motion-sway 3.2s ease-in-out infinite;
+    transform-origin: center 38%;
+    will-change: transform;
+}
+
+.private-invitation-card-preview--card-motion-pulse .private-invitation-card-preview__main {
+    animation: private-card-motion-pulse 2.75s ease-in-out infinite;
+    transform-origin: center center;
+    will-change: transform;
+}
+
+.private-invitation-card-preview--card-motion-float .private-invitation-card-preview__main {
+    animation: private-card-motion-float 3s ease-in-out infinite;
+    transform-origin: center center;
+    will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .private-invitation-card-preview--card-motion-sway .private-invitation-card-preview__main,
+    .private-invitation-card-preview--card-motion-pulse .private-invitation-card-preview__main,
+    .private-invitation-card-preview--card-motion-float .private-invitation-card-preview__main {
+        animation: none !important;
+        transform: none !important;
+        will-change: auto;
+    }
 }

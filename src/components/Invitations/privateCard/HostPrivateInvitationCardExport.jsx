@@ -8,6 +8,11 @@ import { getSafeAvatar } from '../../../utils/avatarUtils';
 import PrivateInvitationCardPreview from './PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from './privateCardFrameColors';
 import { DEFAULT_FONT_ID } from './privateCardFonts';
+import { DEFAULT_MOTION_ID } from './privateCardMotions';
+import {
+    getDatingInvitationHeroCoverFromInvitation,
+    getPrivateInvitationHeroCoverFromInvitation
+} from '../datingCard/datingCardBackgrounds';
 
 /**
  * Host-only: full invitation card preview + PNG download + native share (when supported).
@@ -35,6 +40,12 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
             inviterAvatarUrl: getSafeAvatar(authorLike)
         };
     }, [invitation.author, invitation.authorId, userProfile]);
+
+    const cardHeroCover = useMemo(() => {
+        if (!invitation) return null;
+        if (invitation.type === 'Dating') return getDatingInvitationHeroCoverFromInvitation(invitation);
+        return getPrivateInvitationHeroCoverFromInvitation(invitation);
+    }, [invitation]);
 
     const capturePngBlob = async () => {
         const el = captureRef.current;
@@ -149,10 +160,21 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
                 <div ref={captureRef} style={{ display: 'inline-block' }}>
                     <PrivateInvitationCardPreview
                         className="private-invitation-card-preview--showcase"
+                        cardTemplateSet={invitation.type === 'Dating' ? 'dating' : 'private'}
                         frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
+                        cardThemeColor={
+                            invitation.type === 'Private'
+                                ? invitation.privateCardThemeColor ?? null
+                                : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
+                        }
                         cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
+                        cardMotionId={invitation.cardMotionId ?? DEFAULT_MOTION_ID}
+                        freezeMotion
                         occasionType={invitation.occasionType}
                         cardBackgroundId={invitation.cardBackgroundId || null}
+                        heroCoverSrc={cardHeroCover?.src ?? null}
+                        heroCoverMediaType={cardHeroCover?.mediaType ?? null}
+                        heroCoverPoster={cardHeroCover?.poster ?? null}
                         title={invitation.title}
                         description={invitation.description}
                         date={invitation.date}
@@ -160,6 +182,13 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
                         location={invitation.location}
                         inviterName={inviterName}
                         inviterAvatarUrl={inviterAvatarUrl}
+                        showHostAndMessage={
+                            invitation.type === 'Dating'
+                                ? invitation.datingCardShowHostAndMessage !== false
+                                : invitation.type === 'Private'
+                                  ? invitation.privateCardShowHostAndMessage !== false
+                                  : true
+                        }
                     />
                 </div>
             </div>

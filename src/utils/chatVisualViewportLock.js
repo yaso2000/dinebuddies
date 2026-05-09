@@ -50,13 +50,17 @@ function lockPageScroll() {
 
 /**
  * @param {() => HTMLElement | null} getContainer
- * @param {{ onViewportChange?: (vv: typeof window.visualViewport) => void }} [options]
- * @returns {() => void} detach
+ * @param {{
+ *   onViewportChange?: (vv: typeof window.visualViewport) => void;
+ *   getShellHeightOverride?: () => number | null;
+ * }} [options] getShellHeightOverride — during emoji↔keyboard, pin shell height (avoids whole-chat reflow).
+ * @returns {{ detach: () => void; sync: () => void }}
  */
 export function attachChatShellToVisualViewport(getContainer, options = {}) {
-    const { onViewportChange } = options;
+    const { onViewportChange, getShellHeightOverride } = options;
     if (!isPhoneLikeChatShell()) {
-        return () => {};
+        const noop = () => {};
+        return { detach: noop, sync: noop };
     }
 
     const getRoot = () => (typeof getContainer === 'function' ? getContainer() : getContainer);
@@ -68,8 +72,13 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         const innerH = window.innerHeight;
         const innerW = window.innerWidth;
 
+        const overrideRaw = typeof getShellHeightOverride === 'function' ? getShellHeightOverride() : null;
+        const override =
+            overrideRaw != null && Number.isFinite(overrideRaw) ? Math.round(overrideRaw) : null;
+
         if (isAppleWebKitTouch()) {
-            const h = Math.max(1, Math.min(vv.height, innerH));
+            let h = Math.max(1, Math.min(vv.height, innerH));
+            if (override != null) h = Math.max(1, Math.min(override, innerH));
             el.style.left = '0px';
             el.style.right = '0px';
             el.style.top = '0px';
@@ -78,7 +87,8 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
             el.style.bottom = 'auto';
         } else {
             const w = Math.max(1, Math.min(vv.width, innerW - vv.offsetLeft));
-            const h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
+            let h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
+            if (override != null) h = Math.max(1, Math.min(override, innerH - vv.offsetTop));
             el.style.left = `${vv.offsetLeft}px`;
             el.style.top = `${vv.offsetTop}px`;
             el.style.width = `${w}px`;
@@ -111,7 +121,7 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
 
     const unlockScroll = lockPageScroll();
 
-    return function detach() {
+    function detach() {
         vv.removeEventListener('resize', sync);
         if (onVVScroll) {
             vv.removeEventListener('scroll', onVVScroll);
@@ -123,5 +133,7 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
             }
         }
         unlockScroll();
-    };
+    }
+
+    return { detach, sync };
 }

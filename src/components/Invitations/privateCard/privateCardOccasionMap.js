@@ -3,6 +3,7 @@
  * Fallback: social
  */
 export const OCCASION_TYPE_TO_CATEGORY_ID = {
+    Dating: 'dating',
     Birthday: 'birthday',
     Social: 'social',
     Work: 'work',

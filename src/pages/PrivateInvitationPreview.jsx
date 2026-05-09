@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaLock, FaArrowLeft } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,11 @@ import { pickSafeDisplayImageUrl, getSafeAvatar } from '../utils/avatarUtils';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
 import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
+import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
+import {
+    getDatingInvitationHeroCoverFromInvitation,
+    getPrivateInvitationHeroCoverFromInvitation
+} from '../components/Invitations/datingCard/datingCardBackgrounds';
 
 const PrivateInvitationPreview = () => {
     const { t } = useTranslation();
@@ -83,6 +88,12 @@ const PrivateInvitationPreview = () => {
         return () => {
             cancelled = true;
         };
+    }, [invitation]);
+
+    const cardHeroCover = useMemo(() => {
+        if (!invitation) return null;
+        if (invitation.type === 'Dating') return getDatingInvitationHeroCoverFromInvitation(invitation);
+        return getPrivateInvitationHeroCoverFromInvitation(invitation);
     }, [invitation]);
 
     const handlePublish = async () => {
@@ -156,10 +167,20 @@ const PrivateInvitationPreview = () => {
             <div style={{ padding: '0 15px 20px', display: 'flex', justifyContent: 'center' }}>
                 <PrivateInvitationCardPreview
                     className="private-invitation-card-preview--showcase"
+                    cardTemplateSet={invitation.type === 'Dating' ? 'dating' : 'private'}
                     frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
+                    cardThemeColor={
+                        invitation.type === 'Private'
+                            ? invitation.privateCardThemeColor ?? null
+                            : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
+                    }
                     cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
+                    cardMotionId={invitation.cardMotionId ?? DEFAULT_MOTION_ID}
                     occasionType={invitation.occasionType}
                     cardBackgroundId={invitation.cardBackgroundId || null}
+                    heroCoverSrc={cardHeroCover?.src ?? null}
+                    heroCoverMediaType={cardHeroCover?.mediaType ?? null}
+                    heroCoverPoster={cardHeroCover?.poster ?? null}
                     title={invitation.title}
                     description={invitation.description}
                     date={invitation.date}
@@ -167,6 +188,13 @@ const PrivateInvitationPreview = () => {
                     location={invitation.location}
                     inviterName={invitation.author?.name || ''}
                     inviterAvatarUrl={getSafeAvatar(invitation.author || {})}
+                    showHostAndMessage={
+                        invitation.type === 'Dating'
+                            ? invitation.datingCardShowHostAndMessage !== false
+                            : invitation.type === 'Private'
+                              ? invitation.privateCardShowHostAndMessage !== false
+                              : true
+                    }
                 />
             </div>
 
