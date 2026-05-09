@@ -9,6 +9,7 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const { buildAdminGrantClaims } = require('./adminClaims');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -1182,6 +1183,8 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
     }
 
+    const targetUser = await admin.auth().getUser(targetUid);
+
     await db.collection('users').doc(targetUid).set({
         role: 'admin',
         accountType: 'admin',
@@ -1189,9 +1192,15 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    // superOwner must describe the target identity, not the requester performing the grant.
+    const claims = buildAdminGrantClaims({
+        targetUid,
+        targetEmail: targetUser.email,
+        currentClaims: targetUser.customClaims,
+        superOwnerUids: SUPER_OWNER_UIDS,
+        superOwnerEmails: SUPER_OWNER_EMAILS
+    });
+    await admin.auth().setCustomUserClaims(targetUid, claims);
 
     return { success: true, targetUid };
 });
