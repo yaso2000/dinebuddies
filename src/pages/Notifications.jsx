@@ -45,6 +45,10 @@ const getNotifTitle = (notif, t) => {
         case 'invitation_completed': return t('notif_title_completed', 'Invitation Completed! 🎉');
         case 'invitation_updated': return t('notif_title_updated', 'Invitation Time Updated');
         case 'private_invitation': return t('notification_private_invitation_title', 'New private invitation');
+        case 'private_invitation_response':
+            return notif.status === 'declined'
+                ? t('notif_title_private_declined', 'Invitation declined')
+                : t('notif_title_private_accepted', 'Invitation accepted');
         case 'join_request':     return t('notif_title_join_request', 'New Join Request');
         case 'request_approved':    return t('notif_title_request_approved', 'Request Approved');
         case 'business_message':    return t('notif_title_business_message', 'Message from Business');
@@ -88,6 +92,8 @@ const getNotifMessage = (notif, t) => {
             return notif.message || t('notif_msg_updated', 'The invitation time has been updated. Please confirm your attendance.');
         case 'private_invitation':
             return t('notification_private_invitation_message', '{{name}} has invited you to a private occasion: {{title}}', { name, title });
+        case 'private_invitation_response':
+            return notif.message || '';
         case 'join_request':
             return t('notif_msg_join_request', '{{name}} requested to join your invitation', { name });
         case 'request_approved':
@@ -125,11 +131,14 @@ const Notifications = () => {
     const [filterType, setFilterType] = useState('all'); // all, follow, invitation_accepted, etc.
     const [searchQuery, setSearchQuery] = useState('');
 
-    const getIcon = (type) => {
+    const getIcon = (type, status) => {
         const iconStyle = { fontSize: '1.2rem' };
         switch (type) {
             case 'follow':
+            case 'join_request':
                 return <FaUserPlus style={{ ...iconStyle, color: 'var(--primary)' }} />;
+            case 'request_approved':
+                return <FaCheckDouble style={{ ...iconStyle, color: '#10b981' }} />;
             case 'invitation_accepted':
                 return <FaCheckCircle style={{ ...iconStyle, color: '#10b981' }} />;
             case 'invitation_rejected':
@@ -144,6 +153,15 @@ const Notifications = () => {
                 return <FaExclamationCircle style={{ ...iconStyle, color: '#f59e0b' }} />;
             case 'private_invitation':
                 return <FaLock style={{ ...iconStyle, color: '#8b5cf6' }} />;
+            case 'private_invitation_response':
+                return status === 'declined' ? (
+                    <FaTimesCircle style={{ ...iconStyle, color: '#ef4444' }} />
+                ) : (
+                    <FaCheckCircle style={{ ...iconStyle, color: '#10b981' }} />
+                );
+            case 'business_message':
+            case 'community_message':
+                return <FaCommentAlt style={{ ...iconStyle, color: 'var(--secondary)' }} />;
             default:
                 return <FaBell style={{ ...iconStyle, color: 'var(--text-secondary)' }} />;
         }
@@ -347,18 +365,18 @@ const Notifications = () => {
                             {!notif.read && <div className="unread-dot"></div>}
 
                             <div className="notification-icon">
-                                {notif.fromUserAvatar ? (
+                                {notif.fromUserAvatar || notif.senderAvatar ? (
                                     <UserAvatar
-                                        src={notif.fromUserAvatar}
+                                        src={notif.fromUserAvatar || notif.senderAvatar}
                                         user={{
-                                            name: notif.fromUserName,
+                                            name: notif.fromUserName || notif.senderName,
                                             gender: notif.fromUserGender,
-                                            role: notif.fromUserRole
+                                            role: notif.fromUserRole,
                                         }}
-                                        alt={notif.fromUserName || 'User'}
+                                        alt={notif.fromUserName || notif.senderName || 'User'}
                                     />
                                 ) : (
-                                    getIcon(notif.type)
+                                    getIcon(notif.type, notif.status)
                                 )}
                             </div>
 

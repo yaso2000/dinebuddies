@@ -1,6 +1,7 @@
 {
     "name": "DineBuddies Premium",
     "short_name": "DineBuddies",
+    "gcm_sender_id": "686703042572",
     "description": "Premium Social Dining Events & Exclusive Invitations",
     "start_url": "/",
     "display": "standalone",

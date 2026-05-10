@@ -109,7 +109,7 @@ const loadFacebookSDK = () => new Promise((resolve) => {
 });
 
 import { fetchIpLocation, reverseGeocode } from '../utils/locationUtils';
-import { initNotifications, removeFcmToken } from '../services/notificationService';
+import { initNotifications, removeFcmToken, isIosDevice } from '../services/notificationService';
 
 import {
     doc,
@@ -245,8 +245,14 @@ export const AuthProvider = ({ children }) => {
                         authLoadingTimeoutRef.current = null;
                     }, 5000);
                 }
-                // Initialize push notifications (request permission + save FCM token)
+                // Initialize push notifications (request permission + save FCM token).
+                // iOS PWA: first cold start can race the messaging SW — retry once after a few seconds.
                 initNotifications(user.uid).catch(() => { });
+                if (isIosDevice()) {
+                    setTimeout(() => {
+                        initNotifications(user.uid).catch(() => { });
+                    }, 3500);
+                }
             } else {
                 lastAuthUidRef.current = null;
                 if (authLoadingTimeoutRef.current) {

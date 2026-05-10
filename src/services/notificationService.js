@@ -1,23 +1,72 @@
 /**
  * Push Notification Service — Firebase Cloud Messaging (FCM)
  *
- * Usage:
- *   import { initNotifications, saveFcmToken, removeFcmToken } from './notificationService';
- *
- *   // After login:
- *   await initNotifications(currentUser.uid);
- *
- *   // Before logout:
- *   await removeFcmToken(currentUser.uid);
+ * One worker: /firebase-messaging-sw.js (PWA precache + messaging). Do not register /sw.js.
  */
 import { getMessaging, getToken, deleteToken, onMessage } from 'firebase/messaging';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import app from '../firebase/config';
 import { db } from '../firebase/config';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 let _messaging = null;
+let _foregroundListenerAttached = false;
+
+/** True for iPhone/iPad Safari or installed PWA WebKit (includes iPad “desktop” UA). */
+export function isIosDevice() {
+    if (typeof navigator === 'undefined') return false;
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) return true;
+    // iPadOS 13+ often reports MacIntel + touch points when “desktop” mode is on.
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
+/** Apple Web Push requires the app to be opened from the Home Screen (standalone), not a normal Safari tab. */
+export function isIosStandalonePwa() {
+    if (!isIosDevice()) return false;
+    try {
+        if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    } catch {
+        /* ignore */
+    }
+    return Boolean(window.navigator.standalone);
+}
+
+/** iOS 16.4+ only — earlier versions cannot receive web push. */
+export function isIosWebPushSupportedVersion() {
+    if (!isIosDevice()) return true;
+    const m = navigator.userAgent.match(/OS (\d+)[_.](\d+)/);
+    if (!m) return true;
+    const major = parseInt(m[1], 10);
+    const minor = parseInt(m[2], 10);
+    if (Number.isNaN(major)) return true;
+    if (major < 16) return false;
+    if (major === 16 && minor < 4) return false;
+    return true;
+}
+
+async function waitForServiceWorkerActive(reg, timeoutMs = 8000) {
+    if (!reg) return;
+    if (reg.active?.state === 'activated') return;
+    const w = reg.installing || reg.waiting || reg.active;
+    if (!w) return;
+    if (w.state === 'activated') return;
+    await new Promise((resolve) => {
+        const done = () => resolve();
+        const t = setTimeout(done, timeoutMs);
+        w.addEventListener(
+            'statechange',
+            () => {
+                if (w.state === 'activated') {
+                    clearTimeout(t);
+                    done();
+                }
+            },
+            { once: true }
+        );
+    });
+}
+
 function getMsg() {
     if (_messaging) return _messaging;
     try {
@@ -28,105 +77,136 @@ function getMsg() {
     return _messaging;
 }
 
-/**
- * True if our PWA worker (/sw.js) already controls the origin — registering
- * /firebase-messaging-sw.js with the same scope would replace it and can break
- * cached shells, routing, and the whole app after login.
- */
-async function pwaServiceWorkerActive() {
-    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return false;
-    try {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        return regs.some((reg) => {
-            const url = reg.active?.scriptURL || '';
-            return url.includes('/sw.js') && !url.includes('firebase-messaging-sw');
-        });
-    } catch {
-        return false;
+async function getFcmServiceWorkerRegistration() {
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return null;
+
+    await navigator.serviceWorker.ready.catch(() => {});
+
+    let existing = await navigator.serviceWorker.getRegistration('/');
+    const scriptIsFcm = (reg) => {
+        const u = reg?.active?.scriptURL || reg?.waiting?.scriptURL || '';
+        return u.includes('firebase-messaging-sw.js');
+    };
+
+    // Another worker on scope `/` (e.g. old sw) blocks FCM — unregister then register messaging SW.
+    if (existing && !scriptIsFcm(existing)) {
+        try {
+            await existing.unregister();
+        } catch {
+            /* ignore */
+        }
+        existing = await navigator.serviceWorker.getRegistration('/');
     }
+
+    if (existing && scriptIsFcm(existing)) {
+        try {
+            await existing.update();
+        } catch {
+            /* ignore */
+        }
+        await waitForServiceWorkerActive(existing);
+        return existing;
+    }
+
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    try {
+        await reg.update();
+    } catch {
+        /* ignore */
+    }
+    await waitForServiceWorkerActive(reg);
+    return reg;
 }
 
 /**
  * Request notification permission, get FCM token, and save it to Firestore.
- * Safe to call multiple times — idempotent.
- * @param {string} uid — current user's UID
- * @returns {Promise<string|null>} token if granted, null otherwise
+ * @param {string} uid
+ * @returns {Promise<string|null>}
  */
 export async function initNotifications(uid) {
     if (!uid) return null;
     try {
+        if (!isIosWebPushSupportedVersion()) {
+            console.warn('[FCM] iOS 16.4+ required for web push on iPhone.');
+            return null;
+        }
+
+        // Do not block getToken on standalone detection — some WebKit builds mis-report; let FCM succeed or fail clearly.
+        if (isIosDevice() && !isIosStandalonePwa()) {
+            console.info('[FCM] iOS: Web Push works reliably from the Home Screen app; Safari tab may not receive a token.');
+        }
+
+        if (!VAPID_KEY || String(VAPID_KEY).trim() === '') {
+            console.error('[FCM] Missing VITE_FIREBASE_VAPID_KEY — browser cannot obtain a push token.');
+            return null;
+        }
+
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') return null;
 
         const messaging = getMsg();
         if (!messaging) return null;
 
-        // Do not register firebase-messaging-sw.js when /sw.js is already active — same scope would
-        // replace the PWA worker and has caused blank/broken SPA loads after sign-in.
-        if (await pwaServiceWorkerActive()) {
-            return null;
+        const reg = await getFcmServiceWorkerRegistration();
+        if (!reg) return null;
+
+        if (isIosDevice()) {
+            await new Promise((r) => setTimeout(r, 400));
         }
 
         const token = await getToken(messaging, {
             vapidKey: VAPID_KEY,
-            serviceWorkerRegistration: await navigator.serviceWorker.register(
-                '/firebase-messaging-sw.js',
-                { scope: '/' }
-            ),
+            serviceWorkerRegistration: reg,
         });
 
         if (token) {
             await saveFcmToken(uid, token);
-            // Handle foreground messages
-            onMessage(messaging, (payload) => {
-                const { title, body } = payload.notification || {};
-                const { actionUrl } = payload.data || {};
-                
-                if (title && Notification.permission === 'granted') {
-                    navigator.serviceWorker.ready.then((reg) => {
-                        const iconUrl = payload.data?.senderAvatar || '/icon-light-192.png';
-                        reg.showNotification(title, {
-                            body: body || '',
-                            icon: iconUrl,
-                            data: { url: actionUrl || '/' }
-                        });
-                    });
-                }
-            });
+            if (!_foregroundListenerAttached) {
+                _foregroundListenerAttached = true;
+                // Data-only FCM: foreground deliveries hit here only — do not call showNotification
+                // (system banner off; user sees in-app notifications from Firestore).
+                onMessage(messaging, () => {});
+            }
         }
 
         return token || null;
     } catch (err) {
-        // Permission denied or browser doesn't support push — fail silently
         console.warn('[FCM] initNotifications failed:', err.message);
         return null;
     }
 }
 
-/**
- * Save an FCM token to the user's Firestore document.
- * Uses arrayUnion so no duplicates are stored.
- */
 export async function saveFcmToken(uid, token) {
     if (!uid || !token) return;
+    const ref = doc(db, 'users', uid);
     try {
-        await updateDoc(doc(db, 'users', uid), {
+        await updateDoc(ref, {
             fcmTokens: arrayUnion(token),
         });
     } catch (err) {
-        console.warn('[FCM] saveFcmToken failed:', err.message);
+        const code = err?.code || '';
+        const msg = String(err?.message || '');
+        if (code === 'not-found' || msg.includes('No document to update')) {
+            try {
+                await setDoc(ref, { fcmTokens: arrayUnion(token) }, { merge: true });
+            } catch (e2) {
+                console.warn('[FCM] saveFcmToken setDoc failed:', e2?.message || e2);
+            }
+        } else {
+            console.warn('[FCM] saveFcmToken failed:', err.message);
+        }
     }
 }
 
-/**
- * Remove the current device's FCM token from Firestore and invalidate it.
- * Call before logout to stop receiving push notifications on this device.
- */
 export async function removeFcmToken(uid) {
     if (!uid) return;
     try {
         const messaging = getMsg();
-        const token = await getToken(messaging, { vapidKey: VAPID_KEY }).catch(() => null);
+        const reg = await getFcmServiceWorkerRegistration().catch(() => null);
+        const token = await getToken(messaging, {
+            vapidKey: VAPID_KEY,
+            ...(reg ? { serviceWorkerRegistration: reg } : {}),
+        }).catch(() => null);
         if (token) {
             await deleteToken(messaging);
             await updateDoc(doc(db, 'users', uid), {

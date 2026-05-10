@@ -5,6 +5,19 @@
     "installCommand": "npm install",
     "headers": [
         {
+            "source": "/firebase-messaging-sw.js",
+            "headers": [
+                {
+                    "key": "Content-Type",
+                    "value": "application/javascript; charset=utf-8"
+                },
+                {
+                    "key": "Cache-Control",
+                    "value": "public, max-age=0, must-revalidate"
+                }
+            ]
+        },
+        {
             "source": "/(.*)",
             "headers": [
                 {
@@ -28,7 +41,7 @@
             "destination": "/api/sitemap"
         },
         {
-            "source": "/((?!api/).*)",
+            "source": "/((?!api/)(?!firebase-messaging-sw\\.js)(?!manifest\\.json)(?!sw\\.js).*)",
             "destination": "/index.html"
         }
     ],

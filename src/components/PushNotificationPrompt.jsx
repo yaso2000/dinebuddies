@@ -15,24 +15,36 @@ const PushNotificationPrompt = () => {
     useEffect(() => {
         if (isGuest || !currentUser || !userProfile) return;
 
-        const dismissed = localStorage.getItem('pushPromptDismissed');
-        if (dismissed === 'true') return;
-
-        // Detect iOS
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        const isStandalone =
+            (typeof window.matchMedia === 'function' &&
+                window.matchMedia('(display-mode: standalone)').matches) ||
+            window.navigator.standalone;
 
-        // If iOS and NOT standalone (not added to home screen), Notification API is blocked by Apple.
+        // Old bug: "Got it" on the install-hint used pushPromptDismissed and blocked Enable in the PWA.
+        // Only clear if permission was never decided (still "default") so we do not nag after explicit "Not now" + deny.
+        if (
+            isIOS &&
+            isStandalone &&
+            localStorage.getItem('pushPromptDismissed') === 'true' &&
+            localStorage.getItem('iosAddToHomeHintDismissed') !== 'true' &&
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'default'
+        ) {
+            localStorage.removeItem('pushPromptDismissed');
+        }
+
         if (isIOS && !isStandalone) {
+            if (localStorage.getItem('iosAddToHomeHintDismissed') === 'true') return;
             setIsIosStandaloneRequired(true);
             const timer = setTimeout(() => setShowPrompt(true), 3000);
             return () => clearTimeout(timer);
         }
 
-        // Check if browser supports notifications natively
-        if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+        setIsIosStandaloneRequired(false);
+        if (localStorage.getItem('pushPromptDismissed') === 'true') return;
 
-        // If permission is already granted or denied, don't show prompt
+        if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         if (Notification.permission !== 'default') return;
 
         const timer = setTimeout(() => setShowPrompt(true), 3000);
@@ -41,7 +53,6 @@ const PushNotificationPrompt = () => {
 
     const handleEnable = async () => {
         if (isIosStandaloneRequired) {
-            // Can't enable natively. Just dismiss for now.
             handleDismiss();
             return;
         }
@@ -64,7 +75,11 @@ const PushNotificationPrompt = () => {
 
     const handleDismiss = () => {
         setShowPrompt(false);
-        localStorage.setItem('pushPromptDismissed', 'true');
+        if (isIosStandaloneRequired) {
+            localStorage.setItem('iosAddToHomeHintDismissed', 'true');
+        } else {
+            localStorage.setItem('pushPromptDismissed', 'true');
+        }
     };
 
     if (!showPrompt) return null;

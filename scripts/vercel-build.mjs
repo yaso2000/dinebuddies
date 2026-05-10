@@ -5,7 +5,7 @@
  * Set VERCEL_PREDIST=1 (or "true") for one-shot deploy of current dist/, e.g.:
  *   npx vercel --prod -b VERCEL_PREDIST=1
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, copyFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 const predist =
@@ -31,6 +31,14 @@ if (predist) {
     console.log(
         `[vercel-build] VERCEL_PREDIST: using existing dist/ (assets: ${files.length} files).`
     );
+    const swSrc = 'public/firebase-messaging-sw.js';
+    const swDest = 'dist/firebase-messaging-sw.js';
+    if (!existsSync(swSrc)) {
+        console.error('[vercel-build] VERCEL_PREDIST: public/firebase-messaging-sw.js is missing.');
+        process.exit(1);
+    }
+    copyFileSync(swSrc, swDest);
+    console.log('[vercel-build] VERCEL_PREDIST: copied firebase-messaging-sw.js → dist/ (must match app SDK).');
     process.exit(0);
 }
 

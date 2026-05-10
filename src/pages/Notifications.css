@@ -156,6 +156,38 @@
     box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
 }
 
+/* Notification avatar + type badge */
+.notification-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+}
+
+.notification-type-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--card-bg, var(--bg-main));
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+}
+
+.notification-initial {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+    user-select: none;
+}
+
 /* Notification Icon */
 .notification-icon {
     width: 48px;
@@ -168,6 +200,10 @@
     justify-content: center;
     flex-shrink: 0;
     overflow: hidden;
+}
+
+.notification-icon.notification-icon--photo {
+    padding: 0;
 }
 
 .notification-icon img {

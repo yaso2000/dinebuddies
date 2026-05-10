@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -22,6 +22,21 @@ import {
 
 const NotificationContext = createContext();
 
+/** True if user is already on the screen this notification points to (avoids toast + badge noise). */
+function shouldSuppressInAppToastForPath(pathname, notif) {
+    if (!notif?.actionUrl || notif.read) return false;
+    const url = String(notif.actionUrl);
+    if (pathname === url) return true;
+    if (notif.type !== 'message') return false;
+    if (url.startsWith('/community/')) {
+        const base = url.replace(/\/chat\/?$/, '');
+        return pathname === base || pathname === url;
+    }
+    if (url.startsWith('/chat/')) return pathname === url;
+    if (url.includes('/invitation/') && url.includes('/chat')) return pathname === url;
+    return false;
+}
+
 export const useNotifications = () => {
     const context = useContext(NotificationContext);
     if (!context) {
@@ -42,6 +57,8 @@ export const NotificationProvider = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { showToast } = useToast();
+    const pathnameRef = useRef(location.pathname);
+    pathnameRef.current = location.pathname;
 
     // Load notifications for current user
     useEffect(() => {
@@ -84,26 +101,27 @@ export const NotificationProvider = ({ children }) => {
 
                 // Trigger in-app floating notifications for new items
                 if (!isInitialLoad) {
+                    const pathname = pathnameRef.current;
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === 'added') {
                             const newNotif = change.doc.data();
-                            
-                            // Don't toast if it's already read
                             const isAlreadyRead = newNotif.read;
-                            // Don't toast if the user is currently on the exact page the notification refers to
-                            const isCurrentlyOnPage = location.pathname === newNotif.actionUrl;
+                            const onTarget = shouldSuppressInAppToastForPath(pathname, newNotif);
 
-                            if (!isAlreadyRead && !isCurrentlyOnPage) {
-                                showToast({
-                                    title: newNotif.title,
-                                    body: newNotif.message,
-                                    icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
-                                    onClick: () => {
-                                        if (newNotif.actionUrl) {
-                                            navigate(newNotif.actionUrl);
-                                        }
-                                    }
-                                }, 'notification');
+                            if (!isAlreadyRead && !onTarget) {
+                                showToast(
+                                    {
+                                        title: newNotif.title,
+                                        body: newNotif.message,
+                                        icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
+                                        onClick: () => {
+                                            if (newNotif.actionUrl) {
+                                                navigate(newNotif.actionUrl);
+                                            }
+                                        },
+                                    },
+                                    'notification'
+                                );
                             }
                         }
                     });
@@ -246,26 +264,27 @@ export const NotificationProvider = ({ children }) => {
     };
 
     const markMessageNotificationsAsRead = async (actionUrlSubstring) => {
-        if (!currentUser?.uid) return;
-        const unreadToClear = notifications.filter(n => 
-            !n.read && 
-            n.type === 'message' && 
-            n.actionUrl && 
-            n.actionUrl.includes(actionUrlSubstring)
+        if (!currentUser?.uid || !actionUrlSubstring) return;
+        const unreadToClear = notifications.filter(
+            (n) =>
+                !n.read &&
+                n.type === 'message' &&
+                n.actionUrl &&
+                (n.actionUrl.includes(actionUrlSubstring) || actionUrlSubstring.includes(n.actionUrl))
         );
 
         if (unreadToClear.length === 0) return;
 
-        unreadToClear.forEach(async (n) => {
-            try {
-                await updateDoc(doc(db, 'notifications', n.id), {
+        await Promise.all(
+            unreadToClear.map((n) =>
+                updateDoc(doc(db, 'notifications', n.id), {
                     read: true,
-                    readAt: serverTimestamp()
-                });
-            } catch (error) {
-                console.error(`Error marking message notification ${n.id} as read:`, error);
-            }
-        });
+                    readAt: serverTimestamp(),
+                }).catch((error) => {
+                    console.error(`Error marking message notification ${n.id} as read:`, error);
+                })
+            )
+        );
     };
 
     // Mark all as read

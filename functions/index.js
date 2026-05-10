@@ -2309,6 +2309,36 @@ exports.deleteOldCommunityPosts = functions.pubsub
 
 // ─── FCM Push Notifications ──────────────────────────────────────────────────
 
+const FCM_SITE_ORIGIN = 'https://www.dinebuddies.com';
+const FCM_DEFAULT_ICON = `${FCM_SITE_ORIGIN}/icon-light-192.png`;
+
+/** Relative paths like `/chat/x` break Web Push click targets on iOS — must be absolute https. */
+function fcmAbsoluteAppUrl(pathOrUrl) {
+    const raw = String(pathOrUrl || '/').trim() || '/';
+    if (/^https:\/\//i.test(raw)) {
+        try {
+            return new URL(raw).href;
+        } catch {
+            return `${FCM_SITE_ORIGIN}/`;
+        }
+    }
+    const path = raw.startsWith('/') ? raw : `/${raw}`;
+    return `${FCM_SITE_ORIGIN}${path}`;
+}
+
+/** Non-https or malformed avatar URLs can cause delivery/click issues — use site icon. */
+function fcmSafeIconUrl(maybeUrl) {
+    if (!maybeUrl || typeof maybeUrl !== 'string') return FCM_DEFAULT_ICON;
+    const t = maybeUrl.trim();
+    if (!/^https:\/\//i.test(t)) return FCM_DEFAULT_ICON;
+    try {
+        const u = new URL(t);
+        return u.protocol === 'https:' ? t : FCM_DEFAULT_ICON;
+    } catch {
+        return FCM_DEFAULT_ICON;
+    }
+}
+
 /**
  * Send an FCM push notification to a specific user.
  * Reads fcmTokens[] from users/{uid}, sends multicast, and cleans up stale tokens.
@@ -2323,49 +2353,86 @@ async function sendPushToUser(userId, title, body, data = {}) {
     try {
         const userSnap = await db.collection('users').doc(userId).get();
         if (!userSnap.exists) return;
-        const tokens = userSnap.data()?.fcmTokens || [];
+        const rawTokens = userSnap.data()?.fcmTokens || [];
+        const tokens = [...new Set(rawTokens.map((t) => String(t).trim()).filter(Boolean))];
         if (!tokens.length) return;
 
-        const iconToUse = data.senderAvatar || 'https://www.dinebuddies.com/icon-light-192.png';
+        const actionUrlAbs = fcmAbsoluteAppUrl(data.actionUrl || '/');
+        const iconToUse = fcmSafeIconUrl(data.senderAvatar);
+        const badgeUrl = FCM_DEFAULT_ICON;
+        const notifTag =
+            data.notifId != null && String(data.notifId).trim() !== ''
+                ? `db-notif-${String(data.notifId)}`
+                : null;
 
-        const message = {
-            tokens,
-            notification: { title, body: body || '' },
-            webpush: {
-                notification: {
-                    title,
-                    body: body || '',
-                    icon: iconToUse,
-                    badge: 'https://www.dinebuddies.com/icon-light-192.png',
-                    click_action: data.actionUrl || '/',
-                },
-                fcm_options: { link: data.actionUrl || '/' },
-            },
-            data: Object.fromEntries(
-                Object.entries({ actionUrl: '/', ...data })
-                    .filter(([, v]) => v != null)
-                    .map(([k, v]) => [k, String(v)])
-            ),
+        // Web/PWA: `webpush.notification` + absolute `fcm_options.link`.
+        // Root `data`: only strings (FCM). Include `url` for notificationclick fallbacks.
+        const dataStrings = Object.fromEntries(
+            Object.entries({
+                url: actionUrlAbs,
+                actionUrl: actionUrlAbs,
+                type: data.type || '',
+                senderAvatar: data.senderAvatar ? String(data.senderAvatar) : '',
+                notifId: data.notifId != null ? String(data.notifId) : '',
+            })
+                .filter(([, v]) => v != null && String(v).trim() !== '')
+                .map(([k, v]) => [k, String(v)])
+        );
+
+        const webNotif = {
+            title,
+            body: body || '',
+            icon: iconToUse,
+            badge: badgeUrl,
+        };
+        if (notifTag) webNotif.tag = notifTag;
+
+        const webpushCfg = {
+            notification: webNotif,
+            fcm_options: { link: actionUrlAbs },
+            headers: { Urgency: 'high' },
         };
 
-        const response = await admin.messaging().sendEachForMulticast(message);
-
-        // Clean up invalid/expired tokens
         const expiredTokens = [];
-        response.responses.forEach((r, i) => {
-            if (!r.success) {
+        const MULTICAST_MAX = 500;
+
+        for (let offset = 0; offset < tokens.length; offset += MULTICAST_MAX) {
+            const chunk = tokens.slice(offset, offset + MULTICAST_MAX);
+            const response = await admin.messaging().sendEachForMulticast({
+                tokens: chunk,
+                webpush: webpushCfg,
+                data: dataStrings,
+            });
+
+            const ok = response.successCount || 0;
+            functions.logger.info(`sendPushToUser chunk uid=${userId} ok=${ok}/${chunk.length}`);
+
+            if (ok === 0 && chunk.length > 0) {
+                const firstErr = response.responses.find((r) => !r.success)?.error?.message;
+                functions.logger.warn(
+                    `sendPushToUser: 0/${chunk.length} for ${userId} (chunk @${offset})`,
+                    firstErr || 'unknown error'
+                );
+            }
+
+            response.responses.forEach((r, i) => {
+                if (r.success) return;
                 const code = r.error?.code;
                 if (
                     code === 'messaging/invalid-registration-token' ||
-                    code === 'messaging/registration-token-not-registered'
+                    code === 'messaging/registration-token-not-registered' ||
+                    code === 'messaging/unregistered'
                 ) {
-                    expiredTokens.push(tokens[i]);
+                    expiredTokens.push(chunk[i]);
                 }
-            }
-        });
-        if (expiredTokens.length > 0) {
+            });
+        }
+
+        const uniqExpired = [...new Set(expiredTokens)];
+        for (let i = 0; i < uniqExpired.length; i += 30) {
+            const part = uniqExpired.slice(i, i + 30);
             await db.collection('users').doc(userId).update({
-                fcmTokens: admin.firestore.FieldValue.arrayRemove(...expiredTokens),
+                fcmTokens: admin.firestore.FieldValue.arrayRemove(...part),
             });
         }
     } catch (err) {
@@ -2389,7 +2456,13 @@ exports.onNotificationCreated = functions.firestore
         const senderAvatar = data.senderAvatar || data.fromUserAvatar || data.senderPhoto || '';
 
         if (!userId) return null;
-        await sendPushToUser(userId, title, body, { actionUrl, type: data.type || '', senderAvatar });
+        const notifId = snap.id;
+        await sendPushToUser(userId, title, body, {
+            actionUrl,
+            type: data.type || '',
+            senderAvatar,
+            notifId,
+        });
         return null;
     });
 
