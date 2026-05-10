@@ -75,7 +75,7 @@ export const premiumOfferService = {
             throw new Error('Publishing premium offers requires an Elite or Professional Business subscription.');
         }
         if (!isElite && isProfessional) {
-            const credits = userData.offerCredits || 0;
+            const credits = (userData.offerCredits || 0) + (userData.offerSlotCredits || 0);
             if (credits <= 0) {
                 throw new Error('No offer credits remaining. Please purchase more credits to publish an offer.');
             }
