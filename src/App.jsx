@@ -91,6 +91,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import GuestBlockedRoute from './components/GuestBlockedRoute';
 import AdminRoute from './components/AdminRoute';
 import AppRouteLoading from './components/AppRouteLoading';
+import PushDebugPanel from './components/PushDebugPanel';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
 function RouteSuspenseLayout() {
@@ -122,6 +123,7 @@ function App() {
             <ToastProvider>
                 <Router>
                     <LoginRouterBridge />
+                    <PushDebugPanel />
                     <AuthProvider>
                         <InvitationProvider>
                             <NotificationProvider>

@@ -1,9 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { initNotifications } from '../services/notificationService';
+import {
+    initNotifications,
+    isIOS,
+    isStandalonePwa,
+    getPushCapabilitySnapshot,
+} from '../services/notificationService';
 import { useTranslation } from 'react-i18next';
 import { FaBell, FaTimes } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
+
+/** Per-user keys — global keys broke "new account same browser" (dismiss stuck from previous uid). */
+function pushDismissKey(uid) {
+    return `db:pushPromptDismissed:${uid}`;
+}
+function iosHomeHintDismissKey(uid) {
+    return `db:iosAddToHomeHintDismissed:${uid}`;
+}
+
+/** '1' if push prompt was dismissed / finished while in standalone PWA — do not auto-clear dismiss (avoids prompt loop after failed Enable). */
+function pushDismissStandaloneKey(uid) {
+    return `db:pushDismissWasStandalone:${uid}`;
+}
 
 const PushNotificationPrompt = () => {
     const { currentUser, userProfile, isGuest } = useAuth();
@@ -11,38 +29,41 @@ const PushNotificationPrompt = () => {
     const { showToast } = useToast();
     const [showPrompt, setShowPrompt] = useState(false);
     const [isIosStandaloneRequired, setIsIosStandaloneRequired] = useState(false);
+    const [enableBusy, setEnableBusy] = useState(false);
 
     useEffect(() => {
         if (isGuest || !currentUser || !userProfile) return;
 
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isStandalone =
-            (typeof window.matchMedia === 'function' &&
-                window.matchMedia('(display-mode: standalone)').matches) ||
-            window.navigator.standalone;
+        const uid = currentUser.uid;
+        console.log('[PushDebug]', getPushCapabilitySnapshot(uid));
+
+        const pushDismissed = () => localStorage.getItem(pushDismissKey(uid)) === 'true';
+        const iosHomeDismissed = () => localStorage.getItem(iosHomeHintDismissKey(uid)) === 'true';
+
+        const standalone = isStandalonePwa();
 
         // Old bug: "Got it" on the install-hint used pushPromptDismissed and blocked Enable in the PWA.
         // Only clear if permission was never decided (still "default") so we do not nag after explicit "Not now" + deny.
         if (
-            isIOS &&
-            isStandalone &&
-            localStorage.getItem('pushPromptDismissed') === 'true' &&
-            localStorage.getItem('iosAddToHomeHintDismissed') !== 'true' &&
+            isIOS() &&
+            standalone &&
+            pushDismissed() &&
+            !iosHomeDismissed() &&
             typeof Notification !== 'undefined' &&
             Notification.permission === 'default'
         ) {
-            localStorage.removeItem('pushPromptDismissed');
+            localStorage.removeItem(pushDismissKey(uid));
         }
 
-        if (isIOS && !isStandalone) {
-            if (localStorage.getItem('iosAddToHomeHintDismissed') === 'true') return;
+        if (isIOS() && !standalone) {
+            if (iosHomeDismissed()) return;
             setIsIosStandaloneRequired(true);
             const timer = setTimeout(() => setShowPrompt(true), 3000);
             return () => clearTimeout(timer);
         }
 
         setIsIosStandaloneRequired(false);
-        if (localStorage.getItem('pushPromptDismissed') === 'true') return;
+        if (pushDismissed()) return;
 
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         if (Notification.permission !== 'default') return;
@@ -57,8 +78,12 @@ const PushNotificationPrompt = () => {
             return;
         }
 
+        const uid = currentUser?.uid;
+        if (!uid) return;
+
+        setEnableBusy(true);
         try {
-            const token = await initNotifications(currentUser.uid);
+            const token = await initNotifications(uid);
             if (token) {
                 showToast(t('notifications_enabled', 'Push notifications enabled!'), 'success');
             } else {
@@ -68,17 +93,26 @@ const PushNotificationPrompt = () => {
             console.error("Error enabling notifications:", error);
             showToast(t('notifications_failed', 'Failed to enable notifications.'), 'error');
         } finally {
+            setEnableBusy(false);
             setShowPrompt(false);
-            localStorage.setItem('pushPromptDismissed', 'true');
+            localStorage.setItem(pushDismissKey(uid), 'true');
+            if (isStandalonePwa()) {
+                localStorage.setItem(pushDismissStandaloneKey(uid), '1');
+            }
         }
     };
 
     const handleDismiss = () => {
         setShowPrompt(false);
+        const uid = currentUser?.uid;
+        if (!uid) return;
         if (isIosStandaloneRequired) {
-            localStorage.setItem('iosAddToHomeHintDismissed', 'true');
+            localStorage.setItem(iosHomeHintDismissKey(uid), 'true');
         } else {
-            localStorage.setItem('pushPromptDismissed', 'true');
+            localStorage.setItem(pushDismissKey(uid), 'true');
+            if (isStandalonePwa()) {
+                localStorage.setItem(pushDismissStandaloneKey(uid), '1');
+            }
         }
     };
 
@@ -128,13 +162,14 @@ const PushNotificationPrompt = () => {
                         </p>
                     </div>
                 </div>
-                <button onClick={handleDismiss} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+                <button type="button" onClick={handleDismiss} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
                     <FaTimes size={18} />
                 </button>
             </div>
             
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                 <button 
+                    type="button"
                     onClick={handleDismiss} 
                     style={{ flex: 1, padding: '10px', background: 'var(--bg-input)', border: 'none', borderRadius: '8px', color: 'var(--text-main)', fontWeight: 'bold', cursor: 'pointer' }}
                 >
@@ -142,10 +177,22 @@ const PushNotificationPrompt = () => {
                 </button>
                 {!isIosStandaloneRequired && (
                     <button 
+                        type="button"
                         onClick={handleEnable} 
-                        style={{ flex: 1, padding: '10px', background: 'var(--primary)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+                        disabled={enableBusy}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            background: 'var(--primary)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            cursor: enableBusy ? 'wait' : 'pointer',
+                            opacity: enableBusy ? 0.85 : 1,
+                        }}
                     >
-                        {t('enable', 'Enable')}
+                        {enableBusy ? t('enabling', 'Enabling…') : t('enable', 'Enable')}
                     </button>
                 )}
             </div>

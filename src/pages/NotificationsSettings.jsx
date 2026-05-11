@@ -380,31 +380,42 @@ const NotificationsSettings = () => {
                             {t('push_diagnostics_desc', "If you aren't receiving notifications, use this tool to debug your device's connection.")}
                         </p>
                         <button
+                            type="button"
                             onClick={async () => {
+                                if (!currentUser?.uid) {
+                                    alert('Not signed in.');
+                                    return;
+                                }
                                 try {
-                                    alert("1. Checking permissions...");
-                                    const perm = Notification.permission;
-                                    alert("Permission: " + perm);
-                                    
-                                    alert("2. Checking Service Worker...");
-                                    const sw = await navigator.serviceWorker.getRegistration('/');
-                                    if (!sw) {
-                                        alert("No Service Worker found. Attempting to register...");
-                                        await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                                    if (!('Notification' in window)) {
+                                        alert('This browser has no Notification API.');
+                                        return;
                                     }
-                                    alert("SW Status: Active");
+                                    alert('1. Checking permissions...');
+                                    const permBefore = Notification.permission;
+                                    alert(`Permission: ${permBefore}`);
 
-                                    alert("3. Fetching FCM Token...");
-                                    const { getMessaging, getToken } = await import('firebase/messaging');
-                                    const app = (await import('../firebase/config')).default;
-                                    const messaging = getMessaging(app);
-                                    
-                                    const token = await getToken(messaging, {
-                                        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
-                                    });
-                                    alert("SUCCESS! Token is: " + (token ? token.substring(0, 15) + "..." : "EMPTY"));
-                                } catch(e) {
-                                    alert("[ERROR]: " + e.message);
+                                    if (permBefore === 'denied') {
+                                        alert(
+                                            'Notifications are blocked for this site. On iPhone: Settings → (your app name or Safari) → Notifications → Allow. Then return here and run diagnostics again.'
+                                        );
+                                        return;
+                                    }
+
+                                    alert(
+                                        '2–3. Running the same setup as “Enable” (service worker, permission prompt if needed, FCM token)...'
+                                    );
+                                    const token = await initNotifications(currentUser.uid);
+                                    if (token) {
+                                        alert(`SUCCESS. Token starts with: ${token.substring(0, 18)}…`);
+                                    } else {
+                                        const permAfter = Notification.permission;
+                                        alert(
+                                            `No token obtained. Permission is now: ${permAfter}. If you did not tap Allow, try again. If it stays blocked, use iOS Settings to allow notifications for this app.`
+                                        );
+                                    }
+                                } catch (e) {
+                                    alert(`[ERROR]: ${e?.message || String(e)}`);
                                 }
                             }}
                             style={{
