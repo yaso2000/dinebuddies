@@ -1339,12 +1339,16 @@ exports.consumeOfferCredit = functions.https.onCall(async (_data, context) => {
 
         if (isElite) return { consumed: false, remaining: null };
 
-        const credits = user.offerCredits || 0;
-        if (credits <= 0) {
+        const credits = Math.max(0, Number(user.offerCredits || 0));
+        const legacySlotCredits = Math.max(0, Number(user.offerSlotCredits || 0));
+        const totalCredits = credits + legacySlotCredits;
+        if (totalCredits <= 0) {
             throw new functions.https.HttpsError('failed-precondition', 'No offer credits remaining.');
         }
-        tx.update(userRef, { offerCredits: credits - 1 });
-        return { consumed: true, remaining: credits - 1 };
+        tx.update(userRef, credits > 0
+            ? { offerCredits: credits - 1 }
+            : { offerSlotCredits: legacySlotCredits - 1 });
+        return { consumed: true, remaining: totalCredits - 1 };
     });
 
     return { success: true, ...result };

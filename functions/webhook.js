@@ -2,39 +2,10 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { getCheckoutProduct, getQuotaForPlan, getTierForPlan } = require('./paymentPlans');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-// Map planId → weeklyPrivateQuota  (-1 = unlimited)
-const PLAN_QUOTA_MAP = {
-    // User plans
-    'pro': 2,
-    'premium': -1,
-    // Partner plans (no private invites — they are business accounts)
-    'professional': 0,
-    'elite': 0,
-};
-
-function getQuotaForPlan(planId) {
-    if (!planId) return 0;
-    const id = planId.toLowerCase();
-    if (id in PLAN_QUOTA_MAP) return PLAN_QUOTA_MAP[id];
-    // Fallback by keyword
-    if (id.includes('premium')) return -1;
-    if (id.includes('pro')) return 2;
-    return 0;
-}
-
-function getTierForPlan(planId) {
-    if (!planId) return 'free';
-    const id = planId.toLowerCase();
-    if (id.includes('elite')) return 'elite';
-    if (id.includes('professional')) return 'professional';
-    if (id.includes('premium')) return 'premium';
-    if (id.includes('pro')) return 'pro';
-    return 'free';
-}
 
 /**
  * Stripe Webhook handler
@@ -148,46 +119,70 @@ async function handleCheckoutComplete(session) {
         return;
     }
 
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
+    const product = getCheckoutProduct(planId);
+    if (!product) {
+        console.error('Invalid checkout plan metadata:', planId);
+        return;
+    }
 
-    try {
+    const weeklyQuota = getQuotaForPlan(product.canonicalPlanId);
+    const tier = getTierForPlan(product.canonicalPlanId);
+    const isOfferSlot = product.purchaseType === 'offer_slot';
+    const fulfillRef = db.collection('stripe_checkout_fulfillments').doc(session.id);
+    const userRef = db.collection('users').doc(userId);
+    const subscriptionRef = db.collection('user_subscriptions').doc(session.id);
+
+    await db.runTransaction(async (tx) => {
+        const done = await tx.get(fulfillRef);
+        if (done.exists) return;
+
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) {
+            throw new Error(`User not found for checkout session ${session.id}: ${userId}`);
+        }
+
         if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
-            await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
+            // Credit pack: add premium offer credits used by consumeOfferCredit.
+            tx.update(userRef, {
+                offerCredits: admin.firestore.FieldValue.increment(product.offerCredits || 1),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
         } else {
             // Subscription plan
-            await db.collection('users').doc(userId).update({
+            tx.update(userRef, {
                 subscriptionStatus: 'active',
                 subscriptionId: subscriptionId,
                 subscriptionTier: tier,
-                currentPlan: planId,
+                currentPlan: product.canonicalPlanId,
                 weeklyPrivateQuota: weeklyQuota,
                 usedPrivateCreditsThisWeek: 0,
                 subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
                 stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
             });
-
-            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
         }
 
         // Save subscription record
-        await db.collection('user_subscriptions').add({
+        tx.set(subscriptionRef, {
             userId,
-            planId,
-            subscriptionId,
-            status: 'active',
+            planId: product.canonicalPlanId,
+            subscriptionId: subscriptionId || null,
+            status: isOfferSlot ? 'completed' : 'active',
             startDate: admin.firestore.FieldValue.serverTimestamp(),
             sessionId: session.id
         });
 
-    } catch (error) {
-        console.error('Error updating user subscription:', error);
+        tx.set(fulfillRef, {
+            userId,
+            planId: product.canonicalPlanId,
+            purchaseType: product.purchaseType || 'subscription',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+
+    if (isOfferSlot) {
+        console.log(`✅ User ${userId} received ${product.offerCredits || 1} offer credit(s)`);
+    } else {
+        console.log(`✅ User ${userId} → plan: ${product.canonicalPlanId}, tier: ${tier}, quota: ${weeklyQuota}`);
     }
 }
 
