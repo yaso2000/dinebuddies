@@ -6,6 +6,14 @@ import Layout from './components/Layout';
 import LoginHub from './pages/auth/LoginHub';
 import CompleteProfile from './pages/CompleteProfile';
 import HomeRouter from './components/HomeRouter';
+import ReferralJoinPage from './pages/ReferralJoinPage';
+import AffiliateDashboard from './pages/affiliate/AffiliateDashboard';
+import AffiliatePortal from './pages/affiliate/AffiliatePortal';
+import AffiliateUseLaptop from './pages/affiliate/AffiliateUseLaptop';
+import AffiliateForceSignOut from './pages/affiliate/AffiliateForceSignOut';
+import AffiliateSignupPage from './pages/affiliate/AffiliateSignupPage';
+import AffiliateLoginPage from './pages/affiliate/AffiliateLoginPage';
+import AffiliateSettingsPage from './pages/affiliate/AffiliateSettingsPage';
 import NotFound from './pages/NotFound';
 import AuthActionHandler from './pages/AuthActionHandler';
 import VerifyEmail from './pages/VerifyEmail';
@@ -91,7 +99,6 @@ import { NotificationProvider } from './context/NotificationContext';
 import GuestBlockedRoute from './components/GuestBlockedRoute';
 import AdminRoute from './components/AdminRoute';
 import AppRouteLoading from './components/AppRouteLoading';
-import PushDebugPanel from './components/PushDebugPanel';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
 function RouteSuspenseLayout() {
@@ -123,7 +130,6 @@ function App() {
             <ToastProvider>
                 <Router>
                     <LoginRouterBridge />
-                    <PushDebugPanel />
                     <AuthProvider>
                         <InvitationProvider>
                             <NotificationProvider>
@@ -132,6 +138,14 @@ function App() {
                                         <Routes>
                                             {/* Auth routes outside of nested Layout wrappers for maximum reliability */}
                                             <Route path="/login" element={<LoginHub />} />
+                                            <Route path="/join" element={<ReferralJoinPage />} />
+                                            <Route path="/affiliate/use-laptop" element={<AffiliateUseLaptop />} />
+                                            <Route path="/affiliate/sign-out" element={<AffiliateForceSignOut />} />
+                                            <Route path="/affiliate/signup" element={<AffiliateSignupPage />} />
+                                            <Route path="/affiliate/login" element={<AffiliateLoginPage />} />
+                                            <Route path="/affiliate/settings" element={<AffiliateSettingsPage />} />
+                                            <Route path="/affiliate/dashboard" element={<AffiliateDashboard />} />
+                                            <Route path="/affiliate" element={<AffiliatePortal />} />
                                             <Route path="/business/login" element={<Navigate to="/login?tab=business" replace />} />
                                             <Route path="/auth/action" element={<AuthActionHandler />} />
                                             <Route path="/__/auth/action" element={<AuthActionHandler />} />

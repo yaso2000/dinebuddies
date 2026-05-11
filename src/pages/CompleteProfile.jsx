@@ -115,6 +115,10 @@ const CompleteProfile = () => {
                     navigate('/business-dashboard', { replace: true });
                     return;
                 }
+                if (rl === 'affiliate_agent') {
+                    navigate('/affiliate/dashboard', { replace: true });
+                    return;
+                }
                 // AuthContext userProfile can lag behind Firestore (persisted cache). Do not flash this
                 // screen when the server document is already complete — use the same snapshot as role checks.
                 if (['admin', 'staff', 'support'].includes(rl)) {

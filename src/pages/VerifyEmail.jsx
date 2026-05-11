@@ -30,7 +30,7 @@ const VerifyEmail = () => {
             }
         }
         navigate('/', { replace: true });
-    }, [navigate, userProfile?.isBusiness, userProfile?.uid, currentUser?.uid]);
+    }, [navigate, userProfile, currentUser?.uid]);
 
     useEffect(() => {
         if (loading) return;

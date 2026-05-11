@@ -1,0 +1,313 @@
+/* Affiliate web dashboard — data-dense, uses app CSS variables (no Tailwind in repo). */
+
+.affiliate-shell {
+    min-height: 100vh;
+    background: linear-gradient(165deg, var(--bg-main) 0%, var(--bg-elevated) 55%, var(--bg-main) 100%);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.affiliate-shell--center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.affiliate-dash {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 28px 20px 48px;
+}
+
+.affiliate-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.affiliate-header h1 {
+    margin: 0 0 6px;
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.affiliate-sub {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+
+.affiliate-header-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.affiliate-grid-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.affiliate-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 18px 20px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+}
+
+.affiliate-stat-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.affiliate-stat-value {
+    font-size: 1.85rem;
+    font-weight: 900;
+    line-height: 1.1;
+    color: var(--text-main);
+}
+
+.affiliate-stat-hint {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.affiliate-marketing {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 22%, var(--bg-card)), var(--bg-card));
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border-color));
+    border-radius: 16px;
+    padding: 22px 22px 20px;
+    margin-bottom: 28px;
+}
+
+.affiliate-marketing h2 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.affiliate-marketing-p {
+    margin: 0 0 16px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.affiliate-code-pill {
+    display: inline-block;
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    margin-bottom: 12px;
+}
+
+.affiliate-link-box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+    margin-bottom: 14px;
+}
+
+.affiliate-link-input {
+    flex: 1 1 240px;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-main);
+    font-size: 0.88rem;
+}
+
+.affiliate-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.affiliate-dash-payout-card .affiliate-dash-dl {
+    margin: 0;
+    display: grid;
+    gap: 12px 16px;
+}
+
+.affiliate-dash-payout-card .affiliate-dash-dl > div {
+    margin: 0;
+}
+
+.affiliate-dash-payout-card .affiliate-dash-dl dt {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.affiliate-dash-payout-card .affiliate-dash-dl dd {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.affiliate-share-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 10px;
+    align-items: stretch;
+}
+
+.affiliate-share-grid .affiliate-btn {
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.affiliate-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    text-decoration: none;
+    border: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.affiliate-btn:active {
+    transform: scale(0.98);
+}
+
+.affiliate-btn--primary {
+    background: var(--primary);
+    color: var(--text-on-brand, #fff);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.affiliate-btn--secondary {
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+.affiliate-btn--ghost {
+    background: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+.affiliate-table-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.affiliate-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.affiliate-table th,
+.affiliate-table td {
+    padding: 12px 16px;
+    text-align: start;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.affiliate-table th {
+    background: var(--bg-elevated);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.affiliate-table tr:last-child td {
+    border-bottom: none;
+}
+
+.affiliate-muted {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    line-height: 1.55;
+}
+
+.affiliate-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+}
+
+.affiliate-card--notice {
+    max-width: 560px;
+}
+
+.affiliate-h1 {
+    margin: 0 0 12px;
+    font-size: 1.45rem;
+    font-weight: 800;
+}
+
+.affiliate-auth-card .affiliate-auth-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.affiliate-auth-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 14px 0 6px;
+}
+
+.affiliate-auth-label:first-of-type {
+    margin-top: 0;
+}
+
+.affiliate-auth-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.affiliate-auth-input:focus {
+    outline: 2px solid rgba(99, 102, 241, 0.35);
+    outline-offset: 1px;
+}

@@ -123,6 +123,59 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    // Affiliate / referral: financial and identity fields are written only by Cloud Functions (Admin SDK).
+    function affiliateServerOnlyUserKeys() {
+      return [
+        'current_balance', 'total_earned', 'pending_referrals_count', 'successful_referrals_count',
+        'pending_payouts', 'total_clicks', 'referral_code', 'referral_link', 'affiliateLastCommissionSessionId',
+        'registrationChannel'
+      ];
+    }
+
+    // Affiliate agents may edit contact/payout identity fields only (not balances or referral codes).
+    function affiliateAgentContactFieldsOnlyUpdate(userId) {
+      return isOwner(userId) &&
+             resource.data.get('role', '') == 'affiliate_agent' &&
+             request.resource.data.get('role', '') == resource.data.get('role', '') &&
+             request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly([
+                 'affiliate_phone', 'affiliate_paypal_email', 'affiliate_address',
+                 'affiliate_country', 'affiliate_city'
+               ]);
+    }
+
+    function userCreateHasNoServerAffiliateFields() {
+      return !request.resource.data.keys().hasAny(affiliateServerOnlyUserKeys());
+    }
+
+    function userCreateReferredByOk() {
+      return !request.resource.data.keys().hasAny(['referred_by']) ||
+        (request.resource.data.referred_by is string &&
+         request.resource.data.referred_by.matches('^AGENT-[A-Z0-9]{5,12}$'));
+    }
+
+    function affiliateServerOnlyKeysAffected() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(affiliateServerOnlyUserKeys());
+    }
+
+    // referred_by may be set once (e.g. from sessionStorage at signup); never changed or cleared by client.
+    function referredByClientUpdateOk() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['referred_by']) ||
+        (!resource.data.keys().hasAny(['referred_by']) &&
+         request.resource.data.referred_by is string &&
+         request.resource.data.referred_by.matches('^AGENT-[A-Z0-9]{5,12}$'));
+    }
+
+    function ownerAffiliateWriteGuards() {
+      return !affiliateServerOnlyKeysAffected() && referredByClientUpdateOk();
+    }
+
+    // Clients cannot self-assign affiliate_agent (or staff/admin) on first create — use Cloud Function.
+    function userCreateRoleOkForClient() {
+      return !request.resource.data.keys().hasAny(['role']) ||
+        request.resource.data.role in ['user', 'guest', 'business', 'partner'];
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -134,24 +187,31 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+                       userCreateHasNoServerAffiliateFields() &&
+                       userCreateReferredByOk() &&
+                       userCreateRoleOkForClient();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
+      // Affiliate: phone / PayPal / mailing address only (no financial fields)
+      allow update: if affiliateAgentContactFieldsOnlyUpdate(userId);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
+                       ownerAffiliateWriteGuards() &&
                        userDocHasNoRoleField() &&
                        request.resource.data.role == 'user';
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
+                       ownerAffiliateWriteGuards() &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']);
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
-      allow update: if isOwner(userId) && 
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       // Admin panel (admin + moderator/support/staff): credits, moderation, etc.
@@ -204,6 +264,12 @@ service cloud.firestore {
         
         // User can delete their own preferences
         allow delete: if isOwner(userId);
+      }
+
+      // Affiliate commission ledger (written only by Cloud Functions / Admin SDK)
+      match /commissions_history/{entryId} {
+        allow read: if isOwner(userId);
+        allow create, update, delete: if false;
       }
     }
 
@@ -690,6 +756,27 @@ service cloud.firestore {
       allow read: if isAdminOrPanelStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isAdminOrPanelStaff() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
       allow update, delete: if false;
+    }
+
+    // ============================================
+    // AFFILIATE PAYOUT REQUESTS (created by Cloud Functions only)
+    // ============================================
+    match /payout_requests/{id} {
+      allow read: if isSignedIn() &&
+                     (resource.data.agentUid == request.auth.uid || isAdminOrPanelStaff());
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // AFFILIATE REFERRAL REGISTRY (Cloud Functions Admin SDK only)
+    // ============================================
+    match /affiliate_referral_codes/{code} {
+      allow read, write: if false;
+    }
+
+    // Referral click rate limits (Cloud Functions only)
+    match /referral_rate_limits/{docId} {
+      allow read, write: if false;
     }
 
     // ============================================

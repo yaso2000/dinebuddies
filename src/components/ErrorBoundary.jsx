@@ -51,6 +51,13 @@ class ErrorBoundary extends React.Component {
             console.error("Max auto-retries reached. Redirecting to Home to prevent fatal crash screen.");
             this.setState({ errorInfo });
             
+            // Never send affiliate shell to /posts-feed — Layout will bounce them back to /affiliate/dashboard
+            // and a render error there becomes an infinite loop with ErrorBoundary.
+            const p = window.location.pathname || '';
+            if (p.startsWith('/affiliate')) {
+                window.location.replace('/affiliate');
+                return;
+            }
             // Avoid "/" — HomeRouter redirects business users (e.g. pending registration) and can create
             // navigate loops with /business/signup; feed is a neutral recovery target.
             if (window.location.pathname !== '/posts-feed') {

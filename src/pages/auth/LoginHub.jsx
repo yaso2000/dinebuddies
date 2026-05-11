@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaUser } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
+import { useToast } from '../../context/ToastContext';
+import { consumeAuthGateNotice } from '../../utils/authGateNotice';
+import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import PersonalAuthPanel from './PersonalAuthPanel';
 import BusinessLoginPanel from './BusinessLoginPanel';
 
@@ -16,9 +19,28 @@ function readLoginTabFromLocation(location) {
 /** Login hub — personal (default) with a corner toggle to business. */
 export default function LoginHub() {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [tab, setTab] = useState(() => readLoginTabFromLocation(location));
+
+    useEffect(() => {
+        const next = sanitizeNextPath(searchParams.get('next'));
+        if (next && next.startsWith('/affiliate')) {
+            const q = searchParams.toString();
+            navigate(q ? `/affiliate/login?${q}` : '/affiliate/login', { replace: true });
+        }
+    }, [searchParams, navigate]);
+
+    useEffect(() => {
+        const notice = consumeAuthGateNotice();
+        if (!notice) return;
+        const text = notice.i18nKey
+            ? t(notice.i18nKey, notice.message || '')
+            : notice.message || t('auth_affiliate_web_only', 'حسابات الوكلاء تدار عبر موقع الويب فقط.');
+        showToast(text, notice.variant === 'info' ? 'info' : 'error');
+    }, [showToast, t]);
 
     useEffect(() => {
         setTab(readLoginTabFromLocation(location));

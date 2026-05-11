@@ -1,18 +1,26 @@
+// Load functions/.env before any module reads process.env (e.g. Stripe).
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const path = require('path');
-// Load functions/.env at runtime (emulator + deploys that include the file). For production, also set
-// RESEND_API_KEY (and optional vars) in Google Cloud Console → Cloud Functions → each function → Variables.
-require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const admin = require('firebase-admin');
 admin.initializeApp();
 
 const { registerAdminSearchUsers } = require('./adminSearchUsers');
+const { registerDirectorySearch } = require('./directorySearch');
+const { registerAffiliateReferralOnUserWrite } = require('./affiliateReferral');
+const {
+    incrementReferralClicks,
+    syncAffiliatePendingReferralOnUserWrite,
+} = require('./affiliateTracking');
+const { registerAffiliateAgentProfile } = require('./affiliateAuth');
+const { requestAffiliatePayout } = require('./affiliatePayouts');
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const {
     CREDIT_COSTS,
     spendCreditsInTransaction,
     isBusinessUserDoc,
+    normalizeBusinessSubscriptionTier,
 } = require('./creditsCore');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
@@ -33,7 +41,10 @@ function isDatingInvitationDocForBilling(inv) {
 const USER_WEEKLY_PRIVATE_QUOTAS = {
     free: 0,
     pro: 2,
-    vip: -1
+    vip: -1,
+    paid: 0,
+    professional: 0,
+    elite: 0
 };
 const SUPER_OWNER_UIDS = ['xTgHC1v00LZIZ6ESA9YGjGU5zW33'];
 const SUPER_OWNER_EMAILS = ['admin@dinebuddies.com', 'y.abohamed@gmail.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au'];
@@ -282,6 +293,7 @@ async function assertAdminContext(context) {
 }
 
 registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
+registerDirectorySearch(exports, { db, admin });
 
 function asTrimmedString(value) {
     if (typeof value !== 'string') return null;
@@ -427,6 +439,7 @@ async function getPublicProfilesByIds(ids) {
 exports.createCheckoutSession = stripeModule.createCheckoutSession;
 exports.createPortalSession = stripeModule.createPortalSession;
 exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
+exports.fulfillDineCreditsCheckout = stripeModule.fulfillDineCreditsCheckout;
 
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;
@@ -449,6 +462,11 @@ exports.syncPublicProfileOnUserWrite = functions.firestore
         }
 
         const afterData = change.after.data() || {};
+        // Affiliate agents are not consumer directory listings; strip any stale projection.
+        if (String(afterData.role || '').toLowerCase() === 'affiliate_agent') {
+            await publicRef.delete().catch(() => { });
+            return null;
+        }
         // Moderation: banned accounts must not remain in directory / public projection.
         if (afterData.banned === true) {
             await publicRef.delete().catch(() => { });
@@ -464,6 +482,12 @@ exports.syncPublicProfileOnUserWrite = functions.firestore
         await publicRef.set(mapped, { merge: false });
         return null;
     });
+
+registerAffiliateReferralOnUserWrite(exports, { db, admin });
+exports.incrementReferralClicks = incrementReferralClicks;
+exports.syncAffiliatePendingReferralOnUserWrite = syncAffiliatePendingReferralOnUserWrite;
+exports.registerAffiliateAgentProfile = registerAffiliateAgentProfile;
+exports.requestAffiliatePayout = requestAffiliatePayout;
 
 // ─── Trigger: denormalize averageRating + reviewCount into public_profiles ───
 // Fires on every create/update/delete in reviews/{reviewId}.
@@ -1220,7 +1244,7 @@ exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
 
     const targetUid = data?.targetUid;
     const role = data?.role;
-    const allowedRoles = ['user', 'staff', 'support', 'admin', 'business'];
+    const allowedRoles = ['user', 'staff', 'support', 'admin', 'business', 'affiliate_agent'];
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
     }
@@ -1273,7 +1297,7 @@ exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, conte
     const subscriptionTier = data?.subscriptionTier;
     const isBusinessUser = data?.isBusinessUser === true;
     const allowedUserTiers = ['free', 'pro', 'vip'];
-    const allowedBusinessTiers = ['free', 'professional', 'elite'];
+    const allowedBusinessTiers = ['free', 'paid', 'professional', 'elite'];
 
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
@@ -1350,10 +1374,9 @@ exports.consumeOfferCredit = functions.https.onCall(async (_data, context) => {
             throw new functions.https.HttpsError('not-found', 'User profile not found.');
         }
         const user = userSnap.data() || {};
-        const tier = (user.subscriptionTier || 'free').toLowerCase();
-        const isElite = tier === 'elite';
+        const tierNorm = normalizeBusinessSubscriptionTier(user.subscriptionTier);
 
-        if (isElite) return { consumed: false, remaining: null };
+        if (tierNorm === 'paid') return { consumed: false, remaining: null };
 
         const credits = user.offerCredits || 0;
         if (credits <= 0) {
@@ -2349,7 +2372,10 @@ function fcmSafeIconUrl(maybeUrl) {
  * @param {object} data    — optional key-value data (actionUrl, type, etc.)
  */
 async function sendPushToUser(userId, title, body, data = {}) {
-    if (!userId || !title) return;
+    if (!userId) return;
+    // Never bail on whitespace/empty title — FCM would skip delivery silently otherwise.
+    const safeTitle =
+        title != null && String(title).trim() !== '' ? String(title).trim() : 'DineBuddies';
     try {
         const userSnap = await db.collection('users').doc(userId).get();
         if (!userSnap.exists) return;
@@ -2365,7 +2391,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
                 ? `db-notif-${String(data.notifId)}`
                 : null;
 
-        // Web/PWA: `webpush.notification` + absolute `fcm_options.link`.
+        // Web/PWA: `webpush.notification` + `webpush.fcmOptions.link` (Admin SDK camelCase — NOT `fcm_options`).
         // Root `data`: only strings (FCM). Include `url` for notificationclick fallbacks.
         const dataStrings = Object.fromEntries(
             Object.entries({
@@ -2380,7 +2406,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
         );
 
         const webNotif = {
-            title,
+            title: safeTitle,
             body: body || '',
             icon: iconToUse,
             badge: badgeUrl,
@@ -2389,7 +2415,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
 
         const webpushCfg = {
             notification: webNotif,
-            fcm_options: { link: actionUrlAbs },
+            fcmOptions: { link: actionUrlAbs },
             headers: { Urgency: 'high' },
         };
 
@@ -2400,18 +2426,21 @@ async function sendPushToUser(userId, title, body, data = {}) {
             const chunk = tokens.slice(offset, offset + MULTICAST_MAX);
             const response = await admin.messaging().sendEachForMulticast({
                 tokens: chunk,
+                notification: { title: safeTitle, body: body || '' },
                 webpush: webpushCfg,
                 data: dataStrings,
             });
 
-            const ok = response.successCount || 0;
-            functions.logger.info(`sendPushToUser chunk uid=${userId} ok=${ok}/${chunk.length}`);
+            const successCount = response.successCount || 0;
+            functions.logger.info(`sendPushToUser chunk uid=${userId} ok=${successCount}/${chunk.length}`);
 
-            if (ok === 0 && chunk.length > 0) {
-                const firstErr = response.responses.find((r) => !r.success)?.error?.message;
+            if (successCount === 0 && chunk.length > 0) {
+                const codes = response.responses
+                    .filter((r) => !r.success)
+                    .map((r) => r.error?.code || r.error?.message || 'unknown');
                 functions.logger.warn(
                     `sendPushToUser: 0/${chunk.length} for ${userId} (chunk @${offset})`,
-                    firstErr || 'unknown error'
+                    [...new Set(codes)].join(' | ')
                 );
             }
 
@@ -2421,7 +2450,11 @@ async function sendPushToUser(userId, title, body, data = {}) {
                 if (
                     code === 'messaging/invalid-registration-token' ||
                     code === 'messaging/registration-token-not-registered' ||
-                    code === 'messaging/unregistered'
+                    code === 'messaging/unregistered' ||
+                    code === 'messaging/invalid-web-push-token' ||
+                    code === 'messaging/web-push-token-expired' ||
+                    code === 'messaging/web-push-auth-error' ||
+                    code === 'messaging/third-party-auth-error'
                 ) {
                     expiredTokens.push(chunk[i]);
                 }

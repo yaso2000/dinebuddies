@@ -1,28 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import DesktopLanding from '../pages/DesktopLanding';
 import AppRouteLoading from '../components/AppRouteLoading';
 import { useAuth } from '../context/AuthContext';
-import { isBusinessUser } from '../utils/accountRole';
+import { isBusinessUser, isAffiliateAgent } from '../utils/accountRole';
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
 import { isAdminIdentity, shouldLandOnAdminDashboard } from '../utils/adminAccess';
 
-const MOBILE_MQ = '(max-width: 768px)';
-
 const HomeRouter = () => {
     const { currentUser, userProfile, loading, profileServerSynced } = useAuth();
-    const [isMobile, setIsMobile] = useState(() =>
-        typeof window !== 'undefined' ? window.matchMedia(MOBILE_MQ).matches : false
-    );
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-        const mq = window.matchMedia(MOBILE_MQ);
-        const onChange = () => setIsMobile(mq.matches);
-        onChange();
-        mq.addEventListener('change', onChange);
-        return () => mq.removeEventListener('change', onChange);
-    }, []);
 
     const businessHomeDest = () => '/business-dashboard';
 
@@ -33,8 +19,7 @@ const HomeRouter = () => {
         return <AppRouteLoading variant="session" />;
     }
 
-    // Signed in but Firestore profile not yet: never use the guest `isMobile` branch below — scrollbar /
-    // widths near 768px caused rapid Navigate ↔ DesktopLanding (felt like desktop↔mobile) and wrong /posts-feed.
+    // Signed in but Firestore profile not yet: keep loading until Firestore resolves (avoids wrong redirects near 768px).
     if (currentUser && !userProfile) {
         if (isAdminIdentity(currentUser, null)) {
             return <Navigate to="/admin/dashboard" replace />;
@@ -55,7 +40,10 @@ const HomeRouter = () => {
             }
             return <Navigate to={businessHomeDest()} replace />;
         }
-        
+        if (isAffiliateAgent(userProfile)) {
+            return <Navigate to="/affiliate/dashboard" replace />;
+        }
+
         // Consumer (Personal) profile completion layer
         const isComplete = userProfile.isProfileComplete || (
             (userProfile.displayName || userProfile.display_name || userProfile.nickname) &&
@@ -73,11 +61,10 @@ const HomeRouter = () => {
         return <Navigate to="/posts-feed" replace />;
     }
 
-    // Default for anyone else (guests/loading-finished-no-user)
-    if (isMobile) {
+    // Signed-out: desktop shows marketing landing; narrow viewports open the app shell (original mobile behavior).
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
         return <Navigate to="/posts-feed" replace />;
     }
-
     return <DesktopLanding />;
 };
 

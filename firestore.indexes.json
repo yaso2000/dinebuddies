@@ -217,6 +217,38 @@
                     "order": "ASCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "role", "order": "ASCENDING" },
+                { "fieldPath": "lastSeen", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "role", "order": "ASCENDING" },
+                { "fieldPath": "created_time", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "profileType", "order": "ASCENDING" },
+                { "fieldPath": "updatedAt", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "payout_requests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "agentUid", "order": "ASCENDING" },
+                { "fieldPath": "createdAt", "order": "DESCENDING" }
+            ]
         }
     ],
     "fieldOverrides": []

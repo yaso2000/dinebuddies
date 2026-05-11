@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { needsEmailPasswordVerification } from '../../utils/emailVerification';
 import { isBusinessUser } from '../../utils/accountRole';
+import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 
 /**
@@ -43,6 +44,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
+    const nextPath = sanitizeNextPath(new URLSearchParams(location.search).get('next'));
+
     const guestLike =
         isGuest ||
         userProfile?.isGuest === true ||
@@ -59,10 +62,11 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
     let continueHref = '/posts-feed';
     if (showAlreadySignedIn) {
-        if (needsEmailPasswordVerification(currentUser, userProfile)) continueHref = '/verify-email';
-        else if (shouldLandOnAdminDashboard(currentUser, userProfile)) continueHref = '/admin/dashboard';
+        if (shouldLandOnAdminDashboard(currentUser, userProfile)) continueHref = '/admin/dashboard';
         else if (isBusinessUser(userProfile)) {
             continueHref = '/business-dashboard';
+        } else if (needsEmailPasswordVerification(currentUser, userProfile)) {
+            continueHref = '/verify-email';
         } else if (!isComplete) {
             continueHref = '/complete-profile';
         } else {
@@ -76,16 +80,16 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
         // If userProfile is loaded, make a smart decision
         if (userProfile) {
-            if (needsEmailPasswordVerification(currentUser, userProfile)) {
-                navigate('/verify-email', { replace: true });
-                return;
-            }
             if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
                 navigate('/admin/dashboard', { replace: true });
                 return;
             }
             if (isBusinessUser(userProfile)) {
                 navigate('/business-dashboard', { replace: true });
+                return;
+            }
+            if (needsEmailPasswordVerification(currentUser, userProfile)) {
+                navigate('/verify-email', { replace: true });
                 return;
             }
             const isCompleteAfterVerify = userProfile.isProfileComplete || (
@@ -110,7 +114,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
             }
         }, 1500);
         return () => clearTimeout(tmr);
-    }, [justLoggedIn, currentUser, userProfile, profileServerSynced, navigate]);
+    }, [justLoggedIn, currentUser, userProfile, profileServerSynced, navigate, nextPath]);
 
     useEffect(() => {
         try {

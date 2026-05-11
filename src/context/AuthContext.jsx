@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastContext';
 import { getAuthErrorMessage } from '../utils/errorMessages';
-import { isBusinessUser } from '../utils/accountRole';
+import { isBusinessUser, isAffiliateAgent } from '../utils/accountRole';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
+import { DEFAULT_ACCESS_PLATFORM } from '../constants/userProfileSchema';
+import { subscribeMobileRestrictedShell } from '../utils/mobileAppShell';
+import { stashAuthGateNotice } from '../utils/authGateNotice';
+import { peekPendingReferralCode, clearPendingReferralCode } from '../utils/pendingReferral';
 
 /** Keeps Layout/HomeRouter treating the session as business when userProfile is briefly null (Firestore/auth race). */
 function syncBusinessNavHint(profile, uid) {
@@ -177,12 +181,18 @@ export const AuthProvider = ({ children }) => {
     /** True after first users/{uid} snapshot from server OR listener error — avoids routing on stale local cache. */
     const [profileServerSynced, setProfileServerSynced] = useState(false);
     const [isGuest, setIsGuest] = useState(false);
+    /** Latest profile for affiliate mobile-shell guard (updated every render). */
+    const profileRefForPlatformGuard = useRef(null);
+    profileRefForPlatformGuard.current = userProfile;
     const nominatimFailed = useRef(false);
     const isDeletingAccountRef = useRef(false);
     /** Cleared when Firestore profile snapshot resolves so the 5s fail-safe cannot fire after real data. */
     const authLoadingTimeoutRef = useRef(null);
     /** Avoid setLoading(true) on duplicate onAuthStateChanged for the same uid (unmounts Layout /admin). */
     const lastAuthUidRef = useRef(null);
+    /** Prevents repeated sign-out while affiliate + mobile guard runs. */
+    const affiliatePlatformLockRef = useRef(false);
+    const { showToast } = useToast();
 
     // Guest profile template
     const guestProfile = {
@@ -247,10 +257,14 @@ export const AuthProvider = ({ children }) => {
                 }
                 // Initialize push notifications (request permission + save FCM token).
                 // iOS PWA: first cold start can race the messaging SW — retry once after a few seconds.
-                initNotifications(user.uid).catch(() => { });
+                initNotifications(user.uid).catch((e) => {
+                    console.warn('[FCM] init after login:', e?.message || e);
+                });
                 if (isIosDevice()) {
                     setTimeout(() => {
-                        initNotifications(user.uid).catch(() => { });
+                        initNotifications(user.uid).catch((e) => {
+                            console.warn('[FCM] iOS retry:', e?.message || e);
+                        });
                     }, 3500);
                 }
             } else {
@@ -365,6 +379,38 @@ export const AuthProvider = ({ children }) => {
             unsubscribeSnapshot();
         };
     }, [currentUser?.uid]);
+
+    // Affiliate agents: web-only — block narrow viewport / installed PWA (same shell as consumer mobile home).
+    useEffect(() => {
+        if (!currentUser?.uid || isGuest) {
+            affiliatePlatformLockRef.current = false;
+            return undefined;
+        }
+        if (!isAffiliateAgent(userProfile)) {
+            affiliatePlatformLockRef.current = false;
+            return undefined;
+        }
+        const msgAr = 'حسابات الوكلاء تدار عبر موقع الويب فقط.';
+        const stop = subscribeMobileRestrictedShell((restricted) => {
+            if (!restricted) return;
+            const prof = profileRefForPlatformGuard.current;
+            if (!prof || !isAffiliateAgent(prof) || !auth.currentUser) return;
+            if (affiliatePlatformLockRef.current) return;
+            affiliatePlatformLockRef.current = true;
+            stashAuthGateNotice({
+                i18nKey: 'auth_affiliate_web_only',
+                message: msgAr,
+                variant: 'error',
+            });
+            showToast(msgAr, 'error');
+            firebaseSignOut(auth)
+                .catch(() => {})
+                .finally(() => {
+                    affiliatePlatformLockRef.current = false;
+                });
+        });
+        return stop;
+    }, [currentUser?.uid, isGuest, userProfile?.role, showToast]);
 
     // Update lastSeen and location
     useEffect(() => {
@@ -483,9 +529,6 @@ export const AuthProvider = ({ children }) => {
         } catch (ipError) { }
     };
 
-
-    const { showToast } = useToast();
-
     // Fetch user profile from Firestore
     const fetchUserProfile = async (userId) => {
         try {
@@ -506,7 +549,14 @@ export const AuthProvider = ({ children }) => {
     const signInWithEmail = async (email, password) => {
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
-            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+            const userRef = doc(db, 'users', result.user.uid);
+            let userDoc = await getDoc(userRef);
+            if (!userDoc.exists()) {
+                for (let i = 0; i < 6 && !userDoc.exists(); i += 1) {
+                    await new Promise((r) => setTimeout(r, 180));
+                    userDoc = await getDoc(userRef);
+                }
+            }
             if (!userDoc.exists()) {
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName || '',
@@ -779,11 +829,24 @@ export const AuthProvider = ({ children }) => {
 
             const existingSnap = await getDoc(doc(db, 'users', userId));
             const existing = existingSnap.exists() ? existingSnap.data() : null;
+            const existingRoleLc = String(existing?.role || '').toLowerCase();
+            const affiliatePortal =
+                existingRoleLc === 'affiliate_agent' ||
+                String(existing?.registrationChannel || '').toLowerCase() === 'affiliate_portal';
+            if (affiliatePortal) {
+                await fetchUserProfile(userId);
+                return;
+            }
             const pendingBusinessFlow =
                 String(existing?.registrationIntent || '').toLowerCase() === 'business';
 
             const welcomeDinePaid =
                 grantedCredits > 0 ? grantedCredits * PRIVATE_INVITATION_PUBLISH_CREDITS : 0;
+            const pendingRef =
+                typeof window !== 'undefined' && !pendingBusinessFlow && !existing?.referred_by
+                    ? peekPendingReferralCode()
+                    : null;
+
             const baseProfile = {
                 uid: userId,
                 display_name: finalDisplayName,
@@ -796,8 +859,12 @@ export const AuthProvider = ({ children }) => {
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 lastSeen: serverTimestamp(),
-                isProfileComplete: false
+                isProfileComplete: false,
+                access_platform: userData.access_platform || existing?.access_platform || DEFAULT_ACCESS_PLATFORM,
             };
+            if (pendingRef) {
+                baseProfile.referred_by = pendingRef;
+            }
             if (welcomeDinePaid > 0) {
                 baseProfile.totalCreditsPurchased = increment(welcomeDinePaid);
             }
@@ -807,6 +874,10 @@ export const AuthProvider = ({ children }) => {
             }
 
             await setDoc(doc(db, 'users', userId), baseProfile, { merge: true });
+
+            if (pendingRef) {
+                clearPendingReferralCode();
+            }
 
             if (showWelcomeNotification) {
                 try {
