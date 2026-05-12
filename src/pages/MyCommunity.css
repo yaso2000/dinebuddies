@@ -15,7 +15,7 @@
         padding-bottom: 2rem;
     }
     .my-community-inner {
-        max-width: 640px;
+        max-width: 100%;
         margin-left: auto;
         margin-right: auto;
         padding: 0 24px;
@@ -24,7 +24,7 @@
 
 @media (min-width: 1024px) {
     .my-community-inner {
-        max-width: 680px;
+        max-width: 100%;
         padding: 0 32px;
     }
 }

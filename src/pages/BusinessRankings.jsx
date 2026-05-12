@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { attachRankingScores, rankBusinesses } from '../services/businessRankingService';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 
 const RANKING_LIMIT = 100;
 const BUSINESSES_QUERY_LIMIT = 200;
@@ -135,8 +136,8 @@ export default function BusinessRankings() {
                 if (cancelled) return;
 
                 list.forEach(b => { b.subscriptionTier = statsById[b.id]?.subscriptionTier || b.subscriptionTier || 'free'; });
-                const eliteOnly = list.filter(b => (b.subscriptionTier || '').toLowerCase() === 'elite');
-                const withScores = attachRankingScores(eliteOnly, statsById);
+                const paidOnly = list.filter((b) => normalizeBusinessTier(b.subscriptionTier) === 'paid');
+                const withScores = attachRankingScores(paidOnly, statsById);
                 setBusinesses(withScores);
             } catch (e) {
                 if (!cancelled) {
@@ -178,12 +179,12 @@ export default function BusinessRankings() {
     }
 
     return (
-        <div style={{ padding: 24, maxWidth: 800, margin: '0 auto' }}>
+        <div style={{ padding: 24, maxWidth: '100%', width: '100%', margin: 0, boxSizing: 'border-box' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 8 }}>
                 {t('rankings_title', 'Business Rankings')}
             </h1>
             <p style={{ fontSize: '0.9rem', marginBottom: 20 }}>
-                <strong style={{ color: '#ea580c' }}>{t('rankings_elite_only', 'Only Elite subscribers are included in the ranking.')}</strong>
+                <strong style={{ color: '#ea580c' }}>{t('rankings_paid_only', 'Only Paid Business subscribers are included in the ranking.')}</strong>
             </p>
 
             {/* Competition scope: City, Country and Global */}

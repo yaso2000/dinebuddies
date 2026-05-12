@@ -28,7 +28,7 @@
 /* .back-btn: use global definition from index.css */
 
 .settings-content {
-    max-width: 600px;
+    max-width: 100%;
     margin: 0 auto;
     padding: 2rem 1.5rem;
 }
@@ -840,7 +840,7 @@
 
 @media (min-width: 520px) {
     .credits-wallet-page .credits-wallet__content {
-        max-width: 560px;
+        max-width: 100%;
         padding-inline: 1.25rem;
     }
 

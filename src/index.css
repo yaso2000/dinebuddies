@@ -100,8 +100,11 @@
   --header-height: 60px;
   --nav-height: 70px;
   --max-width: 500px;
-  /* Desktop center column: match phone card width */
-  --desktop-content-max: 500px;
+  /* Desktop: fixed iPad-like shell — left | center | right = 300 + 650 + 300 (1250 total) */
+  --ds-shell-max: 1250px;
+  --ds-col-side: 300px;
+  --ds-col-center: 650px;
+  --desktop-content-max: 650px;
 }
 
 /* Hide Google reCAPTCHA Badge globally to prevent overlapping UI Elements */
@@ -454,8 +457,8 @@ body {
     display: flex !important;
     flex-direction: column !important;
     height: 100vh !important;
-    max-width: 1280px !important;
-    /* matches ds-body-grid exactly */
+    max-width: var(--ds-shell-max) !important;
+    /* 300 + 650 + 300 — matches .ds-body-grid track sum */
     width: 100% !important;
     overflow: hidden !important;
     border: none !important;
@@ -2878,9 +2881,11 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     min-height: 0;
     overflow: hidden;
     display: grid;
-    grid-template-columns: 220px 1fr 280px;
+    /* 300 : 650 : 300 at full shell (1250px); fr tracks shrink together if viewport is narrower */
+    grid-template-columns: minmax(0, 3fr) minmax(0, 6.5fr) minmax(0, 3fr);
     width: 100%;
-    /* fills app-layout — no separate max-width needed */
+    max-width: var(--ds-shell-max);
+    margin-inline: auto;
     box-sizing: border-box;
     align-items: stretch;
   }
@@ -2970,10 +2975,11 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     align-items: center !important;
   }
 
-  /* Phone-like width: center feed/cards in the middle column */
+  /* Center column width comes from grid; children fill it (no second max-width stack) */
   .app-main > * {
     width: 100% !important;
-    max-width: var(--desktop-content-max) !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
     flex: 0 0 auto !important;
   }

@@ -53,7 +53,7 @@ const PostDetails = () => {
     }
 
     return (
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 0 4rem' }}>
+        <div style={{ maxWidth: '100%', width: '100%', margin: 0, padding: '0 0 4rem', boxSizing: 'border-box' }}>
             {/* Header */}
             <div style={{
                 display: 'flex', alignItems: 'center', gap: '1rem',

@@ -314,7 +314,7 @@ const Notifications = () => {
                     </div>
 
                     {/* Type Filters */}
-                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingBottom: '2px' }}>
                         {[
                             { id: 'all', label: t('all_types', 'All'), emoji: '🔔' },
                             { id: 'members', label: t('members', 'Members'), emoji: '👥' },

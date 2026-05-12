@@ -5,6 +5,16 @@
     background: var(--bg-main);
     display: flex;
     flex-direction: column;
+    min-width: 0;
+}
+
+/* Sticky header + tabs as one unit (fixes overlapping stickies on iPhone). */
+.search-top-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: inherit;
+    border-bottom: 1px solid var(--border-color);
 }
 
 /* Header */
@@ -13,13 +23,12 @@
     align-items: center;
     gap: 10px;
     padding: 12px 16px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    min-width: 0;
 }
 
 .search-input-wrapper {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     align-items: center;
     background: var(--bg-card);
@@ -71,13 +80,10 @@
 
 .search-clear-btn:hover { color: var(--text-main); }
 
-/* Category Tabs */
+/* Category Tabs (inside .search-top-sticky — not separately sticky) */
 .search-tabs-wrap {
-    border-bottom: 1px solid var(--border-color);
     background: var(--bg-main);
-    position: sticky;
-    top: 64px;
-    z-index: 90;
+    padding-bottom: 2px;
 }
 
 .search-tabs {
@@ -89,6 +95,79 @@
 }
 
 .search-tabs::-webkit-scrollbar { display: none; }
+
+/* Online-only filter (users with Firestore isOnline === true) */
+.search-online-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px 10px;
+    margin-top: 2px;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-main);
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-online-toggle-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-online-switch {
+    position: relative;
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.search-online-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.search-online-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border-color);
+    border-radius: 999px;
+    transition: background 0.2s;
+}
+
+.search-online-slider::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    top: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.search-online-switch input:checked + .search-online-slider {
+    background: var(--primary);
+}
+
+.search-online-switch input:checked + .search-online-slider::before {
+    transform: translateX(18px);
+}
+
+.search-badge-online {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.7rem;
+}
 
 .search-tab {
     display: flex;
@@ -129,9 +208,18 @@
 .search-body {
     flex: 1;
     padding: 12px 16px;
-    max-width: 680px;
+    padding-bottom: calc(12px + var(--nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
+    max-width: 100%;
     margin: 0 auto;
     width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+    .search-body {
+        padding-bottom: 12px;
+    }
 }
 
 /* Loading */

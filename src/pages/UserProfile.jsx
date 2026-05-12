@@ -85,7 +85,6 @@ const UserProfile = () => {
             }
 
             try {
-                console.log('🔍 Fetching user data for:', userId);
                 const userRef = doc(db, 'users', userId);
                 const userDoc = await getDoc(userRef);
 
@@ -100,10 +99,8 @@ const UserProfile = () => {
                         return;
                     }
 
-                    console.log('✅ User data loaded:', userData);
                     setUser(userData);
                 } else {
-                    console.log('❌ User not found in Firestore');
                     setUser(null);
                 }
             } catch (error) {
@@ -394,8 +391,8 @@ const UserProfile = () => {
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '12px',
-                            maxWidth: '520px',
-                            margin: '0 auto',
+                            maxWidth: '100%',
+                            margin: 0,
                             width: '100%'
                         }}
                     >
@@ -607,9 +604,9 @@ const UserProfile = () => {
                             role="status"
                             style={{
                                 marginTop: '14px',
-                                maxWidth: '520px',
-                                marginLeft: 'auto',
-                                marginRight: 'auto',
+                                maxWidth: '100%',
+                                marginLeft: 0,
+                                marginRight: 0,
                                 padding: '12px 14px',
                                 borderRadius: '14px',
                                 fontSize: '0.85rem',
