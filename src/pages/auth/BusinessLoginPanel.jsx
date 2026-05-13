@@ -346,7 +346,13 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
                         {t('no_business_account', "Don't have a business account?")}
                     </p>
-                    <button type="button" onClick={() => navigate('/business/signup')} style={outlineBtn}>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            navigate(`/signup/business${typeof window !== 'undefined' ? window.location.search || '' : ''}`)
+                        }
+                        style={outlineBtn}
+                    >
                         {t('create_business_account', 'Create Business Account')}
                     </button>
                     {!embedInHub && (

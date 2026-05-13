@@ -27,6 +27,13 @@
             ]
         }
     ],
+    "redirects": [
+        {
+            "source": "/business-signup",
+            "destination": "/signup/business",
+            "permanent": true
+        }
+    ],
     "rewrites": [
         {
             "source": "/__/auth/:path*",

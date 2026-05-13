@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -16,6 +16,11 @@ import {
     GEOLOCATION_OPTIONS,
     detectCityCountryInBackground,
 } from '../utils/bigDataCloudGeocode';
+import {
+    peekPendingReferralCode,
+    clearPendingReferralCode,
+    syncPendingReferralFromQueryString,
+} from '../utils/pendingReferral';
 
 const STEPS = {
     AUTH: 1,
@@ -34,6 +39,7 @@ function businessNameValidationError(name, accountEmail) {
 
 const BusinessSignup = () => {
     const { t, i18n } = useTranslation();
+    const location = useLocation();
     const isRtl = typeof i18n.dir === 'function' && i18n.dir(i18n.language) === 'rtl';
     /** Leading edge of the input: icon sits here; padding reserves space for text. */
     const fieldIconStyle = {
@@ -58,6 +64,10 @@ const BusinessSignup = () => {
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [step, setStep] = useState(STEPS.AUTH);
+
+    useLayoutEffect(() => {
+        syncPendingReferralFromQueryString(location.search);
+    }, [location.search]);
     const [loading, setLoading] = useState(false);
 
     // Step 1: Auth Info
@@ -237,7 +247,8 @@ const BusinessSignup = () => {
                 createdAt: serverTimestamp(),
             };
 
-            await setDoc(doc(db, 'users', user.uid), {
+            const pendingReferral = peekPendingReferralCode();
+            const userPayload = {
                 uid: user.uid,
                 email: email.trim(),
                 accountType: 'business',
@@ -251,7 +262,16 @@ const BusinessSignup = () => {
                 businessInfo,
                 followersCount: 0,
                 ownedCommunities: [],
-            });
+            };
+            if (pendingReferral) {
+                userPayload.referred_by = pendingReferral;
+            }
+
+            await setDoc(doc(db, 'users', user.uid), userPayload);
+
+            if (pendingReferral) {
+                clearPendingReferralCode();
+            }
 
             try {
                 await sendVerificationEmailResend('business_signup');

@@ -57,7 +57,13 @@ function isBusinessEmailVerificationContinueUrl(continueDecoded) {
         const u = continueDecoded.includes('://')
             ? new URL(continueDecoded)
             : new URL(continueDecoded, typeof window !== 'undefined' ? window.location.origin : 'https://localhost');
-        if (u.pathname.startsWith('/business/login') || u.pathname.startsWith('/business/signup')) return true;
+        if (
+            u.pathname.startsWith('/business/login') ||
+            u.pathname.startsWith('/business/signup') ||
+            u.pathname.startsWith('/signup/business')
+        ) {
+            return true;
+        }
         const q = u.searchParams;
         if (q.get('fromVerify') === '1') return true;
     } catch {

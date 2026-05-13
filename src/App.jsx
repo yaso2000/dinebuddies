@@ -1,5 +1,14 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
+import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    Navigate,
+    Outlet,
+    useNavigate,
+    useParams,
+    useLocation,
+} from 'react-router-dom';
 import Layout from './components/Layout';
 
 // Core Pages (Eagerly loaded for critical paths)
@@ -115,6 +124,12 @@ function RedirectBusinessInvitationsToCommunity() {
     return <Navigate to={`/community/${businessId}`} replace />;
 }
 
+/** Canonical business registration is `/signup/business`; legacy paths keep `?ref=` etc. */
+function LegacyBusinessSignupRedirect() {
+    const { search, hash } = useLocation();
+    return <Navigate to={{ pathname: '/signup/business', search, hash }} replace />;
+}
+
 function LoginRouterBridge() {
     const navigate = useNavigate();
     useEffect(() => {
@@ -147,6 +162,16 @@ function App() {
                                             <Route path="/affiliate/dashboard" element={<AffiliateDashboard />} />
                                             <Route path="/affiliate" element={<AffiliatePortal />} />
                                             <Route path="/business/login" element={<Navigate to="/login?tab=business" replace />} />
+                                            <Route
+                                                path="/signup/business"
+                                                element={
+                                                    <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
+                                                        <BusinessSignup />
+                                                    </Suspense>
+                                                }
+                                            />
+                                            <Route path="/business/signup" element={<LegacyBusinessSignupRedirect />} />
+                                            <Route path="/business-signup" element={<LegacyBusinessSignupRedirect />} />
                                             <Route path="/auth/action" element={<AuthActionHandler />} />
                                             <Route path="/__/auth/action" element={<AuthActionHandler />} />
                                             <Route path="/verify-email" element={<GuestBlockedRoute><VerifyEmail /></GuestBlockedRoute>} />
@@ -158,8 +183,6 @@ function App() {
                                             <Route path="/business-pro/*" element={<Navigate to="/business-dashboard" replace />} />
 
                                             <Route element={<RouteSuspenseLayout />}>
-                                                <Route path="/business/signup" element={<BusinessSignup />} />
-
                                                 <Route element={<Layout />}>
                                                     {/* More specific paths first */}
                                                     <Route path="/post/featured/:featuredId" element={<PostDetails />} />

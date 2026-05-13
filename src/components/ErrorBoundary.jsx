@@ -59,7 +59,7 @@ class ErrorBoundary extends React.Component {
                 return;
             }
             // Avoid "/" — HomeRouter redirects business users (e.g. pending registration) and can create
-            // navigate loops with /business/signup; feed is a neutral recovery target.
+            // navigate loops with /signup/business; feed is a neutral recovery target.
             if (window.location.pathname !== '/posts-feed') {
                 window.location.href = '/posts-feed';
             } else {

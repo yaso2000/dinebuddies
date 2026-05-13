@@ -24,6 +24,13 @@
             "**/.*",
             "**/node_modules/**"
         ],
+        "redirects": [
+            {
+                "source": "/business-signup",
+                "destination": "/signup/business",
+                "type": 301
+            }
+        ],
         "rewrites": [
             {
                 "source": "/api/place-photo",

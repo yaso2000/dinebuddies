@@ -13,7 +13,8 @@ const AuthBlockedRoute = ({ children }) => {
     const isAuthShell =
         path === '/login' ||
         path === '/business/login' ||
-        path === '/business/signup';
+        path === '/business/signup' ||
+        path === '/signup/business';
 
     if (loading && !isAuthShell) {
         return (
