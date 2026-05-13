@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { findByPlanId, isExpectedPriceForProduct } = require('./paymentPlans');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -34,6 +35,46 @@ function getTierForPlan(planId) {
     if (id.includes('premium')) return 'premium';
     if (id.includes('pro')) return 'pro';
     return 'free';
+}
+
+async function getPaidPriceIdsForSession(session) {
+    if (session.subscription) {
+        const subscription = await stripe.subscriptions.retrieve(session.subscription, {
+            expand: ['items.data.price'],
+        });
+        return (subscription.items?.data || [])
+            .map((item) => item.price?.id || item.plan?.id)
+            .filter(Boolean);
+    }
+
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+        limit: 10,
+        expand: ['data.price'],
+    });
+    return (lineItems.data || [])
+        .map((item) => item.price?.id)
+        .filter(Boolean);
+}
+
+async function getVerifiedCheckoutProduct(session) {
+    const product = findByPlanId(session.metadata?.planId);
+    if (!product) {
+        console.error('Unknown checkout plan metadata:', session.metadata);
+        return null;
+    }
+
+    const paidPriceIds = await getPaidPriceIdsForSession(session);
+    if (!isExpectedPriceForProduct(product, paidPriceIds)) {
+        console.error('Checkout price mismatch; refusing entitlement grant', {
+            sessionId: session.id,
+            planId: session.metadata?.planId,
+            expectedPriceId: product.priceId,
+            paidPriceIds,
+        });
+        return null;
+    }
+
+    return product;
 }
 
 /**
@@ -135,7 +176,6 @@ async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
 
     const userId = session.metadata?.userId;
-    const planId = session.metadata?.planId;
     const subscriptionId = session.subscription;
 
     if (!userId) {
@@ -148,9 +188,17 @@ async function handleCheckoutComplete(session) {
         return;
     }
 
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
+    const checkoutProduct = await getVerifiedCheckoutProduct(session);
+    if (!checkoutProduct) {
+        return;
+    }
+
+    const planId = checkoutProduct.planId;
+    const weeklyQuota = Number.isFinite(checkoutProduct.weeklyQuota)
+        ? checkoutProduct.weeklyQuota
+        : getQuotaForPlan(planId);
+    const tier = checkoutProduct.tier || getTierForPlan(planId);
+    const isOfferSlot = checkoutProduct.type === 'offer_slot';
 
     try {
         if (isOfferSlot) {
@@ -176,15 +224,17 @@ async function handleCheckoutComplete(session) {
             console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
         }
 
-        // Save subscription record
-        await db.collection('user_subscriptions').add({
-            userId,
-            planId,
-            subscriptionId,
-            status: 'active',
-            startDate: admin.firestore.FieldValue.serverTimestamp(),
-            sessionId: session.id
-        });
+        if (!isOfferSlot) {
+            // Save subscription record
+            await db.collection('user_subscriptions').add({
+                userId,
+                planId,
+                subscriptionId,
+                status: 'active',
+                startDate: admin.firestore.FieldValue.serverTimestamp(),
+                sessionId: session.id
+            });
+        }
 
     } catch (error) {
         console.error('Error updating user subscription:', error);
@@ -207,9 +257,13 @@ async function handleSubscriptionUpdate(subscription) {
     }
 
     const userId = usersSnapshot.docs[0].id;
-    const planId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
+    const rawPlanId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
+    const checkoutProduct = findByPlanId(rawPlanId);
+    const planId = checkoutProduct?.planId || rawPlanId;
+    const weeklyQuota = Number.isFinite(checkoutProduct?.weeklyQuota)
+        ? checkoutProduct.weeklyQuota
+        : getQuotaForPlan(planId);
+    const tier = checkoutProduct?.tier || getTierForPlan(planId);
 
     await db.collection('users').doc(userId).update({
         subscriptionStatus: subscription.status,
