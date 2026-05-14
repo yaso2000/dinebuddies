@@ -48,6 +48,10 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'booking_confirmed',
     'invitation_updated'
 ]);
+
+function isSuperOwnerIdentity(uid, email) {
+    return SUPER_OWNER_UIDS.includes(uid) || SUPER_OWNER_EMAILS.includes(String(email || '').toLowerCase());
+}
 const ALLOWED_PARTNER_NOTIFICATION_TYPES = new Set(['new_booking']);
 const NOTIFICATION_ALLOWED_KEYS = new Set([
     'userId',
@@ -256,7 +260,7 @@ async function assertAdminContext(context) {
     }
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
-    const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
+    const isSuperOwner = isSuperOwnerIdentity(requesterUid, requesterEmail);
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
 
     const requesterDoc = await db.collection('users').doc(requesterUid).get();
@@ -1172,7 +1176,7 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
 
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
-    const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
+    const isSuperOwner = isSuperOwnerIdentity(requesterUid, requesterEmail);
     if (!isSuperOwner) {
         throw new functions.https.HttpsError('permission-denied', 'Only super owners can grant admin role.');
     }
@@ -1189,9 +1193,13 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const targetIsSuperOwner = isSuperOwnerIdentity(targetUid, targetUser.email);
+
+    await admin.auth().setCustomUserClaims(targetUid, {
+        admin: true,
+        superOwner: targetIsSuperOwner,
+    });
 
     return { success: true, targetUid };
 });
