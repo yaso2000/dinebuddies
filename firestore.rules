@@ -101,6 +101,72 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function serverOwnedUserFields() {
+      return [
+        'paidCredits',
+        'freeCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'subscriptionId',
+        'subscriptionStatus',
+        'subscriptionTier',
+        'currentPlan',
+        'stripeCustomerId',
+        'weeklyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'weeklyResetAt',
+        'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth',
+        'offerSlotCredits'
+      ];
+    }
+
+    function serverOwnedUserCreateDeniedFields() {
+      return [
+        'paidCredits',
+        'freeCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'subscriptionId',
+        'subscriptionStatus',
+        'subscriptionTier',
+        'currentPlan',
+        'stripeCustomerId',
+        'weeklyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'weeklyResetAt',
+        'offerSlotCredits'
+      ];
+    }
+
+    function hasNoServerOwnedUserFieldChanges() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOwnedUserFields()) &&
+             (
+               !request.resource.data.diff(resource.data).affectedKeys().hasAny(['purchasedPrivateCredits']) ||
+               request.resource.data.get('purchasedPrivateCredits', 0) == resource.data.get('purchasedPrivateCredits', 0)
+             );
+    }
+
+    function hasSafeInitialUserCreditFields() {
+      return !request.resource.data.keys().hasAny(serverOwnedUserCreateDeniedFields()) &&
+             (
+               !request.resource.data.keys().hasAny(['purchasedPrivateCredits']) ||
+               (
+                 request.resource.data.purchasedPrivateCredits is number &&
+                 request.resource.data.purchasedPrivateCredits >= 0 &&
+                 request.resource.data.purchasedPrivateCredits <= 5
+               )
+             ) &&
+             (
+               !request.resource.data.keys().hasAny(['usedPrivateCreditsThisMonth']) ||
+               request.resource.data.usedPrivateCreditsThisMonth == 0
+             ) &&
+             (
+               !request.resource.data.keys().hasAny(['lastPrivateResetMonth']) ||
+               request.resource.data.lastPrivateResetMonth == ''
+             );
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,7 +178,7 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && hasSafeInitialUserCreditFields();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
@@ -131,7 +197,8 @@ service cloud.firestore {
       allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                         .hasAny(['role', 'accountType']) &&
+                       hasNoServerOwnedUserFieldChanges();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
@@ -422,8 +489,10 @@ service cloud.firestore {
       // Client-side create is self-only; cross-user partner notifications must use trusted backend callable, unless it's a feedback alert.
       allow create: if (isSignedIn() &&
                       request.resource.data.senderId == request.auth.uid &&
-                      request.resource.data.restaurantId == request.auth.uid) ||
-                      (request.resource.data.type == 'business_feedback');
+                      (
+                        request.resource.data.restaurantId == request.auth.uid ||
+                        request.resource.data.type == 'business_feedback'
+                      ));
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
