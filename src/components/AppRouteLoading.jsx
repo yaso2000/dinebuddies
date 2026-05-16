@@ -14,31 +14,10 @@ export default function AppRouteLoading({ variant = 'route', fullViewport = fals
               ? t('loading_app_profile', 'Syncing your profile…')
               : t('loading_app_route', 'Loading…');
 
-    const wrapStyle = fullViewport
-        ? {
-              minHeight: '100dvh',
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%)',
-              padding: '1.5rem',
-              boxSizing: 'border-box',
-          }
-        : {
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '40vh',
-              width: '100%',
-              padding: '1.5rem',
-              boxSizing: 'border-box',
-          };
+    const wrapClass = ['app-route-loading', fullViewport ? 'app-route-loading--full' : 'app-route-loading--inline'].join(' ');
 
-    return (
-        <div role="status" aria-busy="true" aria-live="polite" style={wrapStyle}>
+    const inner = (
+        <div role="status" aria-busy="true" aria-live="polite" className={wrapClass}>
             <div
                 style={{
                     width: 44,
@@ -65,4 +44,18 @@ export default function AppRouteLoading({ variant = 'route', fullViewport = fals
             </p>
         </div>
     );
+
+    if (fullViewport) {
+        return (
+            <div className="app-loading-shell">
+                <div className="app-loading-shell__grid">
+                    <div className="app-loading-shell__rail app-loading-shell__rail--left" aria-hidden />
+                    <div className="app-loading-shell__main">{inner}</div>
+                    <div className="app-loading-shell__rail app-loading-shell__rail--right" aria-hidden />
+                </div>
+            </div>
+        );
+    }
+
+    return inner;
 }

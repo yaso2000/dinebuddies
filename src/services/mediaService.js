@@ -88,23 +88,18 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
  */
 export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invitations') => {
     try {
-        console.log('📹 Starting video upload...');
 
         // Upload video first
         const videoUrl = await uploadMedia(videoFile, userId, 'video', folder);
-        console.log('✅ Video uploaded:', videoUrl);
 
         let thumbnailUrl = null;
 
         // Try to generate and upload thumbnail
         try {
-            console.log('🖼️ Generating thumbnail...');
             const thumbnailBlob = await generateThumbnail(videoFile, 0.5);
-            console.log('✅ Thumbnail generated:', thumbnailBlob.size, 'bytes');
 
             const thumbnailFile = new File([thumbnailBlob], 'thumbnail.jpg', { type: 'image/jpeg' });
             thumbnailUrl = await uploadMedia(thumbnailFile, userId, 'thumbnail', folder);
-            console.log('✅ Thumbnail uploaded:', thumbnailUrl);
         } catch (thumbError) {
             console.warn('⚠️ Thumbnail generation failed, using default:', thumbError);
             // Use a default thumbnail or the video URL itself
@@ -177,7 +172,6 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
         return null;
     }
 
-    console.log('🔄 Fetching image via proxy to bypass CORS:', url);
 
     // In dev: uses vite middleware. In prod: uses Vercel function
     const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
@@ -191,7 +185,6 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
         }
 
         const blob = await response.blob();
-        console.log(`📦 Proxy Blob: Size=${blob.size}, Type=${blob.type}`);
 
         if (blob.size < 1000) {
             console.warn('⚠️ Blob too small, likely an error page.');
@@ -204,9 +197,7 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
         const filename = `google_place_${Date.now()}.jpg`;
         const file = new File([blob], filename, { type: 'image/jpeg' });
 
-        console.log('📤 Uploading proxied image to storage...');
         const uploadedUrl = await uploadMedia(file, userId, 'image', folder);
-        console.log('✅ Image permanently stored:', uploadedUrl);
 
         return uploadedUrl;
     } catch (error) {

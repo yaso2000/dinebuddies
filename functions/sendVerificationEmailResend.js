@@ -21,6 +21,8 @@ const FLOW_PATHS = {
     business_login: '/business/login',
     settings_email: '/settings/email',
     pro_settings: '/settings',
+    /** Affiliate email/password signup — web dashboard after verify. */
+    affiliate_signup: '/affiliate/dashboard?fromVerify=1',
     home: '/',
 };
 

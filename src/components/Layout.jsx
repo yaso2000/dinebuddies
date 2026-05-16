@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
 import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaTimes, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -11,26 +11,26 @@ import ProfileCompletionModal from './ProfileCompletionModal';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import OffersBanner from './OffersBanner';
 import AppRouteLoading from './AppRouteLoading';
 import RankingSidebarWidget from './RankingSidebarWidget';
-import PushNotificationPrompt from './PushNotificationPrompt';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
 import { goToLogin } from '../utils/goToLogin';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { useToast } from '../context/ToastContext';
 import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
-
-const Layout = ({ children }) => {
+import { attachMobileBottomNavKeyboardGuard } from '../utils/mobileBottomNavKeyboardGuard';
+import { refreshFcmIfUserOptedIn } from '../services/notificationService';
+import { appLogoForChrome } from '../config/appLogo';
+const Layout = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { t, i18n } = useTranslation();
     const { currentUser, userProfile, isGuest, isBusiness, loading } = useAuth();
     const invContext = useInvitations();
-    const { invitations = [], getFollowingInvitations = () => [], canCreatePrivateInvitation } = invContext || {};
+    const { invitations = [], restaurants = [], getFollowingInvitations = () => [], canCreatePrivateInvitation } = invContext || {};
     const { showToast } = useToast();
     const { unreadCount: chatUnreadCount, conversations = [] } = useChat();
     const { unreadCount, unreadBellCount = 0, unreadMessageCount = 0, markMessageNotificationsAsRead } = useNotifications();
@@ -39,7 +39,6 @@ const Layout = ({ children }) => {
     const totalChatUnread = chatUnreadCount + unreadMessageCount;
     const { themeMode } = useTheme();
 
-    const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
     const [inviteCreateOpen, setInviteCreateOpen] = useState(false);
 
     const openInviteCreate = () => {
@@ -94,16 +93,15 @@ const Layout = ({ children }) => {
     };
 
     useEffect(() => {
-        if (!businessCreateOpen && !inviteCreateOpen) return;
+        if (!inviteCreateOpen) return;
         const onKey = (e) => {
             if (e.key === 'Escape') {
-                setBusinessCreateOpen(false);
                 setInviteCreateOpen(false);
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [businessCreateOpen, inviteCreateOpen]);
+    }, [inviteCreateOpen]);
 
     // iOS: keep fixed app header aligned with the visual viewport when the keyboard opens (feed, comments, etc.)
     useEffect(() => {
@@ -133,35 +131,83 @@ const Layout = ({ children }) => {
         };
     }, [location.pathname]);
 
-    // Right sidebar data
-    const [trendingPartners, setTrendingPartners] = useState([]);
+    /** Mobile: hide bottom tab bar while the soft keyboard is open (posts, comments, create post, etc.). */
+    useEffect(() => {
+        const p = location.pathname;
+        const isChatRoute =
+            p.startsWith('/chat/') ||
+            p === '/messages' ||
+            p.startsWith('/messages') ||
+            (p.startsWith('/invitation/') && p.endsWith('/chat'));
+        const isCommunityRoute = p.startsWith('/community/');
+        const isChatScreen = isChatRoute || isCommunityRoute;
+        const isAdminRoute = p.startsWith('/admin');
+        const shouldApply = () => !isAdminRoute && !isChatScreen;
+        return attachMobileBottomNavKeyboardGuard(shouldApply);
+    }, [location.pathname]);
+
+    // iOS / PWA: FCM + service worker can go stale after suspend; refresh token when user returns (if push still on).
+    // Skip on notification settings: toggling push can race visibility events; prefs may be mid-edit until saved.
+    const fcmRefreshThrottleRef = useRef(0);
+    useEffect(() => {
+        const uid = currentUser?.uid;
+        if (!uid || isGuest) return undefined;
+        const run = () => {
+            if (document.visibilityState !== 'visible') return;
+            if (location.pathname === '/settings/notifications') return;
+            const now = Date.now();
+            if (now - fcmRefreshThrottleRef.current < 8000) return;
+            fcmRefreshThrottleRef.current = now;
+            refreshFcmIfUserOptedIn(uid);
+        };
+        document.addEventListener('visibilitychange', run);
+        window.addEventListener('pageshow', run);
+        return () => {
+            document.removeEventListener('visibilitychange', run);
+            window.removeEventListener('pageshow', run);
+        };
+    }, [currentUser?.uid, isGuest, location.pathname]);
+
+    // Right sidebar data (trending uses same `restaurants` pipeline as directory — InvitationContext)
+    const trendingPartners = useMemo(() => {
+        const list = Array.isArray(restaurants) ? restaurants : [];
+        return [...list]
+            .sort((a, b) => {
+                const ra = Number(a.averageRating ?? a.rating ?? 0);
+                const rb = Number(b.averageRating ?? b.rating ?? 0);
+                return rb - ra;
+            })
+            .slice(0, 4)
+            .map((b) => ({
+                id: b.id,
+                name: b.name || 'Business',
+                image: b.image || b.avatar || '',
+                logo: b.avatar,
+                rating: typeof b.averageRating === 'number' ? b.averageRating : (b.rating ?? null),
+                cuisine: b.type || b.businessType || b.cuisine,
+            }));
+    }, [restaurants]);
     const [recentCommunities, setRecentCommunities] = useState([]);
     const [joinedCommunityData, setJoinedCommunityData] = useState([]);
-    const [hasOffers, setHasOffers] = useState(false);
+
+    const markMessageNotificationsAsReadRef = useRef(markMessageNotificationsAsRead);
+    markMessageNotificationsAsReadRef.current = markMessageNotificationsAsRead;
 
     // Auto-mark chat notifications as read when visiting chat pages
     useEffect(() => {
-        if (!location || !markMessageNotificationsAsRead) return;
-        
-        const path = location.pathname;
-        if (path.startsWith('/chat/') || path.startsWith('/community/') || path.startsWith('/invitation/')) {
-            // Delay slightly so the context initializes
-            setTimeout(() => {
-                markMessageNotificationsAsRead(path);
-            }, 500);
-        }
-    }, [location?.pathname, markMessageNotificationsAsRead]);
+        if (!location) return;
 
-    // Fetch trending partners for right sidebar
-    useEffect(() => {
-        try {
-            const q = query(collection(db, 'restaurants'), orderBy('rating', 'desc'), limit(4));
-            const unsub = onSnapshot(q, (snap) => {
-                setTrendingPartners(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            }, () => { });
-            return () => unsub();
-        } catch { return () => { }; }
-    }, []);
+        const path = location.pathname;
+        if (!path.startsWith('/chat/') && !path.startsWith('/community/') && !path.startsWith('/invitation/')) {
+            return undefined;
+        }
+
+        const timerId = window.setTimeout(() => {
+            markMessageNotificationsAsReadRef.current?.(path);
+        }, 500);
+
+        return () => clearTimeout(timerId);
+    }, [location.pathname]);
 
     // Fetch communities the current user has JOINED (from userProfile.joinedCommunities)
     useEffect(() => {
@@ -190,18 +236,14 @@ const Layout = ({ children }) => {
         return () => { cancelled = true; };
     }, [userProfile?.joinedCommunities, userProfile?.id]);
 
-    // 1. Wait for auth to settle before running guards (must be after all hooks — see React #310).
-    // Never return null here: <Outlet /> would not mount, so GuestBlockedRoute never runs and users
-    // see a blank screen until refresh (protected routes + guests redirecting to /login).
-    //
-    // IMPORTANT: Do not unmount <Outlet /> on /admin while `loading` flips true (Firestore/auth churn).
-    // That tore down AdminRoute/AdminLayout and felt like "desktop↔mobile" or home↔admin flicker.
+    // Session / profile gate: one full-viewport loader with the same horizontal cap as `.app-layout`
+    // (see `app-loading-shell` in index.css) — avoids narrow-then-wide jumps before the shell mounts.
     const isAdminPath = location.pathname.startsWith('/admin');
     if (loading && !(isAdminPath && currentUser?.uid)) {
         return <AppRouteLoading variant="session" fullViewport />;
     }
 
-    // 2. Email verification — email/password accounts (consumer or business) until verified
+    // Email verification — email/password accounts (consumer or business) until verified
     // For business accounts, we allow them to continue but show the EmailVerificationBusinessBanner instead of force redirect.
     const isAdminAccount = isAdminIdentity(currentUser, userProfile);
     const privateInvitationPath =
@@ -245,8 +287,7 @@ const Layout = ({ children }) => {
     const isAdminRoute = location.pathname.startsWith('/admin');
 
     const businessCreateFabActive =
-        location.pathname === '/create-post' ||
-        location.pathname === '/business-dashboard';
+        location.pathname === '/create-post' || location.pathname === '/business-dashboard';
 
     const inviteCreateFabActive =
         location.pathname === '/create/manual' ||
@@ -375,11 +416,6 @@ const Layout = ({ children }) => {
     const RightSidebar = () => (
         <aside className="ds-right-sidebar">
 
-            {/* ── Offers Banner (desktop only) — hide on private invite flows (reads as “payment” noise) ── */}
-            {!location.pathname.startsWith('/invitation/private/') && (
-                <OffersBanner onHasOffers={setHasOffers} />
-            )}
-
             {/* Top 3 Elite Ranking (desktop only) */}
             <RankingSidebarWidget />
 
@@ -481,12 +517,24 @@ const Layout = ({ children }) => {
         <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
 
             <ProfileCompletionModal />
-            <PushNotificationPrompt />
             {/* ── HEADER ── always on desktop, hidden on mobile chat ── */}
             <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}`}>
-                <div className="logo-wrapper" onClick={() => navigate(feedHomePath)}>
-                    <img src="/db-logo.svg" alt="DineBuddies" className="app-logo-img" />
+                <div
+                    className="logo-wrapper app-header-brand"
+                    onClick={() => navigate(feedHomePath)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            navigate(feedHomePath);
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t('nav_home')}
+                >
+                    <img src={appLogoForChrome(themeMode)} alt="" className="app-logo-img" aria-hidden />
                 </div>
+                <span className="header-spacer" aria-hidden="true" />
                 <div className="header-actions">
                     {!isGuest && userProfile?.role !== 'guest' ? (
                         <>
@@ -599,9 +647,7 @@ const Layout = ({ children }) => {
                                     <button
                                         type="button"
                                         className={`ds-nav-item${businessCreateFabActive ? ' active' : ''}`}
-                                        onClick={() => setBusinessCreateOpen(true)}
-                                        aria-haspopup="dialog"
-                                        aria-expanded={businessCreateOpen}
+                                        onClick={() => navigate('/create-post')}
                                     >
                                         <FaPlusCircle /><span>{t('business_nav_create_posts', 'Create posts')}</span>
                                     </button>
@@ -643,8 +689,9 @@ const Layout = ({ children }) => {
                 <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}`}>
                     <EmailVerificationBusinessBanner />
                     <UnpublishedBusinessReminder />
-                    {children}
-                    <Outlet />
+                    <Suspense fallback={<div className="app-route-suspense-fallback" role="status" aria-busy="true" aria-label={t('loading', 'Loading…')} />}>
+                        <Outlet />
+                    </Suspense>
                 </main>
 
                 {/* Column 3 — Right widgets */}
@@ -683,10 +730,8 @@ const Layout = ({ children }) => {
                         <button
                             type="button"
                             className={`nav-item fab-nav-item${businessCreateFabActive ? ' active' : ''}`}
-                            onClick={() => setBusinessCreateOpen(true)}
-                            aria-haspopup="dialog"
-                            aria-expanded={businessCreateOpen}
-                            aria-label={t('business_create_menu', 'Create')}
+                            onClick={() => navigate('/create-post')}
+                            aria-label={t('business_nav_create_posts', 'Create posts')}
                         >
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
                         </button>
@@ -816,65 +861,6 @@ const Layout = ({ children }) => {
                 </div>
             )}
 
-            {isBusinessAccount && businessCreateOpen && (
-                <div
-                    className="business-create-overlay"
-                    role="presentation"
-                    onClick={() => setBusinessCreateOpen(false)}
-                >
-                    <div
-                        className="business-create-sheet"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="business-create-title"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="business-create-sheet__header">
-                            <div className="business-create-sheet__titles">
-                                <h2 id="business-create-title" className="business-create-sheet__title">
-                                    {t('business_create_title', 'Create')}
-                                </h2>
-                                <p className="business-create-sheet__subtitle">
-                                    {t('business_create_subtitle', 'Choose what you want to publish')}
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                className="business-create-sheet__close"
-                                onClick={() => setBusinessCreateOpen(false)}
-                                aria-label={t('close', 'Close')}
-                            >
-                                <FaTimes />
-                            </button>
-                        </div>
-                        <div className="business-create-sheet__options">
-                            <button
-                                type="button"
-                                className="business-create-option"
-                                onClick={() => {
-                                    setBusinessCreateOpen(false);
-                                    navigate('/create-post');
-                                }}
-                            >
-                                <span className="business-create-option__icon business-create-option__icon--featured">
-                                    <FaStar />
-                                </span>
-                                <span className="business-create-option__text">
-                                    <span className="business-create-option__label">
-                                        {t('business_create_featured_title', 'Featured Post')}
-                                    </span>
-                                    <span className="business-create-option__desc">
-                                        {t(
-                                            'business_create_featured_desc',
-                                            'Create a regular or featured business post.'
-                                        )}
-                                    </span>
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

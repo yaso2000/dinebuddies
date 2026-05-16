@@ -23,8 +23,9 @@ const isBusiness = (u) => u.role === 'business';
 
 const BIZ_TIERS = [
     { value: 'free', label: '🆓 Free', color: '#64748b' },
-    { value: 'professional', label: '⚡ Professional', color: '#8b5cf6' },
-    { value: 'elite', label: '👑 Elite', color: '#f59e0b' },
+    { value: 'paid', label: '💳 Paid ($29)', color: '#f59e0b' },
+    { value: 'professional', label: '⚡ Professional (legacy)', color: '#8b5cf6' },
+    { value: 'elite', label: '👑 Elite (legacy)', color: '#ea580c' },
 ];
 
 const SYSTEM_ROLES = ['user', 'business', 'staff', 'support', 'admin'];

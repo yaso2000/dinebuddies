@@ -5,18 +5,19 @@ import InvitationSkeleton from '../components/InvitationSkeleton';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar, FaCheck, FaExpand, FaCompress } from 'react-icons/fa';
+import { FaMapMarkedAlt, FaSearch, FaBullseye, FaExpand, FaCompress } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import '../components/MapStyles.css';
 import './HomeMobileFeed.css';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import HomeRedirectAlert from '../components/home/HomeRedirectAlert';
 import { useTheme } from '../context/ThemeContext';
 import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
-import OffersBanner from '../components/OffersBanner';
-import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
+import { parseInvitationAgeRange } from '../utils/invitationDisplayUtils';
 import { asUidArray } from '../utils/userSocialLists';
+import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
 
 
 
@@ -27,7 +28,6 @@ const Home = () => {
     const invContext = useInvitations();
     const {
         invitations = [],
-        restaurants = [],
         currentUser = null,
         loadingInvitations: loading = true,
         loadMoreInvitations = () => { },
@@ -39,12 +39,6 @@ const Home = () => {
     const isBusinessAccount = isBusiness;
 
     const [redirectMessage, setRedirectMessage] = useState(null);
-
-    // Debugging to ensure we don't have posts mixing in
-    useEffect(() => {
-        console.log("Home Component Loaded - Enforcing Invitations Display");
-        console.log("currentUser:", currentUser);
-    }, [currentUser]);
 
     // Show redirect message (e.g. after invitation was deleted) and clear location state
     useEffect(() => {
@@ -67,7 +61,6 @@ const Home = () => {
     const [locationFilter, setLocationFilter] = useState('All');
     const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'today', 'week', 'soon'
     const [viewMode, setViewMode] = useState('list');
-    const [hasOffers, setHasOffers] = useState(false);
     const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
     const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
     const [showSelector, setShowSelector] = useState(false); // New: For пригласительный селектор (fixed) - Create Invitation Selector
@@ -96,29 +89,16 @@ const Home = () => {
         return R * c; // Distance in km
     };
 
-    // Get user location on component mount
+    // Location for distance / map: use profile coordinates only (AuthContext already requests GPS periodically).
+    // Do NOT call getCurrentPosition here — it duplicated the browser prompt with AuthContext and remounts.
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setUserLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    });
-                    setLocationError(null);
-                },
-                (error) => {
-                    console.log('Location access denied or unavailable:', error);
-                    setLocationError(error.message);
-                    // Default to null (world view) if location denied
-                    setUserLocation(null);
-                }
-            );
-        } else {
-            setLocationError('Geolocation not supported');
-            setUserLocation(null);
+        const lat = userProfile?.coordinates?.lat;
+        const lng = userProfile?.coordinates?.lng;
+        if (typeof lat === 'number' && typeof lng === 'number' && Number.isFinite(lat) && Number.isFinite(lng)) {
+            setUserLocation({ lat, lng });
+            setLocationError(null);
         }
-    }, []);
+    }, [userProfile?.coordinates?.lat, userProfile?.coordinates?.lng]);
 
 
 
@@ -143,7 +123,6 @@ const Home = () => {
 
     const safeInvitations = useMemo(() => Array.isArray(invitations) ? invitations : [], [invitations]);
     const blockedAuthorIds = useMemo(() => new Set(asUidArray(userProfile?.blockedUserIds)), [userProfile?.blockedUserIds]);
-    const safeRestaurants = useMemo(() => Array.isArray(restaurants) ? restaurants : [], [restaurants]);
 
     // Memoized filtered invitations
     // NEW CLEAN LOGIC - REPLACING BROKEN LEGACY LOGIC
@@ -173,8 +152,10 @@ const Home = () => {
                 // Priority 2: For non-completed, hide 1 hour after scheduled time
                 const inviteDate = new Date(inv.date || now);
                 if (!isNaN(inviteDate.getTime())) {
-                    const [hours, minutes] = (inv.time || "20:30").split(':');
-                    inviteDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0);
+                    const timeParts = String(inv.time || '20:30').split(':');
+                    const hours = parseInt(timeParts[0], 10) || 0;
+                    const minutes = parseInt(timeParts[1], 10) || 0;
+                    inviteDate.setHours(hours, minutes, 0);
                     const expiry = new Date(inviteDate.getTime() + 60 * 60 * 1000);
                     if (now > expiry) return false;
                 }
@@ -184,18 +165,21 @@ const Home = () => {
             if (inv.privacy === 'private' || (inv.invitedFriends && inv.invitedFriends.length > 0)) {
                 return false; // Hide all private (or legacy private) invitations from all feeds
             } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
-                const isFollowing = currentUser?.following?.includes(inv.author.id);
+                const followingIds = Array.isArray(currentUser?.following) ? currentUser.following : [];
+                const isFollowing = followingIds.includes(inv.author.id);
                 if (!isOwn && !isFollowing) return false;
             }
 
-            // 4. SEARCH FILTER (Matching RestaurantDirectory logic)
-            const matchesSearch = !searchQuery ||
-                (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
+            // 4. SEARCH FILTER (Matching RestaurantDirectory logic) — coerce to string (Firestore may store non-strings)
+            const q = searchQuery.toLowerCase();
+            const matchesSearch =
+                !searchQuery ||
+                String(inv.title ?? '').toLowerCase().includes(q) ||
+                String(inv.location ?? '').toLowerCase().includes(q) ||
+                String(inv.description ?? '').toLowerCase().includes(q);
 
             // 5. CATEGORY FILTER (Matching RestaurantDirectory logic)
-            const matchesCategory = activeFilter === 'All' || inv.type === activeFilter;
+            const matchesCategory = activeFilter === 'All' || String(inv.type ?? '') === String(activeFilter);
 
             return matchesSearch && matchesCategory;
         });
@@ -235,9 +219,6 @@ const Home = () => {
     }, [safeInvitations, searchQuery, geoFilter, activeFilter, userLocation, currentUser, userProfile?.role, blockedAuthorIds]);
 
     // Legacy filtering logic removed.
-
-    const premiumAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 3), [safeRestaurants]);
-    const inFeedAds = useMemo(() => safeRestaurants.filter(r => r && r.tier === 2), [safeRestaurants]);
 
     const invitationsWithCoords = useMemo(() => {
         const out = [];
@@ -413,7 +394,7 @@ const Home = () => {
                             <div style="position: relative;">
                                 <img src="${displayImage}" class="compact-popup-image" onerror="this.src='https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'" />
                                 <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 4px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);">
-                                    <span style="background: ${markerColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${inv.type ? t(`type_${inv.type.toLowerCase().replace(' ', '')}`, inv.type) : t('venue', 'Venue')}</span>
+                                    <span style="background: ${markerColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px;">${inv.type != null && inv.type !== '' ? t('type_' + String(inv.type).toLowerCase().replace(/\s+/g, ''), String(inv.type)) : t('venue', 'Venue')}</span>
                                 </div>
                             </div>
                             <div class="compact-popup-body">
@@ -544,124 +525,14 @@ const Home = () => {
         if (inv.genderPreference && inv.genderPreference !== 'any' && currentUser?.gender) {
             if (currentUser.gender !== inv.genderPreference) return { eligible: false, reason: t('gender_mismatch') };
         }
-        if (inv.ageRange && currentUser?.age) {
-            const [minAge, maxAge] = inv.ageRange.split('-').map(Number);
-            if (currentUser.age < minAge || currentUser.age > maxAge) return { eligible: false, reason: `${t('age_range_preference')}: ${inv.ageRange}` };
+        const ages = parseInvitationAgeRange(inv.ageRange);
+        if (ages && currentUser?.age) {
+            const [minAge, maxAge] = ages;
+            if (currentUser.age < minAge || currentUser.age > maxAge) {
+                return { eligible: false, reason: `${t('age_range_preference')}: ${inv.ageRange}` };
+            }
         }
         return { eligible: true };
-    };
-
-    const RestaurantAdCard = ({ restaurant }) => {
-        if (!restaurant) return null;
-        return (
-            <div
-                onClick={() => navigate(`/restaurant/${restaurant.id}`)}
-                className="business-ad-card smart-invitation-card"
-                style={{
-                    // Add border gold/distinctive for business
-                    border: '2px solid #f59e0b',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    cursor: 'pointer'
-                }}
-            >
-                {/* --- 1. HEADER (Logo & Name) --- */}
-                <div className="card-header" style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
-                    padding: '20px',
-                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                    pointerEvents: 'none', border: 'none'
-                }}>
-                    <div className="header-host-info" style={{ display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto' }}>
-                        <div style={{ position: 'relative' }}>
-                            <img
-                                src={restaurant.image} // Use restaurant main image as logo placeholder if logo not available
-                                alt={restaurant.name}
-                                style={{
-                                    width: '55px', height: '55px', borderRadius: '50%',
-                                    border: '2px solid var(--luxury-gold)', objectFit: 'cover',
-                                    padding: '2px', background: 'var(--bg-card)'
-                                }}
-                            />
-                            <div style={{
-                                position: 'absolute', bottom: '-2px', right: '-2px',
-                                background: 'var(--luxury-gold)', color: 'black', borderRadius: '50%',
-                                width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '10px', fontWeight: 'bold', border: '2px solid var(--bg-card)'
-                            }}>
-                                <FaCheck />
-                            </div>
-                        </div>
-                        <div>
-                            <div style={{
-                                fontSize: '0.95rem', fontWeight: '800', color: 'white',
-                                textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                                display: 'flex', alignItems: 'center', gap: '6px'
-                            }}>
-                                {restaurant.name}
-                                <span style={{ fontSize: '0.7em', background: 'var(--luxury-gold)', color: 'black', padding: '1px 6px', borderRadius: '6px' }}>AD</span>
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <FaStar style={{ color: '#fbbf24' }} /> {restaurant.rating} • {t('partner', { defaultValue: 'business' })}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* --- 2. MEDIA (Full Background) --- */}
-                <div className="card-media" style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    zIndex: 1
-                }}>
-                    <img
-                        src={restaurant.image}
-                        alt={restaurant.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    <div className="media-overlay" style={{
-                        position: 'absolute', inset: 0,
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 30%, transparent 100%)'
-                    }} />
-                </div>
-
-                {/* --- 3. FOOTER (Actions) --- */}
-                <div className="card-footer" style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
-                    padding: '20px',
-                    display: 'flex', flexDirection: 'column', gap: '10px',
-                    pointerEvents: 'none'
-                }}>
-                    <div className="footer-info" style={{ pointerEvents: 'auto' }}>
-                        <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: 'white', margin: '0 0 6px 0', lineHeight: 1.2, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                            {restaurant.promoText || 'Special Offer Inside!'}
-                        </h3>
-                        {restaurant.tags && (
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                {restaurant.tags.map((tag, i) => (
-                                    <span key={i} style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.8)', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '4px' }}>
-                                        #{tag}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="footer-actions" style={{ pointerEvents: 'auto' }}>
-                        <button style={{
-                            width: '100%', padding: '14px', borderRadius: '30px', border: 'none',
-                            background: 'var(--luxury-gold)', // Gold for business action
-                            color: 'black',
-                            fontWeight: '800', fontSize: '1rem', cursor: 'pointer',
-                            display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
-                            boxShadow: '0 4px 15px rgba(251, 191, 36, 0.4)'
-                        }}>
-                            {t('view_profile', { defaultValue: 'View Profile' })}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
     };
 
     const handleCategoryClick = (cat) => {
@@ -713,25 +584,6 @@ const Home = () => {
                     }
                 }
             `}</style>
-
-
-
-
-            {/* ── Offer Banner: Mobile only — desktop shows it in right sidebar ── */}
-            <div className="mobile-only-offers">
-                {hasOffers && (
-                    <div style={{
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 120,
-                        background: 'var(--bg-main)',
-                        padding: '6px 2px 0',
-                    }}>
-                        <OffersBanner onHasOffers={setHasOffers} />
-                    </div>
-                )}
-                {!hasOffers && <OffersBanner onHasOffers={setHasOffers} style={{ display: 'none' }} />}
-            </div>
 
             {/* Title row + List/Map toggle — normal scrollable content */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px 4px' }}>
@@ -944,43 +796,7 @@ const Home = () => {
                 }}
             >
 
-                {redirectMessage && (
-                    <div
-                        role="alert"
-                        style={{
-                            margin: '8px 12px',
-                            padding: '12px 16px',
-                            borderRadius: '12px',
-                            background: 'var(--primary)',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '12px'
-                        }}
-                    >
-                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{redirectMessage}</span>
-                        <button
-                            onClick={() => setRedirectMessage(null)}
-                            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontWeight: '600' }}
-                        >
-                            {t('close', { defaultValue: 'Close' })}
-                        </button>
-                    </div>
-                )}
-
-                {premiumAds.length > 0 && (
-                    <div className="promo-banner" onClick={() => navigate(`/restaurant/${premiumAds[0].id}`)}>
-                        <span className="promo-badge">HOT DEAL</span>
-                        <div className="promo-overlay"></div>
-                        <img src={premiumAds[0].image} className="promo-bg" alt="" />
-                        <div className="promo-text-layer">
-                            <h3 className="promo-title">{premiumAds[0].name}</h3>
-                            <p className="promo-desc">{premiumAds[0].promoText}</p>
-                            <button className="btn btn-sm btn-white">Explore Now</button>
-                        </div>
-                    </div>
-                )}
+                <HomeRedirectAlert message={redirectMessage} onDismiss={() => setRedirectMessage(null)} t={t} />
 
 
 
@@ -993,16 +809,9 @@ const Home = () => {
                         </>
                     ) : filteredInvitations.length > 0 ? (
                         <>
-                            {filteredInvitations.map((inv, idx) => {
-                                const shouldShowAd = inFeedAds.length > 0 && idx > 0 && idx % 4 === 0;
-                                const adIndex = Math.floor(idx / 4) % inFeedAds.length;
-                                return (
-                                    <React.Fragment key={inv.id}>
-                                        <InvitationCard invitation={inv} />
-                                        {shouldShowAd && <RestaurantAdCard restaurant={inFeedAds[adIndex]} />}
-                                    </React.Fragment>
-                                );
-                            })}
+                            {filteredInvitations.map((inv) => (
+                                <InvitationCard key={inv.id} invitation={inv} />
+                            ))}
                             {hasMoreInvitations && (
                                 <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}>
                                     <button

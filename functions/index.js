@@ -11,6 +11,7 @@ const { registerAffiliateReferralOnUserWrite } = require('./affiliateReferral');
 const {
     incrementReferralClicks,
     syncAffiliatePendingReferralOnUserWrite,
+    onBusinessSubscriptionCreated,
 } = require('./affiliateTracking');
 const { registerAffiliateAgentProfile } = require('./affiliateAuth');
 const { requestAffiliatePayout } = require('./affiliatePayouts');
@@ -69,7 +70,9 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'booking_cancelled',
     'invitation_completed',
     'booking_confirmed',
-    'invitation_updated'
+    'invitation_updated',
+    'affiliate_referral_business',
+    'affiliate_referral_plan'
 ]);
 const ALLOWED_PARTNER_NOTIFICATION_TYPES = new Set(['new_booking']);
 const NOTIFICATION_ALLOWED_KEYS = new Set([
@@ -486,6 +489,7 @@ exports.syncPublicProfileOnUserWrite = functions.firestore
 registerAffiliateReferralOnUserWrite(exports, { db, admin });
 exports.incrementReferralClicks = incrementReferralClicks;
 exports.syncAffiliatePendingReferralOnUserWrite = syncAffiliatePendingReferralOnUserWrite;
+exports.onBusinessSubscriptionCreated = onBusinessSubscriptionCreated;
 exports.registerAffiliateAgentProfile = registerAffiliateAgentProfile;
 exports.requestAffiliatePayout = requestAffiliatePayout;
 

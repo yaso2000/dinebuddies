@@ -77,8 +77,8 @@ const MigrationTools = () => {
                 </div>
             </div>
 
-            {/* Legacy plan migration removed to avoid duplication of old $39/$79 data. 
-               Please use PlanManagement.jsx for sync/reset tools. */}
+            {/* Legacy plan migration removed to avoid duplication of old $39/$79 data.
+               Sync business plans + invitation credit packs from repo defaults: Admin → Plans & Packs (`/admin/plans`, `Plans.jsx`). */}
 
             {/* User Cleanup Migration Card */}
             <div className="admin-card admin-mb-4" style={{ marginTop: '2rem', borderTop: '1px solid #334155', paddingTop: '2rem' }}>

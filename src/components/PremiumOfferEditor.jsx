@@ -76,7 +76,7 @@ const PremiumOfferEditor = ({ onPublish, businessProfile, initialData = null, on
             background: isFullPage ? 'transparent' : 'var(--bg-card)',
             borderRadius: isFullPage ? '0' : '16px',
             width: '100%',
-            maxWidth: isFullPage ? 'none' : '650px',
+            maxWidth: isFullPage ? 'none' : 'var(--desktop-content-max)',
             maxHeight: isFullPage ? 'none' : '90vh',
             display: 'flex',
             flexDirection: 'column',
@@ -144,7 +144,7 @@ const PremiumOfferEditor = ({ onPublish, businessProfile, initialData = null, on
                 borderBottom: '1px solid rgba(255,255,255,0.1)',
                 boxShadow: '0 15px 30px rgba(0,0,0,0.5)'
             }}>
-                <div style={{ maxWidth: '650px', margin: '0 auto', padding: '0 20px' }}>
+                <div style={{ maxWidth: 'var(--desktop-content-max)', margin: '0 auto', padding: '0 20px' }}>
                     <label style={{ ...labelStyle, color: '#D4AF37', marginBottom: '12px', fontSize: '0.75rem' }}>
                         Live Premium Preview
                     </label>
@@ -167,7 +167,7 @@ const PremiumOfferEditor = ({ onPublish, businessProfile, initialData = null, on
 
                 <div style={{
                     padding: isFullPage ? '24px 20px' : '24px 20px',
-                    maxWidth: '650px',
+                    maxWidth: 'var(--desktop-content-max)',
                     width: '100%',
                     margin: '0 auto',
                     display: 'flex',
@@ -528,7 +528,7 @@ const PremiumOfferEditor = ({ onPublish, businessProfile, initialData = null, on
                 WebkitBackdropFilter: 'blur(10px)',
             }}>
                 <div style={{
-                    maxWidth: '650px',
+                    maxWidth: 'var(--desktop-content-max)',
                     margin: '0 auto',
                     padding: '0 20px',
                     display: 'flex',

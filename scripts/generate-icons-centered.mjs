@@ -11,12 +11,12 @@ const paddingPercentage = 0.20;
 
 const icons = [
     {
-        svgFile: resolve(publicDir, 'db dinebuddies.svg'),
+        svgFile: resolve(publicDir, 'DB-logo orange.svg'),
         outputPrefix: 'icon-light',
         background: { r: 255, g: 255, b: 255, alpha: 1 },
     },
     {
-        svgFile: resolve(publicDir, 'db-logo-white.svg'),
+        svgFile: resolve(publicDir, 'DB-logo white.svg'),
         outputPrefix: 'icon-dark',
         background: { r: 2, g: 6, b: 23, alpha: 1 },
     },

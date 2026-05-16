@@ -1,161 +1,62 @@
 /**
- * Default Subscription Plans and Credit Packs
- * Base currency: USD. Display in local currency via currencyConverter.js.
+ * Subscription plans (business) + credit packs (consumer invite top-ups).
+ * Base currency: USD. Local display via currencyConverter.js.
  *
- * Consumer (`type: 'user'`) rows are legacy reference only — the app uses **Dine Credits**
- * (`freeCredits` + `paidCredits`) for private/date invites and AI, not separate invitation packs.
+ * Business: exactly two tiers — `free` and `paid`. Paid tier `stripePriceId` must match
+ * the recurring Price in Stripe (Dashboard → Product → Pricing → copy price_…).
+ *
+ * Consumer: no subscription. Public invitations are free. Dine Credits (wallet) pay for
+ * private + dating invitation publishing only. AI credit purchases / AI spend are paused in product copy.
  */
 
 export const BASE_SUBSCRIPTION_PLANS = [
     {
-        id: 'p1',
-        name: 'Free Plan',
-        title: 'Start for Free',
-        description: 'For participating in public events',
-        type: 'user',
+        id: 'business-free',
+        name: 'Free Business',
+        title: 'Free',
+        description: 'List your venue in the directory and join the community',
+        type: 'business',
         price: 0,
+        currency: 'USD',
         duration: { type: 'month', value: 1 },
-        invitationCredits: 0,
-        publicCredits: 4,
-        monthlyPrivateQuota: 2,
         stripePriceId: null,
         tier: 'free',
         features: [
-            'Create 4 Public Invitations per month',
-            '2 Private Invitations per month',
-            'Browse all nearby Public Invitations',
-            'Join Food Communities',
-            'App-based technical support'
+            'Business profile in the directory',
+            'Ratings and reviews',
+            'Basic presence and community access',
+            'App support'
         ],
         active: true,
         recommended: false
     },
     {
-        id: 'p2',
-        name: 'Pro Plan',
-        title: 'Most Popular',
-        description: 'For active users seeking privacy',
-        type: 'user',
-        price: 8,
-        currency: 'USD',
-        duration: { type: 'month', value: 1 },
-        monthlyPrivateQuota: 4,
-        stripePriceId: 'price_1T4DptKpQn3RDJUCrhwtOx0u',
-        tier: 'pro',
-        features: [
-            '4 Private Invitations per month',
-            'Unlimited Public Invitations',
-            'Distinctive Pro Badge',
-            'Priority in search results',
-            'Fast technical support'
-        ],
-        active: true,
-        recommended: true
-    },
-    {
-        id: 'p3',
-        name: 'Premium Plan',
-        title: 'Golden Experience',
-        description: 'For lovers of luxury and absolute privacy',
-        type: 'user',
-        price: 15,
-        currency: 'USD',
-        duration: { type: 'month', value: 1 },
-        monthlyPrivateQuota: 10,
-        stripePriceId: 'price_1T4DrkKpQn3RDJUC7cPercNu',
-        tier: 'vip',
-        features: [
-            '10 Private Invitations per month',
-            'Unlimited Public Invitations',
-            'Exclusive Golden Badge',
-            'Top priority + Partner discounts',
-            'Undo cancellation option'
-        ],
-        active: true,
-        recommended: false
-    },
-    {
-        id: 'p4',
-        name: 'Professional Business Plan',
-        title: 'For Small Venues',
-        description: 'Perfect solution for emerging businesses and venues',
+        id: 'business-paid',
+        name: 'Paid Business',
+        title: 'Paid',
+        description: 'Full partner tools, visibility, and analytics',
         type: 'business',
-        price: 19,
+        price: 20,
         currency: 'USD',
         duration: { type: 'month', value: 1 },
-        invitationCredits: null,
-        invitationOffers: null,
-        stripePriceId: 'price_1T4DfJKpQn3RDJUC4ANefmpl',
-        tier: 'professional',
-        offerSlots: 1,
-        offerHoursPerSlot: 50,
-        offerPerpetual: false,
+        stripePriceId: 'price_1TWGO9KpQn3RDJUCly8Y0jFc',
+        tier: 'paid',
         features: [
-            '1 Month FREE Trial ✨',
-            'Full dashboard access',
-            'Listing in business directory',
-            'Services & Menu management',
-            '1 offer slot (50 hours/week)',
-            'Accept reservations',
-            'Basic statistics',
-            'Email support'
-        ],
-        active: true,
-        recommended: false
-    },
-    {
-        id: 'p5',
-        name: 'Elite Partner Plan',
-        title: 'For Businesses & Large Venues',
-        description: 'Professional tools to manage and grow your business',
-        type: 'business',
-        price: 29,
-        currency: 'USD',
-        duration: { type: 'month', value: 1 },
-        invitationCredits: null,
-        invitationOffers: null,
-        stripePriceId: 'price_1T4DlqKpQn3RDJUC6vrueW0n',
-        tier: 'elite',
-        offerSlots: 1,
-        offerHoursPerSlot: null,
-        offerPerpetual: true,
-        features: [
-            '1 Month FREE Trial ✨',
-            'All Basic features',
-            '1 permanent offer slot ♾️',
-            'Featured in search results',
+            'Everything in Free',
+            'Priority visibility in search',
             'Advanced analytics',
-            'Menu & Offer management',
-            'Loyalty program integration',
-            'Direct phone support'
+            'Community management tools',
+            'Member notifications',
+            'Featured placement options',
+            'Email & priority support'
         ],
         active: true,
         recommended: true
-    },
-    {
-        id: 'p6',
-        name: 'Free Business Plan',
-        title: 'For Basic Presence',
-        description: 'Start listing your restaurant in the directory for free',
-        type: 'business',
-        price: 0,
-        duration: { type: 'month', value: 1 },
-        invitationCredits: 0,
-        invitationOffers: 0,
-        tier: 'free',
-        features: [
-            'Basic listing in business directory',
-            'Receive ratings and reviews',
-            'View counts statistics only',
-            'App-based technical support'
-        ],
-        active: true,
-        recommended: false
     }
 ];
 
+/** Private / dating invitation packs (one-time checkouts — separate from subscription). */
 export const BASE_CREDIT_PACKS = [
-    // ── Private Invitation Packs ──────────────────────────────────────────────
     {
         id: 'c1',
         name: 'Single Private Invitation',
@@ -201,8 +102,6 @@ export const BASE_CREDIT_PACKS = [
         currency: 'USD',
         stripePriceId: 'price_1T4E8AKpQn3RDJUCc3tJwnAI'
     },
-
-    // ── Dating Invitation Packs ───────────────────────────────────────────────
     {
         id: 'd1',
         name: '5 Dating Invitations',
@@ -220,17 +119,5 @@ export const BASE_CREDIT_PACKS = [
         price: 10,
         currency: 'USD',
         stripePriceId: 'price_1TDaO5KpQn3RDJUC0vD1Afzj'
-    },
-
-    // ── Business Offer Packs ───────────────────────────────────────────────────
-    {
-        id: 'o1',
-        name: '50 Hour Offer Slot',
-        type: 'offer_slot',
-        offerHours: 50,
-        price: 5,
-        currency: 'USD',
-        stripePriceId: 'price_1T5mIGKpQn3RDJUCMzhlyN6a',
-        description: 'Adds one 50-hour premium offer display slot to your banner'
     }
 ];

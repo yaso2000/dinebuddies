@@ -19,7 +19,7 @@ import app, { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { isAffiliateAgent } from '../../utils/accountRole';
-import { useAffiliateDesktopEligible } from '../../utils/affiliateDesktopGate';
+import { getAffiliateEmailSignInHref } from '../../utils/affiliateAuthRoutes';
 import { getReferralLink } from '../../utils/referralLink';
 import AppRouteLoading from '../../components/AppRouteLoading';
 import './AffiliateDashboard.css';
@@ -121,10 +121,29 @@ function AffiliateDashboardInner() {
     const referralCode = (userProfile?.referral_code || '').trim();
     const linkFromProfile = (userProfile?.referral_link || '').trim();
     const shareUrl = useMemo(() => {
-        if (linkFromProfile) return linkFromProfile;
         if (referralCode) return getReferralLink(referralCode);
+        if (linkFromProfile) return linkFromProfile;
         return '';
     }, [linkFromProfile, referralCode]);
+
+    useEffect(() => {
+        if (!currentUser?.uid || !emailVerified) return;
+        if (referralCode) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const fn = httpsCallable(getFunctions(app, FUNCTIONS_REGION), 'ensureMyAffiliateReferralCode');
+                await fn({});
+            } catch (e) {
+                if (!cancelled) {
+                    console.warn('[AffiliateDashboard] ensureMyAffiliateReferralCode', e?.code, e?.message);
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [currentUser?.uid, emailVerified, referralCode]);
 
     const totalClicks =
         typeof userProfile?.total_clicks === 'number' && Number.isFinite(userProfile.total_clicks)
@@ -558,14 +577,13 @@ function AffiliateDashboardInner() {
 
 export default function AffiliateDashboard() {
     const { currentUser, userProfile, loading, profileServerSynced } = useAuth();
-    const desktopOk = useAffiliateDesktopEligible();
 
     if (loading) {
         return <AppRouteLoading variant="session" fullViewport />;
     }
 
     if (!currentUser) {
-        return <Navigate to="/affiliate/login?next=/affiliate/dashboard" replace />;
+        return <Navigate to={getAffiliateEmailSignInHref('/affiliate/dashboard')} replace />;
     }
 
     // Wait for first server-backed profile snapshot so new signups are not sent home
@@ -575,11 +593,7 @@ export default function AffiliateDashboard() {
     }
 
     if (!userProfile || !isAffiliateAgent(userProfile)) {
-        return <Navigate to="/affiliate/login?next=/affiliate/dashboard" replace />;
-    }
-
-    if (!desktopOk) {
-        return <Navigate to="/affiliate/use-laptop" replace />;
+        return <Navigate to="/" replace />;
     }
 
     return <AffiliateDashboardInner />;

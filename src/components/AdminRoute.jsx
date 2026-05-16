@@ -3,21 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { auth } from '../firebase/config';
-
-const fullPageSpinner = (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f0817', color: '#94a3b8' }}>
-        <div
-            style={{
-                width: 40,
-                height: 40,
-                border: '4px solid rgba(148, 163, 184, 0.15)',
-                borderTop: '4px solid #E86E2E',
-                borderRadius: '50%',
-                animation: 'spin 0.9s linear infinite',
-            }}
-        />
-    </div>
-);
+import AppRouteLoading from './AppRouteLoading';
 
 /** No auto-redirect to `/` — that fought HomeRouter and caused admin ↔ home flicker loops. */
 function AdminAccessDenied() {
@@ -104,13 +90,13 @@ const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support',
 
     if (!currentUser) {
         if (loading) {
-            return fullPageSpinner;
+            return <AppRouteLoading variant="session" fullViewport />;
         }
         return <Navigate to="/login" replace />;
     }
 
     if (loading || !tokenChecked) {
-        return fullPageSpinner;
+        return <AppRouteLoading variant="session" fullViewport />;
     }
 
     const id = identityUser(currentUser);
@@ -119,7 +105,7 @@ const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support',
     // Firestore-backed roles need users/{uid}. Do not treat `loading === false` alone as "no profile will
     // arrive" (AuthContext fail-safe can clear loading before the first snapshot).
     if (userProfile === null && !canEnterWithoutProfileDoc) {
-        return fullPageSpinner;
+        return <AppRouteLoading variant="session" fullViewport />;
     }
 
     const isSuperAdmin = isAdminIdentity(id, userProfile);

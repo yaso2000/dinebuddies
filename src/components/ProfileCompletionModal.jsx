@@ -26,7 +26,7 @@ const ProfileCompletionModal = () => {
     });
 
     // Check for missing fields and open modal if necessary
-    // Skip for: business, admin, staff, support, guest, partner (same rules as ProfileGuard / normalizeProfile)
+    // Skip for: business, admin, staff, support, guest, partner (same rules as profile normalization)
     const roleLc = String(userProfile?.role || '').toLowerCase();
     const hasBizInfo =
         userProfile?.businessInfo &&

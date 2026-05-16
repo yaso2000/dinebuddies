@@ -11,7 +11,6 @@ const PaymentSuccess = () => {
     const { t } = useTranslation();
 
     useEffect(() => {
-        console.log('Payment Session ID:', sessionId);
 
         // Countdown timer
         const timer = setInterval(() => {

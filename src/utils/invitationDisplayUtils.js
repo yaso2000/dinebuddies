@@ -55,3 +55,24 @@ export const formatAgeGroupsSmart = (selectedGroups, t) => {
     // If not contiguous or just one, join them
     return sortedGroups.join(', ');
 };
+
+/**
+ * Parse legacy `ageRange` for eligibility checks. Firestore may store a string "18-35",
+ * an object `{ min, max }`, or malformed values — never throw from `.split()`.
+ * @param {unknown} ageRange
+ * @returns {[number, number] | null}
+ */
+export function parseInvitationAgeRange(ageRange) {
+    if (ageRange == null || ageRange === '' || ageRange === 'any') return null;
+    if (typeof ageRange === 'object' && !Array.isArray(ageRange)) {
+        const min = Number(ageRange.min ?? ageRange.minAge);
+        const max = Number(ageRange.max ?? ageRange.maxAge);
+        if (Number.isFinite(min) && Number.isFinite(max)) return [min, max];
+        return null;
+    }
+    const s = String(ageRange).trim();
+    if (!s || !/[-–—]/.test(s)) return null;
+    const parts = s.split(/[-–—]/).map((p) => Number(String(p).trim()));
+    if (parts.length < 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return null;
+    return [parts[0], parts[1]];
+}

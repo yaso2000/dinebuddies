@@ -4,7 +4,7 @@
  * One worker: /firebase-messaging-sw.js (PWA precache + messaging). Do not register /sw.js.
  */
 import { getMessaging, getToken, deleteToken, onMessage, isSupported } from 'firebase/messaging';
-import { doc, updateDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import app from '../firebase/config';
 import { db } from '../firebase/config';
 
@@ -12,6 +12,16 @@ const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 let _messaging = null;
 let _foregroundListenerAttached = false;
+
+/** Avoid hung promises freezing the UI (common on iOS PWA + FCM). */
+function withTimeout(ms, promise, label = 'operation') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+        }),
+    ]);
+}
 
 /** iPhone / iPod touch / iPad (incl. iPadOS “desktop” UA as MacIntel + touch). */
 export function isIOS() {
@@ -36,29 +46,12 @@ export function isStandalonePwa() {
     } catch {
         /* ignore */
     }
-    console.log('[StandaloneCheck]', {
-        matchMedia: matchMediaStandalone,
-        navigatorStandalone: window.navigator.standalone,
-    });
     return matchMediaStandalone || window.navigator.standalone === true;
 }
 
 /** iOS device launched from Home Screen — required before Web Push + permission on iOS. */
 export function isIosStandalonePwa() {
     return isIOS() && isStandalonePwa();
-}
-
-/** Snapshot for iOS/PWA debugging (temporary). */
-export function getPushCapabilitySnapshot(uid) {
-    return {
-        uid: uid ?? null,
-        isIOS: isIOS(),
-        isStandalone: isStandalonePwa(),
-        supportsNotification: typeof Notification !== 'undefined',
-        supportsServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
-        supportsPush: typeof window !== 'undefined' && 'PushManager' in window,
-        permission: typeof Notification !== 'undefined' ? Notification.permission : 'unavailable',
-    };
 }
 
 /** iOS 16.4+ only — earlier versions cannot receive web push. */
@@ -109,7 +102,7 @@ function getMsg() {
 async function getFcmServiceWorkerRegistration() {
     if (typeof navigator === 'undefined' || !navigator.serviceWorker) return null;
 
-    await navigator.serviceWorker.ready.catch(() => {});
+    await withTimeout(10000, navigator.serviceWorker.ready.catch(() => {}), 'serviceWorker.ready').catch(() => {});
 
     let existing = await navigator.serviceWorker.getRegistration('/');
     const scriptIsFcm = (reg) => {
@@ -137,7 +130,16 @@ async function getFcmServiceWorkerRegistration() {
         return existing;
     }
 
-    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    let reg;
+    try {
+        reg = await withTimeout(
+            20000,
+            navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' }),
+            'serviceWorker.register(fcm)'
+        );
+    } catch {
+        return null;
+    }
     try {
         await reg.update();
     } catch {
@@ -153,70 +155,87 @@ async function getFcmServiceWorkerRegistration() {
  * @returns {Promise<string|null>}
  */
 export async function initNotifications(uid) {
-    if (!uid) {
-        console.warn('[PushStep abort] no uid');
-        return null;
-    }
+    if (!uid) return null;
     try {
-        console.log('[PushStep 1] initNotifications called', { uid });
-        console.log('[PushStep 2] permission before', Notification.permission);
-
-        const supported = await isSupported().catch(() => false);
-        if (!supported) {
-            console.warn('[PushStep abort] isSupported false');
-            console.warn('[FCM] Messaging unsupported here (HTTPS + supported browser required).');
-            return null;
-        }
-
         if (!isIosWebPushSupportedVersion()) {
-            console.warn('[PushStep abort] iOS version < 16.4');
             console.warn('[FCM] iOS 16.4+ required for web push on iPhone.');
             return null;
         }
 
-        // iOS: never request Notification permission (or obtain FCM token) until launched from Home Screen.
         if (isIOS() && !isStandalonePwa()) {
-            console.warn('[PushStep abort] iOS and not standalone');
-            console.info('[FCM] iOS non-standalone: skip permission + token; use Add to Home Screen first.');
             return null;
         }
 
         if (!VAPID_KEY || String(VAPID_KEY).trim() === '') {
-            console.warn('[PushStep abort] missing VITE_FIREBASE_VAPID_KEY');
             console.error('[FCM] Missing VITE_FIREBASE_VAPID_KEY — browser cannot obtain a push token.');
+            return null;
+        }
+
+        /**
+         * Start the permission prompt before any `await` so iOS keeps the user-activation chain
+         * (same as SW registration — WebKit is strict).
+         */
+        let permissionPromise = null;
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            try {
+                permissionPromise = Notification.requestPermission();
+            } catch (e) {
+                console.warn('[FCM] requestPermission threw:', e?.message || e);
+            }
+        }
+
+        const supported = await isSupported().catch(() => false);
+        if (!supported) {
+            console.warn('[FCM] Messaging unsupported here (HTTPS + supported browser required).');
+            if (permissionPromise) {
+                try {
+                    await withTimeout(120000, permissionPromise, 'Notification.requestPermission(cleanup)');
+                } catch {
+                    /* ignore */
+                }
+            }
             return null;
         }
 
         const messaging = getMsg();
         if (!messaging) {
-            console.warn('[PushStep abort] getMessaging returned null');
+            if (permissionPromise) {
+                try {
+                    await withTimeout(120000, permissionPromise, 'Notification.requestPermission(cleanup)');
+                } catch {
+                    /* ignore */
+                }
+            }
             return null;
         }
 
-        console.log('[PushStep 3] registering service worker');
         const reg = await getFcmServiceWorkerRegistration();
         if (!reg) {
-            console.warn('[PushStep abort] service worker registration null');
+            if (permissionPromise) {
+                permissionPromise.catch(() => {});
+                try {
+                    await withTimeout(120000, permissionPromise, 'Notification.requestPermission(cancel)');
+                } catch {
+                    /* ignore */
+                }
+            }
             return null;
         }
-        console.log('[PushStep 4] service worker registered', reg);
+
+        let permission = typeof Notification !== 'undefined' ? Notification.permission : 'denied';
+        if (permissionPromise) {
+            try {
+                permission = await withTimeout(120000, permissionPromise, 'Notification.requestPermission');
+            } catch (e) {
+                console.warn('[FCM] permission wait failed:', e?.message || e);
+                permission = 'denied';
+            }
+        }
+        if (permission !== 'granted') return null;
 
         if (isIOS()) {
             await new Promise((r) => setTimeout(r, 400));
         }
-
-        console.log('[PushStep 5] requesting permission');
-        const permission = await Notification.requestPermission();
-        console.log('[PushStep 6] permission after', permission);
-        if (permission !== 'granted') {
-            console.warn('[PushStep abort] permission not granted', permission);
-            return null;
-        }
-
-        console.log('[PushStep 7] calling getToken', {
-            hasVapidKey: !!import.meta.env.VITE_FIREBASE_VAPID_KEY,
-            vapidPrefix: import.meta.env.VITE_FIREBASE_VAPID_KEY?.slice(0, 12),
-        });
 
         let token = null;
         let lastTokenErr = null;
@@ -225,13 +244,15 @@ export async function initNotifications(uid) {
                 await new Promise((r) => setTimeout(r, 500 * attempt));
             }
             try {
-                token = await getToken(messaging, {
-                    vapidKey: VAPID_KEY,
-                    serviceWorkerRegistration: reg,
-                });
-                console.log('[PushStep 8] getToken result', token);
+                token = await withTimeout(
+                    25000,
+                    getToken(messaging, {
+                        vapidKey: VAPID_KEY,
+                        serviceWorkerRegistration: reg,
+                    }),
+                    'FCM.getToken'
+                );
             } catch (err) {
-                console.error('[PushError getToken]', err);
                 lastTokenErr = err;
                 console.warn('[FCM] getToken attempt', attempt + 1, err?.code || '', err?.message || err);
             }
@@ -239,19 +260,9 @@ export async function initNotifications(uid) {
         if (!token && lastTokenErr) {
             console.warn('[FCM] getToken failed after retries:', lastTokenErr?.code || '', lastTokenErr?.message || lastTokenErr);
         }
-        if (!token) {
-            console.warn('[PushStep abort] getToken returned null/empty after retries');
-            return null;
-        }
+        if (!token) return null;
 
-        console.log('[PushStep 9] saving token');
-        try {
-            await saveFcmToken(uid, token);
-            console.log('[PushStep 10] token saved');
-        } catch (err) {
-            console.error('[PushError saveFcmToken]', err);
-            throw err;
-        }
+        await saveFcmToken(uid, token);
 
         if (!_foregroundListenerAttached) {
             _foregroundListenerAttached = true;
@@ -266,6 +277,28 @@ export async function initNotifications(uid) {
         const msg = err?.message != null ? String(err.message) : String(err);
         console.warn('[FCM] initNotifications failed:', code ? `${code} ` : '', msg);
         return null;
+    }
+}
+
+/**
+ * Re-run FCM registration when the app returns to the foreground (iOS PWA often needs this).
+ * Skips when the user turned push off in app preferences or the OS denied permission.
+ * @param {string} uid
+ */
+export async function refreshFcmIfUserOptedIn(uid) {
+    if (!uid) return;
+    try {
+        const snap = await getDoc(doc(db, 'users', uid, 'preferences', 'notifications'));
+        let pushEnabled = true;
+        if (snap.exists()) {
+            const d = snap.data();
+            if (typeof d?.pushEnabled === 'boolean') pushEnabled = d.pushEnabled;
+        }
+        if (!pushEnabled) return;
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        await initNotifications(uid);
+    } catch (e) {
+        console.warn('[FCM] refreshFcmIfUserOptedIn:', e?.message || e);
     }
 }
 
@@ -296,6 +329,7 @@ export async function removeFcmToken(uid) {
     if (isIOS() && !isStandalonePwa()) return;
     try {
         const messaging = getMsg();
+        if (!messaging) return;
         const reg = await getFcmServiceWorkerRegistration().catch(() => null);
         const token = await getToken(messaging, {
             vapidKey: VAPID_KEY,

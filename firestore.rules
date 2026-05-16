@@ -127,7 +127,7 @@ service cloud.firestore {
     // Affiliate / referral: financial and identity fields are written only by Cloud Functions (Admin SDK).
     function affiliateServerOnlyUserKeys() {
       return [
-        'current_balance', 'total_earned', 'pending_referrals_count', 'successful_referrals_count',
+        'current_balance', 'total_earned', 'pending_referrals_count', 'successful_referrals_count', 'referral_count',
         'pending_payouts', 'total_clicks', 'referral_code', 'referral_link', 'affiliateLastCommissionSessionId',
         'registrationChannel'
       ];
@@ -141,7 +141,8 @@ service cloud.firestore {
              request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly([
                  'affiliate_phone', 'affiliate_paypal_email', 'affiliate_address',
-                 'affiliate_country', 'affiliate_city'
+                 'affiliate_country', 'affiliate_city', 'countryCode',
+                 'affiliate_notify_referral_business', 'affiliate_notify_referral_plan'
                ]);
     }
 
@@ -777,6 +778,18 @@ service cloud.firestore {
     // Referral click rate limits (Cloud Functions only)
     match /referral_rate_limits/{docId} {
       allow read, write: if false;
+    }
+
+    // Stripe → affiliate commission queue (written only by Cloud Functions Admin SDK)
+    match /business_subscriptions/{id} {
+      allow read, write: if false;
+    }
+
+    // Affiliate commission audit trail (Admin SDK only; agents/admins may read own rows)
+    match /affiliate_commission_audits/{id} {
+      allow read: if isSignedIn() &&
+                     (resource.data.agentUid == request.auth.uid || isAdminOrPanelStaff());
+      allow create, update, delete: if false;
     }
 
     // ============================================

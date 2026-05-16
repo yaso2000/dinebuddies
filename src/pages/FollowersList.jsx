@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { FaArrowRight, FaComments, FaUserPlus, FaUserCheck, FaUsers, FaHeart } from 'react-icons/fa';
 import { getFollowers, getFollowing, getMutualFollowersCount } from '../utils/followHelpers';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -17,6 +19,7 @@ const FollowersList = () => {
     const { userId: paramUserId } = useParams();
     const { currentUser, toggleFollow } = useInvitations();
     const { userProfile } = useAuth();
+    const { showToast } = useToast();
     const [followers, setFollowers] = useState([]);
     const [following, setFollowing] = useState([]);
     const [mutualFollowers, setMutualFollowers] = useState([]);
@@ -115,6 +118,11 @@ const FollowersList = () => {
     };
 
     const filteredUsers = getFilteredUsers();
+
+    const followCtx = useMemo(
+        () => ({ currentUser, userProfile, toggleFollow, showToast, t }),
+        [currentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     const handleChatClick = (userId) => {
         navigate(`/chat/${userId}`);
@@ -283,49 +291,13 @@ const FollowersList = () => {
                                 >
                                     {/* Avatar */}
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{
-                                            width: '50px',
-                                            height: '50px',
-                                            borderRadius: '50%',
-                                            border: `2px solid ${isMutualFollow(user) && isOwnProfile ? 'var(--primary)' : getGenderBorderColor(user)}`,
-                                            overflow: 'hidden'
-                                        }}>
-                                            <UserAvatar
-                                                user={user}
-                                                alt={user.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                            />
-                                        </div>
-                                        {/* Avatar Plus Badge just like in UserProfile */}
-                                        {userProfile?.role !== 'business' && !user.isFollowedByMe && user.id !== (currentUser?.id || currentUser?.uid) && (
-                                            <div
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleFollow(user.id);
-                                                    
-                                                    // Optimistic update for the badge
-                                                    if (!isOwnProfile) {
-                                                        setFollowers(prev => prev.map(u => 
-                                                            u.id === user.id ? { ...u, isFollowedByMe: true } : u
-                                                        ));
-                                                    } else {
-                                                        const updater = prev => prev.map(u => 
-                                                            u.id === user.id ? { ...u, isFollowedByMe: true } : u
-                                                        );
-                                                        setFollowers(updater);
-                                                        setFollowing(updater);
-                                                        setMutualFollowers(updater);
-                                                    }
-                                                }}
-                                                style={{
-                                                    position: 'absolute', bottom: '-2px', insetInlineEnd: '-2px',
-                                                    width: '20px', height: '20px', borderRadius: '50%',
-                                                    background: 'var(--primary)', border: '2px solid var(--bg-card)',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '12px', color: 'white', fontWeight: '900', lineHeight: 1, zIndex: 1
-                                                }}
-                                            >+</div>
-                                        )}
+                                        <UserAvatar
+                                            user={user}
+                                            followPlus={buildFollowPlusProps(user, followCtx) || undefined}
+                                            followBadgeSize={18}
+                                            alt={user.name}
+                                            style={{ width: '50px', height: '50px', objectFit: 'cover' }}
+                                        />
                                     </div>
 
                                     {/* User Info */}

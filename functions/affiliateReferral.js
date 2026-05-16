@@ -32,7 +32,7 @@ async function generateUniqueReferralCode(_db, _admin) {
 function getPublicAppOrigin() {
     const o = process.env.PUBLIC_APP_ORIGIN || process.env.PUBLIC_APP_URL || '';
     const trimmed = String(o).trim().replace(/\/+$/, '');
-    return trimmed || 'https://www.dinebuddies.com';
+    return trimmed || 'https://dinebuddies.com';
 }
 
 /**
@@ -108,6 +108,13 @@ async function assignReferralFieldsIfNeeded(db, admin, uid) {
                         Number.isFinite(cur.successful_referrals_count)
                             ? cur.successful_referrals_count
                             : 0,
+                    referral_count:
+                        typeof cur.referral_count === 'number' && Number.isFinite(cur.referral_count)
+                            ? cur.referral_count
+                            : typeof cur.successful_referrals_count === 'number' &&
+                                Number.isFinite(cur.successful_referrals_count)
+                              ? cur.successful_referrals_count
+                              : 0,
                 });
             });
 
@@ -146,6 +153,30 @@ function registerAffiliateReferralOnUserWrite(exportsObj, { db, admin }) {
             }
             return null;
         });
+
+    /** Authenticated affiliate: allocate referral_code + referral_link if missing (dashboard bootstrap). */
+    exportsObj.ensureMyAffiliateReferralCode = functions.https.onCall(async (_data, context) => {
+        if (!context.auth?.uid) {
+            throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+        }
+        const uid = context.auth.uid;
+        const snap = await db.collection('users').doc(uid).get();
+        if (!snap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Profile not found.');
+        }
+        const r = String(snap.data()?.role || '').toLowerCase();
+        if (r !== 'affiliate_agent') {
+            throw new functions.https.HttpsError('permission-denied', 'Affiliate accounts only.');
+        }
+        await assignReferralFieldsIfNeeded(db, admin, uid);
+        const after = await db.collection('users').doc(uid).get();
+        const d = after.data() || {};
+        return {
+            ok: true,
+            referralCode: d.referral_code ? String(d.referral_code).trim() : null,
+            referralLink: d.referral_link ? String(d.referral_link).trim() : null,
+        };
+    });
 }
 
 module.exports = {

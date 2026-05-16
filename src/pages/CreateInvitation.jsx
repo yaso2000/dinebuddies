@@ -409,7 +409,6 @@ const CreateInvitation = () => {
 
     const handlePreview = async (e) => {
         e.preventDefault();
-        console.log('🔍 handlePreview called');
 
         // Check if user is guest
         if (!currentUser || currentUser.id === 'guest' || !authUser) {
@@ -420,25 +419,21 @@ const CreateInvitation = () => {
         }
 
         if (isSubmitting) {
-            console.log('⚠️ Already submitting, returning');
             return;
         }
 
         // Validation
         if (!formData.title.trim()) {
-            console.log('❌ Title validation failed');
             showToast(t('please_enter_title'), 'error');
             return;
         }
 
         if (!formData.date || !formData.time) {
-            console.log('❌ Date/Time validation failed');
             showToast(t('please_set_datetime'), 'error');
             return;
         }
 
         if (!formData.location.trim()) {
-            console.log('❌ Location validation failed');
             showToast(t('please_enter_location'), 'error');
             return;
         }
@@ -460,7 +455,6 @@ const CreateInvitation = () => {
 
         // Check for cancellation restrictions
         if (restrictionInfo && !restrictionInfo.canCreate) {
-            console.log('❌ Restriction check failed');
             showToast(t('cannot_create_restricted', {
                 date: restrictionInfo.until?.toLocaleDateString()
             }), 'error');
@@ -468,7 +462,6 @@ const CreateInvitation = () => {
         }
 
         // Check daily invitation limit
-        console.log('✅ Starting validation check...');
         const userId = currentUser?.id || authUser?.uid;
         if (!userId) {
             showToast(t('login_required') || 'Authentication required', 'error');
@@ -482,7 +475,6 @@ const CreateInvitation = () => {
             validation = await validateInvitationCreation(userId);
         }
         if (!validation.valid) {
-            console.log('❌ Daily limit validation failed:', validation.error);
             const confirmMessage = `${validation.error}\n\nDo you want to go to your current invitation?`;
 
             if (window.confirm(confirmMessage)) {
@@ -491,7 +483,6 @@ const CreateInvitation = () => {
             return;
         }
 
-        console.log('✅ All validations passed, starting submission...');
         setIsSubmitting(true);
         setUploadProgress(0);
 
@@ -500,7 +491,6 @@ const CreateInvitation = () => {
 
             // Process media (image or video)
             if (mediaData) {
-                console.log('📤 Processing media...');
                 setUploadProgress(20);
 
                 try {
@@ -511,9 +501,7 @@ const CreateInvitation = () => {
                         throw new Error('User not authenticated');
                     }
 
-                    console.log('👤 Using User ID:', userId);
                     mediaFields = await processInvitationMedia(mediaData, userId);
-                    console.log('✅ Media processed:', mediaFields);
 
                     if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
                         // For updates, use deleteField. For new docs, just exclude them.
@@ -579,25 +567,20 @@ const CreateInvitation = () => {
                 delete draftData.image;
             }
 
-            console.log('📝 Creating draft with data:', draftData);
 
             let finalDraftId;
 
             if (editingDraft && draftId) {
                 // Update existing draft
-                console.log('🔄 Updating existing draft:', draftId);
                 const invitationRef = doc(db, 'invitations', draftId);
                 await updateDoc(invitationRef, draftData);
                 finalDraftId = draftId;
             } else {
                 // Create new draft
-                console.log('➕ Creating new draft...');
                 finalDraftId = await addInvitation(draftData);
-                console.log('✅ Draft created with ID:', finalDraftId);
             }
 
             if (finalDraftId) {
-                console.log('🚀 Navigating to preview:', `/invitation/preview/${finalDraftId}`);
                 navigate(`/invitation/preview/${finalDraftId}`);
             } else {
                 showToast(
@@ -617,7 +600,6 @@ const CreateInvitation = () => {
     // Keep original handleSubmit for backward compatibility (if needed)
     const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log('🚀 Publishing invitation directly/updating...');
 
         if (isSubmitting) return;
 
@@ -679,7 +661,6 @@ const CreateInvitation = () => {
 
             // 1. Process New Media from MediaSelector (Prioritized)
             if (mediaData) {
-                console.log('📤 Processing media from MediaSelector...');
                 setUploadProgress(20);
 
                 try {
@@ -687,7 +668,6 @@ const CreateInvitation = () => {
                     if (!userId) throw new Error('User ID missing');
 
                     mediaFields = await processInvitationMedia(mediaData, userId);
-                    console.log('✅ Media processed successfully:', mediaFields);
 
                     if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
                         if (editingInvitation) {
@@ -726,7 +706,6 @@ const CreateInvitation = () => {
             }
             // 2. Fallback: Legacy Image Upload (if imageFile exists and no mediaData)
             else if (imageFile) {
-                console.log('📤 Uploading image (Legacy)...');
                 const invitationId = editingInvitation ? editingInvitation.id : `temp_${Date.now()}`;
                 const url = await uploadInvitationPhoto(
                     imageFile,
@@ -736,7 +715,6 @@ const CreateInvitation = () => {
                     (progress) => setUploadProgress(progress)
                 );
                 finalImageUrl = url;
-                console.log('✅ Image uploaded:', url);
 
                 // Construct legacy media fields
                 mediaFields = {
@@ -779,16 +757,13 @@ const CreateInvitation = () => {
             }
 
             if (editingInvitation) {
-                console.log('📝 Updating invitation:', editingInvitation.id);
                 const invitationRef = doc(db, 'invitations', editingInvitation.id);
 
                 await updateDoc(invitationRef, cleanData);
-                console.log('✅ Invitation updated');
                 showToast(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }), 'success');
                 navigate(`/invitation/${editingInvitation.id}`);
             } else {
                 // This path is usually handled by handlePreview -> Draft -> Publish, but logic remains
-                console.log('📝 Creating invitation via direct submit...');
                 const newId = await addInvitation(cleanData);
                 if (newId) {
                     navigate(`/invitation/${newId}`);

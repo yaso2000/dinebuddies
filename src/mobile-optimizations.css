@@ -65,7 +65,8 @@
         --sar: env(safe-area-inset-right, 0px);
         --sab: env(safe-area-inset-bottom, 0px);
         --sal: env(safe-area-inset-left, 0px);
-        padding-top: var(--sat);
+        padding-top: max(0px, constant(safe-area-inset-top));
+        padding-top: max(0px, var(--sat));
         padding-right: var(--sar);
         padding-left: var(--sal);
         box-sizing: border-box;
@@ -88,6 +89,9 @@
         width: 100%;
         position: relative;
         touch-action: pan-y;
+        /* iOS: reduce elastic overscroll so chrome + fixed header feel less “rubbery” */
+        overscroll-behavior-y: none;
+        overscroll-behavior-x: none;
     }
 
     .app-main--chat {

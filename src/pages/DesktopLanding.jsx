@@ -1,8 +1,13 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
+import { appLogoForChrome } from '../config/appLogo';
 
 const DesktopLanding = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
+    const { themeMode } = useTheme();
 
     return (
         <div style={{
@@ -24,12 +29,29 @@ const DesktopLanding = () => {
                 backdropFilter: 'blur(10px)'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <img src="/db-logo.svg" alt="DineBuddies Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
+                    <img src={appLogoForChrome(themeMode)} alt="DineBuddies Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
                     <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, background: 'linear-gradient(to right, var(--text-main), var(--text-muted))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                         DineBuddies
                     </h1>
                 </div>
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <Link
+                        to="/affiliate/signup"
+                        style={{
+                            display: 'inline-block',
+                            padding: '0.55rem 1rem',
+                            borderRadius: '8px',
+                            border: '1px solid var(--primary)',
+                            background: 'transparent',
+                            color: 'var(--primary)',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textDecoration: 'none',
+                            fontSize: '0.9rem',
+                        }}
+                    >
+                        {t('desktop_nav_affiliate_signup', 'Affiliate signup')}
+                    </Link>
                     <Link
                         to="/login"
                         style={{
@@ -42,7 +64,6 @@ const DesktopLanding = () => {
                             fontWeight: 600,
                             cursor: 'pointer',
                             transition: 'all 0.2s',
-                            marginRight: '1rem',
                             textDecoration: 'none',
                             boxSizing: 'border-box',
                         }}
@@ -144,6 +165,7 @@ const DesktopLanding = () => {
                     <a href="/terms" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Terms of Use</a>
                     <a href="/guidelines" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Community Guidelines</a>
                     <a href="/support" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Contact Us</a>
+                    <Link to="/affiliate" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}>Affiliate partners</Link>
                 </div>
                 <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }}>
                     &copy; {new Date().getFullYear()} DineBuddies. All rights reserved.

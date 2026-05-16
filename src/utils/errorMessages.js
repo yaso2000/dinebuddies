@@ -23,6 +23,8 @@ const AUTH_ERROR_MAP = {
     'auth/configuration-not-found': 'Sign-in configuration error. Please try again.',
     'auth/missing-email': 'Please enter your email address.',
     'auth/invalid-email': 'Please enter a valid email address.',
+    'auth/affiliate-web-only':
+        'Create your affiliate account from a desktop browser. On your phone, sign in via the app login → Business tab with your partner email and password.',
     // Firestore (e.g. profile write after sign-up)
     'permission-denied': 'Could not save your profile (access denied). Try again or contact support.',
     'unavailable': 'Service temporarily unavailable. Try again in a moment.',

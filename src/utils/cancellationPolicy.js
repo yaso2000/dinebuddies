@@ -169,7 +169,6 @@ export const recordCancellation = async (userId, invitationId, reason, invitatio
 
         // EXEMPTION: No penalty if no one joined and no pending requests
         if (joined.length === 0 && requests.length === 0) {
-            console.log('✅ Cancellation exempted - no participants affected');
             return {
                 success: true,
                 penalty: {

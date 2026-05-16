@@ -1,0 +1,193 @@
+/* Fixed-size promo template (500×500 design space, scaled in editor). Typography sizes are locked with !important. */
+
+.feed-lock-promo-stage {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.feed-lock-promo-bgimg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.feed-lock-promo-scaler {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 500px;
+  height: 500px;
+  transform: translate(-50%, -50%);
+  transform-origin: center center;
+  z-index: 1;
+}
+
+.feed-lock-promo-post {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  border-radius: 15px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  box-sizing: border-box;
+}
+
+.feed-lock-promo-circle {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.feed-lock-promo-circle--1 {
+  width: 300px;
+  height: 300px;
+  top: -100px;
+  right: -80px;
+}
+
+.feed-lock-promo-circle--2 {
+  width: 200px;
+  height: 200px;
+  bottom: -50px;
+  left: -50px;
+}
+
+.feed-lock-promo-editable {
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  border: 1px dashed transparent;
+  cursor: text;
+  z-index: 2;
+  background: transparent;
+  box-sizing: border-box;
+  resize: none;
+  width: 100%;
+}
+
+.feed-lock-promo-editable:hover {
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+}
+
+.feed-lock-promo-editable:focus {
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.feed-lock-promo-badge {
+  background: #fff;
+  padding: 8px 20px;
+  border-radius: 50px;
+  margin-bottom: 20px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  max-width: 92%;
+  text-align: center;
+  line-height: 1.25;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.feed-lock-promo-title {
+  margin: 0;
+  line-height: 1.1;
+  text-align: center;
+  max-width: 96%;
+  font-size: 50px !important;
+  font-weight: 900 !important;
+}
+
+.feed-lock-promo-subtitle {
+  margin: 10px 0 30px 0;
+  opacity: 0.95;
+  max-width: 94%;
+  text-align: center;
+  line-height: 1.25;
+  font-size: 20px !important;
+  font-weight: 300 !important;
+}
+
+.feed-lock-promo-messagebox {
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.4);
+  width: 80%;
+  box-sizing: border-box;
+}
+
+.feed-lock-promo-message {
+  margin: 0;
+  line-height: 1.5;
+  width: 100%;
+  min-height: 4.5em;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+}
+
+/* HTML preview: fixed card; scale() is applied inline (unitless) so Vite/LightningCSS accepts the bundle */
+.feed-studio-html-preview__stage.feed-studio-html-preview__stage--locked-promo {
+  padding: 0;
+  justify-content: center;
+  align-items: stretch;
+  display: block;
+  position: relative;
+}
+
+.feed-lock-promo-html-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.feed-lock-promo-html-root .feed-lock-promo-scaler {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 500px;
+  height: 500px;
+  transform-origin: center center;
+}
+
+.feed-lock-promo-html-root .feed-lock-promo-badge {
+  cursor: default;
+}
+
+.feed-lock-promo-post .feed-studio-field-wrap--grow {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.feed-studio-field-wrap:has(textarea.feed-lock-promo-editable.is-active) .feed-studio-toolbar-shell {
+  position: relative;
+  z-index: 8;
+}
+
+@media (max-width: 640px) {
+  .feed-studio-field-wrap:has(textarea.feed-lock-promo-editable.is-active) {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .feed-studio-field-wrap:has(textarea.feed-lock-promo-editable.is-active) .feed-studio-toolbar-shell {
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+}

@@ -1,10 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
+import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 import { FaArrowLeft, FaSearch, FaEllipsisV } from 'react-icons/fa';
 import './ChatList.css';
 import { goToLogin } from '../utils/goToLogin';
@@ -13,8 +16,15 @@ const ChatList = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { conversations, loading, unreadCount } = useChat();
-    const { currentUser, userProfile } = useAuth();
+    const { userProfile } = useAuth();
+    const { currentUser: invCurrentUser, toggleFollow } = useInvitations();
+    const { showToast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
+
+    const listFollowCtx = useMemo(
+        () => ({ currentUser: invCurrentUser, userProfile, toggleFollow, showToast, t }),
+        [invCurrentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     // Redirect guests to login
     useEffect(() => {
@@ -120,15 +130,25 @@ const ChatList = () => {
                             const otherUser = convo.otherUser;
                             if (!otherUser) return null;
 
+                            const otherUid = otherUser.uid || otherUser.id;
+                            const otherShape = { ...otherUser, id: otherUid, uid: otherUid };
+                            const convoFp = buildFollowPlusProps(otherShape, listFollowCtx);
+
                             return (
                                 <div
                                     key={convo.id}
                                     className={`conversation-item ${convo.isUnread ? 'unread' : ''}`}
-                                    onClick={() => navigate(`/chat/${otherUser.uid}`)}
+                                    onClick={() => navigate(`/chat/${otherUid}`)}
                                 >
                                     {/* Avatar */}
                                     <div className="conversation-avatar">
-                                        <UserAvatar user={otherUser} alt={otherUser.displayName} style={{ objectFit: 'cover' }} />
+                                        <UserAvatar
+                                            user={otherShape}
+                                            followPlus={convoFp || undefined}
+                                            followBadgeSize={16}
+                                            alt={otherUser.displayName}
+                                            style={{ objectFit: 'cover' }}
+                                        />
                                         {otherUser.isOnline && <div className="online-indicator" />}
                                     </div>
 

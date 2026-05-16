@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     collection,
     query,
@@ -44,13 +44,27 @@ export const ChatProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
     const userProfileCache = useRef(new Map()); // Cache otherUser profiles to avoid N getDocs per snapshot
+    // Avoid re-subscribing the conversations query when block/mute arrays get new references with the same UIDs.
+    const socialFilterRef = useRef({ blocked: new Set(), muted: new Set() });
+    const blockedKey = useMemo(
+        () => JSON.stringify([...(asUidArray(userProfile?.blockedUserIds) || [])].sort()),
+        [userProfile?.blockedUserIds]
+    );
+    const mutedKey = useMemo(
+        () => JSON.stringify([...(asUidArray(userProfile?.mutedUserIds) || [])].sort()),
+        [userProfile?.mutedUserIds]
+    );
+    socialFilterRef.current = {
+        blocked: new Set(asUidArray(userProfile?.blockedUserIds)),
+        muted: new Set(asUidArray(userProfile?.mutedUserIds)),
+    };
 
     // Subscribe to user's conversations
     useEffect(() => {
         if (!currentUser?.uid) {
             setConversations([]);
             setLoading(false);
-            return;
+            return undefined;
         }
 
         setLoading(true);
@@ -67,8 +81,7 @@ export const ChatProvider = ({ children }) => {
                 const convos = [];
                 let totalUnread = 0;
 
-                const myBlocked = new Set(asUidArray(userProfile?.blockedUserIds));
-                const myMuted = new Set(asUidArray(userProfile?.mutedUserIds));
+                const { blocked: myBlocked, muted: myMuted } = socialFilterRef.current;
 
                 for (const docSnap of snapshot.docs) {
                     const data = docSnap.data();
@@ -126,7 +139,8 @@ export const ChatProvider = ({ children }) => {
         );
 
         return () => unsubscribe();
-    }, [currentUser?.uid, userProfile?.blockedUserIds, userProfile?.mutedUserIds]);
+        // blockedKey / mutedKey: stable primitive signatures so we re-filter when lists change without tearing down the listener.
+    }, [currentUser?.uid, blockedKey, mutedKey]);
 
     // Create or get conversation (stable reference to avoid effect re-runs and 429 rate limit)
     const getOrCreateConversation = useCallback(async (otherUserId) => {

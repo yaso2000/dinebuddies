@@ -49,7 +49,8 @@ const extractAndRemoveLink = (inputText) => {
 };
 
 const InlinePostEditor = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const isRtl = typeof i18n.dir === 'function' ? i18n.dir(i18n.language) === 'rtl' : i18n.language?.startsWith('ar');
     const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
 
@@ -150,12 +151,12 @@ const InlinePostEditor = () => {
                 mediaType: mediaType,
                 textStyle: {
                     fontSize: 16,
-                    textAlign: 'left',
+                    textAlign: isRtl ? 'right' : 'left',
                     fontWeight: 'normal',
                     fontStyle: 'normal',
                     color: 'var(--text-main)',
                     backgroundColor: 'transparent',
-                    fontFamily: '"Inter", sans-serif'
+                    fontFamily: isRtl ? 'var(--font-arabic), "Inter", sans-serif' : '"Inter", sans-serif'
                 },
                 overlayText: '',
                 overlayStyle: null,
@@ -193,16 +194,18 @@ const InlinePostEditor = () => {
 
     return (
         <div style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '12px 16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div dir={isRtl ? 'rtl' : 'ltr'} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                 <img
                     src={getSafeAvatar(userProfile || currentUser)}
                     alt="User avatar"
-                    style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+                    style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
                 />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
                     <div style={{ position: 'relative' }}>
                         <textarea
                             ref={textareaRef}
+                            dir={isRtl ? 'rtl' : 'ltr'}
+                            lang={isRtl ? 'ar' : undefined}
                             placeholder={t('whats_on_your_mind', "What's on your mind?")}
                             value={text}
                             onChange={handleTextChange}
@@ -210,7 +213,10 @@ const InlinePostEditor = () => {
                             style={{
                                 width: '100%',
                                 background: 'transparent',
-                                padding: '4px 46px 6px 0',
+                                paddingTop: 4,
+                                paddingBottom: 6,
+                                paddingInlineStart: 0,
+                                paddingInlineEnd: 46,
                                 minHeight: '60px',
                                 borderRadius: '0',
                                 border: 'none',
@@ -218,8 +224,10 @@ const InlinePostEditor = () => {
                                 fontSize: '0.95rem',
                                 resize: 'none',
                                 outline: 'none',
-                                fontFamily: 'inherit',
-                                cursor: 'text'
+                                fontFamily: isRtl ? 'var(--font-arabic), inherit' : 'inherit',
+                                cursor: 'text',
+                                textAlign: 'start',
+                                unicodeBidi: 'plaintext'
                             }}
                         />
                         <button
@@ -229,7 +237,7 @@ const InlinePostEditor = () => {
                             aria-label={t('post', 'Post')}
                             style={{
                                 position: 'absolute',
-                                right: 0,
+                                insetInlineEnd: 0,
                                 bottom: 6,
                                 width: 34,
                                 height: 34,
@@ -244,7 +252,7 @@ const InlinePostEditor = () => {
                                 opacity: ((!text.trim() && !media && !embedData) || loading) ? 0.5 : 1
                             }}
                         >
-                            <FaPaperPlane size={13} />
+                            <FaPaperPlane size={13} style={isRtl ? { transform: 'scaleX(-1)' } : undefined} />
                         </button>
                     </div>
 
@@ -254,17 +262,23 @@ const InlinePostEditor = () => {
                         </div>
                     )}
 
-                    <div style={{ textAlign: 'right', fontSize: '0.75rem', color: text.length >= 300 ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '-8px', marginRight: '4px' }}>
+                    <div style={{
+                        textAlign: 'end',
+                        fontSize: '0.75rem',
+                        color: text.length >= 300 ? 'var(--secondary)' : 'var(--text-muted)',
+                        marginTop: '-8px',
+                        marginInlineEnd: '4px'
+                    }}>
                         {text.length} / 300
                     </div>
 
                     {media && !embedData && (
-                        <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', width: '100%', maxWidth: '300px', alignSelf: 'flex-start', border: '1px solid var(--border-color)' }}>
+                        <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', width: '100%', maxWidth: '300px', alignSelf: 'start', border: '1px solid var(--border-color)' }}>
                             <button
                                 type="button"
                                 onClick={() => setMedia(null)}
                                 style={{
-                                    position: 'absolute', top: '6px', right: '6px', zIndex: 10,
+                                    position: 'absolute', top: '6px', insetInlineEnd: '6px', zIndex: 10,
                                     background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
                                     borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     cursor: 'pointer'
@@ -277,12 +291,12 @@ const InlinePostEditor = () => {
                     )}
 
                     {embedData && (
-                        <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', width: '100%', alignSelf: 'flex-start', border: '1px solid var(--border-color)', background: '#000' }}>
+                        <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', width: '100%', alignSelf: 'start', border: '1px solid var(--border-color)', background: '#000' }}>
                             <button
                                 type="button"
                                 onClick={() => setEmbedData(null)}
                                 style={{
-                                    position: 'absolute', top: '6px', right: '6px', zIndex: 10,
+                                    position: 'absolute', top: '6px', insetInlineEnd: '6px', zIndex: 10,
                                     background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
                                     borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     cursor: 'pointer'
@@ -339,7 +353,7 @@ const InlinePostEditor = () => {
                                     style={{
                                         position: 'absolute',
                                         top: '100%',
-                                        left: 0,
+                                        insetInlineStart: 0,
                                         zIndex: 1001,
                                         background: 'var(--bg-card)',
                                         border: '1px solid var(--border-color)',

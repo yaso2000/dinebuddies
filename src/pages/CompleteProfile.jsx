@@ -161,8 +161,8 @@ const CompleteProfile = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
 
-        console.log("Submitting profile form...", formData);
 
         // Photo is optional — only name, age category, and gender are required
         if (!formData.displayName || !formData.ageCategory || !formData.gender) {
@@ -202,7 +202,6 @@ const CompleteProfile = () => {
                 photo_url: formData.photoURL || currentUser.photoURL || '',
             };
 
-            console.log("Saving profile data (robust mode)...", updateData);
 
             // 1. ALWAYS use setDoc with merge: true for robustness (handles both create and update)
             const userRef = doc(db, 'users', currentUser.uid);
@@ -215,7 +214,6 @@ const CompleteProfile = () => {
                         displayName: formData.displayName,
                         photoURL: formData.photoURL || currentUser.photoURL
                     });
-                    console.log("✅ Auth Profile updated (displayName & photoURL synced)");
                 } catch (authError) {
                     console.warn("⚠️ Auth Profile update failed (non-critical):", authError);
                 }
@@ -226,14 +224,12 @@ const CompleteProfile = () => {
             if (!verifySnap.exists()) throw new Error("Document write failed (not found after write).");
 
             const verifyData = verifySnap.data();
-            console.log("🔍 Verification Data:", verifyData);
 
             if (!verifyData.ageCategory && !verifyData.age) {
                 throw new Error(`Fields missing after save. Age: ${verifyData.age}, Cat: ${verifyData.ageCategory}`);
             }
 
             // 3. Force HARD RELOAD or Redirect
-            console.log("✅ Verification passed. Redirecting...");
             const from = location.state?.from?.pathname || '/';
             window.location.href = from;
 
@@ -272,7 +268,6 @@ const CompleteProfile = () => {
             });
             setFormData(prev => ({ ...prev, photoURL: url }));
             setUploadProgress(0); // Reset
-            console.log("📸 Photo uploaded:", url);
         } catch (error) {
             console.error("❌ Photo upload failed:", error);
             showToast("Failed to upload photo. Please try again.", 'error');

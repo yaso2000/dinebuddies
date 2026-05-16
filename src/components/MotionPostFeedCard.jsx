@@ -3,10 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from './UserAvatar';
 import { renderMotionPost } from '../features/motion-post/renderMotionPost';
-import { motionFirestoreDocToPreviewPayload, motionPostPreviewAspectFromDoc } from '../features/motion-post/motionPostFeedUtils';
-import { getGenderBorderColor } from '../utils/avatarUtils';
-
-const formatFeedTime = (ts) => {
+import { motionFirestoreDocToPreviewPayload, motionPostPreviewAspectFromDoc } from '../features/motion-post/motionPostFeedUtils'; = (ts) => {
     if (!ts) return '';
     const d = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
     if (Number.isNaN(d.getTime())) return '';
@@ -64,7 +61,6 @@ export default function MotionPostFeedCard({ post }) {
                         borderRadius: '50%',
                         objectFit: 'cover',
                         cursor: 'pointer',
-                        border: `2px solid ${getGenderBorderColor(authorObj)}`,
                     }}
                     onClick={(e) => {
                         e.stopPropagation();

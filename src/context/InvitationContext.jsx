@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import app, { auth, db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-
-const FUNCTIONS_REGION = 'us-central1';
 import {
     collection,
     query,
@@ -28,10 +27,7 @@ import { useToast } from './ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 import notificationSound from '../utils/notificationSound';
 import { followUser, unfollowUser } from '../utils/followHelpers';
-import { convertFromUSD, getCurrencyByCountry } from '../utils/currencyConverter';
-import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../config/planDefaults';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
-import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { incrementBusinessInvitationCount } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
@@ -40,24 +36,21 @@ import {
     PRIVATE_INVITATION_PUBLISH_CREDITS,
     DATING_INVITATION_PUBLISH_CREDITS,
 } from '../utils/privateInvitationCredits';
+import { getInvitationFirestoreFlags } from '../utils/invitationFirestoreRoutes';
+import { aggregateReviewStatsByBusinessIds } from '../services/reviewStatsAggregation';
+import { FUNCTIONS_REGION, INVITATIONS_PAGE_SIZE, INVITATION_ERROR_MESSAGES } from './invitationContextConstants';
+import { useFirestoreWriteLock } from '../hooks/useFirestoreWriteLock';
 
 const InvitationContext = createContext(null);
 
 export const useInvitations = () => useContext(InvitationContext);
 
-const INVITATIONS_PAGE_SIZE = 20;
-
-const INVITATION_ERROR_MESSAGES = {
-    requestToJoin: 'Failed to send request. Try again.',
-    respondToPrivateInvitation: 'Failed to respond. Try again.',
-    approveUser: 'Failed to approve. Try again.',
-    rejectUser: 'Failed to reject. Try again.',
-    cancelRequest: 'Failed to cancel request. Try again.',
-    addInvitation: 'Failed to create invitation. Try again.',
-    addPrivateInvitation: 'Failed to create invitation. Try again.'
-};
-
 export const InvitationProvider = ({ children }) => {
+    const location = useLocation();
+    const firestoreRouteFlags = useMemo(
+        () => getInvitationFirestoreFlags(location.pathname),
+        [location.pathname]
+    );
     const { currentUser, userProfile: firebaseProfile, updateUserProfile, isGuest } = useAuth();
     const { showToast } = useToast();
     const [invitations, setInvitations] = useState([]);
@@ -65,10 +58,10 @@ export const InvitationProvider = ({ children }) => {
     const [hasMoreInvitations, setHasMoreInvitations] = useState(true);
     const [loadingMoreInvitations, setLoadingMoreInvitations] = useState(false);
     const lastInvitationDocRef = useRef(null);
+    const withFirestoreWriteLock = useFirestoreWriteLock();
     const [privateInvitations, setPrivateInvitations] = useState([]);
     const [restaurants, setRestaurants] = useState([]);
     const [loadingInvitations, setLoadingInvitations] = useState(true);
-    const [detectedCountry, setDetectedCountry] = useState(null);
     const functions = getFunctions(app, FUNCTIONS_REGION);
     const publishPrivateInvitationDraftCallable = httpsCallable(functions, 'publishPrivateInvitationDraft');
     const setCommunityMembershipCallable = httpsCallable(functions, 'setCommunityMembership');
@@ -79,6 +72,15 @@ export const InvitationProvider = ({ children }) => {
 
     // --- 1. Sync Public Invitations (first page only; use Load More for more) ---
     useEffect(() => {
+        if (!firestoreRouteFlags.publicInvitations) {
+            setInvitations([]);
+            setLoadedMoreInvitations([]);
+            setHasMoreInvitations(true);
+            lastInvitationDocRef.current = null;
+            setLoadingInvitations(false);
+            return undefined;
+        }
+
         const q = query(
             collection(db, 'invitations'),
             orderBy('createdAt', 'desc'),
@@ -105,12 +107,15 @@ export const InvitationProvider = ({ children }) => {
             clearTimeout(timeout);
             unsubscribe();
         };
-    }, []);
+    }, [firestoreRouteFlags.publicInvitations]);
 
     // --- 1b. Sync Private Invitations (separate collection) ---
     useEffect(() => {
         const userId = currentUser?.uid || currentUser?.id;
-        if (!userId || userId === 'guest') return;
+        if (!userId || userId === 'guest' || !firestoreRouteFlags.privateInvitations) {
+            setPrivateInvitations([]);
+            return undefined;
+        }
 
         let cancelled = false;
         let unsubHost = () => {};
@@ -173,37 +178,18 @@ export const InvitationProvider = ({ children }) => {
             unsubHost();
             unsubInvited();
         };
-    }, [currentUser?.uid]);
+    }, [currentUser?.uid, firestoreRouteFlags.privateInvitations]);
 
     // --- 2. Sync Businesses (directory - visible to everyone including guests) ---
-    // Enrich with ratings so directory cards show same rating as profile/dashboard
-    const fetchRatingsForBusinessIds = async (ids) => {
-        if (!ids.length) return {};
-        const reviewsRef = collection(db, 'reviews');
-        const BATCH = 10;
-        const byDocId = new Map();
-        for (let i = 0; i < ids.length; i += BATCH) {
-            const chunk = ids.slice(i, i + BATCH);
-            const [sp, sf, sr] = await Promise.all([
-                getDocs(query(reviewsRef, where('partnerId', 'in', chunk), limit(100))),
-                getDocs(query(reviewsRef, where('profileId', 'in', chunk), limit(100))),
-                getDocs(query(reviewsRef, where('restaurantId', 'in', chunk), limit(100)))
-            ]);
-            [sp.docs, sf.docs, sr.docs].flat().forEach(d => byDocId.set(d.id, d.data()));
-        }
-        const byBusinessId = {};
-        ids.forEach(id => {
-            const reviews = [...byDocId.values()].filter(
-                r => r.partnerId === id || r.profileId === id || r.restaurantId === id
-            );
-            const count = reviews.length;
-            const total = reviews.reduce((s, r) => s + (r.rating || 0), 0);
-            byBusinessId[id] = { averageRating: count > 0 ? total / count : 0, reviewCount: count };
-        });
-        return byBusinessId;
-    };
-
+    // Enrich with ratings via shared aggregation (same logic as rankingDataLoader).
     useEffect(() => {
+        if (!firestoreRouteFlags.restaurants) {
+            setRestaurants([]);
+            return undefined;
+        }
+
+        let cancelled = false;
+
         const q = query(
             collection(db, 'public_profiles'),
             where('profileType', '==', 'business'),
@@ -211,17 +197,19 @@ export const InvitationProvider = ({ children }) => {
             limit(20)
         );
         const unsubscribe = onSnapshot(q, (snapshot) => {
+            if (cancelled) return;
+
             const businessList = [];
 
-            snapshot.forEach(doc => {
-                const data = doc.data();
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
                 const info = data.businessPublic || {};
                 const brandKit = info.brandKit || data.businessInfo?.brandKit || {};
 
                 businessList.push({
-                    id: doc.id,
-                    uid: doc.id,
-                    ownerId: doc.id,
+                    id: docSnap.id,
+                    uid: docSnap.id,
+                    ownerId: docSnap.id,
                     name: data.displayName || 'Business',
                     type: info.businessType || 'Restaurant',
                     image: pickSafeDisplayImageUrl(info.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
@@ -250,7 +238,8 @@ export const InvitationProvider = ({ children }) => {
             });
 
             const ids = businessList.map(b => b.id);
-            fetchRatingsForBusinessIds(ids).then((ratingsById) => {
+            aggregateReviewStatsByBusinessIds(db, ids).then((ratingsById) => {
+                if (cancelled) return;
                 setRestaurants(prev => (prev || []).map(b => {
                     const r = ratingsById[b.id];
                     return {
@@ -264,242 +253,17 @@ export const InvitationProvider = ({ children }) => {
             console.error("Error fetching businesses:", error);
         });
 
-        return () => unsubscribe();
-    }, []);
-
-    // --- 3. Auto-Detect Country via IP ---
-    useEffect(() => {
-        const detectCountry = async () => {
-            try {
-                // If user is logged in and has a country in their profile, use it
-                if (firebaseProfile?.country) {
-                    setDetectedCountry(firebaseProfile.country);
-                    return;
-                }
-
-                // Otherwise, detect via IP
-                const data = await fetchIpLocation();
-                if (data.success) {
-                    // Map country code to full name for the converter
-                    const countryName = data.country || 'United States';
-                    setDetectedCountry(countryName);
-                }
-            } catch (error) {
-                console.error('❌ IP Location Error:', error);
-                setDetectedCountry('United States'); // Fallback
-            }
+        return () => {
+            cancelled = true;
+            unsubscribe();
         };
-
-        detectCountry();
-    }, [firebaseProfile?.country]);
+    }, [firestoreRouteFlags.restaurants]);
 
     const [notifications, setNotifications] = useState([]);
-    const [allUsers, setAllUsers] = useState([]);
-    const [reports, setReports] = useState([]);
-
-    // Sync users list from Firestore (admin-only).
-    // Non-admins must use trusted endpoints/public projections instead of raw users list.
-    useEffect(() => {
-        if (!currentUser?.uid) {
-            setAllUsers([]);
-            return;
-        }
-        if (firebaseProfile?.role !== 'admin') {
-            setAllUsers([]);
-            return;
-        }
-        const q = query(
-            collection(db, 'users'),
-            limit(500)
-        );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const usersData = snapshot.docs.map(d => ({
-                id: d.id,
-                uid: d.id,
-                ...d.data(),
-                joinDate: d.data().createdAt || new Date().toISOString()
-            }));
-            setAllUsers(usersData);
-        }, (error) => console.error("Error syncing users:", error));
-        return () => unsubscribe();
-    }, [currentUser?.uid, firebaseProfile?.role]);
-
-    // Sync Reports from Firestore (Admin only, limit to reduce cost)
-    useEffect(() => {
-        if (firebaseProfile?.role !== 'admin') return;
-        const q = query(
-            collection(db, 'reports'),
-            orderBy('timestamp', 'desc'),
-            limit(200)
-        );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const reportsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setReports(reportsData);
-        }, (error) => {
-            console.error("Error syncing reports:", error);
-        });
-        return () => unsubscribe();
-    }, [firebaseProfile?.role]);
-
-    const [dbPlans, setDbPlans] = useState([]);
-    const [dbCreditPacks, setDbCreditPacks] = useState([]);
-
-    // Sync subscription plans from Firestore
-    useEffect(() => {
-        const q = query(collection(db, 'subscriptionPlans'), where('active', '==', true));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const plansData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    stripePriceId: data.stripe?.priceId || data.stripePriceId,
-                    features: data.features?.map(f => typeof f === 'object' ? f.text : (f.text || f)) || []
-                };
-            });
-            setDbPlans(plansData);
-        }, (error) => {
-            console.error("Error syncing dynamic plans:", error);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    // Sync credit packs from Firestore
-    useEffect(() => {
-        const q = query(collection(db, 'creditPacks'), where('active', '==', true));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const packsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setDbCreditPacks(packsData);
-        }, (error) => {
-            console.error("Error syncing credit packs:", error);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    const baseSubscriptionPlans = BASE_SUBSCRIPTION_PLANS;
-    const baseCreditPacks = BASE_CREDIT_PACKS;
-
-    // Helper to detect Arabic text
-    const hasArabic = (text) => /[\u0600-\u06FF]/.test(text);
-
-    const allPlans = React.useMemo(() => {
-        // Start with a map of base plans for quick lookup
-        const mergedMap = {};
-
-        // 1. Add all hardcoded base plans first
-        baseSubscriptionPlans.forEach(plan => {
-            const key = plan.stripePriceId || plan.id;
-            mergedMap[key] = { ...plan };
-        });
-
-        // 2. Merge/Add all Firestore plans
-        dbPlans.forEach(dbPlan => {
-            // IGNORE any plan that has Arabic in the name - this is the "mess" removal
-            if (hasArabic(dbPlan.name || '') || hasArabic(dbPlan.title || '')) {
-                return;
-            }
-
-            const key = dbPlan.stripePriceId || dbPlan.id;
-
-            if (mergedMap[key]) {
-                // EXTREMELY IMPORTANT: We keep the HARDCODED English name/description/features
-                // because Firestore might still contain old Arabic versions until the user syncs.
-                // We only take the price, active state, and Stripe ID from Firestore.
-                mergedMap[key] = {
-                    ...mergedMap[key],
-                    ...dbPlan,
-                    // FORCE English fields from local config for existing plans
-                    name: mergedMap[key].name,
-                    description: mergedMap[key].description,
-                    features: mergedMap[key].features,
-                    title: mergedMap[key].title || mergedMap[key].name,
-                    // Keep standard Stripe sync fields
-                    price: dbPlan.price !== undefined ? dbPlan.price : mergedMap[key].price,
-                    currency: dbPlan.currency || mergedMap[key].currency,
-                    id: dbPlan.id
-                };
-            } else {
-                // New plan created in Admin UI - should already be English
-                // But we check for duplicates: if it's a "Free" plan and we already have one of that type, skip it
-                const isDuplicateFree = dbPlan.price === 0 && Object.values(mergedMap).some(p => p.price === 0 && p.type === dbPlan.type);
-
-                if (!isDuplicateFree) {
-                    mergedMap[dbPlan.id] = { ...dbPlan };
-                }
-            }
-        });
-
-        // Consumer subscription tiers removed — keep business plans only for pricing/admin merge.
-        return Object.values(mergedMap).filter((p) => p.type !== 'user');
-    }, [dbPlans, baseSubscriptionPlans]);
-
-    const allCreditPacks = React.useMemo(() => {
-        const mergedMap = {};
-
-        // 1. Add base packs
-        baseCreditPacks.forEach(pack => {
-            mergedMap[pack.stripePriceId || pack.id] = { ...pack };
-        });
-
-        // 2. Add/Merge Firestore packs
-        dbCreditPacks.forEach(dbPack => {
-            // Ignore Arabic packs
-            if (hasArabic(dbPack.name || '')) return;
-
-            const key = dbPack.stripePriceId || dbPack.id;
-            if (mergedMap[key]) {
-                mergedMap[key] = {
-                    ...mergedMap[key],
-                    ...dbPack,
-                    // Force English name from local config
-                    name: mergedMap[key].name
-                };
-            } else {
-                mergedMap[dbPack.id] = { ...dbPack };
-            }
-        });
-
-        return Object.values(mergedMap);
-    }, [dbCreditPacks, baseCreditPacks, hasArabic]);
-
-    const countryToUse = firebaseProfile?.country || detectedCountry || 'Australia';
-
-    const subscriptionPlans = React.useMemo(() => {
-        return allPlans.map(plan => {
-            if (plan.price === 0) return plan;
-            const converted = convertFromUSD(plan.price, countryToUse);
-            const originalConverted = plan.originalPrice ? convertFromUSD(plan.originalPrice, countryToUse) : null;
-            return {
-                ...plan,
-                price: converted.price,
-                currency: converted.code,
-                currencySymbol: converted.symbol,
-                originalPrice: originalConverted ? originalConverted.price : null
-            };
-        });
-    }, [allPlans, countryToUse]);
-
-    const creditPacks = React.useMemo(() => {
-        return allCreditPacks.map(pack => {
-            const converted = convertFromUSD(pack.price, countryToUse);
-            return {
-                ...pack,
-                price: converted.price,
-                currency: converted.code,
-                currencySymbol: converted.symbol
-            };
-        });
-    }, [allCreditPacks, countryToUse]);
 
     // --- Methods ---
 
-    const banUser = async (userId) => {
+    const banUser = async (userId) => withFirestoreWriteLock(`ban:${userId}`, undefined, async () => {
         try {
             const userRef = doc(db, 'users', userId);
             const userDoc = await getDoc(userRef);
@@ -512,9 +276,9 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) {
             console.error("Error banning user:", error);
         }
-    };
+    });
 
-    const resolveReport = async (reportId) => {
+    const resolveReport = async (reportId) => withFirestoreWriteLock(`resolveReport:${reportId}`, undefined, async () => {
         try {
             await updateDoc(doc(db, 'reports', reportId), {
                 status: 'resolved',
@@ -524,14 +288,9 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) {
             console.error("Error resolving report:", error);
         }
-    };
+    });
 
-    const updatePlan = (planId, newData) => {
-        // This is local-only for now, in a real app it would update Firestore
-        setDbPlans(prev => prev.map(p => p.id === planId ? { ...p, ...newData } : p));
-    };
-
-    const sendSystemMessage = async (userId, message) => {
+    const sendSystemMessage = async (userId, message) => withFirestoreWriteLock(`sysmsg:${userId}`, undefined, async () => {
         try {
             await addDoc(collection(db, 'system_messages'), {
                 userId,
@@ -543,7 +302,7 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) {
             console.error("Error sending system message:", error);
         }
-    };
+    });
 
     const addNotification = (title, message, type = 'info') => {
         setNotifications(prev => [{ id: uuidv4(), title, message, time: 'Now', read: false, type }, ...prev]);
@@ -557,55 +316,57 @@ export const InvitationProvider = ({ children }) => {
             showToast('Business accounts cannot create or publish invitations.', 'error');
             return false;
         }
-        try {
-            if (!newInvite.title) return false;
-            const inviteData = {
-                ...newInvite,
-                hostId: currentUser.id,
-                author: {
-                    id: currentUser.id,
-                    name: currentUser.name || 'User',
-                    avatar: getSafeAvatar(currentUser),
-                    isBusiness: isBusinessAccount
-                },
-                requests: [], joined: [], chat: [], meetingStatus: 'planning',
-                date: newInvite.date || new Date().toISOString(),
-                time: newInvite.time || '20:30',
-                lat: newInvite.lat || (-33.8688 + (Math.random() - 0.5) * 0.1),
-                lng: newInvite.lng || (151.2093 + (Math.random() - 0.5) * 0.1),
-                privacy: newInvite.privacy || 'public',
-                createdAt: serverTimestamp()
-            };
+        return withFirestoreWriteLock('addInvitation', false, async () => {
+            try {
+                if (!newInvite.title) return false;
+                const inviteData = {
+                    ...newInvite,
+                    hostId: currentUser.id,
+                    author: {
+                        id: currentUser.id,
+                        name: currentUser.name || 'User',
+                        avatar: getSafeAvatar(currentUser),
+                        isBusiness: isBusinessAccount
+                    },
+                    requests: [], joined: [], chat: [], meetingStatus: 'planning',
+                    date: newInvite.date || new Date().toISOString(),
+                    time: newInvite.time || '20:30',
+                    lat: newInvite.lat || (-33.8688 + (Math.random() - 0.5) * 0.1),
+                    lng: newInvite.lng || (151.2093 + (Math.random() - 0.5) * 0.1),
+                    privacy: newInvite.privacy || 'public',
+                    createdAt: serverTimestamp()
+                };
 
-            const docRef = await addDoc(collection(db, 'invitations'), inviteData);
-            
-            // Only notify if it's not a draft
-            if (inviteData.status !== 'draft') {
-                addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
+                const docRef = await addDoc(collection(db, 'invitations'), inviteData);
 
-                if (newInvite.restaurantId) {
-                    incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
-                    const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
-                    if (restaurant) {
-                        addBusinessNotification(restaurant.id, {
-                            type: 'new_booking',
-                            title: '🎉 New Booking!',
-                            message: `${currentUser.name} booked a table for ${inviteData.guestsNeeded} people at ${restaurant.name}`,
-                            invitationId: docRef.id,
-                            date: inviteData.date,
-                            time: inviteData.time,
-                            guestsNeeded: inviteData.guestsNeeded
-                        });
+                // Only notify if it's not a draft
+                if (inviteData.status !== 'draft') {
+                    addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
+
+                    if (newInvite.restaurantId) {
+                        incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
+                        const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
+                        if (restaurant) {
+                            addBusinessNotification(restaurant.id, {
+                                type: 'new_booking',
+                                title: '🎉 New Booking!',
+                                message: `${currentUser.name} booked a table for ${inviteData.guestsNeeded} people at ${restaurant.name}`,
+                                invitationId: docRef.id,
+                                date: inviteData.date,
+                                time: inviteData.time,
+                                guestsNeeded: inviteData.guestsNeeded
+                            });
+                        }
                     }
                 }
+
+                return docRef.id;
+            } catch (err) {
+                console.error("Error adding invitation:", err);
+                showToast(INVITATION_ERROR_MESSAGES.addInvitation, 'error');
+                return false;
             }
-            
-            return docRef.id;
-        } catch (err) {
-            console.error("Error adding invitation:", err);
-            showToast(INVITATION_ERROR_MESSAGES.addInvitation, 'error');
-            return false;
-        }
+        });
     };
 
     // --- Private Invitation: separate collection ---
@@ -615,57 +376,59 @@ export const InvitationProvider = ({ children }) => {
             showToast('Business accounts cannot create or publish invitations.', 'error');
             return false;
         }
-        try {
-            if (!newInvite.title) return false;
+        return withFirestoreWriteLock('addPrivateInvitation', false, async () => {
+            try {
+                if (!newInvite.title) return false;
 
-            // Firebase Auth User uses `uid` (not `id`). Never omit authorId or publish will reject the host.
-            const creatorUid = currentUser.uid || currentUser.id;
-            if (!creatorUid || creatorUid === 'guest') return false;
+                // Firebase Auth User uses `uid` (not `id`). Never omit authorId or publish will reject the host.
+                const creatorUid = currentUser.uid || currentUser.id;
+                if (!creatorUid || creatorUid === 'guest') return false;
 
-            // Remove undefined values — Firestore rejects them (e.g. lat/lng when no location selected)
-            const sanitize = (obj) => {
-                const clean = {};
-                Object.entries(obj).forEach(([k, v]) => {
-                    if (v !== undefined) clean[k] = v;
+                // Remove undefined values — Firestore rejects them (e.g. lat/lng when no location selected)
+                const sanitize = (obj) => {
+                    const clean = {};
+                    Object.entries(obj).forEach(([k, v]) => {
+                        if (v !== undefined) clean[k] = v;
+                    });
+                    return clean;
+                };
+
+                const displayName =
+                    currentUser.displayName ||
+                    firebaseProfile?.display_name ||
+                    firebaseProfile?.displayName ||
+                    'User';
+
+                let inviteData = sanitize({
+                    ...newInvite,
+                    authorId: creatorUid,
+                    author: {
+                        id: creatorUid,
+                        name: displayName,
+                        avatar: getSafeAvatar(currentUser)
+                    },
+                    privacy: 'private',
+                    createdAt: serverTimestamp()
                 });
-                return clean;
-            };
-
-            const displayName =
-                currentUser.displayName ||
-                firebaseProfile?.display_name ||
-                firebaseProfile?.displayName ||
-                'User';
-
-            let inviteData = sanitize({
-                ...newInvite,
-                authorId: creatorUid,
-                author: {
-                    id: creatorUid,
-                    name: displayName,
-                    avatar: getSafeAvatar(currentUser)
-                },
-                privacy: 'private',
-                createdAt: serverTimestamp()
-            });
-            if (inviteData.invitedFriends?.length) {
-                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteData.invitedFriends);
-                inviteData = { ...inviteData, invitedFriends: allowed };
-                if (skipped.length) {
-                    showToast('Some people could not be invited (they blocked or muted you).', 'info');
+                if (inviteData.invitedFriends?.length) {
+                    const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteData.invitedFriends);
+                    inviteData = { ...inviteData, invitedFriends: allowed };
+                    if (skipped.length) {
+                        showToast('Some people could not be invited (they blocked or muted you).', 'info');
+                    }
                 }
+                const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
+                if (newInvite.restaurantId) incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
+                return docRef.id;
+            } catch (err) {
+                console.error("Error adding private invitation:", err);
+                showToast(INVITATION_ERROR_MESSAGES.addPrivateInvitation, 'error');
+                return false;
             }
-            const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
-            if (newInvite.restaurantId) incrementBusinessInvitationCount(newInvite.restaurantId).catch(() => { });
-            return docRef.id;
-        } catch (err) {
-            console.error("Error adding private invitation:", err);
-            showToast(INVITATION_ERROR_MESSAGES.addPrivateInvitation, 'error');
-            return false;
-        }
+        });
     };
 
-    const addReport = async (reportData) => {
+    const addReport = async (reportData) => withFirestoreWriteLock(`addReport:${reportData?.targetId || 'unknown'}`, undefined, async () => {
         try {
             await createReportCallable({
                 type: reportData?.type,
@@ -679,7 +442,7 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) {
             console.error("Error adding report:", error);
         }
-    };
+    });
 
     const addBusinessNotification = async (restaurantId, notificationData) => {
         try {
@@ -706,43 +469,45 @@ export const InvitationProvider = ({ children }) => {
             showToast('Business accounts cannot join invitations.', 'error');
             return false;
         }
-        try {
-            const invRef = doc(db, 'invitations', invId);
-            const invDoc = await getDoc(invRef);
-            if (!invDoc.exists()) return false;
+        return withFirestoreWriteLock(`requestToJoin:${invId}`, false, async () => {
+            try {
+                const invRef = doc(db, 'invitations', invId);
+                const invDoc = await getDoc(invRef);
+                if (!invDoc.exists()) return false;
 
-            const invData = invDoc.data();
-            const hostId = invData.author?.id;
+                const invData = invDoc.data();
+                const hostId = invData.author?.id;
 
-            await updateDoc(invRef, {
-                requests: arrayUnion(currentUser.id)
-            });
-
-            if (hostId && hostId !== currentUser.id) {
-                await addUserNotification({
-                    userId: hostId,
-                    type: 'join_request',
-                    title: '🙋 New Join Request',
-                    message: `${currentUser.name} wants to join your invitation "${invData.title}"`,
-                    invitationId: invId,
-                    actionUrl: `/invitation/${invId}?section=join-requests`,
+                await updateDoc(invRef, {
+                    requests: arrayUnion(currentUser.id)
                 });
 
-                notificationSound.showJoinRequestNotification(
-                    currentUser.name,
-                    invData.title,
-                    () => { window.location.href = `/invitation/${invId}`; }
-                );
+                if (hostId && hostId !== currentUser.id) {
+                    await addUserNotification({
+                        userId: hostId,
+                        type: 'join_request',
+                        title: '🙋 New Join Request',
+                        message: `${currentUser.name} wants to join your invitation "${invData.title}"`,
+                        invitationId: invId,
+                        actionUrl: `/invitation/${invId}?section=join-requests`,
+                    });
+
+                    notificationSound.showJoinRequestNotification(
+                        currentUser.name,
+                        invData.title,
+                        () => { window.location.href = `/invitation/${invId}`; }
+                    );
+                }
+                return true;
+            } catch (err) {
+                console.error("Error requesting to join:", err);
+                showToast(INVITATION_ERROR_MESSAGES.requestToJoin, 'error');
+                return false;
             }
-            return true;
-        } catch (err) {
-            console.error("Error requesting to join:", err);
-            showToast(INVITATION_ERROR_MESSAGES.requestToJoin, 'error');
-            return false;
-        }
+        });
     };
 
-    const cancelRequest = async (invId) => {
+    const cancelRequest = async (invId) => withFirestoreWriteLock(`cancelRequest:${invId}`, false, async () => {
         try {
             const invRef = doc(db, 'invitations', invId);
             await updateDoc(invRef, {
@@ -754,9 +519,9 @@ export const InvitationProvider = ({ children }) => {
             showToast(INVITATION_ERROR_MESSAGES.cancelRequest, 'error');
             return false;
         }
-    };
+    });
 
-    const approveUser = async (invId, userId) => {
+    const approveUser = async (invId, userId) => withFirestoreWriteLock(`approveUser:${invId}:${userId}`, false, async () => {
         try {
             const invRef = doc(db, 'invitations', invId);
             const invDoc = await getDoc(invRef);
@@ -774,7 +539,7 @@ export const InvitationProvider = ({ children }) => {
                 const userData = userDoc.exists() ? userDoc.data() : {};
                 const userName = userData.display_name || userData.displayName || userData.name || 'A guest';
                 const collectionName = invData.privacy === 'private' ? 'private_invitations' : 'invitations';
-                
+
                 await addDoc(collection(db, collectionName, invId, 'messages'), {
                     text: `🎉 ${userName} has been approved to join the invitation!`,
                     senderId: 'system',
@@ -818,9 +583,9 @@ export const InvitationProvider = ({ children }) => {
             showToast(INVITATION_ERROR_MESSAGES.approveUser, 'error');
             return false;
         }
-    };
+    });
 
-    const rejectUser = async (invId, userId) => {
+    const rejectUser = async (invId, userId) => withFirestoreWriteLock(`rejectUser:${invId}:${userId}`, false, async () => {
         try {
             const invRef = doc(db, 'invitations', invId);
             await updateDoc(invRef, { requests: arrayRemove(userId) });
@@ -830,7 +595,7 @@ export const InvitationProvider = ({ children }) => {
             showToast(INVITATION_ERROR_MESSAGES.rejectUser, 'error');
             return false;
         }
-    };
+    });
 
     // ── Private / dating drafts: Dine Credits (free+paid), same pool as AI; admins bypass. ──
 
@@ -870,18 +635,20 @@ export const InvitationProvider = ({ children }) => {
         if (!invitationId || !currentUser || uid === 'guest') {
             return { success: false, alreadyPublished: false };
         }
-        try {
-            const result = await publishPrivateInvitationDraftCallable({ invitationId });
-            return {
-                success: true,
-                alreadyPublished: result?.data?.alreadyPublished === true
-            };
-        } catch (error) {
-            const message = error?.message || 'Failed to publish private invitation.';
-            console.error('Error publishing private invitation draft:', error);
-            showToast(message, 'error');
-            return { success: false, alreadyPublished: false };
-        }
+        return withFirestoreWriteLock(`publishPrivate:${invitationId}`, { success: false, alreadyPublished: false }, async () => {
+            try {
+                const result = await publishPrivateInvitationDraftCallable({ invitationId });
+                return {
+                    success: true,
+                    alreadyPublished: result?.data?.alreadyPublished === true
+                };
+            } catch (error) {
+                const message = error?.message || 'Failed to publish private invitation.';
+                console.error('Error publishing private invitation draft:', error);
+                showToast(message, 'error');
+                return { success: false, alreadyPublished: false };
+            }
+        });
     };
 
     const respondToPrivateInvitation = async (invId, status) => {
@@ -891,62 +658,64 @@ export const InvitationProvider = ({ children }) => {
             showToast('Business accounts cannot respond to invitations.', 'error');
             return false;
         }
-        try {
-            const invRef = doc(db, 'private_invitations', invId);
-            const invDoc = await getDoc(invRef);
-            if (!invDoc.exists()) return false;
+        return withFirestoreWriteLock(`respondPrivate:${invId}:${status}`, false, async () => {
+            try {
+                const invRef = doc(db, 'private_invitations', invId);
+                const invDoc = await getDoc(invRef);
+                if (!invDoc.exists()) return false;
 
-            const invData = invDoc.data();
-            const hostId = invData.authorId || invData.author?.id;
-            const responderName =
-                currentUser.displayName || firebaseProfile?.display_name || firebaseProfile?.displayName || 'Guest';
+                const invData = invDoc.data();
+                const hostId = invData.authorId || invData.author?.id;
+                const responderName =
+                    currentUser.displayName || firebaseProfile?.display_name || firebaseProfile?.displayName || 'Guest';
 
-            await updateDoc(invRef, { [`rsvps.${me}`]: status });
+                await updateDoc(invRef, { [`rsvps.${me}`]: status });
 
-            if (status === 'declined') {
-                const updatedDoc = await getDoc(invRef);
-                const data = updatedDoc.data();
-                const rsvps = data.rsvps || {};
-                const invitedFriends = data.invitedFriends || [];
-                const allDeclined = invitedFriends.length > 0 && invitedFriends.every(id => rsvps[id] === 'declined');
+                if (status === 'declined') {
+                    const updatedDoc = await getDoc(invRef);
+                    const data = updatedDoc.data();
+                    const rsvps = data.rsvps || {};
+                    const invitedFriends = data.invitedFriends || [];
+                    const allDeclined = invitedFriends.length > 0 && invitedFriends.every(id => rsvps[id] === 'declined');
 
-                if (allDeclined) {
+                    if (allDeclined) {
+                        await addUserNotification({
+                            userId: hostId,
+                            type: 'system_announcement',
+                            title: '⚠️ Invitation Cancelled',
+                            message: `All invitees declined your private invitation "${data.title}"`,
+                            invitationId: invId,
+                            style: 'warning',
+                        });
+                        setTimeout(async () => { await deleteInvitationAndStorage(invId, 'private_invitations'); }, 5000);
+                        addNotification('Cancelled', 'Invitation rejected by all invitees.', 'warning');
+                        return true;
+                    }
+                }
+
+                if (hostId && hostId !== me) {
                     await addUserNotification({
                         userId: hostId,
-                        type: 'system_announcement',
-                        title: '⚠️ Invitation Cancelled',
-                        message: `All invitees declined your private invitation "${data.title}"`,
+                        type: 'private_invitation_response',
+                        title: status === 'accepted' ? '✅ Invitation Accepted' : '❌ Invitation Declined',
+                        message: `${responderName} has ${status === 'accepted' ? 'accepted' : 'declined'} your private invitation "${invData.title}"`,
                         invitationId: invId,
-                        style: 'warning',
+                        actionUrl: `/invitation/private/${invId}`,
+                        status: status,
                     });
-                    setTimeout(async () => { await deleteInvitationAndStorage(invId, 'private_invitations'); }, 5000);
-                    addNotification('Cancelled', 'Invitation rejected by all invitees.', 'warning');
-                    return true;
                 }
+                addNotification(
+                    status === 'accepted' ? 'Accepted!' : 'Declined',
+                    status === 'accepted' ? 'You have accepted the invitation successfully.' : 'Your response has been sent to the host.',
+                    'success'
+                );
+                return true;
+            } catch (error) {
+                console.error("Error responding to private invitation:", error);
+                showToast(INVITATION_ERROR_MESSAGES.respondToPrivateInvitation, 'error');
+                return false;
             }
-
-            if (hostId && hostId !== me) {
-                await addUserNotification({
-                    userId: hostId,
-                    type: 'private_invitation_response',
-                    title: status === 'accepted' ? '✅ Invitation Accepted' : '❌ Invitation Declined',
-                    message: `${responderName} has ${status === 'accepted' ? 'accepted' : 'declined'} your private invitation "${invData.title}"`,
-                    invitationId: invId,
-                    actionUrl: `/invitation/private/${invId}`,
-                    status: status,
-                });
-            }
-            addNotification(
-                status === 'accepted' ? 'Accepted!' : 'Declined',
-                status === 'accepted' ? 'You have accepted the invitation successfully.' : 'Your response has been sent to the host.',
-                'success'
-            );
-            return true;
-        } catch (error) {
-            console.error("Error responding to private invitation:", error);
-            showToast(INVITATION_ERROR_MESSAGES.respondToPrivateInvitation, 'error');
-            return false;
-        }
+        });
     };
 
     const sendChatMessage = (invId, text) => {
@@ -954,7 +723,7 @@ export const InvitationProvider = ({ children }) => {
         setInvitations(prev => prev.map(inv => inv.id === invId ? { ...inv, chat: [...(inv.chat || []), msg] } : inv));
     };
 
-    const updateMeetingStatus = async (id, status) => {
+    const updateMeetingStatus = async (id, status) => withFirestoreWriteLock(`meetingStatus:${id}:${status}`, undefined, async () => {
         try {
             const invitationRef = doc(db, 'invitations', id);
             const updateData = { participantStatus: { [currentUser.id]: status } };
@@ -979,7 +748,7 @@ export const InvitationProvider = ({ children }) => {
 
             await setDoc(invitationRef, updateData, { merge: true });
         } catch (error) { console.error('Error updating meeting status:', error); }
-    };
+    });
 
     const updateInvitationTime = (id, newDate, newTime) => {
         setInvitations(prev => prev.map(inv => inv.id === id ? { ...inv, date: new Date(newDate).toISOString(), time: newTime } : inv));
@@ -999,40 +768,38 @@ export const InvitationProvider = ({ children }) => {
 
     const toggleFollow = async (userId) => {
         if (isGuest || !userId || userId === currentUser.id) return;
-        
+
         // Absolute block: Business accounts cannot follow ANYONE
         if (currentUser?.role === 'business' || currentUser?.isBusiness || firebaseProfile?.role === 'business') {
             showToast('Business accounts cannot follow other accounts.', 'error');
             return;
         }
 
-        const isCurrentlyFollowing = (firebaseProfile?.following || []).includes(userId);
-        try {
-            const targetUserDoc = await getDoc(doc(db, 'users', userId));
-            if (!targetUserDoc.exists()) return;
-            const targetRole = targetUserDoc.data()?.role || 'user';
-            
-            // Absolute block: No one can follow a Business account (they use Communities instead)
-            if (targetRole === 'business') return; 
+        return withFirestoreWriteLock(`toggleFollow:${userId}`, undefined, async () => {
+            const isCurrentlyFollowing = (firebaseProfile?.following || []).includes(userId);
+            try {
+                const targetUserDoc = await getDoc(doc(db, 'users', userId));
+                if (!targetUserDoc.exists()) return;
+                const targetRole = targetUserDoc.data()?.role || 'user';
 
-            const currentUserRef = doc(db, 'users', currentUser.uid || currentUser.id);
+                // Absolute block: No one can follow a Business account (they use Communities instead)
+                if (targetRole === 'business') return;
 
-            if (isCurrentlyFollowing) {
-                // Atomic remove — no race condition
-                await updateDoc(currentUserRef, { following: arrayRemove(userId) });
-                await unfollowUser(currentUser.uid || currentUser.id, userId);
-            } else {
-                // Atomic add — no race condition
-                await updateDoc(currentUserRef, { following: arrayUnion(userId) });
-                await followUser(currentUser.uid || currentUser.id, userId, {
-                    id: currentUser.uid || currentUser.id,
-                    name: firebaseProfile?.display_name || currentUser.displayName,
-                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
-                });
+                if (isCurrentlyFollowing) {
+                    // unfollowUser updates following + followersCount; do not pre-update (duplicate writes + slower)
+                    await unfollowUser(currentUser.uid || currentUser.id, userId);
+                } else {
+                    // followUser updates following + followersCount + notification; pre-arrayUnion breaks followUser (it sees "already following" and skips)
+                    await followUser(currentUser.uid || currentUser.id, userId, {
+                        id: currentUser.uid || currentUser.id,
+                        name: firebaseProfile?.display_name || currentUser.displayName,
+                        avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
+                    });
+                }
+            } catch (error) {
+                console.error('Error in toggleFollow:', error);
             }
-        } catch (error) {
-            console.error('Error in toggleFollow:', error);
-        }
+        });
     };
 
     const getFollowingInvitations = () => {
@@ -1070,75 +837,83 @@ export const InvitationProvider = ({ children }) => {
     const updateProfile = async (data) => {
         if (!currentUser?.uid || currentUser.uid === 'guest') return false;
 
-        try {
-            const updates = { ...data };
+        return withFirestoreWriteLock(`invitationCtx:updateProfile:${currentUser.uid}`, false, async () => {
+            try {
+                const updates = { ...data };
 
-            if (data.name || data.displayName) {
-                updates.display_name = data.name || data.displayName;
-                updates.displayName = data.name || data.displayName;
-            }
+                if (data.name || data.displayName) {
+                    updates.display_name = data.name || data.displayName;
+                    updates.displayName = data.name || data.displayName;
+                }
 
-            if (data.avatar || data.photoURL || data.photo_url) {
-                const photo = data.avatar || data.photoURL || data.photo_url;
-                updates.photo_url = photo;
-                updates.photoURL = photo;
-            }
+                if (data.avatar || data.photoURL || data.photo_url) {
+                    const photo = data.avatar || data.photoURL || data.photo_url;
+                    updates.photo_url = photo;
+                    updates.photoURL = photo;
+                }
 
-            if (updateUserProfile) {
-                await updateUserProfile(updates);
-                return true;
+                if (updateUserProfile) {
+                    const ok = await updateUserProfile(updates);
+                    return ok === true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                throw error;
             }
-            return false;
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            throw error;
-        }
+        });
     };
 
     const updateRestaurant = async (resId, data) => {
-        try {
-            const targetId = resId === 'new_res' ? (currentUser.uid + '_restaurant') : resId;
-            const resRef = doc(db, 'restaurants', targetId);
+        const targetId = resId === 'new_res' ? (currentUser.uid + '_restaurant') : resId;
+        return withFirestoreWriteLock(`updateRestaurant:${targetId}`, { success: false, error: 'duplicate_request' }, async () => {
+            try {
+                const resRef = doc(db, 'restaurants', targetId);
 
-            // Avoid JSON.parse(JSON.stringify) for data that might contain Firestore objects
-            const cleanData = { ...data };
+                const cleanData = { ...data };
 
-            if (!cleanData.ownerId) cleanData.ownerId = currentUser.uid;
-            await setDoc(resRef, cleanData, { merge: true });
-            return { success: true, id: targetId };
-        } catch (error) { console.error("Error updating restaurant:", error); return { success: false, error }; }
+                if (!cleanData.ownerId) cleanData.ownerId = currentUser.uid;
+                await setDoc(resRef, cleanData, { merge: true });
+                return { success: true, id: targetId };
+            } catch (error) { console.error("Error updating restaurant:", error); return { success: false, error }; }
+        });
     };
 
     const markAllAsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
     const joinCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return false;
-        try {
-            const userId = currentUser.uid || currentUser.id;
-            if (!userId) return false;
-            await setCommunityMembershipCallable({ partnerId, action: 'join' });
-            await addUserNotification({
-                userId: partnerId,
-                type: 'new_community_member',
-                title: '🎉 New Community Member!',
-                message: `${currentUser.name || currentUser.displayName || 'Someone'} has joined your community.`,
-                senderName: currentUser.name || currentUser.displayName || 'Someone',
-                senderAvatar: getSafeAvatar(currentUser),
-            });
-            addNotification('🎉 Success!', 'You have joined the community successfully.', 'success');
-            return true;
-        } catch (error) { console.error('Error joining community:', error); return false; }
+        return withFirestoreWriteLock(`joinCommunity:${partnerId}`, false, async () => {
+            try {
+                const userId = currentUser.uid || currentUser.id;
+                if (!userId) return false;
+                await setCommunityMembershipCallable({ partnerId, action: 'join' });
+                // Partner notification is best-effort; second callable cold-start was blocking join UX
+                void addUserNotification({
+                    userId: partnerId,
+                    type: 'new_community_member',
+                    title: '🎉 New Community Member!',
+                    message: `${currentUser.name || currentUser.displayName || 'Someone'} has joined your community.`,
+                    senderName: currentUser.name || currentUser.displayName || 'Someone',
+                    senderAvatar: getSafeAvatar(currentUser),
+                }).catch((e) => console.warn('join community partner notification failed', e));
+                addNotification('🎉 Success!', 'You have joined the community successfully.', 'success');
+                return true;
+            } catch (error) { console.error('Error joining community:', error); return false; }
+        });
     };
 
     const leaveCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return false;
-        try {
-            const userId = currentUser.uid || currentUser.id;
-            if (!userId) return false;
-            await setCommunityMembershipCallable({ partnerId, action: 'leave' });
-            addNotification('👋 Left', 'You have left the community.', 'info');
-            return true;
-        } catch (error) { console.error('Error leaving community:', error); return false; }
+        return withFirestoreWriteLock(`leaveCommunity:${partnerId}`, false, async () => {
+            try {
+                const userId = currentUser.uid || currentUser.id;
+                if (!userId) return false;
+                await setCommunityMembershipCallable({ partnerId, action: 'leave' });
+                addNotification('👋 Left', 'You have left the community.', 'info');
+                return true;
+            } catch (error) { console.error('Error leaving community:', error); return false; }
+        });
     };
 
     const toggleCommunity = async (partnerId) => {
@@ -1174,7 +949,7 @@ export const InvitationProvider = ({ children }) => {
         return currentUser.role === 'business' && currentUser.ownedRestaurants?.includes(restaurantId);
     };
 
-    const submitReport = async (report) => {
+    const submitReport = async (report) => withFirestoreWriteLock(`submitReport:${report?.targetId || 'unknown'}`, null, async () => {
         try {
             const result = await createReportCallable({
                 type: report?.type,
@@ -1188,24 +963,25 @@ export const InvitationProvider = ({ children }) => {
             const reportId = result?.data?.reportId || null;
             return reportId ? { id: reportId, ...report } : { ...report };
         } catch (error) { console.error("Error submitting report:", error); return null; }
-    };
+    });
 
     const deleteInvitation = async (invId, isPrivate = false) => {
         if (!invId || !currentUser) return false;
-        try {
-            const collName = isPrivate ? 'private_invitations' : 'invitations';
-            // Let Firestore rules enforce authorization; do not trust client-side admin fields.
+        return withFirestoreWriteLock(`deleteInvitation:${invId}:${isPrivate ? 'p' : 'pub'}`, false, async () => {
             try {
-                const primaryDeleted = await deleteInvitationAndStorage(invId, collName);
-                if (primaryDeleted) return true;
-            } catch (error) {
-                console.warn(`Primary delete failed for ${collName}/${invId}:`, error?.message || error);
-            }
+                const collName = isPrivate ? 'private_invitations' : 'invitations';
+                try {
+                    const primaryDeleted = await deleteInvitationAndStorage(invId, collName);
+                    if (primaryDeleted) return true;
+                } catch (error) {
+                    console.warn(`Primary delete failed for ${collName}/${invId}:`, error?.message || error);
+                }
 
-            const altColl = isPrivate ? 'invitations' : 'private_invitations';
-            const fallbackDeleted = await deleteInvitationAndStorage(invId, altColl);
-            return !!fallbackDeleted;
-        } catch (error) { console.error('Error deleting invitation:', error); return false; }
+                const altColl = isPrivate ? 'invitations' : 'private_invitations';
+                const fallbackDeleted = await deleteInvitationAndStorage(invId, altColl);
+                return !!fallbackDeleted;
+            } catch (error) { console.error('Error deleting invitation:', error); return false; }
+        });
     };
 
     const loadMoreInvitations = async () => {
@@ -1276,7 +1052,9 @@ export const InvitationProvider = ({ children }) => {
             notifications, updateProfile, updateRestaurant, markAllAsRead, addNotification, deleteInvitation,
             toggleFollow, getFollowingInvitations, submitRating, submitRestaurantRating, joinCommunity, leaveCommunity, toggleCommunity,
             canEditRestaurant, getCommunityMembers,
-            allUsers, reports, subscriptionPlans, creditPacks, banUser, resolveReport, updatePlan, sendSystemMessage, addReport, submitReport
+            // Admin-wide Firestore mirrors were removed from this provider — load admin data inside /admin only.
+            // Subscription / credit-pack snapshots live in PricingDataProvider (route-scoped).
+            allUsers: [], reports: [], banUser, resolveReport, sendSystemMessage, addReport, submitReport
         }}>
             {children}
         </InvitationContext.Provider>

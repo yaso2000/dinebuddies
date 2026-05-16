@@ -14,7 +14,7 @@ import { normalizeBusinessTier } from '../utils/businessSubscription';
 import { BASE_SUBSCRIPTION_PLANS } from '../config/planDefaults';
 
 const BUSINESS_PAID_MONTHLY_USD =
-    BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite')?.price ?? 29;
+    BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'paid')?.price ?? 29;
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -308,7 +308,7 @@ const Settings = () => {
     // Guest View - Prompt to Sign In
     if (isGuest) {
         return (
-            <div className="page-container" style={{ paddingBottom: '100px' }}>
+            <div className="page-container settings-page-responsive" style={{ paddingBottom: '100px' }}>
                 {/* Header */}
                 <header className="app-header sticky-header-glass">
                     <button className="back-btn" onClick={() => navigate(-1)}>

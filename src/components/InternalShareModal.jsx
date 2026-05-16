@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, setDoc, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../context/ToastContext';
+import { useInvitations } from '../context/InvitationContext';
 import { FaTimes, FaSearch, FaCheck, FaPaperPlane, FaUsers, FaUser } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 
 const InternalShareModal = ({ isOpen, onClose, shareData }) => {
     const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
     const { conversations, getOrCreateConversation, sendMessage } = useChat();
     const { showToast } = useToast();
+    const { currentUser: invCurrentUser, toggleFollow } = useInvitations();
+
+    const shareFollowCtx = useMemo(
+        () => ({ currentUser: invCurrentUser, userProfile, toggleFollow, showToast, t }),
+        [invCurrentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'communities'
     const [searchQuery, setSearchQuery] = useState('');
@@ -249,29 +258,71 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                             {filteredChats.length === 0 ? (
                                 <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{t('no_chats_found', 'No recent chats found.')}</p>
                             ) : (
-                                filteredChats.map(convo => {
+                                filteredChats.map((convo) => {
                                     const otherUser = convo.otherUser;
+                                    if (!otherUser) return null;
                                     const status = sentStatus[otherUser.uid];
+                                    const otherUid = otherUser.uid || otherUser.id;
+                                    const otherShape = { ...otherUser, id: otherUid, uid: otherUid };
+                                    const chatFp = buildFollowPlusProps(otherShape, shareFollowCtx);
                                     return (
-                                        <div key={convo.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <img src={getSafeAvatar(otherUser)} alt="" style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                                        <div
+                                            key={convo.id}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '14px',
+                                                padding: '10px 12px',
+                                                borderRadius: '8px',
+                                                marginBottom: '4px',
+                                                background: 'rgba(255,255,255,0.02)',
+                                            }}
+                                        >
+                                            <UserAvatar
+                                                user={otherShape}
+                                                followPlus={chatFp || undefined}
+                                                followBadgeSize={14}
+                                                alt=""
+                                                style={{ width: 44, height: 44, flexShrink: 0, objectFit: 'cover' }}
+                                            />
                                             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                                                <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{otherUser.displayName}</h4>
+                                                <h4
+                                                    style={{
+                                                        margin: 0,
+                                                        fontSize: '0.95rem',
+                                                        color: 'var(--text-main)',
+                                                        whiteSpace: 'nowrap',
+                                                        textOverflow: 'ellipsis',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    {otherUser.displayName}
+                                                </h4>
                                             </div>
-                                            <button 
+                                            <button
                                                 onClick={() => handleSendDirect(otherUser.uid)}
                                                 disabled={!!status}
                                                 style={{
-                                                    background: status === 'sent' ? 'rgba(74, 222, 128, 0.2)' : status === 'sending' ? 'var(--bg-darker)' : 'var(--primary)',
+                                                    background: status === 'sent'
+                                                        ? 'rgba(74, 222, 128, 0.2)'
+                                                        : status === 'sending'
+                                                          ? 'var(--bg-darker)'
+                                                          : 'var(--primary)',
                                                     color: status === 'sent' ? '#4ade80' : 'white',
-                                                    border: 'none', borderRadius: '20px', padding: '6px 16px', fontSize: '0.85rem', fontWeight: 600,
-                                                    cursor: status ? 'default' : 'pointer', transition: 'all 0.2s ease', minWidth: '70px'
+                                                    border: 'none',
+                                                    borderRadius: '20px',
+                                                    padding: '6px 16px',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 600,
+                                                    cursor: status ? 'default' : 'pointer',
+                                                    transition: 'all 0.2s ease',
+                                                    minWidth: '70px',
                                                 }}
                                             >
                                                 {status === 'sending' ? '...' : status === 'sent' ? <FaCheck /> : t('send', 'Send')}
                                             </button>
                                         </div>
-                                    )
+                                    );
                                 })
                             )}
                         </>
@@ -286,7 +337,12 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                                     const status = sentStatus[comm.id];
                                     return (
                                         <div key={comm.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <img src={getSafeAvatar(comm)} alt="" style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                                            <UserAvatar
+                                                user={{ ...comm, id: comm.id, role: 'business', isBusiness: true }}
+                                                src={getSafeAvatar(comm)}
+                                                alt=""
+                                                style={{ width: 44, height: 44, flexShrink: 0, objectFit: 'cover' }}
+                                            />
                                             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                                                 <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{comm.businessName || comm.display_name}</h4>
                                                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Community</p>

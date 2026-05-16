@@ -11,11 +11,12 @@ import { db } from '../firebase/config';
 import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount } from '../services/businessLikeService';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 import { getContrastText } from '../utils/colorUtils';
 import '../components/MapStyles.css';
 import { goToLogin } from '../utils/goToLogin';
 
-const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
+const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title, userProfile, showToast, t }) => {
     if (!members) return null;
 
     // Local following Set — prevents stale-closure mismatch where toggling one member
@@ -129,8 +130,13 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                             <UserAvatar
                                                 src={getSafeAvatar({ photo_url: member.avatarUrl, avatar_url: member.avatar_url })}
                                                 user={member}
+                                                followPlus={buildFollowPlusProps(
+                                                    { ...member, id: member.id, uid: member.id, isFollowedByMe: localFollowing.has(member.id) },
+                                                    { currentUser, userProfile, toggleFollow: onToggleFollow, showToast, t }
+                                                ) || undefined}
+                                                followBadgeSize={15}
                                                 alt={member.displayName || member.display_name || member.name}
-                                                style={{ width: '48px', height: '48px', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
+                                                style={{ width: '48px', height: '48px', objectFit: 'cover' }}
                                             />
                                             {isMe && <div style={{
                                                 position: 'absolute', bottom: -2, right: -2,
@@ -302,6 +308,15 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
     const [joinInProgress, setJoinInProgress] = useState(false);
     const effectiveJoined = optimisticJoined ?? isJoined;
 
+    // Clear optimistic overlay only once context matches it. Clearing in `finally` caused a
+    // brief fallback to stale `isJoined` before Firestore/profile updated → button flickered twice.
+    useEffect(() => {
+        if (optimisticJoined === null) return;
+        if (isJoined === optimisticJoined) {
+            setOptimisticJoined(null);
+        }
+    }, [isJoined, optimisticJoined]);
+
     // Use ref to avoid triggering effect on every context re-render
     const getMembersRef = useRef(context?.getCommunityMembers);
     useEffect(() => {
@@ -339,7 +354,9 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                 await navigator.share(shareData);
                 incrementBusinessShareCount(res.id);
             } catch (err) {
-                if (err?.name !== 'AbortError') console.log('Error sharing:', err);
+                if (err?.name !== 'AbortError') {
+                    /* share cancelled or failed — non-fatal */
+                }
             }
         } else {
             navigator.clipboard.writeText(shareData.url);
@@ -664,14 +681,13 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                                     Promise.resolve(toggleCommunity(communityId))
                                         .then((ok) => {
                                             if (ok === false) {
-                                                setOptimisticJoined(effectiveJoined);
+                                                setOptimisticJoined(null);
                                             }
                                         })
                                         .catch(() => {
-                                            setOptimisticJoined(effectiveJoined);
+                                            setOptimisticJoined(null);
                                         })
                                         .finally(() => {
-                                            setOptimisticJoined(null);
                                             setJoinInProgress(false);
                                         });
                                 }
@@ -719,6 +735,7 @@ const BusinessesDirectory = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const { currentUser, userProfile, isGuest } = useAuth();
+    const { showToast } = useToast();
     const context = useInvitations();
     const { isDark } = useTheme();
 
@@ -778,9 +795,7 @@ const BusinessesDirectory = () => {
                         lng: position.coords.longitude
                     });
                 },
-                (error) => {
-                    console.log('Location access denied:', error);
-                }
+                () => {}
             );
         }
     }, []);
@@ -1420,6 +1435,9 @@ const BusinessesDirectory = () => {
                     onToggleFollow={context.toggleFollow}
                     onChat={(id) => navigate(`/chat/${id}`)}
                     title={t ? t('community_members') : 'Community Members'}
+                    userProfile={userProfile}
+                    showToast={showToast}
+                    t={t}
                 />
             )}
         </div>

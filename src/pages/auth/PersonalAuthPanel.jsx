@@ -5,9 +5,8 @@ import { FaFacebook, FaUser, FaEnvelope, FaLock } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { needsEmailPasswordVerification } from '../../utils/emailVerification';
-import { isBusinessUser } from '../../utils/accountRole';
+import { isBusinessUser, isAffiliateAgent } from '../../utils/accountRole';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 
@@ -67,6 +66,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
             continueHref = '/business-dashboard';
         } else if (needsEmailPasswordVerification(currentUser, userProfile)) {
             continueHref = '/verify-email';
+        } else if (isAffiliateAgent(userProfile)) {
+            continueHref = '/affiliate/dashboard';
         } else if (!isComplete) {
             continueHref = '/complete-profile';
         } else {
@@ -90,6 +91,10 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
             }
             if (needsEmailPasswordVerification(currentUser, userProfile)) {
                 navigate('/verify-email', { replace: true });
+                return;
+            }
+            if (isAffiliateAgent(userProfile)) {
+                navigate('/affiliate/dashboard', { replace: true });
                 return;
             }
             const isCompleteAfterVerify = userProfile.isProfileComplete || (
@@ -260,9 +265,9 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         width: '100%',
         padding: '12px',
         borderRadius: '10px',
-        border: '1px solid #d1d5db',
-        background: '#ffffff',
-        color: '#111827',
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
         fontWeight: '700',
         fontSize: '0.95rem',
         cursor: 'pointer',
@@ -274,34 +279,15 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
     const cardShell = {
         width: '100%',
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
+        background: 'var(--card-bg)',
+        border: '1px solid var(--border-color)',
         borderRadius: '16px',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+        boxShadow: 'var(--shadow-premium)',
         padding: '18px',
     };
 
     const body = (
         <div className="personal-auth-panel">
-                <div className="auth-luxury-ribbon auth-luxury-ribbon--personal">
-                    <FaUser aria-hidden />
-                    <span>{t('account_type_personal_title', 'Personal account')}</span>
-                </div>
-                <p
-                    style={{
-                        color: '#4b5563',
-                        fontSize: '0.88rem',
-                        margin: '0 0 1rem',
-                        lineHeight: 1.45,
-                        textAlign: 'center',
-                    }}
-                >
-                    {t(
-                        'auth_personal_step1_subtitle',
-                        'Sign in or create a personal account with Google, Facebook, or email.'
-                    )}
-                </p>
-
                 {showAlreadySignedIn && (
                     <div
                         style={{
@@ -319,7 +305,14 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                         <button
                             type="button"
                             onClick={() => navigate(continueHref)}
-                            style={{ border: 'none', background: 'transparent', fontWeight: 800, color: '#2563eb', fontSize: '0.92rem', cursor: 'pointer' }}
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                fontWeight: 800,
+                                color: 'var(--primary)',
+                                fontSize: '0.92rem',
+                                cursor: 'pointer',
+                            }}
                         >
                             {t('continue_to_app', 'Continue to the app →')}
                         </button>
@@ -329,14 +322,14 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                 {error && (
                     <div
                         style={{
-                            background: 'rgba(239,68,68,0.12)',
-                            color: '#f87171',
+                            background: 'color-mix(in srgb, var(--color-danger) 14%, transparent)',
+                            color: 'var(--color-danger)',
                             padding: '0.75rem',
                             borderRadius: '12px',
                             marginBottom: '1rem',
                             fontSize: '0.85rem',
                             textAlign: 'center',
-                            border: '1px solid rgba(239,68,68,0.2)',
+                            border: '1px solid color-mix(in srgb, var(--color-danger) 35%, transparent)',
                         }}
                     >
                         {error}
@@ -351,11 +344,11 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                             gap: 10,
                             fontSize: '0.95rem',
                             fontWeight: 800,
-                            color: '#111827',
-                            margin: '0 0 1rem',
+                            color: 'var(--text-heading)',
+                            margin: '0 0 0.75rem',
                         }}
                     >
-                        <FaUser style={{ color: '#60a5fa', flexShrink: 0 }} aria-hidden />
+                        <FaUser style={{ color: 'var(--color-info)', flexShrink: 0 }} aria-hidden />
                         {t('account_type_personal_title', 'Personal account')}
                     </h2>
 
@@ -388,11 +381,11 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                             gap: 10,
                         }}
                     >
-                        <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                        <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600 }}>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                             {t('login_divider_or', 'or')}
                         </span>
-                        <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                     </div>
 
                     <button
@@ -410,7 +403,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                             fontWeight: 800,
                         }}
                     >
-                        <FaEnvelope size={18} color="#111827" aria-hidden />
+                        <FaEnvelope size={18} style={{ color: 'var(--text-primary)', flexShrink: 0 }} aria-hidden />
                         {emailPanelOpen
                             ? t('auth_personal_hide_email', 'Hide email form')
                             : t('auth_personal_show_email', 'Sign in with email')}
@@ -424,8 +417,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                 marginTop: '0.85rem',
                                 padding: '0.85rem',
                                 borderRadius: '12px',
-                                border: '1px solid #e5e7eb',
-                                background: '#f9fafb',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-secondary)',
                             }}
                         >
                             <div
@@ -447,13 +440,16 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                         borderRadius: '8px',
                                         border:
                                             emailTab === 'signin'
-                                                ? '2px solid #2563eb'
-                                                : '1px solid #d1d5db',
-                                        background: emailTab === 'signin' ? '#eff6ff' : '#fff',
+                                                ? '2px solid var(--primary)'
+                                                : '1px solid var(--border-color)',
+                                        background:
+                                            emailTab === 'signin'
+                                                ? 'color-mix(in srgb, var(--primary) 12%, transparent)'
+                                                : 'var(--bg-card)',
                                         fontWeight: 800,
                                         fontSize: '0.85rem',
                                         cursor: 'pointer',
-                                        color: '#111827',
+                                        color: 'var(--text-primary)',
                                     }}
                                 >
                                     {t('user_login_title', 'Sign in')}
@@ -472,13 +468,16 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                         borderRadius: '8px',
                                         border:
                                             emailTab === 'signup'
-                                                ? '2px solid #2563eb'
-                                                : '1px solid #d1d5db',
-                                        background: emailTab === 'signup' ? '#eff6ff' : '#fff',
+                                                ? '2px solid var(--primary)'
+                                                : '1px solid var(--border-color)',
+                                        background:
+                                            emailTab === 'signup'
+                                                ? 'color-mix(in srgb, var(--primary) 12%, transparent)'
+                                                : 'var(--bg-card)',
                                         fontWeight: 800,
                                         fontSize: '0.85rem',
                                         cursor: 'pointer',
-                                        color: '#111827',
+                                        color: 'var(--text-primary)',
                                     }}
                                 >
                                     {t('create_account', 'Create account')}
@@ -487,7 +486,13 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
                             <label
                                 htmlFor="personal-auth-email"
-                                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#374151', marginBottom: 4 }}
+                                style={{
+                                    display: 'block',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: 4,
+                                }}
                             >
                                 {t('email', 'Email')}
                             </label>
@@ -498,7 +503,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                         left: 12,
                                         top: '50%',
                                         transform: 'translateY(-50%)',
-                                        color: '#9ca3af',
+                                        color: 'var(--icon-secondary)',
                                         pointerEvents: 'none',
                                     }}
                                     size={14}
@@ -511,21 +516,28 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                     value={email}
                                     onChange={(ev) => setEmail(ev.target.value)}
                                     placeholder={t('email_placeholder', 'Email')}
+                                    className="auth-input"
                                     style={{
                                         width: '100%',
                                         padding: '10px 12px 10px 36px',
                                         borderRadius: '10px',
-                                        border: '1px solid #d1d5db',
+                                        border: '1px solid var(--border-color)',
                                         fontSize: '0.95rem',
                                         boxSizing: 'border-box',
-                                        background: '#fff',
+                                        background: 'var(--bg-input)',
                                     }}
                                 />
                             </div>
 
                             <label
                                 htmlFor="personal-auth-password"
-                                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#374151', marginBottom: 4 }}
+                                style={{
+                                    display: 'block',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: 4,
+                                }}
                             >
                                 {t('password', 'Password')}
                             </label>
@@ -536,7 +548,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                         left: 12,
                                         top: '50%',
                                         transform: 'translateY(-50%)',
-                                        color: '#9ca3af',
+                                        color: 'var(--icon-secondary)',
                                         pointerEvents: 'none',
                                     }}
                                     size={14}
@@ -549,14 +561,15 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                     value={password}
                                     onChange={(ev) => setPassword(ev.target.value)}
                                     placeholder={t('password_placeholder', 'Password (at least 6 characters)')}
+                                    className="auth-input"
                                     style={{
                                         width: '100%',
                                         padding: '10px 12px 10px 36px',
                                         borderRadius: '10px',
-                                        border: '1px solid #d1d5db',
+                                        border: '1px solid var(--border-color)',
                                         fontSize: '0.95rem',
                                         boxSizing: 'border-box',
-                                        background: '#fff',
+                                        background: 'var(--bg-input)',
                                     }}
                                 />
                             </div>
@@ -571,8 +584,6 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                     padding: '12px',
                                     borderRadius: '10px',
                                     border: 'none',
-                                    background: '#2563eb',
-                                    color: '#fff',
                                     fontWeight: 800,
                                     fontSize: '0.95rem',
                                     cursor: loading ? 'not-allowed' : 'pointer',
@@ -592,7 +603,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#2563eb',
+                                        color: 'var(--primary)',
                                         fontSize: '0.82rem',
                                         fontWeight: 700,
                                         cursor: loading ? 'not-allowed' : 'pointer',
@@ -618,7 +629,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                         style={{
                             background: 'none',
                             border: 'none',
-                            color: '#4b5563',
+                            color: 'var(--text-muted)',
                             fontSize: '0.82rem',
                             cursor: loading ? 'not-allowed' : 'pointer',
                             textDecoration: 'underline',

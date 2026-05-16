@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -26,64 +26,10 @@ const MyCommunity = () => {
     const isBusinessAccount = userProfile?.isBusiness || false;
     const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
 
-    useEffect(() => {
-        if (!isBusinessAccount || !currentUser?.uid) {
-            if (!isBusinessAccount) navigate('/');
-            return;
-        }
-
-        const unsubInvitations = subscribeToInvitations();
-        const unsubMembers = subscribeToMembers();
-        const unsubEngagement = subscribeToEngagement();
-
-        return () => {
-            if (unsubInvitations) unsubInvitations();
-            if (unsubMembers) unsubMembers();
-            if (unsubEngagement) unsubEngagement();
-        };
-    }, [currentUser?.uid, isBusinessAccount]);
-
-    useEffect(() => {
-        if (!isBusinessAccount || !currentUser?.uid) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const result = await getCommunityMembers(currentUser.uid, { includeMembers: true, limit: 10 });
-                const list = result?.members || [];
-                if (!cancelled) setTopMembers(list.slice(0, 3));
-            } catch (e) {
-                if (!cancelled) setTopMembers([]);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [currentUser?.uid, isBusinessAccount, getCommunityMembers]);
-
-    const subscribeToMembers = () => {
-        try {
-            const refreshMemberCount = async () => {
-                const result = await getCommunityMembers(currentUser.uid, {
-                    includeMembers: false,
-                    limit: 1
-                });
-                setStats(prev => ({
-                    ...prev,
-                    members: Number(result?.memberCount || 0)
-                }));
-            };
-
-            refreshMemberCount();
-            const intervalId = setInterval(refreshMemberCount, 30000);
-            return () => clearInterval(intervalId);
-        } catch (error) {
-            console.error("Error in subscribeToMembers:", error);
-            return () => { };
-        }
-    };
-
     const invitationIdsByRestaurant = useRef(new Set());
     const invitationIdsByHost = useRef(new Set());
 
-    const subscribeToInvitations = () => {
+    const subscribeToInvitations = useCallback(() => {
         try {
             // Count invitations for this business: at this venue (restaurantId) OR created by partner (hostId)
             const qRestaurant = query(
@@ -122,9 +68,9 @@ const MyCommunity = () => {
             setLoading(false);
             return () => { };
         }
-    };
+    }, [currentUser?.uid]);
 
-    const subscribeToEngagement = () => {
+    const subscribeToEngagement = useCallback(() => {
         try {
             const q = query(
                 collection(db, 'communityPosts'),
@@ -145,9 +91,44 @@ const MyCommunity = () => {
         } catch (error) {
             return () => { };
         }
-    };
+    }, [currentUser?.uid]);
 
+    // Member count: same `users/{uid}` document as AuthContext — avoid a second onSnapshot here.
+    useEffect(() => {
+        if (!isBusinessAccount || !currentUser?.uid) return;
+        const memberCount = Array.isArray(userProfile?.communityMembers) ? userProfile.communityMembers.length : 0;
+        setStats((prev) => (prev.members === memberCount ? prev : { ...prev, members: memberCount }));
+    }, [isBusinessAccount, currentUser?.uid, userProfile?.communityMembers]);
 
+    useEffect(() => {
+        if (!isBusinessAccount || !currentUser?.uid) {
+            if (!isBusinessAccount) navigate('/');
+            return undefined;
+        }
+
+        const unsubInvitations = subscribeToInvitations();
+        const unsubEngagement = subscribeToEngagement();
+
+        return () => {
+            unsubInvitations?.();
+            unsubEngagement?.();
+        };
+    }, [currentUser?.uid, isBusinessAccount, navigate, subscribeToInvitations, subscribeToEngagement]);
+
+    useEffect(() => {
+        if (!isBusinessAccount || !currentUser?.uid) return undefined;
+        let cancelled = false;
+        (async () => {
+            try {
+                const result = await getCommunityMembers(currentUser.uid, { includeMembers: true, limit: 10 });
+                const list = result?.members || [];
+                if (!cancelled) setTopMembers(list.slice(0, 3));
+            } catch (e) {
+                if (!cancelled) setTopMembers([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [currentUser?.uid, isBusinessAccount, getCommunityMembers]);
 
     if (!isBusinessAccount) {
         return null;

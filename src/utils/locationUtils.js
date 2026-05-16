@@ -164,7 +164,6 @@ export const geocode = async (address) => {
             }
         }
 
-        console.log(`🔍 Geocoding address: ${address}...`);
 
         // Append a random cache buster to avoid 403 from some networks
         const cacheBuster = Math.floor(Math.random() * 1000000);
@@ -217,7 +216,6 @@ export const reverseGeocode = async (lat, lng) => {
             }
         }
 
-        console.log(`🔍 Reverse geocoding: ${lat}, ${lng}...`);
 
         // Append a random cache buster to avoid 403 from some networks
         const cacheBuster = Math.floor(Math.random() * 1000000);
@@ -257,14 +255,12 @@ export const reverseGeocode = async (lat, lng) => {
         }
 
         // Fallback to BigDataCloud if Nominatim is blocked or failed
-        console.log(`🌐 Trying BigDataCloud fallback for reverse geocoding: ${lat}, ${lng}...`);
         try {
             const fallbackResponse = await fetch(
                 `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
             );
             if (fallbackResponse.ok) {
                 const d = await fallbackResponse.json();
-                console.log(`✅ Reverse geocode found via BigDataCloud:`, d.city || d.locality);
                 return {
                     success: true,
                     fullLocation: `${d.city || d.locality}, ${d.principalSubdivision || ''}, ${d.countryName || ''}`.replace(/^, /, ''),

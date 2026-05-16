@@ -35,7 +35,7 @@ If push breaks after unrelated changes, **restore the patterns listed here** bef
 5. **Do not add `onBackgroundMessage` + `showNotification` in the SW** while the server sends `webpush.notification` — duplicates on iOS.
 
 6. **Server payload (Cloud Functions)**  
-   - `sendEachForMulticast` with `webpush.notification` + `fcm_options.link` (absolute `https://www.dinebuddies.com/...`).  
+   - `sendEachForMulticast` with `webpush.notification` + `webpush.fcmOptions.link` (absolute `https://www.dinebuddies.com/...`). Use **camelCase** `fcmOptions` — Admin SDK does not map `fcm_options`.  
    - Helpers: `fcmAbsoluteAppUrl`, `fcmSafeIconUrl`, chunk tokens ≤ **500**.  
    - Trigger: `onNotificationCreated` on `notifications/{id}`.
 

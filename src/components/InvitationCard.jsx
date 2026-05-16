@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaPlus, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaGenderless, FaMoneyBillWave, FaUserFriends, FaShareAlt, FaVideo, FaVolumeUp, FaVolumeMute, FaBullhorn, FaHeart, FaUsers, FaBriefcase, FaSmile, FaTimes } from 'react-icons/fa';
+import React, { useState, useRef, useMemo } from 'react';
+import { FaMapMarkerAlt, FaClock, FaCalendarAlt, FaChevronRight, FaPaperPlane, FaCheck, FaFlag, FaMars, FaVenus, FaVenusMars, FaGenderless, FaMoneyBillWave, FaUserFriends, FaShareAlt, FaVideo, FaVolumeUp, FaVolumeMute, FaBullhorn, FaHeart, FaUsers, FaBriefcase, FaSmile, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,9 @@ import { useNavigate } from 'react-router-dom';
 import NewReportModal from './NewReportModal';
 import { getTemplateStyle, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
+import UserAvatar from './UserAvatar';
+import { parseInvitationAgeRange } from '../utils/invitationDisplayUtils';
 import { motion } from 'framer-motion';
 import { getCoverTextMotionProps } from '../utils/invitationCoverTextMotion';
 
@@ -90,7 +93,10 @@ const InvitationCard = ({ invitation }) => {
     const isPending = (requests || []).includes(currentUser?.id);
     const isAccepted = (joined || []).includes(currentUser?.id);
     const spotsLeft = Math.max(0, guestsNeeded - (joined || []).length);
-    const isFollowing = userProfile?.following?.includes(author?.id);
+    const authorFollowPlus = useMemo(
+        () => buildFollowPlusProps(author, { currentUser, userProfile, toggleFollow, showToast, t }),
+        [author, currentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     // Business accounts cannot interact with invitations
 
@@ -120,11 +126,6 @@ const InvitationCard = ({ invitation }) => {
         }
     };
 
-    const handleFollowClick = (e) => {
-        e.stopPropagation();
-        toggleFollow(author?.id);
-    };
-
     const handleAvatarClick = (e) => {
         e.stopPropagation();
         navigate(author?.id === currentUser?.id ? '/profile' : `/profile/${author?.id}`);
@@ -148,10 +149,13 @@ const InvitationCard = ({ invitation }) => {
 
         // Check age range preference
         if (ageRange && currentUser?.age) {
-            const [minAge, maxAge] = ageRange.split('-').map(Number);
-            const userAge = currentUser.age;
-            if (userAge < minAge || userAge > maxAge) {
-                return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+            const ages = parseInvitationAgeRange(ageRange);
+            if (ages) {
+                const [minAge, maxAge] = ages;
+                const userAge = currentUser.age;
+                if (userAge < minAge || userAge > maxAge) {
+                    return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+                }
             }
         }
 
@@ -366,34 +370,19 @@ const InvitationCard = ({ invitation }) => {
             style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}
         >
             <div style={{ position: 'relative' }}>
-                <img
-                    src={getSafeAvatar(author)}
-                    onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                <UserAvatar
+                    user={author}
+                    followPlus={authorFollowPlus || undefined}
+                    followBadgeSize={16}
                     alt={author?.name}
                     style={{
-                        width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover',
-                        border: '2px solid rgba(255,255,255,0.85)',
+                        width: '36px',
+                        height: '36px',
+                        objectFit: 'cover',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
                         background: 'white',
                     }}
                 />
-                {!isHost && !isFollowing && author?.role !== 'business' && userProfile?.role !== 'business' && (
-                    <button
-                        type="button"
-                        onClick={handleFollowClick}
-                        style={{
-                            position: 'absolute', bottom: '-2px', ...(isRTL ? { left: '-2px' } : { right: '-2px' }),
-                            width: '16px', height: '16px', borderRadius: '50%',
-                            background: 'var(--primary)',
-                            border: '2px solid white', color: 'white',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '8px', padding: 0, cursor: 'pointer', zIndex: 26,
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                        }}
-                    >
-                        <FaPlus />
-                    </button>
-                )}
             </div>
             <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.9rem', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{author?.name}</span>
         </div>
@@ -442,34 +431,19 @@ const InvitationCard = ({ invitation }) => {
             style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
         >
             <div style={{ position: 'relative' }}>
-                <img
-                    src={getSafeAvatar(author)}
-                    onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                <UserAvatar
+                    user={author}
+                    followPlus={authorFollowPlus || undefined}
+                    followBadgeSize={16}
                     alt={author?.name}
                     style={{
-                        width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover',
-                        border: '2px solid #e5e7eb',
+                        width: '36px',
+                        height: '36px',
+                        objectFit: 'cover',
                         boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
                         background: 'white',
                     }}
                 />
-                {!isHost && !isFollowing && author?.role !== 'business' && userProfile?.role !== 'business' && (
-                    <button
-                        type="button"
-                        onClick={handleFollowClick}
-                        style={{
-                            position: 'absolute', bottom: '-2px', ...(isRTL ? { left: '-2px' } : { right: '-2px' }),
-                            width: '16px', height: '16px', borderRadius: '50%',
-                            background: 'var(--primary)',
-                            border: '2px solid white', color: 'white',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '8px', padding: 0, cursor: 'pointer', zIndex: 26,
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                        }}
-                    >
-                        <FaPlus />
-                    </button>
-                )}
             </div>
             <span style={{ color: '#111827', fontWeight: 800, fontSize: '0.9rem' }}>{author?.name}</span>
         </div>
@@ -535,17 +509,22 @@ const InvitationCard = ({ invitation }) => {
                             width: 30,
                             height: 30,
                             borderRadius: '50%',
-                            overflow: 'hidden',
-                            border: '2px solid rgba(255,255,255,0.9)',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-                            background: '#fff',
+                            overflow: 'visible',
                             flexShrink: 0,
                         }}>
-                            <img
-                                src={getSafeAvatar(author)}
-                                onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                            <UserAvatar
+                                user={author}
+                                followPlus={authorFollowPlus || undefined}
+                                followBadgeSize={13}
                                 alt={author?.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    display: 'block',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                                    background: '#fff',
+                                }}
                             />
                         </div>
                         <span style={{

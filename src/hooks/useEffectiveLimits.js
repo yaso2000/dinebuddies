@@ -32,7 +32,9 @@ export const useEffectiveLimits = (businessId, userProfile = null) => {
                 const businessInfo = userData.businessInfo || {};
                 const planId = (() => {
                     const t = (userData.subscriptionTier || 'free').toLowerCase();
-                    return ['free', 'professional', 'elite'].includes(t) ? t : 'free';
+                    if (t === 'paid' || t === 'elite' || t === 'professional' || t === 'pro' || t === 'premium')
+                        return 'paid';
+                    return 'free';
                 })();
                 const defaultLimits = getPlanById(planId);
                 const customLimits = businessInfo.customLimits || {};

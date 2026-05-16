@@ -44,6 +44,7 @@ import { premiumOfferService } from '../services/premiumOfferService';
 import { useToast } from '../context/ToastContext';
 import { useBusinessRank } from '../hooks/useBusinessRank';
 import { goToLogin } from '../utils/goToLogin';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 
 const BUSINESS_TYPES = [
     'Restaurant', 'Cafe', 'Bar', 'Night Club', 'Food Truck', 'Fast Food'
@@ -589,7 +590,7 @@ const BusinessProfile = () => {
                     fetchActiveInvitations(),
                     fetchReviews()
                 ]);
-                if ((business?.subscriptionTier || '').toLowerCase() === 'elite') {
+                if (normalizeBusinessTier(business?.subscriptionTier) === 'paid') {
                     fetchFeaturedPosts();
                 }
             }
@@ -1341,9 +1342,8 @@ const BusinessProfile = () => {
 
     const hasDrafts = isOwner && rawBusinessInfo.drafts && Object.keys(rawBusinessInfo.drafts).length > 0;
 
-    const tier = business.subscriptionTier || 'free';
-    const isPaid = tier === 'professional' || tier === 'elite';
-    const isElite = tier === 'elite';
+    const isPaid = normalizeBusinessTier(business.subscriptionTier) === 'paid';
+    const isElite = isPaid;
     const isPremium = isPaid;
 
     // ── Theme & Brand Kit Engine ──
@@ -1654,7 +1654,7 @@ const BusinessProfile = () => {
                             )}
                             {/* Plan badge */}
                             {isPaid && !isOwner && (
-                                <div style={{ position: 'absolute', top: '-6px', left: '-6px', background: '#000000', border: `2px solid ${isElite ? '#f59e0b' : '#8b5cf6'}`, borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 8px ${isElite ? 'rgba(245,158,11,0.5)' : 'rgba(139,92,246,0.5)'}`, fontSize: '0.85rem' }} title={isElite ? t('elite_business', 'Elite Business') : t('professional_business', 'Professional Business')}>{isElite ? '👑' : '⚡'}</div>
+                                <div style={{ position: 'absolute', top: '-6px', left: '-6px', background: '#000000', border: '2px solid #f59e0b', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 8px rgba(245,158,11,0.5)', fontSize: '0.85rem' }} title={t('paid_business', 'Paid Business')}>👑</div>
                             )}
                         </div>
 

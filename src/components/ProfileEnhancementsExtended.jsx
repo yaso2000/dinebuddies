@@ -71,14 +71,12 @@ export const FavoritePlaces = ({ userId, readOnly = false }) => {
                                 country: detectedCountryCode,
                                 city: detectedCity
                             }));
-                            console.log('📍 Location detected (Auto):', detectedCity, detectedCountryCode);
                         }
                     }
                 } catch (e) {
                     console.warn("Auto-detect city failed:", e.message);
                 }
             }, (err) => {
-                console.log("Location detection denied/failed", err);
             });
         }
     }, [adding]);

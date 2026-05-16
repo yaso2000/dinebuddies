@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
@@ -11,8 +11,10 @@ import { BiRepost } from 'react-icons/bi';
 import { IoShareSocialOutline, IoSend } from 'react-icons/io5';
 import TikTokEmbed from './TikTokEmbed';
 import ShareButtons from './ShareButtons';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
+import { useInvitations } from '../context/InvitationContext';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 import FeaturedPostSlideCard from './FeaturedPostSlideCard';
 import { FaCalendarAlt, FaMapMarkerAlt, FaImage, FaYoutube, FaTiktok, FaInstagram, FaPlay } from 'react-icons/fa';
 import { globalMediaManager } from '../utils/mediaUtils';
@@ -36,6 +38,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
+    const { toggleFollow } = useInvitations();
 
     const [showComments, setShowComments] = useState(defaultExpandComments);
     const [showMenu, setShowMenu] = useState(false);
@@ -69,7 +72,10 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         return [...raw].sort((a, b) => getCommentTimeMs(a) - getCommentTimeMs(b));
     }, [post.comments]);
 
-    const lastCommentPreview = sortedComments.length ? sortedComments[sortedComments.length - 1] : null;
+    const lastCommentsPreview = useMemo(() => {
+        if (!sortedComments.length) return [];
+        return sortedComments.slice(-2);
+    }, [sortedComments]);
 
     useEffect(() => {
         setDetailCommentWindow(5);
@@ -116,7 +122,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                 if (['youtube', 'tiktok'].includes(type)) {
                     setIsPlaying(true);
                 } else if (type === 'video' && videoRef.current) {
-                    videoRef.current.play().catch(e => console.log('Autoplay blocked', e));
+                    videoRef.current.play().catch(() => {});
                     setIsPlaying(true);
                 }
                 globalMediaManager.play(post.id);
@@ -296,6 +302,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                 userId: currentUser.uid,
                 userName: currentUser.displayName || 'User',
                 userPhoto: getSafeAvatar(userProfile || currentUser),
+                userGender: userProfile?.gender || null,
                 text: newComment.trim(),
                 createdAt: new Date().toISOString()
             };
@@ -451,6 +458,31 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         catch(e) { return 'No Date'; }
     };
 
+    const followCtx = useMemo(
+        () => ({ currentUser, userProfile, toggleFollow, showToast, t }),
+        [currentUser, userProfile, toggleFollow, showToast, t]
+    );
+
+    const displayAuthorFollowPlus = useMemo(
+        () => buildFollowPlusProps(displayAuthorObj, followCtx),
+        [displayAuthorObj, followCtx]
+    );
+
+    const commentFollowPlusFor = useCallback(
+        (comment) => {
+            if (!comment?.userId) return null;
+            const sub = {
+                id: comment.userId,
+                uid: comment.userId,
+                display_name: comment.userName,
+                gender: comment.userGender,
+                photo_url: comment.userPhoto,
+            };
+            return buildFollowPlusProps(sub, followCtx);
+        },
+        [followCtx]
+    );
+
     return (
         <div
             className={`post-card ${showInChat ? 'in-chat' : ''}`}
@@ -475,8 +507,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     user={displayAuthorObj}
                     src={displayAuthorAvatar}
                     className="post-avatar"
+                    followPlus={displayAuthorFollowPlus || undefined}
                     alt={displayAuthorName}
-                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer', border: `2px solid ${getGenderBorderColor(displayAuthorObj)}` }}
+                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (displayPost.partnerId) navigate(`/business/${displayPost.partnerId}`);
@@ -868,7 +901,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </button>
                 </div>
 
-                {/* Feed preview: count + last comment only (click to open chat-style comments) */}
+                {/* Feed preview: count + last two comments (click to expand) */}
                 {!showComments && commentsRaw.length > 0 && (
                     <div
                         role="button"
@@ -889,12 +922,15 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         <div className="post-comments-preview__count">
                             {commentsRaw.length} {t('comments', 'Comments')}
                         </div>
-                        {lastCommentPreview && (
-                            <div className="post-comments-preview__last">
-                                <span className="post-comments-preview__name">{lastCommentPreview.userName}</span>
-                                <span className="post-comments-preview__text">{truncateText(lastCommentPreview.text, 120)}</span>
+                        {lastCommentsPreview.map((c) => (
+                            <div
+                                key={c.id || `${c.userId}-${c.createdAt}`}
+                                className="post-comments-preview__last"
+                            >
+                                <span className="post-comments-preview__name">{c.userName}</span>
+                                <span className="post-comments-preview__text">{truncateText(c.text, 90)}</span>
                             </div>
-                        )}
+                        ))}
                     </div>
                 )}
 
@@ -986,27 +1022,53 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             )}
                             {sortedComments.slice(-Math.min(detailCommentWindow, sortedComments.length)).map((comment) => (
                                 <div key={comment.id || `${comment.userId}-${comment.createdAt}`} className="comments-thread__item comments-thread__item--detail">
-                                    <div className="comments-thread__meta">
-                                        <span className="comments-thread__author">{comment.userName}</span>
-                                        <span className="comments-thread__time">{formatDate(comment.createdAt)}</span>
+                                    <div className="comments-thread__row">
+                                        <UserAvatar
+                                            user={{
+                                                id: comment.userId,
+                                                uid: comment.userId,
+                                                display_name: comment.userName,
+                                                gender: comment.userGender,
+                                                photo_url: comment.userPhoto,
+                                            }}
+                                            src={comment.userPhoto || getSafeAvatar({
+                                                id: comment.userId,
+                                                display_name: comment.userName,
+                                                gender: comment.userGender,
+                                            })}
+                                            followPlus={commentFollowPlusFor(comment) || undefined}
+                                            followBadgeSize={14}
+                                            alt={comment.userName || ''}
+                                            style={{ width: 34, height: 34, objectFit: 'cover', flexShrink: 0 }}
+                                        />
+                                        <div className="comments-thread__col">
+                                            <div className="comments-thread__meta">
+                                                <span className="comments-thread__author">{comment.userName}</span>
+                                                <span className="comments-thread__time">{formatDate(comment.createdAt)}</span>
+                                            </div>
+                                            <div className="comments-thread__body">{comment.text}</div>
+                                        </div>
                                     </div>
-                                    <div className="comments-thread__body">{comment.text}</div>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* Feed: last comment preview + composer below */}
+                {/* Feed: last two comments + composer below */}
                 {showComments && !showInChat && (
                     <div className="comments-section comments-section--chat" onClick={(e) => e.stopPropagation()}>
-                        {lastCommentPreview && (
-                            <div className="comments-inline-last">
-                                <div className="comments-thread__meta">
-                                    <span className="comments-thread__author">{lastCommentPreview.userName}</span>
-                                    <span className="comments-thread__time">{formatDate(lastCommentPreview.createdAt)}</span>
-                                </div>
-                                <div className="comments-thread__body">{lastCommentPreview.text}</div>
+                        {lastCommentsPreview.length > 0 && (
+                            <div className="comments-inline-last-stack">
+                                {lastCommentsPreview.map((c) => (
+                                    <div key={c.id || `${c.userId}-${c.createdAt}`} className="comments-inline-last">
+                                        <div className="comments-thread__meta">
+                                            <span className="comments-thread__author">{c.userName}</span>
+                                            <span className="comments-thread__time">{formatDate(c.createdAt)}</span>
+                                        </div>
+                                        <div className="comments-thread__body">{c.text}</div>
+                                    </div>
+                                ))}
                             </div>
                         )}
 

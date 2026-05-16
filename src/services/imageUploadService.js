@@ -25,7 +25,6 @@ export const uploadImage = async (file, path = 'uploads') => {
         // Get the download URL
         const downloadURL = await getDownloadURL(snapshot.ref);
 
-        console.log(`Image uploaded successfully to ${finalPath}`);
         return downloadURL;
     } catch (error) {
         console.error("Error uploading image:", error);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaComments, FaLock, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,11 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
+import UserAvatar from '../components/UserAvatar';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
 import HostPrivateInvitationCardExport from '../components/Invitations/privateCard/HostPrivateInvitationCardExport';
 import './PrivateInvitation.css';
@@ -32,13 +35,19 @@ const PrivateInvitationDetails = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile, loading: authLoading } = useAuth();
-    const { respondToPrivateInvitation, deleteInvitation } = useInvitations();
+    const { respondToPrivateInvitation, deleteInvitation, toggleFollow } = useInvitations();
+    const { showToast } = useToast();
 
     const [invitation, setInvitation] = useState(null);
     const [loading, setLoading] = useState(true);
     const [invitedUsers, setInvitedUsers] = useState([]);
     const [isResponding, setIsResponding] = useState(false);
     const [animationData, setAnimationData] = useState(null);
+
+    const privateFollowCtx = useMemo(
+        () => ({ currentUser, userProfile, toggleFollow, showToast, t }),
+        [currentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     useEffect(() => {
         if (!id) return;
@@ -395,7 +404,13 @@ const PrivateInvitationDetails = () => {
                             const badge = getStatusBadge(user.rsvpStatus);
                             return (
                                 <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.03)', padding: '10px 15px', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
-                                    <img src={getSafeAvatar(user)} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                                    <UserAvatar
+                                        user={user}
+                                        followPlus={buildFollowPlusProps(user, privateFollowCtx) || undefined}
+                                        followBadgeSize={14}
+                                        alt=""
+                                        style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                                    />
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{user.display_name}</div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{user.username || t('username_fallback', 'user')}</div>

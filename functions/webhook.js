@@ -1,36 +1,36 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { getStripe } = require('./stripeClient');
+const { fulfillDineCreditsFromCheckoutSession } = require('./dineCreditsFulfillment');
+const { processAffiliateBusinessCommission, reverseAffiliateCommissionOnChargeRefunded } = require('./affiliateTracking');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-// Map planId → weeklyPrivateQuota  (-1 = unlimited)
+// Legacy consumer checkout planIds (no longer sold) — map to no subscription quota on users.
 const PLAN_QUOTA_MAP = {
-    // User plans
-    'pro': 2,
-    'premium': -1,
-    // Partner plans (no private invites — they are business accounts)
-    'professional': 0,
-    'elite': 0,
+    pro: 2,
+    premium: -1,
+    professional: 0,
+    elite: 0,
+    paid: 0
 };
 
 function getQuotaForPlan(planId) {
     if (!planId) return 0;
-    const id = planId.toLowerCase();
-    if (id in PLAN_QUOTA_MAP) return PLAN_QUOTA_MAP[id];
-    // Fallback by keyword
+    const id = String(planId).toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(PLAN_QUOTA_MAP, id)) return PLAN_QUOTA_MAP[id];
     if (id.includes('premium')) return -1;
-    if (id.includes('pro')) return 2;
+    if (id.includes('pro') && !id.includes('paid')) return 2;
     return 0;
 }
 
+/** Business checkout → `paid`; legacy elite/professional → `paid`. Consumer legacy → unchanged keys (app ignores). */
 function getTierForPlan(planId) {
     if (!planId) return 'free';
-    const id = planId.toLowerCase();
-    if (id.includes('elite')) return 'elite';
-    if (id.includes('professional')) return 'professional';
+    const id = String(planId).toLowerCase();
+    if (id === 'paid' || id.includes('paid')) return 'paid';
+    if (id.includes('elite') || id.includes('professional')) return 'paid';
     if (id.includes('premium')) return 'premium';
     if (id.includes('pro')) return 'pro';
     return 'free';
@@ -45,7 +45,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     let event;
 
     try {
-        event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
+        event = getStripe().webhooks.constructEvent(req.rawBody, sig, endpointSecret);
     } catch (err) {
         console.error('⚠️ Webhook signature verification failed:', err.message);
         return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -75,6 +75,10 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
                 await handlePaymentFailed(event.data.object);
                 break;
 
+            case 'charge.refunded':
+                await reverseAffiliateCommissionOnChargeRefunded(event.data.object);
+                break;
+
             default:
                 console.log(`Unhandled event type: ${event.type}`);
         }
@@ -87,49 +91,6 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 });
 
 // ===== Event Handlers =====
-
-async function handleDineCreditsPurchase(session) {
-    const userId = session.metadata?.userId;
-    const credits = Math.floor(Number(session.metadata?.credits));
-    const packageId = String(session.metadata?.packageId || '');
-
-    if (!userId || !Number.isFinite(credits) || credits <= 0) {
-        console.error('Invalid dine credits checkout metadata', session.metadata);
-        return;
-    }
-
-    const fulfillRef = db.collection('stripe_dine_credit_fulfillments').doc(session.id);
-    const userRef = db.collection('users').doc(userId);
-
-    await db.runTransaction(async (tx) => {
-        const done = await tx.get(fulfillRef);
-        if (done.exists) return;
-
-        const snap = await tx.get(userRef);
-        if (!snap.exists) {
-            console.error('User not found for dine credits:', userId);
-            return;
-        }
-        const d = snap.data();
-        const accountRole = isBusinessUserDoc(d) ? 'business' : 'user';
-        grantPaidCreditsInTransaction(tx, userRef, d, {
-            uid: userId,
-            accountRole,
-            credits,
-            type: 'purchase',
-            reason: `stripe_${packageId || 'credits'}`,
-            relatedId: session.id,
-        });
-        tx.set(fulfillRef, {
-            userId,
-            credits,
-            packageId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-    });
-
-    console.log(`✅ Granted ${credits} dine credits to ${userId}`);
-}
 
 async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
@@ -144,39 +105,32 @@ async function handleCheckoutComplete(session) {
     }
 
     if (session.mode === 'payment' && session.metadata?.purchaseType === 'dine_credits') {
-        await handleDineCreditsPurchase(session);
+        await fulfillDineCreditsFromCheckoutSession(db, admin, session);
+        return;
+    }
+
+    if (session.mode !== 'subscription' || !subscriptionId) {
+        console.log('Skipping subscription fulfillment — not a subscription checkout', session.mode, session.id);
         return;
     }
 
     const weeklyQuota = getQuotaForPlan(planId);
     const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
 
     try {
-        if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
-            await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
-        } else {
-            // Subscription plan
-            await db.collection('users').doc(userId).update({
-                subscriptionStatus: 'active',
-                subscriptionId: subscriptionId,
-                subscriptionTier: tier,
-                currentPlan: planId,
-                weeklyPrivateQuota: weeklyQuota,
-                usedPrivateCreditsThisWeek: 0,
-                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
-                stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
-            });
+        await db.collection('users').doc(userId).update({
+            subscriptionStatus: 'active',
+            subscriptionId: subscriptionId,
+            subscriptionTier: tier,
+            currentPlan: planId,
+            weeklyPrivateQuota: weeklyQuota,
+            usedPrivateCreditsThisWeek: 0,
+            subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+            stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
+        });
 
-            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
-        }
+        console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
 
-        // Save subscription record
         await db.collection('user_subscriptions').add({
             userId,
             planId,
@@ -186,6 +140,11 @@ async function handleCheckoutComplete(session) {
             sessionId: session.id
         });
 
+        try {
+            await processAffiliateBusinessCommission({ db, admin, session, userId });
+        } catch (affErr) {
+            console.error('[affiliate] commission hook:', affErr?.message || affErr);
+        }
     } catch (error) {
         console.error('Error updating user subscription:', error);
     }

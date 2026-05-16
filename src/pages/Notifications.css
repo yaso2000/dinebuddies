@@ -356,3 +356,34 @@
         right: 1rem;
     }
 }
+
+/* Swipe-to-delete row (iOS-style) */
+.notification-swipe-outer {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+}
+
+.notification-swipe-delete {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, #991b1b, #ef4444);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    z-index: 0;
+}
+
+.notification-swipe-panel {
+    position: relative;
+    z-index: 1;
+    background: transparent;
+}
+
+.notification-swipe-panel .notification-item {
+    margin: 0;
+}

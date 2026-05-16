@@ -6,7 +6,7 @@
 /** Default consumer role for new personal accounts. */
 export const ROLE_USER = 'user';
 
-/** Affiliate program — managed on web only; blocked on mobile shell (see mobileAppShell + AuthContext). */
+/** Affiliate program — dashboard available on mobile and desktop (email/password sign-in). */
 export const ROLE_AFFILIATE_AGENT = 'affiliate_agent';
 
 /** Where the account is intended to be used (future gates / analytics). */

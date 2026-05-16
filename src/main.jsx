@@ -7,7 +7,6 @@ import './styles/ui-primitives.css';
 import './mobile-optimizations.css';
 import './i18n';
 import './utils/numberFormatOverrides';
-import ErrorBoundary from './components/ErrorBoundary';
 import App from './App.jsx';
 
 function escapeHtml(s) {
@@ -58,11 +57,9 @@ function boot() {
     try {
         ReactDOM.createRoot(rootEl).render(
             <HelmetProvider>
-                <ErrorBoundary>
-                    <div className="app-root-fill">
-                        <App />
-                    </div>
-                </ErrorBoundary>
+                <div className="app-root-fill">
+                    <App />
+                </div>
             </HelmetProvider>
         );
 

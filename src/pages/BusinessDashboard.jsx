@@ -11,6 +11,7 @@ import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe, FaSearch } from 'react-icons/fa';
 const BusinessDashboard = () => {
     const { t, i18n } = useTranslation();
@@ -49,7 +50,6 @@ const BusinessDashboard = () => {
 
         try {
             setLoading(true);
-            console.log('🔄 Fetching dashboard data for:', currentUser.uid);
 
             // Fetch community members count via trusted backend path
             const memberResult = await getCommunityMembers(currentUser.uid, {
@@ -57,7 +57,6 @@ const BusinessDashboard = () => {
                 limit: 1
             });
             const memberCount = Number(memberResult?.memberCount || 0);
-            console.log('👥 Community Members:', memberCount);
 
             // Fetch active invitations count - FIXED: use restaurantId instead of partnerId
             const invitationsQuery = query(
@@ -65,7 +64,6 @@ const BusinessDashboard = () => {
                 where('restaurantId', '==', currentUser.uid)
             );
             const invitationsSnapshot = await getDocs(invitationsQuery);
-            console.log('📨 Total Invitations found:', invitationsSnapshot.size);
 
             // Filter for active invitations (not expired)
             const now = new Date();
@@ -73,10 +71,8 @@ const BusinessDashboard = () => {
                 const data = doc.data();
                 const inviteDate = new Date(`${data.date}T${data.time}`);
                 const isActive = inviteDate > now;
-                console.log('  - Invitation:', data.title, '| Date:', inviteDate, '| Active:', isActive);
                 return isActive;
             }).length;
-            console.log('✅ Active Invitations:', activeInvitations);
 
             // Fetch reviews and calculate real rating
             const reviewsQuery = query(
@@ -86,17 +82,11 @@ const BusinessDashboard = () => {
             const reviewsSnapshot = await getDocs(reviewsQuery);
             const reviewsData = reviewsSnapshot.docs.map(doc => doc.data());
             const reviewCount = reviewsData.length;
-            console.log('⭐ Reviews found:', reviewCount);
 
             let rating = 0;
             if (reviewCount > 0) {
                 const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);
                 rating = totalRating / reviewCount;
-                console.log('📊 Rating calculation:', {
-                    totalRating,
-                    reviewCount,
-                    average: rating.toFixed(1)
-                });
             }
 
             // Fetch recent activity (last 5 invitations) - Removed orderBy to avoid index requirement
@@ -110,7 +100,6 @@ const BusinessDashboard = () => {
                 id: doc.id,
                 ...doc.data()
             }));
-            console.log('📋 Recent Activity:', recentData.length, 'items');
 
             const finalStats = {
                 memberCount,
@@ -120,7 +109,6 @@ const BusinessDashboard = () => {
                 reviewCount
             };
 
-            console.log('✅ Final Stats:', finalStats);
             setStats(finalStats);
 
             setRecentActivity(recentData);
@@ -348,23 +336,19 @@ const BusinessDashboard = () => {
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <span style={{
                                 padding: '4px 10px',
-                                background: userProfile?.subscriptionTier === 'elite'
+                                background: normalizeBusinessTier(userProfile?.subscriptionTier) === 'paid'
                                     ? 'linear-gradient(135deg, #fbbf24, #d97706)'
-                                    : userProfile?.subscriptionTier === 'professional'
-                                        ? 'linear-gradient(135deg, #8b5cf6, #d946ef)'
-                                        : 'rgba(156, 163, 175, 0.2)',
+                                    : 'rgba(156, 163, 175, 0.2)',
                                 borderRadius: '12px',
                                 fontSize: '0.75rem',
                                 fontWeight: '700',
                                 color: 'white'
                             }}>
-                                {userProfile?.subscriptionTier === 'elite'
-                                    ? t('elite_partner', 'Elite Partner')
-                                    : userProfile?.subscriptionTier === 'professional'
-                                        ? t('professional_tier', 'Professional')
-                                        : t('free_plan', 'Free Plan')}
+                                {normalizeBusinessTier(userProfile?.subscriptionTier) === 'paid'
+                                    ? t('paid_business_plan', 'Paid Business')
+                                    : t('free_plan', 'Free Plan')}
                             </span>
-                            {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
+                            {normalizeBusinessTier(userProfile?.subscriptionTier) === 'free' && (
                                 <button
                                     onClick={() => navigate('/settings/subscription')}
                                     style={{
@@ -394,7 +378,7 @@ const BusinessDashboard = () => {
                 </div>
 
                 {/* Trial Promo Banner */}
-                {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') && (
+                {normalizeBusinessTier(userProfile?.subscriptionTier) === 'free' && (
                     <div
                         onClick={() => navigate('/settings/subscription')}
                         style={{
@@ -415,10 +399,10 @@ const BusinessDashboard = () => {
                             <div style={{ fontSize: '1.5rem' }}>🎁</div>
                             <div>
                                 <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800' }}>
-                                    {t('try_elite_free', 'Try Elite Partner FREE!')}
+                                    {t('try_paid_business_promo', 'Upgrade to Paid Business')}
                                 </h4>
                                 <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>
-                                    {t('get_elite_features_promo', 'Get a full month of Elite features')}
+                                    {t('paid_business_promo_sub', 'Unlock full partner tools and visibility')}
                                 </p>
                             </div>
                         </div>

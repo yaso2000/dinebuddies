@@ -20,10 +20,6 @@ const CREDIT_COSTS = {
     PRIVATE_INVITATION: 90,
     DATING_INVITATION: 185,
     INVITATION_BOOST: 50,
-    AI_TEXT_REGULAR: 10,
-    AI_REWRITE: 5,
-    AI_IMAGE: 50,
-    AI_REVIEW_REPLY: 5,
 };
 
 const CREDIT_PACKAGES = {
@@ -76,6 +72,20 @@ function normalizeBusinessSubscriptionTier(raw) {
  */
 function spendCreditsInTransaction(tx, userRef, userData, args) {
     const { uid, accountRole, amount, type, reason, relatedId } = args;
+    const id = `${String(type || '')}|${String(reason || '')}`.toLowerCase();
+    if (
+        id.includes('ai_image') ||
+        id.includes('ai_text') ||
+        id.includes('ai_rewrite') ||
+        id.includes('ai_review') ||
+        id.includes('openai') ||
+        id.includes('gemini')
+    ) {
+        const err = new Error('AI_SPEND_DISABLED');
+        err.code = 'AI_SPEND_DISABLED';
+        throw err;
+    }
+
     const n = Math.floor(Number(amount));
     if (!Number.isFinite(n) || n <= 0) {
         return { freeUsed: 0, paidUsed: 0, balanceType: 'none' };

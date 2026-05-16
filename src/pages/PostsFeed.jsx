@@ -274,7 +274,7 @@ const PostsFeed = () => {
             </div>
 
             {/* Unified Feed — featured + regular merged by date */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '100px', maxWidth: '100%', width: '100%', margin: 0, paddingTop: '12px' }}>
+            <div className="posts-feed-stream" style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '100px', maxWidth: '100%', width: '100%', margin: 0, paddingTop: '12px' }}>
                 
                 {/* Real Inline Post Creator */}
                 <InlinePostEditor />

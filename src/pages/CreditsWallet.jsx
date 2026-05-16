@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -43,9 +43,48 @@ const PACKS = [
 export default function CreditsWallet() {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { userProfile } = useAuth();
     const { showToast } = useToast();
     const [loadingId, setLoadingId] = useState(null);
+
+    /** After Stripe redirect: grant credits if webhook was not configured (idempotent on server). */
+    useEffect(() => {
+        const purchase = searchParams.get('purchase');
+        const sessionId = searchParams.get('session_id');
+        if (purchase !== 'success' || !sessionId) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const fn = httpsCallable(getFunctions(app, FUNCTIONS_REGION), 'fulfillDineCreditsCheckout');
+                const res = await fn({ sessionId });
+                const credits = res.data?.credits;
+                if (!cancelled) {
+                    showToast(
+                        t('credits_fulfilled_toast', `Added ${credits ?? ''} credits to your wallet.`),
+                        'success'
+                    );
+                    setSearchParams({}, { replace: true });
+                }
+            } catch (e) {
+                console.error(e);
+                if (!cancelled) {
+                    showToast(
+                        e?.message ||
+                            t(
+                                'credits_fulfill_failed',
+                                'Could not confirm credits yet. Refresh the page or contact support if your balance is still wrong.'
+                            ),
+                        'error'
+                    );
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [searchParams, setSearchParams, showToast, t]);
 
     const free = Math.max(0, Number(userProfile?.freeCredits) || 0);
     const paid = Math.max(0, Number(userProfile?.paidCredits) || 0);
@@ -82,7 +121,7 @@ export default function CreditsWallet() {
                 <div className="credits-wallet__title-block">
                     <h1>{t('dine_credits', 'Dine Credits')}</h1>
                     <p className="credits-wallet__title-sub">
-                        {t('credits_wallet_subtitle', 'One balance for invites, dates & AI')}
+                        {t('credits_wallet_subtitle', 'Private & date invitations — public invites are free')}
                     </p>
                 </div>
                 <div className="credits-wallet__header-spacer" aria-hidden />
@@ -152,7 +191,7 @@ export default function CreditsWallet() {
                                     <span className="credits-wallet__hint-ico credits-wallet__hint-ico--cluster" aria-hidden>
                                         <FaLock /><FaHeart /><FaMagic />
                                     </span>
-                                    {t('credit_hint_uses', 'Same balance for private invites, dates & AI.')}
+                                    {t('credit_hint_uses', 'Used when publishing private and date invitations. AI credit use is paused.')}
                                 </li>
                             </ul>
                         </div>

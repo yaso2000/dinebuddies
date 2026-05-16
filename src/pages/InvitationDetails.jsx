@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { FaArrowRight, FaPaperPlane, FaCheck, FaTimes, FaUsers, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaShareAlt, FaCheckCircle, FaStar, FaEdit, FaImage, FaUserFriends, FaTrash, FaComments } from 'react-icons/fa';
 import VideoPlayer from '../components/Shared/VideoPlayer';
@@ -21,6 +21,9 @@ import InvitationHeader from '../components/Invitation/InvitationHeader';
 import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
 import InvitationTimeline from '../components/Invitation/InvitationTimeline';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
+import UserAvatar from '../components/UserAvatar';
+import { parseInvitationAgeRange } from '../utils/invitationDisplayUtils';
 
 const INVITATION_IMAGE_FALLBACK = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
@@ -217,7 +220,6 @@ const InvitationDetails = () => {
                     });
                 },
                 (error) => {
-                    console.log('Location access denied:', error);
                 }
             );
         }
@@ -562,6 +564,11 @@ const InvitationDetails = () => {
     const isPending = requests.includes(currentUser?.id);
     const spotsLeft = guestsNeeded - joined.length;
 
+    const hostFollowPlus = useMemo(
+        () => buildFollowPlusProps(author, { currentUser, userProfile, toggleFollow, showToast, t }),
+        [author, currentUser, userProfile, toggleFollow, showToast, t]
+    );
+
 
 
     // Determine current user's specific status for the timeline
@@ -648,13 +655,14 @@ const InvitationDetails = () => {
         }
 
         // Check LEGACY age range preference
-        if (ageRange && ageRange !== 'any' && !invitation.ageGroups) { // Only check if new system not used
-            // If we have categories, try to map/guess or just skip
-            // For legacy '18-25' string matching
+        if (ageRange && ageRange !== 'any' && !invitation.ageGroups) {
             if (currentUser?.age) {
-                const [minAge, maxAge] = ageRange.split('-').map(Number);
-                if (currentUser.age < minAge || currentUser.age > maxAge) {
-                    return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+                const ages = parseInvitationAgeRange(ageRange);
+                if (ages) {
+                    const [minAge, maxAge] = ages;
+                    if (currentUser.age < minAge || currentUser.age > maxAge) {
+                        return { eligible: false, reason: `${t('age_range_preference')}: ${ageRange}` };
+                    }
                 }
             }
         }
@@ -679,13 +687,10 @@ const InvitationDetails = () => {
         if (!eligibility.eligible) return;
 
         if (isPending) {
-            console.log('🔴 Canceling request for invitation:', id);
             cancelRequest(id);
         } else {
-            console.log('🟢 Requesting to join invitation:', id);
             const ok = await requestToJoin(id);
             if (!ok) return;
-            console.log('✅ Request sent successfully');
             navigate('/', { replace: true });
         }
     };
@@ -720,32 +725,17 @@ const InvitationDetails = () => {
 
                     {/* Host Info - Small Compact */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '12px' }}>
-                        <img
+                        <UserAvatar
+                            user={author}
                             src={getSafeAvatar(author)}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+                            followPlus={hostFollowPlus || undefined}
+                            followBadgeSize={17}
                             alt={author.name}
+                            style={{ width: '40px', height: '40px', objectFit: 'cover' }}
                         />
                         <div>
                             <div style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{author.name}</div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('host')}</div>
-                        </div>
-                        <div style={{ marginLeft: 'auto' }}>
-                            {currentUser?.id && currentUser?.id !== author.id && userProfile?.role !== 'business' && (
-                                <button
-                                    onClick={() => toggleFollow(author.id)}
-                                    style={{
-                                        background: currentUser?.following?.includes(author.id) ? 'var(--primary)' : 'transparent',
-                                        border: '1px solid var(--primary)',
-                                        color: currentUser?.following?.includes(author.id) ? 'white' : 'var(--primary)',
-                                        padding: '4px 12px',
-                                        borderRadius: '20px',
-                                        fontSize: '0.75rem',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {currentUser?.following?.includes(author.id) ? t('following') : t('follow')}
-                                </button>
-                            )}
                         </div>
                     </div>
 

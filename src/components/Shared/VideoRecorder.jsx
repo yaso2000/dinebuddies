@@ -73,7 +73,6 @@ const VideoRecorder = ({ maxDuration = 15, onRecordingComplete, onCancel }) => {
                 mimeType = 'video/webm;codecs=vp9';
             }
 
-            console.log(`🎥 Starting recording with mimeType: ${mimeType}`);
             const recorder = new MediaRecorder(streamRef.current, { mimeType });
 
             recorder.ondataavailable = (e) => {
@@ -84,7 +83,6 @@ const VideoRecorder = ({ maxDuration = 15, onRecordingComplete, onCancel }) => {
 
             recorder.onstop = () => {
                 const blob = new Blob(chunksRef.current, { type: mimeType });
-                console.log(`⏹️ Recording stopped. Blob size: ${blob.size} bytes`);
 
                 // Immediately confirm and pass data up
                 const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';

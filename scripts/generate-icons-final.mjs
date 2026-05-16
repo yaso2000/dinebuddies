@@ -20,12 +20,12 @@ const newViewBox = '-515 -695 2574 2574';
 
 const icons = [
     {
-        in: resolve(publicDir, 'db dinebuddies.svg'),
+        in: resolve(publicDir, 'DB-logo orange.svg'),
         outPrefix: 'icon-light',
         bg: '#ffffff'
     },
     {
-        in: resolve(publicDir, 'db-logo-white.svg'),
+        in: resolve(publicDir, 'DB-logo white.svg'),
         outPrefix: 'icon-dark',
         bg: '#0f172a' // the exact dark blue/navy of your app
     }

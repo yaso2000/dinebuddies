@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDoc, doc, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useInvitations } from '../context/InvitationContext';
 import {
     FaArrowLeft, FaEllipsisV, FaImage, FaPaperPlane,
     FaCamera, FaMicrophone, FaPlus, FaStop,
@@ -14,6 +15,7 @@ import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPi
 import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 import { createNotification } from '../utils/notificationHelpers';
 import SharedContentBubble from '../components/SharedContentBubble';
 import UnifiedCamera from '../components/UnifiedCamera';
@@ -28,6 +30,12 @@ const CommunityChatRoom = () => {
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
+    const { currentUser: invCurrentUser, toggleFollow } = useInvitations();
+
+    const communityFollowCtx = useMemo(
+        () => ({ currentUser: invCurrentUser, userProfile, toggleFollow, showToast, t }),
+        [invCurrentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     // Real Data State
     const [messages, setMessages] = useState([]);
@@ -40,6 +48,16 @@ const CommunityChatRoom = () => {
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
     const [showCamera, setShowCamera] = useState(false);
+
+    const partnerForHeader = useMemo(
+        () => ({ ...(partner || {}), id: partnerId, uid: partnerId }),
+        [partner, partnerId]
+    );
+
+    const partnerHeaderFollowPlus = useMemo(
+        () => buildFollowPlusProps(partnerForHeader, communityFollowCtx),
+        [partnerForHeader, communityFollowCtx]
+    );
 
     const emojiBtnRef = useRef(null);
     const isTouchUi = isTouchOrCoarsePointer();
@@ -278,7 +296,7 @@ const CommunityChatRoom = () => {
                     type: 'message',
                     title: userProfile?.display_name || 'New message in your community',
                     message: newMessage.trim().slice(0, 80),
-                    actionUrl: `/community/${partnerId}/chat`
+                    actionUrl: `/community/${partnerId}`
                 }).catch(() => { });
             }
         } catch (error) {
@@ -473,8 +491,10 @@ const CommunityChatRoom = () => {
                 </button>
                 <div className="header-info" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginInlineStart: '8px', flex: 1, minWidth: 0 }}>
                     <UserAvatar
-                        user={partner}
+                        user={partnerForHeader}
                         alt=""
+                        followPlus={partnerHeaderFollowPlus || undefined}
+                        followBadgeSize={14}
                         style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px', maxWidth: '40px', maxHeight: '40px', flexShrink: 0, marginInlineEnd: '10px', objectFit: 'cover' }}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>

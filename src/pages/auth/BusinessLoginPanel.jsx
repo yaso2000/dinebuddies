@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
+import { sanitizeNextPath } from '../../utils/safeInternalPath';
+import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
 
 /**
  * Business email/password sign-in.
@@ -15,8 +17,9 @@ import { getAuthErrorMessage } from '../../utils/errorMessages';
 export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingleCard = false }) {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { showToast } = useToast();
-    const { signInWithEmail, sendPasswordResetToEmail, userProfile, signOut, loading: authLoading } = useAuth();
+    const { signInWithEmail, sendPasswordResetToEmail, userProfile, loading: authLoading } = useAuth();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -25,18 +28,24 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     const [error, setError] = useState('');
     const [justLoggedIn, setJustLoggedIn] = useState(false);
 
+    const affiliateNext = sanitizeNextPath(searchParams.get('next'));
+    const nextPath = sanitizeNextPath(searchParams.get('next'));
+
     useEffect(() => {
         if (!justLoggedIn || authLoading) return;
         if (!userProfile) return;
-        const isBiz = userProfile.isBusiness || userProfile.role === 'business';
-        if (isBiz) {
+        if (isBusinessUser(userProfile)) {
             navigate('/business-dashboard', { replace: true });
+        } else if (isAffiliateAgent(userProfile)) {
+            const dest =
+                affiliateNext && affiliateNext.startsWith('/affiliate') ? affiliateNext : '/affiliate/dashboard';
+            navigate(dest, { replace: true });
         } else {
-            setError(t('business_login_only', 'This login is for business accounts only. Use the regular sign-in for personal accounts.'));
+            // Personal (or other) consumer: same email/password box as business — go to app, no warning or sign-out
+            navigate(nextPath && !nextPath.startsWith('/affiliate') ? nextPath : '/', { replace: true });
             setJustLoggedIn(false);
-            signOut().catch(() => {});
         }
-    }, [justLoggedIn, userProfile, authLoading, navigate, signOut, t]);
+    }, [justLoggedIn, userProfile, authLoading, navigate, affiliateNext, nextPath]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -181,11 +190,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                 className={embeddedInSingleCard ? 'business-auth-card business-auth-card--embedded' : 'glass-card business-auth-card'}
                 style={card}
             >
-                <div className="auth-luxury-ribbon auth-luxury-ribbon--business">
-                    <HiBuildingStorefront aria-hidden />
-                    <span>{t('business_login', 'Business')}</span>
-                </div>
-                <div style={{ textAlign: 'center', marginBottom: embeddedInSingleCard ? '0.85rem' : '1.25rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: embeddedInSingleCard ? '0.65rem' : '1rem' }}>
                     <div style={iconBox}>
                         <HiBuildingStorefront style={{ color: '#fff' }} />
                     </div>
@@ -195,7 +200,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                 ? 'clamp(1.05rem, 3vw, 1.25rem)'
                                 : 'clamp(1.2rem, 3.5vw, 1.5rem)',
                             fontWeight: 900,
-                            margin: '0 0 0.35rem',
+                            margin: 0,
                             background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
                             WebkitBackgroundClip: 'text',
                             backgroundClip: 'text',
@@ -204,9 +209,6 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                     >
                         {t('business_login_title', 'Business Login')}
                     </h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: embeddedInSingleCard ? '0.85rem' : '0.92rem', margin: 0 }}>
-                        {t('business_login_subtitle', 'Sign in to your DineBuddies business account')}
-                    </p>
                 </div>
 
                 {error && (
@@ -343,9 +345,6 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                         textAlign: 'center',
                     }}
                 >
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
-                        {t('no_business_account', "Don't have a business account?")}
-                    </p>
                     <button
                         type="button"
                         onClick={() =>

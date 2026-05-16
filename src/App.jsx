@@ -29,6 +29,9 @@ import VerifyEmail from './pages/VerifyEmail';
 import PostDetails from './pages/PostDetails';
 import SearchPage from './pages/SearchPage';
 import PostsFeed from './pages/PostsFeed';
+import Home from './pages/Home';
+import MobileWelcomeEntry from './pages/MobileWelcomeEntry';
+import Settings from './pages/Settings';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
 const Profile = lazy(() => import('./pages/Profile'));
@@ -36,7 +39,6 @@ const UserProfile = lazy(() => import('./pages/UserProfile'));
 const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
 const BusinessRankings = lazy(() => import('./pages/BusinessRankings'));
 const RestaurantDetails = lazy(() => import('./pages/RestaurantDetails'));
-const Settings = lazy(() => import('./pages/Settings'));
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
 const AdminHome = lazy(() => import('./pages/admin/AdminHome'));
 const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
@@ -48,7 +50,6 @@ const MyCommunities = lazy(() => import('./pages/MyCommunities'));
 const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const AccountsManager = lazy(() => import('./pages/admin/AccountsManager'));
-const HomeInvitations = lazy(() => import('./pages/Home'));
 
 const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
 const BusinessSignup = lazy(() => import('./pages/BusinessSignup'));
@@ -110,12 +111,9 @@ import AdminRoute from './components/AdminRoute';
 import AppRouteLoading from './components/AppRouteLoading';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
+/** Route shell only — lazy `Suspense` lives inside `Layout` so sidebars/header stay mounted. */
 function RouteSuspenseLayout() {
-    return (
-        <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
-            <Outlet />
-        </Suspense>
-    );
+    return <Outlet />;
 }
 
 /** /business/:businessId/invitations → community hub for that partner */
@@ -232,6 +230,14 @@ function App() {
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-dating" element={<GuestBlockedRoute><CreateDatingInvitation /></GuestBlockedRoute>} />
+                                                    <Route
+                                                        path="/feed-image-studio"
+                                                        element={
+                                                            <GuestBlockedRoute>
+                                                                <Navigate to="/create-post" replace />
+                                                            </GuestBlockedRoute>
+                                                        }
+                                                    />
                                                     <Route path="/create-post" element={<GuestBlockedRoute><CreatePost /></GuestBlockedRoute>} />
                                                     <Route path="/create-story" element={<GuestBlockedRoute><CreateStory /></GuestBlockedRoute>} />
 
@@ -264,7 +270,8 @@ function App() {
                                                     <Route path="/communities" element={<GuestBlockedRoute><MyCommunities /></GuestBlockedRoute>} />
                                                     <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
-                                                    <Route path="/invitations" element={<HomeInvitations />} />
+                                                    <Route path="/welcome" element={<MobileWelcomeEntry />} />
+                                                    <Route path="/invitations" element={<Home />} />
 
                                                     <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
                                                         <Route path="dashboard" element={<AdminHome />} />

@@ -100,11 +100,91 @@
   --header-height: 60px;
   --nav-height: 70px;
   --max-width: 500px;
-  /* Desktop: fixed iPad-like shell — left | center | right = 300 + 650 + 300 (1250 total) */
-  --ds-shell-max: 1250px;
+
+  /*
+   * Desktop (≥1024px): fixed three-column shell — ONE width for every page.
+   * Left 300 | center 600 | right 300 = 1200px total. No fr-based retuning.
+   */
   --ds-col-side: 300px;
-  --ds-col-center: 650px;
-  --desktop-content-max: 650px;
+  --ds-col-center-fixed: 600px;
+  --ds-shell-max: calc(var(--ds-col-side) * 2 + var(--ds-col-center-fixed));
+  --ds-col-center: var(--ds-col-center-fixed);
+  --desktop-content-max: var(--ds-col-center-fixed);
+  --ds-body-grid-cols: var(--ds-col-side) var(--ds-col-center-fixed) var(--ds-col-side);
+  /* Desktop: pull feed/post cards inward from the 600px center column (100px per side). */
+  --desktop-card-side-gutter: 100px;
+}
+
+/*
+ * Session / full-viewport loaders: same fixed 300 | 600 | 300 grid as `.ds-body-grid` (desktop).
+ */
+.app-loading-shell {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-inline: auto;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-body-gradient);
+  background-attachment: fixed;
+}
+
+.app-loading-shell__grid {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.app-loading-shell__rail {
+  display: none;
+}
+
+.app-loading-shell__main {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .app-loading-shell {
+    max-width: var(--ds-shell-max) !important;
+    min-height: 100vh !important;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .app-loading-shell__grid {
+    display: grid;
+    grid-template-columns: var(--ds-body-grid-cols);
+    align-items: stretch;
+    justify-content: stretch;
+    flex: 1 1 auto;
+  }
+
+  .app-loading-shell__rail {
+    display: block;
+    min-width: 0;
+  }
+
+  .app-loading-shell__main {
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+  }
+}
+
+/* Spinner block must not force 100dvh inside the grid middle cell */
+.app-loading-shell__main .app-route-loading--full {
+  min-height: 0 !important;
+  background: transparent !important;
+  width: 100%;
+  flex: 1 1 auto;
 }
 
 /* Hide Google reCAPTCHA Badge globally to prevent overlapping UI Elements */
@@ -421,12 +501,56 @@ body {
   position: relative;
 }
 
+/* Premium feed studio route: prevent any child min-content from blowing horizontal scroll */
+.app-main--feed-studio {
+  overflow-x: hidden;
+  min-width: 0;
+}
+
+/* Lazy route placeholder inside .app-main — same width as final page, no second spinner “size” */
+.app-route-suspense-fallback {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 40vh;
+}
+
+@media (min-width: 1024px) {
+  .app-main > .app-route-suspense-fallback {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    align-self: stretch !important;
+  }
+}
+
+/* Unified route/session loaders — theme-aware (see AppRouteLoading.jsx) */
+.app-route-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.5rem;
+}
+
+.app-route-loading--full {
+  min-height: 100dvh;
+  background: var(--bg-body-gradient);
+  background-attachment: fixed;
+}
+
+.app-route-loading--inline {
+  min-height: 40vh;
+}
+
 /* ─────────────────────────────────────────────────────
    DESKTOP CORE ARCHITECTURE  (≥1024px)
-   Each column scrolls independently — SPA style
-   • app-layout  → flex column, height:100vh
-   • ds-body-grid → flex:1, fills remaining height
-   • each column  → overflow-y:auto, scrolls itself
+   Fixed shell width: 300 | 600 | 300 (1200px) — same on every page.
+   • app-layout  → flex column, height:100vh, max-width 1200
+   • ds-body-grid → fixed three columns (see :root --ds-body-grid-cols)
+   • each column  → scrolls independently where applicable
 ──────────────────────────────────────────────────────── */
 @media (min-width: 1024px) {
 
@@ -437,6 +561,10 @@ body {
     overflow: auto !important;
     position: static !important;
     width: 100% !important;
+  }
+
+  html {
+    scrollbar-gutter: stable;
   }
 
   /* #root: flex container so app-layout is always centered */
@@ -452,15 +580,15 @@ body {
   }
 
 
-  /* app-layout: same max-width as ds-body-grid so header aligns with grid */
+  /* app-layout: width matches the fixed desktop shell; allow horizontal scroll if viewport < 1200 */
   .app-layout {
     display: flex !important;
     flex-direction: column !important;
     height: 100vh !important;
     max-width: var(--ds-shell-max) !important;
-    /* 300 + 650 + 300 — matches .ds-body-grid track sum */
     width: 100% !important;
-    overflow: hidden !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
     border: none !important;
     box-shadow: none !important;
     /* #root flex centers this block; avoid duplicate margin rules */
@@ -472,9 +600,10 @@ body {
     flex-shrink: 0 !important;
   }
 
-  /* Center column: independently scrollable */
+  /* Center column: always reserve vertical scrollbar width on desktop so inner width
+     does not change when content grows past the fold (removes a common “width jump”). */
   .app-main {
-    overflow-y: auto !important;
+    overflow-y: scroll !important;
     overflow-x: hidden !important;
     height: 100% !important;
     min-height: 0 !important;
@@ -492,6 +621,11 @@ body {
   .app-main--fullscreen {
     padding-bottom: 0 !important;
     overflow: hidden !important;
+  }
+
+  /* Feed image studio: full-bleed editor; avoid flex center clipping wide scaled canvases */
+  .app-main--feed-studio {
+    align-items: stretch !important;
   }
 
   /* Force chat-screen to fill the container height (not full dvh) */
@@ -583,10 +717,25 @@ body {
     bottom: auto !important;
     z-index: auto !important;
     width: 100% !important;
-    height: auto !important;
+    /* Fill .app-main--chat column so the composer sits on the bottom (height:auto left dead space). */
+    height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
     padding: 0 !important;
+  }
+
+  /* Mobile block above only applies max-width:1023px; desktop needs the same flex chain. */
+  .chat-root.chat-container > .chat-body-column,
+  .community-chat-root > .chat-body-column,
+  .invitation-chat-root > .chat-body-column {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
   }
 }
 
@@ -615,6 +764,55 @@ body {
    On desktop (>=1024px): always show regardless of chat state. */
 .app-header--chat {
   display: none;
+}
+
+/* Mobile: logo at leading edge (opposite profile / icon cluster) */
+@media (max-width: 1023px) {
+  .app-header:not(.app-header--chat) {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'brand mid actions';
+    align-items: center;
+    column-gap: 6px;
+    padding-left: max(0.65rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.65rem, env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
+  }
+
+  .app-header .app-header-brand {
+    grid-area: brand;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-header .header-spacer {
+    grid-area: mid;
+    min-width: 0;
+    width: 100%;
+    pointer-events: none;
+  }
+
+  .app-header .app-header-brand .app-logo-img {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+
+  .app-header .header-actions {
+    grid-area: actions;
+    justify-self: end;
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-header .header-spacer {
+    display: none;
+  }
 }
 
 /* Fullscreen pages (e.g. Create Story): no bottom padding on all sizes */
@@ -730,39 +928,8 @@ body {
   width: 30px;
   height: 30px;
   object-fit: contain;
-  transition: filter 0.3s ease;
+  transition: opacity 0.3s ease;
 }
-
-/* Dark theme: make logo white */
-[data-theme='dark'] .app-logo-img {
-  filter: brightness(0) invert(1);
-}
-
-/* Light theme: logo stays original (dark) */
-[data-theme='light'] .app-logo-img {
-  filter: none;
-}
-
-.app-name {
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: var(--primary);
-  letter-spacing: -0.5px;
-  display: inline-block;
-  transform: translate(-2px, 4px);
-}
-
-/* Header: unify logo + app name — white on dark header, primary on light header */
-[data-theme='dark'] .app-header .app-name,
-html:not([data-theme='light']) .app-header .app-name {
-  color: #ffffff;
-}
-
-[data-theme='light'] .app-header .app-name {
-  color: var(--primary);
-}
-
-
 
 /* RTL Support for Arabic */
 [dir="rtl"] {
@@ -1189,10 +1356,9 @@ html:not([data-theme='light']) .app-header .app-name {
 
 
 
-/* Page Container */
+/* Page Container — no entrance animation: avoids a second “paint” / width-feel shift on route changes */
 .page-container {
   padding: 1rem;
-  animation: fadeIn 0.5s ease-out;
 }
 
 @keyframes fadeIn {
@@ -2220,6 +2386,30 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: none !important;
 }
 
+/* Premium feed studio (/feed-image-studio): hide bottom nav while keyboard is open or viewport shrinks */
+@media (max-width: 1023px) {
+  body.feed-studio-keyboard-open .bottom-nav.user-nav {
+    display: none !important;
+  }
+
+  body.feed-studio-keyboard-open .app-main {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /*
+   * Global mobile: tab bar uses fixed bottom — on some WebViews it stacks above the soft keyboard.
+   * Layout toggles `body.app-mobile-keyboard-open` (visualViewport + text focus). Hide bar and trim
+   * main padding until the keyboard closes. Skip chat/fullscreen shells via selectors.
+   */
+  body.app-mobile-keyboard-open .bottom-nav.user-nav {
+    display: none !important;
+  }
+
+  body.app-mobile-keyboard-open .app-layout > .app-main:not(.app-main--chat):not(.app-main--fullscreen) {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 /* Standalone auth routes (outside Layout): html/body/#root use overflow:hidden + #root is flex.
    After client-side navigation the in-flow flex child can paint with zero usable height (blank screen).
    A fixed viewport layer is the scroll container so login / verify / 404 always paint and scroll. */
@@ -2238,47 +2428,76 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   background: var(--bg-body);
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* /login — luxury-minimal palette (warm neutrals + subtle brand) */
+/* /login — surfaces follow app theme tokens (data-theme on :root) */
 .login-hub.login-hub-page {
   align-items: center;
-  justify-content: flex-start;
-  padding: clamp(1rem, 3vh, 2rem) 16px;
+  justify-content: center;
+  min-height: 100%;
+  /* Explicit sides: shorthand would override .auth-route-scroll safe-area padding on same node */
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: max(clamp(0.75rem, 2.5vh, 1.5rem), env(safe-area-inset-top, 0px));
+  padding-bottom: max(
+    clamp(0.75rem, 2.5vh, 1.5rem),
+    env(safe-area-inset-bottom, 0px)
+  );
   box-sizing: border-box;
   background:
-    radial-gradient(120% 80% at 50% -20%, rgba(232, 110, 46, 0.06) 0%, transparent 55%),
-    linear-gradient(
-      168deg,
-      #faf9f7 0%,
-      #f1eeea 38%,
-      color-mix(in srgb, var(--bg-body, #0f0817) 88%, #292524) 100%
-    );
+    radial-gradient(120% 80% at 50% -20%, color-mix(in srgb, var(--primary) 12%, transparent) 0%, transparent 55%),
+    var(--bg-body-gradient);
 }
 
-/* Corner switch: personal (default) ↔ business — replaces in-card tab strip */
+/* Logo + wordmark above login card (same shell as /welcome) */
+.login-hub-brand-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.login-hub-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Theme + account switch — inside .login-hub-wrap column (not screen corners on desktop) */
+.login-hub-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  flex-shrink: 0;
+}
+
 .login-hub-page .login-hub-account-toggle {
-  position: fixed;
-  top: max(0.65rem, env(safe-area-inset-top, 0px));
-  inset-inline-end: max(0.65rem, env(safe-area-inset-right, 0px));
-  z-index: 60;
+  position: static;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.75rem;
   border-radius: 999px;
-  border: 1px solid rgba(28, 25, 23, 0.12);
-  background: rgba(255, 254, 251, 0.94);
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  color: #44403c;
+  color: var(--text-primary);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 6px 20px -8px rgba(28, 25, 23, 0.18);
+  box-shadow: var(--shadow-premium);
   transition:
     background 0.15s ease,
     color 0.15s ease,
@@ -2287,9 +2506,9 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-page .login-hub-account-toggle:hover {
-  background: #fffefb;
-  color: #1c1917;
-  border-color: rgba(28, 25, 23, 0.18);
+  background: color-mix(in srgb, var(--bg-card) 95%, var(--hover-overlay));
+  color: var(--text-heading);
+  border-color: var(--border-color);
   transform: translateY(-1px);
 }
 
@@ -2304,20 +2523,26 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   opacity: 0.92;
 }
 
+.login-hub-page .login-hub-theme-toggle {
+  position: static;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
 .login-hub-tabpanel--solo {
   border-radius: 14px 14px 0 0;
 }
 
 .login-hub-header {
   text-align: center;
-  margin-bottom: clamp(1.1rem, 3vw, 1.5rem);
+  margin-bottom: 0.75rem;
 }
 
 .login-hub-mode-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 0.7rem;
+  margin: 0.35rem auto 0;
   padding: 0.36rem 0.8rem;
   border-radius: 999px;
   font-size: 0.72rem;
@@ -2328,24 +2553,37 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-mode-pill--personal {
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.06));
-  color: #1d4ed8;
-  border-color: rgba(37, 99, 235, 0.24);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-info) 22%, transparent),
+    color-mix(in srgb, var(--color-info) 8%, transparent)
+  );
+  color: color-mix(in srgb, var(--color-info) 72%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--color-info) 38%, var(--border-color));
 }
 
 .login-hub-mode-pill--business {
-  background: linear-gradient(180deg, rgba(249, 115, 22, 0.18), rgba(217, 119, 6, 0.08));
-  color: #b45309;
-  border-color: rgba(180, 83, 9, 0.28);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 22%, transparent),
+    color-mix(in srgb, var(--primary) 8%, transparent)
+  );
+  color: color-mix(in srgb, var(--primary) 75%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border-color));
 }
 
 .login-hub-brand {
   font-size: clamp(1.38rem, 4vw, 1.7rem);
   font-weight: 900;
-  margin: 0 0 0.45rem;
+  margin: 0;
   letter-spacing: -0.03em;
-  color: #1c1917;
-  background: linear-gradient(120deg, #1c1917 0%, #44403c 55%, #1c1917 100%);
+  color: var(--text-heading);
+  background: linear-gradient(
+    120deg,
+    var(--text-heading) 0%,
+    color-mix(in srgb, var(--text-heading) 55%, var(--text-muted)) 55%,
+    var(--text-heading) 100%
+  );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -2354,13 +2592,13 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 /* Fallback for browsers that clip poorly */
 @supports not (background-clip: text) {
   .login-hub-brand {
-    color: #1c1917;
+    color: var(--text-heading);
     background: none;
   }
 }
 
 .login-hub-tagline {
-  color: #78716c;
+  color: var(--text-muted);
   font-size: 0.91rem;
   line-height: 1.55;
   margin: 0 auto;
@@ -2391,9 +2629,9 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   padding: 0.45rem 0.65rem;
   border: none;
   border-radius: 10px;
-  background: rgba(255, 254, 251, 0.65);
-  border: 1px solid rgba(28, 25, 23, 0.1);
-  color: #57534e;
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   font-size: 0.86rem;
   font-weight: 700;
   cursor: pointer;
@@ -2403,8 +2641,8 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-banner-back:hover {
-  background: #fffefb;
-  color: #1c1917;
+  background: var(--bg-hover);
+  color: var(--text-heading);
 }
 
 .login-hub-tagline--business-signup {
@@ -2415,29 +2653,30 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   max-width: 100%;
 }
 
-/* Light, readable fields on warm card (theme --bg-body is often dark) */
 .login-hub-card--business-signup .business-signup-form input,
 .login-hub-card--business-signup .business-signup-form select {
-  background: #fffefb !important;
-  border-color: #e7e2dc !important;
-  color: #1c1917 !important;
+  background: var(--bg-input) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
 }
 
 .login-hub-card--business-signup .business-signup-form h2,
 .login-hub-card--business-signup .business-signup-form h3 {
-  color: #1c1917;
+  color: var(--text-heading);
 }
 
 .login-hub-card {
   width: 100%;
   border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(28, 25, 23, 0.08);
-  background: linear-gradient(180deg, #fffefb 0%, #faf8f5 55%, #f5f3f0 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 22px 48px -14px rgba(28, 25, 23, 0.14),
-    0 6px 16px rgba(28, 25, 23, 0.06);
+  border: 1px solid var(--border-color);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card-bg) 92%, var(--bg-elevated)) 0%,
+    var(--card-bg) 55%,
+    color-mix(in srgb, var(--card-bg) 88%, var(--bg-secondary)) 100%
+  );
+  box-shadow: var(--shadow-premium);
 }
 
 /* Business signup wizard: Places dropdown must extend past the card (see LocationAutocomplete). */
@@ -2446,19 +2685,17 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-card--personal {
-  border-color: rgba(37, 99, 235, 0.16);
+  border-color: color-mix(in srgb, var(--color-info) 28%, var(--border-color));
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 22px 48px -14px rgba(30, 64, 175, 0.18),
-    0 6px 16px rgba(30, 64, 175, 0.08);
+    var(--shadow-premium),
+    0 0 0 1px color-mix(in srgb, var(--color-info) 12%, transparent);
 }
 
 .login-hub-card--business {
-  border-color: rgba(180, 83, 9, 0.18);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border-color));
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 24px 52px -14px rgba(120, 53, 15, 0.18),
-    0 6px 16px rgba(120, 53, 15, 0.08);
+    var(--shadow-premium),
+    0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 .login-hub-tabs {
@@ -2466,8 +2703,8 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   flex-direction: row;
   gap: 8px;
   padding: 10px;
-  background: linear-gradient(180deg, #ebe8e3 0%, #e3e0db 100%);
-  border-bottom: 1px solid rgba(28, 25, 23, 0.07);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .login-hub-tab {
@@ -2482,7 +2719,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: #78716c;
+  color: var(--text-muted);
   font-weight: 800;
   font-size: 0.88rem;
   letter-spacing: -0.01em;
@@ -2499,7 +2736,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: block;
   font-size: 0.68rem;
   font-weight: 600;
-  color: rgba(120, 113, 108, 0.92);
+  color: var(--text-muted);
   line-height: 1.25;
 }
 
@@ -2512,8 +2749,8 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-tab:hover {
-  color: #44403c;
-  background: rgba(255, 254, 251, 0.55);
+  color: var(--text-primary);
+  background: var(--hover-overlay);
 }
 
 .login-hub-tab:hover svg {
@@ -2521,12 +2758,9 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-tab--active {
-  background: linear-gradient(180deg, #ffffff 0%, #fffefb 100%) !important;
-  color: #1c1917 !important;
-  box-shadow:
-    0 2px 10px rgba(28, 25, 23, 0.07),
-    0 1px 3px rgba(28, 25, 23, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  background: color-mix(in srgb, var(--bg-card) 94%, var(--bg-elevated)) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-premium);
 }
 
 .login-hub-tab--active svg {
@@ -2535,7 +2769,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-tab--active .login-hub-tab-subline {
-  color: rgba(68, 64, 60, 0.92);
+  color: var(--text-muted);
 }
 
 .login-hub-tab--active::after {
@@ -2564,7 +2798,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 .login-hub-tabpanel {
   padding: clamp(14px, 2.5vw, 22px);
   min-height: 0;
-  background: rgba(255, 254, 251, 0.35);
+  background: color-mix(in srgb, var(--bg-card) 40%, transparent);
 }
 
 .auth-luxury-ribbon {
@@ -2580,39 +2814,48 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .auth-luxury-ribbon--personal {
-  color: #1e40af;
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(37, 99, 235, 0.22);
+  color: color-mix(in srgb, var(--color-info) 78%, var(--text-primary));
+  background: color-mix(in srgb, var(--color-info) 14%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--color-info) 32%, var(--border-color));
 }
 
 .auth-luxury-ribbon--business {
-  color: #b45309;
-  background: rgba(249, 115, 22, 0.12);
-  border-color: rgba(180, 83, 9, 0.24);
+  color: color-mix(in srgb, var(--primary) 82%, var(--text-primary));
+  background: color-mix(in srgb, var(--primary) 14%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border-color));
 }
 
 .personal-auth-panel .personal-auth-social {
-  border-color: rgba(59, 130, 246, 0.2) !important;
-  box-shadow: 0 8px 22px -16px rgba(37, 99, 235, 0.35);
+  border-color: color-mix(in srgb, var(--color-info) 28%, var(--border-color)) !important;
+  box-shadow: 0 8px 22px -16px color-mix(in srgb, var(--color-info) 35%, transparent);
 }
 
 .personal-auth-panel .personal-auth-email-toggle {
-  border-color: rgba(37, 99, 235, 0.3) !important;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%) !important;
+  border-color: color-mix(in srgb, var(--color-info) 35%, var(--border-color)) !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-card) 94%, var(--color-info)) 0%,
+    color-mix(in srgb, var(--bg-secondary) 92%, var(--color-info)) 100%
+  ) !important;
 }
 
 .personal-auth-panel .personal-auth-email-form {
-  border: 1px solid rgba(37, 99, 235, 0.16) !important;
-  background: linear-gradient(180deg, #f9fbff 0%, #f4f8ff 100%) !important;
+  border: 1px solid color-mix(in srgb, var(--color-info) 22%, var(--border-color)) !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-card) 96%, var(--color-info)) 0%,
+    color-mix(in srgb, var(--bg-secondary) 94%, var(--color-info)) 100%
+  ) !important;
 }
 
 .personal-auth-panel .personal-auth-primary-submit {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-  box-shadow: 0 10px 24px -16px rgba(29, 78, 216, 0.7);
+  background: var(--luxury-gradient) !important;
+  box-shadow: var(--shadow-glow);
+  color: #fff !important;
 }
 
 .personal-auth-panel .personal-auth-guest-link {
-  color: #1d4ed8 !important;
+  color: color-mix(in srgb, var(--color-info) 65%, var(--text-primary)) !important;
 }
 
 .business-auth-panel .business-auth-card {
@@ -2627,14 +2870,13 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 
 .business-auth-panel .business-auth-form input {
   border-color: color-mix(in srgb, var(--primary) 22%, var(--border-color)) !important;
-  background: color-mix(in srgb, #fff 84%, var(--primary) 5%) !important;
-  /* Inline styles used var(--text-main); theme token stays light-on-dark — force readable text on light field. */
-  color: #1c1917 !important;
-  caret-color: #1c1917;
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  caret-color: var(--text-primary);
 }
 
 .business-auth-panel .business-auth-form input::placeholder {
-  color: #78716c !important;
+  color: var(--text-muted) !important;
   opacity: 1;
 }
 
@@ -2840,6 +3082,19 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     display: flex !important;
   }
 
+  /* Feed cards: horizontal inset so cards are narrower than the center column */
+  .app-main .feed-list {
+    padding-left: var(--desktop-card-side-gutter);
+    padding-right: var(--desktop-card-side-gutter);
+    box-sizing: border-box;
+  }
+
+  .app-main .posts-feed-stream {
+    padding-left: var(--desktop-card-side-gutter);
+    padding-right: var(--desktop-card-side-gutter);
+    box-sizing: border-box;
+  }
+
   /* ChatList: when ChatSidebar shows the list (/chat/:id), center is placeholder only */
   .app-main:not(.app-main--messages-index) .chat-list-container {
     display: none !important;
@@ -2872,18 +3127,15 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     padding-bottom: 1rem !important;
   }
 
-  /* ── 3-column body grid ──
-     flex:1 fills the remaining height below the header
-     align-items:stretch makes all 3 cols equal height
-     so each col can overflow-y:auto independently          */
+  /* ── 3-column body grid — fixed 300 | 600 | 300 (see :root --ds-body-grid-cols) ── */
   .ds-body-grid {
     flex: 1;
     min-height: 0;
     overflow: hidden;
     display: grid;
-    /* 300 : 650 : 300 at full shell (1250px); fr tracks shrink together if viewport is narrower */
-    grid-template-columns: minmax(0, 3fr) minmax(0, 6.5fr) minmax(0, 3fr);
+    grid-template-columns: var(--ds-body-grid-cols);
     width: 100%;
+    min-width: var(--ds-shell-max);
     max-width: var(--ds-shell-max);
     margin-inline: auto;
     box-sizing: border-box;
@@ -2973,6 +3225,30 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
+    /* Avoid layout jump when scrollbar appears; theme-aware thumb (not system white bar) */
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text-muted) 45%, transparent) color-mix(in srgb, var(--bg-body) 85%, transparent);
+  }
+
+  .app-main::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .app-main::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .app-main::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .app-main::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+    background-clip: padding-box;
   }
 
   /* Center column width comes from grid; children fill it (no second max-width stack) */
@@ -2986,6 +3262,13 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 
   .app-main--admin > * {
     max-width: 100% !important;
+  }
+
+  /* Lazy-route Suspense fallback: fill center column (override .app-main > * flex: 0 0 auto) */
+  .app-main > .app-route-loading.app-route-loading--inline {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    align-self: stretch !important;
   }
 
   /* Chat / fullscreen routes: let the shell fill vertical space */

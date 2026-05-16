@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { signInWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
 import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
@@ -8,6 +8,9 @@ import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { isAffiliateAgentProfileData } from '../../utils/accountRole';
+import { isMobileRestrictedShell } from '../../utils/mobileAppShell';
+import { getAffiliateEmailSignInHref } from '../../utils/affiliateAuthRoutes';
+import AffiliatePublicRouteAccountGuard from '../../components/AffiliatePublicRouteAccountGuard';
 import './AffiliateDashboard.css';
 
 /** Avoid false "not an affiliate" right after auth: local cache can lag behind `users/{uid}` on the server. */
@@ -44,6 +47,14 @@ export default function AffiliateLoginPage() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
+    if (typeof window !== 'undefined' && isMobileRestrictedShell()) {
+        return (
+            <AffiliatePublicRouteAccountGuard useNextQuery>
+                <Navigate to={getAffiliateEmailSignInHref(params.get('next'))} replace />
+            </AffiliatePublicRouteAccountGuard>
+        );
+    }
+
     const onSubmit = async (e) => {
         e.preventDefault();
         const em = email.trim().toLowerCase();
@@ -70,6 +81,7 @@ export default function AffiliateLoginPage() {
                     ),
                     'error'
                 );
+                navigate('/login', { replace: true });
                 return;
             }
             navigate(nextPath, { replace: true });
@@ -81,6 +93,7 @@ export default function AffiliateLoginPage() {
     };
 
     return (
+        <AffiliatePublicRouteAccountGuard useNextQuery>
         <div className="affiliate-shell affiliate-shell--center">
             <div className="affiliate-card affiliate-auth-card" style={{ maxWidth: 420, width: '100%' }}>
                 <h1 className="affiliate-h1">{t('affiliate_login_title', 'Affiliate sign-in')}</h1>
@@ -124,5 +137,6 @@ export default function AffiliateLoginPage() {
                 </p>
             </div>
         </div>
+        </AffiliatePublicRouteAccountGuard>
     );
 }

@@ -372,3 +372,90 @@
 
 /* profile-form-surface, profile-form-field, profile-form-label
    → aliased in ui-primitives.css. Keep until migration to ui-form-*. */
+
+/* Other user's profile: invite FAB on avatar corner */
+.user-profile-invite-anchor {
+  position: absolute;
+  z-index: 6;
+  bottom: 8px;
+  inset-inline-start: 8px;
+}
+
+.user-profile-invite-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--bg-body) 90%, var(--border-color));
+  background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 55%, #4c1d95));
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.user-profile-invite-fab:hover:not(:disabled) {
+  transform: scale(1.06);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.user-profile-invite-fab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 70%, #fff);
+  outline-offset: 2px;
+}
+
+.user-profile-invite-fab:disabled,
+.user-profile-invite-fab--disabled {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: grayscale(0.85);
+  opacity: 0.72;
+}
+
+.user-profile-invite-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-start: 0;
+  min-width: min(220px, 72vw);
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-premium);
+}
+
+.user-profile-invite-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+}
+
+.user-profile-invite-menu__item:hover {
+  background: var(--hover-overlay);
+}
+
+.user-profile-invite-menu__item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 0;
+}
+
+.user-profile-invite-menu__item svg {
+  flex-shrink: 0;
+  opacity: 0.9;
+}

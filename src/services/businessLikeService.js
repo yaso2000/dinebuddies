@@ -116,40 +116,49 @@ export async function toggleBusinessLike(businessId, userId, currentlyLiked, bus
         throw err;
     }
 
-    // 2) Update business like count (best-effort; do not fail the like if this fails)
-    try {
-        const businessSnap = await getDoc(businessRef);
-        if (businessSnap.exists()) {
-            const delta = currentlyLiked ? -1 : 1;
-            await updateDoc(businessRef, { 'businessInfo.profileLikes': increment(delta) });
-        }
-    } catch (countErr) {
-        console.warn('[like] profileLikes count update failed (like still saved)', { businessId, code: countErr?.code, message: countErr?.message });
-    }
-
-    try {
-        const userSnap = await getDoc(userRef);
-        const currentPlaces = userSnap.exists() ? (userSnap.data().favoritePlaces || []).slice() : [];
-
-        if (currentlyLiked) {
-            const next = currentPlaces.filter((p) => (p.businessId || p.id) !== businessId);
-            await updateDoc(userRef, { favoritePlaces: next });
-        } else if (businessInfoForFavorite) {
-            const already = currentPlaces.some((p) => (p.businessId || p.id) === businessId);
-            if (!already) {
-                const entry = {
+    // 2) Business like count + user favoritePlaces are independent — run in parallel after transaction
+    await Promise.all([
+        (async () => {
+            try {
+                const businessSnap = await getDoc(businessRef);
+                if (businessSnap.exists()) {
+                    const delta = currentlyLiked ? -1 : 1;
+                    await updateDoc(businessRef, { 'businessInfo.profileLikes': increment(delta) });
+                }
+            } catch (countErr) {
+                console.warn('[like] profileLikes count update failed (like still saved)', {
                     businessId,
-                    name: businessInfoForFavorite.name || '',
-                    image: businessInfoForFavorite.image,
-                    address: businessInfoForFavorite.address || '',
-                    city: businessInfoForFavorite.city || '',
-                    source: 'business',
-                    addedAt: new Date().toISOString()
-                };
-                await updateDoc(userRef, { favoritePlaces: [...currentPlaces, entry] });
+                    code: countErr?.code,
+                    message: countErr?.message
+                });
             }
-        }
-    } catch (err) {
-        console.warn('[like] favoritePlaces sync failed (like still succeeded)', err);
-    }
+        })(),
+        (async () => {
+            try {
+                const userSnap = await getDoc(userRef);
+                const currentPlaces = userSnap.exists() ? (userSnap.data().favoritePlaces || []).slice() : [];
+
+                if (currentlyLiked) {
+                    const next = currentPlaces.filter((p) => (p.businessId || p.id) !== businessId);
+                    await updateDoc(userRef, { favoritePlaces: next });
+                } else if (businessInfoForFavorite) {
+                    const already = currentPlaces.some((p) => (p.businessId || p.id) === businessId);
+                    if (!already) {
+                        const entry = {
+                            businessId,
+                            name: businessInfoForFavorite.name || '',
+                            image: businessInfoForFavorite.image,
+                            address: businessInfoForFavorite.address || '',
+                            city: businessInfoForFavorite.city || '',
+                            source: 'business',
+                            addedAt: new Date().toISOString()
+                        };
+                        await updateDoc(userRef, { favoritePlaces: [...currentPlaces, entry] });
+                    }
+                }
+            } catch (err) {
+                console.warn('[like] favoritePlaces sync failed (like still succeeded)', err);
+            }
+        })()
+    ]);
 }

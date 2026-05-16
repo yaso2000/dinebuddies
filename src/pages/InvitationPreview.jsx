@@ -101,13 +101,11 @@ const InvitationPreview = () => {
     };
 
     const handlePublish = async () => {
-        console.log('🚀 Publishing invitation...');
         setIsPublishing(true);
 
         try {
             const invitationRef = doc(db, 'invitations', draftId);
 
-            console.log('📝 Removing draft status and marking as published...');
 
             // Import deleteField
             const { deleteField } = await import('firebase/firestore');
@@ -118,8 +116,6 @@ const InvitationPreview = () => {
                 publishedAt: new Date().toISOString()
             });
 
-            console.log('✅ Invitation published successfully!');
-            console.log('🔄 Navigating to invitation page...');
 
             // Navigate to published invitation
             navigate(`/invitation/${draftId}`);

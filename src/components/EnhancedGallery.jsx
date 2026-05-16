@@ -23,6 +23,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import './EnhancedGallery.css';
 import { shouldBlockDirectImageLoad } from '../utils/avatarUtils';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 
 const CATEGORIES = [
     { id: 'food', label: 'Food', icon: FaUtensils, color: '#f59e0b' },
@@ -300,9 +301,8 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
         };
     }, [moveMenuForIndex]);
 
-    // Tier-based limits
-    const tier = business?.subscriptionTier || 'free';
-    const MAX_IMAGES = tier === 'elite' ? 20 : tier === 'professional' ? 6 : 20;
+    const isPaidGallery = normalizeBusinessTier(business?.subscriptionTier) === 'paid';
+    const MAX_IMAGES = isPaidGallery ? 20 : 6;
 
     const handleImageUpload = async (e, category) => {
         const file = e.target.files[0];

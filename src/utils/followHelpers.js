@@ -1,10 +1,10 @@
 import { doc, updateDoc, arrayUnion, arrayRemove, increment, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import app, { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewFollower } from './notificationHelpers';
 import { getSafeAvatar } from './avatarUtils';
 
-const functions = getFunctions();
+const functions = getFunctions(app, 'us-central1');
 const listUserNetworkCallable = httpsCallable(functions, 'listUserNetwork');
 const getFollowerCountCallable = httpsCallable(functions, 'getFollowerCount');
 
@@ -60,7 +60,6 @@ export const getFollowers = async (userId) => {
 export const getFollowing = async (userId, followingIds = []) => {
     try {
         if (!followingIds || followingIds.length === 0) {
-            console.log('User is not following anyone (list is empty)');
             return [];
         }
 
@@ -123,7 +122,6 @@ export const followUser = async (currentUserId, targetUserId, currentUserData = 
         const currentUserFollowing = currentUserDoc.data()?.following || [];
 
         if (currentUserFollowing.includes(targetUserId)) {
-            console.log('Already following this user');
             return { success: false, message: 'Already following' };
         }
 
@@ -148,10 +146,11 @@ export const followUser = async (currentUserId, targetUserId, currentUserData = 
             followersCount: increment(1)
         });
 
-        // 5. Send notification to target user
-        await notifyNewFollower(targetUserId, followerData);
+        // 5. Push notification (callable); do not block follow completion on network latency
+        void notifyNewFollower(targetUserId, followerData).catch((e) =>
+            console.warn('notifyNewFollower failed', e)
+        );
 
-        console.log('✅ Successfully followed user and sent notification');
         return { success: true, message: 'Followed successfully' };
     } catch (error) {
         console.error('Error following user:', error);

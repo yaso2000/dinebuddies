@@ -32,6 +32,10 @@ const OffersBanner = ({ onHasOffers } = {}) => {
 
     const phaseTimer = useRef(null);
     const clearTimers = () => { clearTimeout(phaseTimer.current); };
+    const onHasOffersRef = useRef(onHasOffers);
+    useEffect(() => {
+        onHasOffersRef.current = onHasOffers;
+    }, [onHasOffers]);
 
     /* ── Fetch active offers, filtering out expired ones ──────────── */
     useEffect(() => {
@@ -48,7 +52,7 @@ const OffersBanner = ({ onHasOffers } = {}) => {
                     return expiry.getTime() > now;
                 });
             setOffers(active);
-            onHasOffers?.(active.length > 0);
+            onHasOffersRef.current?.(active.length > 0);
         }, err => console.error('❌ OffersBanner fetch error:', err));
         return () => { unsub(); clearTimers(); };
     }, []);

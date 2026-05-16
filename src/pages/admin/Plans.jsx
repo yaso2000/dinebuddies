@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { FaPlus, FaEdit, FaTrash, FaSync, FaSave, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaSync, FaSave, FaTimes, FaRedo } from 'react-icons/fa';
 import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../../config/planDefaults';
 
 const Plans = () => {
@@ -21,7 +21,7 @@ const Plans = () => {
             title: '',
             description: '',
             type: 'business',
-            tier: 'professional',
+            tier: 'free',
             price: 0,
             originalPrice: 0,
             discount: 0,
@@ -37,9 +37,10 @@ const Plans = () => {
         load();
     }, []);
 
-    const load = async () => {
+    const load = async (opts = {}) => {
+        const silent = opts.silent === true;
         try {
-            setLoading(true);
+            if (!silent) setListLoading(true);
             const [plansSnap, packsSnap] = await Promise.all([
                 getDocs(collection(db, 'subscriptionPlans')),
                 getDocs(collection(db, 'creditPacks')),
@@ -49,14 +50,14 @@ const Plans = () => {
         } catch (e) {
             console.error(e);
         } finally {
-            setLoading(false);
+            if (!silent) setListLoading(false);
         }
     };
 
     const syncFromCode = async () => {
         if (!window.confirm('Sync plans and packs from code defaults? This will add new or update existing by tier/stripePriceId.')) return;
         try {
-            setLoading(true);
+            setSyncing(true);
             let planImported = 0, planUpdated = 0, packImported = 0, packUpdated = 0;
 
             // Consumer `type: user` plans are legacy (app uses Dine credits + free tier). Only sync business tiers from code.
@@ -96,13 +97,13 @@ const Plans = () => {
             }
 
             alert(
-                `Synced. Business plans: ${planImported} new, ${planUpdated} updated. Packs: ${packImported} new, ${packUpdated} updated. (Consumer subscription rows in code were skipped.)`
+                `Synced. Business plans: ${planImported} new, ${planUpdated} updated. Packs: ${packImported} new, ${packUpdated} updated. (Consumer subscription rows in code were skipped.) Edit Stripe price IDs in src/config/planDefaults.js if checkout fails.`
             );
-            load();
+            await load({ silent: true });
         } catch (e) {
             alert('Error: ' + e.message);
         } finally {
-            setLoading(false);
+            setSyncing(false);
         }
     };
 
@@ -196,14 +197,12 @@ const Plans = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="admin-loading">
-                <div className="admin-spinner" />
-                <p style={{ color: 'var(--admin-text-secondary)', marginTop: '1rem' }}>Loading plans…</p>
-            </div>
-        );
-    }
+    const listSpinner = (
+        <div className="admin-card" style={{ padding: '2.5rem', textAlign: 'center' }}>
+            <div className="admin-spinner" style={{ margin: '0 auto' }} />
+            <p style={{ color: 'var(--admin-text-secondary)', marginTop: '1rem', marginBottom: 0 }}>Loading from Firestore…</p>
+        </div>
+    );
 
     return (
         <div dir="ltr">
@@ -216,18 +215,63 @@ const Plans = () => {
                 </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+            <div
+                className="admin-card admin-mb-4"
+                style={{
+                    borderLeft: '4px solid #22c55e',
+                    padding: '1rem 1.25rem',
+                    background: 'rgba(34, 197, 94, 0.08)',
+                }}
+            >
+                <p style={{ margin: '0 0 0.65rem', color: 'var(--admin-text-primary)', fontWeight: 700, fontSize: '0.95rem' }}>
+                    Stripe price IDs (source of truth in the repo)
+                </p>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--admin-text-secondary)', fontSize: '0.9rem', lineHeight: 1.55 }}>
+                    <li>
+                        Business subscription + invitation / dating packs: <code style={{ fontSize: '0.85em' }}>src/config/planDefaults.js</code> (
+                        <code>BASE_SUBSCRIPTION_PLANS</code>, <code>BASE_CREDIT_PACKS</code>). Paste live <code>price_…</code> IDs from the Stripe Dashboard, deploy the app, then use <strong>Sync from code → Firestore</strong> below. This does <strong>not</strong> call Stripe.
+                    </li>
+                    <li>
+                        Dine Credits wallet top-ups (200 / 500 / …): Cloud Functions env keys{' '}
+                        <code style={{ fontSize: '0.85em' }}>STRIPE_PRICE_CREDITS_200</code>,{' '}
+                        <code>STRIPE_PRICE_CREDITS_500</code>, etc. (<code>functions/creditsCore.js</code>) — separate from this page&apos;s Firestore sync.
+                    </li>
+                </ul>
+                <p style={{ margin: '0.75rem 0 0', color: 'var(--admin-text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }} dir="rtl">
+                    لم ترسل أسعار سترايب في المحادثة: المعرفات الحية تُنسَخ من لوحة سترايب إلى الملف أعلاه، ثم تُفعَّل في Firestore بالزر أدناه. لا توجد مزامنة تلقائية مع سترايب من لوحة الأدمن.
+                </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button type="button" className={`admin-btn ${tab === 'packs' ? 'admin-btn-primary' : 'admin-btn-secondary'}`} onClick={() => setTab('packs')}>
                     Credit packs ({packs.length})
                 </button>
                 <button type="button" className={`admin-btn ${tab === 'plans' ? 'admin-btn-primary' : 'admin-btn-secondary'}`} onClick={() => setTab('plans')}>
                     Business plans ({plans.filter((p) => p.type === 'business').length})
                 </button>
-                <button type="button" className="admin-btn admin-btn-secondary" onClick={syncFromCode}>
-                    <FaSync /> Sync from Code
+                <button
+                    type="button"
+                    className="admin-btn admin-btn-secondary"
+                    onClick={() => load()}
+                    disabled={listLoading || syncing}
+                    title="إعادة قراءة المجموعات من Firestore"
+                >
+                    <FaRedo /> Reload from Firestore
+                </button>
+                <button
+                    type="button"
+                    className="admin-btn admin-btn-primary"
+                    onClick={syncFromCode}
+                    disabled={listLoading || syncing}
+                    title="دفع القيم من planDefaults.js إلى Firestore (subscriptionPlans + creditPacks)"
+                >
+                    <span style={{ display: 'inline-flex', animation: syncing ? 'spin 0.8s linear infinite' : undefined }}>
+                        <FaSync />
+                    </span>{' '}
+                    {syncing ? 'Syncing…' : 'Sync from code → Firestore'}
                 </button>
                 {tab === 'plans' && (
-                    <button type="button" className="admin-btn admin-btn-primary" onClick={openCreate}>
+                    <button type="button" className="admin-btn admin-btn-secondary" onClick={openCreate}>
                         <FaPlus /> Create New Plan
                     </button>
                 )}
@@ -235,6 +279,9 @@ const Plans = () => {
 
             {tab === 'plans' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {listLoading ? (
+                        listSpinner
+                    ) : (
                     <div className="admin-grid admin-grid-3">
                         {plans.filter((p) => p.type === 'business').length === 0 ? (
                             <div className="admin-card">
@@ -250,6 +297,9 @@ const Plans = () => {
                                         <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--admin-text-primary)', marginBottom: '0.25rem' }}>
                                             {p.name || p.id}
                                         </h3>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', marginBottom: '0.5rem', wordBreak: 'break-all', fontFamily: 'ui-monospace, monospace' }}>
+                                            Stripe: {p.stripePriceId || '— (free tier: matched by type + tier in sync)'}
+                                        </p>
                                         <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-muted)', marginBottom: '0.75rem', minHeight: '2.5rem' }}>
                                             {p.description || '—'}
                                         </p>
@@ -284,8 +334,9 @@ const Plans = () => {
                                 ))
                         )}
                     </div>
+                    )}
 
-                    {plans.some((p) => p.type === 'user') && (
+                    {!listLoading && plans.some((p) => p.type === 'user') && (
                         <details className="admin-card" style={{ padding: '1rem' }}>
                             <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--admin-text-muted)' }}>
                                 Legacy consumer subscription rows ({plans.filter((p) => p.type === 'user').length}) — not sold; delete when safe
@@ -314,6 +365,9 @@ const Plans = () => {
             )}
 
             {tab === 'packs' && (
+                listLoading ? (
+                    listSpinner
+                ) : (
                 <div className="admin-grid admin-grid-3">
                     {packs.length === 0 ? (
                         <div className="admin-card">
@@ -325,6 +379,9 @@ const Plans = () => {
                         packs.map((p) => (
                             <div key={p.id} className="admin-card">
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--admin-text-primary)' }}>{p.name || p.id}</h3>
+                                <p style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)', wordBreak: 'break-all', fontFamily: 'ui-monospace, monospace', marginBottom: '0.35rem' }}>
+                                    {p.stripePriceId || '—'}
+                                </p>
                                 <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--admin-text-primary)' }}>
                                     {p.amount ?? p.offerHours ?? '—'} {p.type === 'offer_slot' ? 'hours' : 'credits'}
                                 </div>
@@ -334,6 +391,7 @@ const Plans = () => {
                         ))
                     )}
                 </div>
+                )
             )}
 
             {editorOpen && (
@@ -366,7 +424,7 @@ const Plans = () => {
                             </div>
                             <div>
                                 <label className="admin-label">Tier</label>
-                                <input type="text" className="admin-input" value={form.tier} onChange={(e) => setForm((f) => ({ ...f, tier: e.target.value }))} placeholder="free, pro, vip, professional, elite" />
+                                <input type="text" className="admin-input" value={form.tier} onChange={(e) => setForm((f) => ({ ...f, tier: e.target.value }))} placeholder="free or paid (business)" />
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
                                 <div>

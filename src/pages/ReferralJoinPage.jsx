@@ -1,61 +1,84 @@
-import React, { useEffect, useRef } from 'react';
-import { useSearchParams, Navigate } from 'react-router-dom';
+import React, { useLayoutEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
-import { validateReferralCodeForStorage } from '../utils/pendingReferral';
+import { validateReferralCodeForStorage, syncPendingReferralFromQueryString } from '../utils/pendingReferral';
 
 const FUNCTIONS_REGION = 'us-central1';
 
 /**
  * Landing for shared referral links (/join?ref=AGENT-XXXX).
- * Persists code for later signup flows; records a server-side click (rate-limited); forwards to login.
+ * Persists code, records click (waits for callable so navigation does not abort the request), then full-page redirect to /login.
  */
 export default function ReferralJoinPage() {
+    const { t } = useTranslation();
     const [params] = useSearchParams();
     const refRaw = params.get('ref')?.trim();
-    const clickOnce = useRef(false);
 
-    useEffect(() => {
-        if (!refRaw) return;
-        const normalized =
-            validateReferralCodeForStorage(refRaw) || validateReferralCodeForStorage(refRaw.trim().toUpperCase());
-        try {
-            if (normalized) {
-                sessionStorage.setItem('dineb_pending_referral', normalized);
+    useLayoutEffect(() => {
+        let cancelled = false;
+        const hardRedirect = (path) => {
+            if (typeof window === 'undefined') return;
+            window.location.replace(path);
+        };
+
+        void (async () => {
+            if (!refRaw) {
+                hardRedirect('/');
+                return;
             }
-        } catch {
-            /* ignore */
-        }
-    }, [refRaw]);
+            const normalized =
+                validateReferralCodeForStorage(refRaw) || validateReferralCodeForStorage(refRaw.trim().toUpperCase());
+            if (!normalized) {
+                hardRedirect('/');
+                return;
+            }
 
-    useEffect(() => {
-        const code = validateReferralCodeForStorage(refRaw);
-        if (!code || clickOnce.current) return;
-        const dedupeKey = `dineb_ref_click_sent_${code}`;
-        try {
-            if (sessionStorage.getItem(dedupeKey) === '1') return;
-        } catch {
-            /* ignore */
-        }
-        clickOnce.current = true;
-        (async () => {
+            syncPendingReferralFromQueryString(`?ref=${encodeURIComponent(normalized)}`);
+
+            const dedupeKey = `dineb_ref_click_sent_${normalized}`;
+            let skipClick = false;
             try {
-                const fn = httpsCallable(getFunctions(app, FUNCTIONS_REGION), 'incrementReferralClicks');
-                await fn({ referralCode: code });
+                const v = sessionStorage.getItem(dedupeKey);
+                if (v === '1' || v === 'pending') skipClick = true;
+                else sessionStorage.setItem(dedupeKey, 'pending');
+            } catch {
+                /* ignore */
+            }
+
+            if (!skipClick) {
                 try {
-                    sessionStorage.setItem(dedupeKey, '1');
-                } catch {
-                    /* ignore */
+                    const fn = httpsCallable(getFunctions(app, FUNCTIONS_REGION), 'incrementReferralClicks');
+                    await fn({ referralCode: normalized });
+                    try {
+                        sessionStorage.setItem(dedupeKey, '1');
+                    } catch {
+                        /* ignore */
+                    }
+                } catch (e) {
+                    console.warn('[ReferralJoinPage] incrementReferralClicks:', e?.code, e?.message);
+                    try {
+                        sessionStorage.removeItem(dedupeKey);
+                    } catch {
+                        /* ignore */
+                    }
                 }
-            } catch (e) {
-                console.warn('[ReferralJoinPage] incrementReferralClicks:', e?.code, e?.message);
+            }
+
+            if (!cancelled) {
+                hardRedirect(`/login?ref=${encodeURIComponent(refRaw.trim())}`);
             }
         })();
+
+        return () => {
+            cancelled = true;
+        };
     }, [refRaw]);
 
-    if (!refRaw) {
-        return <Navigate to="/" replace />;
-    }
-
-    return <Navigate to={`/login?ref=${encodeURIComponent(refRaw.trim())}`} replace />;
+    return (
+        <div className="auth-route-scroll" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            {t('referral_join_redirecting', 'Redirecting…')}
+        </div>
+    );
 }

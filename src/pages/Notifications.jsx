@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
@@ -104,6 +104,96 @@ const getNotifMessage = (notif, t) => {
             return notif.message || '';
     }
 };
+
+/** Horizontal swipe to delete; vertical scroll still works on the list. */
+function SwipeableNotificationRow({ deleteLabel, onDelete, onOpen, children }) {
+    const [tx, setTx] = useState(0);
+    const [dragH, setDragH] = useState(false);
+    const drag = useRef({ active: false, startX: 0, startY: 0, mode: null, pointerId: null });
+    const blockClick = useRef(false);
+
+    const onPointerDown = (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        drag.current = {
+            active: true,
+            startX: e.clientX,
+            startY: e.clientY,
+            mode: null,
+            pointerId: e.pointerId,
+        };
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* ignore */ }
+    };
+
+    const onPointerMove = (e) => {
+        const d = drag.current;
+        if (!d.active || e.pointerId !== d.pointerId) return;
+        const dx = e.clientX - d.startX;
+        const dy = e.clientY - d.startY;
+        if (!d.mode && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+            d.mode = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+            if (d.mode === 'h') setDragH(true);
+        }
+        if (d.mode === 'h') {
+            e.preventDefault();
+            setTx(Math.max(-140, Math.min(140, dx)));
+        }
+    };
+
+    const finish = useCallback((e) => {
+        const d = drag.current;
+        if (!d.active) return;
+        if (e.pointerId != null && e.pointerId !== d.pointerId) return;
+        d.active = false;
+        const clientX = typeof e.clientX === 'number' ? e.clientX : drag.current.startX;
+        const dx = clientX - d.startX;
+        d.mode = null;
+        setDragH(false);
+        try {
+            e.currentTarget?.releasePointerCapture?.(e.pointerId);
+        } catch (_) { /* ignore */ }
+        if (Math.abs(dx) > 64) {
+            blockClick.current = true;
+            setTx(0);
+            onDelete();
+            return;
+        }
+        if (Math.abs(dx) > 12) {
+            blockClick.current = true;
+            setTimeout(() => {
+                blockClick.current = false;
+            }, 120);
+        }
+        setTx(0);
+    }, [onDelete]);
+
+    return (
+        <div className="notification-swipe-outer">
+            <div className="notification-swipe-delete" aria-hidden>
+                {deleteLabel}
+            </div>
+            <div
+                className="notification-swipe-panel"
+                style={{
+                    transform: `translateX(${tx}px)`,
+                    transition: dragH ? 'none' : 'transform 0.2s ease',
+                    touchAction: dragH ? 'none' : 'pan-y',
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={finish}
+                onPointerCancel={finish}
+                onClick={() => {
+                    if (blockClick.current) return;
+                    onOpen();
+                }}
+            >
+                {children}
+            </div>
+        </div>
+    );
+}
 
 const Notifications = () => {
     const { t, i18n } = useTranslation();
@@ -356,49 +446,52 @@ const Notifications = () => {
                     />
                 ) : (
                     filteredNotifications.map(notif => (
-                        <div
+                        <SwipeableNotificationRow
                             key={notif.id}
-                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}
-                            onClick={() => handleNotificationClick(notif)}
+                            deleteLabel={t('notification_swipe_delete', 'Delete')}
+                            onDelete={() => deleteNotification(notif.id)}
+                            onOpen={() => handleNotificationClick(notif)}
                         >
-                            {/* Unread Indicator */}
-                            {!notif.read && <div className="unread-dot"></div>}
+                            <div className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}>
+                                {!notif.read && <div className="unread-dot"></div>}
 
-                            <div className="notification-icon">
-                                {notif.fromUserAvatar || notif.senderAvatar ? (
-                                    <UserAvatar
-                                        src={notif.fromUserAvatar || notif.senderAvatar}
-                                        user={{
-                                            name: notif.fromUserName || notif.senderName,
-                                            gender: notif.fromUserGender,
-                                            role: notif.fromUserRole,
-                                        }}
-                                        alt={notif.fromUserName || notif.senderName || 'User'}
-                                    />
-                                ) : (
-                                    getIcon(notif.type, notif.status)
-                                )}
+                                <div className="notification-icon">
+                                    {notif.fromUserAvatar || notif.senderAvatar ? (
+                                        <UserAvatar
+                                            src={notif.fromUserAvatar || notif.senderAvatar}
+                                            user={{
+                                                id: notif.fromUserId || notif.metadata?.fromUserId,
+                                                uid: notif.fromUserId || notif.metadata?.fromUserId,
+                                                name: notif.fromUserName || notif.senderName,
+                                                gender: notif.fromUserGender,
+                                                role: notif.fromUserRole,
+                                            }}
+                                            alt={notif.fromUserName || notif.senderName || 'User'}
+                                        />
+                                    ) : (
+                                        getIcon(notif.type, notif.status)
+                                    )}
+                                </div>
+
+                                <div className="notification-content">
+                                    <h4 className="notification-title">{getNotifTitle(notif, t)}</h4>
+                                    <p className="notification-message">{getNotifMessage(notif, t)}</p>
+                                    <span className="notification-time">{formatTime(notif.createdAt)}</span>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="delete-btn ui-btn--danger-outline"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteNotification(notif.id);
+                                    }}
+                                    title={t('delete', 'Delete')}
+                                >
+                                    <FaTrash />
+                                </button>
                             </div>
-
-                            {/* Content */}
-                            <div className="notification-content">
-                                <h4 className="notification-title">{getNotifTitle(notif, t)}</h4>
-                                <p className="notification-message">{getNotifMessage(notif, t)}</p>
-                                <span className="notification-time">{formatTime(notif.createdAt)}</span>
-                            </div>
-
-                            {/* Delete Button */}
-                            <button
-                                className="delete-btn ui-btn--danger-outline"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteNotification(notif.id);
-                                }}
-                                title={t('delete', 'Delete')}
-                            >
-                                <FaTrash />
-                            </button>
-                        </div>
+                        </SwipeableNotificationRow>
                     ))
                 )}
             </div>

@@ -4,6 +4,7 @@ import { MdDeliveryDining } from 'react-icons/md';
 import { FaEdit, FaSave } from 'react-icons/fa';
 import PremiumBadge from './PremiumBadge';
 import { getPlatformsForCountry } from '../config/deliveryPlatforms';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 
 
 const DeliveryLinksSection = ({
@@ -19,8 +20,7 @@ const DeliveryLinksSection = ({
 }) => {
     const { t } = useTranslation();
 
-    // Business is "paid" only if on professional or elite plan
-    const isPaid = business?.subscriptionTier === 'professional' || business?.subscriptionTier === 'elite';
+    const isPaid = normalizeBusinessTier(business?.subscriptionTier) === 'paid';
 
     // Get the right platforms for this business's country
     const businessCountry = business?.businessInfo?.country || '';

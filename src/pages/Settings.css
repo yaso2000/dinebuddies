@@ -1,5 +1,10 @@
 /* Settings page: same layout as mobile, responsive on desktop */
 
+/* Skip global .page-container fade/slide-in — avoids a "second load" after the app shell is ready */
+.settings-page-responsive.page-container {
+    animation: none;
+}
+
 .settings-page-responsive {
     min-height: 100%;
 }

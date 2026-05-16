@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import NewReportModal from '../components/NewReportModal';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment, FaChevronRight, FaBan, FaVolumeMute } from 'react-icons/fa';
+import { FaArrowRight, FaStar, FaUserFriends, FaCheckCircle, FaFlag, FaComment, FaChevronRight, FaBan, FaVolumeMute, FaPaperPlane, FaEnvelope, FaHeart } from 'react-icons/fa';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { getFollowers, getFollowing } from '../utils/followHelpers';
 import UserAvatar from '../components/UserAvatar';
@@ -68,10 +68,33 @@ const UserProfile = () => {
     const [networkLoading, setNetworkLoading] = useState(false);
     /** After blocking, keep showing this profile until the user navigates to another route (same userId mount). */
     const [stayOnProfileAfterBlock, setStayOnProfileAfterBlock] = useState(false);
+    const [inviteMenuOpen, setInviteMenuOpen] = useState(false);
+    const inviteMenuRef = useRef(null);
 
     useEffect(() => {
         setStayOnProfileAfterBlock(false);
+        setInviteMenuOpen(false);
     }, [userId]);
+
+    useEffect(() => {
+        if (!inviteMenuOpen) return undefined;
+        const onPointerDown = (e) => {
+            if (inviteMenuRef.current && !inviteMenuRef.current.contains(e.target)) {
+                setInviteMenuOpen(false);
+            }
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') setInviteMenuOpen(false);
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('touchstart', onPointerDown);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('touchstart', onPointerDown);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [inviteMenuOpen]);
 
     // Fetch user data from Firestore
     useEffect(() => {
@@ -299,6 +322,20 @@ const UserProfile = () => {
         );
     }
 
+    const isTargetBusiness = String(user.role || '').toLowerCase() === 'business' || user.isBusiness === true;
+    const canReceivePrivateInvites = user.privacySettings?.allowInvitations !== false;
+    const canReceiveDatingInvites =
+        !isTargetBusiness &&
+        user.availableForDating !== false &&
+        user.privacySettings?.availableForDating !== false;
+    const canSendAnyInvite = !isTargetBusiness && (canReceivePrivateInvites || canReceiveDatingInvites);
+    const showProfileInviteCorner =
+        Boolean(myUid) &&
+        !currentUser?.isGuest &&
+        !isTargetBusiness &&
+        !theyBlockedMe &&
+        !iBlockedThem;
+
     return (
         <div className="profile-page" style={{ paddingBottom: '100px' }}>
             {/* Header with Back Button */}
@@ -339,6 +376,80 @@ const UserProfile = () => {
                                     }
                                 }}
                             />
+                            {showProfileInviteCorner && (
+                                <div className="user-profile-invite-anchor" ref={inviteMenuRef}>
+                                    <button
+                                        type="button"
+                                        className={`user-profile-invite-fab${canSendAnyInvite ? '' : ' user-profile-invite-fab--disabled'}`}
+                                        disabled={!canSendAnyInvite}
+                                        title={
+                                            canSendAnyInvite
+                                                ? t('profile_invite_fab_open', 'Invite')
+                                                : t(
+                                                      'profile_invite_all_closed_hint',
+                                                      'This member is not accepting private or dating invitations right now.'
+                                                  )
+                                        }
+                                        aria-label={t('profile_invite_menu_a11y', 'Send an invitation')}
+                                        aria-expanded={inviteMenuOpen}
+                                        aria-haspopup="menu"
+                                        onClick={() => {
+                                            if (!canSendAnyInvite) return;
+                                            if (currentUser?.isGuest) {
+                                                goToLogin();
+                                                return;
+                                            }
+                                            setInviteMenuOpen((o) => !o);
+                                        }}
+                                    >
+                                        <FaPaperPlane aria-hidden />
+                                    </button>
+                                    {inviteMenuOpen && canSendAnyInvite && (
+                                        <div className="user-profile-invite-menu" role="menu">
+                                            {canReceivePrivateInvites && (
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    className="user-profile-invite-menu__item"
+                                                    onClick={() => {
+                                                        setInviteMenuOpen(false);
+                                                        if (currentUser?.isGuest) {
+                                                            goToLogin();
+                                                            return;
+                                                        }
+                                                        navigate('/create-private', {
+                                                            state: { inviteRecipientId: user.id },
+                                                        });
+                                                    }}
+                                                >
+                                                    <FaEnvelope aria-hidden />
+                                                    {t('profile_invite_menu_private', 'Private invitation')}
+                                                </button>
+                                            )}
+                                            {canReceiveDatingInvites && (
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    className="user-profile-invite-menu__item"
+                                                    onClick={() => {
+                                                        setInviteMenuOpen(false);
+                                                        if (currentUser?.isGuest) {
+                                                            goToLogin();
+                                                            return;
+                                                        }
+                                                        navigate('/create-dating', {
+                                                            state: { inviteRecipientId: user.id },
+                                                        });
+                                                    }}
+                                                >
+                                                    <FaHeart aria-hidden />
+                                                    {t('profile_invite_menu_dating', 'Dating invitation')}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             {user.isOnline && <div className="host-status-online"></div>}
                         </div>
 

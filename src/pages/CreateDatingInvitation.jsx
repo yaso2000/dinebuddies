@@ -236,12 +236,16 @@ const CreateDatingInvitation = () => {
                             const friendData = friendDoc.exists() ? friendDoc.data() : {};
                             return {
                                 ...friend,
-                                availableForDating: friendData.availableForDating !== false
+                                availableForDating:
+                                    friendData.availableForDating !== false &&
+                                    friendData.privacySettings?.availableForDating !== false,
                             };
                         } catch {
                             return {
                                 ...friend,
-                                availableForDating: true
+                                availableForDating:
+                                    friendData.availableForDating !== false &&
+                                    friendData.privacySettings?.availableForDating !== false,
                             };
                         }
                     })
@@ -255,6 +259,21 @@ const CreateDatingInvitation = () => {
         };
         fetchFriends();
     }, [authUser, currentUser, userProfile]);
+
+    const pendingInviteRecipientRef = useRef(location.state?.inviteRecipientId ?? null);
+
+    useEffect(() => {
+        if (friendsLoading) return;
+        const rid = pendingInviteRecipientRef.current;
+        if (!rid) return;
+        pendingInviteRecipientRef.current = null;
+        const match = mutualFriends.find((f) => f.id === rid);
+        if (!match || match.availableForDating === false) return;
+        setFormData((prev) => {
+            if (prev.invitedFriends.includes(rid)) return prev;
+            return { ...prev, invitedFriends: [rid] };
+        });
+    }, [mutualFriends, friendsLoading]);
 
     // Unified location discovery for all users/pages.
     useEffect(() => {

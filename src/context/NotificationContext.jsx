@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -104,21 +104,46 @@ export const NotificationProvider = ({ children }) => {
                     const pathname = pathnameRef.current;
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === 'added') {
-                            const newNotif = change.doc.data();
+                            const snap = change.doc;
+                            const docId = snap.id;
+                            const newNotif = snap.data();
                             const isAlreadyRead = newNotif.read;
-                            const onTarget = shouldSuppressInAppToastForPath(pathname, newNotif);
+                            const onTarget = shouldSuppressInAppToastForPath(pathname, { ...newNotif, id: docId });
 
                             if (!isAlreadyRead && !onTarget) {
+                                const avatarUrl =
+                                    newNotif.fromUserAvatar ||
+                                    newNotif.senderAvatar ||
+                                    newNotif.metadata?.fromUserAvatar ||
+                                    newNotif.metadata?.senderAvatar ||
+                                    newNotif.metadata?.avatarUrl ||
+                                    null;
+                                const senderName =
+                                    newNotif.fromUserName ||
+                                    newNotif.senderName ||
+                                    newNotif.metadata?.fromUserName ||
+                                    '';
                                 showToast(
                                     {
                                         title: newNotif.title,
                                         body: newNotif.message,
-                                        icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
+                                        icon: avatarUrl,
+                                        avatarUrl,
+                                        senderName,
+                                        senderUser: {
+                                            displayName: senderName || newNotif.title,
+                                            display_name: senderName,
+                                            gender: newNotif.fromUserGender || newNotif.metadata?.fromUserGender,
+                                            role: newNotif.fromUserRole || newNotif.metadata?.fromUserRole,
+                                            photoURL: avatarUrl,
+                                        },
+                                        swipeDeleteLabel: t('toast_release_to_delete', 'Release to delete'),
                                         onClick: () => {
                                             if (newNotif.actionUrl) {
                                                 navigate(newNotif.actionUrl);
                                             }
                                         },
+                                        onSwipeDismiss: () => deleteNotification(docId),
                                     },
                                     'notification'
                                 );
@@ -210,24 +235,20 @@ export const NotificationProvider = ({ children }) => {
 
             // ❌ Check if push notifications are globally disabled
             if (settings.pushEnabled === false) {
-                console.log('🔕 Push notifications disabled for user:', userId);
                 return;
             }
 
             // ❌ Check if this specific notification type is disabled
             if (settings.pushTypes && settings.pushTypes[type] === false) {
-                console.log(`🔕 Notification type "${type}" disabled for user:`, userId);
                 return;
             }
 
             // 🌙 Check Do Not Disturb
             if (settings.doNotDisturb && isInDNDPeriod(settings.doNotDisturb)) {
-                console.log('🌙 Do Not Disturb active - notification skipped for user:', userId);
                 return;
             }
 
             // ✅ All checks passed - create notification
-            console.log(`✅ Creating notification (${type}) for user:`, userId);
 
             const notificationsRef = collection(db, 'notifications');
             await addDoc(notificationsRef, {
@@ -263,7 +284,7 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    const markMessageNotificationsAsRead = async (actionUrlSubstring) => {
+    const markMessageNotificationsAsRead = useCallback(async (actionUrlSubstring) => {
         if (!currentUser?.uid || !actionUrlSubstring) return;
         const unreadToClear = notifications.filter(
             (n) =>
@@ -285,7 +306,7 @@ export const NotificationProvider = ({ children }) => {
                 })
             )
         );
-    };
+    }, [currentUser?.uid, notifications]);
 
     // Mark all as read
     const markAllAsRead = async () => {

@@ -1,11 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastContext';
 import { getAuthErrorMessage } from '../utils/errorMessages';
-import { isBusinessUser, isAffiliateAgent } from '../utils/accountRole';
+import { isBusinessUser } from '../utils/accountRole';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
 import { DEFAULT_ACCESS_PLATFORM } from '../constants/userProfileSchema';
-import { subscribeMobileRestrictedShell } from '../utils/mobileAppShell';
-import { stashAuthGateNotice } from '../utils/authGateNotice';
 import { peekPendingReferralCode, clearPendingReferralCode } from '../utils/pendingReferral';
 
 /** Keeps Layout/HomeRouter treating the session as business when userProfile is briefly null (Firestore/auth race). */
@@ -181,17 +179,13 @@ export const AuthProvider = ({ children }) => {
     /** True after first users/{uid} snapshot from server OR listener error — avoids routing on stale local cache. */
     const [profileServerSynced, setProfileServerSynced] = useState(false);
     const [isGuest, setIsGuest] = useState(false);
-    /** Latest profile for affiliate mobile-shell guard (updated every render). */
-    const profileRefForPlatformGuard = useRef(null);
-    profileRefForPlatformGuard.current = userProfile;
     const nominatimFailed = useRef(false);
     const isDeletingAccountRef = useRef(false);
     /** Cleared when Firestore profile snapshot resolves so the 5s fail-safe cannot fire after real data. */
     const authLoadingTimeoutRef = useRef(null);
     /** Avoid setLoading(true) on duplicate onAuthStateChanged for the same uid (unmounts Layout /admin). */
     const lastAuthUidRef = useRef(null);
-    /** Prevents repeated sign-out while affiliate + mobile guard runs. */
-    const affiliatePlatformLockRef = useRef(false);
+    const profileWriteInFlightRef = useRef(false);
     const { showToast } = useToast();
 
     // Guest profile template
@@ -333,11 +327,9 @@ export const AuthProvider = ({ children }) => {
                     uid: docSnap.id,
                     ...docSnap.data()
                 });
-                console.log('Profile snapshot updated:', normalized.uid, 'Role:', normalized.role);
                 syncBusinessNavHint(normalized, docSnap.id);
                 setUserProfile(normalized);
             } else if (!isDeletingAccountRef.current) {
-                console.log('Profile snapshot: Document does not exist yet for UID:', uid);
                 syncBusinessNavHint(null, null);
                 setUserProfile(null);
             }
@@ -379,38 +371,6 @@ export const AuthProvider = ({ children }) => {
             unsubscribeSnapshot();
         };
     }, [currentUser?.uid]);
-
-    // Affiliate agents: web-only — block narrow viewport / installed PWA (same shell as consumer mobile home).
-    useEffect(() => {
-        if (!currentUser?.uid || isGuest) {
-            affiliatePlatformLockRef.current = false;
-            return undefined;
-        }
-        if (!isAffiliateAgent(userProfile)) {
-            affiliatePlatformLockRef.current = false;
-            return undefined;
-        }
-        const msgAr = 'حسابات الوكلاء تدار عبر موقع الويب فقط.';
-        const stop = subscribeMobileRestrictedShell((restricted) => {
-            if (!restricted) return;
-            const prof = profileRefForPlatformGuard.current;
-            if (!prof || !isAffiliateAgent(prof) || !auth.currentUser) return;
-            if (affiliatePlatformLockRef.current) return;
-            affiliatePlatformLockRef.current = true;
-            stashAuthGateNotice({
-                i18nKey: 'auth_affiliate_web_only',
-                message: msgAr,
-                variant: 'error',
-            });
-            showToast(msgAr, 'error');
-            firebaseSignOut(auth)
-                .catch(() => {})
-                .finally(() => {
-                    affiliatePlatformLockRef.current = false;
-                });
-        });
-        return stop;
-    }, [currentUser?.uid, isGuest, userProfile?.role, showToast]);
 
     // Update lastSeen and location
     useEffect(() => {
@@ -641,7 +601,6 @@ export const AuthProvider = ({ children }) => {
 
             if (!userDoc.exists()) {
                 isNewUser = true;
-                console.log('Google Auth: New user detected, creating profile for:', result.user.uid);
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName,
                     email: result.user.email,
@@ -649,7 +608,6 @@ export const AuthProvider = ({ children }) => {
                     authProvider: 'google'
                 });
             } else {
-                console.log('Google Auth: Existing user, syncing photos for:', result.user.uid);
                 // Keep photo in sync
                 await updateDoc(doc(db, 'users', result.user.uid), {
                     photo_url: result.user.photoURL || userDoc.data().photo_url,
@@ -868,7 +826,7 @@ export const AuthProvider = ({ children }) => {
             if (welcomeDinePaid > 0) {
                 baseProfile.totalCreditsPurchased = increment(welcomeDinePaid);
             }
-            // Do not stamp role:user on top of an in-progress /business/signup stub (Firestore allows first business write only when role is absent or via registrationIntent completion rule).
+            // Do not stamp role:user on top of an in-progress business signup stub (Firestore allows first business write only when role is absent or via registrationIntent completion rule).
             if (!pendingBusinessFlow) {
                 baseProfile.role = 'user';
             }
@@ -951,7 +909,9 @@ export const AuthProvider = ({ children }) => {
 
     // Update user profile
     const updateUserProfile = async (updates) => {
-        if (!currentUser) return;
+        if (!currentUser) return false;
+        if (profileWriteInFlightRef.current) return false;
+        profileWriteInFlightRef.current = true;
 
         try {
             // Update Firestore
@@ -974,9 +934,12 @@ export const AuthProvider = ({ children }) => {
 
             // Refresh user profile
             await fetchUserProfile(currentUser.uid);
+            return true;
         } catch (error) {
             console.error('Error updating user profile:', error);
             throw error;
+        } finally {
+            profileWriteInFlightRef.current = false;
         }
     };
 
@@ -1015,8 +978,7 @@ export const AuthProvider = ({ children }) => {
                 if (password) {
                     const cred = EmailAuthProvider.credential(user.email, password);
                     await reauthenticateWithCredential(user, cred);
-                    await doAuthDelete();
-                    return true;
+                    return await performDelete();
                 }
                 const providerIds = (user.providerData || []).map((p) => p.providerId);
                 let provider = null;
@@ -1026,8 +988,7 @@ export const AuthProvider = ({ children }) => {
                 else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
                 if (provider) {
                     await reauthenticateWithPopup(user, provider);
-                    await doAuthDelete();
-                    return true;
+                    return await performDelete();
                 }
                 const err = new Error('Re-authentication required');
                 err.code = 'auth/requires-recent-login';

@@ -10,7 +10,8 @@
 importScripts('https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.8.0/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'dinebuddies-v19-sw-route-fix';
+const CACHE_NAME = 'dinebuddies-v22-token-retries-click';
+const SITE_ORIGIN = 'https://www.dinebuddies.com';
 const PRECACHE = ['/manifest.json', '/icon-light-192.png', '/icon-light-512.png'];
 
 firebase.initializeApp({
@@ -47,12 +48,22 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     const d = event.notification.data || {};
-    const targetUrl =
+    const raw =
         d.url ||
         d.actionUrl ||
         d.link ||
         (typeof d.FCM_MSG === 'object' && d.FCM_MSG?.data?.actionUrl) ||
         '/';
+    let targetUrl = typeof raw === 'string' ? raw.trim() : '/';
+    if (!targetUrl) targetUrl = '/';
+    if (!/^https?:\/\//i.test(targetUrl)) {
+        const path = targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`;
+        try {
+            targetUrl = new URL(path, SITE_ORIGIN).href;
+        } catch {
+            targetUrl = `${SITE_ORIGIN}/`;
+        }
+    }
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
             for (const client of clientList) {

@@ -118,7 +118,6 @@ const CreatePrivateInvitation = () => {
     // Populate data when editing
     useEffect(() => {
         if (editInvitation) {
-            console.log('📝 Editing existing invitation:', editInvitation);
             setExistingDraftId(editInvitation.id);
             setFormData({
                 title: editInvitation.title || '',
@@ -239,6 +238,23 @@ const CreatePrivateInvitation = () => {
         };
         fetchFriends();
     }, [authUser, currentUser, userProfile]);
+
+    const pendingInviteRecipientRef = useRef(location.state?.inviteRecipientId ?? null);
+
+    useEffect(() => {
+        if (friendsLoading) return;
+        const rid = pendingInviteRecipientRef.current;
+        if (!rid) return;
+        pendingInviteRecipientRef.current = null;
+        const match = mutualFriends.find((f) => f.id === rid);
+        if (!match) return;
+        setFormData((prev) => {
+            if (prev.invitedFriends.includes(rid)) return prev;
+            const maxGuests = 30;
+            if ((prev.invitedFriends || []).length >= maxGuests) return prev;
+            return { ...prev, invitedFriends: [...(prev.invitedFriends || []), rid] };
+        });
+    }, [mutualFriends, friendsLoading]);
 
     // Unified location discovery for all users/pages.
     useEffect(() => {
@@ -448,6 +464,7 @@ const CreatePrivateInvitation = () => {
 
     const handlePreview = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
 
         if (!formData.title.trim() || !formData.date || !formData.time || !formData.location.trim()) {
             showToast(t('please_fill_required_fields') || 'Please fill in all required fields', 'error');
@@ -504,9 +521,7 @@ const CreatePrivateInvitation = () => {
                 navigate(`/invitation/private/preview/${existingDraftId}`);
             } else {
                 // CREATE NEW
-                console.log('🔏 Creating private invitation draft...');
                 const draftId = await addPrivateInvitation(draftData);
-                console.log('📋 Draft result:', draftId);
                 if (draftId) {
                     navigate(`/invitation/private/preview/${draftId}`);
                 }

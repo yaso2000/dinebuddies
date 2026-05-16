@@ -98,6 +98,18 @@ const CreatePost = () => {
         }
     }, [currentUser, userProfile]);
 
+    useEffect(() => {
+        const url = location.state?.premiumFeedImageUrl;
+        if (!url) return;
+        setMedia({ file: null, preview: url, type: 'image', remoteUrl: url });
+        const hint = location.state?.premiumFeedCaptionHint;
+        if (hint) setText(String(hint));
+        const rest = { ...(location.state || {}) };
+        delete rest.premiumFeedImageUrl;
+        delete rest.premiumFeedCaptionHint;
+        navigate(location.pathname, { replace: true, state: rest });
+    }, [location.state?.premiumFeedImageUrl, location.pathname, navigate]);
+
     const startCamera = () => {
         setShowCamera(true);
     };
@@ -141,6 +153,8 @@ const CreatePost = () => {
                 // Use 'community-posts' path to avoid potential conflicts with invitation rules
                 const path = `community-posts/${currentUser.uid}/post_${Date.now()}_${media.file.name}`;
                 mediaUrl = await uploadImage(media.file, path);
+            } else if (media?.remoteUrl) {
+                mediaUrl = media.remoteUrl;
             }
 
             const postData = {

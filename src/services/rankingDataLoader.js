@@ -1,10 +1,12 @@
 /**
- * Loads ranked Elite businesses (same data as Rankings page, Elite-only).
+ * Loads ranked paid businesses (same data as Rankings page, paid subscribers only).
  * Used by sidebar (top 3) and business profile (rank position).
  */
 import { collection, query, where, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { attachRankingScores } from './businessRankingService';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
+import { aggregateReviewStatsByBusinessIds } from './reviewStatsAggregation';
 
 const BATCH = 10;
 const MAX_LOAD = 20;
@@ -69,30 +71,30 @@ export async function loadRankedEliteBusinesses(opts = {}) {
         }
     }
 
-    const reviewsRef = collection(db, 'reviews');
-    for (let i = 0; i < ids.length; i += BATCH) {
-        const chunk = ids.slice(i, i + BATCH);
-        const [sp, sf, sr] = await Promise.all([
-            getDocs(query(reviewsRef, where('partnerId', 'in', chunk), limit(100))).catch(() => ({ docs: [] })),
-            getDocs(query(reviewsRef, where('profileId', 'in', chunk), limit(100))).catch(() => ({ docs: [] })),
-            getDocs(query(reviewsRef, where('restaurantId', 'in', chunk), limit(100))).catch(() => ({ docs: [] }))
-        ]);
-        const allReviews = [...sp.docs, ...sf.docs, ...sr.docs].map(d => d.data());
-        chunk.forEach(id => {
-            const reviews = allReviews.filter(r => r.partnerId === id || r.profileId === id || r.restaurantId === id);
-            const count = reviews.length;
-            const total = reviews.reduce((s, r) => s + (r.rating || 0), 0);
-            if (!statsById[id]) statsById[id] = { profileViews: 0, profileLikes: 0, profileShares: 0, memberCount: 0, totalInvitations: 0, rating: 0, reviewCount: 0, subscriptionTier: 'free' };
-            statsById[id].rating = count > 0 ? total / count : 0;
-            statsById[id].reviewCount = count;
-        });
-    }
+    const reviewAgg = await aggregateReviewStatsByBusinessIds(db, ids).catch(() => ({}));
+    ids.forEach((id) => {
+        const r = reviewAgg[id];
+        if (!statsById[id]) {
+            statsById[id] = {
+                profileViews: 0,
+                profileLikes: 0,
+                profileShares: 0,
+                memberCount: 0,
+                totalInvitations: 0,
+                rating: 0,
+                reviewCount: 0,
+                subscriptionTier: 'free',
+            };
+        }
+        statsById[id].rating = typeof r?.averageRating === 'number' ? r.averageRating : 0;
+        statsById[id].reviewCount = typeof r?.reviewCount === 'number' ? r.reviewCount : 0;
+    });
 
     list.forEach(b => {
         b.subscriptionTier = statsById[b.id]?.subscriptionTier || b.subscriptionTier || 'free';
     });
-    const eliteOnly = list.filter(b => (b.subscriptionTier || '').toLowerCase() === 'elite');
-    const withScores = attachRankingScores(eliteOnly, statsById);
+    const paidOnly = list.filter((b) => normalizeBusinessTier(b.subscriptionTier) === 'paid');
+    const withScores = attachRankingScores(paidOnly, statsById);
     const sorted = [...withScores].sort((a, b) => (b.rankingScore ?? 0) - (a.rankingScore ?? 0));
     return sorted.slice(0, topN);
 }

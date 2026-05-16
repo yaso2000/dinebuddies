@@ -43,7 +43,6 @@ const SubscriptionManagement = () => {
                         (user.role === 'business' || user.isBusiness)
                 );
 
-            console.log('Subscriptions:', usersWithSubs);
             setSubscriptions(usersWithSubs);
         } catch (error) {
             console.error('Error fetching subscriptions:', error);
@@ -128,6 +127,24 @@ const SubscriptionManagement = () => {
                 <p className="admin-page-subtitle">
                     <strong>Business</strong> recurring subscriptions only. Consumer accounts use Dine credits — manage them under{' '}
                     <Link to="/admin/grant-credits" style={{ color: 'var(--admin-accent)' }}>Grant credits</Link>.
+                </p>
+            </div>
+
+            <div
+                className="admin-card admin-mb-4"
+                style={{
+                    borderLeft: '4px solid var(--admin-accent)',
+                    padding: '1rem 1.25rem',
+                    background: 'rgba(99, 102, 241, 0.08)',
+                }}
+            >
+                <p style={{ margin: 0, color: 'var(--admin-text-primary)', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                    <strong>Stripe price IDs &amp; Firestore sync</strong> are not on this page. Update defaults in{' '}
+                    <code style={{ fontSize: '0.85em' }}>src/config/planDefaults.js</code>, then open{' '}
+                    <Link to="/admin/plans" style={{ color: 'var(--admin-accent)', fontWeight: 700 }}>
+                        Plans &amp; Packs
+                    </Link>{' '}
+                    and use <strong>Sync from code → Firestore</strong> (does not call the Stripe API).
                 </p>
             </div>
 

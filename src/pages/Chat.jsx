@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -15,6 +15,8 @@ import {
 } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
+import { useInvitations } from '../context/InvitationContext';
+import { buildFollowPlusProps } from '../utils/followPlusUi';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
 import NewReportModal from '../components/NewReportModal';
 import SharedContentBubble from '../components/SharedContentBubble';
@@ -32,6 +34,12 @@ const Chat = () => {
     const { isDark } = useTheme();
     const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
     const { showToast } = useToast();
+    const { currentUser: invCurrentUser, toggleFollow } = useInvitations();
+
+    const chatFollowCtx = useMemo(
+        () => ({ currentUser: invCurrentUser, userProfile, toggleFollow, showToast, t }),
+        [invCurrentUser, userProfile, toggleFollow, showToast, t]
+    );
 
     const [conversationId, setConversationId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -47,6 +55,12 @@ const Chat = () => {
     const [retryTrigger, setRetryTrigger] = useState(0);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [messagingRestricted, setMessagingRestricted] = useState(false);
+
+    const otherUserFollowPlus = useMemo(() => {
+        if (!otherUser) return null;
+        const uid = otherUser.uid || otherUser.id;
+        return buildFollowPlusProps({ ...otherUser, id: uid, uid }, chatFollowCtx);
+    }, [otherUser, chatFollowCtx]);
 
     const handleScroll = (e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -452,11 +466,27 @@ const Chat = () => {
                     <>
                         <div className="header-avatar" style={{ position: 'relative', display: 'flex', width: '42px', height: '42px', minWidth: '42px', minHeight: '42px', flexShrink: 0, marginRight: '12px' }}>
                             <UserAvatar
-                                user={otherUser}
+                                user={{ ...otherUser, id: otherUser.uid || otherUser.id, uid: otherUser.uid }}
                                 alt={otherUser.displayName}
+                                followPlus={otherUserFollowPlus || undefined}
+                                followBadgeSize={15}
                                 style={{ width: '42px', height: '42px', minWidth: '42px', minHeight: '42px', maxWidth: '42px', maxHeight: '42px', borderRadius: '50%', objectFit: 'cover' }}
                             />
-                            {otherUser.isOnline && <div className="online-dot" style={{ position: 'absolute', bottom: -2, right: -2, width: '12px', height: '12px', background: '#10b981', borderRadius: '50%', border: '2px solid var(--bg-card)' }} />}
+                            {otherUser.isOnline && (
+                                <div
+                                    className="online-dot"
+                                    style={{
+                                        position: 'absolute',
+                                        top: -2,
+                                        insetInlineEnd: -2,
+                                        width: '12px',
+                                        height: '12px',
+                                        background: '#10b981',
+                                        borderRadius: '50%',
+                                        border: '2px solid var(--bg-card)',
+                                    }}
+                                />
+                            )}
                         </div>
                         <div className="header-info" style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
                             <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{otherUser.displayName}</h3>

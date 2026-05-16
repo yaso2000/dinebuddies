@@ -97,7 +97,6 @@ const TemplateColorSelector = ({ onSelect, selectedTemplate, selectedColor }) =>
                 }}>
                     {Object.entries(TEMPLATE_STYLES).length > 0 ? (
                         Object.entries(TEMPLATE_STYLES).map(([key, template]) => {
-                            console.log('🎨 Rendering template:', key, template);
                             return (
                                 <button
                                     key={key}

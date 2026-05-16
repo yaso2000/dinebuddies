@@ -20,6 +20,7 @@ import {
     FaHistory,
     FaGift,
 } from 'react-icons/fa';
+import { APP_LOGO } from '../../config/appLogo';
 
 const Sidebar = ({ isOpen, onClose }) => {
     const { currentUser, userProfile } = useAuth();
@@ -97,7 +98,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             <aside className={`admin-sidebar ${!isOpen ? 'mobile-hidden' : ''}`}>
                 <div className="admin-sidebar-header">
                     <div className="admin-sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <img src="/logo.png" alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+                        <img src={APP_LOGO.white} alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
                         <div style={{ fontSize: '1rem', fontWeight: '800', color: '#fff', letterSpacing: '-0.02em' }}>
                             DineBuddies <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', fontWeight: '500', marginLeft: '4px' }}>Admin</span>
                         </div>

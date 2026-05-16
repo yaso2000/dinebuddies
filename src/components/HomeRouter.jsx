@@ -61,7 +61,16 @@ const HomeRouter = () => {
         return <Navigate to="/posts-feed" replace />;
     }
 
-    // Signed-out: desktop shows marketing landing; narrow viewports open the app shell (original mobile behavior).
+    const guestModeActive =
+        typeof localStorage !== 'undefined' && localStorage.getItem('guestMode') === 'true';
+    const profileGuest =
+        userProfile &&
+        (userProfile.isGuest === true || String(userProfile.role || '').toLowerCase() === 'guest');
+    if (!currentUser && (guestModeActive || profileGuest)) {
+        return <Navigate to="/posts-feed" replace />;
+    }
+
+    // Signed-out: mobile — open the main feed (video/posts); desktop — marketing landing.
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
         return <Navigate to="/posts-feed" replace />;
     }

@@ -1,6 +1,7 @@
 import { auth, db, storage } from '../firebase/config';
 import { collection, doc, getDoc, addDoc, updateDoc, deleteDoc, increment, serverTimestamp, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 
 /**
  * Publishes or updates a special offer.
@@ -12,7 +13,6 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
  */
 export const publishOffer = async (restaurantId, offerData, file, offerId = null) => {
     try {
-        console.log("🚀 Starting offer publication for restaurant:", restaurantId);
 
         // 1. Validate restaurant existence and credits
         const restaurantRef = doc(db, "users", restaurantId);
@@ -27,9 +27,8 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
             throw new Error("Target account is not a business account.");
         }
 
-        // Check for elite plan or available credits
-        const isElite = data.subscriptionTier === 'elite';
-        const hasEnoughCredits = (data.offerCredits > 0) || isElite;
+        const isPaidBusiness = normalizeBusinessTier(data.subscriptionTier) === 'paid';
+        const hasEnoughCredits = (data.offerCredits > 0) || isPaidBusiness;
 
         if (!offerId && !hasEnoughCredits) {
             throw new Error("Insufficient offer credits. Please top up your balance.");
@@ -38,7 +37,6 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
         // 2. Upload Media (image/video)
         let mediaUrl = "";
         if (file) {
-            console.log("📤 Uploading media to storage...");
             const currentUid = auth.currentUser?.uid;
             if (!currentUid || currentUid !== restaurantId) {
                 throw new Error("Unauthorized media upload path for this offer.");
@@ -46,7 +44,6 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
             const storageRef = ref(storage, `offers/${currentUid}_${Date.now()}`);
             await uploadBytes(storageRef, file);
             mediaUrl = await getDownloadURL(storageRef);
-            console.log("✅ Media uploaded:", mediaUrl);
         } else if (offerData.mediaUrl) {
             mediaUrl = offerData.mediaUrl;
         }
@@ -75,7 +72,7 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
                 status: offerData.status || 'active', // active, draft, frozen
                 identityType: offerData.identityType || 'logo',
                 badgeId: offerData.badgeId || null,
-                priorityScore: isElite ? 100 : 50,
+                priorityScore: isPaidBusiness ? 100 : 50,
                 location: data.businessInfo?.location || data.location
             },
             stats: offerData.stats || { impressions: 0, invitationsCreated: 0 },
@@ -86,17 +83,15 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
             finalOffer.createdAt = serverTimestamp();
         }
 
-        console.log("💾 Saving offer to Firestore...");
 
         // 4. Update or Add offer
         if (offerId) {
             const offerRef = doc(db, "special_offers", offerId);
             await updateDoc(offerRef, finalOffer);
-            console.log("✅ Offer updated successfully");
             return { success: true, id: offerId };
         } else {
             const offerDoc = await addDoc(collection(db, "special_offers"), finalOffer);
-            if (!isElite) {
+            if (!isPaidBusiness) {
                 await updateDoc(restaurantRef, {
                     offerCredits: increment(-1)
                 });

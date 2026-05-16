@@ -6,7 +6,7 @@ import app, { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaCheck, FaStar, FaCrown, FaFire } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { useInvitations } from '../context/InvitationContext';
+import { usePricingData } from '../context/PricingDataContext';
 import { useToast } from '../context/ToastContext';
 import { convertFromUSD } from '../utils/currencyConverter';
 import { goToLogin } from '../utils/goToLogin';
@@ -15,7 +15,7 @@ const PricingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { currentUser, userProfile } = useAuth();
-    const { creditPacks, subscriptionPlans: contextPlans } = useInvitations();
+    const { creditPacks, subscriptionPlans: contextPlans } = usePricingData();
     const { showToast } = useToast();
 
     // Determine page type from URL
@@ -43,10 +43,8 @@ const PricingPage = () => {
             const userType = userProfile.role === 'business' ? 'business' : 'user';
 
             if (userType === 'business' && !isBusinessPage) {
-                console.log('🔄 Redirecting partner to business pricing');
                 navigate('/business/pricing', { replace: true });
             } else if (userType === 'user' && isBusinessPage) {
-                console.log('🔄 Redirecting user to standard pricing');
                 navigate('/pricing', { replace: true });
             }
         }
@@ -94,6 +92,7 @@ const PricingPage = () => {
                 priceId: plan.stripePriceId,
                 planId: plan.id,
                 planName: plan.name,
+                subscriptionKind: plan.type === 'business' ? 'business' : 'consumer',
                 successUrl: `${window.location.origin}/payment-success`,
                 cancelUrl: `${window.location.origin}/pricing`
             });
@@ -153,7 +152,7 @@ const PricingPage = () => {
                             ? t('Professional solutions to grow your business', 'Professional solutions to grow your business')
                             : t(
                                   'credits_pricing_page_subtitle',
-                                  'Dine Credits are shared by all accounts: private invites, date invites, AI, and more. Buy packs in your wallet — final per-use pricing may be announced later.'
+                                  'Public invitations are free. Dine Credits are for private and date invitations only. Buying credits for AI features is paused. Top up from your wallet when purchases are enabled.'
                               )}
                     </p>
                 </div>
@@ -403,7 +402,7 @@ const PricingPage = () => {
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.55, marginBottom: '1.25rem' }}>
                             {t(
                                 'dine_credits_wallet_card_body',
-                                'Buy credit packs in one place. The same balance covers private invitations, date invitations, AI tools, and other in-app features.'
+                                'Buy Dine Credits for private and date invitations. Public invitations stay free. AI credit purchases are paused for now.'
                             )}
                         </p>
                         <button

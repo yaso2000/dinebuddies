@@ -18,7 +18,6 @@ class NotificationSound {
     // Request permission from user
     async requestPermission() {
         if (!('Notification' in window)) {
-            console.log('This browser does not support notifications');
             return false;
         }
 
@@ -34,7 +33,6 @@ class NotificationSound {
     // Show notification with system sound
     showNotification(title, options = {}) {
         if (this.permission !== 'granted') {
-            console.log('Notification permission not granted');
             return;
         }
 
@@ -103,7 +101,6 @@ class NotificationSound {
     // Backward compatibility - keep setVolume but it does nothing
     setVolume(volume) {
         // System notifications don't have volume control
-        console.log('System notifications volume is controlled by OS');
     }
 }
 

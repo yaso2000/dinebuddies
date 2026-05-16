@@ -9,9 +9,12 @@ import { needsEmailPasswordVerification } from '../utils/emailVerification';
 import { sendVerificationEmailResend, verificationEmailErrorMessage } from '../services/verificationEmailService';
 import { FaEnvelope, FaCheckCircle, FaSignOutAlt, FaRedo } from 'react-icons/fa';
 import { goToLogin } from '../utils/goToLogin';
+import { useTheme } from '../context/ThemeContext';
+import { appLogoForChrome } from '../config/appLogo';
 
 const VerifyEmail = () => {
     const { t } = useTranslation();
+    const { themeMode } = useTheme();
     const { showToast } = useToast();
     const navigate = useNavigate();
     const { currentUser, userProfile, loading, signOut } = useAuth();
@@ -131,7 +134,7 @@ const VerifyEmail = () => {
                 boxShadow: '0 16px 40px rgba(0,0,0,0.25)',
             }}>
                 <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                    <img src="/db-logo.svg" alt="" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 12 }} />
+                    <img src={appLogoForChrome(themeMode)} alt="" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 12 }} />
                     <h1 style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-main)', margin: '0 0 0.35rem' }}>
                         {t('verify_email_title', 'Activate your account')}
                     </h1>

@@ -47,7 +47,6 @@ export const completeInvitation = async (invitationId, invitation, currentUser) 
                 };
             }
 
-            console.log('✅ Location verified:', verification);
         }
 
         // 4. Update invitation status to completed

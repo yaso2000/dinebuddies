@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { APP_LOGO } from '../config/appLogo';
 
 const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) => {
     const { t } = useTranslation();
@@ -166,7 +167,7 @@ const InstagramStoryTemplate = forwardRef(({ data, type = 'invitation' }, ref) =
                     {/* DineBuddies branding + CTA */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                            <img src="/db-logo-white.svg" alt="DineBuddies" style={{ width: '80px', height: '80px', filter: 'brightness(0) invert(1)' }} />
+                            <img src={APP_LOGO.white} alt="DineBuddies" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
                             <div style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '1px' }}>DineBuddies</div>
                         </div>
                         {isBusiness && (

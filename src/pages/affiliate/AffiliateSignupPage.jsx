@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,6 +14,9 @@ import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { sendVerificationEmailResend } from '../../services/verificationEmailService';
 import LocationAutocomplete from '../../components/LocationAutocomplete';
 import { parseGoogleAddressComponents } from '../../utils/googlePlacesBusiness';
+import AffiliatePublicRouteAccountGuard from '../../components/AffiliatePublicRouteAccountGuard';
+import { isMobileRestrictedShell, subscribeMobileRestrictedShell } from '../../utils/mobileAppShell';
+import { getAffiliateEmailSignInHref } from '../../utils/affiliateAuthRoutes';
 import './AffiliateDashboard.css';
 import '../../components/venue-search.css';
 
@@ -34,6 +37,14 @@ export default function AffiliateSignupPage() {
     const [countryCode, setCountryCode] = useState('');
     const [locationSearch, setLocationSearch] = useState('');
     const [paypalEmail, setPaypalEmail] = useState('');
+
+    const [mobileShell, setMobileShell] = useState(() =>
+        typeof window !== 'undefined' ? isMobileRestrictedShell() : false
+    );
+    useEffect(() => {
+        setMobileShell(isMobileRestrictedShell());
+        return subscribeMobileRestrictedShell(setMobileShell);
+    }, []);
 
     const mapsInputStyle = {
         width: '100%',
@@ -150,7 +161,40 @@ export default function AffiliateSignupPage() {
         }
     };
 
+    if (mobileShell) {
+        return (
+            <AffiliatePublicRouteAccountGuard>
+                <div className="affiliate-shell affiliate-shell--center">
+                    <div className="affiliate-card" style={{ maxWidth: 480, width: '100%' }}>
+                        <h1 className="affiliate-h1">{t('affiliate_signup_title', 'Affiliate registration')}</h1>
+                        <p className="affiliate-muted" style={{ marginBottom: 16, lineHeight: 1.55 }}>
+                            {t(
+                                'affiliate_signup_desktop_only',
+                                'Creating a new affiliate account is only supported on a desktop or laptop browser. Please open this page on a computer to continue.'
+                            )}
+                        </p>
+                        <div className="affiliate-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                            <Link
+                                to={getAffiliateEmailSignInHref('/affiliate/dashboard')}
+                                className="affiliate-btn affiliate-btn--primary"
+                            >
+                                {t('affiliate_portal_cta_login', 'Sign in')}
+                            </Link>
+                            <Link to="/affiliate" className="affiliate-btn affiliate-btn--ghost">
+                                {t('affiliate_back_home', 'Back to home')}
+                            </Link>
+                        </div>
+                        <p className="affiliate-muted" style={{ marginTop: 14, fontSize: '0.82rem' }}>
+                            <Link to="/affiliate/sign-out">{t('affiliate_sign_out_escape_link', 'Session stuck? Sign out here')}</Link>
+                        </p>
+                    </div>
+                </div>
+            </AffiliatePublicRouteAccountGuard>
+        );
+    }
+
     return (
+        <AffiliatePublicRouteAccountGuard blockRedirect={loading}>
         <div className="affiliate-shell affiliate-shell--center">
             <div className="affiliate-card affiliate-auth-card" style={{ maxWidth: 480, width: '100%' }}>
                 <h1 className="affiliate-h1">{t('affiliate_signup_title', 'Affiliate registration')}</h1>
@@ -274,7 +318,7 @@ export default function AffiliateSignupPage() {
                 </form>
                 <p className="affiliate-muted" style={{ marginTop: 18, fontSize: '0.9rem' }}>
                     {t('affiliate_auth_has_account', 'Already have an account?')}{' '}
-                    <Link to="/affiliate/login">{t('affiliate_login_link', 'Sign in')}</Link>
+                    <Link to={getAffiliateEmailSignInHref('/affiliate/dashboard')}>{t('affiliate_login_link', 'Sign in')}</Link>
                 </p>
                 <p style={{ marginTop: 12 }}>
                     <Link to="/affiliate" className="affiliate-muted">
@@ -286,5 +330,6 @@ export default function AffiliateSignupPage() {
                 </p>
             </div>
         </div>
+        </AffiliatePublicRouteAccountGuard>
     );
 }

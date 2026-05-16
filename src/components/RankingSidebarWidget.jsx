@@ -18,7 +18,7 @@ export default function RankingSidebarWidget() {
         <div className="ds-widget-card">
             <div className="ds-widget-header">
                 <FaCrown size={14} style={{ color: 'var(--luxury-gold)' }} />
-                <span>{t('rankings_top_elite', 'Top Elite Ranking')}</span>
+                <span>{t('rankings_top_paid', 'Top Paid Business')}</span>
                 <Link to="/rankings" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
             </div>
             {top.map((b, i) => (

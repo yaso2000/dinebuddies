@@ -90,7 +90,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
     };
 
     const handleLocationSelect = (place) => {
-        console.log('Selected place:', place);
 
         // Extract city and country from fullAddress
         let city = '';
@@ -598,8 +597,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     }}
                                 >
                                     <option value="free">Free</option>
-                                    <option value="professional">Professional</option>
-                                    <option value="elite">Elite</option>
+                                    <option value="paid">Paid ($29/mo)</option>
                                 </select>
                             </div>
                         </>

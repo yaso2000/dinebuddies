@@ -9,7 +9,8 @@ const BusinessLimitsEditor = ({ business, onClose, onSave }) => {
 
     const planId = (() => {
         const t = (business.subscriptionTier || 'free').toLowerCase();
-        return ['free', 'professional', 'elite'].includes(t) ? t : 'free';
+        if (t === 'paid' || t === 'elite' || t === 'professional' || t === 'pro' || t === 'premium') return 'paid';
+        return 'free';
     })();
     const defaultLimits = getPlanById(planId);
 
@@ -84,7 +85,7 @@ const BusinessLimitsEditor = ({ business, onClose, onSave }) => {
 
         switch (action) {
             case 'grant_pro_month':
-                const proPlan = getPlanById('pro');
+                const proPlan = getPlanById('paid');
                 const oneMonthLater = new Date();
                 oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
                 const expiryDate = oneMonthLater.toISOString().split('T')[0];

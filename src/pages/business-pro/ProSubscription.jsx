@@ -6,17 +6,17 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../firebase/config';
 import { FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
 import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
+import { AI_FEATURES_ENABLED } from '../../config/featureFlags';
 import { normalizeBusinessTier } from '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
 
-/** Stripe Checkout + webhook use legacy planId for tier resolution — keep `elite` for $29 business paid. */
-const PAID_STRIPE_PLAN = BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite');
+const PAID_STRIPE_PLAN = BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'paid');
 
 const FREE_FEATURES = [
     ['biz_plan_free_feat_profile', 'Business profile & basic photos'],
     ['biz_plan_free_feat_community', 'Community access'],
     ['biz_plan_free_feat_motion_5', '5 manual motion posts / month'],
-    ['biz_plan_free_feat_ai_credits', 'AI requires Dine Credits'],
+    ['biz_plan_free_feat_directory', 'Directory listing & reviews']
 ];
 
 const PAID_FEATURES = [
@@ -26,7 +26,9 @@ const PAID_FEATURES = [
     ['biz_plan_paid_feat_analytics', 'Advanced analytics'],
     ['biz_plan_paid_feat_member_notifs', 'Member notifications'],
     ['biz_plan_paid_feat_profile_tools', 'Enhanced profile tools'],
-    ['biz_plan_paid_feat_ai_credits_note', 'AI still uses Dine Credits — not unlimited'],
+    ...(AI_FEATURES_ENABLED
+        ? [['biz_plan_paid_feat_ai_optional', 'Optional AI add-ons when enabled']]
+        : [['biz_plan_no_ai', 'No AI features in this release']])
 ];
 
 const ProSubscription = () => {
@@ -56,8 +58,9 @@ const ProSubscription = () => {
             const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
             const result = await createCheckoutSession({
                 priceId: plan.stripePriceId,
-                planId: 'elite',
+                planId: 'paid',
                 planName: t('biz_plan_paid_name', 'Paid Business'),
+                subscriptionKind: 'business',
                 successUrl: `${window.location.origin}/payment-success`,
                 cancelUrl: billingReturnUrl,
             });
@@ -212,13 +215,13 @@ const ProSubscription = () => {
                                 ${paidPrice}
                                 {t(
                                     'biz_plan_paid_banner_suffix',
-                                    '/month — full manual feature set. Buy Dine Credits for AI.'
+                                    '/month — full partner tools (no AI).'
                                 )}
                             </>
                         ) : (
                             t(
                                 'biz_plan_free_banner_desc',
-                                'Core profile and community. Motion limits apply; AI uses Dine Credits.'
+                                'Core profile and community. Motion limits apply. No AI features.'
                             )
                         )}
                     </div>
@@ -267,7 +270,10 @@ const ProSubscription = () => {
             </div>
 
             <p style={{ marginTop: 24, fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                {t('biz_plan_credits_lead', 'Need AI?')}{' '}
+                {t(
+                    'biz_plan_credits_lead',
+                    'Need Dine Credits for private or date invitations (consumers) or extras?'
+                )}{' '}
                 <button
                     type="button"
                     onClick={() => navigate('/settings/credits')}

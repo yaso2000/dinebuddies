@@ -19,7 +19,7 @@ export function verificationEmailErrorMessage(err, fallback = 'Could not send ve
  * Sends verification email via Resend (Cloud Function + HTML template).
  * Replaces Firebase client `sendEmailVerification` for better deliverability and design.
  *
- * @param {'business_signup'|'business_login'|'settings_email'|'pro_settings'|'home'} flow — matches continue URL after verify
+ * @param {'business_signup'|'business_login'|'settings_email'|'pro_settings'|'affiliate_signup'|'home'} flow — matches continue URL after verify
  */
 export async function sendVerificationEmailResend(flow = 'home') {
     const run = httpsCallable(functionsInstance, 'sendEmailVerificationResend');
