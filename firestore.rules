@@ -101,6 +101,43 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function sensitiveUserFields() {
+      return [
+        'role',
+        'accountType',
+        'isBusiness',
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'banned',
+        'bannedAt',
+        'subscription',
+        'subscriptionStatus',
+        'subscriptionId',
+        'subscriptionTier',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'monthlyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'usedPrivateCreditsThisMonth',
+        'purchasedPrivateCredits',
+        'freeCredits',
+        'paidCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'offerCredits',
+        'offerSlotCredits',
+        'stripeCustomerId',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'reputation',
+        'isVerified'
+      ];
+    }
+
+    function isSafeSelfUserUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(sensitiveUserFields());
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -129,9 +166,7 @@ service cloud.firestore {
       allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
       allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
-      allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+      allow update: if isOwner(userId) && isSafeSelfUserUpdate();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
