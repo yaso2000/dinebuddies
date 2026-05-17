@@ -101,6 +101,58 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function userCreateHasSafeRole() {
+      return (!request.resource.data.keys().hasAny(['role']) ||
+              request.resource.data.role in ['user', 'business', 'partner']) &&
+             (!request.resource.data.keys().hasAny(['accountType']) ||
+              request.resource.data.accountType in ['user', 'business', 'partner']);
+    }
+
+    function userCreateDoesNotGrantEntitlements() {
+      return !request.resource.data.keys().hasAny([
+               'admin', 'isAdmin', 'superOwner',
+               'subscriptionStatus', 'subscriptionId', 'currentPlan',
+               'weeklyPrivateQuota', 'usedPrivateCreditsThisWeek',
+               'monthlyPrivateQuota',
+               'stripeCustomerId', 'subscriptionStartDate', 'subscriptionEndDate',
+               'cancelAtPeriodEnd', 'offerSlotCredits',
+               'freeCredits', 'paidCredits', 'totalCreditsPurchased', 'totalCreditsSpent',
+               'adminGrantedAt', 'adminGrantedBy', 'banned', 'bannedAt'
+             ]) &&
+             (!request.resource.data.keys().hasAny(['subscriptionTier']) ||
+              request.resource.data.subscriptionTier == 'free') &&
+             (!request.resource.data.keys().hasAny(['purchasedPrivateCredits']) ||
+              (request.resource.data.purchasedPrivateCredits >= 0 &&
+               request.resource.data.purchasedPrivateCredits <= 5)) &&
+             (!request.resource.data.keys().hasAny(['usedPrivateCreditsThisMonth']) ||
+              request.resource.data.usedPrivateCreditsThisMonth == 0) &&
+             (!request.resource.data.keys().hasAny(['reputation']) ||
+              (request.resource.data.reputation >= 0 && request.resource.data.reputation <= 100));
+    }
+
+    function userUpdateDoesNotTouchSensitiveFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+               'role', 'accountType',
+               'admin', 'isAdmin', 'superOwner',
+               'subscriptionTier', 'subscriptionStatus', 'subscriptionId', 'currentPlan',
+               'weeklyPrivateQuota', 'usedPrivateCreditsThisWeek',
+               'monthlyPrivateQuota', 'usedPrivateCreditsThisMonth',
+               'purchasedPrivateCredits', 'stripeCustomerId',
+               'subscriptionStartDate', 'subscriptionEndDate', 'cancelAtPeriodEnd',
+               'offerSlotCredits',
+               'freeCredits', 'paidCredits', 'totalCreditsPurchased', 'totalCreditsSpent',
+               'adminGrantedAt', 'adminGrantedBy', 'banned', 'bannedAt', 'reputation'
+             ]);
+    }
+
+    function businessInfoUpdateDoesNotTouchSensitiveFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['businessInfo']) ||
+             !request.resource.data.get('businessInfo', {})
+               .diff(resource.data.get('businessInfo', {}))
+               .affectedKeys()
+               .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes']);
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,7 +164,9 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isOwner(userId) &&
+                      userCreateHasSafeRole() &&
+                      userCreateDoesNotGrantEntitlements();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
@@ -129,9 +183,9 @@ service cloud.firestore {
       allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
       allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
-      allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+      allow update: if isOwner(userId) &&
+                       userUpdateDoesNotTouchSensitiveFields() &&
+                       businessInfoUpdateDoesNotTouchSensitiveFields();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&

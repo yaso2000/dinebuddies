@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getPaymentCatalogItem } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,13 +22,14 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { planId } = data;
     const userId = context.auth.uid;
+    const plan = getPaymentCatalogItem(planId);
 
-    if (!priceId) {
+    if (!plan) {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Invalid checkout plan'
         );
     }
 
@@ -54,24 +56,37 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             }, { merge: true });
         }
 
+        const successUrl = String(data?.successUrl || '').trim();
+        const cancelUrl = String(data?.cancelUrl || '').trim();
+        if (!successUrl || !cancelUrl) {
+            throw new functions.https.HttpsError('invalid-argument', 'successUrl and cancelUrl are required');
+        }
+
         // إنشاء Checkout Session
+        const sessionMetadata = {
+            userId: userId,
+            planId: plan.planId,
+            planName: plan.planName,
+            purchaseType: plan.kind,
+            tier: plan.tier || '',
+            purchasedPrivateCredits: String(plan.purchasedPrivateCredits || 0),
+            offerSlotCredits: String(plan.offerSlotCredits || 0),
+        };
+
         const session = await stripe.checkout.sessions.create({
             customer: customerId,
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: plan.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl,
-            metadata: {
-                userId: userId,
-                planId: planId,
-                planName: planName
-            }
+            mode: plan.kind === 'subscription' ? 'subscription' : 'payment',
+            success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: cancelUrl,
+            metadata: sessionMetadata,
+            ...(plan.kind === 'subscription' ? { subscription_data: { metadata: sessionMetadata } } : {}),
         });
 
         console.log(`✅ Checkout session created for user ${userId}: ${session.id}`);
