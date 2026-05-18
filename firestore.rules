@@ -80,6 +80,74 @@ service cloud.firestore {
       return !resource.data.keys().hasAny(['role']);
     }
 
+    function sensitiveUserFields() {
+      return [
+        'admin', 'isAdmin', 'superOwner', 'adminGrantedAt', 'adminGrantedBy',
+        'banned', 'bannedAt',
+        'subscriptionStatus', 'subscriptionId', 'stripeSubscriptionId', 'subscriptionTier',
+        'currentPlan', 'weeklyPrivateQuota', 'monthlyPrivateQuota',
+        'usedPrivateCreditsThisWeek', 'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth', 'lastQuotaResetDate', 'weeklyResetAt',
+        'subscriptionStartDate', 'subscriptionEndDate', 'stripeCustomerId',
+        'freeCredits', 'paidCredits', 'totalCreditsPurchased', 'totalCreditsSpent',
+        'purchasedPrivateCredits', 'offerCredits', 'offerSlotCredits', 'lastCreditGrantedAt',
+        'reputation'
+      ];
+    }
+
+    function protectedSelfUpdateFields() {
+      return [
+        'role', 'accountType',
+        'admin', 'isAdmin', 'superOwner', 'adminGrantedAt', 'adminGrantedBy',
+        'banned', 'bannedAt',
+        'subscriptionStatus', 'subscriptionId', 'stripeSubscriptionId', 'subscriptionTier',
+        'currentPlan', 'weeklyPrivateQuota', 'monthlyPrivateQuota',
+        'usedPrivateCreditsThisWeek', 'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth', 'lastQuotaResetDate', 'weeklyResetAt',
+        'subscriptionStartDate', 'subscriptionEndDate', 'stripeCustomerId',
+        'freeCredits', 'paidCredits', 'totalCreditsPurchased', 'totalCreditsSpent',
+        'purchasedPrivateCredits', 'offerCredits', 'offerSlotCredits', 'lastCreditGrantedAt',
+        'reputation'
+      ];
+    }
+
+    function isProtectedSelfUserUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedSelfUpdateFields());
+    }
+
+    function isSafeInitialUserProfileWrite() {
+      return (!request.resource.data.keys().hasAny(['role']) ||
+              request.resource.data.role in ['user', 'business', 'partner']) &&
+             (!request.resource.data.keys().hasAny(['accountType']) ||
+              request.resource.data.accountType in ['user', 'business', 'partner']) &&
+             request.resource.data.get('admin', false) == false &&
+             request.resource.data.get('isAdmin', false) == false &&
+             request.resource.data.get('superOwner', false) == false &&
+             request.resource.data.get('banned', false) == false &&
+             request.resource.data.get('subscriptionTier', 'free') == 'free' &&
+             !request.resource.data.keys().hasAny([
+               'subscriptionStatus', 'subscriptionId', 'stripeSubscriptionId',
+               'currentPlan', 'subscriptionStartDate', 'subscriptionEndDate', 'stripeCustomerId',
+               'adminGrantedAt', 'adminGrantedBy', 'bannedAt', 'lastCreditGrantedAt'
+             ]) &&
+             request.resource.data.get('freeCredits', 0) == 0 &&
+             request.resource.data.get('paidCredits', 0) == 0 &&
+             request.resource.data.get('totalCreditsPurchased', 0) == 0 &&
+             request.resource.data.get('totalCreditsSpent', 0) == 0 &&
+             request.resource.data.get('purchasedPrivateCredits', 0) <= 5 &&
+             request.resource.data.get('offerCredits', 0) == 0 &&
+             request.resource.data.get('offerSlotCredits', 0) == 0 &&
+             request.resource.data.get('weeklyPrivateQuota', 0) == 0 &&
+             request.resource.data.get('monthlyPrivateQuota', 0) == 0 &&
+             request.resource.data.get('usedPrivateCreditsThisWeek', 0) == 0 &&
+             request.resource.data.get('usedPrivateCreditsThisMonth', 0) == 0 &&
+             request.resource.data.get('reputation', 100) <= 100;
+    }
+
+    function isSafeBusinessRoleCompletion() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(sensitiveUserFields());
+    }
+
     // Mid-flow business signup (step 1) may have registrationIntent:business but role accidentally set to
     // 'user' (race with profile bootstrap). Allow one completion write to role:business + businessInfo.
     function isBusinessSignupCompletionFromIntent() {
@@ -112,26 +180,28 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isSafeInitialUserProfileWrite();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       isSafeInitialUserProfileWrite();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       isSafeBusinessRoleCompletion();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent() && isSafeBusinessRoleCompletion();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile() && isSafeBusinessRoleCompletion();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                         .hasAny(protectedSelfUpdateFields());
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
@@ -423,7 +493,10 @@ service cloud.firestore {
       allow create: if (isSignedIn() &&
                       request.resource.data.senderId == request.auth.uid &&
                       request.resource.data.restaurantId == request.auth.uid) ||
-                      (request.resource.data.type == 'business_feedback');
+                      (isSignedIn() &&
+                       request.resource.data.type == 'business_feedback' &&
+                       request.resource.data.senderId == request.auth.uid &&
+                       request.resource.data.restaurantId is string);
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
