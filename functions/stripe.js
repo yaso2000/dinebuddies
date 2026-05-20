@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getCatalogItemByPriceId } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,7 +22,7 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const priceId = String(data?.priceId || '').trim();
     const userId = context.auth.uid;
 
     if (!priceId) {
@@ -29,6 +30,20 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             'invalid-argument',
             'Price ID is required'
         );
+    }
+
+    const catalogItem = getCatalogItemByPriceId(priceId);
+    if (!catalogItem) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Unknown checkout price'
+        );
+    }
+
+    const successUrl = String(data.successUrl || '').trim();
+    const cancelUrl = String(data.cancelUrl || '').trim();
+    if (!successUrl || !cancelUrl) {
+        throw new functions.https.HttpsError('invalid-argument', 'successUrl and cancelUrl are required');
     }
 
     try {
@@ -64,13 +79,13 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl,
+            mode: catalogItem.mode,
+            success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: cancelUrl,
             metadata: {
                 userId: userId,
-                planId: planId,
-                planName: planName
+                catalogId: catalogItem.id,
+                purchaseType: catalogItem.kind
             }
         });
 
