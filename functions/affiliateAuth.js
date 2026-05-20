@@ -119,6 +119,10 @@ const registerAffiliateAgentProfile = functions.https.onCall(async (data, contex
                 paidCredits: typeof d.paidCredits === 'number' && Number.isFinite(d.paidCredits) ? d.paidCredits : 0,
                 pending_payouts:
                     typeof d.pending_payouts === 'number' && Number.isFinite(d.pending_payouts) ? d.pending_payouts : 0,
+                total_referred_users: 0,
+                pending_commissions: 0,
+                total_earned: 0,
+                current_balance: 0,
                 registrationChannel: 'affiliate_portal',
                 authProvider: 'affiliate_email',
                 created_time: d.created_time || admin.firestore.FieldValue.serverTimestamp(),

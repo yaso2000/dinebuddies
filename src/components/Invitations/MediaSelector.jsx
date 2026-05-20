@@ -3,6 +3,7 @@ import { FaVideo, FaStore, FaCamera, FaUpload, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import MediaUpload from '../Shared/MediaUpload';
 import UnifiedCamera from '../UnifiedCamera';
+import ImageModerationOverlay from '../Shared/ImageModerationOverlay';
 
 import './MediaSelector.css';
 
@@ -16,6 +17,8 @@ const MediaSelector = ({
     onPersistImage,
     onDeleteLibraryVideo,
     onDeleteLibraryImage,
+    /** Called when moderated image upload fails (e.g. toast). */
+    onImageUploadError,
     initialData = null,
     className = '',
     /** Hide venue cover block (e.g. dating flow). */
@@ -35,6 +38,8 @@ const MediaSelector = ({
     const [cameraSubMode, setCameraSubMode] = useState(null);
     const [selectedMedia, setSelectedMedia] = useState(initialData || null);
     const [videoPersisting, setVideoPersisting] = useState(false);
+    const [imagePersisting, setImagePersisting] = useState(false);
+    const [imageRejectedPreview, setImageRejectedPreview] = useState(null);
 
     useEffect(() => {
         setSelectedMedia(parentMediaData ?? null);
@@ -150,7 +155,31 @@ const MediaSelector = ({
     const isLibraryTileSelected =
         libraryVideo && selectedMedia?.type === 'video' && selectedMedia?.preview === libraryVideo.videoUrl;
 
-    const handlePhotoCapture = (file, previewUrl) => {
+    const handlePhotoCapture = async (file, previewUrl) => {
+        if (onPersistImage) {
+            setImageRejectedPreview(null);
+            setImagePersisting(true);
+            try {
+                const persisted = await onPersistImage(file);
+                if (!persisted) throw new Error('image-rejected');
+                const mediaData = {
+                    source: 'custom_image',
+                    type: 'image',
+                    file: null,
+                    preview: persisted,
+                    fromLibrary: true,
+                };
+                setSelectedMedia(mediaData);
+                onMediaSelect(mediaData);
+            } catch (e) {
+                console.error(e);
+                setImageRejectedPreview(previewUrl);
+                onImageUploadError?.(e);
+            } finally {
+                setImagePersisting(false);
+            }
+            return;
+        }
         const mediaData = {
             source: 'custom_image',
             file,
@@ -520,19 +549,56 @@ const MediaSelector = ({
                             </div>
                         )}
 
-                        {isCameraPhotoSelection && (
-                            <div className="media-preview" style={{ position: 'relative', marginTop: 12 }}>
-                                <img
-                                    src={selectedMedia.preview}
-                                    alt=""
-                                    className="preview-image"
+                        {imagePersisting && (
+                            <p role="status" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: 8 }}>
+                                {t('image_upload_checking')}
+                            </p>
+                        )}
+
+                        {imageRejectedPreview && (
+                            <div style={{ marginTop: 12 }}>
+                                <ImageModerationOverlay status="rejected">
+                                    <img
+                                        src={imageRejectedPreview}
+                                        alt=""
+                                        style={{ width: '100%', maxHeight: 300, objectFit: 'cover', display: 'block' }}
+                                    />
+                                </ImageModerationOverlay>
+                                <button
+                                    type="button"
+                                    onClick={() => setImageRejectedPreview(null)}
                                     style={{
+                                        marginTop: 8,
                                         width: '100%',
-                                        maxHeight: '300px',
-                                        objectFit: 'cover',
-                                        borderRadius: '12px',
+                                        padding: '8px 12px',
+                                        borderRadius: 10,
+                                        border: '1px solid var(--border-color)',
+                                        background: 'var(--bg-input)',
+                                        color: 'var(--text-main)',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
                                     }}
-                                />
+                                >
+                                    {t('image_rejected_choose_another', 'Choose another photo')}
+                                </button>
+                            </div>
+                        )}
+
+                        {isCameraPhotoSelection && !imageRejectedPreview && (
+                            <div className="media-preview" style={{ position: 'relative', marginTop: 12 }}>
+                                <ImageModerationOverlay status={imagePersisting ? 'checking' : null}>
+                                    <img
+                                        src={selectedMedia.preview}
+                                        alt=""
+                                        className="preview-image"
+                                        style={{
+                                            width: '100%',
+                                            maxHeight: '300px',
+                                            objectFit: 'cover',
+                                            borderRadius: '12px',
+                                        }}
+                                    />
+                                </ImageModerationOverlay>
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -620,14 +686,53 @@ const MediaSelector = ({
                                 </div>
                             </div>
                         )}
-                        {!isUploadSelection && (
+                        {imagePersisting && !isUploadSelection && (
+                            <p role="status" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: 10 }}>
+                                {t('image_upload_checking')}
+                            </p>
+                        )}
+
+                        {imageRejectedPreview && (
+                            <div style={{ marginBottom: 12 }}>
+                                <ImageModerationOverlay status="rejected">
+                                    <img
+                                        src={imageRejectedPreview}
+                                        alt=""
+                                        style={{ width: '100%', maxHeight: 300, objectFit: 'cover', display: 'block' }}
+                                    />
+                                </ImageModerationOverlay>
+                                <button
+                                    type="button"
+                                    onClick={() => setImageRejectedPreview(null)}
+                                    style={{
+                                        marginTop: 8,
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        borderRadius: 10,
+                                        border: '1px solid var(--border-color)',
+                                        background: 'var(--bg-input)',
+                                        color: 'var(--text-main)',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {t('image_rejected_choose_another', 'Choose another photo')}
+                                </button>
+                            </div>
+                        )}
+
+                        {!isUploadSelection && !imageRejectedPreview && (
                             <MediaUpload
                                 type="image"
                                 maxSize={10}
+                                awaitMediaSelect={!!onPersistImage}
                                 onMediaSelect={async (file, preview, type) => {
                                     if (onPersistImage && type === 'image') {
-                                        const persisted = await onPersistImage(file);
-                                        if (persisted) {
+                                        setImageRejectedPreview(null);
+                                        setImagePersisting(true);
+                                        try {
+                                            const persisted = await onPersistImage(file);
+                                            if (!persisted) throw new Error('image-rejected');
                                             const mediaData = {
                                                 source: 'custom_image',
                                                 type: 'image',
@@ -637,26 +742,35 @@ const MediaSelector = ({
                                             };
                                             setSelectedMedia(mediaData);
                                             onMediaSelect(mediaData);
-                                            return;
+                                        } catch (e) {
+                                            console.error(e);
+                                            setImageRejectedPreview(preview);
+                                            onImageUploadError?.(e);
+                                            throw e;
+                                        } finally {
+                                            setImagePersisting(false);
                                         }
+                                        return;
                                     }
                                     handleCustomMedia(file, preview, type);
                                 }}
                             />
                         )}
-                        {isUploadSelection && (selectedMedia.preview || selectedMedia.url) && (
+                        {isUploadSelection && (selectedMedia.preview || selectedMedia.url) && !imageRejectedPreview && (
                             <div className="media-preview" style={{ position: 'relative' }}>
-                                <img
-                                    src={selectedMedia.preview || selectedMedia.url}
-                                    alt="Selected"
-                                    className="preview-image"
-                                    style={{
-                                        width: '100%',
-                                        maxHeight: '300px',
-                                        objectFit: 'cover',
-                                        borderRadius: '12px',
-                                    }}
-                                />
+                                <ImageModerationOverlay status={imagePersisting ? 'checking' : null}>
+                                    <img
+                                        src={selectedMedia.preview || selectedMedia.url}
+                                        alt="Selected"
+                                        className="preview-image"
+                                        style={{
+                                            width: '100%',
+                                            maxHeight: '300px',
+                                            objectFit: 'cover',
+                                            borderRadius: '12px',
+                                        }}
+                                    />
+                                </ImageModerationOverlay>
                                 <button
                                     type="button"
                                     className="remove-preview-btn"

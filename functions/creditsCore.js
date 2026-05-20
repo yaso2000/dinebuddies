@@ -186,6 +186,44 @@ function grantMonthlyFreeBonusInTransaction(tx, userRef, userData, uid) {
     });
 }
 
+/**
+ * Admin-only free credit grant (never touches paidCredits).
+ * @param {FirebaseFirestore.Transaction} tx
+ * @param {FirebaseFirestore.DocumentReference} userRef
+ * @param {Record<string, unknown>} userData
+ * @param {string} uid
+ * @param {number} amount
+ * @param {{ reason?: string, adminUid?: string }} meta
+ */
+function grantFreeCreditsInTransaction(tx, userRef, userData, uid, amount, meta = {}) {
+    const n = Math.floor(Number(amount));
+    if (!Number.isFinite(n) || n <= 0) {
+        throw new Error('INVALID_AMOUNT');
+    }
+    const current = Math.max(0, Math.floor(Number(userData.freeCredits) || 0));
+    const next = current + n;
+    const accountRole = isBusinessUserDoc(userData) ? 'business' : 'user';
+
+    tx.update(userRef, {
+        freeCredits: next,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    const ledgerRef = db.collection('credit_transactions').doc();
+    tx.set(ledgerRef, {
+        userId: uid,
+        accountRole,
+        type: 'admin_grant_free',
+        amount: n,
+        balanceType: 'free',
+        reason: String(meta.reason || 'admin_grant').slice(0, 200),
+        relatedId: meta.adminUid ? String(meta.adminUid).slice(0, 128) : null,
+        createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { freeCreditsAfter: next, freeCreditsBefore: current };
+}
+
 function isRegularUserDoc(d) {
     const role = String(d?.role || '').toLowerCase();
     if (d?.isBusiness === true) return false;
@@ -214,6 +252,7 @@ module.exports = {
     spendCreditsInTransaction,
     grantPaidCreditsInTransaction,
     grantMonthlyFreeBonusInTransaction,
+    grantFreeCreditsInTransaction,
     isRegularUserDoc,
     isBusinessUserDoc,
 };

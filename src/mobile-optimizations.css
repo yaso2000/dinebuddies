@@ -85,6 +85,7 @@
         overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
         width: 100%;
         position: relative;
         touch-action: pan-y;
@@ -96,6 +97,13 @@
         overflow: hidden !important;
         overscroll-behavior: none;
         touch-action: pan-y;
+    }
+
+    .app-main--search {
+        overflow: visible !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0 !important;
     }
 
     /*
@@ -125,16 +133,20 @@
      * (:has → skip when chat hides the main header.)
      */
     @supports (-webkit-touch-callout: none) {
-        .app-layout:has(> header.app-header:not(.app-header--chat)) {
+        .app-layout:has(> header.app-header:not(.app-header--chat):not(.app-header--search-route)) {
             padding-top: 0 !important;
         }
 
-        .app-layout:has(> header.app-header:not(.app-header--chat)) .ds-body-grid {
+        .app-layout:has(> header.app-header:not(.app-header--chat):not(.app-header--search-route)) .ds-body-grid {
             padding-top: calc(var(--header-height) + env(safe-area-inset-top, 0px));
             box-sizing: border-box;
         }
 
-        .app-header:not(.app-header--chat) {
+        .app-layout--search .ds-body-grid {
+            padding-top: 0 !important;
+        }
+
+        .app-header:not(.app-header--chat):not(.app-header--search-route) {
             position: fixed !important;
             /* JS sets --ios-vv-header-offset when keyboard shifts the layout viewport (iOS). */
             top: var(--ios-vv-header-offset, 0px) !important;

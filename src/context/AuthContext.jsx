@@ -2,10 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { useToast } from './ToastContext';
 import { getAuthErrorMessage } from '../utils/errorMessages';
 import { isBusinessUser, isAffiliateAgent } from '../utils/accountRole';
+import {
+    mergeConsumerProfiles,
+    canConsumerEnterApp,
+    isConsumerProfileComplete
+} from '../utils/consumerProfileComplete';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
 import { DEFAULT_ACCESS_PLATFORM } from '../constants/userProfileSchema';
-import { subscribeMobileRestrictedShell } from '../utils/mobileAppShell';
-import { stashAuthGateNotice } from '../utils/authGateNotice';
 import { peekPendingReferralCode, clearPendingReferralCode } from '../utils/pendingReferral';
 
 /** Keeps Layout/HomeRouter treating the session as business when userProfile is briefly null (Firestore/auth race). */
@@ -20,7 +23,9 @@ function syncBusinessNavHint(profile, uid) {
 }
 import { sendPasswordResetViaResend } from '../services/passwordResetEmailService';
 import { sendVerificationEmailResend } from '../services/verificationEmailService';
-import { isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
+import { isEmailRegisteredAsAffiliate, isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
+import { assertProfileMatchesPortal, AUTH_PORTAL } from '../utils/authPortalGate';
+import { resolveAppleDisplayName } from '../utils/appleAuth';
 import { PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
@@ -65,7 +70,8 @@ const isInAppBrowser = () => {
  * Facebook JS SDK `FB.login` relies on third-party cookies; Safari / iOS WebKit often return
  * `unknown` with no token. Firebase `signInWithRedirect` uses a first-party round-trip and works.
  */
-const preferFacebookRedirectAuth = () => {
+/** Safari / iOS WebKit: popup OAuth is unreliable — use Firebase redirect. */
+const preferWebOAuthRedirectAuth = () => {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
     if (/iPad|iPhone|iPod/i.test(ua)) return true;
@@ -75,6 +81,8 @@ const preferFacebookRedirectAuth = () => {
     const vendor = navigator.vendor || '';
     return /Safari/i.test(ua) && /Apple/i.test(vendor);
 };
+
+const preferFacebookRedirectAuth = preferWebOAuthRedirectAuth;
 
 // Try to open the current URL in an external browser.
 // On Android: uses an intent URI to launch Chrome.
@@ -113,12 +121,19 @@ const loadFacebookSDK = () => new Promise((resolve) => {
 });
 
 import { fetchIpLocation, reverseGeocode } from '../utils/locationUtils';
-import { initNotifications, removeFcmToken, isIosDevice } from '../services/notificationService';
+import {
+    initNotifications,
+    removeFcmToken,
+    isIosDevice,
+    isPushEnabledInPrefs,
+    ensurePushRegistration,
+} from '../services/notificationService';
 
 import {
     doc,
     setDoc,
     getDoc,
+    getDocFromServer,
     updateDoc,
     deleteDoc,
     serverTimestamp,
@@ -180,19 +195,50 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     /** True after first users/{uid} snapshot from server OR listener error — avoids routing on stale local cache. */
     const [profileServerSynced, setProfileServerSynced] = useState(false);
+  /** Login gate: pending | allowed (enter app) | blocked (must use /complete-profile). */
+    const [consumerEntryStatus, setConsumerEntryStatus] = useState('pending');
     const [isGuest, setIsGuest] = useState(false);
-    /** Latest profile for affiliate mobile-shell guard (updated every render). */
-    const profileRefForPlatformGuard = useRef(null);
-    profileRefForPlatformGuard.current = userProfile;
     const nominatimFailed = useRef(false);
     const isDeletingAccountRef = useRef(false);
     /** Cleared when Firestore profile snapshot resolves so the 5s fail-safe cannot fire after real data. */
     const authLoadingTimeoutRef = useRef(null);
     /** Avoid setLoading(true) on duplicate onAuthStateChanged for the same uid (unmounts Layout /admin). */
     const lastAuthUidRef = useRef(null);
-    /** Prevents repeated sign-out while affiliate + mobile guard runs. */
-    const affiliatePlatformLockRef = useRef(false);
+    /** After a server snapshot, ignore stale persisted-cache snapshots that would re-open onboarding. */
+    const profileServerSyncedRef = useRef(false);
     const { showToast } = useToast();
+
+    const consumerEntryStorageKey = (uid) => `dineb_consumer_entry_ok_${uid}`;
+
+    const grantConsumerEntry = (uid) => {
+        if (!uid) return;
+        try {
+            sessionStorage.setItem(consumerEntryStorageKey(uid), '1');
+        } catch {
+            /* ignore */
+        }
+        setConsumerEntryStatus('allowed');
+    };
+
+    const revokeConsumerEntry = (uid) => {
+        if (uid) {
+            try {
+                sessionStorage.removeItem(consumerEntryStorageKey(uid));
+            } catch {
+                /* ignore */
+            }
+        }
+        setConsumerEntryStatus('blocked');
+    };
+
+    const readCachedEntryAllowed = (uid) => {
+        if (!uid) return false;
+        try {
+            return sessionStorage.getItem(consumerEntryStorageKey(uid)) === '1';
+        } catch {
+            return false;
+        }
+    };
 
     // Guest profile template
     const guestProfile = {
@@ -257,15 +303,21 @@ export const AuthProvider = ({ children }) => {
                 }
                 // Initialize push notifications (request permission + save FCM token).
                 // iOS PWA: first cold start can race the messaging SW — retry once after a few seconds.
-                initNotifications(user.uid).catch((e) => {
-                    console.warn('[FCM] init after login:', e?.message || e);
-                });
+                const bootPush = () => {
+                    (async () => {
+                        if (!(await isPushEnabledInPrefs(user.uid))) return;
+                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                            await ensurePushRegistration(user.uid);
+                        } else {
+                            await initNotifications(user.uid);
+                        }
+                    })().catch((e) => {
+                        console.warn('[FCM] init after login:', e?.message || e);
+                    });
+                };
+                bootPush();
                 if (isIosDevice()) {
-                    setTimeout(() => {
-                        initNotifications(user.uid).catch((e) => {
-                            console.warn('[FCM] iOS retry:', e?.message || e);
-                        });
-                    }, 3500);
+                    setTimeout(bootPush, 3500);
                 }
             } else {
                 lastAuthUidRef.current = null;
@@ -314,32 +366,120 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const uid = currentUser?.uid;
         if (!uid) {
+            profileServerSyncedRef.current = false;
             setProfileServerSynced(false);
+            setConsumerEntryStatus('pending');
             return;
         }
+
+        if (readCachedEntryAllowed(uid)) {
+            setConsumerEntryStatus('allowed');
+        } else {
+            setConsumerEntryStatus('pending');
+        }
+
+        profileServerSyncedRef.current = false;
         setProfileServerSynced(false);
-        /** Offline / flaky networks: never block completion routing forever waiting for server. */
-        const failSafe = setTimeout(() => setProfileServerSynced(true), 6000);
         const userRef = doc(db, 'users', uid);
-        const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
-            const fromCache = docSnap.metadata.fromCache;
-            if (!fromCache) {
-                clearTimeout(failSafe);
+        let cancelled = false;
+
+        const applyEntryDecision = (profile, { definitive }) => {
+            if (cancelled) return;
+            if (canConsumerEnterApp(profile)) {
+                grantConsumerEntry(uid);
+                profileServerSyncedRef.current = true;
+                setProfileServerSynced(true);
+                return;
+            }
+            if (definitive) {
+                revokeConsumerEntry(uid);
+                profileServerSyncedRef.current = true;
                 setProfileServerSynced(true);
             }
+        };
+
+        (async () => {
+            try {
+                const snap = await getDocFromServer(userRef);
+                if (cancelled) return;
+                if (!snap.exists()) {
+                    if (!isDeletingAccountRef.current) {
+                        syncBusinessNavHint(null, null);
+                        setUserProfile(null);
+                    }
+                    applyEntryDecision(null, { definitive: true });
+                    return;
+                }
+                const normalized = normalizeProfile({
+                    id: snap.id,
+                    uid: snap.id,
+                    ...snap.data()
+                });
+                syncBusinessNavHint(normalized, snap.id);
+                setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
+                applyEntryDecision(normalized, { definitive: true });
+            } catch (e) {
+                console.warn('Profile getDocFromServer:', e?.message || e);
+            }
+        })();
+
+        const failSafe = setTimeout(async () => {
+            if (profileServerSyncedRef.current || cancelled) return;
+            try {
+                const snap = await getDoc(userRef);
+                if (cancelled) return;
+                if (snap.exists()) {
+                    const normalized = normalizeProfile({
+                        id: snap.id,
+                        uid: snap.id,
+                        ...snap.data()
+                    });
+                    syncBusinessNavHint(normalized, snap.id);
+                    setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
+                    applyEntryDecision(normalized, { definitive: true });
+                } else {
+                    applyEntryDecision(null, { definitive: true });
+                }
+            } catch (e) {
+                console.warn('Profile fail-safe getDoc:', e?.message || e);
+            } finally {
+                if (!cancelled && !profileServerSyncedRef.current) {
+                    profileServerSyncedRef.current = true;
+                    setProfileServerSynced(true);
+                }
+            }
+        }, 3000);
+
+        const applySnapshotProfile = (normalized, docId) => {
+            syncBusinessNavHint(normalized, docId);
+            setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
+        };
+
+        const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
+            const fromCache = docSnap.metadata.fromCache;
             if (docSnap.exists()) {
                 const normalized = normalizeProfile({
                     id: docSnap.id,
                     uid: docSnap.id,
                     ...docSnap.data()
                 });
-                console.log('Profile snapshot updated:', normalized.uid, 'Role:', normalized.role);
-                syncBusinessNavHint(normalized, docSnap.id);
-                setUserProfile(normalized);
+                applySnapshotProfile(normalized, docSnap.id);
+                if (!fromCache) {
+                    clearTimeout(failSafe);
+                    applyEntryDecision(normalized, { definitive: true });
+                } else if (canConsumerEnterApp(normalized)) {
+                    grantConsumerEntry(uid);
+                    profileServerSyncedRef.current = true;
+                    setProfileServerSynced(true);
+                }
             } else if (!isDeletingAccountRef.current) {
                 console.log('Profile snapshot: Document does not exist yet for UID:', uid);
                 syncBusinessNavHint(null, null);
                 setUserProfile(null);
+                if (!fromCache) {
+                    clearTimeout(failSafe);
+                    applyEntryDecision(null, { definitive: true });
+                }
             }
             // Cached snapshots used to block setLoading(false) for up to 8s waiting for the server —
             // that kept Layout + HomeRouter on a full-screen spinner even though profile data was ready.
@@ -367,6 +507,7 @@ export const AuthProvider = ({ children }) => {
         }, (error) => {
             console.error("Profile Error:", error);
             clearTimeout(failSafe);
+            profileServerSyncedRef.current = true;
             setProfileServerSynced(true);
             if (authLoadingTimeoutRef.current) {
                 clearTimeout(authLoadingTimeoutRef.current);
@@ -375,42 +516,11 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
         });
         return () => {
+            cancelled = true;
             clearTimeout(failSafe);
             unsubscribeSnapshot();
         };
     }, [currentUser?.uid]);
-
-    // Affiliate agents: web-only — block narrow viewport / installed PWA (same shell as consumer mobile home).
-    useEffect(() => {
-        if (!currentUser?.uid || isGuest) {
-            affiliatePlatformLockRef.current = false;
-            return undefined;
-        }
-        if (!isAffiliateAgent(userProfile)) {
-            affiliatePlatformLockRef.current = false;
-            return undefined;
-        }
-        const msgAr = 'حسابات الوكلاء تدار عبر موقع الويب فقط.';
-        const stop = subscribeMobileRestrictedShell((restricted) => {
-            if (!restricted) return;
-            const prof = profileRefForPlatformGuard.current;
-            if (!prof || !isAffiliateAgent(prof) || !auth.currentUser) return;
-            if (affiliatePlatformLockRef.current) return;
-            affiliatePlatformLockRef.current = true;
-            stashAuthGateNotice({
-                i18nKey: 'auth_affiliate_web_only',
-                message: msgAr,
-                variant: 'error',
-            });
-            showToast(msgAr, 'error');
-            firebaseSignOut(auth)
-                .catch(() => {})
-                .finally(() => {
-                    affiliatePlatformLockRef.current = false;
-                });
-        });
-        return stop;
-    }, [currentUser?.uid, isGuest, userProfile?.role, showToast]);
 
     // Update lastSeen and location
     useEffect(() => {
@@ -546,7 +656,8 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const signInWithEmail = async (email, password) => {
+    const signInWithEmail = async (email, password, options = {}) => {
+        const portal = options.portal === AUTH_PORTAL.BUSINESS ? AUTH_PORTAL.BUSINESS : null;
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
             const userRef = doc(db, 'users', result.user.uid);
@@ -557,13 +668,42 @@ export const AuthProvider = ({ children }) => {
                     userDoc = await getDoc(userRef);
                 }
             }
-            if (!userDoc.exists()) {
+            if (userDoc.exists()) {
+                const raw = userDoc.data();
+                const assertPortal = portal || AUTH_PORTAL.BUSINESS;
+                try {
+                    assertProfileMatchesPortal(raw, assertPortal);
+                } catch (portalErr) {
+                    const em = String(result.user.email || raw.email || raw.authEmail || '')
+                        .trim()
+                        .toLowerCase();
+                    if (
+                        assertPortal === AUTH_PORTAL.BUSINESS &&
+                        portalErr?.code === 'auth/consumer-portal-only' &&
+                        em &&
+                        (await isEmailRegisteredAsBusiness(em))
+                    ) {
+                        // Legacy / partial Firestore markers — email is registered as business.
+                    } else {
+                        try {
+                            await firebaseSignOut(auth);
+                        } catch {
+                            /* ignore */
+                        }
+                        throw portalErr;
+                    }
+                }
+            } else if (portal === AUTH_PORTAL.BUSINESS) {
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName || '',
                     email: result.user.email,
                     photo_url: result.user.photoURL || '',
                     authProvider: 'password',
                 });
+            } else {
+                const err = new Error('Profile missing');
+                err.code = 'auth/user-not-found';
+                throw err;
             }
             return result.user;
         } catch (error) {
@@ -583,6 +723,11 @@ export const AuthProvider = ({ children }) => {
         if (await isEmailRegisteredAsBusiness(em)) {
             const e = new Error('business');
             e.code = 'auth/business-email-in-use';
+            throw e;
+        }
+        if (await isEmailRegisteredAsAffiliate(em)) {
+            const e = new Error('affiliate');
+            e.code = 'auth/affiliate-email-in-use';
             throw e;
         }
         const result = await createUserWithEmailAndPassword(auth, em, password);
@@ -649,8 +794,8 @@ export const AuthProvider = ({ children }) => {
                     authProvider: 'google'
                 });
             } else {
+                assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
                 console.log('Google Auth: Existing user, syncing photos for:', result.user.uid);
-                // Keep photo in sync
                 await updateDoc(doc(db, 'users', result.user.uid), {
                     photo_url: result.user.photoURL || userDoc.data().photo_url,
                     last_active_time: serverTimestamp()
@@ -658,6 +803,16 @@ export const AuthProvider = ({ children }) => {
             }
             return { user: result.user, isNewUser };
         } catch (error) {
+            if (
+                error?.code === 'auth/affiliate-portal-only' ||
+                error?.code === 'auth/business-portal-only'
+            ) {
+                try {
+                    await firebaseSignOut(auth);
+                } catch {
+                    /* ignore */
+                }
+            }
             if (error.code === 'auth/account-exists-with-different-credential') {
                 const email = error.customData?.email;
                 if (email) {
@@ -667,8 +822,18 @@ export const AuthProvider = ({ children }) => {
                             e.code = 'auth/business-email-in-use';
                             throw e;
                         }
+                        if (await isEmailRegisteredAsAffiliate(email)) {
+                            const e = new Error('affiliate');
+                            e.code = 'auth/affiliate-email-in-use';
+                            throw e;
+                        }
                     } catch (inner) {
-                        if (inner?.code === 'auth/business-email-in-use') throw inner;
+                        if (
+                            inner?.code === 'auth/business-email-in-use' ||
+                            inner?.code === 'auth/affiliate-email-in-use'
+                        ) {
+                            throw inner;
+                        }
                     }
                 }
             }
@@ -737,7 +902,10 @@ export const AuthProvider = ({ children }) => {
                     photo_url: result.user.photoURL,
                     authProvider: 'facebook'
                 });
-            } else if (result.user.photoURL) {
+            } else {
+                assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
+            }
+            if (userDoc.exists() && result.user.photoURL) {
                 const data = userDoc.data();
                 const currentPhoto = data.photoURL || data.photo_url;
                 if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
@@ -751,6 +919,16 @@ export const AuthProvider = ({ children }) => {
 
             return { user: result.user, isNewUser };
         } catch (error) {
+            if (
+                error?.code === 'auth/affiliate-portal-only' ||
+                error?.code === 'auth/business-portal-only'
+            ) {
+                try {
+                    await firebaseSignOut(auth);
+                } catch {
+                    /* ignore */
+                }
+            }
             if (error.code === 'auth/account-exists-with-different-credential') {
                 const email = error.customData?.email;
                 if (email) {
@@ -760,12 +938,106 @@ export const AuthProvider = ({ children }) => {
                             e.code = 'auth/business-email-in-use';
                             throw e;
                         }
+                        if (await isEmailRegisteredAsAffiliate(email)) {
+                            const e = new Error('affiliate');
+                            e.code = 'auth/affiliate-email-in-use';
+                            throw e;
+                        }
                     } catch (inner) {
-                        if (inner?.code === 'auth/business-email-in-use') throw inner;
+                        if (
+                            inner?.code === 'auth/business-email-in-use' ||
+                            inner?.code === 'auth/affiliate-email-in-use'
+                        ) {
+                            throw inner;
+                        }
                     }
                 }
             }
             console.error('Error signing in with Facebook:', error);
+            throw error;
+        }
+    };
+
+    // Apple Sign In — personal accounts only (same portal rules as Google / Facebook).
+    const signInWithApple = async () => {
+        if (isInAppBrowser()) {
+            const openedExternal = openInExternalBrowser();
+            if (!openedExternal) {
+                const err = new Error('Please open the app in Safari or Chrome to use Apple login.');
+                err.code = 'auth/in-app-browser';
+                throw err;
+            }
+            return null;
+        }
+        const provider = new OAuthProvider('apple.com');
+        provider.addScope('email');
+        provider.addScope('name');
+        if (preferWebOAuthRedirectAuth()) {
+            signInWithRedirect(auth, provider);
+            return { __oauthRedirect: true };
+        }
+        try {
+            const result = await signInWithPopup(auth, provider);
+            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+            let isNewUser = false;
+
+            if (!userDoc.exists()) {
+                isNewUser = true;
+                const appleName = resolveAppleDisplayName(result.user, result);
+                await createUserProfile(result.user.uid, {
+                    display_name: appleName || result.user.displayName,
+                    email: result.user.email,
+                    photo_url: result.user.photoURL,
+                    authProvider: 'apple',
+                });
+            } else {
+                assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
+                if (result.user.photoURL) {
+                    await updateDoc(doc(db, 'users', result.user.uid), {
+                        photo_url: result.user.photoURL || userDoc.data().photo_url,
+                        last_active_time: serverTimestamp(),
+                    });
+                }
+            }
+            return { user: result.user, isNewUser };
+        } catch (error) {
+            if (
+                error?.code === 'auth/affiliate-portal-only' ||
+                error?.code === 'auth/business-portal-only'
+            ) {
+                try {
+                    await firebaseSignOut(auth);
+                } catch {
+                    /* ignore */
+                }
+            }
+            if (error.code === 'auth/account-exists-with-different-credential') {
+                const email = error.customData?.email;
+                if (email) {
+                    try {
+                        if (await isEmailRegisteredAsBusiness(email)) {
+                            const e = new Error('business');
+                            e.code = 'auth/business-email-in-use';
+                            throw e;
+                        }
+                        if (await isEmailRegisteredAsAffiliate(email)) {
+                            const e = new Error('affiliate');
+                            e.code = 'auth/affiliate-email-in-use';
+                            throw e;
+                        }
+                    } catch (inner) {
+                        if (
+                            inner?.code === 'auth/business-email-in-use' ||
+                            inner?.code === 'auth/affiliate-email-in-use'
+                        ) {
+                            throw inner;
+                        }
+                    }
+                }
+            }
+            if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+                console.error('Apple Sign-in Error:', error.code, error.message);
+            }
             throw error;
         }
     };
@@ -859,9 +1131,18 @@ export const AuthProvider = ({ children }) => {
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 lastSeen: serverTimestamp(),
-                isProfileComplete: false,
                 access_platform: userData.access_platform || existing?.access_platform || DEFAULT_ACCESS_PLATFORM,
             };
+            if (!existing) {
+                baseProfile.isProfileComplete = false;
+            } else if (existing.isProfileComplete === true) {
+                baseProfile.isProfileComplete = true;
+            } else {
+                const prior = normalizeProfile({ id: userId, uid: userId, ...existing });
+                if (isConsumerProfileComplete(prior)) {
+                    baseProfile.isProfileComplete = true;
+                }
+            }
             if (pendingRef) {
                 baseProfile.referred_by = pendingRef;
             }
@@ -900,7 +1181,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Complete Facebook sign-in after `signInWithRedirect` (Safari / iOS).
+    // Complete Facebook / Apple sign-in after `signInWithRedirect` (Safari / iOS).
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -908,40 +1189,58 @@ export const AuthProvider = ({ children }) => {
                 const result = await getRedirectResult(auth);
                 if (cancelled || !result?.user) return;
                 const pid = result.providerId || result.user?.providerData?.[0]?.providerId;
-                if (pid !== 'facebook.com') return;
+                if (pid !== 'facebook.com' && pid !== 'apple.com') return;
 
+                const authProvider = pid === 'apple.com' ? 'apple' : 'facebook';
                 const u = result.user;
                 const userDoc = await getDoc(doc(db, 'users', u.uid));
                 if (!userDoc.exists()) {
+                    const displayName =
+                        authProvider === 'apple'
+                            ? resolveAppleDisplayName(u, result) || u.displayName
+                            : u.displayName;
                     await createUserProfile(u.uid, {
-                        display_name: u.displayName,
+                        display_name: displayName,
                         email: u.email,
                         photo_url: u.photoURL,
-                        authProvider: 'facebook',
+                        authProvider,
                     });
-                } else if (u.photoURL) {
-                    const data = userDoc.data();
-                    const currentPhoto = data.photoURL || data.photo_url;
-                    if (!currentPhoto || String(currentPhoto).includes('data:image/svg+xml') || String(currentPhoto).length < 10) {
-                        await updateDoc(doc(db, 'users', u.uid), {
-                            photoURL: u.photoURL,
-                            photo_url: u.photoURL,
-                            updatedAt: serverTimestamp(),
-                        });
+                } else {
+                    assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
+                    if (u.photoURL) {
+                        const data = userDoc.data();
+                        const currentPhoto = data.photoURL || data.photo_url;
+                        if (!currentPhoto || String(currentPhoto).includes('data:image/svg+xml') || String(currentPhoto).length < 10) {
+                            await updateDoc(doc(db, 'users', u.uid), {
+                                photoURL: u.photoURL,
+                                photo_url: u.photoURL,
+                                updatedAt: serverTimestamp(),
+                            });
+                        }
                     }
                 }
             } catch (error) {
+                if (
+                    error?.code === 'auth/affiliate-portal-only' ||
+                    error?.code === 'auth/business-portal-only'
+                ) {
+                    try {
+                        await firebaseSignOut(auth);
+                    } catch {
+                        /* ignore */
+                    }
+                }
                 if (error?.code === 'auth/account-exists-with-different-credential') {
                     const email = error.customData?.email;
                     if (email) {
                         try {
                             if (await isEmailRegisteredAsBusiness(email)) {
-                                console.warn('[Auth] Facebook redirect: business email conflict', email);
+                                console.warn('[Auth] OAuth redirect: business email conflict', email);
                             }
                         } catch { /* ignore */ }
                     }
                 } else if (error?.code && error.code !== 'auth/no-auth-event') {
-                    console.warn('[Auth] getRedirectResult (Facebook):', error.code, error.message);
+                    console.warn('[Auth] getRedirectResult:', error.code, error.message);
                 }
             }
         })();
@@ -1043,11 +1342,19 @@ export const AuthProvider = ({ children }) => {
 
     /** Full-page navigation avoids stale React state / nested routes that block SPA `navigate('/login')`. */
     const signOut = async (redirectTo = '/login') => {
-        const dest = (redirectTo && String(redirectTo).replace(/\/$/, '')) || '/login';
+        const dest =
+            typeof redirectTo === 'string' && redirectTo.startsWith('/')
+                ? redirectTo.replace(/\/$/, '') || '/login'
+                : '/login';
         try {
             // FCM cleanup hits the network (getToken/deleteToken + Firestore). Do not block logout beyond a short cap.
             if (currentUser?.uid) {
                 const uid = currentUser.uid;
+                try {
+                    sessionStorage.removeItem(consumerEntryStorageKey(uid));
+                } catch {
+                    /* ignore */
+                }
                 await Promise.race([
                     removeFcmToken(uid),
                     new Promise((resolve) => setTimeout(resolve, 2000)),
@@ -1055,6 +1362,7 @@ export const AuthProvider = ({ children }) => {
             }
             await firebaseSignOut(auth);
             setUserProfile(null);
+            setConsumerEntryStatus('pending');
             syncBusinessNavHint(null, null);
             if (typeof window !== 'undefined') {
                 const path = (window.location.pathname || '/').replace(/\/$/, '') || '/';
@@ -1102,6 +1410,8 @@ export const AuthProvider = ({ children }) => {
         userProfile,
         loading,
         profileServerSynced,
+        consumerEntryStatus,
+        grantConsumerEntry: () => grantConsumerEntry(currentUser?.uid),
         // Derive from normalised profile so there is ONE source of truth
         isGuest: isGuest || userProfile?.isGuest || false,
         isBusiness: isBusinessUser(userProfile),
@@ -1112,6 +1422,7 @@ export const AuthProvider = ({ children }) => {
         sendPasswordResetToEmail,
         signInWithGoogle,
         signInWithFacebook,
+        signInWithApple,
         signOut,
         updateUserProfile,
         deleteUserAccount,

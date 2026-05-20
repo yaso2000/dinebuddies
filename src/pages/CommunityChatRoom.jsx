@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fa';
 import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPickerPortal';
 import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import { createNotification } from '../utils/notificationHelpers';
@@ -40,6 +41,7 @@ const CommunityChatRoom = () => {
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
     const [showCamera, setShowCamera] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
 
     const emojiBtnRef = useRef(null);
     const isTouchUi = isTouchOrCoarsePointer();
@@ -292,8 +294,9 @@ const CommunityChatRoom = () => {
     const handleCameraCapture = async (file) => {
         if (!file) return;
 
+        setShowCamera(false);
+        setIsUploadingImage(true);
         try {
-            setShowCamera(false);
             const imageUrl = await uploadImage(file, currentUser.uid);
             const messagesRef = collection(db, 'communities', partnerId, 'messages');
 
@@ -308,7 +311,9 @@ const CommunityChatRoom = () => {
             });
         } catch (error) {
             console.error("Error uploading image:", error);
-            showToast(t('failed_upload_image'), 'error');
+            notifyImageUploadError(showToast, error, t);
+        } finally {
+            setIsUploadingImage(false);
         }
     };
     // --- Render Helpers ---
@@ -643,6 +648,21 @@ const CommunityChatRoom = () => {
 
 
             <div className="chat-footer-stack">
+            {isUploadingImage && (
+                <div
+                    role="status"
+                    style={{
+                        padding: '10px 14px',
+                        textAlign: 'center',
+                        fontSize: '0.9rem',
+                        color: 'var(--text-secondary, #94a3b8)',
+                        background: 'var(--bg-darker)',
+                        borderTop: '1px solid var(--border-color)',
+                    }}
+                >
+                    {t('image_upload_checking')}
+                </div>
+            )}
             <div ref={composerRef} style={{
                 flexShrink: 0,
                 width: '100%',

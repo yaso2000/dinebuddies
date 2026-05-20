@@ -1,6 +1,6 @@
 /**
  * Detects the same “mobile shell” the app uses for home routing (narrow viewport)
- * plus installed PWA (standalone), so affiliate / web-only accounts can be gated consistently.
+ * plus installed PWA (standalone). Used for layout/shell detection elsewhere in the app.
  */
 
 const MOBILE_VIEWPORT_MQ = '(max-width: 768px)';

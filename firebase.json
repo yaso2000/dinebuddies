@@ -33,6 +33,10 @@
         ],
         "rewrites": [
             {
+                "source": "/api/consumer-search",
+                "function": "consumerAccountSearchHttp"
+            },
+            {
                 "source": "/api/place-photo",
                 "function": "placePhoto"
             },

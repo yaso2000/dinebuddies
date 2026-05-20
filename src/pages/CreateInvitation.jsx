@@ -12,6 +12,7 @@ import VenueLocationPicker from '../components/VenueLocationPicker';
 import { Country, State, City } from 'country-state-city';
 import { uploadInvitationPhoto } from '../utils/imageUpload';
 import { processInvitationMedia, uploadVideoWithThumbnail, uploadMedia, uploadGoogleImage } from '../services/mediaService';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
 import { validateInvitationCreation } from '../utils/invitationValidation';
 import { canCreateInvitation } from '../utils/cancellationPolicy';
@@ -19,7 +20,13 @@ import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/f
 import { db } from '../firebase/config';
 import { detectUserLocationContext } from '../utils/locationUtils';
 import { COLOR_SCHEMES, TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
-import { PUBLIC_VENUE_TYPES, migrateLegacyOccasionToInviteMood, normalizePublicVenueType } from '../utils/publicInvitationVibes';
+import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
+import {
+    PUBLIC_VENUE_TYPES,
+    migrateLegacyOccasionToInviteMood,
+    normalizePublicVenueType,
+    publicVenueTypeI18nKey,
+} from '../utils/publicInvitationVibes';
 import InvitationCard from '../components/InvitationCard';
 import { normalizeCoverAnimationType, PUBLIC_INVITATION_FONT_OPTIONS } from '../utils/aiInvitationThemeBinding';
 import { invitationMessageMaxLength } from '../utils/invitationSmartDescription';
@@ -407,8 +414,12 @@ const CreateInvitation = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handlePreview = async (e) => {
-        e.preventDefault();
+    const handlePreview = async (e, templateKeyOverride) => {
+        if (e?.preventDefault) e.preventDefault();
+        const templateType = templateKeyOverride || formData.templateType;
+        if (templateKeyOverride && templateKeyOverride !== formData.templateType) {
+            setFormData((prev) => ({ ...prev, templateType: templateKeyOverride }));
+        }
         console.log('🔍 handlePreview called');
 
         // Check if user is guest
@@ -534,7 +545,8 @@ const CreateInvitation = () => {
 
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
+                    notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
+                    setMediaData(null);
                     setIsSubmitting(false);
                     setUploadProgress(0);
                     return;
@@ -567,6 +579,7 @@ const CreateInvitation = () => {
 
             let draftData = {
                 ...formData,
+                templateType,
                 ...mediaFields, // Merge media fields
                 isFollowersOnly: formData.privacy === 'followers',
                 status: 'draft' // Mark as draft
@@ -707,10 +720,10 @@ const CreateInvitation = () => {
                     }
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    let errMsg = mediaError?.message || 'Failed to upload media. Try again.';
-                    // Show exact error on screen instead of generic translation key for debugging
-                    showToast(`Media Error: ${errMsg}`, 'error');
+                    notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
+                    setMediaData(null);
                     setIsSubmitting(false);
+                    setUploadProgress(0);
                     return;
                 }
                 setUploadProgress(80);
@@ -1106,7 +1119,13 @@ const CreateInvitation = () => {
                 </div>
             )}
 
-            <form onSubmit={editingInvitation ? handleSubmit : handlePreview} className="create-form">
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    if (editingInvitation) handleSubmit(e);
+                }}
+                className="create-form"
+            >
 
                 {!editingInvitation && (
                     <div className="ui-card venue-search-stack" style={{ marginBottom: '1rem', padding: '1rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
@@ -1122,22 +1141,44 @@ const CreateInvitation = () => {
                             📍 {t('search_venue') || 'Search for a Venue'}
                         </h4>
 
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                        <div className="form-group public-invite-prefs" style={{ marginBottom: '1rem' }}>
                             <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
                                 {t('venue_category_label', { defaultValue: 'Venue category' })}
                             </label>
-                            <select
-                                name="type"
-                                value={PUBLIC_VENUE_TYPES.includes(formData.type) ? formData.type : 'Restaurant'}
-                                onChange={handleChange}
-                                className="input-field"
+                            <div
+                                className="public-invite-pref-grid public-invite-pref-grid--venue"
+                                role="radiogroup"
+                                aria-label={t('venue_category_label', { defaultValue: 'Venue category' })}
                             >
-                                {PUBLIC_VENUE_TYPES.map((vt) => (
-                                    <option key={vt} value={vt}>
-                                        {t(`venue_type_${vt.toLowerCase().replace(/\s+/g, '_')}`, { defaultValue: vt })}
-                                    </option>
-                                ))}
-                            </select>
+                                {PUBLIC_VENUE_CATEGORIES.map(({ type, Icon }) => {
+                                    const selected =
+                                        (PUBLIC_VENUE_TYPES.includes(formData.type) ? formData.type : 'Restaurant') ===
+                                        type;
+                                    return (
+                                        <button
+                                            key={type}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={selected}
+                                            className={`public-invite-pref-chip public-invite-pref-chip--venue${selected ? ' is-selected' : ''}`}
+                                            onClick={() => setFormData((prev) => ({ ...prev, type }))}
+                                        >
+                                            {selected ? (
+                                                <span className="public-invite-pref-chip__check" aria-hidden>
+                                                    <FaCheckCircle />
+                                                </span>
+                                            ) : null}
+                                            <Icon
+                                                className="public-invite-pref-chip__icon public-invite-pref-chip__icon--venue"
+                                                aria-hidden
+                                            />
+                                            <span className="public-invite-pref-chip__label">
+                                                {t(publicVenueTypeI18nKey(type), { defaultValue: type })}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                             <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
                                 {t('invitation_type_venue_search_hint', 'Choose the venue type first so search suggests matching places (café, bar, etc.).')}
                             </small>
@@ -1196,6 +1237,24 @@ const CreateInvitation = () => {
                             className="input-field"
                             disabled={!!editingInvitation}
                             style={editingInvitation ? { opacity: 0.6, cursor: 'not-allowed', background: 'var(--hover-overlay)' } : {}}
+                        />
+                    </div>
+                    <div className="form-group public-invite-message-field" style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ marginBottom: 0 }}>{t('form_message_label', 'Message')}</label>
+                            <span style={{ fontSize: '0.7rem', color: (formData.description?.length || 0) >= invitationMessageMaxLength ? '#f87171' : 'var(--text-muted)' }}>
+                                {(formData.description?.length || 0)}/{invitationMessageMaxLength}
+                            </span>
+                        </div>
+                        <textarea
+                            name="description"
+                            rows="2"
+                            placeholder={t('form_message_placeholder', 'Write your message to the invitees here...')}
+                            value={formData.description}
+                            onChange={handleChange}
+                            className="input-field text-area"
+                            maxLength={invitationMessageMaxLength}
+                            style={{ minHeight: '44px' }}
                         />
                     </div>
                     <div className="form-group" style={{ marginBottom: '1rem' }}>
@@ -1277,7 +1336,7 @@ const CreateInvitation = () => {
                 </div>
 
                 {/* Gender Groups Preference */}
-                <div className="form-group">
+                <div className="form-group public-invite-prefs">
                     <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>
                             <span className="label-icon"><FaVenusMars /></span>
@@ -1287,7 +1346,7 @@ const CreateInvitation = () => {
                             {t('multi_select', { defaultValue: '(Select multiple)' })}
                         </span>
                     </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="public-invite-pref-grid public-invite-pref-grid--gender">
                         {[
                             { value: 'male', label: t('male'), icon: IoMale },
                             { value: 'female', label: t('female'), icon: IoFemale },
@@ -1300,6 +1359,7 @@ const CreateInvitation = () => {
                                 <button
                                     key={option.value}
                                     type="button"
+                                    className={`public-invite-pref-chip${isSelected ? ' is-selected' : ''}`}
                                     onClick={() => {
                                         let newGroups = [...currentGroups];
                                         if (isSelected) {
@@ -1314,32 +1374,14 @@ const CreateInvitation = () => {
                                         }
                                         setFormData({ ...formData, genderGroups: newGroups, genderPreference: 'custom' });
                                     }}
-                                    style={{
-                                        position: 'relative',
-                                        padding: '16px 12px',
-                                        borderRadius: '16px',
-                                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                        background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
-                                        color: isSelected ? 'var(--text-main)' : 'var(--text-secondary)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        transform: isSelected ? 'translateY(-2px)' : 'none',
-                                        boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
-                                    }}
                                 >
                                     {isSelected && (
-                                        <div style={{ position: 'absolute', top: '8px', right: '8px', color: 'var(--primary)', fontSize: '0.8rem' }}>
+                                        <span className="public-invite-pref-chip__check" aria-hidden>
                                             <FaCheckCircle />
-                                        </div>
+                                        </span>
                                     )}
-                                    <option.icon style={{ fontSize: '2rem', color: isSelected ? 'var(--primary)' : 'inherit', filter: isSelected ? 'drop-shadow(0 0 8px rgba(139, 92, 246, 0.5))' : 'none' }} />
-                                    <span style={{ fontSize: '0.9rem', fontWeight: isSelected ? '800' : '600' }}>
-                                        {option.label}
-                                    </span>
+                                    <option.icon className="public-invite-pref-chip__icon" style={{ color: isSelected ? 'var(--primary)' : 'inherit' }} />
+                                    <span className="public-invite-pref-chip__label">{option.label}</span>
                                 </button>
                             );
                         })}
@@ -1352,7 +1394,7 @@ const CreateInvitation = () => {
                 </div>
 
                 {/* Age Groups Preference */}
-                <div className="form-group">
+                <div className="form-group public-invite-prefs">
                     <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>
                             <span className="label-icon"><FaUserFriends /></span>
@@ -1362,7 +1404,7 @@ const CreateInvitation = () => {
                             {t('multi_select', { defaultValue: '(Select multiple)' })}
                         </span>
                     </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                    <div className="public-invite-pref-grid public-invite-pref-grid--age">
                         {[
                             { value: '18-24', label: '18-24' },
                             { value: '25-34', label: '25-34' },
@@ -1378,6 +1420,7 @@ const CreateInvitation = () => {
                                 <button
                                     key={option.value}
                                     type="button"
+                                    className={`public-invite-pref-chip public-invite-pref-chip--age${isSelected ? ' is-selected' : ''}`}
                                     onClick={() => {
                                         let newGroups = [...currentGroups];
                                         if (isSelected) {
@@ -1393,40 +1436,14 @@ const CreateInvitation = () => {
                                         // If ageGroups is modified, we set ageRange to 'custom' to avoid legacy logic taking over
                                         setFormData({ ...formData, ageGroups: newGroups, ageRange: 'custom' });
                                     }}
-                                    style={{
-                                        position: 'relative',
-                                        padding: '16px 12px',
-                                        borderRadius: '16px',
-                                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                        background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'var(--hover-overlay)',
-                                        color: isSelected ? 'var(--text-main)' : 'var(--text-secondary)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '4px',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        opacity: 1, // Full opacity for clear visibility
-                                        minHeight: '80px',
-                                        transform: isSelected ? 'translateY(-2px)' : 'none',
-                                        boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
-                                    }}
                                 >
                                     {isSelected && (
-                                        <div style={{ position: 'absolute', top: '6px', right: '6px', color: 'var(--primary)', fontSize: '0.7rem' }}>
+                                        <span className="public-invite-pref-chip__check" aria-hidden>
                                             <FaCheckCircle />
-                                        </div>
+                                        </span>
                                     )}
-                                    <HiUser style={{
-                                        fontSize: '1.8rem',
-                                        color: isSelected ? 'var(--primary)' : 'inherit',
-                                        marginBottom: '4px',
-                                        filter: isSelected ? 'drop-shadow(0 0 5px rgba(139, 92, 246, 0.5))' : 'none'
-                                    }} />
-                                    <span style={{ fontSize: '0.9rem', fontWeight: isSelected ? '800' : '600' }}>
-                                        {option.label}
-                                    </span>
+                                    <HiUser className="public-invite-pref-chip__icon public-invite-pref-chip__icon--age" style={{ color: isSelected ? 'var(--primary)' : 'inherit' }} />
+                                    <span className="public-invite-pref-chip__label">{option.label}</span>
                                 </button>
                             );
                         })}
@@ -1436,25 +1453,6 @@ const CreateInvitation = () => {
                             ⚠️ {t('select_at_least_one_age', { defaultValue: 'Please select at least one age group' })}
                         </p>
                     )}
-                </div>
-
-                <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <label style={{ marginBottom: 0 }}>{t('form_message_label', 'Message')}</label>
-                        <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= invitationMessageMaxLength ? '#f87171' : 'var(--text-muted)' }}>
-                            {(formData.description?.length || 0)}/{invitationMessageMaxLength}
-                        </span>
-                    </div>
-                    <textarea
-                        name="description"
-                        rows="2"
-                        placeholder={t('form_message_placeholder', 'Write your message to the invitees here...')}
-                        value={formData.description}
-                        onChange={handleChange}
-                        className="input-field text-area"
-                        maxLength={invitationMessageMaxLength}
-                        style={{ minHeight: '44px' }}
-                    ></textarea>
                 </div>
 
                 <div
@@ -1481,6 +1479,7 @@ const CreateInvitation = () => {
                         onPersistImage={persistImageToLibrary}
                         onDeleteLibraryVideo={deleteLibraryVideo}
                         onDeleteLibraryImage={deleteLibraryImage}
+                        onImageUploadError={(err) => notifyImageUploadError(showToast, err, t, 'media_upload_failed')}
                         onMediaSelect={handleMediaSelect}
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
@@ -1502,7 +1501,11 @@ const CreateInvitation = () => {
                                     color: 'var(--text-secondary)',
                                 }}
                             >
-                                <span>{t('processing')}</span>
+                                <span>
+                                    {mediaData?.type === 'image' && uploadProgress < 80
+                                        ? t('image_upload_checking')
+                                        : t('processing')}
+                                </span>
                                 <span>{uploadProgress}%</span>
                             </div>
                             <div
@@ -1612,22 +1615,14 @@ const CreateInvitation = () => {
                 </div>
 
                 {/* Color Theme Horizontal Picker */}
-                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
-                    <label className="elegant-label" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="form-group ui-form-surface public-invite-colors" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
+                    <label className="elegant-label" style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>🎨</span>
                         {t('choose_color_theme', { defaultValue: 'Choose Color Theme' })}
                     </label>
 
-                    <div style={{
-                        display: 'flex',
-                        overflowX: 'auto',
-                        gap: '12px',
-                        padding: '10px 4px',
-                        scrollbarWidth: 'none', // Firefox
-                        msOverflowStyle: 'none', // IE/Edge
-                        cursor: 'grab',
-                    }}
-                        className="hide-scroll-bar"
+                    <div
+                        className="hide-scroll-bar public-color-swatch-row"
                         ref={colorScrollRef}
                         onMouseDown={(e) => startHorizontalDrag('colors', colorScrollRef, e)}
                         onMouseMove={(e) => moveHorizontalDrag('colors', colorScrollRef, e)}
@@ -1640,33 +1635,15 @@ const CreateInvitation = () => {
                                 <button
                                     key={key}
                                     type="button"
+                                    className={`public-color-swatch${isSelected ? ' is-selected' : ''}`}
+                                    style={{ background: color.gradient, boxShadow: isSelected ? `0 4px 12px ${color.shadow}` : '0 2px 6px rgba(0,0,0,0.12)' }}
                                     onClick={() => setFormData({ ...formData, colorScheme: key })}
-                                    style={{
-                                        minWidth: '70px',
-                                        height: '70px',
-                                        borderRadius: '50%',
-                                        background: color.gradient,
-                                        border: isSelected ? '4px solid var(--text-main)' : '2px solid transparent',
-                                        cursor: 'pointer',
-                                        flexShrink: 0,
-                                        position: 'relative',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
-                                        boxShadow: isSelected ? `0 8px 20px ${color.shadow}` : `0 4px 10px rgba(0,0,0,0.1)`
-                                    }}
+                                    aria-pressed={isSelected}
                                 >
                                     {isSelected && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: '50%',
-                                            left: '50%',
-                                            transform: 'translate(-50%, -50%)',
-                                            color: 'white',
-                                            fontSize: '1.5rem',
-                                            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-                                        }}>
+                                        <span className="public-color-swatch__check" aria-hidden>
                                             <FaCheckCircle />
-                                        </div>
+                                        </span>
                                     )}
                                 </button>
                             );
@@ -1797,6 +1774,28 @@ const CreateInvitation = () => {
                                     >
                                         {t(`invitation_template_${key}`, { defaultValue: tmpl.name })}
                                     </div>
+                                    {!editingInvitation && (
+                                        <button
+                                            type="button"
+                                            className="ui-btn ui-btn--primary invitation-template-preview-btn"
+                                            disabled={isSubmitting}
+                                            onClick={(ev) => {
+                                                ev.stopPropagation();
+                                                handlePreview(ev, key);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                marginTop: '10px',
+                                                minHeight: '44px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            {isSubmitting
+                                                ? t('loading')
+                                                : t('preview_invitation', { defaultValue: 'Preview invitation' })}
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })}
@@ -1806,9 +1805,11 @@ const CreateInvitation = () => {
                     </p>
                 </div>
 
-                <button type="submit" className="ui-btn ui-btn--primary" style={{ width: '100%', height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
-                    {isSubmitting ? t('loading') : (editingInvitation ? (t('save_changes') || '💾 Save Changes') : (t('preview_invitation') || '📋 Preview Invitation'))}
-                </button>
+                {editingInvitation && (
+                    <button type="submit" className="ui-btn ui-btn--primary" style={{ width: '100%', height: '60px', marginTop: '1rem', fontSize: '1.1rem' }} disabled={isSubmitting}>
+                        {isSubmitting ? t('loading') : (t('save_changes') || '💾 Save Changes')}
+                    </button>
+                )}
             </form>
         </div>
         </>

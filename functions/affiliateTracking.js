@@ -113,6 +113,7 @@ const syncAffiliatePendingReferralOnUserWrite = functions.firestore
         try {
             await db.collection('users').doc(agentUid).update({
                 pending_referrals_count: admin.firestore.FieldValue.increment(1),
+                total_referred_users: admin.firestore.FieldValue.increment(1),
             });
             functions.logger.info('[syncAffiliatePendingReferral]', {
                 referredUser: context.params.uid,
@@ -174,6 +175,7 @@ async function processAffiliateBusinessCommission({ db, admin, session, userId }
         });
         t.update(agentRef, {
             current_balance: admin.firestore.FieldValue.increment(commissionCents),
+            pending_commissions: admin.firestore.FieldValue.increment(commissionCents),
             total_earned: admin.firestore.FieldValue.increment(commissionCents),
             pending_referrals_count: nextPending,
             successful_referrals_count: admin.firestore.FieldValue.increment(1),

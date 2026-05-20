@@ -37,6 +37,7 @@ const InvitationDetails = () => {
     const navigate = useNavigate();
     const routerLocation = useLocation();
     const joinRequestsRef = useRef(null);
+    const detailsScrollRef = useRef(null);
 
     const { invitations, currentUser, loadingInvitations, approveUser, rejectUser, updateMeetingStatus, approveNewTime, rejectNewTime, toggleFollow, submitRating, requestToJoin, cancelRequest } = useInvitations();
     const { userProfile } = useAuth(); // Get userProfile for accountType check
@@ -244,6 +245,29 @@ const InvitationDetails = () => {
             }, 500);
         }
     }, [routerLocation.search, invitation]);
+
+    // First open: show top of invitation (hero), not bottom/map
+    useEffect(() => {
+        const params = new URLSearchParams(routerLocation.search);
+        if (params.get('section')) return;
+        if (!invitation?.id) return;
+
+        const resetScroll = () => {
+            const el = detailsScrollRef.current;
+            if (el) el.scrollTop = 0;
+            const appMain = document.querySelector('.app-main');
+            if (appMain) appMain.scrollTop = 0;
+            window.scrollTo(0, 0);
+        };
+
+        requestAnimationFrame(resetScroll);
+        const t1 = setTimeout(resetScroll, 50);
+        const t2 = setTimeout(resetScroll, 250);
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+        };
+    }, [id, invitation?.id, routerLocation.search]);
 
     // Fetch requesters data
     useEffect(() => {
@@ -703,7 +727,7 @@ const InvitationDetails = () => {
                 </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '100px' }} className="details-scroll-area">
+            <div ref={detailsScrollRef} style={{ flex: 1, overflowY: 'auto', paddingBottom: '100px' }} className="details-scroll-area">
                 <InvitationHeader
                     invitation={invitation}
                     isHost={isHost}

@@ -1,15 +1,13 @@
 /**
  * Public invitation card: font list and cover animation slugs (stored on invitations / composer).
  */
+import { PRIVATE_CARD_FONTS } from '../components/Invitations/privateCard/privateCardFonts';
 
-export const PUBLIC_INVITATION_FONT_OPTIONS = [
-    { label: 'Playfair Display', cssFamily: "'Playfair Display', Georgia, serif" },
-    { label: 'Cormorant Garamond', cssFamily: "'Cormorant Garamond', 'Times New Roman', serif" },
-    { label: 'Lora', cssFamily: "'Lora', Georgia, serif" },
-    { label: 'Montserrat', cssFamily: "'Montserrat', 'Segoe UI', sans-serif" },
-    { label: 'Dancing Script', cssFamily: "'Dancing Script', cursive" },
-    { label: 'Great Vibes', cssFamily: "'Great Vibes', cursive" },
-];
+/** Same catalog as private/dating cards (Latin + Arabic decorative). */
+export const PUBLIC_INVITATION_FONT_OPTIONS = PRIVATE_CARD_FONTS.map((f) => ({
+    label: f.defaultLabel,
+    cssFamily: f.cssFamily.replace(/"/g, "'"),
+}));
 
 /** Canonical values for `animation_meta.type` and `coverAnimationType` in Firestore. */
 export const INVITATION_COVER_ANIMATION_TYPES = ['elegant-fade', 'gentle-pulse', 'glide-up', 'none'];

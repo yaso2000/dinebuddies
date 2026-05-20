@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { processAffiliateBusinessCommission } = require('./affiliateTracking');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -29,6 +30,7 @@ function getQuotaForPlan(planId) {
 function getTierForPlan(planId) {
     if (!planId) return 'free';
     const id = planId.toLowerCase();
+    if (id === 'paid' || id.includes('paid')) return 'paid';
     if (id.includes('elite')) return 'elite';
     if (id.includes('professional')) return 'professional';
     if (id.includes('premium')) return 'premium';
@@ -185,6 +187,10 @@ async function handleCheckoutComplete(session) {
             startDate: admin.firestore.FieldValue.serverTimestamp(),
             sessionId: session.id
         });
+
+        if (session.mode === 'subscription') {
+            await processAffiliateBusinessCommission({ db, admin, session, userId });
+        }
 
     } catch (error) {
         console.error('Error updating user subscription:', error);

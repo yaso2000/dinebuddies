@@ -40,7 +40,7 @@ const CreateInvitationManualHub = () => {
         }
         if (kind === 'private') {
             const quotaInfo = canCreatePrivateInvitation('private');
-            if (!quotaInfo.canCreate) {
+            if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
                 showToast(
                     t(
                         'insufficient_dine_credits_wallet',
@@ -56,7 +56,7 @@ const CreateInvitationManualHub = () => {
         }
         if (kind === 'dating') {
             const quotaInfo = canCreatePrivateInvitation('dating');
-            if (!quotaInfo.canCreate) {
+            if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
                 showToast(
                     t(
                         'insufficient_dine_credits_wallet',

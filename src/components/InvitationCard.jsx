@@ -15,6 +15,8 @@ const INVITATION_CARD_IMAGE_FALLBACK =
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
+import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
+import { goToLogin } from '../utils/goToLogin';
 
 function InvMotionTitle({ mode, style, children }) {
     const motionProps = getCoverTextMotionProps(mode);
@@ -255,6 +257,22 @@ const InvitationCard = ({ invitation }) => {
             url: shareUrl,
             skipExternalFallback: false,
         });
+    };
+
+    /** Share invitation on the main home feed (communityPosts), not business featured slides. */
+    const handleShareToFeed = (e) => {
+        e.stopPropagation();
+        if (!currentUser?.id) {
+            goToLogin(navigate, { from: { pathname: '/posts-feed' } });
+            return;
+        }
+        if (userProfile?.role === 'guest' || userProfile?.isGuest) {
+            showToast(t('guests_cannot_post', { defaultValue: 'Sign in to share to the feed.' }), 'error');
+            return;
+        }
+        const attachment = buildInvitationFeedAttachment(invitation);
+        if (!attachment) return;
+        navigate('/posts-feed', { state: { attachedInvitation: attachment, scrollToComposer: true } });
     };
 
     // Determine media to display (non–selfie-video cards only — video invites use split layout + `<video>`)
@@ -716,7 +734,7 @@ const InvitationCard = ({ invitation }) => {
                             <button type="button" onClick={handleShare} style={actionBtnStyle} title={t('share')}>
                                 <FaShareAlt size={14} />
                             </button>
-                            <button type="button" onClick={(e) => { e.stopPropagation(); navigate('/create-post', { state: { attachedInvitation: invitation } }); }} style={actionBtnStyle} title={t('share_to_feed')}>
+                            <button type="button" onClick={handleShareToFeed} style={actionBtnStyle} title={t('share_to_feed', { defaultValue: 'Share to feed' })}>
                                 <FaBullhorn size={14} />
                             </button>
                             {!isHost && userProfile?.role !== 'guest' && !userProfile?.isGuest && (
@@ -899,7 +917,7 @@ const InvitationCard = ({ invitation }) => {
                     <button type="button" onClick={handleShare} style={actionBtnStyle} title={t('share')}>
                         <FaShareAlt size={14} />
                     </button>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); navigate('/create-post', { state: { attachedInvitation: invitation } }); }} style={actionBtnStyle} title={t('share_to_feed')}>
+                    <button type="button" onClick={handleShareToFeed} style={actionBtnStyle} title={t('share_to_feed', { defaultValue: 'Share to feed' })}>
                         <FaBullhorn size={14} />
                     </button>
                     {!isHost && userProfile?.role !== 'guest' && !userProfile?.isGuest && (

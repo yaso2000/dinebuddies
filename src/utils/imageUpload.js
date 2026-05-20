@@ -1,6 +1,8 @@
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
+import { uploadManagedImage } from '../services/managedImageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
 
 /**
  * Compress and resize image before upload
@@ -41,7 +43,24 @@ const COMPRESSION_TIMEOUT_MS = 12000;
 const UPLOAD_TIMEOUT_MS = 45000;
 const COMPRESSION_SKIP_THRESHOLD_BYTES = 700 * 1024; // Skip compression for small images
 
-export const uploadImage = (file, path, onProgress = null, compressionOptions = {}) => {
+/**
+ * @param {File|Blob} file
+ * @param {string} path — used for direct (unmoderated) uploads only
+ * @param {Function|null} onProgress
+ * @param {object} compressionOptions
+ * @param {{ moderationZone?: string, userId?: string }|null} uploadOptions — when set, runs Vision moderation
+ */
+export const uploadImage = (file, path, onProgress = null, compressionOptions = {}, uploadOptions = null) => {
+    if (uploadOptions?.moderationZone && uploadOptions?.userId) {
+        return uploadManagedImage(file, uploadOptions.userId, uploadOptions.moderationZone, {
+            compressionOptions,
+            onProgress,
+        });
+    }
+    return uploadImageToStoragePath(file, path, onProgress, compressionOptions);
+};
+
+const uploadImageToStoragePath = (file, path, onProgress = null, compressionOptions = {}) => {
     return new Promise(async (resolve, reject) => {
         let uploadTimedOut = false;
         let uploadTimeoutId = null;
@@ -118,10 +137,23 @@ export const uploadImage = (file, path, onProgress = null, compressionOptions = 
  * @param {Function} onProgress - Progress callback
  * @returns {Promise<string>} Download URL
  */
+/**
+ * Upload community post media: images are moderated; videos upload directly.
+ */
+export const uploadPostMedia = (file, userId, path, onProgress = null, mediaType = 'image') => {
+    const isVideo = mediaType === 'video' || file.type?.startsWith('video/');
+    if (isVideo) {
+        return uploadImage(file, path, onProgress);
+    }
+    return uploadImage(file, path, onProgress, {}, {
+        moderationZone: ImageUploadZone.POST,
+        userId,
+    });
+};
+
 export const uploadProfilePicture = async (file, userId, onProgress = null) => {
-    const timestamp = Date.now();
-    const path = `avatars/${userId}_${timestamp}.jpg`;
-    return uploadImage(file, path, onProgress);
+    void onProgress;
+    return uploadManagedImage(file, userId, ImageUploadZone.AVATAR);
 };
 
 /**
@@ -134,10 +166,10 @@ export const uploadProfilePicture = async (file, userId, onProgress = null) => {
  * @returns {Promise<string>} Download URL
  */
 export const uploadInvitationPhoto = async (file, invitationId, userId, index = 0, onProgress = null) => {
-    const timestamp = Date.now();
-    // uid subfolder enforces ownership via storage.rules (request.auth.uid == userId)
-    const path = `invitations/${invitationId}/${userId}/${timestamp}_${index}.jpg`;
-    return uploadImage(file, path, onProgress);
+    void invitationId;
+    void index;
+    void onProgress;
+    return uploadManagedImage(file, userId, ImageUploadZone.INVITATION);
 };
 
 /**

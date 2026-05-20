@@ -1,5 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { buildTheme } from '../theme/buildTheme';
+import React, { createContext, useContext, useLayoutEffect, useState, useCallback } from 'react';
+import {
+    applyDocumentTheme,
+    readStoredThemeMode,
+    THEME_STORAGE_KEY,
+} from '../theme/bootDocumentTheme';
 
 const ThemeContext = createContext();
 
@@ -11,49 +15,28 @@ export const useTheme = () => {
     return context;
 };
 
-const STORAGE_KEY = 'theme';
-
 export const ThemeProvider = ({ children }) => {
-    const [themeMode, setThemeMode] = useState(() => {
-        if (typeof window === 'undefined') return 'dark';
-        return localStorage.getItem(STORAGE_KEY) || 'dark';
-    });
-
-    const [brandColor, setBrandColor] = useState(null); // Allows profiles to set dynamic brands
+    const [themeMode, setThemeMode] = useState(readStoredThemeMode);
+    const [brandColor, setBrandColor] = useState(null);
+    const [accountTheme, setAccountThemeState] = useState('personal');
 
     const isDark = themeMode === 'dark';
+    const isBusinessTheme = accountTheme === 'business';
+    const isAffiliateTheme = accountTheme === 'affiliate';
 
-    useEffect(() => {
-        document.documentElement.setAttribute('data-theme', themeMode);
-        document.body.classList.toggle('light-mode', themeMode === 'light');
-        localStorage.setItem(STORAGE_KEY, themeMode);
-
-        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-        if (metaThemeColor) {
-            metaThemeColor.setAttribute('content', themeMode === 'dark' ? '#0b0812' : '#f8fafc');
+    const setAccountTheme = useCallback((next) => {
+        if (next === 'business' || next === 'personal' || next === 'affiliate') {
+            setAccountThemeState(next);
         }
+    }, []);
 
-        // Apply dynamic theme variables globally
-        const themeVars = buildTheme({ mode: themeMode, brandColor });
-        const root = document.documentElement;
-        
-        root.style.setProperty('--bg-primary', themeVars.bgPrimary);
-        root.style.setProperty('--bg-secondary', themeVars.bgSecondary);
-        root.style.setProperty('--bg-card', themeVars.bgCard);
-        root.style.setProperty('--text-primary', themeVars.textPrimary);
-        root.style.setProperty('--text-secondary', themeVars.textSecondary);
-        root.style.setProperty('--border-color', themeVars.borderColor);
-        root.style.setProperty('--icon-primary', themeVars.iconPrimary);
-        root.style.setProperty('--icon-secondary', themeVars.iconSecondary);
-        
-        root.style.setProperty('--brand-primary', themeVars.brandPrimary);
-        root.style.setProperty('--brand-glow', themeVars.brandGlow);
-        root.style.setProperty('--text-on-brand', themeVars.textOnBrand);
-
-    }, [themeMode, brandColor]);
+    useLayoutEffect(() => {
+        applyDocumentTheme({ themeMode, accountTheme, brandColor });
+        localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    }, [themeMode, brandColor, accountTheme]);
 
     const toggleTheme = () => {
-        setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+        setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
     };
 
     const setTheme = (mode) => {
@@ -66,12 +49,12 @@ export const ThemeProvider = ({ children }) => {
         toggleTheme,
         setTheme,
         brandColor,
-        setBrandColor, // Exposed for pages like BusinessProfile
+        setBrandColor,
+        accountTheme,
+        isBusinessTheme,
+        isAffiliateTheme,
+        setAccountTheme,
     };
 
-    return (
-        <ThemeContext.Provider value={value}>
-            {children}
-        </ThemeContext.Provider>
-    );
+    return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };

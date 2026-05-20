@@ -5,6 +5,8 @@ import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaC
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { useToast } from '../context/ToastContext';
 import {
     DndContext,
@@ -327,7 +329,10 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
                 initialQuality: 0.85
             };
 
-            const downloadURL = await uploadImage(file, path, null, options);
+            const downloadURL = await uploadImage(file, path, null, options, {
+                moderationZone: ImageUploadZone.GALLERY,
+                userId: partnerId,
+            });
 
             const newImage = {
                 url: downloadURL,

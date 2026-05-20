@@ -1,21 +1,27 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCamera, FaImages, FaTimes } from 'react-icons/fa';
+import { FaTimes } from 'react-icons/fa';
 import { getCardBackgroundOptions, resolveCardBackgroundUrlCandidates } from './privateCardBackgrounds';
+import {
+    getDatingCardBackgroundOptions,
+    resolveDatingCardBackgroundUrlCandidates
+} from '../datingCard/datingCardBackgrounds';
+import {
+    isSamePrivateCoverMedia,
+    PRIVATE_COVER_STASH_MAX_IMAGES,
+    PRIVATE_COVER_STASH_MAX_VIDEOS
+} from '../../../utils/privateCoverMediaStash';
 import '../datingCard/DatingPreviewRightRail.css';
 import './PrivateInvitationCoverRightRail.css';
 
-function PrivateOccasionThumb({ categoryId, optionId, selected, onClick, title }) {
-    const candidates = useMemo(
-        () => resolveCardBackgroundUrlCandidates(categoryId, optionId),
-        [categoryId, optionId]
-    );
+function TemplateThumb({ resolveCandidates, optionId, selected, onClick, title }) {
+    const candidates = useMemo(() => resolveCandidates(optionId), [resolveCandidates, optionId]);
     const [idx, setIdx] = useState(0);
     const url = candidates[idx];
 
     useEffect(() => {
         setIdx(0);
-    }, [categoryId, optionId]);
+    }, [optionId, candidates]);
 
     return (
         <button
@@ -39,13 +45,18 @@ function PrivateOccasionThumb({ categoryId, optionId, selected, onClick, title }
     );
 }
 
-function MediaThumb({ selected, children, onClear, showClear }) {
+function StashMediaThumb({ selected, onSelect, onClear, children }) {
     return (
-        <div
-            className={`dating-preview-rail__thumb-wrap${selected ? ' dating-preview-rail__thumb-wrap--selected' : ''}`}
-        >
-            <div className="dating-preview-rail__thumb dating-preview-rail__thumb--media">{children}</div>
-            {showClear && onClear && (
+        <div className={`dating-preview-rail__thumb-wrap${selected ? ' dating-preview-rail__thumb-wrap--selected' : ''}`}>
+            <button
+                type="button"
+                className="dating-preview-rail__thumb dating-preview-rail__thumb--media"
+                onClick={onSelect}
+                aria-pressed={selected}
+            >
+                {children}
+            </button>
+            {onClear && (
                 <button
                     type="button"
                     className="dating-preview-rail__clear"
@@ -63,8 +74,7 @@ function MediaThumb({ selected, children, onClear, showClear }) {
 }
 
 /**
- * Private create: one vertical strip beside the card. Content depends on the active tab only
- * (template / upload / camera). Thumbnails scroll when taller than the card preview.
+ * Private create: vertical strip beside the card — template art, or temp upload/video thumbnails.
  */
 export default function PrivateInvitationCoverRightRail({
     categoryId,
@@ -72,53 +82,55 @@ export default function PrivateInvitationCoverRightRail({
     onCardBackgroundIdChange,
     mode,
     mediaData,
-    onMediaSelect
+    coverStash = [],
+    onSelectStashItem,
+    onRemoveStashItem,
+    /** @type {'private'|'dating'} */
+    templateVariant = 'private'
 }) {
     const { t } = useTranslation();
-    const libraryInputRef = useRef(null);
-    const captureInputRef = useRef(null);
-    const occasionOptions = useMemo(() => getCardBackgroundOptions(categoryId), [categoryId]);
+    const occasionOptions = useMemo(() => {
+        if (templateVariant === 'dating') return getDatingCardBackgroundOptions();
+        return getCardBackgroundOptions(categoryId);
+    }, [templateVariant, categoryId]);
 
-    const templateLabel = t('private_card_occasion_art_label', { defaultValue: 'Occasion artwork' });
-    const uploadLabel = t('private_cover_upload_rail_label', { defaultValue: 'Your photo' });
-    const cameraLabel = t('private_cover_video_rail_label', { defaultValue: 'Video' });
+    const resolveTemplateCandidates = useMemo(() => {
+        if (templateVariant === 'dating') {
+            return (optionId) => resolveDatingCardBackgroundUrlCandidates(optionId);
+        }
+        return (optionId) => resolveCardBackgroundUrlCandidates(categoryId, optionId);
+    }, [templateVariant, categoryId]);
 
-    const sectionLabel = mode === 'template' ? templateLabel : mode === 'upload' ? uploadLabel : cameraLabel;
+    const uploadItems = useMemo(
+        () => coverStash.filter((e) => e.kind === 'upload' && e.media?.type === 'image'),
+        [coverStash]
+    );
+    const cameraItems = useMemo(
+        () => coverStash.filter((e) => e.kind === 'camera' && e.media?.type === 'video'),
+        [coverStash]
+    );
 
-    const uploadSelected =
-        mode === 'upload' &&
-        mediaData?.source === 'custom_image' &&
-        mediaData?.type === 'image' &&
-        (mediaData?.preview || mediaData?.url) &&
-        !mediaData?.coverTemplateId;
+    const templateLabel =
+        templateVariant === 'dating'
+            ? t('dating_card_template_label', { defaultValue: 'Card templates' })
+            : t('private_card_occasion_art_label', { defaultValue: 'Occasion artwork' });
+    const uploadLabel = t('private_cover_upload_rail_label', {
+        defaultValue: 'Your photos ({{count}}/{{max}})',
+        count: uploadItems.length,
+        max: PRIVATE_COVER_STASH_MAX_IMAGES
+    });
+    const cameraLabel = t('private_cover_video_rail_label', {
+        defaultValue: 'Your videos ({{count}}/{{max}})',
+        count: cameraItems.length,
+        max: PRIVATE_COVER_STASH_MAX_VIDEOS
+    });
 
-    const cameraVideoSelected =
-        mode === 'camera' && mediaData?.type === 'video' && Boolean(mediaData?.preview);
-
-    const applyImageFile = (file) => {
-        if (!file || !file.type?.startsWith('image/')) return;
-        const preview = URL.createObjectURL(file);
-        onMediaSelect({
-            source: 'custom_image',
-            type: 'image',
-            file,
-            preview
-        });
-    };
-
-    const handleLibraryChange = (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        applyImageFile(file);
-    };
-
-    const handleCaptureChange = (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        applyImageFile(file);
-    };
+    const sectionLabel =
+        mode === 'template' ? templateLabel : mode === 'upload' ? uploadLabel : cameraLabel;
 
     const scrollRole = mode === 'template' ? 'radiogroup' : 'group';
+    const isMediaMode = mode === 'upload' || mode === 'camera';
+    const mediaItems = mode === 'upload' ? uploadItems : mode === 'camera' ? cameraItems : [];
 
     return (
         <div
@@ -128,7 +140,8 @@ export default function PrivateInvitationCoverRightRail({
                 'private-card-bg-picker',
                 'private-card-bg-picker--beside',
                 'dating-preview-rail--template-column',
-                mode === 'template' ? 'private-invite-cover-rail--template-mode' : ''
+                mode === 'template' ? 'private-invite-cover-rail--template-mode' : '',
+                isMediaMode ? 'private-invite-cover-rail--media-mode' : ''
             ]
                 .filter(Boolean)
                 .join(' ')}
@@ -153,9 +166,9 @@ export default function PrivateInvitationCoverRightRail({
                                 cardBackgroundId === opt.id ||
                                 (opt.id === 'birthday-candlecake' && cardBackgroundId === 'birthday-candlake');
                             return (
-                                <PrivateOccasionThumb
+                                <TemplateThumb
                                     key={opt.id}
-                                    categoryId={categoryId}
+                                    resolveCandidates={resolveTemplateCandidates}
                                     optionId={opt.id}
                                     selected={selected}
                                     onClick={() => onCardBackgroundIdChange(opt.id)}
@@ -165,82 +178,52 @@ export default function PrivateInvitationCoverRightRail({
                         })
                     ))}
 
-                {mode === 'upload' && (
-                    <>
-                        <button
-                            type="button"
-                            className="dating-preview-rail__thumb dating-preview-rail__thumb--action"
-                            onClick={() => libraryInputRef.current?.click()}
-                            title={t('dating_upload_library_title', { defaultValue: 'Choose from library' })}
-                        >
-                            <FaImages className="dating-preview-rail__action-icon" aria-hidden />
-                            <span className="dating-preview-rail__action-text">
-                                {t('dating_upload_library_short', { defaultValue: 'Library' })}
-                            </span>
-                        </button>
-                        <input
-                            ref={libraryInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="dating-preview-rail__file-input"
-                            onChange={handleLibraryChange}
-                        />
-
-                        <button
-                            type="button"
-                            className="dating-preview-rail__thumb dating-preview-rail__thumb--action"
-                            onClick={() => captureInputRef.current?.click()}
-                            title={t('dating_upload_capture_title', { defaultValue: 'Take a photo' })}
-                        >
-                            <FaCamera className="dating-preview-rail__action-icon" aria-hidden />
-                            <span className="dating-preview-rail__action-text">
-                                {t('dating_upload_capture_short', { defaultValue: 'Camera' })}
-                            </span>
-                        </button>
-                        <input
-                            ref={captureInputRef}
-                            type="file"
-                            accept="image/*"
-                            capture="user"
-                            className="dating-preview-rail__file-input"
-                            onChange={handleCaptureChange}
-                        />
-
-                        {uploadSelected && (
-                            <MediaThumb showClear onClear={() => onMediaSelect(null)} selected>
-                                <img
-                                    src={mediaData.preview || mediaData.url}
-                                    alt=""
-                                    className="dating-preview-rail__thumb-img"
-                                    draggable={false}
-                                />
-                            </MediaThumb>
-                        )}
-                    </>
+                {isMediaMode && mediaItems.length === 0 && (
+                    <p className="private-invite-cover-rail__empty private-invite-cover-rail__empty--media">
+                        {mode === 'upload'
+                            ? t('private_cover_upload_rail_empty', {
+                                  defaultValue:
+                                      'Tap “Upload photo” to add from your device (up to {{max}}).',
+                                  max: PRIVATE_COVER_STASH_MAX_IMAGES
+                              })
+                            : t('private_cover_video_rail_empty', {
+                                  defaultValue:
+                                      'Tap “Record video” to capture a clip (up to {{max}}).',
+                                  max: PRIVATE_COVER_STASH_MAX_VIDEOS
+                              })}
+                    </p>
                 )}
 
-                {mode === 'camera' && (
-                    <>
-                        {!cameraVideoSelected && (
-                            <div
-                                className="dating-preview-rail__placeholder dating-preview-rail__placeholder--video-slot"
-                                aria-hidden
-                            />
-                        )}
-                        {cameraVideoSelected && (
-                            <MediaThumb showClear onClear={() => onMediaSelect(null)} selected>
-                                <video
-                                    src={mediaData.preview}
-                                    poster={mediaData.videoThumbnail || undefined}
-                                    className="dating-preview-rail__thumb-video"
-                                    muted
-                                    playsInline
-                                    preload="metadata"
-                                />
-                            </MediaThumb>
-                        )}
-                    </>
-                )}
+                {isMediaMode &&
+                    mediaItems.map((entry) => {
+                        const selected = isSamePrivateCoverMedia(entry.media, mediaData);
+                        return (
+                            <StashMediaThumb
+                                key={entry.id}
+                                selected={selected}
+                                onSelect={() => onSelectStashItem?.(entry.id)}
+                                onClear={() => onRemoveStashItem?.(entry.id)}
+                            >
+                                {entry.media.type === 'video' ? (
+                                    <video
+                                        src={entry.media.preview}
+                                        poster={entry.media.videoThumbnail || undefined}
+                                        className="dating-preview-rail__thumb-video"
+                                        muted
+                                        playsInline
+                                        preload="metadata"
+                                    />
+                                ) : (
+                                    <img
+                                        src={entry.media.preview || entry.media.url}
+                                        alt=""
+                                        className="dating-preview-rail__thumb-img"
+                                        draggable={false}
+                                    />
+                                )}
+                            </StashMediaThumb>
+                        );
+                    })}
             </div>
         </div>
     );

@@ -6,10 +6,12 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../firebase/config';
 import { FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
 import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
+import { BUSINESS_PAID_PLAN_DISPLAY } from '../../config/stripeCommerce';
 import { normalizeBusinessTier } from '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
+import StripeTestModeBanner from '../../components/StripeTestModeBanner';
 
-/** Stripe Checkout + webhook use legacy planId for tier resolution — keep `elite` for $29 business paid. */
+/** Legacy fallback when STRIPE_PRICE_BUSINESS_MONTHLY is not set on the server. */
 const PAID_STRIPE_PLAN = BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite');
 
 const FREE_FEATURES = [
@@ -45,19 +47,37 @@ const ProSubscription = () => {
     const billingReturnUrl = `${window.location.origin}${location.pathname || '/settings/subscription'}`;
 
     const handleUpgrade = async () => {
-        const plan = PAID_STRIPE_PLAN;
-        if (!plan?.stripePriceId) {
-            showToast(t('biz_plan_checkout_missing', 'Paid plan is not configured. Please contact support.'), 'warning');
-            return;
-        }
         setLoading('paid');
         try {
             const functions = getFunctions(app, 'us-central1');
+            const createBusinessCheckout = httpsCallable(functions, 'createBusinessSubscriptionCheckout');
+            try {
+                const result = await createBusinessCheckout({
+                    planName: t('biz_plan_paid_name', BUSINESS_PAID_PLAN_DISPLAY.name),
+                    successUrl: `${window.location.origin}/payment-success`,
+                    cancelUrl: billingReturnUrl,
+                });
+                if (result.data?.url) window.location.href = result.data.url;
+                return;
+            } catch (bizErr) {
+                const code = bizErr?.code || '';
+                if (code !== 'functions/failed-precondition') throw bizErr;
+            }
+
+            const plan = PAID_STRIPE_PLAN;
+            if (!plan?.stripePriceId) {
+                showToast(
+                    t('biz_plan_checkout_missing', 'Paid plan is not configured. Set STRIPE_PRICE_BUSINESS_MONTHLY in functions/.env.'),
+                    'warning'
+                );
+                return;
+            }
             const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
             const result = await createCheckoutSession({
                 priceId: plan.stripePriceId,
                 planId: 'elite',
                 planName: t('biz_plan_paid_name', 'Paid Business'),
+                subscriptionKind: 'business',
                 successUrl: `${window.location.origin}/payment-success`,
                 cancelUrl: billingReturnUrl,
             });
@@ -86,7 +106,7 @@ const ProSubscription = () => {
         }
     };
 
-    const paidPrice = PAID_STRIPE_PLAN?.price ?? 29;
+    const paidPriceLabel = `${BUSINESS_PAID_PLAN_DISPLAY.priceLabel}${BUSINESS_PAID_PLAN_DISPLAY.periodLabel}`;
 
     const bannerBorder = isPaid ? 'color-mix(in srgb, var(--primary) 45%, transparent)' : 'var(--border-color)';
     const bannerBg = isPaid
@@ -185,6 +205,7 @@ const ProSubscription = () => {
 
     return (
         <div>
+            <StripeTestModeBanner />
             <div
                 style={{
                     background: bannerBg,
@@ -209,7 +230,7 @@ const ProSubscription = () => {
                     <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 8, maxWidth: 420, lineHeight: 1.45 }}>
                         {isPaid ? (
                             <>
-                                ${paidPrice}
+                                {paidPriceLabel}
                                 {t(
                                     'biz_plan_paid_banner_suffix',
                                     '/month — full manual feature set. Buy Dine Credits for AI.'
@@ -260,7 +281,7 @@ const ProSubscription = () => {
                 {planCard('paid', {
                     titleKey: 'biz_plan_paid_name',
                     titleDefault: 'Paid Business',
-                    priceLabel: `$${paidPrice}`,
+                    priceLabel: paidPriceLabel,
                     features: PAID_FEATURES,
                     tierKey: 'paid',
                 })}

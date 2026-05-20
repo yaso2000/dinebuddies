@@ -24,6 +24,10 @@ export const PUBLIC_VENUE_TYPES = [
     'Sports Match',
 ];
 
+export function publicVenueTypeI18nKey(type) {
+    return `venue_type_${String(type).toLowerCase().replace(/\s+/g, '_')}`;
+}
+
 /** Map legacy `occasionType` (old public picker) → `inviteMood`. */
 const LEGACY_OCCASION_TO_INVITE_MOOD = {
     Social: 'social',

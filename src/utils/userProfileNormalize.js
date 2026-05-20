@@ -65,8 +65,13 @@ export function normalizeUserProfile(data) {
             ? Math.max(0, Math.floor(data.pending_payouts))
             : 0;
 
+    const ageCategory =
+        data.ageCategory || data.age_category || (typeof data.age === 'string' ? data.age : '') || '';
+
     return {
         ...data,
+        ageCategory,
+        age_category: data.age_category || data.ageCategory || ageCategory,
         access_platform: accessPlatform,
         referral_code: referralCode,
         referral_link: referralLink,
@@ -103,7 +108,7 @@ export function normalizeUserProfile(data) {
                         : data.isProfileComplete === true || (
                             (data.displayName || data.display_name || data.nickname) &&
                             data.gender &&
-                            (data.ageCategory || data.age)
+                            (ageCategory || (typeof data.age === 'number' && data.age > 0))
                         )
     };
 }

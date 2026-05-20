@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import UnifiedCamera from '../../UnifiedCamera';
 
@@ -11,9 +11,14 @@ const ACCENT = '#ec4899';
 export default function DatingCoverCameraPanel({ onMediaSelect, openNonce = 0 }) {
     const { t } = useTranslation();
     const [active, setActive] = useState(false);
+    /** Only open on explicit nonce bumps — not when the panel remounts after leaving the tab. */
+    const handledNonceRef = useRef(openNonce);
 
     useEffect(() => {
-        if (openNonce > 0) setActive(true);
+        if (openNonce > handledNonceRef.current) {
+            setActive(true);
+        }
+        handledNonceRef.current = openNonce;
     }, [openNonce]);
 
     const handleRecording = (file, previewUrl, _type, extras = {}) => {

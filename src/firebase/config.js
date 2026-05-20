@@ -34,10 +34,8 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
 export const auth = getAuth(app);
-// Stabilize Firestore WebChannel when proxies, VPNs, or browser extensions break streaming/long-poll
-// (symptoms: net::ERR_ABORTED / 400 on .../Listen/channel and .../Write/channel, flaky userProfile).
 export const db = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
 });
 export const storage = getStorage(app);
 // Realtime Database — used for low-cost presence tracking (online/offline)

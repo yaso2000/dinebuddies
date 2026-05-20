@@ -174,7 +174,7 @@ const MyCommunity = () => {
         <div className="page-container my-community-page">
             <div className="my-community-inner">
             {/* Header */}
-            <header className="app-header sticky-header-glass">
+            <header className="my-community-subheader sticky-header-glass">
                 <button className="back-btn" onClick={() => navigate('/')}>
                     <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                 </button>

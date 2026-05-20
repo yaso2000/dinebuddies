@@ -18,24 +18,24 @@ import {
     FaHeart,
     FaInfoCircle,
 } from 'react-icons/fa';
+import { DINE_CREDIT_PACKS } from '../config/stripeCommerce';
+import StripeTestModeBanner from '../components/StripeTestModeBanner';
 import './SettingsPages.css';
 
 const FUNCTIONS_REGION = 'us-central1';
 
-const PACKS = [
-    { id: 'credits_200', credits: 200, price: '$2', sub: '', icon: FaBolt, accent: 'credits-wallet__pack-icon--sm' },
-    { id: 'credits_500', credits: 500, price: '$5', sub: '', icon: FaCoins, accent: 'credits-wallet__pack-icon--md' },
-    { id: 'credits_1000', credits: 1000, price: '$10', sub: '', icon: FaGem, accent: 'credits-wallet__pack-icon--lg' },
-    {
-        id: 'credits_3000',
-        credits: 3000,
-        price: '$25',
-        sub: 'Best value',
-        icon: FaCrown,
-        accent: 'credits-wallet__pack-icon--xl',
-        highlight: true,
-    },
-];
+const PACK_META = {
+    credits_200: { icon: FaBolt, accent: 'credits-wallet__pack-icon--sm' },
+    credits_500: { icon: FaCoins, accent: 'credits-wallet__pack-icon--md' },
+    credits_1000: { icon: FaGem, accent: 'credits-wallet__pack-icon--lg' },
+    credits_3000: { icon: FaCrown, accent: 'credits-wallet__pack-icon--xl' },
+};
+
+const PACKS = DINE_CREDIT_PACKS.map((p) => ({
+    ...p,
+    price: p.priceLabel,
+    ...PACK_META[p.id],
+}));
 
 /**
  * Dine Credits wallet — one-time Stripe checkouts (server maps package → price).
@@ -67,7 +67,11 @@ export default function CreditsWallet() {
             if (url) window.location.href = url;
         } catch (e) {
             console.error(e);
-            showToast(e?.message || t('checkout_start_failed', 'Could not start checkout.'), 'error');
+            const msg =
+                e?.message ||
+                e?.details ||
+                t('checkout_start_failed', 'Could not start checkout. Check Stripe functions config.');
+            showToast(msg, 'error');
         } finally {
             setLoadingId(null);
         }
@@ -89,6 +93,7 @@ export default function CreditsWallet() {
             </div>
 
             <div className="settings-content credits-wallet__content">
+                <StripeTestModeBanner />
                 <div className="credits-wallet__column">
                     <section className="settings-card credits-wallet__balance credits-wallet__balance--elevated">
                         <div className="credits-wallet__balance-top">

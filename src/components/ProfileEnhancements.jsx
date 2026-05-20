@@ -19,7 +19,9 @@ import {
     FaCheckCircle
 } from 'react-icons/fa';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadManagedImage } from '../services/managedImageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { db, storage } from '../firebase/config';
 import './ProfileEnhancements.css';
 
@@ -49,10 +51,7 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
 
         setUploading(true);
         try {
-            // Upload to Firebase Storage
-            const storageRef = ref(storage, `covers/${userId}_${Date.now()}.jpg`);
-            await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(storageRef);
+            const downloadURL = await uploadManagedImage(file, userId, ImageUploadZone.COVER);
 
             // Update Firestore
             const userRef = doc(db, 'users', userId);
@@ -63,7 +62,7 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
             onUpdate && onUpdate(downloadURL);
         } catch (error) {
             console.error('Error uploading cover:', error);
-            showToast('Failed to upload cover photo', 'error');
+            notifyImageUploadError(showToast, error, t, 'failed_upload_image');
         } finally {
             setUploading(false);
         }

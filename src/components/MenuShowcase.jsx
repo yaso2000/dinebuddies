@@ -4,6 +4,7 @@ import { FaUtensils, FaEdit, FaTimes, FaPlus, FaSave, FaTrash, FaFileImage, FaGr
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage } from '../utils/imageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
 import { useToast } from '../context/ToastContext';
 import {
     DndContext,
@@ -299,6 +300,9 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
             return await uploadImage(file, path, null, {
                 maxSizeMB: 0.5, maxWidthOrHeight: 800,
                 useWebWorker: true, fileType: 'image/jpeg', initialQuality: 0.85
+            }, {
+                moderationZone: ImageUploadZone.MENU,
+                userId: businessId,
             });
         } catch {
             showToast(t('upload_error', 'Failed to upload image'), 'error');

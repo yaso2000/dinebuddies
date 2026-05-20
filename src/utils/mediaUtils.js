@@ -1,38 +1,27 @@
 import imageCompression from 'browser-image-compression';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
+import { uploadManagedImage } from '../services/managedImageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
 
 /**
- * Compress and upload image to Firebase Storage
- * @param {File} file - Image file
- * @param {string} userId - User ID for path
- * @returns {Promise<string>} - Download URL
+ * Compress and upload image to Firebase Storage.
+ * @param {File} file
+ * @param {string} userId
+ * @param {{ zone?: string }} [options] — zone defaults to PUBLIC_CHAT (moderated). Use PRIVATE_DM for 1:1 DMs only.
+ * @returns {Promise<string>}
  */
-export const uploadImage = async (file, userId) => {
+export const uploadImage = async (file, userId, options = {}) => {
+    const zone = options.zone ?? ImageUploadZone.PUBLIC_CHAT;
     try {
-        // Compression options
-        const options = {
+        const compressionOptions = {
             maxSizeMB: 0.5,
             maxWidthOrHeight: 1024,
             useWebWorker: true,
-            fileType: 'image/jpeg'
+            fileType: 'image/jpeg',
         };
-
-        // Compress image
-        const compressedFile = await imageCompression(file, options);
-
-        // Create storage reference
-        const timestamp = Date.now();
-        const fileName = `${userId}_${timestamp}.jpg`;
-        const storageRef = ref(storage, `chat_images/${userId}/${fileName}`);
-
-        // Upload
-        await uploadBytes(storageRef, compressedFile);
-
-        // Get download URL
-        const downloadURL = await getDownloadURL(storageRef);
-
-        return downloadURL;
+        const compressedFile = await imageCompression(file, compressionOptions);
+        return uploadManagedImage(compressedFile, userId, zone);
     } catch (error) {
         console.error('Error uploading image:', error);
         throw error;
@@ -85,7 +74,7 @@ export const uploadFile = async (file, userId) => {
         return {
             url: downloadURL,
             name: file.name,
-            size: file.size
+            size: file.size,
         };
     } catch (error) {
         console.error('Error uploading file:', error);

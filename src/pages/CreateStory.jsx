@@ -7,6 +7,8 @@ import { FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaCamera } from 'rea
 import UnifiedCamera from '../components/UnifiedCamera';
 
 import { uploadImage } from '../utils/imageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { db } from '../firebase/config';
 import { collection, addDoc, serverTimestamp, doc } from 'firebase/firestore';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -154,7 +156,10 @@ const CreateStory = () => {
             if (mediaFile) {
                 const sanitizedName = mediaFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const path = `stories/${currentUser.uid}/${Date.now()}_${sanitizedName}`;
-                mediaUrl = await uploadImage(mediaFile, path);
+                mediaUrl = await uploadImage(mediaFile, path, null, {}, {
+                    moderationZone: ImageUploadZone.STORY,
+                    userId: currentUser.uid,
+                });
                 finalType = 'image';
             }
 
@@ -176,7 +181,7 @@ const CreateStory = () => {
             navigate('/');
         } catch (error) {
             console.error("Error creating story:", error);
-            showToast(t('failed_share_story', 'Failed to share story. Try again.'), 'error');
+            notifyImageUploadError(showToast, error, t, 'failed_share_story');
         } finally {
             setLoading(false);
         }

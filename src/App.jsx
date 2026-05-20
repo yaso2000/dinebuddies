@@ -10,6 +10,7 @@ import {
     useLocation,
 } from 'react-router-dom';
 import Layout from './components/Layout';
+import AccountThemeBridge from './components/AccountThemeBridge';
 
 // Core Pages (Eagerly loaded for critical paths)
 import LoginHub from './pages/auth/LoginHub';
@@ -18,8 +19,8 @@ import HomeRouter from './components/HomeRouter';
 import ReferralJoinPage from './pages/ReferralJoinPage';
 import AffiliateDashboard from './pages/affiliate/AffiliateDashboard';
 import AffiliatePortal from './pages/affiliate/AffiliatePortal';
-import AffiliateUseLaptop from './pages/affiliate/AffiliateUseLaptop';
 import AffiliateForceSignOut from './pages/affiliate/AffiliateForceSignOut';
+import AffiliateRouteLayout from './components/affiliate/AffiliateRouteLayout';
 import AffiliateSignupPage from './pages/affiliate/AffiliateSignupPage';
 import AffiliateLoginPage from './pages/affiliate/AffiliateLoginPage';
 import AffiliateSettingsPage from './pages/affiliate/AffiliateSettingsPage';
@@ -37,8 +38,14 @@ const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
 const BusinessRankings = lazy(() => import('./pages/BusinessRankings'));
 const RestaurantDetails = lazy(() => import('./pages/RestaurantDetails'));
 const Settings = lazy(() => import('./pages/Settings'));
-const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
-const AdminHome = lazy(() => import('./pages/admin/AdminHome'));
+const AdminShell = lazy(() => import('./admin/shell/AdminShell'));
+const AdminUsersPage = lazy(() => import('./admin/pages/UsersPage'));
+const AdminCreditsPage = lazy(() => import('./admin/pages/CreditsPage'));
+const AdminInvitationsPage = lazy(() => import('./admin/pages/InvitationsPage'));
+const AdminSmartSenderPage = lazy(() => import('./admin/pages/SmartSenderPage'));
+const AdminReportsPage = lazy(() => import('./admin/pages/ReportsPage'));
+const AdminPlansSandboxPage = lazy(() => import('./admin/pages/PlansSandboxPage'));
+const AdminPlansProductionPage = lazy(() => import('./admin/pages/PlansProductionPage'));
 const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
 const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
 const Notifications = lazy(() => import('./pages/Notifications'));
@@ -47,7 +54,6 @@ const Chat = lazy(() => import('./pages/Chat'));
 const MyCommunities = lazy(() => import('./pages/MyCommunities'));
 const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
-const AccountsManager = lazy(() => import('./pages/admin/AccountsManager'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
 
 const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
@@ -82,18 +88,6 @@ const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest
 const MyCommunity = lazy(() => import('./pages/MyCommunity'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
-const InvitationManagement = lazy(() => import('./pages/admin/InvitationManagement'));
-const SubscriptionManagement = lazy(() => import('./pages/admin/SubscriptionManagement'));
-const Plans = lazy(() => import('./pages/admin/Plans'));
-const AdminGrantCredits = lazy(() => import('./pages/admin/AdminGrantCredits'));
-const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'));
-const AdminChatCommunity = lazy(() => import('./pages/admin/AdminChatCommunity'));
-const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
-const MigrationTools = lazy(() => import('./pages/admin/MigrationTools'));
-const AdminSystemTools = lazy(() => import('./pages/admin/AdminSystemTools'));
-const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
-const CodeBackups = lazy(() => import('./pages/admin/CodeBackups'));
-const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 
 // Contexts
 import { ToastProvider } from './context/ToastContext';
@@ -110,12 +104,9 @@ import AdminRoute from './components/AdminRoute';
 import AppRouteLoading from './components/AppRouteLoading';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
+/** Layout owns route-level Suspense so the 3-column shell never unmounts during lazy loads. */
 function RouteSuspenseLayout() {
-    return (
-        <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
-            <Outlet />
-        </Suspense>
-    );
+    return <Outlet />;
 }
 
 /** /business/:businessId/invitations → community hub for that partner */
@@ -146,6 +137,7 @@ function App() {
                 <Router>
                     <LoginRouterBridge />
                     <AuthProvider>
+                        <AccountThemeBridge />
                         <InvitationProvider>
                             <NotificationProvider>
                                 <ChatProvider>
@@ -154,13 +146,15 @@ function App() {
                                             {/* Auth routes outside of nested Layout wrappers for maximum reliability */}
                                             <Route path="/login" element={<LoginHub />} />
                                             <Route path="/join" element={<ReferralJoinPage />} />
-                                            <Route path="/affiliate/use-laptop" element={<AffiliateUseLaptop />} />
-                                            <Route path="/affiliate/sign-out" element={<AffiliateForceSignOut />} />
-                                            <Route path="/affiliate/signup" element={<AffiliateSignupPage />} />
-                                            <Route path="/affiliate/login" element={<AffiliateLoginPage />} />
-                                            <Route path="/affiliate/settings" element={<AffiliateSettingsPage />} />
-                                            <Route path="/affiliate/dashboard" element={<AffiliateDashboard />} />
-                                            <Route path="/affiliate" element={<AffiliatePortal />} />
+                                            <Route element={<AffiliateRouteLayout />}>
+                                                <Route path="/affiliate/use-laptop" element={<Navigate to="/affiliate/dashboard" replace />} />
+                                                <Route path="/affiliate/sign-out" element={<AffiliateForceSignOut />} />
+                                                <Route path="/affiliate/signup" element={<AffiliateSignupPage />} />
+                                                <Route path="/affiliate/login" element={<AffiliateLoginPage />} />
+                                                <Route path="/affiliate/settings" element={<AffiliateSettingsPage />} />
+                                                <Route path="/affiliate/dashboard" element={<AffiliateDashboard />} />
+                                                <Route path="/affiliate" element={<AffiliatePortal />} />
+                                            </Route>
                                             <Route path="/business/login" element={<Navigate to="/login?tab=business" replace />} />
                                             <Route
                                                 path="/signup/business"
@@ -177,10 +171,10 @@ function App() {
                                             <Route path="/verify-email" element={<GuestBlockedRoute><VerifyEmail /></GuestBlockedRoute>} />
                                             <Route path="/complete-profile" element={<CompleteProfile />} />
 
-                                            <Route path="/" element={<HomeRouter />} />
-
                                             <Route path="/business-pro" element={<Navigate to="/business-dashboard" replace />} />
                                             <Route path="/business-pro/*" element={<Navigate to="/business-dashboard" replace />} />
+
+                                            <Route path="/" element={<HomeRouter />} />
 
                                             <Route element={<RouteSuspenseLayout />}>
                                                 <Route element={<Layout />}>
@@ -266,25 +260,18 @@ function App() {
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<HomeInvitations />} />
 
-                                                    <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                                                        <Route path="dashboard" element={<AdminHome />} />
-                                                        <Route path="accounts" element={<AccountsManager />} />
-                                                        <Route path="users" element={<Navigate to="/admin/accounts?tab=consumers" replace />} />
-                                                        <Route path="businesses" element={<Navigate to="/admin/accounts?tab=business" replace />} />
-                                                        <Route path="business-limits" element={<Navigate to="/admin/accounts?tab=business" replace />} />
-                                                        <Route path="invitations" element={<InvitationManagement />} />
-                                                        <Route path="subscriptions" element={<SubscriptionManagement />} />
-                                                        <Route path="plans" element={<Plans />} />
-                                                        <Route path="grant-credits" element={<AdminGrantCredits />} />
-                                                        <Route path="reports" element={<ReportsAnalytics />} />
-                                                        <Route path="chat-community" element={<AdminChatCommunity />} />
-                                                        <Route path="notifications" element={<AdminNotifications />} />
-                                                        <Route path="migration" element={<MigrationTools />} />
-                                                        <Route path="system-tools" element={<AdminSystemTools />} />
-                                                        <Route path="audit-log" element={<AdminAuditLog />} />
-                                                        <Route path="backups" element={<CodeBackups />} />
-                                                        <Route path="settings" element={<AdminSettings />} />
-                                                        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                                                    <Route path="/admin/*" element={<AdminRoute><AdminShell /></AdminRoute>}>
+                                                        <Route path="users" element={<AdminUsersPage />} />
+                                                        <Route path="credits" element={<AdminCreditsPage />} />
+                                                        <Route path="messaging" element={<AdminSmartSenderPage />} />
+                                                        <Route path="invitations" element={<AdminInvitationsPage />} />
+                                                        <Route path="reports" element={<AdminReportsPage />} />
+                                                        <Route path="plans/sandbox" element={<AdminPlansSandboxPage />} />
+                                                        <Route path="plans/production" element={<AdminPlansProductionPage />} />
+                                                        <Route path="plans" element={<Navigate to="/admin/plans/production" replace />} />
+                                                        <Route path="dashboard" element={<Navigate to="/admin/users" replace />} />
+                                                        <Route path="*" element={<Navigate to="/admin/users" replace />} />
+                                                        <Route index element={<Navigate to="/admin/users" replace />} />
                                                     </Route>
                                                 </Route>
                                             </Route>

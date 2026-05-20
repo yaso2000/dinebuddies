@@ -60,20 +60,20 @@
   --text-muted: var(--text-secondary);
   --text-white: #ffffff;
 
-  /* Typography — unified sans-serif across the app */
-  --font-arabic: sans-serif;
-  --font-heading: sans-serif;
-  --font-body: sans-serif;
-  --font-family: sans-serif;
+  /* Typography — Cairo (Arabic + Latin); loaded in index.html */
+  --font-arabic: 'Cairo', sans-serif;
+  --font-heading: 'Cairo', sans-serif;
+  --font-body: 'Cairo', sans-serif;
+  --font-family: 'Cairo', sans-serif;
 
-  /* Additional (all resolve to sans-serif for consistency) */
-  --font-montserrat: sans-serif;
-  --font-bebas: sans-serif;
-  --font-lato: sans-serif;
-  --font-poppins: sans-serif;
-  --font-playfair: sans-serif;
-  --font-inter: sans-serif;
-  --font-roboto: sans-serif;
+  /* Additional pairing presets (editors / motion templates may override) */
+  --font-montserrat: 'Montserrat', sans-serif;
+  --font-bebas: 'Bebas Neue', sans-serif;
+  --font-lato: 'Lato', sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
+  --font-playfair: 'Playfair Display', serif;
+  --font-inter: 'Inter', sans-serif;
+  --font-roboto: 'Cairo', sans-serif;
 
   /* Pairing Presets */
   --pair-tech-h: var(--font-montserrat);
@@ -247,6 +247,111 @@
   --shadow-card-hover: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
+/* Business account palette — warm orange wash (personal keeps rules above) */
+[data-account-theme='business'][data-theme='dark'] {
+  --brand-primary: #e86e2e;
+  --brand-glow: rgba(232, 110, 46, 0.4);
+  --bg-body: #100c09;
+  --bg-body-gradient: linear-gradient(160deg, #140e0a 0%, #100c09 55%, #120c08 100%);
+  --bg-card: rgba(32, 22, 16, 0.92);
+  --card-bg: rgba(32, 22, 16, 0.92);
+  --bg-input: rgba(28, 18, 12, 0.92);
+  --bg-secondary: rgba(40, 28, 20, 0.78);
+  --bg-main: #100c09;
+  --bg-elevated: #1f1610;
+  --glass-overlay: rgba(16, 10, 8, 0.92);
+  --shadow-glow: 0 0 18px rgba(232, 110, 46, 0.22);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, #e86e2e 30%, transparent);
+}
+
+[data-account-theme='business'][data-theme='light'] {
+  --brand-primary: #c2410c;
+  --brand-glow: rgba(234, 88, 12, 0.35);
+  --bg-body: #faf7f4;
+  --bg-body-gradient: linear-gradient(160deg, #f5ede6 0%, #faf7f4 55%, #fffefb 100%);
+  --bg-card: #fffefb;
+  --card-bg: #fffefb;
+  --bg-input: #fffefb;
+  --bg-secondary: #fff3e8;
+  --bg-main: #faf7f4;
+  --bg-elevated: #f5ebe3;
+  --glass-overlay: rgba(255, 251, 247, 0.96);
+  --shadow-glow: 0 0 20px rgba(232, 110, 46, 0.2);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, #e86e2e 28%, transparent);
+}
+
+[data-account-theme='business'][data-theme='dark'] html,
+[data-account-theme='business'][data-theme='dark'] body {
+  background: var(--bg-body-gradient) !important;
+}
+
+[data-account-theme='business'][data-theme='light'] html,
+[data-account-theme='business'][data-theme='light'] body {
+  background: var(--bg-body-gradient) !important;
+  color: var(--text-main) !important;
+}
+
+[data-account-theme='business'] .app-header {
+  border-bottom-color: color-mix(in srgb, var(--primary) 18%, var(--border-color));
+}
+
+[data-account-theme='business'] .bottom-nav {
+  border-top-color: color-mix(in srgb, var(--primary) 16%, var(--border-color));
+}
+
+[data-account-theme='business'] .auth-tab-btn.active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+[data-account-theme='business'] .auth-tab-btn.active::after {
+  background: var(--primary);
+  box-shadow: 0 0 10px var(--primary);
+}
+
+/* Affiliate partner palette — green accent on auth + dashboard */
+[data-account-theme='affiliate'][data-theme='dark'] {
+  --brand-primary: #22c55e;
+  --brand-glow: rgba(34, 197, 94, 0.38);
+  --bg-body: #0a120e;
+  --bg-body-gradient: linear-gradient(160deg, #0c1610 0%, #0a120e 55%, #0b140f 100%);
+  --bg-card: rgba(16, 28, 20, 0.94);
+  --card-bg: rgba(16, 28, 20, 0.94);
+  --bg-input: rgba(14, 24, 18, 0.92);
+  --bg-secondary: rgba(20, 32, 24, 0.78);
+  --bg-main: #0a120e;
+  --bg-elevated: #142018;
+  --glass-overlay: rgba(10, 18, 14, 0.92);
+  --shadow-glow: 0 0 18px rgba(34, 197, 94, 0.2);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, #22c55e 30%, transparent);
+}
+
+[data-account-theme='affiliate'][data-theme='light'] {
+  --brand-primary: #16a34a;
+  --brand-glow: rgba(22, 163, 74, 0.32);
+  --bg-body: #f4faf6;
+  --bg-body-gradient: linear-gradient(160deg, #ecfdf3 0%, #f4faf6 55%, #fefffe 100%);
+  --bg-card: #f8fef9;
+  --card-bg: #f8fef9;
+  --bg-input: #f8fef9;
+  --bg-secondary: #ecfdf3;
+  --bg-main: #f4faf6;
+  --bg-elevated: #e8f7ec;
+  --glass-overlay: rgba(248, 254, 249, 0.96);
+  --shadow-glow: 0 0 20px rgba(22, 163, 74, 0.18);
+  --shadow-focus-ring: 0 0 0 3px color-mix(in srgb, #16a34a 28%, transparent);
+}
+
+[data-account-theme='affiliate'][data-theme='dark'] html,
+[data-account-theme='affiliate'][data-theme='dark'] body {
+  background: var(--bg-body-gradient) !important;
+}
+
+[data-account-theme='affiliate'][data-theme='light'] html,
+[data-account-theme='affiliate'][data-theme='light'] body {
+  background: var(--bg-body-gradient) !important;
+  color: var(--text-main) !important;
+}
+
 /* Reset & Base */
 * {
   box-sizing: border-box;
@@ -255,8 +360,17 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
+html {
   font-family: var(--font-body);
+}
+
+body,
+#root,
+.app-layout {
+  font-family: inherit;
+}
+
+body {
   background-color: var(--bg-body);
   color: var(--text-main);
   line-height: 1.5;
@@ -267,20 +381,28 @@ body {
   overflow-x: hidden;
 }
 
-[dir='rtl'],
-[lang='ar'] {
-  font-family: var(--font-arabic) !important;
-}
-
-[dir='rtl'] h1,
-[dir='rtl'] h2,
-[dir='rtl'] h3,
-[dir='rtl'] h4,
-[lang='ar'] h1,
-[lang='ar'] h2,
-[lang='ar'] h3,
-[lang='ar'] h4 {
-  font-family: var(--font-arabic) !important;
+/* Cairo on all copy (inherit from html/body; overrides stray sans-serif rules) */
+p,
+span,
+li,
+td,
+th,
+label,
+a,
+button,
+input,
+textarea,
+select,
+option,
+figcaption,
+blockquote,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: inherit;
 }
 
 h1 {
@@ -390,15 +512,102 @@ h4 {
   box-shadow: var(--shadow-glow);
 }
 
-/* Layout constraints for Mobile-App feel on Desktop */
+/* Canvas follows data-theme (boot script sets attribute before first paint) */
 html,
 body {
-  /* Rich dark gradient as the outer canvas */
-  background: linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%) !important;
-  /* Theme-aware: was #e2e8f0 — that stayed light-gray in light mode and made headings invisible */
-  color: var(--text-main) !important;
-  background-attachment: fixed !important;
+  background: var(--bg-body-gradient, linear-gradient(160deg, #0f0817 0%, #090c1a 60%, #0d0812 100%));
+  color: var(--text-main, #f8fafc);
+  background-attachment: fixed;
   height: 100%;
+}
+
+/* Route / session loading — theme-aware (no hardcoded dark flash) */
+.app-route-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.app-route-loading--inline {
+  min-height: 40vh;
+}
+
+.app-route-loading--viewport {
+  min-height: 100dvh;
+  background: var(--bg-body-gradient);
+}
+
+.app-main--shell-loading {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.app-main--shell-loading .app-route-loading--inline {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app-layout--booting .app-header--boot-placeholder {
+  pointer-events: none;
+}
+
+.app-shell-sidebar-placeholder {
+  min-height: 120px;
+}
+
+@media (min-width: 1024px) {
+  .app-layout--booting {
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* Shell wrapper: constrain + center (was width:100% which pinned layout to one side) */
+  #root > .app-root-fill {
+    width: 100%;
+    max-width: var(--ds-shell-max);
+    margin-inline: auto;
+    min-height: 100vh;
+    flex: 0 1 var(--ds-shell-max);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  .app-root-fill > .app-layout,
+  .app-root-fill .app-layout {
+    width: 100%;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+.app-route-loading__spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+  border-top-color: var(--primary, #e86e2e);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+.app-route-loading__label {
+  margin-top: 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.45;
 }
 
 /* Mobile: narrow centered card */
@@ -452,19 +661,18 @@ body {
   }
 
 
-  /* app-layout: same max-width as ds-body-grid so header aligns with grid */
+  /* app-layout: fills centered .app-root-fill shell (max-width on wrapper) */
   .app-layout {
     display: flex !important;
     flex-direction: column !important;
     height: 100vh !important;
-    max-width: var(--ds-shell-max) !important;
-    /* 300 + 650 + 300 — matches .ds-body-grid track sum */
+    max-width: 100% !important;
     width: 100% !important;
     overflow: hidden !important;
     border: none !important;
     box-shadow: none !important;
-    /* #root flex centers this block; avoid duplicate margin rules */
-    margin: 0 !important;
+    margin-inline: auto !important;
+    margin-block: 0 !important;
   }
 
   /* Header: fixed height, doesn't shrink */
@@ -476,6 +684,7 @@ body {
   .app-main {
     overflow-y: auto !important;
     overflow-x: hidden !important;
+    overscroll-behavior-y: contain;
     height: 100% !important;
     min-height: 0 !important;
     padding-bottom: 2rem !important;
@@ -583,10 +792,36 @@ body {
     bottom: auto !important;
     z-index: auto !important;
     width: 100% !important;
-    height: auto !important;
-    max-height: none !important;
+    height: 100% !important;
+    max-height: 100% !important;
     min-height: 0 !important;
     padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .chat-root.chat-container > .chat-body-column,
+  .community-chat-root > .chat-body-column,
+  .invitation-chat-root > .chat-body-column {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-root .messages-area,
+  .community-chat-root .message-list,
+  .invitation-chat-root .message-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .chat-footer-stack {
+    flex-shrink: 0;
+    margin-top: auto;
   }
 }
 
@@ -615,6 +850,12 @@ body {
    On desktop (>=1024px): always show regardless of chat state. */
 .app-header--chat {
   display: none;
+}
+
+@media (max-width: 1023px) {
+  .app-header--search-route {
+    display: none !important;
+  }
 }
 
 /* Fullscreen pages (e.g. Create Story): no bottom padding on all sizes */
@@ -764,11 +1005,6 @@ html:not([data-theme='light']) .app-header .app-name {
 
 
 
-/* RTL Support for Arabic */
-[dir="rtl"] {
-  font-family: sans-serif;
-}
-
 /* Smart Invitation Card */
 .smart-invitation-card {
   margin: 0 0 0.75rem 0;
@@ -815,6 +1051,159 @@ html:not([data-theme='light']) .app-header .app-name {
   min-height: 0 !important;
   max-height: none !important;
   margin-bottom: 0;
+}
+
+.invitation-template-carousel {
+  align-items: flex-start;
+}
+
+.invitation-template-carousel [data-template-slide] {
+  display: flex;
+  flex-direction: column;
+}
+
+.invitation-template-carousel .invitation-template-preview-btn {
+  flex-shrink: 0;
+}
+
+/* Public invitation create — compact preference chips & color swatches */
+.create-public-invitation .public-invite-pref-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.create-public-invitation .public-invite-pref-grid--gender {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.create-public-invitation .public-invite-pref-grid--age {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.create-public-invitation .public-invite-pref-grid--venue {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 520px) {
+  .create-public-invitation .public-invite-pref-grid--age {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .create-public-invitation .public-invite-pref-grid--venue {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.create-public-invitation .public-invite-pref-chip--venue {
+  padding: 10px 6px;
+  min-height: 72px;
+}
+
+.create-public-invitation .public-invite-pref-chip__icon--venue {
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+
+.create-public-invitation .public-invite-pref-chip--venue.is-selected .public-invite-pref-chip__icon--venue {
+  color: var(--primary);
+}
+
+.create-public-invitation .public-invite-pref-chip {
+  position: relative;
+  margin: 0;
+  padding: 8px 6px;
+  min-height: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--hover-overlay);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.create-public-invitation .public-invite-pref-chip--age {
+  padding: 6px 4px;
+}
+
+.create-public-invitation .public-invite-pref-chip.is-selected {
+  border: 2px solid var(--primary);
+  background: rgba(139, 92, 246, 0.18);
+  color: var(--text-main);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
+}
+
+.create-public-invitation .public-invite-pref-chip__check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--primary);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.create-public-invitation .public-invite-pref-chip__icon {
+  font-size: 1.15rem;
+}
+
+.create-public-invitation .public-invite-pref-chip__icon--age {
+  font-size: 0.95rem;
+  margin-bottom: 0;
+}
+
+.create-public-invitation .public-invite-pref-chip__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.create-public-invitation .public-invite-pref-chip.is-selected .public-invite-pref-chip__label {
+  font-weight: 800;
+}
+
+.create-public-invitation .public-color-swatch-row {
+  display: flex;
+  overflow-x: auto;
+  gap: 8px;
+  padding: 4px 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: grab;
+}
+
+.create-public-invitation .public-color-swatch {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  padding: 0;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.create-public-invitation .public-color-swatch.is-selected {
+  border-color: var(--text-main);
+  transform: scale(1.06);
+}
+
+.create-public-invitation .public-color-swatch__check {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.85rem;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
 }
 
 /* Fixed Flicker: Removed scaling, using only Subtle Lift + Shadow */
@@ -1548,6 +1937,25 @@ select.input-field {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
+/* Partners directory: stay inside app-main scroll — avoid 100vh overflow + header rubber-band */
+.directory-page .directory-map-wrapper:not(.directory-map-wrapper--fullscreen) {
+  height: min(520px, 58vh);
+  min-height: 280px;
+}
+
+.directory-map-wrapper--fullscreen {
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  border-radius: 0 !important;
+}
+
+@media (max-width: 1023px) {
+  .directory-page,
+  .my-community-page {
+    overscroll-behavior-y: contain;
+  }
+}
+
 .leaflet-container-home {
   height: 100%;
   width: 100%;
@@ -1968,7 +2376,7 @@ select.input-field {
 
 @media (min-width: 1024px) {
   .app-header .header-actions {
-    gap: 6px;
+    gap: 16px;
   }
 }
 
@@ -2232,19 +2640,142 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   z-index: 10000;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   background: var(--bg-body);
   display: flex;
   flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  padding-inline: max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+}
+
+/* Affiliate routes (/affiliate/*) — same fixed scroll shell as login; allows pull/scroll on mobile */
+.auth-route-scroll.affiliate-route-scroll {
+  overscroll-behavior-y: auto;
+  background: var(--bg-body);
+}
+
+.auth-route-scroll.affiliate-route-scroll .affiliate-shell {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+.auth-route-scroll.affiliate-route-scroll .affiliate-shell--center {
+  min-height: min(100%, 100dvh);
+}
+
+/* Top bar inside login column: language (left), brand (center), account + affiliate + theme (right) */
+.auth-page-chrome {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  direction: ltr;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  padding: 0 0 0.15rem;
+  box-sizing: border-box;
+}
+
+.auth-page-chrome__left {
+  grid-column: 1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+}
+
+.auth-page-chrome__brand {
+  grid-column: 2;
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.auth-page-chrome__logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.auth-page-chrome__title {
+  font-size: clamp(1.1rem, 3.5vw, 1.35rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #1c1917;
+  white-space: nowrap;
+}
+
+.auth-page-chrome__right {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.auth-page-chrome__icon-btn,
+.auth-page-chrome__account-btn {
+  flex-shrink: 0;
+}
+
+.auth-page-chrome .login-hub-corner-btn {
+  opacity: 1;
+}
+
+.auth-shell-lang-toggle {
+  display: inline-flex;
+  border-radius: 999px;
+  border: 1px solid rgba(28, 25, 23, 0.12);
+  background: rgba(255, 254, 251, 0.94);
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.auth-shell-lang-toggle__btn {
+  border: none;
+  background: transparent;
+  color: #78716c;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.38rem 0.55rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.auth-shell-lang-toggle__btn--active {
+  background: color-mix(in srgb, var(--primary, #e86e2e) 18%, #fffefb);
+  color: #1c1917;
+}
+
+.auth-shell-lang-toggle__btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary, #e86e2e) 55%, #a8a29e);
+  outline-offset: -2px;
 }
 
 /* /login — luxury-minimal palette (warm neutrals + subtle brand) */
 .login-hub.login-hub-page {
   align-items: center;
-  justify-content: flex-start;
-  padding: clamp(1rem, 3vh, 2rem) 16px;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  padding-top: max(clamp(0.75rem, 2vh, 1.25rem), env(safe-area-inset-top, 0px));
+  padding-bottom: max(clamp(1rem, 3vh, 2rem), env(safe-area-inset-bottom, 0px));
+  padding-inline: max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   box-sizing: border-box;
   background:
     radial-gradient(120% 80% at 50% -20%, rgba(232, 110, 46, 0.06) 0%, transparent 55%),
@@ -2256,12 +2787,18 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     );
 }
 
-/* Corner switch: personal (default) ↔ business — replaces in-card tab strip */
-.login-hub-page .login-hub-account-toggle {
-  position: fixed;
-  top: max(0.65rem, env(safe-area-inset-top, 0px));
-  inset-inline-end: max(0.65rem, env(safe-area-inset-right, 0px));
-  z-index: 60;
+/* Toolbar above sign-in card: theme + personal ↔ business */
+.login-hub-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.login-hub-shell-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -2286,22 +2823,39 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     transform 0.12s ease;
 }
 
-.login-hub-page .login-hub-account-toggle:hover {
+.login-hub-shell-btn:hover {
   background: #fffefb;
   color: #1c1917;
   border-color: rgba(28, 25, 23, 0.18);
   transform: translateY(-1px);
 }
 
-.login-hub-page .login-hub-account-toggle:focus-visible {
+.login-hub-shell-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary, #e86e2e) 55%, #a8a29e);
   outline-offset: 2px;
 }
 
-.login-hub-page .login-hub-account-toggle svg {
+.login-hub-shell-btn svg {
   font-size: 1.05rem;
   flex-shrink: 0;
   opacity: 0.92;
+}
+
+.auth-shell-theme-toggle__label {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .auth-shell-theme-toggle__label {
+    display: none;
+  }
+
+  .auth-shell-theme-toggle {
+    padding-inline: 0.55rem;
+  }
 }
 
 .login-hub-tabpanel--solo {
@@ -2370,7 +2924,212 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 .login-hub-wrap {
   width: 100%;
   max-width: min(440px, 100%);
-  margin: 0 auto;
+  margin-inline: auto;
+  margin-block: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.65rem, 1.8vh, 0.95rem);
+}
+
+@media (min-width: 1024px) {
+  .login-hub.login-hub-page {
+    justify-content: center;
+    min-height: min(100%, 100dvh);
+  }
+
+  .login-hub-wrap,
+  .login-hub-wrap--business-signup,
+  .login-hub-wrap--affiliate {
+    max-width: min(440px, 100%);
+    margin-inline: auto;
+  }
+}
+
+/* Login hub — theme + affiliate inside the sign-in card (top start / top end) */
+.login-hub-corner-chrome {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: 10px;
+  inset-inline: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.login-hub-corner-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #e7e5e4) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-card, #fffefb) 82%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: color-mix(in srgb, var(--text-muted, #78716c) 88%, #1c1917);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  opacity: 0.52;
+  box-shadow: 0 4px 14px -6px rgba(28, 25, 23, 0.22);
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.login-hub-corner-btn:hover,
+.login-hub-corner-btn:focus-visible {
+  opacity: 0.95;
+  color: var(--text-main, #1c1917);
+  border-color: color-mix(in srgb, var(--text-muted, #78716c) 55%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.login-hub-corner-btn--affiliate:hover,
+.login-hub-corner-btn--affiliate:focus-visible {
+  color: #16a34a;
+  border-color: color-mix(in srgb, #16a34a 45%, transparent);
+}
+
+.login-hub-corner-btn svg {
+  flex-shrink: 0;
+}
+
+/* Partner program promo — buttons */
+.affiliate-promo-bar {
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.affiliate-promo-bar--landing {
+  display: flex;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  width: 100%;
+}
+
+.affiliate-promo-bar__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.affiliate-promo-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.affiliate-promo-bar__actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.affiliate-promo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated, var(--bg-card));
+  color: var(--text-main);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.affiliate-promo-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.affiliate-promo-btn--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.affiliate-promo-btn--primary:hover {
+  filter: brightness(1.05);
+  color: #fff;
+}
+
+.affiliate-promo-btn--outline {
+  background: transparent;
+}
+
+.ds-affiliate-widget.affiliate-desktop-links {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+
+.affiliate-desktop-links__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.ds-nav-item--affiliate {
+  color: var(--primary);
+}
+
+/* Affiliate promo widgets hidden in-app (partners use web /affiliate/* only) */
+.affiliate-promo-bar.home-affiliate-links,
+.affiliate-promo-bar.posts-feed-affiliate-bar,
+.ds-affiliate-widget.affiliate-desktop-links {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  .login-hub.login-hub-page {
+    align-items: center;
+  }
+
+  .login-hub-wrap,
+  .login-hub-wrap--business-signup {
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  .login-hub-header {
+    width: 100%;
+    text-align: center;
+  }
+
+  .login-hub-toolbar {
+    justify-content: flex-end;
+    width: 100%;
+  }
 }
 
 /* Wider card for business registration wizard */
@@ -2429,6 +3188,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 }
 
 .login-hub-card {
+  position: relative;
   width: 100%;
   border-radius: 18px;
   overflow: hidden;
@@ -2642,6 +3402,215 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: none !important;
 }
 
+.login-hub-toolbar--solo {
+  justify-content: flex-end;
+}
+
+/* Login hub — dark theme (follows global data-theme) */
+[data-theme='dark'] .login-hub.login-hub-page {
+  background:
+    radial-gradient(120% 80% at 50% -20%, rgba(232, 110, 46, 0.14) 0%, transparent 55%),
+    linear-gradient(168deg, #0f0817 0%, #16101f 38%, #0b0812 100%);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-brand {
+  background: linear-gradient(120deg, #f8fafc 0%, #cbd5e1 55%, #f1f5f9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@supports not (background-clip: text) {
+  [data-theme='dark'] .login-hub.login-hub-page .login-hub-brand {
+    color: #f8fafc;
+    background: none;
+  }
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-tagline {
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-shell-btn {
+  background: rgba(30, 24, 50, 0.88);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 8px 24px -10px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-shell-btn:hover {
+  background: rgba(40, 32, 64, 0.95);
+  color: var(--text-main);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border-color));
+}
+
+[data-theme='dark'] .login-hub-corner-btn {
+  background: rgba(30, 24, 50, 0.82);
+  border-color: var(--border-color);
+  color: var(--text-muted);
+}
+
+[data-theme='dark'] .login-hub-corner-btn:hover,
+[data-theme='dark'] .login-hub-corner-btn:focus-visible {
+  color: var(--text-main);
+}
+
+[data-theme='dark'] .login-hub-corner-btn--affiliate:hover,
+[data-theme='dark'] .login-hub-corner-btn--affiliate:focus-visible {
+  color: #4ade80;
+  border-color: color-mix(in srgb, #22c55e 48%, transparent);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card {
+  border-color: var(--border-color);
+  background: linear-gradient(180deg, rgba(34, 28, 52, 0.98) 0%, rgba(22, 14, 35, 0.99) 55%, rgba(15, 10, 24, 1) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 22px 48px -14px rgba(0, 0, 0, 0.45),
+    0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card--personal {
+  border-color: color-mix(in srgb, #3b82f6 40%, var(--border-color));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 22px 48px -14px rgba(30, 64, 175, 0.35),
+    0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card--business {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 52px -14px rgba(120, 53, 15, 0.35),
+    0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme='dark'] .auth-page-chrome__title {
+  color: #fafaf9;
+}
+
+[data-theme='dark'] .auth-shell-lang-toggle {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(28, 25, 23, 0.85);
+}
+
+[data-theme='dark'] .auth-shell-lang-toggle__btn {
+  color: #a8a29e;
+}
+
+[data-theme='dark'] .auth-shell-lang-toggle__btn--active {
+  background: color-mix(in srgb, var(--primary, #e86e2e) 22%, #292524);
+  color: #fafaf9;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-tabpanel {
+  background: transparent;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-banner-back {
+  background: rgba(30, 24, 50, 0.75);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-banner-back:hover {
+  background: rgba(40, 32, 64, 0.9);
+  color: var(--text-main);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .auth-luxury-ribbon--personal {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .auth-luxury-ribbon--business {
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.14);
+  border-color: rgba(251, 146, 60, 0.35);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-mode-pill--personal {
+  color: #93c5fd;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.1));
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-mode-pill--business {
+  color: #fdba74;
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.22), rgba(217, 119, 6, 0.12));
+  border-color: rgba(251, 146, 60, 0.35);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel p,
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel h2,
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel label {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel h2 {
+  color: var(--text-main) !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel input,
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel select {
+  background: var(--bg-input) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+  caret-color: var(--text-main);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel input::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel .personal-auth-email-toggle {
+  border-color: color-mix(in srgb, #3b82f6 40%, var(--border-color)) !important;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel .personal-auth-email-form {
+  border-color: color-mix(in srgb, #3b82f6 35%, var(--border-color)) !important;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.75) 100%) !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .personal-auth-panel .personal-auth-guest-link {
+  color: #93c5fd !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .business-auth-panel .business-auth-card--embedded {
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.12), rgba(15, 10, 24, 0.4)) !important;
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .business-auth-panel .business-auth-form input {
+  background: var(--bg-input) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+  caret-color: var(--text-main);
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .business-auth-panel .business-auth-form input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card--business-signup .business-signup-form input,
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card--business-signup .business-signup-form select {
+  background: var(--bg-input) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card--business-signup .business-signup-form h2,
+[data-theme='dark'] .login-hub.login-hub-page .login-hub-card--business-signup .business-signup-form h3 {
+  color: var(--text-main);
+}
+
 /* Auth Pages Styles */
 .auth-page-container {
   display: flex;
@@ -2827,7 +3796,8 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   }
 
   /* On desktop: always show header, even on chat pages */
-  .app-header--chat {
+  .app-header--chat,
+  .app-header--search-route {
     display: flex !important;
   }
 
@@ -3004,6 +3974,23 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   .app-main .page-container {
     padding: 1rem !important;
     max-width: 100% !important;
+  }
+
+  /* Public invitations on desktop: 100px side gutters */
+  .home-page .feed-list {
+    padding-inline: 100px;
+    box-sizing: border-box;
+  }
+
+  .app-main .page-container.details-page {
+    padding-inline: 100px !important;
+    box-sizing: border-box;
+  }
+
+  .app-main .page-container.invitation-preview-page {
+    padding-inline: 100px !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
   }
 
   /* ── Column 3: Right widgets (scrolls independently) ── */

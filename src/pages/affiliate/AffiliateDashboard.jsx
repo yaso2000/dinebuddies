@@ -19,7 +19,6 @@ import app, { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { isAffiliateAgent } from '../../utils/accountRole';
-import { useAffiliateDesktopEligible } from '../../utils/affiliateDesktopGate';
 import { getReferralLink } from '../../utils/referralLink';
 import AppRouteLoading from '../../components/AppRouteLoading';
 import './AffiliateDashboard.css';
@@ -232,6 +231,39 @@ function AffiliateDashboardInner() {
         }
     };
 
+    if (userProfile?.banned === true) {
+        return (
+            <div className="affiliate-shell">
+                <div className="affiliate-dash">
+                    <div className="affiliate-card" style={{ textAlign: 'center', padding: '2rem' }}>
+                        <h2>{t('affiliate_account_banned', 'Account suspended')}</h2>
+                        <p className="affiliate-sub">
+                            {t('affiliate_account_banned_hint', 'This affiliate account has been permanently disabled.')}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (userProfile?.frozen === true) {
+        return (
+            <div className="affiliate-shell">
+                <div className="affiliate-dash">
+                    <div className="affiliate-card" style={{ textAlign: 'center', padding: '2rem' }}>
+                        <h2>{t('affiliate_dashboard_frozen', 'Dashboard access paused')}</h2>
+                        <p className="affiliate-sub">
+                            {t(
+                                'affiliate_dashboard_frozen_hint',
+                                'Your partner dashboard is temporarily frozen. Contact support.'
+                            )}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="affiliate-shell">
             <div className="affiliate-dash">
@@ -249,10 +281,10 @@ function AffiliateDashboardInner() {
                             <FaCog aria-hidden />
                             {t('affiliate_settings_short', 'Settings')}
                         </Link>
-                        <Link to="/affiliate" className="affiliate-btn affiliate-btn--ghost">
+                        <Link to="/login" className="affiliate-btn affiliate-btn--ghost">
                             {t('affiliate_back_home', 'Back to home')}
                         </Link>
-                        <button type="button" className="affiliate-btn affiliate-btn--secondary" onClick={() => signOut('/affiliate')}>
+                        <button type="button" className="affiliate-btn affiliate-btn--secondary" onClick={() => signOut('/login')}>
                             <FaSignOutAlt aria-hidden />
                             {t('logout', 'Log out')}
                         </button>
@@ -558,8 +590,6 @@ function AffiliateDashboardInner() {
 
 export default function AffiliateDashboard() {
     const { currentUser, userProfile, loading, profileServerSynced } = useAuth();
-    const desktopOk = useAffiliateDesktopEligible();
-
     if (loading) {
         return <AppRouteLoading variant="session" fullViewport />;
     }
@@ -576,10 +606,6 @@ export default function AffiliateDashboard() {
 
     if (!userProfile || !isAffiliateAgent(userProfile)) {
         return <Navigate to="/affiliate/login?next=/affiliate/dashboard" replace />;
-    }
-
-    if (!desktopOk) {
-        return <Navigate to="/affiliate/use-laptop" replace />;
     }
 
     return <AffiliateDashboardInner />;

@@ -15,6 +15,7 @@ import { sendVerificationEmailResend } from '../../services/verificationEmailSer
 import LocationAutocomplete from '../../components/LocationAutocomplete';
 import { parseGoogleAddressComponents } from '../../utils/googlePlacesBusiness';
 import './AffiliateDashboard.css';
+import AffiliateAuthShell from '../auth/AffiliateAuthShell';
 import '../../components/venue-search.css';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -151,8 +152,8 @@ export default function AffiliateSignupPage() {
     };
 
     return (
-        <div className="affiliate-shell affiliate-shell--center">
-            <div className="affiliate-card affiliate-auth-card" style={{ maxWidth: 480, width: '100%' }}>
+        <AffiliateAuthShell>
+            <div className="affiliate-card affiliate-auth-card" style={{ maxWidth: 480, width: '100%', margin: '0 auto' }}>
                 <h1 className="affiliate-h1">{t('affiliate_signup_title', 'Affiliate registration')}</h1>
                 <p className="affiliate-muted" style={{ marginBottom: 20 }}>
                     {t(
@@ -277,7 +278,7 @@ export default function AffiliateSignupPage() {
                     <Link to="/affiliate/login">{t('affiliate_login_link', 'Sign in')}</Link>
                 </p>
                 <p style={{ marginTop: 12 }}>
-                    <Link to="/affiliate" className="affiliate-muted">
+                    <Link to="/login" className="affiliate-muted">
                         {t('affiliate_back_home', 'Back to home')}
                     </Link>
                 </p>
@@ -285,6 +286,6 @@ export default function AffiliateSignupPage() {
                     <Link to="/affiliate/sign-out">{t('affiliate_sign_out_escape_link', 'Session stuck? Sign out here')}</Link>
                 </p>
             </div>
-        </div>
+        </AffiliateAuthShell>
     );
 }

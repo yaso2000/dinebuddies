@@ -15,12 +15,13 @@ import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 import { needsEmailPasswordVerification } from '../utils/emailVerification';
 import { shouldLandOnAdminDashboard } from '../utils/adminAccess';
 import { normalizeUserProfile } from '../utils/userProfileNormalize';
+import { canConsumerEnterApp, isConsumerProfileComplete } from '../utils/consumerProfileComplete';
 
 const CompleteProfile = () => {
     const { t } = useTranslation();
     const { showToast } = useToast();
     // Destructure updateProfile from context
-    const { currentUser, userProfile, loading, updateProfile, profileServerSynced } = useAuth();
+    const { currentUser, userProfile, loading, updateProfile, profileServerSynced, grantConsumerEntry } = useAuth();
     const { isDark } = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
@@ -38,7 +39,7 @@ const CompleteProfile = () => {
     useEffect(() => {
         if (loading) return;
         if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
-            navigate('/admin/dashboard', { replace: true });
+            navigate('/admin/users', { replace: true });
             return;
         }
         if (currentUser && needsEmailPasswordVerification(currentUser, userProfile)) {
@@ -147,14 +148,8 @@ const CompleteProfile = () => {
         if (loading || !currentUser || !firestoreRoleChecked) return;
         if (userProfile?.pendingBusinessRegistration) return;
         if (userProfile?.isBusiness) return;
-        const done =
-            userProfile?.isProfileComplete === true ||
-            (
-                (userProfile?.displayName || userProfile?.display_name || userProfile?.nickname) &&
-                userProfile?.gender &&
-                (userProfile?.ageCategory || userProfile?.age)
-            );
-        if (done) {
+        if (canConsumerEnterApp(userProfile)) {
+            grantConsumerEntry?.();
             navigate('/', { replace: true });
         }
     }, [loading, currentUser, userProfile, firestoreRoleChecked, navigate]);
@@ -232,9 +227,9 @@ const CompleteProfile = () => {
                 throw new Error(`Fields missing after save. Age: ${verifyData.age}, Cat: ${verifyData.ageCategory}`);
             }
 
-            // 3. Force HARD RELOAD or Redirect
+            grantConsumerEntry?.();
             console.log("✅ Verification passed. Redirecting...");
-            const from = location.state?.from?.pathname || '/';
+            const from = location.state?.from?.pathname || '/posts-feed';
             window.location.href = from;
 
         } catch (error) {
@@ -280,7 +275,12 @@ const CompleteProfile = () => {
         }
     };
 
-    if (loading || (currentUser && !firestoreRoleChecked) || (currentUser && !profileServerSynced)) {
+    if (
+        loading ||
+        (currentUser && !firestoreRoleChecked) ||
+        (currentUser && !profileServerSynced) ||
+        (userProfile && isConsumerProfileComplete(userProfile))
+    ) {
         return (
             <div style={{ 
                 height: '100vh', 

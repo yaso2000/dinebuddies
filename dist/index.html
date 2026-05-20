@@ -3,12 +3,41 @@
 
 <head>
   <meta charset="UTF-8" />
+  <script>
+    (function () {
+      try {
+        var key = 'theme';
+        var t = localStorage.getItem(key);
+        if (t !== 'light' && t !== 'dark') t = 'dark';
+        var html = document.documentElement;
+        html.setAttribute('data-theme', t);
+        var biz = false;
+        try { biz = !!sessionStorage.getItem('dineb_biz_uid'); } catch (e) {}
+        var path = location.pathname || '';
+        if (!biz && (path === '/login' || path.indexOf('/business/login') === 0)) {
+          biz = new URLSearchParams(location.search || '').get('tab') === 'business';
+        }
+        if (!biz && /^\/(business-dashboard|business\/onboarding|business\/pricing|signup\/business|business\/signup|business-signup)(\/|$)/.test(path)) {
+          biz = true;
+        }
+        html.setAttribute('data-account-theme', biz ? 'business' : 'personal');
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <style id="boot-critical-theme">
+    html[data-theme="light"] body { background: #f8fafc; color: #0f172a; }
+    html[data-theme="dark"] body { background: #0b0812; color: #f8fafc; }
+    @media (min-width: 1024px) {
+      html, body, #root { width: 100%; min-height: 100%; }
+    }
+  </style>
   <!-- Favicon: SVG for modern browsers (adapts to system theme), PNG fallback -->
   <link rel="icon" type="image/svg+xml" href="/db-logo.svg" />
   <link rel="icon" type="image/png" href="/icon-light.png" media="(prefers-color-scheme: light)" />
   <link rel="icon" type="image/png" href="/icon-dark.png" media="(prefers-color-scheme: dark)" />
   <link rel="icon" type="image/png" href="/icon-dark.png" />
   <link rel="manifest" href="/manifest.json?v=2" />
+  <meta name="theme-color" content="#0b0812" id="meta-theme-color" />
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
   <meta name="viewport"
@@ -18,12 +47,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DineBuddies">
   <link rel="apple-touch-icon" href="/icon-light.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 
   <!-- Google Maps loaded dynamically from main.jsx using env key (keeps key out of source) -->
   <link
-    href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&family=Readex+Pro:wght@200;300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Montserrat:wght@400;500;600;700;900&family=Bebas+Neue&family=Lato:wght@300;400&family=Poppins:wght@600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Cairo:wght@200..1000&family=Tajawal:wght@400;500;700;800;900&family=Readex+Pro:wght@200;300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Montserrat:wght@400;500;600;700;900&family=Bebas+Neue&family=Lato:wght@300;400&family=Poppins:wght@600&display=swap"
     rel="stylesheet">
 
   <title>DineBuddies - Premium Social Events</title>
@@ -47,11 +78,11 @@
   <meta property="twitter:title" content="DineBuddies | Premium Social Dining">
   <meta property="twitter:description" content="Discover exclusive dining experiences, create private invitations, and connect with like-minded foodies near you.">
   <meta property="twitter:image" content="https://www.dinebuddies.com/icon-light-512.png">
-  <script type="module" crossorigin src="/assets/index-Dpn6gadl.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/vendor-react-CPz6lrUa.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-i18n-B-24C8c7.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-BFyWe239.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-BUxuwBOU.css">
+  <script type="module" crossorigin src="/assets/index-RhRZeHI1.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/vendor-react-B-mEgcC4.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-i18n-D7BBuXVv.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-BmxiFVe1.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-Gc_c9HoX.css">
 </head>
 
 <body style="margin: 0; padding: 0; overscroll-behavior-y: none;">

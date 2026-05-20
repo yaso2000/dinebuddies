@@ -90,8 +90,17 @@ const getNotifMessage = (notif, t) => {
             return t('notif_msg_completed', 'The invitation has been completed. Hope you had a great time!');
         case 'invitation_updated':
             return notif.message || t('notif_msg_updated', 'The invitation time has been updated. Please confirm your attendance.');
-        case 'private_invitation':
-            return t('notification_private_invitation_message', '{{name}} has invited you to a private occasion: {{title}}', { name, title });
+        case 'private_invitation': {
+            const invTitle =
+                notif.metadata?.invitationTitle ||
+                notif.invitationTitle ||
+                title ||
+                t('private_invitation', 'Private invitation');
+            return t('notification_private_invitation_message', '{{name}} has invited you to a private occasion: {{title}}', {
+                name,
+                title: invTitle
+            });
+        }
         case 'private_invitation_response':
             return notif.message || '';
         case 'join_request':
@@ -355,7 +364,10 @@ const Notifications = () => {
                         variant="primary"
                     />
                 ) : (
-                    filteredNotifications.map(notif => (
+                    filteredNotifications.map((notif) => {
+                        const cardImageUrl =
+                            notif.metadata?.cardImageUrl || notif.cardImageUrl || null;
+                        return (
                         <div
                             key={notif.id}
                             className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}
@@ -365,7 +377,19 @@ const Notifications = () => {
                             {!notif.read && <div className="unread-dot"></div>}
 
                             <div className="notification-icon">
-                                {notif.fromUserAvatar || notif.senderAvatar ? (
+                                {cardImageUrl && notif.type === 'private_invitation' ? (
+                                    <img
+                                        src={cardImageUrl}
+                                        alt=""
+                                        style={{
+                                            width: 48,
+                                            height: 48,
+                                            borderRadius: 10,
+                                            objectFit: 'cover',
+                                            border: '1px solid var(--border-color)'
+                                        }}
+                                    />
+                                ) : notif.fromUserAvatar || notif.senderAvatar ? (
                                     <UserAvatar
                                         src={notif.fromUserAvatar || notif.senderAvatar}
                                         user={{
@@ -399,7 +423,8 @@ const Notifications = () => {
                                 <FaTrash />
                             </button>
                         </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
         </div>

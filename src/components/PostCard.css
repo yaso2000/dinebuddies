@@ -139,7 +139,7 @@
 
 /* Comments — feed preview (count + last only) */
 .post-comments-preview {
-    margin: 0 16px 0 16px;
+    margin: 0 16px 12px;
     padding: 10px 12px;
     border-radius: 10px;
     background: var(--bg-elevated);
@@ -177,6 +177,36 @@
 .post-comments-preview__text {
     font-weight: 400;
     word-break: break-word;
+}
+
+/* Feed: space below comment preview (was flush with card bottom) */
+.post-card:not(.in-chat) .post-comments-preview {
+    margin-bottom: 20px;
+}
+
+/* Full-bleed video in feed: extra room above bottom nav */
+.post-card--video:not(.in-chat) .post-comments-preview--video {
+    margin-bottom: calc(var(--nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 20px);
+}
+
+.post-card--video .post-comments-preview--video .post-comments-preview__last + .post-comments-preview__last {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.post-card--video .comments-section--video-feed,
+.post-card--video .comments-section--video-detail {
+    margin-bottom: calc(var(--nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 20px);
+    padding-bottom: 16px;
+}
+
+.post-card--video.in-chat .comments-section--video-detail {
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+}
+
+.post-card--video .post-detail-comments-scroll {
+    margin-bottom: 8px;
 }
 
 /* Comments — inline expand (feed): one last comment + framed composer */

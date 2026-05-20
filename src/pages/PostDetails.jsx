@@ -53,7 +53,15 @@ const PostDetails = () => {
     }
 
     return (
-        <div style={{ maxWidth: '100%', width: '100%', margin: 0, padding: '0 0 4rem', boxSizing: 'border-box' }}>
+        <div
+            style={{
+                maxWidth: '100%',
+                width: '100%',
+                margin: 0,
+                padding: `0 0 calc(4rem + env(safe-area-inset-bottom, 0px) + ${post.mediaType === 'video' ? '1.5rem' : '0px'})`,
+                boxSizing: 'border-box',
+            }}
+        >
             {/* Header */}
             <div style={{
                 display: 'flex', alignItems: 'center', gap: '1rem',

@@ -16,6 +16,9 @@ export const DATING_CARD_BACKGROUNDS = [
     { id: 'dating-minimal' }
 ];
 
+/** Default dating template when opening the editor (matches private `birthday-warm` pattern). */
+export const DEFAULT_DATING_CARD_BACKGROUND_ID = 'dating-rose';
+
 const BACKGROUND_FILE_FALLBACK_EXTS = ['webp', 'jpg', 'jpeg', 'png', 'svg'];
 
 export function getDatingCardBackgroundOptions() {

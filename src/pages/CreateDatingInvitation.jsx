@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import VenueLocationPicker from '../components/VenueLocationPicker';
 import { processInvitationMedia } from '../services/mediaService';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getMutualFollowers } from '../utils/followHelpers';
 import { db } from '../firebase/config';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
@@ -21,19 +22,38 @@ import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import { getTotalDineCredits, DATING_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
+import {
+    INVITATION_CARD_MESSAGE_MAX,
+    INVITATION_CARD_TITLE_MAX
+} from '../constants/invitationCardLimits';
 import PrivateCardDatingTypographySheet from '../components/Invitations/privateCard/PrivateCardDatingTypographySheet';
+import PrivateCardTextBackdropTonePicker from '../components/Invitations/privateCard/PrivateCardTextBackdropTonePicker';
 import PrivateCardMotionPicker from '../components/Invitations/privateCard/PrivateCardMotionPicker';
+import {
+    DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
+    getDatingCardTextBackdropFromInvitation
+} from '../components/Invitations/privateCard/privateCardTextBackdrop';
 import { DEFAULT_FRAME_COLOR_ID, getFrameColorById } from '../components/Invitations/privateCard/privateCardFrameColors';
 import { DEFAULT_FONT_ID, PRIVATE_CARD_FONTS } from '../components/Invitations/privateCard/privateCardFonts';
 import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
 import {
     getDatingCardBackgroundOptions,
-    getFirstDatingBackgroundFileUrl,
     getDatingHeroCoverFromMediaData,
-    parseDatingCoverTemplateIdFromUrl
+    parseDatingCoverTemplateIdFromUrl,
+    DEFAULT_DATING_CARD_BACKGROUND_ID
 } from '../components/Invitations/datingCard/datingCardBackgrounds';
 import DatingCoverCameraPanel from '../components/Invitations/datingCard/DatingCoverCameraPanel';
-import DatingPreviewRightRail from '../components/Invitations/datingCard/DatingPreviewRightRail';
+import PrivateInvitationCoverRightRail from '../components/Invitations/privateCard/PrivateInvitationCoverRightRail';
+import {
+    createPrivateCoverStashId,
+    isCoverStashKindAtLimit,
+    isSamePrivateCoverMedia,
+    PRIVATE_COVER_STASH_MAX_IMAGES,
+    PRIVATE_COVER_STASH_MAX_VIDEOS,
+    revokeAllPrivateCoverStash,
+    revokePrivateCoverMedia,
+    revokePrivateCoverStashEntry
+} from '../utils/privateCoverMediaStash';
 
 const CreateDatingInvitation = () => {
     const { t } = useTranslation();
@@ -44,6 +64,9 @@ const CreateDatingInvitation = () => {
     const { currentUser: authUser, userProfile } = useAuth();
 
     const quotaInfo = canCreatePrivateInvitation('dating');
+
+    const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
+    const editInvitation = location.state?.editInvitation;
 
     const [mediaData, setMediaData] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -58,17 +81,26 @@ const CreateDatingInvitation = () => {
     const [datingCardThemeColor, setDatingCardThemeColor] = useState(null);
     const [typographySheetOpen, setTypographySheetOpen] = useState(false);
     const [cardMotionId, setCardMotionId] = useState(DEFAULT_MOTION_ID);
-    const [cardBackgroundId, setCardBackgroundId] = useState(null);
-    const [datingCoverTab, setDatingCoverTab] = useState('camera');
+    const [cardBackgroundId, setCardBackgroundId] = useState(
+        () => editInvitation?.cardBackgroundId || DEFAULT_DATING_CARD_BACKGROUND_ID
+    );
+    const [datingCoverTab, setDatingCoverTab] = useState(() => (editInvitation ? 'camera' : 'template'));
     /** Bumps when user selects the Camera cover tab (or taps it again) to open the recorder. */
     const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
     /** Dating card: show personal message + profile on the preview (default on). */
     const [datingCardShowHostAndMessage, setDatingCardShowHostAndMessage] = useState(true);
+    const [datingCardTextBackdropTone, setDatingCardTextBackdropTone] = useState(
+        DEFAULT_PRIVATE_TEXT_BACKDROP_TONE
+    );
+    /** Temp upload/video drafts shown as thumbnails until publish. */
+    const [coverMediaStash, setCoverMediaStash] = useState([]);
 
     /** Persist cover media per tab when switching Camera / Upload / Template */
     const datingCoverDraftsRef = useRef({ template: null, upload: null, camera: null });
     const mediaDataRef = useRef(null);
-    const datingCoverTabRef = useRef('camera');
+    const datingCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
+    const coverUploadInputRef = useRef(null);
+    const coverMediaStashRef = useRef([]);
 
     useEffect(() => {
         mediaDataRef.current = mediaData;
@@ -76,8 +108,22 @@ const CreateDatingInvitation = () => {
     useEffect(() => {
         datingCoverTabRef.current = datingCoverTab;
     }, [datingCoverTab]);
+    useEffect(() => {
+        coverMediaStashRef.current = coverMediaStash;
+    }, [coverMediaStash]);
+
+    useEffect(() => {
+        return () => {
+            revokeAllPrivateCoverStash(coverMediaStashRef.current);
+        };
+    }, []);
 
     const datingHeroCover = useMemo(() => getDatingHeroCoverFromMediaData(mediaData), [mediaData]);
+
+    const editorPhotoBackgroundActive = useMemo(() => {
+        if (datingHeroCover?.src) return true;
+        return getDatingCardBackgroundOptions().some((o) => o.id === cardBackgroundId);
+    }, [datingHeroCover?.src, cardBackgroundId]);
 
     const datingFontSummary = useMemo(() => {
         const f = PRIVATE_CARD_FONTS.find((x) => x.id === cardFontId);
@@ -90,9 +136,6 @@ const CreateDatingInvitation = () => {
         const fr = getFrameColorById(cardFrameColorId);
         return t(fr.labelKey, { defaultValue: fr.defaultLabel });
     }, [datingCardThemeColor, cardFrameColorId, t]);
-
-    const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
-    const editInvitation = location.state?.editInvitation;
 
     const [formData, setFormData] = useState({
         title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
@@ -136,6 +179,8 @@ const CreateDatingInvitation = () => {
                 occasionType: 'Dating',
             });
             setDatingCardShowHostAndMessage(editInvitation.datingCardShowHostAndMessage !== false);
+            const backdrop = getDatingCardTextBackdropFromInvitation(editInvitation);
+            setDatingCardTextBackdropTone(backdrop.tone);
 
             const videoUrl = editInvitation.customVideo;
             const imgUrl = editInvitation.customImage || editInvitation.image;
@@ -147,22 +192,19 @@ const CreateDatingInvitation = () => {
                     file: null,
                     videoThumbnail: editInvitation.videoThumbnail
                 };
+                const videoEntry = { id: createPrivateCoverStashId(), kind: 'camera', media: m };
+                setCoverMediaStash([videoEntry]);
                 setDatingCoverTab('camera');
                 setMediaData(m);
                 datingCoverDraftsRef.current = { template: null, upload: null, camera: m };
             } else if (imgUrl) {
-                const templateId = parseDatingCoverTemplateIdFromUrl(imgUrl);
-                if (templateId) {
-                    const m = {
-                        source: 'custom_image',
-                        type: 'image',
-                        preview: imgUrl,
-                        file: null,
-                        coverTemplateId: templateId
-                    };
+                const templateId =
+                    parseDatingCoverTemplateIdFromUrl(imgUrl) || editInvitation.cardBackgroundId;
+                if (templateId && getDatingCardBackgroundOptions().some((o) => o.id === templateId)) {
+                    setCardBackgroundId(templateId);
                     setDatingCoverTab('template');
-                    setMediaData(m);
-                    datingCoverDraftsRef.current = { template: m, upload: null, camera: null };
+                    setMediaData(null);
+                    datingCoverDraftsRef.current = { template: null, upload: null, camera: null };
                 } else {
                     const m = {
                         source: 'custom_image',
@@ -171,12 +213,22 @@ const CreateDatingInvitation = () => {
                         url: imgUrl,
                         file: null
                     };
+                    const imageEntry = { id: createPrivateCoverStashId(), kind: 'upload', media: m };
+                    setCoverMediaStash([imageEntry]);
                     setDatingCoverTab('upload');
                     setMediaData(m);
                     datingCoverDraftsRef.current = { template: null, upload: m, camera: null };
                 }
+            } else if (
+                editInvitation.cardBackgroundId &&
+                getDatingCardBackgroundOptions().some((o) => o.id === editInvitation.cardBackgroundId)
+            ) {
+                setCardBackgroundId(editInvitation.cardBackgroundId);
+                setDatingCoverTab('template');
+                setMediaData(null);
+                datingCoverDraftsRef.current = { template: null, upload: null, camera: null };
             } else {
-                setDatingCoverTab('camera');
+                setDatingCoverTab('template');
                 datingCoverDraftsRef.current = { template: null, upload: null, camera: null };
             }
 
@@ -313,19 +365,10 @@ const CreateDatingInvitation = () => {
     };
 
     const revokeBlobPreview = (prev) => {
-        if (prev?.preview && String(prev.preview).startsWith('blob:')) {
-            try {
-                URL.revokeObjectURL(prev.preview);
-            } catch {
-                /* ignore */
-            }
-        }
-        if (prev?.videoThumbnail && String(prev.videoThumbnail).startsWith('blob:')) {
-            try {
-                URL.revokeObjectURL(prev.videoThumbnail);
-            } catch {
-                /* ignore */
-            }
+        if (!prev) return;
+        const stillInStash = coverMediaStashRef.current.some((e) => isSamePrivateCoverMedia(e.media, prev));
+        if (!stillInStash) {
+            revokePrivateCoverMedia(prev);
         }
     };
 
@@ -359,69 +402,140 @@ const CreateDatingInvitation = () => {
         });
     };
 
-    const applyDatingTemplateCover = (templateId) => {
-        const url = getFirstDatingBackgroundFileUrl(templateId);
-        if (!url) return;
-        setCardBackgroundId(templateId);
-        const m = {
-            source: 'custom_image',
-            type: 'image',
-            preview: url,
-            file: null,
-            coverTemplateId: templateId
-        };
-        datingCoverDraftsRef.current.template = m;
-        setMediaData(m);
-    };
-
     const handleDatingCoverTab = (tab) => {
-        if (tab === datingCoverTab) {
-            if (tab === 'camera') setCameraOpenNonce((n) => n + 1);
-            return;
-        }
+        if (tab === datingCoverTab) return;
         datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
 
         setDatingCoverTab(tab);
         const restored = datingCoverDraftsRef.current[tab];
+        setMediaData(restored ?? null);
+    };
 
-        if (tab === 'template') {
-            if (restored?.coverTemplateId) {
-                setCardBackgroundId(restored.coverTemplateId);
-                setMediaData(restored);
-            } else {
-                const opts = getDatingCardBackgroundOptions();
-                const id =
-                    (cardBackgroundId && opts.some((o) => o.id === cardBackgroundId)
-                        ? cardBackgroundId
-                        : null) || opts[0]?.id;
-                if (id) applyDatingTemplateCover(id);
-            }
+    const toastCoverStashLimit = (kind) => {
+        if (kind === 'upload') {
+            showToast(
+                t('private_cover_stash_max_images', {
+                    defaultValue: `You can add up to ${PRIVATE_COVER_STASH_MAX_IMAGES} photos. Remove one from the thumbnails to add another.`,
+                    max: PRIVATE_COVER_STASH_MAX_IMAGES
+                }),
+                'error'
+            );
         } else {
-            setMediaData(restored ?? null);
-        }
-
-        if (tab === 'camera') {
-            setCameraOpenNonce((n) => n + 1);
+            showToast(
+                t('private_cover_stash_max_videos', {
+                    defaultValue: `You can add up to ${PRIVATE_COVER_STASH_MAX_VIDEOS} videos. Remove one from the thumbnails to record another.`,
+                    max: PRIVATE_COVER_STASH_MAX_VIDEOS
+                }),
+                'error'
+            );
         }
     };
 
-    const datingCoverTabBtnStyle = (active) => ({
-        flex: 1,
-        padding: '10px 8px',
-        borderRadius: 12,
-        border: `1px solid ${active ? '#ec4899' : 'rgba(255,255,255,0.12)'}`,
-        background: active ? 'rgba(236,72,153,0.18)' : 'rgba(255,255,255,0.04)',
-        color: active ? '#ec4899' : 'var(--text-main)',
-        fontWeight: 700,
-        fontSize: '0.8rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        cursor: 'pointer',
-        minWidth: 0,
-        transition: 'all 0.2s'
-    });
+    const handleDatingCoverUploadTabClick = () => {
+        if (datingCoverTab === 'upload') {
+            if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'upload')) {
+                toastCoverStashLimit('upload');
+                return;
+            }
+            triggerDatingCoverUpload();
+        } else {
+            handleDatingCoverTab('upload');
+        }
+    };
+
+    const handleDatingCoverCameraTabClick = () => {
+        if (datingCoverTab === 'camera') {
+            if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'camera')) {
+                toastCoverStashLimit('camera');
+                return;
+            }
+            setCameraOpenNonce((n) => n + 1);
+        } else {
+            handleDatingCoverTab('camera');
+        }
+    };
+
+    const stashCoverMedia = (kind, media) => {
+        if (isCoverStashKindAtLimit(coverMediaStashRef.current, kind)) {
+            toastCoverStashLimit(kind);
+            return null;
+        }
+        const entry = { id: createPrivateCoverStashId(), kind, media };
+        setCoverMediaStash((prev) => [...prev, entry]);
+        return entry;
+    };
+
+    const handleCameraCoverMedia = (media) => {
+        datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+        if (!stashCoverMedia('camera', media)) {
+            revokePrivateCoverMedia(media);
+            return;
+        }
+        setDatingCoverTab('camera');
+        setMediaData(media);
+        datingCoverDraftsRef.current.camera = media;
+    };
+
+    const handleDatingCoverUploadPick = (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file?.type?.startsWith('image/')) {
+            if (file) {
+                showToast(t('image_only_upload', { defaultValue: 'Please choose an image file.' }), 'error');
+            }
+            return;
+        }
+        datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+        const preview = URL.createObjectURL(file);
+        const media = {
+            source: 'custom_image',
+            type: 'image',
+            file,
+            preview
+        };
+        if (!stashCoverMedia('upload', media)) {
+            revokePrivateCoverMedia(media);
+            return;
+        }
+        setDatingCoverTab('upload');
+        setMediaData(media);
+        datingCoverDraftsRef.current.upload = media;
+    };
+
+    const handleSelectCoverStashItem = (id) => {
+        const entry = coverMediaStashRef.current.find((e) => e.id === id);
+        if (!entry) return;
+        datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+        setDatingCoverTab(entry.kind);
+        setMediaData(entry.media);
+        datingCoverDraftsRef.current[entry.kind] = entry.media;
+    };
+
+    const handleRemoveCoverStashItem = (id) => {
+        setCoverMediaStash((prev) => {
+            const entry = prev.find((e) => e.id === id);
+            if (!entry) return prev;
+            revokePrivateCoverStashEntry(entry);
+            const next = prev.filter((e) => e.id !== id);
+            if (isSamePrivateCoverMedia(entry.media, mediaDataRef.current)) {
+                const sameKind = next.filter((e) => e.kind === entry.kind);
+                const replacement = sameKind.length ? sameKind[sameKind.length - 1].media : null;
+                setMediaData(replacement);
+                datingCoverDraftsRef.current[entry.kind] = replacement;
+            }
+            return next;
+        });
+    };
+
+    const clearCoverMediaStashAfterPublish = () => {
+        revokeAllPrivateCoverStash(coverMediaStashRef.current);
+        setCoverMediaStash([]);
+        revokePrivateCoverMedia(mediaDataRef.current);
+    };
+
+    const triggerDatingCoverUpload = () => {
+        coverUploadInputRef.current?.click();
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -441,6 +555,18 @@ const CreateDatingInvitation = () => {
             return;
         }
 
+        const quota = canCreatePrivateInvitation('dating');
+        if (!editInvitation && !quota.profileLoading && !quota.canCreate) {
+            showToast(
+                t(
+                    'dine_credits_dating_insufficient',
+                    `Publishing costs ${DATING_INVITATION_PUBLISH_CREDITS} Dine Credits. Open Settings → Dine Credits to top up.`
+                ),
+                'error'
+            );
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             let mediaFields = {};
@@ -450,7 +576,7 @@ const CreateDatingInvitation = () => {
                     mediaFields = await processInvitationMedia(mediaData, userId);
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
+                    notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
                     return;
                 }
             }
@@ -469,6 +595,7 @@ const CreateDatingInvitation = () => {
                 cardBackgroundId: cardBackgroundId || null,
                 datingCardThemeColor,
                 datingCardShowHostAndMessage,
+                datingCardTextBackdropTone,
                 rsvps: initialRsvps,
                 type: 'Dating',
                 status: 'draft',
@@ -478,10 +605,12 @@ const CreateDatingInvitation = () => {
             if (existingDraftId) {
                 const draftRef = doc(db, 'private_invitations', existingDraftId);
                 await updateDoc(draftRef, { ...draftData, updatedAt: serverTimestamp() });
+                clearCoverMediaStashAfterPublish();
                 navigate(`/invitation/private/preview/${existingDraftId}`);
             } else {
                 const draftId = await addPrivateInvitation(draftData);
                 if (draftId) {
+                    clearCoverMediaStashAfterPublish();
                     navigate(`/invitation/private/preview/${draftId}`);
                 }
             }
@@ -492,32 +621,6 @@ const CreateDatingInvitation = () => {
             setIsSubmitting(false);
         }
     };
-
-    // No quota → redirect
-    if (!quotaInfo.canCreate && !editInvitation) {
-        return (
-            <div className="private-create-wrapper private-theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
-                <div className="ui-card ui-card--lg" style={{ maxWidth: '400px', width: '100%', textAlign: 'center', padding: '30px' }}>
-                    <div style={{ fontSize: '3.5rem', marginBottom: '20px' }}>💑</div>
-                    <h2 className="ui-prompt__title" style={{ fontSize: '1.6rem', color: '#ec4899', marginBottom: '12px' }}>
-                        {t('insufficient_credits')}
-                    </h2>
-                    <p className="ui-prompt__desc" style={{ marginBottom: '25px' }}>
-                        {t(
-                            'dine_credits_dating_insufficient',
-                            `Publishing a date invitation costs ${DATING_INVITATION_PUBLISH_CREDITS} Dine Credits. Add credits in your wallet (Settings → Dine Credits).`
-                        )}
-                    </p>
-                    <button onClick={() => navigate('/settings/credits')} className="ui-btn ui-btn--primary" style={{ width: '100%', marginBottom: '12px', background: 'linear-gradient(135deg, #ec4899, #be185d)' }}>
-                        {t('open_dine_credits_wallet', 'Dine Credits wallet')}
-                    </button>
-                    <button onClick={() => navigate(-1)} className="ui-btn ui-btn--ghost" style={{ width: '100%' }}>
-                        {t('go_back')}
-                    </button>
-                </div>
-            </div>
-        );
-    }
 
     const quota = quotaInfo.quota;
     const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
@@ -543,28 +646,30 @@ const CreateDatingInvitation = () => {
                     {t('dating_invitation_desc', 'Send an exclusive private date invitation to one special person.')}
                 </p>
 
-                <div style={{
-                    margin: '12px 0 0',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: isUnlimited ? 'rgba(236,72,153,0.1)' : lowCredits ? 'rgba(239,68,68,0.1)' : 'rgba(236,72,153,0.1)',
-                    border: `1px solid ${isUnlimited ? 'rgba(236,72,153,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(236,72,153,0.3)'}`,
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    fontSize: '0.875rem',
-                    color: isUnlimited ? '#ec4899' : lowCredits ? '#f87171' : '#ec4899',
-                    fontWeight: 600
-                }}>
-                    <span>{isUnlimited ? '∞' : profilePending ? '…' : `${dineBalance}`}</span>
-                    <span style={{ opacity: 0.85, fontWeight: 400 }}>
-                        {isUnlimited
-                            ? t('unlimited_date_invitations', 'Unlimited date invitations')
-                            : t(
-                                  'dine_credits_dating_banner',
-                                  '{{balance}} Dine Credits — publishing uses {{cost}} credits.',
-                                  { balance: dineBalance, cost: publishCost }
-                              )}
-                    </span>
-                </div>
+                {!quotaInfo.profileLoading && (
+                    <div style={{
+                        margin: '12px 0 0',
+                        padding: '10px 16px',
+                        borderRadius: '12px',
+                        background: isUnlimited ? 'rgba(236,72,153,0.1)' : lowCredits ? 'rgba(239,68,68,0.1)' : 'rgba(236,72,153,0.1)',
+                        border: `1px solid ${isUnlimited ? 'rgba(236,72,153,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(236,72,153,0.3)'}`,
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        fontSize: '0.875rem',
+                        color: isUnlimited ? '#ec4899' : lowCredits ? '#f87171' : '#ec4899',
+                        fontWeight: 600
+                    }}>
+                        <span>{isUnlimited ? '∞' : `${dineBalance}`}</span>
+                        <span style={{ opacity: 0.85, fontWeight: 400 }}>
+                            {isUnlimited
+                                ? t('unlimited_date_invitations', 'Unlimited date invitations')
+                                : t(
+                                      'dine_credits_dating_banner',
+                                      '{{balance}} Dine Credits — publishing uses {{cost}} credits.',
+                                      { balance: dineBalance, cost: publishCost }
+                                  )}
+                        </span>
+                    </div>
+                )}
             </div>
 
             <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
@@ -572,7 +677,20 @@ const CreateDatingInvitation = () => {
 
                     {/* Title */}
                     <div className="form-group mb-4">
-                        <label className="elegant-label">{t('invitation_title')}</label>
+                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            {t('invitation_title')}
+                            <span
+                                style={{
+                                    fontSize: '0.75rem',
+                                    color:
+                                        (formData.title?.length || 0) >= INVITATION_CARD_TITLE_MAX
+                                            ? '#f87171'
+                                            : 'var(--text-muted)'
+                                }}
+                            >
+                                {(formData.title?.length || 0)}/{INVITATION_CARD_TITLE_MAX}
+                            </span>
+                        </label>
                         <input
                             type="text"
                             name="title"
@@ -580,6 +698,7 @@ const CreateDatingInvitation = () => {
                             onChange={handleChange}
                             placeholder={t('enter_title')}
                             className="elegant-input"
+                            maxLength={INVITATION_CARD_TITLE_MAX}
                             required
                         />
                     </div>
@@ -588,8 +707,16 @@ const CreateDatingInvitation = () => {
                     <div className="form-group mb-4">
                         <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                             {t('message_to_friends')}
-                            <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) > 180 ? '#f87171' : 'var(--text-muted)' }}>
-                                {(formData.description?.length || 0)}/200
+                            <span
+                                style={{
+                                    fontSize: '0.75rem',
+                                    color:
+                                        (formData.description?.length || 0) >= INVITATION_CARD_MESSAGE_MAX
+                                            ? '#f87171'
+                                            : 'var(--text-muted)'
+                                }}
+                            >
+                                {(formData.description?.length || 0)}/{INVITATION_CARD_MESSAGE_MAX}
                             </span>
                         </label>
                         <textarea
@@ -599,7 +726,7 @@ const CreateDatingInvitation = () => {
                             placeholder={t('write_something_personal')}
                             className="elegant-textarea"
                             rows="3"
-                            maxLength="200"
+                            maxLength={INVITATION_CARD_MESSAGE_MAX}
                         />
                     </div>
 
@@ -652,39 +779,55 @@ const CreateDatingInvitation = () => {
                             {t('private_section_templates_title', { defaultValue: 'Ready card looks' })}
                         </h3>
                         <p className="private-section-card__hint">
-                            {t('dating_section_templates_hint', {
-                                defaultValue: 'Camera, upload, or template — thumbnails beside the card.'
+                            {t('private_section_card_art_beside_hint', {
+                                defaultValue:
+                                    'Template shows artwork beside the card. Tap Upload or Camera to open that tab, then tap again to add photos or record video.'
                             })}
                         </p>
+                        <input
+                            ref={coverUploadInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="private-cover-upload-input"
+                            onChange={handleDatingCoverUploadPick}
+                            tabIndex={-1}
+                            aria-hidden
+                        />
                         <div
                             role="tablist"
                             aria-label={t('dating_cover_tabs_label', { defaultValue: 'Cover source' })}
-                            style={{ display: 'flex', gap: 8, marginBottom: 14 }}
+                            className="private-cover-tabs"
                         >
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={datingCoverTab === 'camera'}
-                                onClick={() => handleDatingCoverTab('camera')}
-                                style={datingCoverTabBtnStyle(datingCoverTab === 'camera')}
+                                onClick={handleDatingCoverCameraTabClick}
+                                className={`private-cover-tab${datingCoverTab === 'camera' ? ' private-cover-tab--active' : ''}`}
                             >
-                                <FaCamera /> {t('dating_cover_tab_camera', { defaultValue: 'Camera' })}
+                                <FaCamera />{' '}
+                                {datingCoverTab === 'camera'
+                                    ? t('private_cover_tab_camera_record', { defaultValue: 'Record video' })
+                                    : t('private_cover_tab_camera_open', { defaultValue: 'Video' })}
                             </button>
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={datingCoverTab === 'upload'}
-                                onClick={() => handleDatingCoverTab('upload')}
-                                style={datingCoverTabBtnStyle(datingCoverTab === 'upload')}
+                                onClick={handleDatingCoverUploadTabClick}
+                                className={`private-cover-tab${datingCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
                             >
-                                <FaUpload /> {t('dating_cover_tab_upload', { defaultValue: 'Upload' })}
+                                <FaUpload />{' '}
+                                {datingCoverTab === 'upload'
+                                    ? t('private_cover_tab_upload_add', { defaultValue: 'Upload photo' })
+                                    : t('private_cover_tab_upload_open', { defaultValue: 'From device' })}
                             </button>
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={datingCoverTab === 'template'}
                                 onClick={() => handleDatingCoverTab('template')}
-                                style={datingCoverTabBtnStyle(datingCoverTab === 'template')}
+                                className={`private-cover-tab${datingCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
                             >
                                 <FaImage /> {t('dating_cover_tab_template', { defaultValue: 'Template' })}
                             </button>
@@ -692,65 +835,43 @@ const CreateDatingInvitation = () => {
 
                         {datingCoverTab === 'camera' && (
                             <DatingCoverCameraPanel
-                                onMediaSelect={setCoverMedia}
+                                onMediaSelect={handleCameraCoverMedia}
                                 openNonce={cameraOpenNonce}
                             />
                         )}
 
-                        <div
-                            className="dating-card-show-content-toggle"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 12,
-                                padding: '10px 12px',
-                                marginBottom: 12,
-                                borderRadius: 12,
-                                border: '1px solid rgba(236,72,153,0.28)',
-                                background: 'rgba(236,72,153,0.06)'
-                            }}
-                            title={t('dating_card_show_content_title', {
-                                defaultValue: 'Off: title, date & place only on the card. On: include your message and profile photo.'
-                            })}
-                        >
-                            <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#ec4899', lineHeight: 1.25 }}>
-                                {t('dating_card_show_content_label', { defaultValue: 'Show message & profile on card' })}
-                            </span>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={datingCardShowHostAndMessage}
-                                aria-label={t('dating_card_show_content_label')}
-                                onClick={() => setDatingCardShowHostAndMessage((v) => !v)}
-                                style={{
-                                    flexShrink: 0,
-                                    width: 52,
-                                    height: 30,
-                                    borderRadius: 999,
-                                    border: '2px solid rgba(236,72,153,0.45)',
-                                    background: datingCardShowHostAndMessage ? 'linear-gradient(135deg,#ec4899,#be185d)' : 'rgba(0,0,0,0.2)',
-                                    position: 'relative',
-                                    cursor: 'pointer',
-                                    transition: 'background 0.2s',
-                                    padding: 0
-                                }}
+                        <div className="private-card-show-content-block">
+                            <div
+                                className="dating-card-show-content-toggle"
+                                title={t('dating_card_show_content_title', {
+                                    defaultValue:
+                                        'Off: date and place only on the card. On: show title, message, and profile photo.'
+                                })}
                             >
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        top: 3,
-                                        insetInlineStart: datingCardShowHostAndMessage ? 24 : 3,
-                                        width: 22,
-                                        height: 22,
-                                        borderRadius: '50%',
-                                        background: '#fff',
-                                        boxShadow: '0 1px 6px rgba(0,0,0,0.25)',
-                                        transition: 'inset-inline-start 0.2s',
-                                        display: 'block'
-                                    }}
+                                <span className="dating-card-show-content-toggle__label">
+                                    {t('dating_card_show_content_label', {
+                                        defaultValue: 'Show title, message & profile on card'
+                                    })}
+                                </span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    className="dating-card-show-content-toggle__switch"
+                                    aria-checked={datingCardShowHostAndMessage}
+                                    aria-label={t('dating_card_show_content_label', {
+                                        defaultValue: 'Show title, message & profile on card'
+                                    })}
+                                    onClick={() => setDatingCardShowHostAndMessage((v) => !v)}
+                                >
+                                    <span className="dating-card-show-content-toggle__thumb" aria-hidden />
+                                </button>
+                            </div>
+                            {datingCardShowHostAndMessage && editorPhotoBackgroundActive && (
+                                <PrivateCardTextBackdropTonePicker
+                                    tone={datingCardTextBackdropTone}
+                                    onToneChange={setDatingCardTextBackdropTone}
                                 />
-                            </button>
+                            )}
                         </div>
 
                         <div className="form-group mb-0">
@@ -786,14 +907,19 @@ const CreateDatingInvitation = () => {
                                         }
                                         inviterAvatarUrl={getSafeAvatar(userProfile || currentUser || {})}
                                         showHostAndMessage={datingCardShowHostAndMessage}
+                                        textBackdropTone={datingCardTextBackdropTone}
                                     />
                                 </div>
-                                <DatingPreviewRightRail
-                                    mode={datingCoverTab}
+                                <PrivateInvitationCoverRightRail
+                                    templateVariant="dating"
+                                    categoryId="dating"
                                     cardBackgroundId={cardBackgroundId}
-                                    onTemplateSelect={applyDatingTemplateCover}
+                                    onCardBackgroundIdChange={setCardBackgroundId}
+                                    mode={datingCoverTab}
                                     mediaData={mediaData}
-                                    onMediaSelect={setCoverMedia}
+                                    coverStash={coverMediaStash}
+                                    onSelectStashItem={handleSelectCoverStashItem}
+                                    onRemoveStashItem={handleRemoveCoverStashItem}
                                 />
                             </div>
                             <div style={{ marginTop: 12 }}>

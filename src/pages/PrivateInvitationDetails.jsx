@@ -10,12 +10,22 @@ import { getTemplateStyle } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
 import HostPrivateInvitationCardExport from '../components/Invitations/privateCard/HostPrivateInvitationCardExport';
+import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
+import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
+import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
+import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
+import {
+    getDatingInvitationHeroCoverFromInvitation,
+    getPrivateInvitationHeroCoverFromInvitation
+} from '../components/Invitations/datingCard/datingCardBackgrounds';
+import { getInvitationCardTextBackdropFromInvitation } from '../components/Invitations/privateCard/privateCardTextBackdrop';
 import './PrivateInvitation.css';
 
 import Lottie from 'lottie-react';
 import { OCCASION_PRESETS } from '../utils/invitationTemplates';
 import { asUidArray } from '../utils/userSocialLists';
 import { goToLogin } from '../utils/goToLogin';
+import { isPrivateInvitationDraft } from '../utils/privateInvitationDraft';
 
 /** Stable string uid for Firestore comparisons (rules use request.auth.uid as string). */
 function normUid(v) {
@@ -84,6 +94,20 @@ const PrivateInvitationDetails = () => {
                         (myBlocked.includes(authorBlockedKey) || myMuted.includes(authorBlockedKey))
                     ) {
                         navigate('/', { replace: true });
+                        return;
+                    }
+
+                    const hostCheck =
+                        sessionUid === normUid(data.authorId) || sessionUid === normUid(data.author?.id);
+                    if (!hostCheck && isPrivateInvitationDraft(data)) {
+                        navigate('/', {
+                            replace: true,
+                            state: {
+                                message: t('private_invitation_not_published', {
+                                    defaultValue: 'This invitation has not been sent yet.'
+                                })
+                            }
+                        });
                         return;
                     }
 
@@ -167,6 +191,9 @@ const PrivateInvitationDetails = () => {
         try {
             const ok = await respondToPrivateInvitation(id, status);
             if (!ok) return;
+            if (status === 'accepted') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         } finally {
             setIsResponding(false);
         }
@@ -189,19 +216,20 @@ const PrivateInvitationDetails = () => {
     // Edit is allowed only if NO ONE has accepted yet
     const hasAccepted = Object.values(invitation.rsvps || {}).some(s => s === 'accepted');
     const canEdit = isHost && !hasAccepted;
+    const isDraft = isPrivateInvitationDraft(invitation);
+
+    const cardHeroCover = !isDraft
+        ? invitation.type === 'Dating'
+            ? getDatingInvitationHeroCoverFromInvitation(invitation)
+            : getPrivateInvitationHeroCoverFromInvitation(invitation)
+        : null;
+    const textBackdrop = getInvitationCardTextBackdropFromInvitation(invitation);
 
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',
         invitation.colorScheme || 'oceanBlue',
         invitation.occasionType,
         { cardFontFamily: invitation.cardFontFamily }
-    );
-
-    // Helpers for status badges
-    const privateHeroImageSrc = pickSafeDisplayImageUrl(
-        invitation.customImage,
-        invitation.restaurantImage,
-        invitation.image
     );
 
     const getStatusBadge = (status) => {
@@ -246,58 +274,87 @@ const PrivateInvitationDetails = () => {
                 </div>
             </div>
 
-            {/* Media Hero */}
-            <div className="private-hero-section" style={{ position: 'relative', width: '100%', height: '280px', overflow: 'hidden', borderRadius: '0 0 40px 40px', marginBottom: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-                {privateHeroImageSrc ? (
-                    <img
-                        src={privateHeroImageSrc}
-                        alt=""
-                        className="private-hero-img-animated"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                ) : (
-                    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #1e1b4b, #312e81)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <FaLock size={60} color="rgba(255,255,255,0.2)" />
+                        {!isDraft && (
+                <section className="private-details-card-hero reveal-text reveal-delay-1" aria-label={invitation.title}>
+                    <div className="private-details-card-hero__glow" aria-hidden />
+                    <div className="private-details-card-hero__card">
+                        <PrivateInvitationCardPreview
+                            className="private-invitation-card-preview--showcase private-invitation-card-preview--details-hero"
+                            freezeMotion
+                            cardTemplateSet={invitation.type === 'Dating' ? 'dating' : 'private'}
+                            frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
+                            cardThemeColor={
+                                invitation.type === 'Private'
+                                    ? invitation.privateCardThemeColor ?? null
+                                    : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
+                            }
+                            cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
+                            cardMotionId={invitation.cardMotionId ?? DEFAULT_MOTION_ID}
+                            occasionType={invitation.occasionType}
+                            cardBackgroundId={invitation.cardBackgroundId || null}
+                            heroCoverSrc={cardHeroCover?.src ?? null}
+                            heroCoverMediaType={cardHeroCover?.mediaType ?? null}
+                            heroCoverPoster={cardHeroCover?.poster ?? null}
+                            title={invitation.title}
+                            description={invitation.description}
+                            date={invitation.date}
+                            time={invitation.time}
+                            location={invitation.location}
+                            inviterName={invitation.author?.name || ''}
+                            inviterAvatarUrl={getSafeAvatar(invitation.author || {})}
+                            showHostAndMessage={
+                                invitation.type === 'Dating'
+                                    ? invitation.datingCardShowHostAndMessage !== false
+                                    : invitation.type === 'Private'
+                                      ? invitation.privateCardShowHostAndMessage !== false
+                                      : true
+                            }
+                            textBackdropTone={
+                                invitation.type === 'Private' || invitation.type === 'Dating'
+                                    ? textBackdrop.tone
+                                    : undefined
+                            }
+                        />
                     </div>
-                )}
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 40%, #0a0a0f 100%)' }} />
-            </div>
+                </section>
+            )}
 
             {/* Content Area */}
             <div className="private-details-content" style={{ padding: '0 15px' }}>
-                <div className="reveal-text private-title-heavy reveal-delay-1">
-                    <h1 style={{
-                        fontFamily: templateStyles?.layout?.fontFamily || 'inherit',
-                        fontSize: '2.2rem',
-                        fontWeight: '900',
-                        textAlign: templateStyles?.layout?.textAlign || 'center',
-                        color: 'var(--text-main)',
-                        marginBottom: '10px',
-                        lineHeight: '1.1',
-                    }}>
-                        {invitation.title}
-                    </h1>
+                {isHost && isDraft && (
+                    <div
+                        className="private-draft-host-banner"
+                        style={{
+                            marginBottom: 20,
+                            padding: '14px 16px',
+                            borderRadius: 16,
+                            background: 'rgba(245, 158, 11, 0.12)',
+                            border: '1px solid rgba(245, 158, 11, 0.35)'
+                        }}
+                    >
+                        <p style={{ margin: '0 0 10px', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.92rem' }}>
+                            {t('private_invitation_draft_banner', {
+                                defaultValue:
+                                    'This invitation is still a draft — guests have not been notified yet. Open preview to review and send.'
+                            })}
+                        </p>
+                        <button
+                            type="button"
+                            className="vip-btn vip-btn-primary"
+                            onClick={() => navigate(`/invitation/private/preview/${invitation.id}`)}
+                            style={{ width: '100%', minHeight: 46, borderRadius: 12, border: 'none', fontWeight: 800 }}
+                        >
+                            {t('continue_to_preview', { defaultValue: 'Continue to preview & send' })}
+                        </button>
+                    </div>
+                )}
+                {(invitation.venueName || invitation.restaurantName) && !isDraft && (
+                    <p className="private-details-venue-chip reveal-text reveal-delay-2">
+                        @ {invitation.venueName || invitation.restaurantName}
+                    </p>
+                )}
 
-                    {invitation.venueName && (
-                        <div style={{
-                            textAlign: templateStyles?.layout?.textAlign || 'center',
-                            color: templateStyles?.layout?.accentColor || 'var(--luxury-gold)',
-                            fontSize: '1.3rem',
-                            fontWeight: '700',
-                            marginBottom: '25px',
-                            background: 'rgba(255,255,255,0.05)',
-                            display: 'inline-block',
-                            padding: '5px 15px',
-                            borderRadius: '12px',
-                            width: 'auto',
-                            margin: '0 auto 25px auto'
-                        }}>
-                            @ {invitation.venueName}
-                        </div>
-                    )}
-                </div>
-
-                {isHost && <HostPrivateInvitationCardExport invitation={invitation} />}
+                {isHost && !isDraft && <HostPrivateInvitationCardExport invitation={invitation} />}
 
                 {/* Description - Glassy card (dating: hidden when host chose title-only card) */}
                 {invitation.description &&

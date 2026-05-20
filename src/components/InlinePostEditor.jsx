@@ -4,7 +4,8 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { uploadImage } from '../utils/imageUpload';
+import { uploadPostMedia } from '../utils/imageUpload';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaImage, FaTimes, FaSmile, FaPaperPlane } from 'react-icons/fa';
 import TikTokEmbed from './TikTokEmbed';
@@ -48,8 +49,9 @@ const extractAndRemoveLink = (inputText) => {
     return { text: newText, embed: null };
 };
 
-const InlinePostEditor = () => {
-    const { t } = useTranslation();
+const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, onClearAttachedInvitation }) => {
+    const { t, i18n } = useTranslation();
+    const isRtl = i18n.language === 'ar' || i18n.language?.startsWith('ar');
     const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
 
@@ -58,8 +60,10 @@ const InlinePostEditor = () => {
     const [embedData, setEmbedData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isCheckingImage, setIsCheckingImage] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [visibilityScope, setVisibilityScope] = useState('local'); // 'local' | 'global'
+    const [attachedInvitation, setAttachedInvitation] = useState(attachedInvitationProp);
 
     const fileInputRef = useRef(null);
     const textareaRef = useRef(null);
@@ -68,6 +72,12 @@ const InlinePostEditor = () => {
         name: userProfile?.display_name || userProfile?.name || currentUser?.displayName || 'User',
         avatar: getSafeAvatar(userProfile || currentUser)
     });
+
+    useEffect(() => {
+        if (attachedInvitationProp) {
+            setAttachedInvitation(attachedInvitationProp);
+        }
+    }, [attachedInvitationProp]);
 
     useEffect(() => {
         if (userProfile) {
@@ -120,10 +130,13 @@ const InlinePostEditor = () => {
         e.target.value = null;
     };
 
+    const canPost = Boolean(text.trim() || media || embedData || attachedInvitation);
+
     const handleSubmit = async () => {
-        if ((!text.trim() && !media && !embedData) || loading) return;
+        if (!canPost || loading) return;
         setLoading(true);
         setUploadProgress(0);
+        setIsCheckingImage(false);
 
         try {
             let mediaUrl = null;
@@ -135,7 +148,14 @@ const InlinePostEditor = () => {
             } else if (media?.file) {
                 const safeName = String(media.file.name || 'image.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
                 const path = `community-posts/${currentUser.uid}/post_${Date.now()}_${safeName}`;
-                mediaUrl = await uploadImage(media.file, path, (p) => setUploadProgress(Math.round(p)));
+                setIsCheckingImage(true);
+                mediaUrl = await uploadPostMedia(
+                    media.file,
+                    currentUser.uid,
+                    path,
+                    (p) => setUploadProgress(Math.round(p)),
+                    'image'
+                );
             }
 
             const postData = {
@@ -150,7 +170,7 @@ const InlinePostEditor = () => {
                 mediaType: mediaType,
                 textStyle: {
                     fontSize: 16,
-                    textAlign: 'left',
+                    textAlign: isRtl ? 'right' : 'left',
                     fontWeight: 'normal',
                     fontStyle: 'normal',
                     color: 'var(--text-main)',
@@ -169,6 +189,7 @@ const InlinePostEditor = () => {
                 countryCode: userProfile?.countryCode || null,
                 coordinates: userProfile?.coordinates || null,
                 visibilityScope,
+                attachedInvitation: attachedInvitation || null,
             };
 
             await addDoc(collection(db, 'communityPosts'), postData);
@@ -177,6 +198,8 @@ const InlinePostEditor = () => {
             setText('');
             setMedia(null);
             setEmbedData(null);
+            setAttachedInvitation(null);
+            onClearAttachedInvitation?.();
             setVisibilityScope('local');
             setUploadProgress(0);
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -184,15 +207,60 @@ const InlinePostEditor = () => {
 
         } catch (error) {
             console.error("Error creating post:", error);
-            showToast(error?.message || t('post_failed', 'Failed to create post. Try again.'), 'error');
+            notifyImageUploadError(showToast, error, t, 'post_failed');
         } finally {
             setLoading(false);
+            setIsCheckingImage(false);
             setUploadProgress(0);
         }
     };
 
     return (
-        <div style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '12px 16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="inline-post-editor" style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '12px 16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {attachedInvitation ? (
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: '10px',
+                        padding: '10px',
+                        borderRadius: '10px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--hover-overlay)',
+                        alignItems: 'center',
+                    }}
+                >
+                    <img
+                        src={attachedInvitation.image || 'https://via.placeholder.com/80'}
+                        alt=""
+                        style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                            {attachedInvitation.title}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                            📅 {attachedInvitation.date} • ⏰ {attachedInvitation.time}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setAttachedInvitation(null);
+                            onClearAttachedInvitation?.();
+                        }}
+                        aria-label={t('remove', 'Remove')}
+                        style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            padding: 4,
+                        }}
+                    >
+                        <FaTimes />
+                    </button>
+                </div>
+            ) : null}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                 <img
                     src={getSafeAvatar(userProfile || currentUser)}
@@ -210,7 +278,8 @@ const InlinePostEditor = () => {
                             style={{
                                 width: '100%',
                                 background: 'transparent',
-                                padding: '4px 46px 6px 0',
+                                padding: '4px 0 6px',
+                                paddingInlineEnd: '46px',
                                 minHeight: '60px',
                                 borderRadius: '0',
                                 border: 'none',
@@ -219,17 +288,19 @@ const InlinePostEditor = () => {
                                 resize: 'none',
                                 outline: 'none',
                                 fontFamily: 'inherit',
-                                cursor: 'text'
+                                cursor: 'text',
+                                textAlign: isRtl ? 'right' : 'left',
+                                direction: isRtl ? 'rtl' : 'ltr',
                             }}
                         />
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={(!text.trim() && !media && !embedData) || loading}
+                            disabled={!canPost || loading}
                             aria-label={t('post', 'Post')}
                             style={{
                                 position: 'absolute',
-                                right: 0,
+                                insetInlineEnd: 0,
                                 bottom: 6,
                                 width: 34,
                                 height: 34,
@@ -240,8 +311,9 @@ const InlinePostEditor = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: ((!text.trim() && !media && !embedData) || loading) ? 'not-allowed' : 'pointer',
-                                opacity: ((!text.trim() && !media && !embedData) || loading) ? 0.5 : 1
+                                cursor: !canPost || loading ? 'not-allowed' : 'pointer',
+                                opacity: !canPost || loading ? 0.5 : 1,
+                                transform: isRtl ? 'scaleX(-1)' : 'none',
                             }}
                         >
                             <FaPaperPlane size={13} />
@@ -249,13 +321,16 @@ const InlinePostEditor = () => {
                     </div>
 
                     {loading && media?.file && (
-                        <div style={{ marginTop: '2px', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            {t('uploading_image_progress', 'Uploading image... {{progress}}%', { progress: uploadProgress })}
+                        <div role="status" style={{ marginTop: '2px', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            {isCheckingImage
+                                ? t('image_upload_checking')
+                                : t('uploading_image_progress', 'Uploading image... {{progress}}%', { progress: uploadProgress })}
+                            {isCheckingImage && uploadProgress > 0 && uploadProgress < 100 ? ` (${uploadProgress}%)` : ''}
                         </div>
                     )}
 
-                    <div style={{ textAlign: 'right', fontSize: '0.75rem', color: text.length >= 300 ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '-8px', marginRight: '4px' }}>
-                        {text.length} / 300
+                    <div style={{ textAlign: 'start', fontSize: '0.75rem', color: text.length >= 300 ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '-8px', marginInlineStart: '4px' }}>
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{text.length} / 300</span>
                     </div>
 
                     {media && !embedData && (
@@ -264,7 +339,7 @@ const InlinePostEditor = () => {
                                 type="button"
                                 onClick={() => setMedia(null)}
                                 style={{
-                                    position: 'absolute', top: '6px', right: '6px', zIndex: 10,
+                                    position: 'absolute', top: '6px', insetInlineEnd: '6px', zIndex: 10,
                                     background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
                                     borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     cursor: 'pointer'
@@ -282,7 +357,7 @@ const InlinePostEditor = () => {
                                 type="button"
                                 onClick={() => setEmbedData(null)}
                                 style={{
-                                    position: 'absolute', top: '6px', right: '6px', zIndex: 10,
+                                    position: 'absolute', top: '6px', insetInlineEnd: '6px', zIndex: 10,
                                     background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
                                     borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     cursor: 'pointer'
@@ -307,7 +382,6 @@ const InlinePostEditor = () => {
             <div style={{ borderTop: '1px solid var(--border-color)', margin: '0 -16px' }} />
 
             <div
-                dir="ltr"
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
             >
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -339,7 +413,7 @@ const InlinePostEditor = () => {
                                     style={{
                                         position: 'absolute',
                                         top: '100%',
-                                        left: 0,
+                                        insetInlineStart: 0,
                                         zIndex: 1001,
                                         background: 'var(--bg-card)',
                                         border: '1px solid var(--border-color)',
@@ -390,7 +464,7 @@ const InlinePostEditor = () => {
                         flexShrink: 0
                     }}
                 >
-                    <span>{visibilityScope === 'local' ? '📍' : '🌍'}</span>
+                    <span aria-hidden>{visibilityScope === 'local' ? '📍' : '🌍'}</span>
                     <span>{visibilityScope === 'local' ? t('post_scope_local', 'Local') : t('post_scope_global', 'Global')}</span>
                 </button>
             </div>

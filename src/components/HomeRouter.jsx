@@ -2,13 +2,19 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import DesktopLanding from '../pages/DesktopLanding';
 import AppRouteLoading from '../components/AppRouteLoading';
+import AppShellLoading from '../components/AppShellLoading';
+
+function isDesktopShell() {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(min-width: 1024px)').matches;
+}
 import { useAuth } from '../context/AuthContext';
 import { isBusinessUser, isAffiliateAgent } from '../utils/accountRole';
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
 import { isAdminIdentity, shouldLandOnAdminDashboard } from '../utils/adminAccess';
 
 const HomeRouter = () => {
-    const { currentUser, userProfile, loading, profileServerSynced } = useAuth();
+    const { currentUser, userProfile, loading } = useAuth();
 
     const businessHomeDest = () => '/business-dashboard';
 
@@ -16,20 +22,20 @@ const HomeRouter = () => {
     // persistence restores. The old guard only did (currentUser && loading), so on mobile we fell
     // through to Navigate → /posts-feed before the session existed (breaking / and any redirect to /).
     if (loading) {
-        return <AppRouteLoading variant="session" />;
+        return isDesktopShell() ? <AppShellLoading variant="session" /> : <AppRouteLoading variant="session" fullViewport />;
     }
 
     // Signed in but Firestore profile not yet: keep loading until Firestore resolves (avoids wrong redirects near 768px).
     if (currentUser && !userProfile) {
         if (isAdminIdentity(currentUser, null)) {
-            return <Navigate to="/admin/dashboard" replace />;
+            return <Navigate to="/admin/users" replace />;
         }
-        return <AppRouteLoading variant="profile" />;
+        return isDesktopShell() ? <AppShellLoading variant="profile" /> : <AppRouteLoading variant="profile" fullViewport />;
     }
 
     if (currentUser && userProfile) {
         if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
-            return <Navigate to="/admin/dashboard" replace />;
+            return <Navigate to="/admin/users" replace />;
         }
         if (needsConsumerEmailVerification(currentUser, userProfile)) {
             return <Navigate to="/verify-email" replace />;
@@ -42,20 +48,6 @@ const HomeRouter = () => {
         }
         if (isAffiliateAgent(userProfile)) {
             return <Navigate to="/affiliate/dashboard" replace />;
-        }
-
-        // Consumer (Personal) profile completion layer
-        const isComplete = userProfile.isProfileComplete || (
-            (userProfile.displayName || userProfile.display_name || userProfile.nickname) &&
-            userProfile.gender &&
-            (userProfile.ageCategory || userProfile.age)
-        );
-
-        if (!isComplete) {
-            if (!profileServerSynced) {
-                return <AppRouteLoading variant="profile" />;
-            }
-            return <Navigate to="/complete-profile" replace />;
         }
 
         return <Navigate to="/posts-feed" replace />;

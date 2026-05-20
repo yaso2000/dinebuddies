@@ -17,6 +17,8 @@ import './ProfileEnhancements.css';
 
 import MediaSelector from './Invitations/MediaSelector';
 import { uploadImage } from '../utils/imageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import LocationAutocomplete from './LocationAutocomplete';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { Country } from 'country-state-city';
@@ -131,7 +133,10 @@ export const FavoritePlaces = ({ userId, readOnly = false }) => {
                 if (selectedMedia.file) {
                     // Upload file (Custom Image)
                     const path = `users/${userId}/places/${Date.now()}_${selectedMedia.file.name}`;
-                    finalImage = await uploadImage(selectedMedia.file, path, setUploadProgress);
+                    finalImage = await uploadImage(selectedMedia.file, path, setUploadProgress, {}, {
+                        moderationZone: ImageUploadZone.PLACE,
+                        userId,
+                    });
                 } else if (selectedMedia.url) {
                     // Handle Remote URL (Google Place or Venue)
                     if ((selectedMedia.source === 'google_place' || selectedMedia.source === 'venue') && !selectedMedia.url.includes('firebasestorage')) {
@@ -142,7 +147,10 @@ export const FavoritePlaces = ({ userId, readOnly = false }) => {
                                 const blob = await response.blob();
                                 const file = new File([blob], `place_${Date.now()}.jpg`, { type: 'image/jpeg' });
                                 const path = `users/${userId}/places/${Date.now()}_place.jpg`;
-                                finalImage = await uploadImage(file, path, setUploadProgress);
+                                finalImage = await uploadImage(file, path, setUploadProgress, {}, {
+                                    moderationZone: ImageUploadZone.PLACE,
+                                    userId,
+                                });
                             } else {
                                 finalImage = selectedMedia.url; // Fallback
                             }
@@ -167,7 +175,10 @@ export const FavoritePlaces = ({ userId, readOnly = false }) => {
                             const blob = await response.blob();
                             const file = new File([blob], `place_default_${Date.now()}.jpg`, { type: 'image/jpeg' });
                             const path = `users/${userId}/places/${Date.now()}_default.jpg`;
-                            finalImage = await uploadImage(file, path, setUploadProgress);
+                            finalImage = await uploadImage(file, path, setUploadProgress, {}, {
+                                moderationZone: ImageUploadZone.PLACE,
+                                userId,
+                            });
                         } else {
                             finalImage = defaultUrl;
                         }

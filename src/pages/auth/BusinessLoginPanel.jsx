@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
+import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
+import { AUTH_PORTAL } from '../../utils/authPortalGate';
+import { resolveBusinessPostLoginPath } from '../../utils/postAuthRedirect';
 
 /**
  * Business email/password sign-in.
@@ -15,8 +18,17 @@ import { getAuthErrorMessage } from '../../utils/errorMessages';
 export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingleCard = false }) {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const location = useLocation();
     const { showToast } = useToast();
-    const { signInWithEmail, sendPasswordResetToEmail, userProfile, signOut, loading: authLoading } = useAuth();
+    const {
+        signInWithEmail,
+        sendPasswordResetToEmail,
+        userProfile,
+        currentUser,
+        signOut,
+        loading: authLoading,
+        profileServerSynced,
+    } = useAuth();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -25,25 +37,51 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     const [error, setError] = useState('');
     const [justLoggedIn, setJustLoggedIn] = useState(false);
 
+    const goBusinessHome = () => {
+        navigate(resolveBusinessPostLoginPath(location.search), { replace: true });
+    };
+
     useEffect(() => {
-        if (!justLoggedIn || authLoading) return;
-        if (!userProfile) return;
-        const isBiz = userProfile.isBusiness || userProfile.role === 'business';
-        if (isBiz) {
-            navigate('/business-dashboard', { replace: true });
-        } else {
-            setError(t('business_login_only', 'This login is for business accounts only. Use the regular sign-in for personal accounts.'));
+        if (authLoading) return;
+        if (!currentUser || !userProfile || !profileServerSynced) return;
+
+        if (isAffiliateAgent(userProfile)) {
+            if (!justLoggedIn) return;
+            setError(
+                t(
+                    'auth_affiliate_portal_only',
+                    'This account is an affiliate partner. Use the affiliate sign-in page only.'
+                )
+            );
             setJustLoggedIn(false);
-            signOut().catch(() => {});
+            signOut('/affiliate/login').catch(() => {});
+            return;
         }
-    }, [justLoggedIn, userProfile, authLoading, navigate, signOut, t]);
+
+        if (isBusinessUser(userProfile)) {
+            if (justLoggedIn || location.pathname === '/login' || location.pathname.startsWith('/business/login')) {
+                goBusinessHome();
+            }
+            return;
+        }
+
+        if (!justLoggedIn) return;
+        setError(
+            t(
+                'business_login_only',
+                'This login is for business accounts only. Use Google, Facebook, or Apple on the personal login page.'
+            )
+        );
+        setJustLoggedIn(false);
+        signOut('/login?tab=personal').catch(() => {});
+    }, [justLoggedIn, currentUser, userProfile, authLoading, profileServerSynced, location.pathname, location.search, navigate, signOut, t]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
         try {
-            await signInWithEmail(email, password);
+            await signInWithEmail(email, password, { portal: AUTH_PORTAL.BUSINESS });
             setJustLoggedIn(true);
         } catch (err) {
             setError(getAuthErrorMessage(err) || err.message || t('login_error', 'Sign-in failed'));

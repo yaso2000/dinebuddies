@@ -70,6 +70,7 @@ const requestAffiliatePayout = functions.https.onCall(async (data, context) => {
 
         t.update(userRef, {
             current_balance: admin.firestore.FieldValue.increment(-balance),
+            pending_commissions: admin.firestore.FieldValue.increment(-balance),
             pending_payouts: admin.firestore.FieldValue.increment(balance),
         });
     });

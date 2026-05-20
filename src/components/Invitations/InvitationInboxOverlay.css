@@ -1,0 +1,197 @@
+/* Above .bottom-nav (99999) and business create sheets (120000) */
+.invitation-inbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200001 !important;
+    background: #050508;
+    display: flex;
+    flex-direction: column;
+    color: #fff;
+    touch-action: manipulation;
+    isolation: isolate;
+}
+
+/* Full-screen decision UI — hide shell chrome while inbox is open */
+body.invitation-inbox-open .bottom-nav,
+body.invitation-inbox-open .app-header {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.invitation-inbox-overlay__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: max(12px, env(safe-area-inset-top)) 16px 8px;
+    flex-shrink: 0;
+}
+
+.invitation-inbox-overlay__progress {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.72);
+    letter-spacing: 0.04em;
+}
+
+.invitation-inbox-overlay__dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+}
+
+.invitation-inbox-overlay__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.28);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.invitation-inbox-overlay__dot--active {
+    background: #fff;
+    transform: scale(1.25);
+}
+
+.invitation-inbox-overlay__close {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.invitation-inbox-overlay__card-stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px 4px;
+    overflow: hidden;
+}
+
+.invitation-inbox-overlay__card-wrap {
+    width: 100%;
+    max-width: min(100%, calc((100dvh - 168px) * 9 / 16));
+    max-height: calc(100dvh - 168px);
+    margin: 0 auto;
+    transition: transform 0.28s ease, opacity 0.28s ease;
+}
+
+.invitation-inbox-overlay__card-wrap--anim-next {
+    animation: invitationInboxSlideInNext 0.32s ease;
+}
+
+.invitation-inbox-overlay__card-wrap--anim-prev {
+    animation: invitationInboxSlideInPrev 0.32s ease;
+}
+
+@keyframes invitationInboxSlideInNext {
+    from {
+        opacity: 0;
+        transform: translateX(28px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes invitationInboxSlideInPrev {
+    from {
+        opacity: 0;
+        transform: translateX(-28px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+[dir='rtl'] .invitation-inbox-overlay__card-wrap--anim-next {
+    animation-name: invitationInboxSlideInPrev;
+}
+
+[dir='rtl'] .invitation-inbox-overlay__card-wrap--anim-prev {
+    animation-name: invitationInboxSlideInNext;
+}
+
+.private-invitation-card-preview--inbox {
+    max-width: 100%;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.private-invitation-card-preview--inbox .private-invitation-card-preview__inner {
+    max-height: calc(100dvh - 168px);
+}
+
+.invitation-inbox-overlay__hint {
+    text-align: center;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 4px 16px 8px;
+    flex-shrink: 0;
+}
+
+.invitation-inbox-overlay__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding: 10px 16px max(20px, env(safe-area-inset-bottom));
+    flex-shrink: 0;
+    background: linear-gradient(to top, #050508 70%, transparent);
+    position: relative;
+    z-index: 2;
+}
+
+.invitation-inbox-overlay__btn {
+    border: none;
+    border-radius: 14px;
+    padding: 14px 10px;
+    font-size: 0.92rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+}
+
+.invitation-inbox-overlay__btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.invitation-inbox-overlay__btn--decline {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fecaca;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.invitation-inbox-overlay__btn--accept {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+}
+
+.invitation-inbox-overlay__btn--later {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.invitation-inbox-overlay__dating .invitation-inbox-overlay__btn--accept {
+    background: linear-gradient(135deg, #ec4899, #be185d);
+    box-shadow: 0 6px 20px rgba(236, 72, 153, 0.35);
+}

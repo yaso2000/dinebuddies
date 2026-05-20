@@ -11,7 +11,7 @@
     --outgoing-bg: var(--primary);
     --header-bg: var(--bg-body);
     --composer-bg: var(--bg-card);
-    --font-family: 'Outfit', sans-serif;
+    --font-family: var(--font-body, 'Cairo', sans-serif);
 }
 
 

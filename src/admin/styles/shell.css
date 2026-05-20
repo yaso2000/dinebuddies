@@ -1,0 +1,397 @@
+/* DineBuddies Admin — Black & Acid Lime */
+.db-shell {
+    --db-bg: #030303;
+    --db-panel: #0a0a0a;
+    --db-elevated: #111111;
+    --db-border: #222222;
+    --db-text: #f4f4f5;
+    --db-muted: #6b6b6b;
+    --db-lime: #c8ff00;
+    --db-lime-dim: rgba(200, 255, 0, 0.12);
+    --db-danger: #ff4d4d;
+    --db-warn: #facc15;
+    --db-ok: #c8ff00;
+    min-height: 100vh;
+    display: flex;
+    background: var(--db-bg);
+    color: var(--db-text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+}
+
+.db-side {
+    width: 216px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--db-border);
+    padding: 1.25rem 0;
+    background: var(--db-panel);
+}
+
+.db-brand {
+    padding: 0 1.1rem 1.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--db-lime);
+}
+
+.db-nav a {
+    display: block;
+    padding: 0.55rem 1.1rem;
+    color: var(--db-muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    font-size: 0.85rem;
+}
+
+.db-nav a:hover {
+    color: var(--db-text);
+    background: var(--db-lime-dim);
+}
+
+.db-nav a.active {
+    color: var(--db-lime);
+    border-left-color: var(--db-lime);
+    background: var(--db-lime-dim);
+}
+
+.db-main {
+    flex: 1;
+    min-width: 0;
+    padding: 1.5rem 1.75rem;
+    overflow: auto;
+}
+
+.db-h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.35rem;
+    font-weight: 600;
+}
+
+.db-lead {
+    margin: 0 0 1.25rem;
+    color: var(--db-muted);
+    font-size: 0.85rem;
+    max-width: 52rem;
+    line-height: 1.5;
+}
+
+.db-env-banner {
+    margin-bottom: 1rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.db-env-banner--sandbox {
+    border: 1px solid var(--db-warn);
+    color: var(--db-warn);
+    background: rgba(250, 204, 21, 0.06);
+}
+
+.db-env-banner--production {
+    border: 1px solid var(--db-lime);
+    color: var(--db-lime);
+    background: var(--db-lime-dim);
+}
+
+.db-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--db-border);
+    padding-bottom: 0.65rem;
+}
+
+.db-tab {
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--db-border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--db-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.db-tab.active {
+    border-color: var(--db-lime);
+    color: var(--db-lime);
+    background: var(--db-lime-dim);
+}
+
+.db-hint {
+    margin: 0 0 1rem;
+    padding: 0.6rem 0.75rem;
+    border-left: 2px solid var(--db-lime);
+    background: var(--db-elevated);
+    color: var(--db-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.db-hint strong {
+    color: var(--db-text);
+}
+
+.db-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.db-input,
+.db-select {
+    background: var(--db-elevated);
+    border: 1px solid var(--db-border);
+    color: var(--db-text);
+    border-radius: 4px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.85rem;
+    min-width: 140px;
+}
+
+.db-input:focus,
+.db-select:focus {
+    outline: none;
+    border-color: var(--db-lime);
+}
+
+.db-btn {
+    border: 1px solid var(--db-border);
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--db-elevated);
+    color: var(--db-text);
+}
+
+.db-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.db-btn--lime {
+    background: var(--db-lime);
+    color: #030303;
+    border-color: var(--db-lime);
+}
+
+.db-btn--ghost {
+    background: transparent;
+    color: var(--db-muted);
+}
+
+.db-btn--danger {
+    border-color: var(--db-danger);
+    color: var(--db-danger);
+}
+
+.db-btn--warn {
+    border-color: var(--db-warn);
+    color: var(--db-warn);
+}
+
+.db-panel {
+    background: var(--db-panel);
+    border: 1px solid var(--db-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.db-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.db-table th,
+.db-table td {
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--db-border);
+}
+
+.db-table th {
+    color: var(--db-muted);
+    font-weight: 500;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: var(--db-elevated);
+}
+
+.db-table tr:last-child td {
+    border-bottom: none;
+}
+
+.db-id {
+    font-size: 0.72rem;
+    color: var(--db-muted);
+    font-family: ui-monospace, monospace;
+}
+
+.db-badge {
+    display: inline-block;
+    padding: 0.12rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.db-badge--ok {
+    background: var(--db-lime-dim);
+    color: var(--db-lime);
+}
+
+.db-badge--warn {
+    background: rgba(250, 204, 21, 0.12);
+    color: var(--db-warn);
+}
+
+.db-badge--ban {
+    background: rgba(255, 77, 77, 0.12);
+    color: var(--db-danger);
+}
+
+.db-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.db-empty {
+    padding: 2.5rem;
+    text-align: center;
+    color: var(--db-muted);
+}
+
+.db-spin {
+    width: 28px;
+    height: 28px;
+    margin: 2rem auto;
+    border: 2px solid var(--db-border);
+    border-top-color: var(--db-lime);
+    border-radius: 50%;
+    animation: db-spin 0.7s linear infinite;
+}
+
+@keyframes db-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.db-credit-row {
+    display: flex;
+    gap: 0.75rem;
+    margin: 0.75rem 0;
+}
+
+.db-credit-box {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid var(--db-border);
+    border-radius: 4px;
+    background: var(--db-elevated);
+}
+
+.db-credit-box label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--db-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.db-credit-box .val {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.db-credit-box--paid .val {
+    color: var(--db-muted);
+}
+
+.db-credit-box--free .val {
+    color: var(--db-lime);
+}
+
+.db-fin span {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--db-muted);
+}
+
+.db-fin .pending {
+    color: var(--db-warn);
+    font-weight: 700;
+}
+
+.db-fin .total {
+    color: var(--db-lime);
+    font-weight: 700;
+}
+
+.db-h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem;
+    color: var(--db-text);
+}
+
+.db-field-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--db-muted);
+    margin-bottom: 0.5rem;
+}
+
+.db-muted {
+    font-size: 0.8rem;
+    color: var(--db-muted);
+}
+
+.db-status-msg {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--db-lime);
+}
+
+@media (max-width: 768px) {
+    .db-shell {
+        flex-direction: column;
+    }
+
+    .db-side {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--db-border);
+    }
+
+    .db-nav {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .db-nav a {
+        border-left: none;
+        border-bottom: 2px solid transparent;
+    }
+
+    .db-nav a.active {
+        border-bottom-color: var(--db-lime);
+    }
+}

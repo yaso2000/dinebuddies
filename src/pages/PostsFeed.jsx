@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, getDocs, limit, doc, updateDoc,
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import StoriesBar from '../components/StoriesBar';
 import StoryViewer from '../components/StoryViewer';
@@ -16,14 +16,28 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { createNotification } from '../utils/notificationHelpers';
 import { useTranslation } from 'react-i18next';
 import { asUidArray } from '../utils/userSocialLists';
-
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 
 const PostsFeed = () => {
     const { t } = useTranslation();
+    const location = useLocation();
     const navigate = useNavigate();
     const { userProfile, currentUser } = useAuth();
     const menuRef = useRef({});
+    const composerRef = useRef(null);
+    const [composerInvitation, setComposerInvitation] = useState(null);
+
+    useEffect(() => {
+        const inv = location.state?.attachedInvitation;
+        if (!inv?.id) return;
+        setComposerInvitation(inv);
+        navigate(location.pathname, { replace: true, state: {} });
+        if (location.state?.scrollToComposer) {
+            requestAnimationFrame(() => {
+                composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+    }, [location.state, location.pathname, navigate]);
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewingStory, setViewingStory] = useState(null);
@@ -277,7 +291,12 @@ const PostsFeed = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '100px', maxWidth: '100%', width: '100%', margin: 0, paddingTop: '12px' }}>
                 
                 {/* Real Inline Post Creator */}
-                <InlinePostEditor />
+                <div ref={composerRef} className="inline-post-editor-anchor">
+                    <InlinePostEditor
+                        attachedInvitation={composerInvitation}
+                        onClearAttachedInvitation={() => setComposerInvitation(null)}
+                    />
+                </div>
 
                 {mergedFeed.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>

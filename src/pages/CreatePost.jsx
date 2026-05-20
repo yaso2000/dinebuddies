@@ -5,7 +5,9 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { uploadImage } from '../utils/imageUpload';
+import { uploadPostMedia } from '../utils/imageUpload';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
+import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaArrowLeft, FaImage, FaVideo, FaSmile, FaTimes, FaFont, FaPalette, FaCircle, FaFileUpload, FaBold, FaItalic, FaAlignLeft, FaAlignCenter, FaAlignRight } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
@@ -44,6 +46,8 @@ const CreatePost = () => {
     const [fontIndex, setFontIndex] = useState(0);
     const [hasStroke, setHasStroke] = useState(true);
     const [loading, setLoading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isCheckingImage, setIsCheckingImage] = useState(false);
     const [showOverlayInput, setShowOverlayInput] = useState(false);
     const [showQuickReactions, setShowQuickReactions] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -132,15 +136,24 @@ const CreatePost = () => {
     const handleSubmit = async () => {
         if ((!text.trim() && !media && !attachedInvitation) || loading) return;
         setLoading(true);
+        setUploadProgress(0);
+        setIsCheckingImage(false);
 
         try {
             let mediaUrl = null;
             let mediaType = media?.type || null;
 
             if (media?.file) {
-                // Use 'community-posts' path to avoid potential conflicts with invitation rules
-                const path = `community-posts/${currentUser.uid}/post_${Date.now()}_${media.file.name}`;
-                mediaUrl = await uploadImage(media.file, path);
+                const safeName = String(media.file.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_');
+                const path = `community-posts/${currentUser.uid}/post_${Date.now()}_${safeName}`;
+                if (mediaType === 'image') setIsCheckingImage(true);
+                mediaUrl = await uploadPostMedia(
+                    media.file,
+                    currentUser.uid,
+                    path,
+                    (p) => setUploadProgress(Math.round(p)),
+                    mediaType
+                );
             }
 
             const postData = {
@@ -153,15 +166,7 @@ const CreatePost = () => {
                 content: text.trim(),
                 mediaUrl: mediaUrl,
                 mediaType: mediaType,
-                attachedInvitation: attachedInvitation ? {
-                    id: attachedInvitation.id,
-                    title: attachedInvitation.title,
-                    date: attachedInvitation.date,
-                    time: attachedInvitation.time,
-                    location: attachedInvitation.location,
-                    image: attachedInvitation.videoThumbnail || attachedInvitation.image || attachedInvitation.restaurantImage || attachedInvitation.customImage || null,
-                    author: attachedInvitation.author
-                } : null,
+                attachedInvitation: buildInvitationFeedAttachment(attachedInvitation),
                 textStyle: {
                     fontSize: fontSize,
                     textAlign: textAlign,
@@ -191,12 +196,14 @@ const CreatePost = () => {
             };
 
             await addDoc(collection(db, 'communityPosts'), postData);
-            navigate('/');
+            navigate(attachedInvitation ? '/posts-feed' : '/');
         } catch (error) {
             console.error("Error creating post:", error);
-            showToast(t('failed_to_post', 'Failed to post. Try again.'), 'error');
+            notifyImageUploadError(showToast, error, t, 'failed_to_post');
         } finally {
             setLoading(false);
+            setIsCheckingImage(false);
+            setUploadProgress(0);
         }
     };
 
@@ -237,9 +244,27 @@ const CreatePost = () => {
                         opacity: (!text.trim() && !media && !attachedInvitation) || loading ? 0.5 : 1
                     }}
                 >
-                    {loading ? t('posting', 'Posting...') : t('post_button', 'Post')}
+                    {loading
+                        ? (isCheckingImage ? t('image_upload_checking') : t('posting', 'Posting...'))
+                        : t('post_button', 'Post')}
                 </button>
             </div>
+
+            {isCheckingImage && (
+                <div
+                    role="status"
+                    style={{
+                        padding: '8px 16px',
+                        fontSize: '0.85rem',
+                        color: 'var(--text-secondary)',
+                        textAlign: 'center',
+                        borderBottom: '1px solid var(--border-color)',
+                    }}
+                >
+                    {t('image_upload_checking')}
+                    {uploadProgress > 0 && uploadProgress < 100 ? ` (${uploadProgress}%)` : ''}
+                </div>
+            )}
 
             {/* Main Content (Scrollable) */}
             <div style={{ flex: 1, padding: '16px', paddingBottom: '70px', overflowY: 'auto' }}>

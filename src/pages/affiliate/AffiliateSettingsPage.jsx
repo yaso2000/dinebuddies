@@ -5,7 +5,6 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
 import { isAffiliateAgent } from '../../utils/accountRole';
-import { useAffiliateDesktopEligible } from '../../utils/affiliateDesktopGate';
 import AppRouteLoading from '../../components/AppRouteLoading';
 import { useToast } from '../../context/ToastContext';
 import LocationAutocomplete from '../../components/LocationAutocomplete';
@@ -24,7 +23,6 @@ export default function AffiliateSettingsPage() {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const { currentUser, userProfile, loading, profileServerSynced, signOut } = useAuth();
-    const desktopOk = useAffiliateDesktopEligible();
 
     const [phone, setPhone] = useState('');
     const [paypal, setPaypal] = useState('');
@@ -107,10 +105,6 @@ export default function AffiliateSettingsPage() {
         return <Navigate to="/affiliate/login?next=/affiliate/settings" replace />;
     }
 
-    if (!desktopOk) {
-        return <Navigate to="/affiliate/use-laptop" replace />;
-    }
-
     const onSave = async (e) => {
         e.preventDefault();
         const p = String(phone || '').replace(/[^\d+()\s-]/g, '').trim();
@@ -173,7 +167,7 @@ export default function AffiliateSettingsPage() {
                         <button
                             type="button"
                             className="affiliate-btn affiliate-btn--ghost"
-                            onClick={() => signOut('/affiliate')}
+                            onClick={() => signOut('/login')}
                         >
                             <FaSignOutAlt aria-hidden />
                             {t('logout', 'Log out')}

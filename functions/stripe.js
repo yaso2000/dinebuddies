@@ -1,7 +1,8 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { CREDIT_PACKAGES } = require('./creditsCore');
+const { CREDIT_PACKAGES, getBusinessMonthlyPriceId } = require('./creditsCore');
+const { isStripeTestMode } = require('./stripeEnv');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,9 +22,10 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { priceId: priceIdIn, planId, planName, subscriptionKind } = data;
     const userId = context.auth.uid;
 
+    const priceId = String(priceIdIn || '').trim();
     if (!priceId) {
         throw new functions.https.HttpsError(
             'invalid-argument',
@@ -69,12 +71,14 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             cancel_url: data.cancelUrl,
             metadata: {
                 userId: userId,
-                planId: planId,
-                planName: planName
-            }
+                planId: planId || '',
+                planName: planName || '',
+                subscriptionKind: String(subscriptionKind || '').trim().toLowerCase(),
+                stripeMode: isStripeTestMode() ? 'test' : 'live',
+            },
         });
 
-        console.log(`✅ Checkout session created for user ${userId}: ${session.id}`);
+        console.log(`✅ Checkout session created for user ${userId}: ${session.id} (${isStripeTestMode() ? 'test' : 'live'})`);
 
         return {
             sessionId: session.id,
@@ -185,4 +189,73 @@ exports.createCreditsCheckoutSession = functions.https.onCall(async (data, conte
         console.error('createCreditsCheckoutSession:', error);
         throw new functions.https.HttpsError('internal', error.message || 'Checkout failed');
     }
+});
+
+/**
+ * Business monthly subscription — price from STRIPE_PRICE_BUSINESS_MONTHLY (test or live).
+ */
+exports.createBusinessSubscriptionCheckout = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+
+    const priceId = getBusinessMonthlyPriceId();
+    if (!priceId) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Business plan is not configured (set STRIPE_PRICE_BUSINESS_MONTHLY in functions/.env).'
+        );
+    }
+
+    const successUrl = String(data?.successUrl || '').trim();
+    const cancelUrl = String(data?.cancelUrl || '').trim();
+    if (!successUrl || !cancelUrl) {
+        throw new functions.https.HttpsError('invalid-argument', 'successUrl and cancelUrl are required');
+    }
+
+    const userId = context.auth.uid;
+    const planName = String(data?.planName || 'Paid Business').trim();
+
+    try {
+        let customerId;
+        const userDoc = await db.collection('users').doc(userId).get();
+
+        if (userDoc.exists && userDoc.data().stripeCustomerId) {
+            customerId = userDoc.data().stripeCustomerId;
+        } else {
+            const customer = await stripe.customers.create({
+                email: context.auth.token.email || `user_${userId}@dinebuddies.com`,
+                metadata: { firebaseUID: userId },
+            });
+            customerId = customer.id;
+            await db.collection('users').doc(userId).set({ stripeCustomerId: customerId }, { merge: true });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+            customer: customerId,
+            payment_method_types: ['card'],
+            line_items: [{ price: priceId, quantity: 1 }],
+            mode: 'subscription',
+            success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: cancelUrl,
+            metadata: {
+                userId,
+                planId: 'paid',
+                planName,
+                subscriptionKind: 'business',
+                stripeMode: isStripeTestMode() ? 'test' : 'live',
+            },
+        });
+
+        return { sessionId: session.id, url: session.url };
+    } catch (error) {
+        console.error('createBusinessSubscriptionCheckout:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Checkout failed');
+    }
+});
+
+/** Admin/debug: which Stripe prices are configured (no secrets). */
+exports.getStripeCommerceStatus = functions.https.onCall(async () => {
+    const { stripeCommerceStatus } = require('./stripeEnv');
+    return stripeCommerceStatus();
 });

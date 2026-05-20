@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const DesktopLanding = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
 
     return (
@@ -13,7 +15,6 @@ const DesktopLanding = () => {
             background: 'linear-gradient(135deg, var(--bg-main) 0%, var(--bg-elevated) 100%)',
             color: 'var(--text-main)'
         }}>
-            {/* Top Navigation */}
             <header style={{
                 padding: '1.5rem 2rem',
                 display: 'flex',
@@ -24,12 +25,12 @@ const DesktopLanding = () => {
                 backdropFilter: 'blur(10px)'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <img src="/db-logo.svg" alt="DineBuddies Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
+                    <img src="/db-logo.svg" alt="DineBuddies" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
                     <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, background: 'linear-gradient(to right, var(--text-main), var(--text-muted))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                         DineBuddies
                     </h1>
                 </div>
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <Link
                         to="/login"
                         style={{
@@ -42,16 +43,16 @@ const DesktopLanding = () => {
                             fontWeight: 600,
                             cursor: 'pointer',
                             transition: 'all 0.2s',
-                            marginRight: '1rem',
                             textDecoration: 'none',
                             boxSizing: 'border-box',
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-card)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     >
-                        Login
+                        {t('login_signup', 'Login / Sign Up')}
                     </Link>
                     <button
+                        type="button"
                         onClick={() => navigate('/posts-feed')}
                         style={{
                             padding: '0.6rem 1.5rem',
@@ -64,12 +65,11 @@ const DesktopLanding = () => {
                             boxShadow: '0 4px 14px rgba(0,0,0,0.2)'
                         }}
                     >
-                        Launch App
+                        {t('desktop_landing_launch_app', 'Launch App')}
                     </button>
                 </div>
             </header>
 
-            {/* Main Content (Hero) */}
             <main style={{
                 flex: 1,
                 display: 'flex',
@@ -94,7 +94,11 @@ const DesktopLanding = () => {
                         margin: '0 0 1rem 0',
                         lineHeight: 1.2
                     }}>
-                        Never dine <span style={{ color: 'var(--primary)' }}>alone</span> again.
+                        {t('desktop_landing_hero_prefix', 'Never dine')}{' '}
+                        <span style={{ color: 'var(--primary)' }}>
+                            {t('desktop_landing_hero_highlight', 'alone')}
+                        </span>{' '}
+                        {t('desktop_landing_hero_suffix', 'again.')}
                     </h2>
                     <p style={{
                         fontSize: '1.25rem',
@@ -102,11 +106,15 @@ const DesktopLanding = () => {
                         margin: '0 0 2rem 0',
                         lineHeight: 1.6
                     }}>
-                        The social dining app for meeting people and sharing meals. Connect with food lovers, discover amazing restaurants, and create unforgettable memories over great food.
+                        {t(
+                            'desktop_landing_hero_subtitle',
+                            'The social dining app for meeting people and sharing meals. Connect with food lovers, discover amazing restaurants, and create unforgettable memories over great food.'
+                        )}
                     </p>
-                    
-                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+
+                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button
+                            type="button"
                             onClick={() => navigate('/posts-feed')}
                             style={{
                                 padding: '1rem 2rem',
@@ -120,16 +128,15 @@ const DesktopLanding = () => {
                                 transition: 'transform 0.2s',
                                 boxShadow: '0 8px 20px rgba(167,139,250,0.4)'
                             }}
-                            onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
-                            onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
                         >
-                            Start Exploring
+                            {t('desktop_landing_start_exploring', 'Start Exploring')}
                         </button>
                     </div>
-                </div>
+                    </div>
             </main>
 
-            {/* Footer with Google Play required links */}
             <footer style={{
                 padding: '2rem',
                 borderTop: '1px solid var(--border-color)',
@@ -140,13 +147,13 @@ const DesktopLanding = () => {
                 gap: '1rem'
             }}>
                 <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <a href="/privacy" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Privacy Policy</a>
-                    <a href="/terms" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Terms of Use</a>
-                    <a href="/guidelines" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Community Guidelines</a>
-                    <a href="/support" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--primary)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}>Contact Us</a>
+                    <Link to="/privacy" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}>{t('privacy_policy', 'Privacy Policy')}</Link>
+                    <Link to="/terms" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}>{t('terms_of_service', 'Terms of Use')}</Link>
+                    <Link to="/guidelines" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}>{t('community_guidelines', 'Community Guidelines')}</Link>
+                    <Link to="/support" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}>{t('contact_us', 'Contact Us')}</Link>
                 </div>
-                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }}>
-                    &copy; {new Date().getFullYear()} DineBuddies. All rights reserved.
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    {t('desktop_landing_copyright', '© {{year}} DineBuddies. All rights reserved.', { year: new Date().getFullYear() })}
                 </div>
             </footer>
         </div>

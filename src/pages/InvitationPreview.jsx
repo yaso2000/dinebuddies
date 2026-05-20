@@ -168,7 +168,7 @@ const InvitationPreview = () => {
     };
 
     return (
-        <div className="page-container" style={{
+        <div className="page-container invitation-preview-page" style={{
             maxWidth: '800px',
             margin: '0 auto',
             padding: '2rem 1.5rem'

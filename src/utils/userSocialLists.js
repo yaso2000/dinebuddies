@@ -77,6 +77,9 @@ export function isAuthorMutedForViewer(viewerProfile, authorId) {
 
 export function messagingRestrictedBetweenUsers(viewerProfile, viewerUid, otherUserDoc, otherUid) {
     if (!viewerUid || !otherUid) return { restricted: true, reason: 'invalid' };
+    if (otherUserDoc?.isSystemAccount === true) {
+        return { restricted: false, reason: null };
+    }
     const myBlocked = asUidArray(viewerProfile?.blockedUserIds);
     const myMuted = asUidArray(viewerProfile?.mutedUserIds);
     const theirBlocked = asUidArray(otherUserDoc?.blockedUserIds);

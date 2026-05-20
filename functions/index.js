@@ -6,7 +6,11 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 const { registerAdminSearchUsers } = require('./adminSearchUsers');
+const { registerAdminBrowseUsers } = require('./adminBrowseUsers');
+const { registerAdminDashboard } = require('./adminDashboard');
+const { registerAdminMassMessaging } = require('./adminMassMessaging');
 const { registerDirectorySearch } = require('./directorySearch');
+const { registerConsumerAccountSearch } = require('./consumerAccountSearch');
 const { registerAffiliateReferralOnUserWrite } = require('./affiliateReferral');
 const {
     incrementReferralClicks,
@@ -293,7 +297,11 @@ async function assertAdminContext(context) {
 }
 
 registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
+registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
+registerAdminDashboard(exports, { db, admin, assertAdminContext });
+registerAdminMassMessaging(exports, { db, admin, assertAdminContext });
 registerDirectorySearch(exports, { db, admin });
+registerConsumerAccountSearch(exports, { db });
 
 function asTrimmedString(value) {
     if (typeof value !== 'string') return null;
@@ -368,12 +376,18 @@ function toPublicProfile(userDocData, uid) {
             ? tierRaw.trim().toLowerCase()
             : 'free';
 
+    const accountRole = asTrimmedString(userData.role)?.toLowerCase() || 'user';
+    const teamRoles = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent']);
+    const searchable = !teamRoles.has(accountRole);
+
     return {
         uid: safeUid,
         profileType,
         displayName,
         avatarUrl: avatarUrl || null,
         subscriptionTier,
+        accountRole,
+        searchable,
         search: {
             displayNameLower: displayName.trim().toLowerCase()
         },
@@ -439,7 +453,8 @@ async function getPublicProfilesByIds(ids) {
 exports.createCheckoutSession = stripeModule.createCheckoutSession;
 exports.createPortalSession = stripeModule.createPortalSession;
 exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
-exports.fulfillDineCreditsCheckout = stripeModule.fulfillDineCreditsCheckout;
+exports.createBusinessSubscriptionCheckout = stripeModule.createBusinessSubscriptionCheckout;
+exports.getStripeCommerceStatus = stripeModule.getStripeCommerceStatus;
 
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;
@@ -474,6 +489,10 @@ exports.syncPublicProfileOnUserWrite = functions.firestore
         }
 
         const mapped = toPublicProfile(afterData, uid);
+        if (mapped && mapped.searchable === false) {
+            await publicRef.delete().catch(() => { });
+            return null;
+        }
         if (!mapped) {
             functions.logger.warn('Skipping public profile sync: invalid uid', { uid });
             return null;
@@ -546,6 +565,23 @@ exports.updateBusinessRatingOnReview = functions.firestore
  * Create in-app notifications for private invitation invitees (server-side, Admin SDK).
  * Does not rely on the client callable createNotification (permissions / race / silent failures).
  */
+function pickPrivateInvitationCardImageUrl(inv) {
+    if (!inv || typeof inv !== 'object') return null;
+    const candidates = [
+        inv.cardImageUrl,
+        inv.customImage,
+        inv.videoThumbnail,
+        inv.restaurantImage,
+        inv.image
+    ];
+    for (const raw of candidates) {
+        if (typeof raw !== 'string') continue;
+        const url = raw.trim();
+        if (/^https:\/\//i.test(url)) return url;
+    }
+    return null;
+}
+
 async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, inviteeIds, invPre, userRef }) {
     if (!Array.isArray(inviteeIds) || inviteeIds.length === 0) return 0;
 
@@ -565,6 +601,7 @@ async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, in
         null;
     const invTitle = (invPre.title && String(invPre.title).trim()) || 'Private invitation';
     const occasion = invPre.occasionType || 'Social';
+    const cardImageUrl = pickPrivateInvitationCardImageUrl(invPre);
     const message = `${hostName} invited you: ${invTitle}`.slice(0, 500);
     const title = 'Private invitation'.slice(0, 120);
     const actionUrl = `/invitation/private/${invitationId}`.slice(0, 256);
@@ -586,7 +623,13 @@ async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, in
                 invitationId,
                 style: null,
                 status: null,
-                metadata: { occasionType: occasion },
+                metadata: {
+                    occasionType: occasion,
+                    invitationTitle: invTitle,
+                    cardImageUrl: cardImageUrl || null
+                },
+                cardImageUrl: cardImageUrl || null,
+                invitationTitle: invTitle,
                 fromUserId: uid,
                 fromUserName: hostName,
                 fromUserAvatar: senderAvatar,
@@ -1715,7 +1758,7 @@ exports.createReport = functions.https.onCall(async (data, context) => {
     const metadata = data?.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
         ? data.metadata
         : {};
-    const allowedTypes = new Set(['user', 'invitation', 'message', 'partner']);
+    const allowedTypes = new Set(['user', 'invitation', 'post', 'message', 'partner']);
 
     if (!type || !allowedTypes.has(type)) {
         throw new functions.https.HttpsError('invalid-argument', 'Invalid report type.');
@@ -2384,7 +2427,8 @@ async function sendPushToUser(userId, title, body, data = {}) {
         if (!tokens.length) return;
 
         const actionUrlAbs = fcmAbsoluteAppUrl(data.actionUrl || '/');
-        const iconToUse = fcmSafeIconUrl(data.senderAvatar);
+        const cardImage = fcmSafeIconUrl(data.cardImageUrl);
+        const iconToUse = cardImage !== FCM_DEFAULT_ICON ? cardImage : fcmSafeIconUrl(data.senderAvatar);
         const badgeUrl = FCM_DEFAULT_ICON;
         const notifTag =
             data.notifId != null && String(data.notifId).trim() !== ''
@@ -2411,6 +2455,9 @@ async function sendPushToUser(userId, title, body, data = {}) {
             icon: iconToUse,
             badge: badgeUrl,
         };
+        if (cardImage !== FCM_DEFAULT_ICON) {
+            webNotif.image = cardImage;
+        }
         if (notifTag) webNotif.tag = notifTag;
 
         const webpushCfg = {
@@ -2487,6 +2534,10 @@ exports.onNotificationCreated = functions.firestore
         const body = data.message || '';
         const actionUrl = data.actionUrl || '/';
         const senderAvatar = data.senderAvatar || data.fromUserAvatar || data.senderPhoto || '';
+        const cardImageUrl =
+            data.cardImageUrl ||
+            data.metadata?.cardImageUrl ||
+            null;
 
         if (!userId) return null;
         const notifId = snap.id;
@@ -2494,6 +2545,7 @@ exports.onNotificationCreated = functions.firestore
             actionUrl,
             type: data.type || '',
             senderAvatar,
+            cardImageUrl,
             notifId,
         });
         return null;
@@ -2755,3 +2807,7 @@ registerSendVerificationEmailResend({ exports, functions, db, admin });
 
 const { registerSendPasswordResetEmailResend } = require('./sendPasswordResetEmailResend');
 registerSendPasswordResetEmailResend({ exports, functions, db, admin });
+
+// ─── Image moderation (Vision Safe Search) ───────────────────────────────────
+const { registerImageModeration } = require('./imageModeration');
+registerImageModeration({ exports, functions, db, admin, enforceCallableRateLimit });

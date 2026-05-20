@@ -186,6 +186,7 @@ service cloud.firestore {
       allow get: if isSignedIn();
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
+      allow list: if isAdminOrPanelStaff() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
       allow create: if isSignedIn() && request.auth.uid == userId &&
                        userCreateHasNoServerAffiliateFields() &&
@@ -601,18 +602,23 @@ service cloud.firestore {
 
     match /subscriptionPlans/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdminOrPanelStaff();
     }
 
     match /creditPacks/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdminOrPanelStaff();
     }
 
     // ============================================
     // APP CONFIGURATION & SETTINGS
     // ============================================
     
+    match /admin_announcements/{docId} {
+      allow read: if isAdminOrPanelStaff();
+      allow create, update, delete: if false;
+    }
+
     match /app_settings/{docId} {
       allow read: if true;
       allow write: if isAdmin();

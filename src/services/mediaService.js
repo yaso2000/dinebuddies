@@ -2,6 +2,8 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import { generateThumbnail } from '../utils/thumbnailGenerator';
 import { compressImage } from '../utils/imageUpload';
+import { uploadImageWithModeration } from './moderatedImageUpload';
+import { folderToImageZone } from './imageUploadZones';
 
 /**
  * Upload media file (image or video) to Firebase Storage
@@ -32,6 +34,12 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
                 console.warn('Image compression failed, uploading original:', e?.message);
             }
         }
+
+        if (type === 'image' || type === 'thumbnail') {
+            const purpose = folderToImageZone(folder, type);
+            return uploadImageWithModeration(fileToUpload, userId, purpose);
+        }
+
         // Determin extension
         let extension = type === 'video' ? 'webm' : 'jpg';
         if (fileToUpload.name) {

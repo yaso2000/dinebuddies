@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import VenueLocationPicker from '../components/VenueLocationPicker';
 import { processInvitationMedia } from '../services/mediaService';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getFollowing } from '../utils/followHelpers';
 import { db } from '../firebase/config';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
@@ -21,9 +22,20 @@ import { serverTimestamp, updateDoc, doc, getDoc, collection, query, where, orde
 import { detectUserLocationContext } from '../utils/locationUtils';
 import './PrivateInvitation.css';
 import { goToLogin } from '../utils/goToLogin';
+import { isExcludedFromUserDocSearch } from '../utils/consumerSearchExclusions';
+import { searchAccounts } from '../services/accountSearch';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
 import PrivateCardDatingTypographySheet from '../components/Invitations/privateCard/PrivateCardDatingTypographySheet';
+import PrivateCardTextBackdropTonePicker from '../components/Invitations/privateCard/PrivateCardTextBackdropTonePicker';
+import {
+    DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
+    getPrivateCardTextBackdropFromInvitation
+} from '../components/Invitations/privateCard/privateCardTextBackdrop';
+import {
+    INVITATION_CARD_MESSAGE_MAX,
+    INVITATION_CARD_TITLE_MAX
+} from '../constants/invitationCardLimits';
 import PrivateCardMotionPicker from '../components/Invitations/privateCard/PrivateCardMotionPicker';
 import PrivateInvitationCoverRightRail from '../components/Invitations/privateCard/PrivateInvitationCoverRightRail';
 import { DEFAULT_FRAME_COLOR_ID, getFrameColorById } from '../components/Invitations/privateCard/privateCardFrameColors';
@@ -32,11 +44,27 @@ import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/private
 import { resolveOccasionCategoryId } from '../components/Invitations/privateCard/privateCardOccasionMap';
 import {
     getCardBackgroundOptions,
-    parsePrivateInvitationCardBackgroundFromUrl
+    parsePrivateInvitationCardBackgroundFromUrl,
+    DEFAULT_PRIVATE_OCCASION_LABEL,
+    DEFAULT_PRIVATE_CARD_BACKGROUND_ID
 } from '../components/Invitations/privateCard/privateCardBackgrounds';
 import { getPrivateHeroCoverFromMediaData } from '../components/Invitations/datingCard/datingCardBackgrounds';
 import DatingCoverCameraPanel from '../components/Invitations/datingCard/DatingCoverCameraPanel';
 import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
+import {
+    createPrivateCoverStashId,
+    isCoverStashKindAtLimit,
+    isSamePrivateCoverMedia,
+    PRIVATE_COVER_STASH_MAX_IMAGES,
+    PRIVATE_COVER_STASH_MAX_VIDEOS,
+    revokeAllPrivateCoverStash,
+    revokePrivateCoverMedia,
+    revokePrivateCoverStashEntry
+} from '../utils/privateCoverMediaStash';
+
+function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
+    return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
+}
 
 const CreatePrivateInvitation = () => {
     const { t } = useTranslation();
@@ -47,6 +75,9 @@ const CreatePrivateInvitation = () => {
     const { currentUser: authUser, userProfile } = useAuth();
 
     const quotaInfo = canCreatePrivateInvitation('private');
+
+    const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
+    const editInvitation = location.state?.editInvitation;
 
     // UI State
     const [mediaData, setMediaData] = useState(null);
@@ -62,14 +93,23 @@ const CreatePrivateInvitation = () => {
     const [privateCardThemeColor, setPrivateCardThemeColor] = useState(null);
     const [typographySheetOpen, setTypographySheetOpen] = useState(false);
     const [cardMotionId, setCardMotionId] = useState(DEFAULT_MOTION_ID);
-    const [cardBackgroundId, setCardBackgroundId] = useState(null);
-    const [privateCoverTab, setPrivateCoverTab] = useState('camera');
+    const [cardBackgroundId, setCardBackgroundId] = useState(
+        () => editInvitation?.cardBackgroundId || DEFAULT_PRIVATE_CARD_BACKGROUND_ID
+    );
+    const [privateCoverTab, setPrivateCoverTab] = useState(() => (editInvitation ? 'camera' : 'template'));
     const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
     const [privateCardShowHostAndMessage, setPrivateCardShowHostAndMessage] = useState(true);
+    const [privateCardTextBackdropTone, setPrivateCardTextBackdropTone] = useState(
+        DEFAULT_PRIVATE_TEXT_BACKDROP_TONE
+    );
+    /** Temp upload/video drafts shown as thumbnails until publish. */
+    const [coverMediaStash, setCoverMediaStash] = useState([]);
 
     const privateCoverDraftsRef = useRef({ template: null, upload: null, camera: null });
     const mediaDataRef = useRef(null);
-    const privateCoverTabRef = useRef('camera');
+    const privateCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
+    const coverUploadInputRef = useRef(null);
+    const coverMediaStashRef = useRef([]);
 
     useEffect(() => {
         mediaDataRef.current = mediaData;
@@ -77,6 +117,15 @@ const CreatePrivateInvitation = () => {
     useEffect(() => {
         privateCoverTabRef.current = privateCoverTab;
     }, [privateCoverTab]);
+    useEffect(() => {
+        coverMediaStashRef.current = coverMediaStash;
+    }, [coverMediaStash]);
+
+    useEffect(() => {
+        return () => {
+            revokeAllPrivateCoverStash(coverMediaStashRef.current);
+        };
+    }, []);
 
     const privateHeroCover = useMemo(() => getPrivateHeroCoverFromMediaData(mediaData), [mediaData]);
 
@@ -91,9 +140,6 @@ const CreatePrivateInvitation = () => {
         const fr = getFrameColorById(cardFrameColorId);
         return t(fr.labelKey, { defaultValue: fr.defaultLabel });
     }, [privateCardThemeColor, cardFrameColorId, t]);
-
-    const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
-    const editInvitation = location.state?.editInvitation;
 
     const [formData, setFormData] = useState({
         title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
@@ -112,8 +158,14 @@ const CreatePrivateInvitation = () => {
         lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
         userLat: null,
         userLng: null,
-        occasionType: editInvitation?.occasionType || 'social',
+        occasionType: editInvitation?.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL,
     });
+
+    const editorPhotoBackgroundActive = useMemo(() => {
+        if (privateHeroCover?.src) return true;
+        const cat = resolveOccasionCategoryId(formData.occasionType);
+        return getCardBackgroundOptions(cat).some((o) => o.id === cardBackgroundId);
+    }, [privateHeroCover?.src, formData.occasionType, cardBackgroundId]);
 
     // Populate data when editing
     useEffect(() => {
@@ -137,10 +189,13 @@ const CreatePrivateInvitation = () => {
                 lng: editInvitation.lng || null,
                 userLat: editInvitation.userLat || null,
                 userLng: editInvitation.userLng || null,
-                occasionType: editInvitation.occasionType || 'social'
+                occasionType: editInvitation.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL
             });
 
             setPrivateCardShowHostAndMessage(editInvitation.privateCardShowHostAndMessage !== false);
+
+            const backdrop = getPrivateCardTextBackdropFromInvitation(editInvitation);
+            setPrivateCardTextBackdropTone(backdrop.tone);
 
             const videoUrl = editInvitation.customVideo;
             const imgUrl = editInvitation.customImage || editInvitation.image;
@@ -152,6 +207,8 @@ const CreatePrivateInvitation = () => {
                     file: null,
                     videoThumbnail: editInvitation.videoThumbnail
                 };
+                const videoEntry = { id: createPrivateCoverStashId(), kind: 'camera', media: m };
+                setCoverMediaStash([videoEntry]);
                 setPrivateCoverTab('camera');
                 setMediaData(m);
                 privateCoverDraftsRef.current = { template: null, upload: null, camera: m };
@@ -171,12 +228,14 @@ const CreatePrivateInvitation = () => {
                         url: imgUrl,
                         file: null
                     };
+                    const imageEntry = { id: createPrivateCoverStashId(), kind: 'upload', media: m };
+                    setCoverMediaStash([imageEntry]);
                     setPrivateCoverTab('upload');
                     setMediaData(m);
                     privateCoverDraftsRef.current = { template: null, upload: m, camera: null };
                 }
             } else {
-                setPrivateCoverTab('camera');
+                setPrivateCoverTab('template');
                 privateCoverDraftsRef.current = { template: null, upload: null, camera: null };
             }
 
@@ -190,7 +249,7 @@ const CreatePrivateInvitation = () => {
         }
     }, [editInvitation]);
 
-    /** Sync card background when occasion or loaded draft changes (birthday = 3 assets; others = none). */
+    /** Sync card background when occasion changes; pick first template if none selected. */
     useEffect(() => {
         const cat = resolveOccasionCategoryId(formData.occasionType);
         const opts = getCardBackgroundOptions(cat);
@@ -289,18 +348,12 @@ const CreatePrivateInvitation = () => {
                     return name.includes(searchQ);
                 });
 
-                const q2 = `${rawQ}\uf8ff`;
-                const usersRef = collection(db, 'users');
-                const [displayNameSnap, displayNameCamelSnap] = await Promise.all([
-                    getDocs(query(usersRef, orderBy('display_name'), where('display_name', '>=', rawQ), where('display_name', '<=', q2), limit(20))),
-                    getDocs(query(usersRef, orderBy('displayName'), where('displayName', '>=', rawQ), where('displayName', '<=', q2), limit(20)))
-                ]);
-
                 const merged = new Map();
                 const addCandidate = (id, data) => {
                     if (!id || id === uid) return;
+                    if (isExcludedFromUserDocSearch(data)) return;
                     const role = (data?.role || '').toLowerCase();
-                    if (role === 'business' || role === 'guest' || data?.isBusiness === true || data?.isGuest === true) return;
+                    if (role === 'business' || role === 'guest' || data?.isBusiness === true) return;
                     const display = data?.display_name || data?.displayName || data?.name || '';
                     if (!display) return;
                     const normalized = {
@@ -318,8 +371,17 @@ const CreatePrivateInvitation = () => {
                 };
 
                 localMatches.forEach((f) => addCandidate(f.id, f));
-                displayNameSnap.forEach((d) => addCandidate(d.id, d.data() || {}));
-                displayNameCamelSnap.forEach((d) => addCandidate(d.id, d.data() || {}));
+
+                const { users } = await searchAccounts(rawQ);
+                users.forEach((u) =>
+                    addCandidate(u.id, {
+                        display_name: u.display_name || u.displayName,
+                        displayName: u.displayName || u.display_name,
+                        photoURL: u.photoURL || u.photo_url,
+                        photo_url: u.photo_url || u.photoURL,
+                        gender: u.gender,
+                    })
+                );
 
                 if (!cancelled) {
                     setFriendSearchResults(Array.from(merged.values()));
@@ -361,19 +423,10 @@ const CreatePrivateInvitation = () => {
     };
 
     const revokeBlobPreview = (prev) => {
-        if (prev?.preview && String(prev.preview).startsWith('blob:')) {
-            try {
-                URL.revokeObjectURL(prev.preview);
-            } catch {
-                /* ignore */
-            }
-        }
-        if (prev?.videoThumbnail && String(prev.videoThumbnail).startsWith('blob:')) {
-            try {
-                URL.revokeObjectURL(prev.videoThumbnail);
-            } catch {
-                /* ignore */
-            }
+        if (!prev) return;
+        const stillInStash = coverMediaStashRef.current.some((e) => isSamePrivateCoverMedia(e.media, prev));
+        if (!stillInStash) {
+            revokePrivateCoverMedia(prev);
         }
     };
 
@@ -408,38 +461,141 @@ const CreatePrivateInvitation = () => {
     };
 
     const handlePrivateCoverTab = (tab) => {
-        if (tab === privateCoverTab) {
-            if (tab === 'camera') setCameraOpenNonce((n) => n + 1);
-            return;
-        }
+        if (tab === privateCoverTab) return;
         privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
 
         setPrivateCoverTab(tab);
         const restored = privateCoverDraftsRef.current[tab];
         setMediaData(restored ?? null);
+    };
 
-        if (tab === 'camera') {
-            setCameraOpenNonce((n) => n + 1);
+    const toastCoverStashLimit = (kind) => {
+        if (kind === 'upload') {
+            showToast(
+                t('private_cover_stash_max_images', {
+                    defaultValue: `You can add up to ${PRIVATE_COVER_STASH_MAX_IMAGES} photos. Remove one from the thumbnails to add another.`,
+                    max: PRIVATE_COVER_STASH_MAX_IMAGES
+                }),
+                'error'
+            );
+        } else {
+            showToast(
+                t('private_cover_stash_max_videos', {
+                    defaultValue: `You can add up to ${PRIVATE_COVER_STASH_MAX_VIDEOS} videos. Remove one from the thumbnails to record another.`,
+                    max: PRIVATE_COVER_STASH_MAX_VIDEOS
+                }),
+                'error'
+            );
         }
     };
 
-    const privateCoverTabBtnStyle = (active) => ({
-        flex: 1,
-        padding: '10px 8px',
-        borderRadius: 12,
-        border: `1px solid ${active ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.12)'}`,
-        background: active ? 'rgba(212,175,55,0.14)' : 'rgba(255,255,255,0.04)',
-        color: active ? 'var(--luxury-gold)' : 'var(--text-main)',
-        fontWeight: 700,
-        fontSize: '0.8rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        cursor: 'pointer',
-        minWidth: 0,
-        transition: 'all 0.2s'
-    });
+    /** Stage 1: switch to Upload tab (thumbnails). Stage 2: open file picker. */
+    const handlePrivateCoverUploadTabClick = () => {
+        if (privateCoverTab === 'upload') {
+            if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'upload')) {
+                toastCoverStashLimit('upload');
+                return;
+            }
+            triggerPrivateCoverUpload();
+        } else {
+            handlePrivateCoverTab('upload');
+        }
+    };
+
+    /** Stage 1: switch to Camera tab (thumbnails). Stage 2: open recorder. */
+    const handlePrivateCoverCameraTabClick = () => {
+        if (privateCoverTab === 'camera') {
+            if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'camera')) {
+                toastCoverStashLimit('camera');
+                return;
+            }
+            setCameraOpenNonce((n) => n + 1);
+        } else {
+            handlePrivateCoverTab('camera');
+        }
+    };
+
+    const stashCoverMedia = (kind, media) => {
+        if (isCoverStashKindAtLimit(coverMediaStashRef.current, kind)) {
+            toastCoverStashLimit(kind);
+            return null;
+        }
+        const entry = { id: createPrivateCoverStashId(), kind, media };
+        setCoverMediaStash((prev) => [...prev, entry]);
+        return entry;
+    };
+
+    const handleCameraCoverMedia = (media) => {
+        privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
+        if (!stashCoverMedia('camera', media)) {
+            revokePrivateCoverMedia(media);
+            return;
+        }
+        setPrivateCoverTab('camera');
+        setMediaData(media);
+        privateCoverDraftsRef.current.camera = media;
+    };
+
+    const handlePrivateCoverUploadPick = (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file?.type?.startsWith('image/')) {
+            if (file) {
+                showToast(t('image_only_upload', { defaultValue: 'Please choose an image file.' }), 'error');
+            }
+            return;
+        }
+        privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
+        const preview = URL.createObjectURL(file);
+        const media = {
+            source: 'custom_image',
+            type: 'image',
+            file,
+            preview
+        };
+        if (!stashCoverMedia('upload', media)) {
+            revokePrivateCoverMedia(media);
+            return;
+        }
+        setPrivateCoverTab('upload');
+        setMediaData(media);
+        privateCoverDraftsRef.current.upload = media;
+    };
+
+    const handleSelectCoverStashItem = (id) => {
+        const entry = coverMediaStashRef.current.find((e) => e.id === id);
+        if (!entry) return;
+        privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
+        setPrivateCoverTab(entry.kind);
+        setMediaData(entry.media);
+        privateCoverDraftsRef.current[entry.kind] = entry.media;
+    };
+
+    const handleRemoveCoverStashItem = (id) => {
+        setCoverMediaStash((prev) => {
+            const entry = prev.find((e) => e.id === id);
+            if (!entry) return prev;
+            revokePrivateCoverStashEntry(entry);
+            const next = prev.filter((e) => e.id !== id);
+            if (isSamePrivateCoverMedia(entry.media, mediaDataRef.current)) {
+                const sameKind = next.filter((e) => e.kind === entry.kind);
+                const replacement = sameKind.length ? sameKind[sameKind.length - 1].media : null;
+                setMediaData(replacement);
+                privateCoverDraftsRef.current[entry.kind] = replacement;
+            }
+            return next;
+        });
+    };
+
+    const clearCoverMediaStashAfterPublish = () => {
+        revokeAllPrivateCoverStash(coverMediaStashRef.current);
+        setCoverMediaStash([]);
+        revokePrivateCoverMedia(mediaDataRef.current);
+    };
+
+    const triggerPrivateCoverUpload = () => {
+        coverUploadInputRef.current?.click();
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -459,16 +615,44 @@ const CreatePrivateInvitation = () => {
             return;
         }
 
+        const quota = canCreatePrivateInvitation('private');
+        if (!editInvitation && !quota.profileLoading && !quota.canCreate) {
+            showToast(
+                t(
+                    'dine_credits_private_insufficient',
+                    `Publishing costs ${PRIVATE_INVITATION_PUBLISH_CREDITS} Dine Credits. Open Settings → Dine Credits to top up.`
+                ),
+                'error'
+            );
+            return;
+        }
+
         setIsSubmitting(true);
         try {
+            const authorUid = resolvePrivateInvitationAuthorUid(authUser, currentUser);
+            if (!authorUid) {
+                showToast(t('please_sign_in', { defaultValue: 'Please sign in to continue.' }), 'error');
+                return;
+            }
+
             let mediaFields = {};
             if (mediaData) {
+                const isVideoUpload = mediaData.type === 'video' || mediaData.source === 'custom_video';
+                if (isVideoUpload) {
+                    showToast(
+                        t('private_cover_video_uploading', {
+                            defaultValue: 'Uploading your video cover… this may take a moment.'
+                        }),
+                        'info',
+                        null,
+                        4000
+                    );
+                }
                 try {
-                    const userId = currentUser?.id || authUser?.uid;
-                    mediaFields = await processInvitationMedia(mediaData, userId);
+                    mediaFields = await processInvitationMedia(mediaData, authorUid);
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
-                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
+                    notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
                     return;
                 }
             }
@@ -488,6 +672,7 @@ const CreatePrivateInvitation = () => {
                 cardBackgroundId: cardBackgroundId || null,
                 privateCardThemeColor,
                 privateCardShowHostAndMessage,
+                privateCardTextBackdropTone,
                 rsvps: initialRsvps,
                 type: 'Private',
                 status: 'draft',
@@ -501,14 +686,18 @@ const CreatePrivateInvitation = () => {
                     ...draftData,
                     updatedAt: serverTimestamp()
                 });
-                navigate(`/invitation/private/preview/${existingDraftId}`);
+                clearCoverMediaStashAfterPublish();
+                navigate(`/invitation/private/preview/${existingDraftId}`, { replace: true });
             } else {
                 // CREATE NEW
                 console.log('🔏 Creating private invitation draft...');
                 const draftId = await addPrivateInvitation(draftData);
                 console.log('📋 Draft result:', draftId);
                 if (draftId) {
-                    navigate(`/invitation/private/preview/${draftId}`);
+                    clearCoverMediaStashAfterPublish();
+                    navigate(`/invitation/private/preview/${draftId}`, { replace: true });
+                } else {
+                    showToast(t('failed_create_invitation'), 'error');
                 }
             }
         } catch (error) {
@@ -518,39 +707,6 @@ const CreatePrivateInvitation = () => {
             setIsSubmitting(false);
         }
     };
-
-    if (!quotaInfo.canCreate && !editInvitation) {
-        return (
-            <div className="private-create-wrapper private-theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
-                <div className="ui-card ui-card--lg" style={{ maxWidth: '400px', width: '100%', textAlign: 'center', padding: '30px' }}>
-                    <div style={{ fontSize: '3.5rem', marginBottom: '20px' }}>🔐</div>
-                    <h2 className="ui-prompt__title" style={{ fontSize: '1.6rem', color: 'var(--luxury-gold)', marginBottom: '12px' }}>
-                        {t('insufficient_credits')}
-                    </h2>
-                    <p className="ui-prompt__desc" style={{ marginBottom: '25px' }}>
-                        {t(
-                            'dine_credits_private_insufficient',
-                            `Publishing a private invitation costs ${PRIVATE_INVITATION_PUBLISH_CREDITS} Dine Credits. Add credits in your wallet (Settings → Dine Credits).`
-                        )}
-                    </p>
-                    <button
-                        onClick={() => navigate('/settings/credits')}
-                        className="ui-btn ui-btn--primary"
-                        style={{ width: '100%', marginBottom: '12px' }}
-                    >
-                        {t('open_dine_credits_wallet', 'Dine Credits wallet')}
-                    </button>
-                    <button
-                        onClick={() => navigate(-1)}
-                        className="ui-btn ui-btn--ghost"
-                        style={{ width: '100%' }}
-                    >
-                        {t('go_back')}
-                    </button>
-                </div>
-            </div>
-        );
-    }
 
     const quota = quotaInfo.quota;
     const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
@@ -576,35 +732,36 @@ const CreatePrivateInvitation = () => {
                     {t('private_invitation_desc', 'This invitation will not be visible to the public. Only people you invite can see and join.')}
                 </p>
 
-                {/* Private invitation credits (purchased packs only — no subscription tiers). */}
-                <div style={{
-                    margin: '12px 0 0',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: isUnlimited
-                        ? 'rgba(72,187,120,0.1)'
-                        : lowCredits
-                            ? 'rgba(239,68,68,0.1)'
-                            : 'rgba(139,92,246,0.1)',
-                    border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: '0.875rem',
-                    color: isUnlimited ? '#4ade80' : lowCredits ? '#f87171' : '#a78bfa',
-                    fontWeight: 600
-                }}>
-                    <span>{isUnlimited ? '∞' : profilePending ? '…' : `${dineBalance}`}</span>
-                    <span style={{ opacity: 0.85, fontWeight: 400 }}>
-                        {isUnlimited
-                            ? t('unlimited_private_invitations', 'Unlimited private invitations')
-                            : t(
-                                  'dine_credits_private_banner',
-                                  '{{balance}} Dine Credits — publishing uses {{cost}} credits (free pool is used first).',
-                                  { balance: dineBalance, cost: publishCost }
-                              )}
-                    </span>
-                </div>
+                {!quotaInfo.profileLoading && (
+                    <div style={{
+                        margin: '12px 0 0',
+                        padding: '10px 16px',
+                        borderRadius: '12px',
+                        background: isUnlimited
+                            ? 'rgba(72,187,120,0.1)'
+                            : lowCredits
+                                ? 'rgba(239,68,68,0.1)'
+                                : 'rgba(139,92,246,0.1)',
+                        border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: '0.875rem',
+                        color: isUnlimited ? '#4ade80' : lowCredits ? '#f87171' : '#a78bfa',
+                        fontWeight: 600
+                    }}>
+                        <span>{isUnlimited ? '∞' : `${dineBalance}`}</span>
+                        <span style={{ opacity: 0.85, fontWeight: 400 }}>
+                            {isUnlimited
+                                ? t('unlimited_private_invitations', 'Unlimited private invitations')
+                                : t(
+                                      'dine_credits_private_banner',
+                                      '{{balance}} Dine Credits — publishing uses {{cost}} credits (free pool is used first).',
+                                      { balance: dineBalance, cost: publishCost }
+                                  )}
+                        </span>
+                    </div>
+                )}
             </div>
 
             <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
@@ -690,7 +847,19 @@ const CreatePrivateInvitation = () => {
                     </div>
 
                     <div className="form-group mb-4">
-                        <label className="elegant-label">{t('invitation_title')}</label>
+                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            {t('invitation_title')}
+                            <span
+                                style={{
+                                    fontSize: '0.75rem',
+                                    color: (formData.title?.length || 0) >= INVITATION_CARD_TITLE_MAX
+                                        ? '#f87171'
+                                        : 'var(--text-muted)'
+                                }}
+                            >
+                                {(formData.title?.length || 0)}/{INVITATION_CARD_TITLE_MAX}
+                            </span>
+                        </label>
                         <input
                             type="text"
                             name="title"
@@ -698,6 +867,7 @@ const CreatePrivateInvitation = () => {
                             onChange={handleChange}
                             placeholder={t('enter_title')}
                             className="elegant-input"
+                            maxLength={INVITATION_CARD_TITLE_MAX}
                             required
                         />
                     </div>
@@ -705,8 +875,16 @@ const CreatePrivateInvitation = () => {
                     <div className="form-group mb-4">
                         <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                             {t('message_to_friends')}
-                            <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) >= 300 ? '#f87171' : 'var(--text-muted)' }}>
-                                {(formData.description?.length || 0)}/300
+                            <span
+                                style={{
+                                    fontSize: '0.75rem',
+                                    color:
+                                        (formData.description?.length || 0) >= INVITATION_CARD_MESSAGE_MAX
+                                            ? '#f87171'
+                                            : 'var(--text-muted)'
+                                }}
+                            >
+                                {(formData.description?.length || 0)}/{INVITATION_CARD_MESSAGE_MAX}
                             </span>
                         </label>
                         <textarea
@@ -716,7 +894,7 @@ const CreatePrivateInvitation = () => {
                             placeholder={t('write_something_personal')}
                             className="elegant-textarea"
                             rows="3"
-                            maxLength={300}
+                            maxLength={INVITATION_CARD_MESSAGE_MAX}
                         ></textarea>
                     </div>
 
@@ -729,115 +907,94 @@ const CreatePrivateInvitation = () => {
                         <p className="private-section-card__hint">
                             {t('private_section_card_art_beside_hint', {
                                 defaultValue:
-                                    'Use Template, Upload, or Camera above. Only that tab’s thumbnails appear beside the card; scroll the strip if there are more.'
+                                    'Template shows artwork beside the card. Tap Upload or Camera to open that tab, then tap again to add photos or record video.'
                             })}
                         </p>
+                        <input
+                            ref={coverUploadInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="private-cover-upload-input"
+                            onChange={handlePrivateCoverUploadPick}
+                            tabIndex={-1}
+                            aria-hidden
+                        />
                         <div
                             role="tablist"
                             aria-label={t('dating_cover_tabs_label', { defaultValue: 'Cover source' })}
-                            style={{ display: 'flex', gap: 8, marginBottom: 14 }}
+                            className="private-cover-tabs"
                         >
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={privateCoverTab === 'camera'}
-                                onClick={() => handlePrivateCoverTab('camera')}
-                                style={privateCoverTabBtnStyle(privateCoverTab === 'camera')}
+                                onClick={handlePrivateCoverCameraTabClick}
+                                className={`private-cover-tab${privateCoverTab === 'camera' ? ' private-cover-tab--active' : ''}`}
                             >
-                                <FaCamera /> {t('dating_cover_tab_camera', { defaultValue: 'Camera' })}
+                                <FaCamera />{' '}
+                                {privateCoverTab === 'camera'
+                                    ? t('private_cover_tab_camera_record', { defaultValue: 'Record video' })
+                                    : t('private_cover_tab_camera_open', { defaultValue: 'Video' })}
                             </button>
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={privateCoverTab === 'upload'}
-                                onClick={() => handlePrivateCoverTab('upload')}
-                                style={privateCoverTabBtnStyle(privateCoverTab === 'upload')}
+                                onClick={handlePrivateCoverUploadTabClick}
+                                className={`private-cover-tab${privateCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
                             >
-                                <FaUpload /> {t('dating_cover_tab_upload', { defaultValue: 'Upload' })}
+                                <FaUpload />{' '}
+                                {privateCoverTab === 'upload'
+                                    ? t('private_cover_tab_upload_add', { defaultValue: 'Upload photo' })
+                                    : t('private_cover_tab_upload_open', { defaultValue: 'From device' })}
                             </button>
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={privateCoverTab === 'template'}
                                 onClick={() => handlePrivateCoverTab('template')}
-                                style={privateCoverTabBtnStyle(privateCoverTab === 'template')}
+                                className={`private-cover-tab${privateCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
                             >
                                 <FaImage /> {t('dating_cover_tab_template', { defaultValue: 'Template' })}
                             </button>
                         </div>
 
                         {privateCoverTab === 'camera' && (
-                            <DatingCoverCameraPanel onMediaSelect={setCoverMedia} openNonce={cameraOpenNonce} />
+                            <DatingCoverCameraPanel onMediaSelect={handleCameraCoverMedia} openNonce={cameraOpenNonce} />
                         )}
 
-                        <div
-                            className="dating-card-show-content-toggle"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 12,
-                                padding: '10px 12px',
-                                marginBottom: 12,
-                                borderRadius: 12,
-                                border: '1px solid rgba(212,175,55,0.35)',
-                                background: 'rgba(212,175,55,0.08)'
-                            }}
-                            title={t('private_card_show_content_title', {
-                                defaultValue:
-                                    'Off: title, date & place only on the card. On: include your message and profile photo.'
-                            })}
-                        >
-                            <span
-                                style={{
-                                    fontWeight: 800,
-                                    fontSize: '0.88rem',
-                                    color: 'var(--luxury-gold)',
-                                    lineHeight: 1.25
-                                }}
-                            >
-                                {t('private_card_show_content_label', {
-                                    defaultValue: 'Show message & profile on card'
+                        <div className="private-card-show-content-block">
+                            <div
+                                className="dating-card-show-content-toggle"
+                                title={t('private_card_show_content_title', {
+                                    defaultValue:
+                                        'Off: date and place only. On: show text with a dark or light panel on photo backgrounds.'
                                 })}
-                            </span>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={privateCardShowHostAndMessage}
-                                aria-label={t('private_card_show_content_label', {
-                                    defaultValue: 'Show message & profile on card'
-                                })}
-                                onClick={() => setPrivateCardShowHostAndMessage((v) => !v)}
-                                style={{
-                                    flexShrink: 0,
-                                    width: 52,
-                                    height: 30,
-                                    borderRadius: 999,
-                                    border: '2px solid rgba(212,175,55,0.5)',
-                                    background: privateCardShowHostAndMessage
-                                        ? 'linear-gradient(135deg,#d4af37,#b8860b)'
-                                        : 'rgba(0,0,0,0.2)',
-                                    position: 'relative',
-                                    cursor: 'pointer',
-                                    transition: 'background 0.2s',
-                                    padding: 0
-                                }}
                             >
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        top: 3,
-                                        insetInlineStart: privateCardShowHostAndMessage ? 24 : 3,
-                                        width: 22,
-                                        height: 22,
-                                        borderRadius: '50%',
-                                        background: '#fff',
-                                        boxShadow: '0 1px 6px rgba(0,0,0,0.25)',
-                                        transition: 'inset-inline-start 0.2s',
-                                        display: 'block'
-                                    }}
+                                <span className="dating-card-show-content-toggle__label">
+                                    {t('private_card_show_content_label', {
+                                        defaultValue: 'Show occasion, title, message & profile on card'
+                                    })}
+                                </span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    className="dating-card-show-content-toggle__switch"
+                                    aria-checked={privateCardShowHostAndMessage}
+                                    aria-label={t('private_card_show_content_label', {
+                                        defaultValue: 'Show occasion, title, message & profile on card'
+                                    })}
+                                    onClick={() => setPrivateCardShowHostAndMessage((v) => !v)}
+                                >
+                                    <span className="dating-card-show-content-toggle__thumb" aria-hidden />
+                                </button>
+                            </div>
+                            {privateCardShowHostAndMessage && editorPhotoBackgroundActive && (
+                                <PrivateCardTextBackdropTonePicker
+                                    tone={privateCardTextBackdropTone}
+                                    onToneChange={setPrivateCardTextBackdropTone}
                                 />
-                            </button>
+                            )}
                         </div>
 
                         <div className="form-group mb-0">
@@ -873,6 +1030,7 @@ const CreatePrivateInvitation = () => {
                                         }
                                         inviterAvatarUrl={getSafeAvatar(userProfile || currentUser || {})}
                                         showHostAndMessage={privateCardShowHostAndMessage}
+                                        textBackdropTone={privateCardTextBackdropTone}
                                     />
                                 </div>
                                 <PrivateInvitationCoverRightRail
@@ -881,7 +1039,9 @@ const CreatePrivateInvitation = () => {
                                     onCardBackgroundIdChange={setCardBackgroundId}
                                     mode={privateCoverTab}
                                     mediaData={mediaData}
-                                    onMediaSelect={setCoverMedia}
+                                    coverStash={coverMediaStash}
+                                    onSelectStashItem={handleSelectCoverStashItem}
+                                    onRemoveStashItem={handleRemoveCoverStashItem}
                                 />
                             </div>
                             <div style={{ marginTop: 12 }}>
@@ -954,7 +1114,7 @@ const CreatePrivateInvitation = () => {
                     </div>
 
                     {/* Friend Selection — Grid Layout */}
-                    <div className="form-group mb-4" style={{ background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <div className="form-group mb-4 private-friends-panel">
                         <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                             <span><FaUserFriends /> {t('invite_friends')}</span>
                             <span style={{
@@ -1016,32 +1176,17 @@ const CreatePrivateInvitation = () => {
                                         <div
                                             key={friend.id}
                                             onClick={() => !isDisabled && toggleFriendSelection(friend.id)}
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                padding: '10px 6px',
-                                                borderRadius: 12,
-                                                background: isSelected ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)',
-                                                border: `1.5px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.07)'}`,
-                                                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                                opacity: isDisabled ? 0.4 : 1,
-                                                transition: 'all 0.18s',
-                                                position: 'relative'
-                                            }}
+                                            className={`private-friend-chip${isSelected ? ' private-friend-chip--selected' : ''}${isDisabled ? ' private-friend-chip--disabled' : ''}`}
                                         >
-                                            {isSelected && (
-                                                <div style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <FaCheckCircle style={{ color: 'white', fontSize: '0.6rem' }} />
-                                                </div>
-                                            )}
+                                            {isSelected ? (
+                                                <FaCheckCircle className="private-friend-chip__check-icon" aria-hidden />
+                                            ) : null}
                                             <img
                                                 src={getSafeAvatar(friend)}
                                                 alt={friend.display_name}
                                                 style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${isSelected ? 'var(--primary)' : getGenderBorderColor(friend)}` }}
                                             />
-                                            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: isSelected ? 'var(--primary)' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <span className="private-friend-chip__name">
                                                 {friend.display_name?.split(' ')[0]}
                                             </span>
                                         </div>

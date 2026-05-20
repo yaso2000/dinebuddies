@@ -270,6 +270,12 @@
   border: 1px solid color-mix(in srgb, var(--color-rating-filled) 30%, transparent);
 }
 
+.profile-invitation-item__badge--draft {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
 .profile-invitation-item__badge--public {
   background: color-mix(in srgb, var(--primary) 20%, transparent);
   color: var(--primary);

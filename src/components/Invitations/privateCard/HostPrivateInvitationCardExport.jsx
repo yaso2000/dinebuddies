@@ -9,6 +9,7 @@ import PrivateInvitationCardPreview from './PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from './privateCardFrameColors';
 import { DEFAULT_FONT_ID } from './privateCardFonts';
 import { DEFAULT_MOTION_ID } from './privateCardMotions';
+import { getInvitationCardTextBackdropFromInvitation } from './privateCardTextBackdrop';
 import {
     getDatingInvitationHeroCoverFromInvitation,
     getPrivateInvitationHeroCoverFromInvitation
@@ -46,6 +47,11 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
         if (invitation.type === 'Dating') return getDatingInvitationHeroCoverFromInvitation(invitation);
         return getPrivateInvitationHeroCoverFromInvitation(invitation);
     }, [invitation]);
+
+    const textBackdrop = useMemo(
+        () => getInvitationCardTextBackdropFromInvitation(invitation),
+        [invitation]
+    );
 
     const capturePngBlob = async () => {
         const el = captureRef.current;
@@ -188,6 +194,11 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
                                 : invitation.type === 'Private'
                                   ? invitation.privateCardShowHostAndMessage !== false
                                   : true
+                        }
+                        textBackdropTone={
+                            invitation.type === 'Private' || invitation.type === 'Dating'
+                                ? textBackdrop.tone
+                                : undefined
                         }
                     />
                 </div>

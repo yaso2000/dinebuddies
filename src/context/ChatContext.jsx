@@ -88,12 +88,17 @@ export const ChatProvider = ({ children }) => {
                             const userDoc = await getDoc(doc(db, 'users', otherUserId));
                             if (userDoc.exists()) {
                                 const userData = userDoc.data();
+                                const isSupport =
+                                    userData.isSystemAccount === true || data.isSupportThread === true;
                                 otherUser = {
                                     uid: otherUserId,
-                                    displayName: userData.display_name || userData.email || 'User',
+                                    displayName: isSupport
+                                        ? data.supportDisplayName || 'DineBuddies Support'
+                                        : userData.display_name || userData.displayName || userData.email || 'User',
                                     photoURL: getSafeAvatar(userData),
                                     isOnline: userData.isOnline || false,
-                                    lastSeen: userData.lastSeen || null
+                                    lastSeen: userData.lastSeen || null,
+                                    isSystemAccount: isSupport,
                                 };
                                 userProfileCache.current.set(otherUserId, otherUser);
                             }

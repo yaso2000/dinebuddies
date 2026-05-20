@@ -1,6 +1,8 @@
 import { auth, db, storage } from '../firebase/config';
 import { collection, doc, getDoc, addDoc, updateDoc, deleteDoc, increment, serverTimestamp, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadManagedImage } from './managedImageUpload';
+import { ImageUploadZone } from './imageUploadZones';
 
 /**
  * Publishes or updates a special offer.
@@ -43,9 +45,13 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
             if (!currentUid || currentUid !== restaurantId) {
                 throw new Error("Unauthorized media upload path for this offer.");
             }
-            const storageRef = ref(storage, `offers/${currentUid}_${Date.now()}`);
-            await uploadBytes(storageRef, file);
-            mediaUrl = await getDownloadURL(storageRef);
+            if (file.type.startsWith('image/')) {
+                mediaUrl = await uploadManagedImage(file, currentUid, ImageUploadZone.OFFER);
+            } else {
+                const storageRef = ref(storage, `offers/${currentUid}_${Date.now()}`);
+                await uploadBytes(storageRef, file);
+                mediaUrl = await getDownloadURL(storageRef);
+            }
             console.log("✅ Media uploaded:", mediaUrl);
         } else if (offerData.mediaUrl) {
             mediaUrl = offerData.mediaUrl;

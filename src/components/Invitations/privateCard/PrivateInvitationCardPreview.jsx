@@ -19,6 +19,11 @@ import {
     adjustFrameTextForDarkTemplate,
     DARK_TEMPLATE_TEXT_SHADOW
 } from './privateCardFrameTextContrast';
+import {
+    DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
+    privateTextBackdropToneToRgba
+} from './privateCardTextBackdrop';
+import { INVITATION_CARD_MESSAGE_MAX } from '../../../constants/invitationCardLimits';
 import './PrivateInvitationCardPreview.css';
 
 function formatPreviewDate(dateStr, locale) {
@@ -84,8 +89,10 @@ export default function PrivateInvitationCardPreview({
     /** @type {'image' | 'video' | null} */
     heroCoverMediaType = null,
     heroCoverPoster = null,
-    /** When false, hide personal message and host row (avatar + name); title, occasion, meta stay. */
-    showHostAndMessage = true
+    /** When false, hide occasion headline, custom title, message, and host; only date/place meta stay. */
+    showHostAndMessage = true,
+    /** `dark` | `light` | `none` — panel behind copy when `showHostAndMessage` on photo backgrounds. */
+    textBackdropTone = DEFAULT_PRIVATE_TEXT_BACKDROP_TONE
 }) {
     const { t } = useTranslation();
     const frame = useMemo(() => getFrameColorById(frameColorId), [frameColorId]);
@@ -121,6 +128,12 @@ export default function PrivateInvitationCardPreview({
         return resolveCanonicalBackgroundId(categoryId, cardBackgroundId);
     }, [cardTemplateSet, categoryId, cardBackgroundId]);
     const hasHeroCover = Boolean(heroCoverSrc && heroCoverMediaType);
+    const hasPhotoBackground = templateArtActive || hasHeroCover;
+
+    const textBackdropRgba = useMemo(() => {
+        if (!showHostAndMessage || !hasPhotoBackground) return null;
+        return privateTextBackdropToneToRgba(textBackdropTone);
+    }, [showHostAndMessage, hasPhotoBackground, textBackdropTone]);
     const darkTemplateArt =
         !hasHeroCover &&
         templateArtActive &&
@@ -226,10 +239,11 @@ export default function PrivateInvitationCardPreview({
             : '';
 
     const minimalBodyClass = showHostAndMessage ? '' : ' private-invitation-card-preview--host-message-hidden';
+    const textBackdropClass = textBackdropRgba ? ' private-invitation-card-preview--text-backdrop' : '';
 
     return (
         <div
-            className={`private-invitation-card-preview ${className}${templateArtActive ? ' private-invitation-card-preview--photo-bg' : ''}${darkTemplateArt ? ' private-invitation-card-preview--dark-template-bg' : ''}${motionClass}${minimalBodyClass}`.trim()}
+            className={`private-invitation-card-preview ${className}${templateArtActive ? ' private-invitation-card-preview--photo-bg' : ''}${darkTemplateArt ? ' private-invitation-card-preview--dark-template-bg' : ''}${textBackdropClass}${motionClass}${minimalBodyClass}`.trim()}
         >
             <div
                 className={`private-invitation-card-preview__inner${templateArtActive ? ' private-invitation-card-preview__inner--photo-bg' : ''}`}
@@ -270,32 +284,41 @@ export default function PrivateInvitationCardPreview({
                 )}
 
                 <div
+                    className="private-invitation-card-preview__text-stack"
+                    style={
+                        textBackdropRgba
+                            ? { '--private-text-backdrop-bg': textBackdropRgba }
+                            : undefined
+                    }
+                >
+                <div
                     className="private-invitation-card-preview__main"
                     style={{ fontFamily: font.cssFamily }}
                 >
-                    <p className="private-invitation-card-preview__occasion" style={textStyles.occasion}>
-                        {occasionLine}
-                    </p>
-
-                    {!templateArtActive && (
-                        <div className="private-invitation-card-preview__icon-wrap">
-                            <PrivateCardCategoryIcon categoryId={categoryId} />
-                        </div>
-                    )}
-
-                    {hasCardTitle ? (
-                        <h3 className="private-invitation-card-preview__title" style={textStyles.title}>
-                            {titleTrimmed}
-                        </h3>
-                    ) : null}
-
                     {showHostAndMessage ? (
                         <>
+                            <p className="private-invitation-card-preview__occasion" style={textStyles.occasion}>
+                                {occasionLine}
+                            </p>
+
+                            {!templateArtActive && (
+                                <div className="private-invitation-card-preview__icon-wrap">
+                                    <PrivateCardCategoryIcon categoryId={categoryId} />
+                                </div>
+                            )}
+
+                            {hasCardTitle ? (
+                                <h3 className="private-invitation-card-preview__title" style={textStyles.title}>
+                                    {titleTrimmed}
+                                </h3>
+                            ) : null}
                             {descText ? (
                                 <p className="private-invitation-card-preview__message" style={textStyles.message}>
-                                    {descText.length > 120 ? `${descText.slice(0, 117)}…` : descText}
+                                    {descText.length > INVITATION_CARD_MESSAGE_MAX
+                                        ? `${descText.slice(0, INVITATION_CARD_MESSAGE_MAX - 1)}…`
+                                        : descText}
                                 </p>
-                            ) : (
+                            ) : !textBackdropRgba ? (
                                 <p
                                     className="private-invitation-card-preview__message private-invitation-card-preview__message--placeholder"
                                     aria-hidden="true"
@@ -303,7 +326,7 @@ export default function PrivateInvitationCardPreview({
                                 >
                                     &nbsp;
                                 </p>
-                            )}
+                            ) : null}
 
                             <div className="private-invitation-card-preview__host">
                                 {inviterAvatarUrl ? (
@@ -336,6 +359,7 @@ export default function PrivateInvitationCardPreview({
                             {locText}
                         </span>
                     )}
+                </div>
                 </div>
             </div>
         </div>

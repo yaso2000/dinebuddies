@@ -6,6 +6,10 @@
 /** Template ids whose artwork is predominantly dark — frame text must be lifted for contrast */
 export const DARK_TEMPLATE_BACKGROUND_IDS = new Set(['birthday-dark', 'birthday-dark-1', 'birthday-dark-neon']);
 
+/** New private-invite create: default occasion + first birthday template art */
+export const DEFAULT_PRIVATE_OCCASION_LABEL = 'Birthday';
+export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'birthday-warm';
+
 export const CARD_BACKGROUNDS_BY_CATEGORY = {
     birthday: [
         { id: 'birthday-warm' },

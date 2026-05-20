@@ -2,6 +2,8 @@ import { db, auth, storage } from '../firebase/config';
 import { collection, query, where, getDocs, addDoc, setDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadManagedImage } from './managedImageUpload';
+import { ImageUploadZone } from './imageUploadZones';
 import { consumeOfferCredit } from './adminSecurityService';
 
 /**
@@ -92,9 +94,13 @@ export const premiumOfferService = {
         // Upload image
         let finalMediaUrl = offerData.imageUrl || '';
         if (file) {
-            const storageRef = ref(storage, `premium_offers/${currentUser.uid}_${Date.now()}`);
-            await uploadBytes(storageRef, file);
-            finalMediaUrl = await getDownloadURL(storageRef);
+            if (file.type?.startsWith('image/')) {
+                finalMediaUrl = await uploadManagedImage(file, currentUser.uid, ImageUploadZone.PREMIUM_OFFER);
+            } else {
+                const storageRef = ref(storage, `premium_offers/${currentUser.uid}_${Date.now()}`);
+                await uploadBytes(storageRef, file);
+                finalMediaUrl = await getDownloadURL(storageRef);
+            }
         }
 
         // 2. Strip restricted fields and non-serializable objects (like 'file')
@@ -144,9 +150,13 @@ export const premiumOfferService = {
         let finalMediaUrl = updateData.imageUrl || '';
         if (file) {
             const currentUser = auth.currentUser;
-            const storageRef = ref(storage, `premium_offers/${currentUser.uid}_${Date.now()}`);
-            await uploadBytes(storageRef, file);
-            finalMediaUrl = await getDownloadURL(storageRef);
+            if (file.type?.startsWith('image/')) {
+                finalMediaUrl = await uploadManagedImage(file, currentUser.uid, ImageUploadZone.PREMIUM_OFFER);
+            } else {
+                const storageRef = ref(storage, `premium_offers/${currentUser.uid}_${Date.now()}`);
+                await uploadBytes(storageRef, file);
+                finalMediaUrl = await getDownloadURL(storageRef);
+            }
             updateData.imageUrl = finalMediaUrl;
         }
 

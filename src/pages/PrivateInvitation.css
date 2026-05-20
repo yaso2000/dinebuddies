@@ -298,6 +298,84 @@
     overflow-x: hidden;
 }
 
+/* Details: invitation card hero (replaces blue lock banner) */
+.private-details-card-hero {
+    position: relative;
+    padding: 4px 16px 0;
+    margin: 0 auto 8px;
+    max-width: var(--max-width, 480px);
+}
+
+.private-details-card-hero__glow {
+    position: absolute;
+    left: 50%;
+    top: 12%;
+    width: min(100%, 360px);
+    height: 55%;
+    transform: translateX(-50%);
+    background: radial-gradient(
+        ellipse 90% 70% at 50% 40%,
+        rgba(139, 92, 246, 0.42),
+        transparent 72%
+    );
+    pointer-events: none;
+    filter: blur(8px);
+}
+
+.theme-dating .private-details-card-hero__glow {
+    background: radial-gradient(
+        ellipse 90% 70% at 50% 40%,
+        rgba(236, 72, 153, 0.45),
+        transparent 72%
+    );
+}
+
+.private-details-card-hero__card {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    padding: 0 0 28px;
+}
+
+.private-details-card-hero__card::after {
+    content: '';
+    position: absolute;
+    left: -8%;
+    right: -8%;
+    bottom: 0;
+    height: 100px;
+    background: linear-gradient(to bottom, transparent 0%, var(--bg-body) 88%);
+    pointer-events: none;
+}
+
+.private-invitation-card-preview--details-hero {
+    max-width: min(100%, 360px);
+    width: 100%;
+    margin: 0 auto;
+}
+
+.private-details-content {
+    position: relative;
+    z-index: 2;
+    margin-top: -8px;
+}
+
+.private-details-venue-chip {
+    text-align: center;
+    color: var(--luxury-gold);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 1.25rem;
+    padding: 6px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    display: table;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .lottie-bg-container {
     mix-blend-mode: screen;
 }
@@ -821,4 +899,467 @@
     width: 100%;
     margin-top: 12px;
     justify-content: center;
+}
+
+/* --- Friend picker grid + cover source tabs (create private) --- */
+.private-friends-panel {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 15px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+}
+
+.private-friend-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+    position: relative;
+}
+
+.private-friend-chip--selected {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: var(--primary);
+}
+
+.private-friend-chip--disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+.private-friend-chip__check-icon {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    padding: 2px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.6rem;
+    box-sizing: border-box;
+}
+
+.private-friend-chip__name {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.private-friend-chip--selected .private-friend-chip__name {
+    color: var(--primary);
+}
+
+.private-theme--dating .private-friend-chip--selected {
+    background: rgba(236, 72, 153, 0.15);
+    border-color: #ec4899;
+}
+
+.private-theme--dating .private-friend-chip--selected .private-friend-chip__name {
+    color: #ec4899;
+}
+
+.private-theme--dating .private-friend-chip__check {
+    background: #ec4899;
+}
+
+.private-cover-upload-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.private-cover-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.private-cover-tab {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    min-width: 0;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.private-cover-tab--active {
+    border-color: var(--luxury-gold);
+    background: rgba(212, 175, 55, 0.14);
+    color: var(--luxury-gold);
+}
+
+/* Card content visibility toggle (title + message + profile) */
+.dating-card-show-content-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--luxury-gold) 38%, var(--border-color));
+    background: color-mix(in srgb, var(--luxury-gold) 10%, var(--bg-card));
+}
+
+.dating-card-show-content-toggle__label {
+    font-weight: 800;
+    font-size: 0.88rem;
+    line-height: 1.35;
+    color: var(--luxury-gold);
+}
+
+.dating-card-show-content-toggle__switch {
+    flex-shrink: 0;
+    width: 52px;
+    height: 30px;
+    border-radius: 999px;
+    border: 2px solid color-mix(in srgb, var(--luxury-gold) 52%, var(--border-color));
+    background: rgba(15, 23, 42, 0.35);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    padding: 0;
+}
+
+.dating-card-show-content-toggle__switch[aria-checked='true'] {
+    background: linear-gradient(135deg, var(--primary), var(--luxury-gold));
+    border-color: color-mix(in srgb, var(--luxury-gold) 65%, var(--primary));
+}
+
+.dating-card-show-content-toggle__thumb {
+    position: absolute;
+    top: 3px;
+    inset-inline-start: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+    transition: inset-inline-start 0.2s, transform 0.2s;
+}
+
+.dating-card-show-content-toggle__switch[aria-checked='true'] .dating-card-show-content-toggle__thumb {
+    inset-inline-start: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Light theme — selection chips, thumbs, inputs (private create)
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme='light'] .private-theme .elegant-input,
+[data-theme='light'] .private-theme .elegant-textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .private-theme .elegant-input::placeholder,
+[data-theme='light'] .private-theme .elegant-textarea::placeholder {
+    color: var(--text-muted);
+}
+
+[data-theme='light'] .private-theme .elegant-input:hover,
+[data-theme='light'] .private-theme .elegant-textarea:hover {
+    border-color: color-mix(in srgb, var(--text-secondary) 35%, var(--border-color));
+}
+
+[data-theme='light'] .private-theme .elegant-input:focus,
+[data-theme='light'] .private-theme .elegant-textarea:focus {
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color));
+    box-shadow: var(--shadow-focus-ring);
+    background: var(--bg-card);
+}
+
+[data-theme='light'] .private-theme input[type='date'].elegant-input,
+[data-theme='light'] .private-theme input[type='time'].elegant-input {
+    color-scheme: light;
+}
+
+[data-theme='light'] .private-theme .private-friend-search-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .private-theme .private-friend-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+[data-theme='light'] .private-theme .private-friend-search-input:focus {
+    border-color: color-mix(in srgb, var(--primary) 50%, var(--border-color));
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-theme .input-field {
+    background: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme='light'] .private-theme .input-field::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 1;
+}
+
+[data-theme='light'] .private-theme .input-field:focus {
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color)) !important;
+    box-shadow: var(--shadow-focus-ring) !important;
+    background: var(--bg-card) !important;
+}
+
+[data-theme='light'] .private-theme .venue-search-segment {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme='light'] .private-theme .venue-search-segment__btn {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+[data-theme='light'] .private-theme .venue-search-segment__btn--active {
+    color: #fff;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+[data-theme='light'] .private-theme .private-occasion-chip {
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .private-theme .private-occasion-chip:hover {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
+    background: var(--bg-secondary);
+}
+
+[data-theme='light'] .private-theme .private-occasion-chip--selected {
+    border-color: color-mix(in srgb, var(--primary) 65%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 14%, var(--bg-card));
+    color: var(--text-heading);
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-theme .private-payment-chip {
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .private-theme .private-payment-chip--selected {
+    border-color: color-mix(in srgb, var(--primary) 60%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+    color: var(--text-heading);
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-theme .private-section-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme='light'] .private-theme .private-section-card--templates {
+    border-color: color-mix(in srgb, var(--luxury-gold) 35%, var(--border-color));
+}
+
+[data-theme='light'] .private-theme .private-friends-panel {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+[data-theme='light'] .private-theme .private-friend-chip {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+}
+
+[data-theme='light'] .private-theme .private-friend-chip--selected {
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+    border-color: var(--primary);
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-theme .private-cover-tab {
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .private-theme .private-cover-tab--active {
+    border-color: color-mix(in srgb, var(--luxury-gold) 70%, var(--border-color));
+    background: color-mix(in srgb, var(--luxury-gold) 14%, var(--bg-card));
+    color: #92400e;
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-motion-picker__chip,
+[data-theme='light'] .private-create-wrapper .private-card-frame-picker__chip,
+[data-theme='light'] .private-create-wrapper .private-card-font-picker__chip {
+    border: 2px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-motion-picker__chip:hover:not(:disabled),
+[data-theme='light'] .private-create-wrapper .private-card-frame-picker__chip:hover:not(:disabled),
+[data-theme='light'] .private-create-wrapper .private-card-font-picker__chip:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color));
+    background: var(--bg-secondary);
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-motion-picker__chip--selected,
+[data-theme='light'] .private-create-wrapper .private-card-frame-picker__chip--selected,
+[data-theme='light'] .private-create-wrapper .private-card-font-picker__chip--selected {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-frame-picker__swatch,
+[data-theme='light'] .private-create-wrapper .private-card-bg-picker__thumb,
+[data-theme='light'] .private-create-wrapper .dating-preview-rail__thumb {
+    border: 2px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-bg-picker__thumb:hover,
+[data-theme='light'] .private-create-wrapper .dating-preview-rail__thumb:hover {
+    border-color: color-mix(in srgb, var(--luxury-gold) 55%, var(--border-color));
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-bg-picker__thumb--selected,
+[data-theme='light'] .private-create-wrapper .dating-preview-rail__thumb--selected,
+[data-theme='light'] .private-create-wrapper .dating-preview-rail__thumb-wrap--selected .dating-preview-rail__thumb {
+    border-color: var(--luxury-gold);
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .private-invite-cover-rail .dating-preview-rail__thumb--action {
+    border-color: color-mix(in srgb, var(--luxury-gold) 50%, var(--border-color));
+    background: color-mix(in srgb, var(--luxury-gold) 10%, var(--bg-card));
+    color: #92400e;
+}
+
+@media (min-width: 1024px) {
+    [data-theme='light']
+        .private-invite-cover-rail--template-mode
+        .dating-preview-rail__thumb {
+        border-color: var(--border-color);
+    }
+}
+
+[data-theme='light'] .private-create-wrapper .dating-preview-rail__placeholder {
+    border: 1.5px dashed var(--border-color);
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
+
+[data-theme='light'] .private-create-wrapper .private-card-bg-picker__scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+}
+
+[data-theme='light'] .dating-typography-sheet {
+    border-color: color-mix(in srgb, var(--primary) 28%, var(--border-color));
+    box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='light'] .dating-typography-sheet__grab {
+    background: var(--border-color);
+}
+
+[data-theme='light'] .dating-typography-sheet__close,
+[data-theme='light'] .dating-typography-sheet__chip,
+[data-theme='light'] .dating-typography-sheet__text-color-reset {
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .dating-typography-sheet__chip--sel {
+    border-color: color-mix(in srgb, var(--primary) 65%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+    box-shadow: var(--shadow-focus-ring);
+}
+
+[data-theme='light'] .dating-card-theme-color-panel {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+[data-theme='light'] .dating-card-theme-color-panel__eyedropper,
+[data-theme='light'] .dating-card-theme-color-panel__tab {
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+
+[data-theme='light'] .dating-card-theme-color-panel__tab--active {
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+    color: var(--text-heading);
+}
+
+[data-theme='light'] .dating-card-theme-color-panel__preset {
+    border: 2px solid var(--border-color);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .dating-card-theme-color-panel__preset--sel {
+    outline-color: var(--primary);
+}
+
+[data-theme='light'] .private-theme .dating-card-show-content-toggle {
+    border: 1.5px solid color-mix(in srgb, var(--luxury-gold) 55%, var(--border-color));
+    background: color-mix(in srgb, var(--luxury-gold) 14%, var(--bg-card));
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme='light'] .private-theme .dating-card-show-content-toggle__label {
+    color: var(--text-heading);
+}
+
+[data-theme='light'] .private-theme .dating-card-show-content-toggle__switch {
+    border: 2px solid #64748b;
+}
+
+[data-theme='light'] .private-theme .dating-card-show-content-toggle__switch:not([aria-checked='true']) {
+    background: #64748b;
+}
+
+[data-theme='light'] .private-theme .dating-card-show-content-toggle__switch[aria-checked='true'] {
+    background: linear-gradient(135deg, var(--primary), #b45309);
+    border-color: #92400e;
+}
+
+[data-theme='light'] .private-theme .dating-card-show-content-toggle__thumb {
+    background: #fff;
+    box-shadow: 0 1px 5px rgba(15, 23, 42, 0.45);
 }

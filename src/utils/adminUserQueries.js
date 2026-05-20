@@ -40,7 +40,79 @@ function nameSearchPrefixes(lower) {
 export const ADMIN_USERS_PAGE_SIZE = 25;
 
 /** Staff-facing roles (browse “team” tab) */
-const TEAM_ROLES = ['admin', 'staff', 'support'];
+const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator']);
+
+const CLIENT_SCAN_BATCH = 80;
+const CLIENT_SCAN_MAX = 2500;
+
+function matchesClientRoleFilter(data, roleFilter, bannedOnly = false) {
+    const r = String(data?.role || '').toLowerCase();
+    let ok = false;
+    switch (roleFilter) {
+        case 'user':
+            ok = !r || r === 'user';
+            break;
+        case 'business':
+            ok = r === 'business' || r === 'partner';
+            break;
+        case 'affiliate_agent':
+            ok = r === 'affiliate_agent';
+            break;
+        case 'team':
+            ok = TEAM_ROLES.has(r);
+            break;
+        case 'all':
+        default:
+            ok = true;
+    }
+    if (bannedOnly) return ok && data?.banned === true;
+    return ok;
+}
+
+/**
+ * Client-side paginated browse: scan users by document id (no role== filter).
+ * Works when many accounts lack `role` and when adminBrowseUsers is not deployed yet.
+ */
+async function browseUsersPageClientScan(db, { roleFilter, startAfterId = null, pageSize = ADMIN_USERS_PAGE_SIZE, bannedOnly = false }) {
+    const limit = Math.min(Math.max(Number(pageSize) || ADMIN_USERS_PAGE_SIZE, 1), 50);
+    const need = limit + 1;
+    const filter = roleFilter || 'all';
+    const rows = [];
+    let cursorId = startAfterId ? String(startAfterId) : null;
+    let scanned = 0;
+
+    while (rows.length < need && scanned < CLIENT_SCAN_MAX) {
+        let q = query(collection(db, 'users'), orderBy(documentId()), limit(CLIENT_SCAN_BATCH));
+        if (cursorId) {
+            const cursorSnap = await getDoc(doc(db, 'users', cursorId));
+            if (cursorSnap.exists()) {
+                q = query(collection(db, 'users'), orderBy(documentId()), startAfter(cursorSnap), limit(CLIENT_SCAN_BATCH));
+            }
+        }
+        const snap = await getDocs(q);
+        if (snap.empty) break;
+        scanned += snap.size;
+        for (const d of snap.docs) {
+            cursorId = d.id;
+            const data = d.data();
+            if (matchesClientRoleFilter(data, filter, bannedOnly === true)) {
+                rows.push({ id: d.id, ...data });
+                if (rows.length >= need) break;
+            }
+        }
+        if (snap.size < CLIENT_SCAN_BATCH) break;
+    }
+
+    const hasNext = rows.length > limit;
+    const users = rows.slice(0, limit);
+    return {
+        users,
+        hasNext,
+        lastId: users.length ? users[users.length - 1].id : null,
+        firstId: users.length ? users[0].id : null,
+        source: 'client-scan',
+    };
+}
 
 /**
  * Paginated browse for admin/staff/support accounts.
@@ -50,10 +122,11 @@ export function buildTeamBrowseQuery(db, { cursorLast }) {
     const col = collection(db, 'users');
     const pagePlus = ADMIN_USERS_PAGE_SIZE + 1;
     const order = orderBy(documentId());
+    const teamRoles = [...TEAM_ROLES];
     if (cursorLast) {
-        return query(col, where('role', 'in', TEAM_ROLES), order, startAfter(cursorLast), limit(pagePlus));
+        return query(col, where('role', 'in', teamRoles), order, startAfter(cursorLast), limit(pagePlus));
     }
-    return query(col, where('role', 'in', TEAM_ROLES), order, limit(pagePlus));
+    return query(col, where('role', 'in', teamRoles), order, limit(pagePlus));
 }
 
 export function buildTeamBrowseQueryPrev(db, { firstVisible }) {
@@ -61,7 +134,7 @@ export function buildTeamBrowseQueryPrev(db, { firstVisible }) {
     const pagePlus = ADMIN_USERS_PAGE_SIZE + 1;
     return query(
         col,
-        where('role', 'in', TEAM_ROLES),
+        where('role', 'in', [...TEAM_ROLES]),
         orderBy(documentId()),
         endBefore(firstVisible),
         limitToLast(pagePlus)
@@ -125,6 +198,65 @@ export function buildUsersBrowseQueryPrev(db, { roleFilter, firstVisible }) {
  * Search: exact UID, exact email, or name prefix.
  * Prefer Cloud Function `adminSearchUsers` (Admin SDK + Auth email); falls back to client Firestore if unavailable.
  */
+/**
+ * Paginated browse via Cloud Function (Admin SDK). Falls back to client Firestore on failure.
+ * @param {{ roleFilter: string, startAfterId?: string|null, pageSize?: number }} opts
+ */
+export async function browseUsersPage(db, { roleFilter, startAfterId = null, pageSize = ADMIN_USERS_PAGE_SIZE, bannedOnly = false }) {
+    const opts = {
+        roleFilter: roleFilter || 'all',
+        startAfterId: startAfterId || null,
+        pageSize,
+        bannedOnly: bannedOnly === true,
+    };
+
+    try {
+        const fn = httpsCallable(getFunctions(app, ADMIN_FUNCTIONS_REGION), 'adminBrowseUsers');
+        const res = await fn({
+            roleFilter: opts.roleFilter,
+            startAfterId: opts.startAfterId,
+            pageSize: opts.pageSize,
+            bannedOnly: opts.bannedOnly,
+        });
+        const users = Array.isArray(res?.data?.users) ? res.data.users : [];
+        return {
+            users: users.filter((row) => row && typeof row === 'object' && row.id),
+            hasNext: !!res?.data?.hasNext,
+            lastId: res?.data?.lastId || null,
+            firstId: res?.data?.firstId || null,
+            source: 'callable',
+        };
+    } catch (e) {
+        const code = e?.code || '';
+        const msg = e?.message || String(e);
+        console.warn('[browseUsersPage] adminBrowseUsers failed, using client scan', code, msg);
+        try {
+            return await browseUsersPageClientScan(db, opts);
+        } catch (scanErr) {
+            const scanMsg = scanErr?.message || String(scanErr);
+            console.error('[browseUsersPage] client scan failed', scanMsg);
+            const err = new Error(scanMsg);
+            err.cause = scanErr;
+            err.browseSource = 'failed';
+            throw err;
+        }
+    }
+}
+
+function browseSnapToPageResult(snap) {
+    const all = snap.docs;
+    const hasMore = all.length > ADMIN_USERS_PAGE_SIZE;
+    const take = hasMore ? ADMIN_USERS_PAGE_SIZE : all.length;
+    const pageDocs = all.slice(0, take);
+    const users = pageDocs.map((d) => ({ id: d.id, ...d.data() }));
+    return {
+        users,
+        hasNext: hasMore,
+        lastId: users.length ? users[users.length - 1].id : null,
+        firstId: users.length ? users[0].id : null,
+    };
+}
+
 export async function searchUsers(db, raw) {
     const term = String(raw || '').trim();
     if (!term) return [];

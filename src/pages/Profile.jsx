@@ -17,22 +17,39 @@ import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { goToLogin } from '../utils/goToLogin';
+import {
+    getPrivateInvitationDetailsPath,
+    isPrivateInvitationDraft
+} from '../utils/privateInvitationDraft';
+import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage';
 
-const InvitationListItem = ({ inv, navigate, t }) => (
+const InvitationListItem = ({ inv, navigate, t }) => {
+    const targetPath =
+        inv.privacy === 'private' ? getPrivateInvitationDetailsPath(inv) : `/invitation/${inv.id}`;
+
+    return (
     <div
         className="profile-invitation-item"
-        onClick={() => navigate(inv.privacy === 'private' ? `/invitation/private/${inv.id}` : `/invitation/${inv.id}`)}
+        onClick={() => navigate(targetPath)}
     >
         <img
             className="profile-invitation-item__thumb"
-            src={inv.customImage || inv.restaurantImage || inv.videoThumbnail || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}
-            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'; }}
+            src={getInvitationListThumbSrc(inv)}
+            onError={(e) => {
+                e.target.onerror = null;
+                e.target.src =
+                    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400';
+            }}
             alt={inv.title}
         />
         <div className="profile-invitation-item__content">
             <div className="profile-invitation-item__title-row">
                 <h4 className="profile-invitation-item__title">{inv.title}</h4>
-                {inv.privacy === 'private' ? (
+                {isPrivateInvitationDraft(inv) ? (
+                    <span className="profile-invitation-item__badge profile-invitation-item__badge--draft">
+                        {t('invitation_draft_badge', { defaultValue: 'Draft' })}
+                    </span>
+                ) : inv.privacy === 'private' ? (
                     <span className="profile-invitation-item__badge profile-invitation-item__badge--private">{t('type_private')}</span>
                 ) : (
                     <span className="profile-invitation-item__badge profile-invitation-item__badge--public">{t('type_public', 'Public')}</span>
@@ -42,7 +59,8 @@ const InvitationListItem = ({ inv, navigate, t }) => (
         </div>
         <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />
     </div>
-);
+    );
+};
 
 const Profile = () => {
     const { t, i18n } = useTranslation();
@@ -187,7 +205,8 @@ const Profile = () => {
             (inv) =>
                 Array.isArray(inv.invitedFriends) &&
                 inv.invitedFriends.includes(profileUid) &&
-                (inv.authorId || inv.author?.id) !== profileUid
+                (inv.authorId || inv.author?.id) !== profileUid &&
+                (inv.publishedAt || inv.status === 'published')
         )
         .map((inv) => ({ ...inv, privacy: 'private' }));
 

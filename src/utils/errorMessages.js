@@ -1,35 +1,44 @@
 /**
  * Maps Firebase Auth and other error codes to user-friendly messages.
- * Used by ToastContext and AuthContext.
+ * Used by ToastContext and AuthContext — resolves via i18n when a locale key exists.
  */
+import i18n from '../i18n';
 
-const AUTH_ERROR_MAP = {
+/** @type {Record<string, string>} Firebase / Firestore code → i18n key */
+const CODE_TO_I18N_KEY = {
     'auth/popup-closed-by-user': '',
     'auth/cancelled-popup-request': '',
-    'auth/network-request-failed': 'Check your connection and try again.',
-    'auth/too-many-requests': 'Too many attempts. Try again later.',
-    'auth/invalid-credential': 'This account does not exist or the password is incorrect.',
-    'auth/user-not-found': 'This account does not exist.',
-    'auth/wrong-password': 'The password is incorrect. Please try again.',
-    'auth/email-already-in-use': 'This email is already in use.',
-    'auth/weak-password': 'Please choose a stronger password.',
-    'auth/invalid-verification-code': 'Invalid or expired code. Request a new one.',
-    'auth/invalid-phone-number': 'Please enter a valid phone number.',
-    'auth/captcha-check-failed': 'Verification failed. Please try again.',
-    'auth/requires-recent-login': 'Please sign in again to continue.',
-    'auth/account-exists-with-different-credential': 'An account already exists with the same email.',
-    'auth/business-email-in-use': 'This email is already registered as a business account. Use Business sign-in, not personal login.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled.',
-    'auth/configuration-not-found': 'Sign-in configuration error. Please try again.',
-    'auth/missing-email': 'Please enter your email address.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    // Firestore (e.g. profile write after sign-up)
-    'permission-denied': 'Could not save your profile (access denied). Try again or contact support.',
-    'unavailable': 'Service temporarily unavailable. Try again in a moment.',
-    'failed-precondition': 'Request could not be completed. Please try again.'
+    'auth/network-request-failed': 'auth_network_request_failed',
+    'auth/too-many-requests': 'auth_too_many_requests',
+    'auth/invalid-credential': 'auth_invalid_credential',
+    'auth/user-not-found': 'auth_user_not_found',
+    'auth/wrong-password': 'auth_wrong_password',
+    'auth/email-already-in-use': 'auth_email_already_in_use',
+    'auth/weak-password': 'auth_weak_password',
+    'auth/invalid-verification-code': 'auth_invalid_verification_code',
+    'auth/invalid-phone-number': 'auth_invalid_phone_number',
+    'auth/captcha-check-failed': 'auth_captcha_check_failed',
+    'auth/requires-recent-login': 'auth_requires_recent_login',
+    'auth/account-exists-with-different-credential': 'auth_account_exists_with_different_credential',
+    'auth/business-email-in-use': 'auth_business_email_conflict',
+    'auth/affiliate-email-in-use': 'auth_affiliate_email_in_use',
+    'auth/business-portal-only': 'auth_business_portal_only',
+    'auth/consumer-portal-only': 'auth_consumer_portal_only',
+    'auth/affiliate-portal-only': 'auth_affiliate_portal_only',
+    'auth/personal-portal-only': 'auth_personal_portal_only',
+    'auth/operation-not-allowed': 'auth_operation_not_allowed',
+    'auth/configuration-not-found': 'auth_configuration_not_found',
+    'auth/missing-email': 'auth_missing_email',
+    'auth/invalid-email': 'auth_invalid_email',
+    'permission-denied': 'auth_permission_denied',
+    unavailable: 'auth_unavailable',
+    'failed-precondition': 'auth_failed_precondition',
 };
 
-const FALLBACK = 'Something went wrong. Please try again.';
+function tAuth(key, defaultValue) {
+    if (!key) return '';
+    return i18n.t(key, { defaultValue: defaultValue || '' });
+}
 
 /**
  * @param {Error & { code?: string }} error - Firebase Auth or similar error
@@ -37,11 +46,25 @@ const FALLBACK = 'Something went wrong. Please try again.';
  */
 export function getAuthErrorMessage(error) {
     const combined = `${error?.code || ''} ${error?.message || ''}`;
-    // Google OAuth popup often returns redirect_uri_mismatch in message (not always a Firebase code)
     if (/redirect_uri_mismatch|invalid_client|OAuth 2 parameters/i.test(combined)) {
-        return 'OAuth setup: add this page origin to Google Cloud (OAuth Web client → Authorized JavaScript origins), add firebaseapp.com/__/auth/handler redirect URIs, and add localhost to Firebase Auth → Authorized domains.';
+        return tAuth('auth_oauth_setup_hint', 'OAuth setup error. Check Google Cloud and Firebase Auth domains.');
     }
-    if (!error?.code) return FALLBACK;
-    const msg = AUTH_ERROR_MAP[error.code];
-    return msg ?? FALLBACK;
+    if (/apple\.com|Sign in with Apple|invalid.*apple/i.test(combined) && error?.code === 'auth/operation-not-allowed') {
+        return tAuth(
+            'auth_apple_not_enabled',
+            'Apple sign-in is not enabled yet. Enable it in Firebase Console → Authentication.'
+        );
+    }
+    if (!error?.code) {
+        return tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
+    }
+    const i18nKey = CODE_TO_I18N_KEY[error.code];
+    if (i18nKey === '') return '';
+    if (i18nKey && i18n.exists(i18nKey)) {
+        return i18n.t(i18nKey);
+    }
+    if (i18nKey) {
+        return i18n.t(i18nKey, { defaultValue: error.message || '' });
+    }
+    return tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
 }

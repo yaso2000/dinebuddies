@@ -1353,8 +1353,11 @@ const BusinessesDirectory = () => {
                         background: 'var(--bg-body)'
                     }}
                 >
-                    <div className="map-wrapper" style={{ borderRadius: '0', overflow: 'hidden', width: '100%', height: isFullscreen ? '100vh' : 'calc(100vh - 200px)', position: 'relative' }}>
-                        <div ref={mapRef} className="responsive-map-container" style={{ width: '100%', height: '100%', minHeight: isFullscreen ? '100vh' : 'calc(100vh - 200px)', outline: 'none' }}></div>
+                    <div
+                        className={`map-wrapper directory-map-wrapper${isFullscreen ? ' directory-map-wrapper--fullscreen' : ''}`}
+                        style={{ borderRadius: '0', overflow: 'hidden', width: '100%', height: isFullscreen ? '100dvh' : undefined, position: 'relative' }}
+                    >
+                        <div ref={mapRef} className="responsive-map-container" style={{ width: '100%', height: '100%', minHeight: isFullscreen ? '100dvh' : undefined, outline: 'none' }}></div>
 
                         {/* Zoom Controls + Fullscreen + Recenter */}
                         <div className="map-zoom-controls">

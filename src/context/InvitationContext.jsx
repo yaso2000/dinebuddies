@@ -27,6 +27,7 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 import notificationSound from '../utils/notificationSound';
+import { resolvePrivateInviteCategory } from '../utils/inviteCategory';
 import { followUser, unfollowUser } from '../utils/followHelpers';
 import { convertFromUSD, getCurrencyByCountry } from '../utils/currencyConverter';
 import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../config/planDefaults';
@@ -88,10 +89,9 @@ export const InvitationProvider = ({ children }) => {
             setLoadingInvitations(false);
         }, 15000);
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const staticInvites = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const staticInvites = snapshot.docs
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((inv) => inv.adminBlocked !== true);
             const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
             lastInvitationDocRef.current = lastDoc;
             setInvitations(staticInvites);
@@ -351,15 +351,18 @@ export const InvitationProvider = ({ children }) => {
     useEffect(() => {
         const q = query(collection(db, 'subscriptionPlans'), where('active', '==', true));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const plansData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    stripePriceId: data.stripe?.priceId || data.stripePriceId,
-                    features: data.features?.map(f => typeof f === 'object' ? f.text : (f.text || f)) || []
-                };
-            });
+            const plansData = snapshot.docs
+                .map((docSnap) => {
+                    const data = docSnap.data();
+                    return {
+                        id: docSnap.id,
+                        ...data,
+                        stripePriceId: data.stripe?.priceId || data.stripePriceId,
+                        features:
+                            data.features?.map((f) => (typeof f === 'object' ? f.text : f.text || f)) || [],
+                    };
+                })
+                .filter((p) => p.planEnvironment !== 'sandbox');
             setDbPlans(plansData);
         }, (error) => {
             console.error("Error syncing dynamic plans:", error);
@@ -371,10 +374,12 @@ export const InvitationProvider = ({ children }) => {
     useEffect(() => {
         const q = query(collection(db, 'creditPacks'), where('active', '==', true));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const packsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const packsData = snapshot.docs
+                .map((docSnap) => ({
+                    id: docSnap.id,
+                    ...docSnap.data(),
+                }))
+                .filter((p) => p.planEnvironment !== 'sandbox');
             setDbCreditPacks(packsData);
         }, (error) => {
             console.error("Error syncing credit packs:", error);
@@ -561,6 +566,7 @@ export const InvitationProvider = ({ children }) => {
             if (!newInvite.title) return false;
             const inviteData = {
                 ...newInvite,
+                inviteCategory: 'public',
                 hostId: currentUser.id,
                 author: {
                     id: currentUser.id,
@@ -639,6 +645,7 @@ export const InvitationProvider = ({ children }) => {
 
             let inviteData = sanitize({
                 ...newInvite,
+                inviteCategory: resolvePrivateInviteCategory(newInvite),
                 authorId: creatorUid,
                 author: {
                     id: creatorUid,
@@ -648,11 +655,19 @@ export const InvitationProvider = ({ children }) => {
                 privacy: 'private',
                 createdAt: serverTimestamp()
             });
-            if (inviteData.invitedFriends?.length) {
-                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteData.invitedFriends);
+            const requestedInvitees = Array.isArray(inviteData.invitedFriends) ? inviteData.invitedFriends : [];
+            if (requestedInvitees.length) {
+                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, requestedInvitees);
                 inviteData = { ...inviteData, invitedFriends: allowed };
                 if (skipped.length) {
                     showToast('Some people could not be invited (they blocked or muted you).', 'info');
+                }
+                if (allowed.length === 0) {
+                    showToast(
+                        'No guests could be invited (blocked, muted, or unavailable). Choose someone else.',
+                        'error'
+                    );
+                    return false;
                 }
             }
             const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
@@ -1219,7 +1234,9 @@ export const InvitationProvider = ({ children }) => {
                 limit(INVITATIONS_PAGE_SIZE)
             );
             const snap = await getDocs(q);
-            const next = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const next = snap.docs
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((inv) => inv.adminBlocked !== true);
             const lastDoc = snap.docs[snap.docs.length - 1] || null;
             lastInvitationDocRef.current = lastDoc;
             setLoadedMoreInvitations(prev => [...prev, ...next]);
@@ -1241,6 +1258,7 @@ export const InvitationProvider = ({ children }) => {
         const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
         if (blocked.size === 0) return invitationsMerged;
         return invitationsMerged.filter((inv) => {
+            if (inv.adminBlocked === true) return false;
             const aid = inv.author?.id;
             if (!aid) return true;
             return !blocked.has(aid);

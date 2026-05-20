@@ -11,6 +11,7 @@ import {
     FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers
 } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPickerPortal';
@@ -41,6 +42,7 @@ const InvitationChatRoom = () => {
         }
     }, [currentUser, isGuest, loading, navigate]);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
 
     // Reaction State
     const [activeReactionId, setActiveReactionId] = useState(null);
@@ -216,6 +218,7 @@ const InvitationChatRoom = () => {
         const file = e.target.files[0];
         if (!file) return;
 
+        setIsUploadingImage(true);
         try {
             const imageUrl = await uploadImage(file, currentUser.uid);
             await addDoc(collection(db, collectionName, invitationId, 'messages'), {
@@ -230,8 +233,9 @@ const InvitationChatRoom = () => {
             scrollToBottom();
         } catch (error) {
             console.error("Error uploading image:", error);
-            showToast(t('failed_upload_image'), 'error');
+            notifyImageUploadError(showToast, error, t);
         } finally {
+            setIsUploadingImage(false);
             e.target.value = '';
         }
     };
@@ -695,6 +699,21 @@ const InvitationChatRoom = () => {
             )}
 
             <div className="chat-footer-stack">
+            {isUploadingImage && (
+                <div
+                    role="status"
+                    style={{
+                        padding: '10px 14px',
+                        textAlign: 'center',
+                        fontSize: '0.9rem',
+                        color: 'var(--text-secondary, #94a3b8)',
+                        background: 'var(--bg-darker)',
+                        borderTop: '1px solid var(--border-color)',
+                    }}
+                >
+                    {t('image_upload_checking')}
+                </div>
+            )}
             <div ref={composerRef} style={{
                 flexShrink: 0,
                 width: '100%',

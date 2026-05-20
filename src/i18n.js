@@ -8,6 +8,7 @@ import fr from './locales/fr.json';
 import es from './locales/es.json';
 import ur from './locales/ur.json';
 import hi from './locales/hi.json';
+import { applyHtmlLanguage } from './utils/authGeoLanguage';
 
 i18n
     .use(LanguageDetector)
@@ -36,5 +37,12 @@ i18n
             useSuspense: false,
         },
     });
+
+i18n.on('initialized', () => {
+    applyHtmlLanguage(i18n.language || 'en');
+});
+i18n.on('languageChanged', (lng) => {
+    applyHtmlLanguage(lng);
+});
 
 export default i18n;

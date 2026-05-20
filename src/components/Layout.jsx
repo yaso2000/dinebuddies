@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
 import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaTimes, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -7,16 +7,17 @@ import { useChat } from '../context/ChatContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import ProfileCompletionModal from './ProfileCompletionModal';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import OffersBanner from './OffersBanner';
 import AppRouteLoading from './AppRouteLoading';
+import AppShellLoading from './AppShellLoading';
 import RankingSidebarWidget from './RankingSidebarWidget';
 import PushNotificationPrompt from './PushNotificationPrompt';
+import PushRegistrationSync from './PushRegistrationSync';
+import InvitationInboxOverlay from './Invitations/InvitationInboxOverlay';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
 import { goToLogin } from '../utils/goToLogin';
@@ -30,7 +31,13 @@ const Layout = ({ children }) => {
     const { t, i18n } = useTranslation();
     const { currentUser, userProfile, isGuest, isBusiness, loading } = useAuth();
     const invContext = useInvitations();
-    const { invitations = [], getFollowingInvitations = () => [], canCreatePrivateInvitation } = invContext || {};
+    const {
+        invitations = [],
+        privateInvitations = [],
+        getFollowingInvitations = () => [],
+        canCreatePrivateInvitation,
+        respondToPrivateInvitation
+    } = invContext || {};
     const { showToast } = useToast();
     const { unreadCount: chatUnreadCount, conversations = [] } = useChat();
     const { unreadCount, unreadBellCount = 0, unreadMessageCount = 0, markMessageNotificationsAsRead } = useNotifications();
@@ -137,7 +144,6 @@ const Layout = ({ children }) => {
     const [trendingPartners, setTrendingPartners] = useState([]);
     const [recentCommunities, setRecentCommunities] = useState([]);
     const [joinedCommunityData, setJoinedCommunityData] = useState([]);
-    const [hasOffers, setHasOffers] = useState(false);
 
     // Auto-mark chat notifications as read when visiting chat pages
     useEffect(() => {
@@ -197,8 +203,10 @@ const Layout = ({ children }) => {
     // IMPORTANT: Do not unmount <Outlet /> on /admin while `loading` flips true (Firestore/auth churn).
     // That tore down AdminRoute/AdminLayout and felt like "desktop↔mobile" or home↔admin flicker.
     const isAdminPath = location.pathname.startsWith('/admin');
+    const adminBypassConsumerGate = isAdminIdentity(currentUser, userProfile);
+
     if (loading && !(isAdminPath && currentUser?.uid)) {
-        return <AppRouteLoading variant="session" fullViewport />;
+        return <AppShellLoading variant="session" />;
     }
 
     // 2. Email verification — email/password accounts (consumer or business) until verified
@@ -242,6 +250,7 @@ const Layout = ({ children }) => {
     const isCommunityRoute = location.pathname.startsWith('/community/');
     const isStoryRoute = location.pathname === '/create-story';
     const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
+    const isSearchRoute = location.pathname === '/search';
     const isAdminRoute = location.pathname.startsWith('/admin');
 
     const businessCreateFabActive =
@@ -375,11 +384,6 @@ const Layout = ({ children }) => {
     const RightSidebar = () => (
         <aside className="ds-right-sidebar">
 
-            {/* ── Offers Banner (desktop only) — hide on private invite flows (reads as “payment” noise) ── */}
-            {!location.pathname.startsWith('/invitation/private/') && (
-                <OffersBanner onHasOffers={setHasOffers} />
-            )}
-
             {/* Top 3 Elite Ranking (desktop only) */}
             <RankingSidebarWidget />
 
@@ -470,7 +474,7 @@ const Layout = ({ children }) => {
             )}
 
             {/* Footer */}
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '4px', lineHeight: 2, display: 'flex', gap: '4px' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '4px', lineHeight: 2, display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                 <span dir="ltr">© {new Date().getFullYear()} DineBuddies</span> ·{' '}
                 <Link to="/settings" style={{ color: 'var(--text-muted)' }}>{t('settings', 'Settings')}</Link>
             </div>
@@ -478,12 +482,21 @@ const Layout = ({ children }) => {
     );
 
     return (
-        <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+        <div className={`app-layout${isSearchRoute ? ' app-layout--search' : ''}`} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
 
-            <ProfileCompletionModal />
             <PushNotificationPrompt />
-            {/* ── HEADER ── always on desktop, hidden on mobile chat ── */}
-            <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}`}>
+            <PushRegistrationSync />
+            {currentUser?.uid && !isGuest && !isBusinessAccount && respondToPrivateInvitation && (
+                <InvitationInboxOverlay
+                    invitations={privateInvitations}
+                    viewerUid={currentUser.uid || currentUser.id}
+                    pathname={location.pathname}
+                    onRespond={respondToPrivateInvitation}
+                    enabled={!loading}
+                />
+            )}
+            {/* ── HEADER ── hidden on mobile chat & search (search has its own bar) ── */}
+            <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}${isSearchRoute ? ' app-header--search-route' : ''}`}>
                 <div className="logo-wrapper" onClick={() => navigate(feedHomePath)}>
                     <img src="/db-logo.svg" alt="DineBuddies" className="app-logo-img" />
                 </div>
@@ -631,7 +644,7 @@ const Layout = ({ children }) => {
                             </Link>
                         )}
                         {isAdminAccount && (
-                            <Link to="/admin/dashboard" className={`ds-nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
+                            <Link to="/admin/users" className={`ds-nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
                                 <FaCrown /><span>Admin</span>
                             </Link>
                         )}
@@ -640,11 +653,13 @@ const Layout = ({ children }) => {
                 ))}
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}`}>
-                    <EmailVerificationBusinessBanner />
-                    <UnpublishedBusinessReminder />
+                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isSearchRoute ? ' app-main--search' : ''}`}>
+                    {!isSearchRoute && <EmailVerificationBusinessBanner />}
+                    {!isSearchRoute && <UnpublishedBusinessReminder />}
                     {children}
-                    <Outlet />
+                    <Suspense fallback={<AppRouteLoading variant="route" />}>
+                        <Outlet />
+                    </Suspense>
                 </main>
 
                 {/* Column 3 — Right widgets */}
@@ -708,7 +723,7 @@ const Layout = ({ children }) => {
                         </Link>
                     )}
                     {isAdminAccount && (
-                        <Link to="/admin/dashboard" className={`nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
+                        <Link to="/admin/users" className={`nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
                             <FaCrown className="nav-icon" />
                             <span>Admin</span>
                         </Link>

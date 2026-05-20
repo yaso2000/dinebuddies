@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaUser } from 'react-icons/fa';
-import { HiBuildingStorefront } from 'react-icons/hi2';
 import { useToast } from '../../context/ToastContext';
 import { consumeAuthGateNotice } from '../../utils/authGateNotice';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import PersonalAuthPanel from './PersonalAuthPanel';
 import BusinessLoginPanel from './BusinessLoginPanel';
+import AuthPageChrome from './AuthPageChrome';
 
 function readLoginTabFromLocation(location) {
     const q = new URLSearchParams(location.search || '');
@@ -16,7 +15,7 @@ function readLoginTabFromLocation(location) {
     return businessFromQuery || businessFromPath ? 'business' : 'personal';
 }
 
-/** Login hub — personal (default) with a corner toggle to business. */
+/** Login hub — personal (default) with toolbar to switch business account or theme. */
 export default function LoginHub() {
     const { t } = useTranslation();
     const { showToast } = useToast();
@@ -66,50 +65,13 @@ export default function LoginHub() {
 
     return (
         <div className="auth-route-scroll login-hub login-hub-page">
-            <button
-                type="button"
-                className="login-hub-account-toggle"
-                onClick={() => (tab === 'personal' ? goBusiness() : goPersonal())}
-                aria-label={
-                    tab === 'personal'
-                        ? t('login_toggle_open_business_a11y', 'Switch to business account sign-in')
-                        : t('login_toggle_open_personal_a11y', 'Switch to personal account sign-in')
-                }
-            >
-                {tab === 'personal' ? (
-                    <>
-                        <HiBuildingStorefront aria-hidden />
-                        <span>{t('login_toggle_business', 'Business')}</span>
-                    </>
-                ) : (
-                    <>
-                        <FaUser aria-hidden />
-                        <span>{t('login_toggle_personal', 'Personal')}</span>
-                    </>
-                )}
-            </button>
-
             <div className="login-hub-wrap">
-                <header className="login-hub-header">
-                    <h1 className="login-hub-brand">DineBuddies</h1>
-                    <span className={`login-hub-mode-pill login-hub-mode-pill--${tab}`}>
-                        {tab === 'business'
-                            ? t('business_login', 'Business')
-                            : t('account_type_personal_title', 'Personal account')}
-                    </span>
-                    <p className="login-hub-tagline">
-                        {tab === 'business'
-                            ? t(
-                                'login_hub_subtitle_business',
-                                'Sign in with your business email and password.'
-                            )
-                            : t(
-                                'login_hub_subtitle_personal',
-                                'Sign in with email, Google, or Facebook — or create a personal account.'
-                            )}
-                    </p>
-                </header>
-
+                <AuthPageChrome
+                    accountTab={tab}
+                    onSwitchToBusiness={goBusiness}
+                    onSwitchToPersonal={goPersonal}
+                    showAffiliateLink
+                />
                 <div className={`login-hub-card login-hub-card--${tab}`}>
                     <div
                         id={panelIdPersonal}

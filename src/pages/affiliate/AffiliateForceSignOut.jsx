@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import AppRouteLoading from '../../components/AppRouteLoading';
 
 /**
- * Emergency exit from redirect loops: full sign-out + hard navigation to /affiliate.
+ * Emergency exit from redirect loops: full sign-out + hard navigation to /login.
  * User can open /affiliate/sign-out manually from the address bar.
  */
 export default function AffiliateForceSignOut() {
@@ -13,10 +13,10 @@ export default function AffiliateForceSignOut() {
         let cancelled = false;
         (async () => {
             try {
-                await signOut('/affiliate');
+                await signOut('/login');
             } catch {
                 if (!cancelled && typeof window !== 'undefined') {
-                    window.location.replace('/affiliate');
+                    window.location.replace('/login');
                 }
             }
         })();

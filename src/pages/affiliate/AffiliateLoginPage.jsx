@@ -9,6 +9,7 @@ import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { isAffiliateAgentProfileData } from '../../utils/accountRole';
 import './AffiliateDashboard.css';
+import AffiliateAuthShell from '../auth/AffiliateAuthShell';
 
 /** Avoid false "not an affiliate" right after auth: local cache can lag behind `users/{uid}` on the server. */
 async function fetchAffiliateUserDocForGate(uid) {
@@ -81,8 +82,8 @@ export default function AffiliateLoginPage() {
     };
 
     return (
-        <div className="affiliate-shell affiliate-shell--center">
-            <div className="affiliate-card affiliate-auth-card" style={{ maxWidth: 420, width: '100%' }}>
+        <AffiliateAuthShell>
+            <div className="affiliate-card affiliate-auth-card" style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
                 <h1 className="affiliate-h1">{t('affiliate_login_title', 'Affiliate sign-in')}</h1>
                 <p className="affiliate-muted" style={{ marginBottom: 20 }}>
                     {t('affiliate_login_intro', 'Email and password only — no social login on this page.')}
@@ -115,7 +116,7 @@ export default function AffiliateLoginPage() {
                     <Link to="/affiliate/signup">{t('affiliate_signup_link', 'Create an account')}</Link>
                 </p>
                 <p style={{ marginTop: 12 }}>
-                    <Link to="/affiliate" className="affiliate-muted">
+                    <Link to="/login" className="affiliate-muted">
                         {t('affiliate_back_home', 'Back to home')}
                     </Link>
                 </p>
@@ -123,6 +124,6 @@ export default function AffiliateLoginPage() {
                     <Link to="/affiliate/sign-out">{t('affiliate_sign_out_escape_link', 'Session stuck? Sign out here')}</Link>
                 </p>
             </div>
-        </div>
+        </AffiliateAuthShell>
     );
 }

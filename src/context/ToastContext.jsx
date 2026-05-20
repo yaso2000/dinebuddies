@@ -147,13 +147,14 @@ export function ToastProvider({ children }) {
         setToasts((prev) => prev.filter((t) => t.id !== id));
     }, []);
 
-    const showToast = useCallback((message, type = 'info', onClick = null) => {
+    const showToast = useCallback((message, type = 'info', onClick = null, durationMs = 5000) => {
         const id = Date.now() + Math.random();
         setToasts((prev) => [...prev, { id, message, type, onClick, createdAt: Date.now() }]);
 
+        const ms = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 5000;
         const t = setTimeout(() => {
             dismiss(id);
-        }, 5000);
+        }, ms);
         timeoutsRef.current[id] = t;
     }, [dismiss]);
 

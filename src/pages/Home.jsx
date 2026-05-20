@@ -14,7 +14,6 @@ import './HomeMobileFeed.css';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { useTheme } from '../context/ThemeContext';
 import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
-import OffersBanner from '../components/OffersBanner';
 import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
 import { asUidArray } from '../utils/userSocialLists';
 
@@ -67,7 +66,6 @@ const Home = () => {
     const [locationFilter, setLocationFilter] = useState('All');
     const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'today', 'week', 'soon'
     const [viewMode, setViewMode] = useState('list');
-    const [hasOffers, setHasOffers] = useState(false);
     const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
     const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
     const [showSelector, setShowSelector] = useState(false); // New: For пригласительный селектор (fixed) - Create Invitation Selector
@@ -716,22 +714,6 @@ const Home = () => {
 
 
 
-
-            {/* ── Offer Banner: Mobile only — desktop shows it in right sidebar ── */}
-            <div className="mobile-only-offers">
-                {hasOffers && (
-                    <div style={{
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 120,
-                        background: 'var(--bg-main)',
-                        padding: '6px 2px 0',
-                    }}>
-                        <OffersBanner onHasOffers={setHasOffers} />
-                    </div>
-                )}
-                {!hasOffers && <OffersBanner onHasOffers={setHasOffers} style={{ display: 'none' }} />}
-            </div>
 
             {/* Title row + List/Map toggle — normal scrollable content */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px 4px' }}>

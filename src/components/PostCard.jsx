@@ -72,8 +72,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const lastCommentPreview = sortedComments.length ? sortedComments[sortedComments.length - 1] : null;
 
     useEffect(() => {
-        setDetailCommentWindow(5);
-    }, [post.id]);
+        const core = post.type === 'repost' && post.originalPost ? post.originalPost : post;
+        setDetailCommentWindow(core?.mediaType === 'video' ? 3 : 5);
+    }, [post.id, post.type, post.originalPost, post.mediaType]);
 
     /** Standalone post: keep view pinned to newest after comments load or new replies */
     useEffect(() => {
@@ -411,6 +412,12 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     // but the MAIN content is the original post.
     const isRepost = post.type === 'repost' && post.originalPost;
     const displayPost = isRepost ? post.originalPost : post;
+    const isVideoPost = displayPost.mediaType === 'video';
+    const feedCommentPreviews = isVideoPost
+        ? sortedComments.slice(-3)
+        : lastCommentPreview
+            ? [lastCommentPreview]
+            : [];
 
     // Resolve Display Post Author (Original Author)
     let displayAuthorName = displayPost.businessName || displayPost.partnerName || displayPost.author?.name || displayPost.userName || displayPost.user_name || displayPost.displayName || 'User';
@@ -453,7 +460,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
     return (
         <div
-            className={`post-card ${showInChat ? 'in-chat' : ''}`}
+            className={`post-card${showInChat ? ' in-chat' : ''}${isVideoPost ? ' post-card--video' : ''}`}
             onClick={() => {
                 if (!showInChat) {
                     navigate(post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`);
@@ -869,11 +876,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                 </div>
 
                 {/* Feed preview: count + last comment only (click to open chat-style comments) */}
-                {!showComments && commentsRaw.length > 0 && (
+                {!showInChat && commentsRaw.length > 0 && (
                     <div
                         role="button"
                         tabIndex={0}
-                        className="post-comments-preview"
+                        className={`post-comments-preview${isVideoPost ? ' post-comments-preview--video' : ''}`}
                         onClick={(e) => {
                             e.stopPropagation();
                             setShowComments(true);
@@ -889,18 +896,24 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         <div className="post-comments-preview__count">
                             {commentsRaw.length} {t('comments', 'Comments')}
                         </div>
-                        {lastCommentPreview && (
-                            <div className="post-comments-preview__last">
-                                <span className="post-comments-preview__name">{lastCommentPreview.userName}</span>
-                                <span className="post-comments-preview__text">{truncateText(lastCommentPreview.text, 120)}</span>
+                        {feedCommentPreviews.map((comment) => (
+                            <div
+                                key={comment.id || `${comment.userId}-${comment.createdAt}`}
+                                className="post-comments-preview__last"
+                            >
+                                <span className="post-comments-preview__name">{comment.userName}</span>
+                                <span className="post-comments-preview__text">{truncateText(comment.text, 120)}</span>
                             </div>
-                        )}
+                        ))}
                     </div>
                 )}
 
                 {/* Standalone post page: composer on top, last N comments below (+ load older on scroll up) */}
                 {showComments && showInChat && (
-                    <div className="comments-section comments-section--detail" onClick={(e) => e.stopPropagation()}>
+                    <div
+                        className={`comments-section comments-section--detail${isVideoPost ? ' comments-section--video-detail' : ''}`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="post-comment-composer-wrap">
                             <form onSubmit={handleAddComment} className="comment-input-row comment-input-row--footer">
                                 <input
@@ -999,16 +1012,22 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
                 {/* Feed: last comment preview + composer below */}
                 {showComments && !showInChat && (
-                    <div className="comments-section comments-section--chat" onClick={(e) => e.stopPropagation()}>
-                        {lastCommentPreview && (
-                            <div className="comments-inline-last">
+                    <div
+                        className={`comments-section comments-section--chat${isVideoPost ? ' comments-section--video-feed' : ''}`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {feedCommentPreviews.map((comment) => (
+                            <div
+                                key={comment.id || `${comment.userId}-${comment.createdAt}`}
+                                className="comments-inline-last"
+                            >
                                 <div className="comments-thread__meta">
-                                    <span className="comments-thread__author">{lastCommentPreview.userName}</span>
-                                    <span className="comments-thread__time">{formatDate(lastCommentPreview.createdAt)}</span>
+                                    <span className="comments-thread__author">{comment.userName}</span>
+                                    <span className="comments-thread__time">{formatDate(comment.createdAt)}</span>
                                 </div>
-                                <div className="comments-thread__body">{lastCommentPreview.text}</div>
+                                <div className="comments-thread__body">{comment.text}</div>
                             </div>
-                        )}
+                        ))}
 
                         {showEmojiPicker && (
                             <div className="comments-emoji-strip">

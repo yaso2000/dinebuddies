@@ -1,7 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { FaImage, FaVideo, FaCloud, FaTimes } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
+import { FaImage, FaVideo, FaTimes } from 'react-icons/fa';
 import { validateVideo, getVideoDuration } from '../../utils/videoCompression';
 import { generateThumbnailURL } from '../../utils/thumbnailGenerator';
+import { getImageUploadErrorMessage } from '../../utils/imageModerationErrors';
+import ImageModerationOverlay from './ImageModerationOverlay';
 import './MediaUpload.css';
 
 const MediaUpload = ({
@@ -12,9 +15,13 @@ const MediaUpload = ({
     maxDuration = 15, // for videos (seconds)
     aspectRatio = null, // e.g., 1 for square, 16/9 for wide
     title = 'Upload Media',
-    className = ''
+    className = '',
+    /** When true, onMediaSelect may return a Promise; preview shows only after it resolves. */
+    awaitMediaSelect = false,
 }) => {
+    const { t } = useTranslation();
     const [uploading, setUploading] = useState(false);
+    const [moderationStatus, setModerationStatus] = useState(null);
     const [progress, setProgress] = useState(0);
     const [preview, setPreview] = useState(null);
     const [error, setError] = useState(null);
@@ -29,6 +36,7 @@ const MediaUpload = ({
 
         setError(null);
         setProgress(0);
+        setModerationStatus(null);
 
         try {
             if (type === 'video') {
@@ -86,17 +94,38 @@ const MediaUpload = ({
                 }
 
                 const previewUrl = URL.createObjectURL(file);
-                setPreview(previewUrl);
-                setSelectedFile(file);
 
-                if (onMediaSelect) {
-                    onMediaSelect(file, previewUrl, 'image');
+                if (onMediaSelect && awaitMediaSelect) {
+                    setUploading(true);
+                    setModerationStatus('checking');
+                    setProgress(20);
+                    try {
+                        await Promise.resolve(onMediaSelect(file, previewUrl, 'image'));
+                        setProgress(100);
+                        setPreview(previewUrl);
+                        setSelectedFile(file);
+                        setModerationStatus(null);
+                    } catch (err) {
+                        setPreview(previewUrl);
+                        setSelectedFile(null);
+                        setModerationStatus('rejected');
+                        setError(getImageUploadErrorMessage(err, t));
+                    } finally {
+                        setUploading(false);
+                    }
+                } else {
+                    setPreview(previewUrl);
+                    setSelectedFile(file);
+                    if (onMediaSelect) {
+                        onMediaSelect(file, previewUrl, 'image');
+                    }
                 }
             }
         } catch (err) {
             console.error('Error processing file:', err);
-            setError(err.message || 'Failed to process file');
+            setError(getImageUploadErrorMessage(err, t, 'failed_upload_image'));
             setUploading(false);
+            setModerationStatus(null);
         }
     };
 
@@ -109,6 +138,7 @@ const MediaUpload = ({
         setProgress(0);
         setError(null);
         setVideoDuration(0);
+        setModerationStatus(null);
 
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -145,7 +175,11 @@ const MediaUpload = ({
                     >
                         {type === 'video' ? <FaVideo size={32} /> : <FaImage size={32} />}
                         <span>
-                            {uploading ? `Processing... ${progress}%` : `Select ${type === 'video' ? 'Video' : 'Photo'}`}
+                            {uploading && moderationStatus === 'checking'
+                                ? t('image_upload_checking')
+                                : uploading
+                                    ? `${t('processing', 'Processing…')} ${progress}%`
+                                    : `Select ${type === 'video' ? 'Video' : 'Photo'}`}
                         </span>
                         {type === 'video' && (
                             <small>Max {maxDuration}s, {maxSize}MB</small>
@@ -182,12 +216,23 @@ const MediaUpload = ({
                                     <span className="duration">{formatDuration(videoDuration)}</span>
                                 </div>
                             </>
+                        ) : moderationStatus === 'rejected' ? (
+                            <ImageModerationOverlay status="rejected">
+                                <img
+                                    src={preview}
+                                    alt=""
+                                    className="preview-image"
+                                    style={{ filter: 'grayscale(0.4)', opacity: 0.5 }}
+                                />
+                            </ImageModerationOverlay>
                         ) : (
-                            <img
-                                src={preview}
-                                alt="Preview"
-                                className="preview-image"
-                            />
+                            <ImageModerationOverlay status={moderationStatus === 'checking' ? 'checking' : null}>
+                                <img
+                                    src={preview}
+                                    alt="Preview"
+                                    className="preview-image"
+                                />
+                            </ImageModerationOverlay>
                         )}
 
                         <button

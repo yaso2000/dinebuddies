@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { initNotifications, removeFcmToken } from '../services/notificationService';
+import {
+    initNotifications,
+    removeFcmToken,
+    ensurePushRegistration,
+} from '../services/notificationService';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import {
@@ -29,6 +33,7 @@ const NotificationsSettings = () => {
     const { currentUser } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [pushToggleBusy, setPushToggleBusy] = useState(false);
 
     // Default settings
     const defaultSettings = {
@@ -82,9 +87,20 @@ const NotificationsSettings = () => {
             const settingsRef = doc(db, 'users', currentUser.uid, 'preferences', 'notifications');
             const settingsDoc = await getDoc(settingsRef);
 
+            let merged = { ...defaultSettings };
             if (settingsDoc.exists()) {
-                setSettings({ ...defaultSettings, ...settingsDoc.data() });
+                merged = { ...merged, ...settingsDoc.data() };
             }
+
+            if (typeof Notification !== 'undefined') {
+                if (Notification.permission === 'denied') {
+                    merged.pushEnabled = false;
+                } else if (Notification.permission === 'granted' && merged.pushEnabled !== false) {
+                    await ensurePushRegistration(currentUser.uid);
+                }
+            }
+
+            setSettings(merged);
         } catch (error) {
             console.error('Error loading notification settings:', error);
         } finally {
@@ -110,23 +126,44 @@ const NotificationsSettings = () => {
         }
     };
 
+    const persistPushEnabled = async (enabled) => {
+        const settingsRef = doc(db, 'users', currentUser.uid, 'preferences', 'notifications');
+        await setDoc(settingsRef, { pushEnabled: enabled }, { merge: true });
+    };
+
     const handlePushToggle = async (e) => {
-        const isChecked = e.target.checked;
-        if (isChecked) {
-            setSaving(true);
-            const token = await initNotifications(currentUser.uid);
-            setSaving(false);
-            if (token) {
-                setSettings(prev => ({ ...prev, pushEnabled: true }));
+        if (!currentUser?.uid || pushToggleBusy) return;
+
+        const wantOn = e.target.checked;
+        setPushToggleBusy(true);
+        setSettings((prev) => ({ ...prev, pushEnabled: wantOn }));
+
+        try {
+            if (wantOn) {
+                const token =
+                    typeof Notification !== 'undefined' && Notification.permission === 'granted'
+                        ? await ensurePushRegistration(currentUser.uid)
+                        : await initNotifications(currentUser.uid);
+                if (!token) {
+                    setSettings((prev) => ({ ...prev, pushEnabled: false }));
+                    showToast(
+                        t('push_enable_failed', 'Please allow notifications in your browser settings.'),
+                        'error'
+                    );
+                    return;
+                }
+                await persistPushEnabled(true);
                 showToast(t('push_enabled_success', 'Push notifications enabled for this device.'), 'success');
             } else {
-                setSettings(prev => ({ ...prev, pushEnabled: false }));
-                showToast(t('push_enable_failed', 'Please allow notifications in your browser settings.'), 'error');
+                await removeFcmToken(currentUser.uid);
+                await persistPushEnabled(false);
             }
-        } else {
-            setSettings(prev => ({ ...prev, pushEnabled: false }));
-            // Optional: remove FCM token from this device so it stops receiving them
-            await removeFcmToken(currentUser.uid);
+        } catch (err) {
+            console.error('Push toggle failed:', err);
+            setSettings((prev) => ({ ...prev, pushEnabled: !wantOn }));
+            showToast(t('error_saving_settings', 'Failed to save settings. Please try again.'), 'error');
+        } finally {
+            setPushToggleBusy(false);
         }
     };
 
@@ -199,7 +236,8 @@ const NotificationsSettings = () => {
                         <label className="toggle-switch">
                             <input
                                 type="checkbox"
-                                checked={settings.pushEnabled}
+                                checked={!!settings.pushEnabled}
+                                disabled={pushToggleBusy}
                                 onChange={handlePushToggle}
                             />
                             <span className="toggle-slider"></span>
@@ -373,63 +411,6 @@ const NotificationsSettings = () => {
                         </div>
                     )}
                 </div>
-
-                <div style={{ marginTop: '40px', padding: '20px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                        <h4 style={{ color: '#ef4444', margin: '0 0 10px 0' }}>{t('push_diagnostics', '⚙️ Push Diagnostics')}</h4>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                            {t('push_diagnostics_desc', "If you aren't receiving notifications, use this tool to debug your device's connection.")}
-                        </p>
-                        <button
-                            type="button"
-                            onClick={async () => {
-                                if (!currentUser?.uid) {
-                                    alert('Not signed in.');
-                                    return;
-                                }
-                                try {
-                                    if (!('Notification' in window)) {
-                                        alert('This browser has no Notification API.');
-                                        return;
-                                    }
-                                    alert('1. Checking permissions...');
-                                    const permBefore = Notification.permission;
-                                    alert(`Permission: ${permBefore}`);
-
-                                    if (permBefore === 'denied') {
-                                        alert(
-                                            'Notifications are blocked for this site. On iPhone: Settings → (your app name or Safari) → Notifications → Allow. Then return here and run diagnostics again.'
-                                        );
-                                        return;
-                                    }
-
-                                    alert(
-                                        '2–3. Running the same setup as “Enable” (service worker, permission prompt if needed, FCM token)...'
-                                    );
-                                    const token = await initNotifications(currentUser.uid);
-                                    if (token) {
-                                        alert(`SUCCESS. Token starts with: ${token.substring(0, 18)}…`);
-                                    } else {
-                                        const permAfter = Notification.permission;
-                                        alert(
-                                            `No token obtained. Permission is now: ${permAfter}. If you did not tap Allow, try again. If it stays blocked, use iOS Settings to allow notifications for this app.`
-                                        );
-                                    }
-                                } catch (e) {
-                                    alert(`[ERROR]: ${e?.message || String(e)}`);
-                                }
-                            }}
-                            style={{
-                                padding: '10px 20px',
-                                background: '#ef4444',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontWeight: 'bold'
-                            }}
-                        >
-                            {t('run_device_diagnostics', 'Run Device Diagnostics')}
-                        </button>
-                    </div>
 
                 {/* Save Button */}
                 <div className="save-button-container">

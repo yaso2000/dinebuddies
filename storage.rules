@@ -23,6 +23,16 @@ service firebase.storage {
       return fileName.matches('^' + request.auth.uid + '(_.*)?(\\..+)?$');
     }
 
+    // Quarantine: user uploads here; Cloud Function moves to public path after Vision scan
+    match /quarantine/{userId}/{fileName} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 15 * 1024 * 1024;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
     // Chat images (current app path: chat_images/{uid}/{fileName})
     match /chat_images/{userId}/{fileName} {
       allow read: if isSignedIn();

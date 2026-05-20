@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HelmetProvider } from 'react-helmet-async';
 import './index.css';
+import './styles/invitation-card-fonts.css';
 import './styles/profile-shared.css';
 import './styles/ui-primitives.css';
 import './mobile-optimizations.css';
@@ -9,6 +10,11 @@ import './i18n';
 import './utils/numberFormatOverrides';
 import ErrorBoundary from './components/ErrorBoundary';
 import App from './App.jsx';
+import { bootDocumentTheme } from './theme/bootDocumentTheme';
+import { installFatalUiRecoveryListeners } from './utils/fatalUiRecovery';
+
+bootDocumentTheme();
+installFatalUiRecoveryListeners();
 
 function escapeHtml(s) {
     return String(s)

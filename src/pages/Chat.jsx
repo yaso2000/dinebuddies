@@ -16,6 +16,8 @@ import {
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import NewReportModal from '../components/NewReportModal';
 import SharedContentBubble from '../components/SharedContentBubble';
 import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPickerPortal';
@@ -123,12 +125,16 @@ const Chat = () => {
                 setMessagingRestricted(restricted);
 
                 if (userDoc.exists()) {
+                    const isSupport = userData.isSystemAccount === true;
                     setOtherUser({
                         uid: userId,
-                        displayName: userData.display_name || userData.email || 'User',
+                        displayName: isSupport
+                            ? userData.display_name || userData.displayName || 'DineBuddies Support'
+                            : userData.display_name || userData.displayName || userData.email || 'User',
                         photoURL: getSafeAvatar(userData),
                         isOnline: userData.isOnline || false,
-                        lastSeen: userData.lastSeen || null
+                        lastSeen: userData.lastSeen || null,
+                        isSystemAccount: isSupport,
                     });
                 } else {
                     setOtherUser({
@@ -268,7 +274,7 @@ const Chat = () => {
         try {
             setUploading(true);
             setUploadProgress(30);
-            const imageUrl = await uploadImage(file, currentUser.uid);
+            const imageUrl = await uploadImage(file, currentUser.uid, { zone: ImageUploadZone.PRIVATE_DM });
             setUploadProgress(80);
 
             const messageId = await sendMessage(conversationId, {
@@ -287,7 +293,7 @@ const Chat = () => {
             }, 500);
         } catch (error) {
             console.error('Error uploading image:', error);
-            showToast(t('failed_upload_image'), 'error');
+            notifyImageUploadError(showToast, error, t);
             setUploading(false);
             setUploadProgress(0);
         } finally {
@@ -471,6 +477,21 @@ const Chat = () => {
             {/* Messages */}
             <div className="messages-area" onScroll={handleScroll} style={{ paddingBottom: '16px' }}>
                 {messages.map((msg, index) => {
+                    const isSystem = msg.type === 'system' || msg.isSystemMessage === true;
+                    if (isSystem) {
+                        return (
+                            <div key={msg.id} className="chat-system-message-row">
+                                <div className="chat-system-message">
+                                    <span className="chat-system-message__brand">
+                                        {msg.senderName || 'DineBuddies'}
+                                    </span>
+                                    <p className="chat-system-message__text">{msg.text}</p>
+                                    <span className="chat-system-message__time">{formatTime(msg.createdAt)}</span>
+                                </div>
+                            </div>
+                        );
+                    }
+
                     const isOwn = msg.senderId === currentUser?.uid;
                     const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
 

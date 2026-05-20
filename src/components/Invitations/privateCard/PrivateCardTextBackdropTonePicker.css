@@ -1,0 +1,62 @@
+.private-card-show-content-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.private-card-show-content-block .dating-card-show-content-toggle {
+    margin-bottom: 0;
+}
+
+.private-card-text-backdrop-tone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.private-card-text-backdrop-tone__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+    margin-inline-end: 4px;
+}
+
+.private-card-text-backdrop-tone__chip {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.35);
+    color: #f8fafc;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.private-card-text-backdrop-tone__chip--light {
+    background: rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.private-card-text-backdrop-tone__chip--none {
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.72));
+    border-style: dashed;
+}
+
+.private-card-text-backdrop-tone__chip--sel {
+    border-color: var(--luxury-gold, #d4af37);
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+}
+
+.private-card-text-backdrop-tone__chip:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

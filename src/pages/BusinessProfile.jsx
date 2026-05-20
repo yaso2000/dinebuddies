@@ -6,6 +6,8 @@ import { auth, db } from '../firebase/config';
 import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount } from '../services/businessLikeService';
 import { useInvitations } from '../context/InvitationContext';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart, FaSave, FaEnvelope, FaCrown } from 'react-icons/fa';
 
 import { HiBuildingStorefront } from 'react-icons/hi2';
@@ -850,7 +852,10 @@ const BusinessProfile = () => {
                 initialQuality: 0.85
             };
 
-            const downloadURL = await uploadImage(file, path, null, options);
+            const downloadURL = await uploadImage(file, path, null, options, {
+                moderationZone: ImageUploadZone.GALLERY,
+                userId: profileId,
+            });
 
             // Update Firestore
             const updatedGallery = [...currentGallery, downloadURL];
@@ -861,7 +866,7 @@ const BusinessProfile = () => {
 
         } catch (error) {
             console.error('❌ Error uploading image:', error);
-            showToast(t('upload_image_failed'), 'error');
+            notifyImageUploadError(showToast, error, t, 'upload_image_failed');
         } finally {
             setUploadingImage(false);
         }
@@ -1108,9 +1113,12 @@ const BusinessProfile = () => {
         if (!file) return;
         try {
             setCoverUploading(true);
-            const url = await uploadImage(file, `covers/${profileId}/cover.jpg`, null, { maxSizeMB: 1, maxWidthOrHeight: 1600 });
+            const url = await uploadImage(file, `covers/${profileId}/cover.jpg`, null, { maxSizeMB: 1, maxWidthOrHeight: 1600 }, {
+                moderationZone: ImageUploadZone.COVER,
+                userId: profileId,
+            });
             await updateDoc(doc(db, 'users', profileId), { 'businessInfo.coverImage': url });
-        } catch (err) { showToast(t('cover_upload_failed'), 'error'); } finally { setCoverUploading(false); }
+        } catch (err) { notifyImageUploadError(showToast, err, t, 'cover_upload_failed'); } finally { setCoverUploading(false); }
     };
 
     const handleLogoUpload = async (e) => {
@@ -1118,9 +1126,12 @@ const BusinessProfile = () => {
         if (!file) return;
         try {
             setLogoUploading(true);
-            const url = await uploadImage(file, `logos/${profileId}/logo.jpg`, null, { maxSizeMB: 0.5, maxWidthOrHeight: 400 });
+            const url = await uploadImage(file, `logos/${profileId}/logo.jpg`, null, { maxSizeMB: 0.5, maxWidthOrHeight: 400 }, {
+                moderationZone: ImageUploadZone.LOGO,
+                userId: profileId,
+            });
             await updateDoc(doc(db, 'users', profileId), { photo_url: url });
-        } catch (err) { showToast(t('logo_upload_failed'), 'error'); } finally { setLogoUploading(false); }
+        } catch (err) { notifyImageUploadError(showToast, err, t, 'logo_upload_failed'); } finally { setLogoUploading(false); }
     };
 
     const openBasicInfoModal = () => {

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { goToLogin } from '../utils/goToLogin';
+import { isConsumerProfileComplete } from '../utils/consumerProfileComplete';
 
 /** Same rules as CompleteProfile / normalizeProfile — keep in sync. */
 function resolutionFromUserDoc(data) {
@@ -126,6 +127,34 @@ const ProfileGuard = ({ children }) => {
         return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>Loading...</div>;
     }
 
+    if (userProfile?.frozen === true && userProfile?.banned !== true) {
+        const untilRaw = userProfile.frozenUntil;
+        const until = untilRaw?.toDate?.() ?? (untilRaw ? new Date(untilRaw) : null);
+        if (!until || until > new Date()) {
+            return (
+                <div
+                    style={{
+                        minHeight: '100vh',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'var(--bg-body)',
+                        color: 'var(--text-main)',
+                        padding: '1.5rem',
+                        textAlign: 'center',
+                    }}
+                >
+                    <div>
+                        <h2 style={{ marginBottom: '0.5rem' }}>Account temporarily frozen</h2>
+                        <p style={{ color: 'var(--text-muted)', maxWidth: 360 }}>
+                            Your account is suspended. Contact support if you believe this is a mistake.
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+    }
+
     // Guest users should be handled by GuestBlockedRoute, but just in case
     if (isGuest) {
         return (
@@ -148,7 +177,7 @@ const ProfileGuard = ({ children }) => {
         if (nullProfileResolution === 'ok') {
             return children;
         }
-        return <Navigate to="/complete-profile" state={{ from: location }} replace />;
+        return children;
     }
 
     const hasBizInfo =
@@ -167,18 +196,13 @@ const ProfileGuard = ({ children }) => {
         return children;
     }
 
-    // Check if profile is complete (Name, Gender, Age Category)
-    const isComplete = userProfile?.isProfileComplete || (
-        (userProfile?.displayName || userProfile?.display_name || userProfile?.nickname) &&
-        userProfile?.gender &&
-        (userProfile?.ageCategory || userProfile?.age)
-    );
-
-    if (!isComplete) {
+    if (!isConsumerProfileComplete(userProfile)) {
         if (!profileServerSynced) {
             return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>Loading...</div>;
         }
-        return <Navigate to="/complete-profile" state={{ from: location }} replace />;
+        if (location.pathname !== '/complete-profile') {
+            return children;
+        }
     }
 
     return children;

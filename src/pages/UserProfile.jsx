@@ -11,6 +11,8 @@ import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { getFollowers, getFollowing } from '../utils/followHelpers';
 import UserAvatar from '../components/UserAvatar';
 import { goToLogin } from '../utils/goToLogin';
+import { getPrivateInvitationDetailsPath } from '../utils/privateInvitationDraft';
+import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage';
 import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
 import { useToast } from '../context/ToastContext';
 
@@ -20,12 +22,19 @@ const INVITATION_HISTORY_SCROLL_HINT_THRESHOLD = 5;
 const InvitationListItem = ({ inv, navigate, t }) => (
     <div
         className="profile-invitation-item profile-invitation-item--lg"
-        onClick={() => navigate(inv.privacy === 'private' ? `/invitation/private/${inv.id}` : `/invitation/${inv.id}`)}
+        onClick={() =>
+            navigate(
+                inv.privacy === 'private' ? getPrivateInvitationDetailsPath(inv) : `/invitation/${inv.id}`
+            )
+        }
     >
         <img
             className="profile-invitation-item__thumb"
-            src={inv.customImage || inv.restaurantImage || inv.videoThumbnail || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}
-            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'; }}
+            src={getInvitationListThumbSrc(inv)}
+            onError={(e) => {
+                e.target.src =
+                    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400';
+            }}
             alt={inv.title}
         />
         <div className="profile-invitation-item__content">

@@ -157,4 +157,4 @@ function registerAdminSearchUsers(exportsObj, { db, admin, assertAdminContext })
     });
 }
 
-module.exports = { registerAdminSearchUsers, runAdminSearchUsers };
+module.exports = { registerAdminSearchUsers, runAdminSearchUsers, plainUserRow, deepPlainFirestoreValue };
