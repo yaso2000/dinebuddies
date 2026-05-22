@@ -1189,9 +1189,16 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const currentClaims = targetUser.customClaims || {};
+    const targetEmail = (targetUser.email || '').toLowerCase();
+    const targetIsConfiguredSuperOwner =
+        SUPER_OWNER_UIDS.includes(targetUid) || SUPER_OWNER_EMAILS.includes(targetEmail);
+    await admin.auth().setCustomUserClaims(targetUid, {
+        ...currentClaims,
+        admin: true,
+        superOwner: currentClaims.superOwner === true || targetIsConfiguredSuperOwner
+    });
 
     return { success: true, targetUid };
 });
