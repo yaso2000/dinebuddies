@@ -47,7 +47,7 @@ const PrivateInvitationPreview = () => {
                 }
 
                 const data = invitationDoc.data();
-                if (data.status !== 'draft') {
+                if (data.status !== 'draft' || data.publishedAt) {
                     navigate(`/invitation/private/${draftId}`);
                     return;
                 }

@@ -2,12 +2,18 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getCheckoutItem } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 
 const db = admin.firestore();
+
+function appendSessionId(url) {
+    const separator = String(url || '').includes('?') ? '&' : '?';
+    return `${url}${separator}session_id={CHECKOUT_SESSION_ID}`;
+}
 
 /**
  * إنشاء جلسة دفع Stripe Checkout
@@ -21,14 +27,20 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { planId } = data || {};
     const userId = context.auth.uid;
 
-    if (!priceId) {
+    const checkoutItem = getCheckoutItem(planId);
+    if (!checkoutItem) {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Invalid plan'
         );
+    }
+    const successUrl = String(data?.successUrl || '').trim();
+    const cancelUrl = String(data?.cancelUrl || '').trim();
+    if (!successUrl || !cancelUrl) {
+        throw new functions.https.HttpsError('invalid-argument', 'successUrl and cancelUrl are required');
     }
 
     try {
@@ -54,25 +66,36 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             }, { merge: true });
         }
 
-        // إنشاء Checkout Session
-        const session = await stripe.checkout.sessions.create({
+        const sessionParams = {
             customer: customerId,
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: checkoutItem.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl,
+            mode: checkoutItem.mode,
+            success_url: appendSessionId(successUrl),
+            cancel_url: cancelUrl,
+            client_reference_id: userId,
             metadata: {
                 userId: userId,
-                planId: planId,
-                planName: planName
+                planId: checkoutItem.planId,
+                checkoutKind: checkoutItem.kind,
             }
-        });
+        };
+        if (checkoutItem.mode === 'subscription') {
+            sessionParams.subscription_data = {
+                metadata: {
+                    userId,
+                    planId: checkoutItem.planId,
+                },
+            };
+        }
+
+        // Create Checkout from the server-owned catalog. Never trust client price IDs.
+        const session = await stripe.checkout.sessions.create(sessionParams);
 
         console.log(`✅ Checkout session created for user ${userId}: ${session.id}`);
 
@@ -170,7 +193,7 @@ exports.createCreditsCheckoutSession = functions.https.onCall(async (data, conte
             payment_method_types: ['card'],
             line_items: [{ price: priceId, quantity: 1 }],
             mode: 'payment',
-            success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
+            success_url: appendSessionId(successUrl),
             cancel_url: cancelUrl,
             metadata: {
                 userId,
