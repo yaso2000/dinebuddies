@@ -125,9 +125,9 @@ const PrivateInvitationDetails = () => {
     const myRSVP = invitation.rsvps?.[viewerId] || 'pending';
     const canChat = isHost || myRSVP === 'accepted';
 
-    // Edit is allowed only if NO ONE has accepted yet
+    // Published invitee changes must go through a server-side notify/charge path.
     const hasAccepted = Object.values(invitation.rsvps || {}).some(s => s === 'accepted');
-    const canEdit = isHost && !hasAccepted;
+    const canEdit = isHost && !hasAccepted && invitation.status === 'draft' && !invitation.publishedAt;
 
     const templateStyles = getTemplateStyle(
         invitation.templateType || 'classic',

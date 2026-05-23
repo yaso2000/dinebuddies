@@ -322,10 +322,13 @@ const CreatePrivateInvitation = () => {
                 }
             }
 
-            // Initialize RSVPs as 'pending' for all invited friends
+            // Preserve existing RSVP decisions while marking newly added invitees pending.
+            const existingRsvps = editInvitation?.rsvps && typeof editInvitation.rsvps === 'object'
+                ? editInvitation.rsvps
+                : {};
             const initialRsvps = {};
             formData.invitedFriends.forEach(friendId => {
-                initialRsvps[friendId] = 'pending';
+                initialRsvps[friendId] = existingRsvps[friendId] || 'pending';
             });
 
             const draftData = {
@@ -336,8 +339,7 @@ const CreatePrivateInvitation = () => {
                 cardBackgroundId: cardBackgroundId || null,
                 rsvps: initialRsvps,
                 type: 'Private',
-                status: 'draft',
-                createdAt: serverTimestamp()
+                status: editInvitation?.status || 'draft'
             };
 
             if (existingDraftId) {
@@ -351,7 +353,10 @@ const CreatePrivateInvitation = () => {
             } else {
                 // CREATE NEW
                 console.log('🔏 Creating private invitation draft...');
-                const draftId = await addPrivateInvitation(draftData);
+                const draftId = await addPrivateInvitation({
+                    ...draftData,
+                    createdAt: serverTimestamp()
+                });
                 console.log('📋 Draft result:', draftId);
                 if (draftId) {
                     navigate(`/invitation/private/preview/${draftId}`);

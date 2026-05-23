@@ -232,9 +232,12 @@ const CreateDatingInvitation = () => {
                 }
             }
 
+            const existingRsvps = editInvitation?.rsvps && typeof editInvitation.rsvps === 'object'
+                ? editInvitation.rsvps
+                : {};
             const initialRsvps = {};
             formData.invitedFriends.forEach(friendId => {
-                initialRsvps[friendId] = 'pending';
+                initialRsvps[friendId] = existingRsvps[friendId] || 'pending';
             });
 
             const draftData = {
@@ -242,8 +245,7 @@ const CreateDatingInvitation = () => {
                 ...mediaFields,
                 rsvps: initialRsvps,
                 type: 'Dating',
-                status: 'draft',
-                createdAt: serverTimestamp()
+                status: editInvitation?.status || 'draft'
             };
 
             if (existingDraftId) {
@@ -251,7 +253,10 @@ const CreateDatingInvitation = () => {
                 await updateDoc(draftRef, { ...draftData, updatedAt: serverTimestamp() });
                 navigate(`/invitation/private/preview/${existingDraftId}`);
             } else {
-                const draftId = await addPrivateInvitation(draftData);
+                const draftId = await addPrivateInvitation({
+                    ...draftData,
+                    createdAt: serverTimestamp()
+                });
                 if (draftId) {
                     navigate(`/invitation/private/preview/${draftId}`);
                 }
