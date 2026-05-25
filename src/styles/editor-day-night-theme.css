@@ -1,0 +1,295 @@
+/**
+ * Motion post studio + featured post editor — follow app day/night (data-theme).
+ * Preview canvas stays slightly darker in light mode so post contrast stays realistic.
+ */
+
+/* ── Motion studio tokens ── */
+.sps-page--premium {
+    --sps-neon: var(--primary);
+    --sps-glow: var(--secondary, #ff9d2e);
+    --sps-neon-bg: var(--bg-body);
+    --sps-glass: color-mix(in srgb, var(--bg-card) 90%, transparent);
+    --sps-glass-border: color-mix(in srgb, var(--primary) 22%, var(--border-color));
+    --sps-text: var(--text-main);
+    --sps-muted: var(--text-muted);
+    --sps-surface: color-mix(in srgb, var(--text-main) 6%, transparent);
+    --sps-surface-strong: color-mix(in srgb, var(--text-main) 10%, transparent);
+    --sps-input-bg: var(--bg-input);
+    --sps-shadow-soft: var(--shadow-premium);
+    --sps-preview-bg: #0f1115;
+    --sps-preview-panel-bg: #161920;
+    --sps-strip-bg: rgba(15, 17, 21, 0.95);
+    --sps-strip-border: rgba(255, 122, 0, 0.2);
+    --sps-dock-bg: linear-gradient(0deg, #0a0c10 0%, rgba(15, 17, 21, 0.98) 100%);
+    --sps-dock-footer-bg: linear-gradient(0deg, rgba(15, 17, 21, 0.98) 0%, #0a0c10 100%);
+    --sps-dock-border: rgba(255, 122, 0, 0.15);
+    --sps-dock-footer-border: rgba(255, 255, 255, 0.06);
+    --sps-control-bg: rgba(255, 255, 255, 0.04);
+    --sps-control-border: rgba(255, 255, 255, 0.1);
+    --sps-control-hover: rgba(255, 255, 255, 0.08);
+    --sps-inset-bg: rgba(0, 0, 0, 0.22);
+    --sps-inset-border: rgba(255, 255, 255, 0.06);
+    --sps-popover-bg: rgba(15, 17, 21, 0.97);
+    --sps-rail-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    --sps-panel-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    --sps-export-text: #0f1115;
+    --sps-divider: rgba(255, 255, 255, 0.12);
+    background: var(--sps-neon-bg);
+    color: var(--sps-text);
+}
+
+[data-theme='light'] .sps-page--premium {
+    --sps-glass: var(--bg-card);
+    --sps-glass-border: color-mix(in srgb, var(--primary) 28%, var(--border-color));
+    --sps-surface: var(--bg-secondary);
+    --sps-surface-strong: var(--hover-overlay);
+    --sps-shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --sps-preview-bg: #c8ced8;
+    --sps-preview-panel-bg: #e2e6ed;
+    --sps-strip-bg: var(--bg-card);
+    --sps-strip-border: var(--border-color);
+    --sps-dock-bg: var(--bg-body);
+    --sps-dock-footer-bg: var(--bg-secondary);
+    --sps-dock-border: var(--border-color);
+    --sps-dock-footer-border: var(--border-color);
+    --sps-control-bg: var(--bg-card);
+    --sps-control-border: var(--border-color);
+    --sps-control-hover: var(--hover-overlay);
+    --sps-inset-bg: var(--bg-input);
+    --sps-inset-border: var(--border-color);
+    --sps-popover-bg: var(--bg-card);
+    --sps-rail-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --sps-panel-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --sps-export-text: #ffffff;
+    --sps-divider: var(--border-color);
+}
+
+[data-theme='light'] .sps-page--premium .sps-layout-pill,
+[data-theme='light'] .sps-page--premium .sps-tool-rail,
+[data-theme='light'] .sps-page--premium .sps-anim-rail,
+[data-theme='light'] .sps-page--premium .sps-glass-panel,
+[data-theme='light'] .sps-page--premium .sps-editor-dock,
+[data-theme='light'] .sps-page--premium .sps-editor-panels,
+[data-theme='light'] .sps-page--premium .sps-actions__ghost,
+[data-theme='light'] .sps-page--premium .sps-actions__scope {
+    background: var(--sps-glass);
+    border-color: var(--sps-glass-border);
+    color: var(--sps-text);
+    box-shadow: var(--sps-shadow-soft);
+}
+
+[data-theme='light'] .sps-page--premium .sps-tool-rail__btn,
+[data-theme='light'] .sps-page--premium .sps-anim-rail__btn,
+[data-theme='light'] .sps-page--premium .sps-mini-tool,
+[data-theme='light'] .sps-page--premium .sps-fx-toggle,
+[data-theme='light'] .sps-page--premium .sps-fx-color-btn,
+[data-theme='light'] .sps-page--premium .sps-stepper-btn,
+[data-theme='light'] .sps-page--premium .sps-chip,
+[data-theme='light'] .sps-page--premium .sps-color-toggle__btn,
+[data-theme='light'] .sps-page--premium .sps-font-grid__item,
+[data-theme='light'] .sps-page--premium .sps-quick-chip,
+[data-theme='light'] .sps-page--premium .sps-promo-chip,
+[data-theme='light'] .sps-page--premium .sps-select,
+[data-theme='light'] .sps-page--premium .sps-canvas-float,
+[data-theme='light'] .sps-page--premium .sps-canvas-clear {
+    background: var(--sps-surface);
+    border-color: var(--border-color);
+    color: var(--sps-text);
+}
+
+[data-theme='light'] .sps-page--premium .sps-tool-rail__btn.active,
+[data-theme='light'] .sps-page--premium .sps-anim-rail__btn.active,
+[data-theme='light'] .sps-page--premium .sps-mini-tool.active,
+[data-theme='light'] .sps-page--premium .sps-fx-cell.is-on .sps-fx-toggle,
+[data-theme='light'] .sps-page--premium .sps-chip.active,
+[data-theme='light'] .sps-page--premium .sps-color-target.active,
+[data-theme='light'] .sps-page--premium .sps-font-grid__item.active,
+[data-theme='light'] .sps-page--premium .sps-layout-pill.active {
+    color: var(--sps-neon);
+    border-color: color-mix(in srgb, var(--sps-neon) 45%, var(--border-color));
+    background: color-mix(in srgb, var(--sps-neon) 12%, var(--bg-card));
+}
+
+[data-theme='light'] .sps-page--premium .sps-glass-row,
+[data-theme='light'] .sps-page--premium .sps-glass-sub,
+[data-theme='light'] .sps-page--premium .sps-color-row__label,
+[data-theme='light'] .sps-page--premium .sps-toggle-row,
+[data-theme='light'] .sps-page--premium .sps-actions__scope,
+[data-theme='light'] .sps-page--premium .sps-quick-styles__label {
+    color: var(--sps-muted);
+}
+
+[data-theme='light'] .sps-page--premium .sps-glass-row__value,
+[data-theme='light'] .sps-page--premium .sps-stepper-row__value {
+    color: var(--sps-neon);
+}
+
+[data-theme='light'] .sps-page--premium .sps-fx-color-popover {
+    background: var(--bg-card);
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--border-color));
+    box-shadow: var(--shadow-card-hover);
+}
+
+[data-theme='light'] .sps-page--premium .sps-canvas-stage__grid {
+    opacity: 0.35;
+}
+
+[data-theme='light'] .sps-page--premium .sps-layout-strip--top {
+    background: var(--sps-strip-bg);
+    border-bottom-color: var(--sps-strip-border);
+}
+
+[data-theme='light'] .sps-page--premium .sps-editor-dock {
+    background: var(--sps-dock-bg);
+    border-top-color: var(--sps-dock-border);
+}
+
+[data-theme='light'] .sps-page--premium .sps-editor-dock__footer {
+    background: var(--sps-dock-footer-bg);
+    border-top-color: var(--sps-dock-footer-border);
+}
+
+[data-theme='light'] .sps-page--premium .sps-layout-strip__btn {
+    background: var(--sps-control-bg);
+    border-color: var(--sps-control-border);
+    color: var(--sps-muted);
+}
+
+[data-theme='light'] .sps-page--premium .sps-layout-strip__btn.active {
+    color: var(--sps-neon);
+    background: color-mix(in srgb, var(--sps-neon) 12%, var(--bg-card));
+}
+
+[data-theme='light'] .sps-page--premium .sps-tool-rail__btn:hover,
+[data-theme='light'] .sps-page--premium .sps-anim-rail__btn:hover {
+    background: var(--sps-control-hover);
+    color: var(--sps-text);
+}
+
+[data-theme='light'] .sps-page--premium .sps-tool-rail__sep {
+    background: var(--sps-divider);
+}
+
+[data-theme='light'] .sps-page--premium .sps-quick-chip {
+    color: var(--sps-text);
+    border-color: var(--sps-control-border);
+    background: var(--sps-control-bg);
+}
+
+[data-theme='light'] .sps-page--premium .sps-color-picker-panel,
+[data-theme='light'] .sps-page--premium .sps-color-toggle,
+[data-theme='light'] .sps-page--premium .sps-fx-color-popover {
+    background: var(--sps-inset-bg);
+    border-color: var(--sps-inset-border);
+}
+
+[data-theme='light'] .sps-page--premium .sps-actions__export {
+    color: var(--sps-export-text);
+}
+
+[data-theme='light'] .sps-page--premium .sps-glass-panel input[type='checkbox'] {
+    accent-color: var(--primary);
+}
+
+[data-theme='light'] .sps-preview {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--primary) 20%, var(--border-color)),
+        0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='light'] .sps-preview .sps-preview__editable.is-empty:empty::before {
+    color: rgba(15, 23, 42, 0.42);
+}
+
+[data-theme='light'] .sps-preview .sps-preview__panel {
+    color: var(--text-main);
+}
+
+[data-theme='light'] .sps-page--premium .sticky-header-glass,
+[data-theme='light'] .fp-page .sticky-header-glass {
+    background: var(--glass-overlay);
+    border-bottom-color: var(--border-color);
+}
+
+/* ── Featured post editor ── */
+.fp-page {
+    --fp-panel-bg: color-mix(in srgb, var(--bg-card) 94%, transparent);
+    --fp-panel-border: var(--border-color);
+    --fp-input-bg: var(--bg-input);
+    --fp-input-border: var(--border-color);
+    --fp-muted: var(--text-muted);
+    --fp-text: var(--text-main);
+    --fp-surface: var(--bg-secondary);
+    --fp-shadow: var(--shadow-premium);
+    background: var(--bg-body);
+    color: var(--fp-text);
+}
+
+[data-theme='light'] .fp-page {
+    --fp-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .fp-page .fp-panel {
+    background: var(--fp-panel-bg);
+    border-color: var(--fp-panel-border);
+    box-shadow: var(--fp-shadow);
+}
+
+[data-theme='light'] .fp-page .fp-controls__label,
+[data-theme='light'] .fp-page .fp-studio__zone-label {
+    color: var(--fp-muted);
+}
+
+[data-theme='light'] .fp-page .fp-align-group,
+[data-theme='light'] .fp-page .fp-font-chip,
+[data-theme='light'] .fp-page .fp-bg-upload-btn {
+    background: var(--fp-panel-bg);
+    border-color: var(--fp-panel-border);
+    box-shadow: var(--fp-shadow);
+}
+
+[data-theme='light'] .fp-page .fp-align-btn,
+[data-theme='light'] .fp-page .fp-text-btn {
+    background: var(--fp-surface);
+    border-color: var(--fp-panel-border);
+    color: var(--fp-muted);
+}
+
+[data-theme='light'] .fp-page .fp-align-btn.active {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+}
+
+[data-theme='light'] .fp-page .fp-color-dot {
+    border-color: color-mix(in srgb, var(--fp-text) 12%, transparent);
+}
+
+[data-theme='light'] .fp-page .fp-color-dot.active {
+    border-color: var(--primary);
+}
+
+[data-theme='light'] .fp-page .fp-bg-upload-btn {
+    background: var(--fp-surface);
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--border-color));
+}
+
+[data-theme='light'] .fp-page .fp-bg-upload-btn__icon {
+    background: color-mix(in srgb, var(--primary) 14%, var(--bg-card));
+}
+
+[data-theme='light'] .fp-page .fp-preview-card {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--primary) 12%, var(--border-color)),
+        0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+[data-theme='light'] .fp-page .fp-publish-bar {
+    background: linear-gradient(to top, var(--bg-body) 92%, transparent);
+    border-top-color: var(--border-color);
+}
+
+[data-theme='light'] .fp-page .fp-paid-banner {
+    background: color-mix(in srgb, var(--primary) 10%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--primary) 28%, var(--border-color));
+    color: var(--fp-text);
+}

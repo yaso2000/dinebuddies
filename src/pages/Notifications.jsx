@@ -38,6 +38,8 @@ const getNotifTitle = (notif, t) => {
         case 'reminder':         return t('notif_title_reminder', 'Upcoming Invitation');
         case 'like':             return t('notif_title_like', 'Invitation Liked');
         case 'comment':          return t('notif_title_comment', 'New Comment');
+        case 'comment_reply':    return t('notif_title_comment_reply', 'New reply');
+        case 'comment_like':     return t('notif_title_comment_like', 'Comment liked');
         case 'invitation_full':  return t('notif_title_full', 'Invitation Complete');
         case 'booking_confirmed':return t('notif_title_booking_confirmed', 'Booking Confirmed');
         case 'invitation_cancelled': return t('notif_title_cancelled', 'Invitation Cancelled');
@@ -52,6 +54,9 @@ const getNotifTitle = (notif, t) => {
         case 'join_request':     return t('notif_title_join_request', 'New Join Request');
         case 'request_approved':    return t('notif_title_request_approved', 'Request Approved');
         case 'business_message':    return t('notif_title_business_message', 'Message from Business');
+        case 'new_booking':         return t('notif_title_new_booking', 'New booking');
+        case 'business_feedback':   return t('notif_title_business_feedback', 'Customer feedback');
+        case 'business_post':       return t('notif_title_business_post', 'New post');
         default:                    return notif.title || t('notification', 'Notification');
     }
 };
@@ -77,7 +82,11 @@ const getNotifMessage = (notif, t) => {
         case 'like':
             return t('notif_msg_like', '{{name}} liked your invitation', { name });
         case 'comment':
-            return notif.message || t('notif_msg_comment', '{{name}} commented on your invitation', { name });
+            return notif.message || t('notif_msg_comment', '{{name}} commented on your post', { name });
+        case 'comment_reply':
+            return notif.message || t('notif_msg_comment_reply', '{{name}} replied to your comment', { name });
+        case 'comment_like':
+            return notif.message || t('notif_msg_comment_like', '{{name}} liked your comment', { name });
         case 'invitation_full':
             return t('notif_msg_full', 'Great news! Your invitation is now complete with all guests confirmed.');
         case 'booking_confirmed':
@@ -109,6 +118,10 @@ const getNotifMessage = (notif, t) => {
             return t('notif_msg_request_approved', 'Your request to join was approved', { name });
         case 'business_message':
             return notif.message || t('notif_title_business_message', 'Message from Business');
+        case 'new_booking':
+        case 'business_feedback':
+        case 'business_post':
+            return notif.message || '';
         default:
             return notif.message || '';
     }
@@ -155,8 +168,10 @@ const Notifications = () => {
             case 'message':
                 return <FaCommentAlt style={{ ...iconStyle, color: 'var(--secondary)' }} />;
             case 'like':
+            case 'comment_like':
                 return <FaHeart style={{ ...iconStyle, color: '#f472b6' }} />;
             case 'comment':
+            case 'comment_reply':
                 return <FaCommentAlt style={{ ...iconStyle, color: '#3b82f6' }} />;
             case 'reminder':
                 return <FaExclamationCircle style={{ ...iconStyle, color: '#f59e0b' }} />;
@@ -168,6 +183,11 @@ const Notifications = () => {
                 ) : (
                     <FaCheckCircle style={{ ...iconStyle, color: '#10b981' }} />
                 );
+            case 'business_post':
+            case 'new_booking':
+                return <FaCalendarCheck style={{ ...iconStyle, color: '#10b981' }} />;
+            case 'business_feedback':
+                return <FaCommentAlt style={{ ...iconStyle, color: '#f59e0b' }} />;
             case 'business_message':
             case 'community_message':
                 return <FaCommentAlt style={{ ...iconStyle, color: 'var(--secondary)' }} />;
@@ -179,7 +199,7 @@ const Notifications = () => {
     const handleNotificationClick = (notification) => {
         // Mark as read
         if (!notification.read) {
-            markAsRead(notification.id);
+            markAsRead(notification.id, notification._collection || 'notifications');
         }
 
         // Special routing: business_message should always open the chat,
@@ -255,27 +275,33 @@ const Notifications = () => {
                 </button>
                 <h1>{t('notifications')}</h1>
                 <div className="header-actions">
-
+                    <button
+                        type="button"
+                        onClick={() => navigate('/settings/notifications')}
+                        className="settings-btn ui-btn ui-btn--secondary"
+                        title={t('notification_settings', 'Notification Settings')}
+                        aria-label={t('notification_settings', 'Notification Settings')}
+                    >
+                        <FaCog />
+                    </button>
                     {notifications.length > 0 && (
                         <>
-                            <button
-                                onClick={() => navigate('/settings/notifications')}
-                                className="settings-btn ui-btn ui-btn--secondary"
-                                title={t('notification_settings', 'Notification Settings')}
-                            >
-                                <FaCog />
-                            </button>
-
                             {unreadCount > 0 && (
-                            <button
-                                onClick={markAllAsRead}
-                                className="mark-all-btn ui-btn ui-btn--primary"
-                                title={t('mark_all_read', 'Mark all read')}
-                            >
+                                <button
+                                    type="button"
+                                    onClick={markAllAsRead}
+                                    className="mark-all-btn ui-btn ui-btn--primary"
+                                    title={t('mark_all_read', 'Mark all read')}
+                                >
                                     <FaCheckDouble />
                                 </button>
                             )}
-                            <button onClick={deleteAllNotifications} className="delete-all-btn ui-btn ui-btn--ghost" title={t('delete_all', 'Delete all')}>
+                            <button
+                                type="button"
+                                onClick={deleteAllNotifications}
+                                className="delete-all-btn ui-btn ui-btn--ghost"
+                                title={t('delete_all', 'Delete all')}
+                            >
                                 <FaTrash />
                             </button>
                         </>
@@ -416,7 +442,7 @@ const Notifications = () => {
                                 className="delete-btn ui-btn--danger-outline"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    deleteNotification(notif.id);
+                                    deleteNotification(notif.id, notif._collection || 'notifications');
                                 }}
                                 title={t('delete', 'Delete')}
                             >

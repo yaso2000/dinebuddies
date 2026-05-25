@@ -27,6 +27,8 @@ export function getFatalUiRecoveryTarget(pathname = '') {
     if (p === '/login' || p.startsWith('/login')) return '/login';
     if (p.startsWith('/invitation/private/preview/')) return '/create-private';
     if (p.startsWith('/create-private')) return '/create-private';
+    if (p === '/create-featured-post') return '/create-featured-post';
+    if (p === '/create-post') return '/create-post';
     return '/posts-feed';
 }
 

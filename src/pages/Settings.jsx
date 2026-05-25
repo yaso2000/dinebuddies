@@ -6,11 +6,11 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet, FaBullhorn } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
-import { normalizeBusinessTier } from '../utils/businessSubscription';
+import { normalizeBusinessTier, getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import { BASE_SUBSCRIPTION_PLANS } from '../config/planDefaults';
 
 const BUSINESS_PAID_MONTHLY_USD =
@@ -212,6 +212,7 @@ const Settings = () => {
 
     // Add Business Profile link for business accounts
     if (isBusiness) {
+        const bizTier = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
         settingsSections.unshift({
             title: t('business', 'Business'),
             items: [
@@ -221,6 +222,15 @@ const Settings = () => {
                     value: t('view_edit_inline', 'View & edit inline'),
                     onClick: () => navigate(`/business/${currentUser?.uid}`),
                     color: '#f97316'
+                },
+                {
+                    icon: <FaBullhorn />,
+                    label: t('business_member_notifications', 'Member alerts & offers'),
+                    value: bizTier.canUseMemberNotifications
+                        ? t('enabled', 'Enabled')
+                        : t('paid_plan', 'Paid'),
+                    onClick: () => navigate('/business-dashboard#business-notifications'),
+                    color: '#ec4899'
                 }
             ]
         });
@@ -478,7 +488,8 @@ const Settings = () => {
                     <h3 className="settings-section-title">{section.title}</h3>
                     <div className="settings-section-card ui-card">
                         {section.items.map((item, itemIndex) => (
-                            <div
+                            <button
+                                type="button"
                                 key={itemIndex}
                                 onClick={item.onClick}
                                 className="settings-row"
@@ -528,7 +539,7 @@ const Settings = () => {
                                 </div>
 
                                 <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }} />
-                            </div>
+                            </button>
                         ))}
                     </div>
                 </div>

@@ -29,6 +29,8 @@ const {
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
+const { createPushMessaging } = require('./pushMessaging');
+const { sendPushToUser, registerNotificationPushTrigger } = createPushMessaging({ db, admin });
 /** @param {Record<string, unknown>} inv */
 function isDatingInvitationDocForBilling(inv) {
     if (!inv || typeof inv !== 'object') return false;
@@ -69,6 +71,8 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'reminder',
     'like',
     'comment',
+    'comment_like',
+    'comment_reply',
     'invitation_cancelled',
     'booking_cancelled',
     'invitation_completed',
@@ -225,8 +229,8 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
         return false;
     }
 
-    // comment & like: allowed for both post-based (no invitationId) and invitation-based interactions
-    if (type === 'like' || type === 'comment') {
+    // comment, reply, like: post-based (no invitationId) or invitation host
+    if (type === 'like' || type === 'comment' || type === 'comment_like' || type === 'comment_reply') {
         if (!invitationId) return true; // post-based: always allow
         const invSnap = await db.collection('invitations').doc(invitationId).get();
         if (!invSnap.exists) return false;
@@ -302,7 +306,8 @@ registerAdminDashboard(exports, { db, admin, assertAdminContext });
 registerAdminMassMessaging(exports, { db, admin, assertAdminContext });
 registerDirectorySearch(exports, { db, admin });
 registerConsumerAccountSearch(exports, { db });
-
+const { registerBusinessPostNotify } = require('./businessPostNotify');
+registerBusinessPostNotify(exports, { db, admin, enforceCallableRateLimit });
 function asTrimmedString(value) {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
@@ -1711,7 +1716,8 @@ exports.createNotification = functions.https.onCall(async (data, context) => {
     // Comprehensive avatar extraction exactly like frontend avatarUtils.js
     const senderAvatar = sender.avatar || sender.photo_url || sender.photoURL || sender.profilePicture || sender.userPhoto || sender.logo || sender.logoImage || null;
 
-    await db.collection('notifications').add({
+    const notifRef = db.collection('notifications').doc();
+    await notifRef.set({
         userId,
         type,
         title,
@@ -1721,7 +1727,6 @@ exports.createNotification = functions.https.onCall(async (data, context) => {
         style: style || null,
         status: status || null,
         metadata,
-        // Trusted sender identity (server-populated)
         fromUserId: senderId,
         fromUserName: senderName,
         fromUserAvatar: senderAvatar,
@@ -1729,10 +1734,11 @@ exports.createNotification = functions.https.onCall(async (data, context) => {
         senderName,
         senderAvatar,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        read: false
+        read: false,
     });
 
-    return { success: true };
+    // Push is sent once by onNotificationCreated (avoid double FCM → double iOS banners).
+    return { success: true, id: notifRef.id, pushDelivered: 'trigger' };
 });
 
 // ─── Trusted callable: create report with anti-spam limits ───────────────────
@@ -2373,183 +2379,7 @@ exports.deleteOldCommunityPosts = functions.pubsub
         return null;
     });
 
-// ─── FCM Push Notifications ──────────────────────────────────────────────────
-
-const FCM_SITE_ORIGIN = 'https://www.dinebuddies.com';
-const FCM_DEFAULT_ICON = `${FCM_SITE_ORIGIN}/icon-light-192.png`;
-
-/** Relative paths like `/chat/x` break Web Push click targets on iOS — must be absolute https. */
-function fcmAbsoluteAppUrl(pathOrUrl) {
-    const raw = String(pathOrUrl || '/').trim() || '/';
-    if (/^https:\/\//i.test(raw)) {
-        try {
-            return new URL(raw).href;
-        } catch {
-            return `${FCM_SITE_ORIGIN}/`;
-        }
-    }
-    const path = raw.startsWith('/') ? raw : `/${raw}`;
-    return `${FCM_SITE_ORIGIN}${path}`;
-}
-
-/** Non-https or malformed avatar URLs can cause delivery/click issues — use site icon. */
-function fcmSafeIconUrl(maybeUrl) {
-    if (!maybeUrl || typeof maybeUrl !== 'string') return FCM_DEFAULT_ICON;
-    const t = maybeUrl.trim();
-    if (!/^https:\/\//i.test(t)) return FCM_DEFAULT_ICON;
-    try {
-        const u = new URL(t);
-        return u.protocol === 'https:' ? t : FCM_DEFAULT_ICON;
-    } catch {
-        return FCM_DEFAULT_ICON;
-    }
-}
-
-/**
- * Send an FCM push notification to a specific user.
- * Reads fcmTokens[] from users/{uid}, sends multicast, and cleans up stale tokens.
- *
- * @param {string} userId  — target user UID
- * @param {string} title   — notification title
- * @param {string} body    — notification body text
- * @param {object} data    — optional key-value data (actionUrl, type, etc.)
- */
-async function sendPushToUser(userId, title, body, data = {}) {
-    if (!userId) return;
-    // Never bail on whitespace/empty title — FCM would skip delivery silently otherwise.
-    const safeTitle =
-        title != null && String(title).trim() !== '' ? String(title).trim() : 'DineBuddies';
-    try {
-        const userSnap = await db.collection('users').doc(userId).get();
-        if (!userSnap.exists) return;
-        const rawTokens = userSnap.data()?.fcmTokens || [];
-        const tokens = [...new Set(rawTokens.map((t) => String(t).trim()).filter(Boolean))];
-        if (!tokens.length) return;
-
-        const actionUrlAbs = fcmAbsoluteAppUrl(data.actionUrl || '/');
-        const cardImage = fcmSafeIconUrl(data.cardImageUrl);
-        const iconToUse = cardImage !== FCM_DEFAULT_ICON ? cardImage : fcmSafeIconUrl(data.senderAvatar);
-        const badgeUrl = FCM_DEFAULT_ICON;
-        const notifTag =
-            data.notifId != null && String(data.notifId).trim() !== ''
-                ? `db-notif-${String(data.notifId)}`
-                : null;
-
-        // Web/PWA: `webpush.notification` + `webpush.fcmOptions.link` (Admin SDK camelCase — NOT `fcm_options`).
-        // Root `data`: only strings (FCM). Include `url` for notificationclick fallbacks.
-        const dataStrings = Object.fromEntries(
-            Object.entries({
-                url: actionUrlAbs,
-                actionUrl: actionUrlAbs,
-                type: data.type || '',
-                senderAvatar: data.senderAvatar ? String(data.senderAvatar) : '',
-                notifId: data.notifId != null ? String(data.notifId) : '',
-            })
-                .filter(([, v]) => v != null && String(v).trim() !== '')
-                .map(([k, v]) => [k, String(v)])
-        );
-
-        const webNotif = {
-            title: safeTitle,
-            body: body || '',
-            icon: iconToUse,
-            badge: badgeUrl,
-        };
-        if (cardImage !== FCM_DEFAULT_ICON) {
-            webNotif.image = cardImage;
-        }
-        if (notifTag) webNotif.tag = notifTag;
-
-        const webpushCfg = {
-            notification: webNotif,
-            fcmOptions: { link: actionUrlAbs },
-            headers: { Urgency: 'high' },
-        };
-
-        const expiredTokens = [];
-        const MULTICAST_MAX = 500;
-
-        for (let offset = 0; offset < tokens.length; offset += MULTICAST_MAX) {
-            const chunk = tokens.slice(offset, offset + MULTICAST_MAX);
-            const response = await admin.messaging().sendEachForMulticast({
-                tokens: chunk,
-                notification: { title: safeTitle, body: body || '' },
-                webpush: webpushCfg,
-                data: dataStrings,
-            });
-
-            const successCount = response.successCount || 0;
-            functions.logger.info(`sendPushToUser chunk uid=${userId} ok=${successCount}/${chunk.length}`);
-
-            if (successCount === 0 && chunk.length > 0) {
-                const codes = response.responses
-                    .filter((r) => !r.success)
-                    .map((r) => r.error?.code || r.error?.message || 'unknown');
-                functions.logger.warn(
-                    `sendPushToUser: 0/${chunk.length} for ${userId} (chunk @${offset})`,
-                    [...new Set(codes)].join(' | ')
-                );
-            }
-
-            response.responses.forEach((r, i) => {
-                if (r.success) return;
-                const code = r.error?.code;
-                if (
-                    code === 'messaging/invalid-registration-token' ||
-                    code === 'messaging/registration-token-not-registered' ||
-                    code === 'messaging/unregistered' ||
-                    code === 'messaging/invalid-web-push-token' ||
-                    code === 'messaging/web-push-token-expired' ||
-                    code === 'messaging/web-push-auth-error' ||
-                    code === 'messaging/third-party-auth-error'
-                ) {
-                    expiredTokens.push(chunk[i]);
-                }
-            });
-        }
-
-        const uniqExpired = [...new Set(expiredTokens)];
-        for (let i = 0; i < uniqExpired.length; i += 30) {
-            const part = uniqExpired.slice(i, i + 30);
-            await db.collection('users').doc(userId).update({
-                fcmTokens: admin.firestore.FieldValue.arrayRemove(...part),
-            });
-        }
-    } catch (err) {
-        functions.logger.warn('sendPushToUser failed:', userId, err.message);
-    }
-}
-
-/**
- * Firestore trigger: whenever a new document is created in notifications/{notifId},
- * send a Firebase Cloud Messaging push to the target user's devices.
- * This converts every in-app notification into a real push automatically.
- */
-exports.onNotificationCreated = functions.firestore
-    .document('notifications/{notifId}')
-    .onCreate(async (snap) => {
-        const data = snap.data() || {};
-        const userId = data.userId;
-        const title = data.title || 'DineBuddies';
-        const body = data.message || '';
-        const actionUrl = data.actionUrl || '/';
-        const senderAvatar = data.senderAvatar || data.fromUserAvatar || data.senderPhoto || '';
-        const cardImageUrl =
-            data.cardImageUrl ||
-            data.metadata?.cardImageUrl ||
-            null;
-
-        if (!userId) return null;
-        const notifId = snap.id;
-        await sendPushToUser(userId, title, body, {
-            actionUrl,
-            type: data.type || '',
-            senderAvatar,
-            cardImageUrl,
-            notifId,
-        });
-        return null;
-    });
+registerNotificationPushTrigger(exports);
 
 /**
  * Scheduled function to delete media related to posts and chats permanently after 1 month.
@@ -2794,8 +2624,14 @@ exports.deleteExpiredStories = functions.pubsub.schedule('every 1 hours').onRun(
     } catch (e) {
         console.error('deleteExpiredStories error:', e);
     }
-    return null;
-});
+        return null;
+    });
+
+const { registerPartnerNotificationInbox } = require('./partnerNotificationInbox');
+registerPartnerNotificationInbox(exports, { db, admin, sendPushToUser });
+
+const { registerPushDevice } = require('./pushDevice');
+registerPushDevice(exports, { db, admin, sendPushToUser });
 
 // ─── Admin: email campaigns (Resend) — see functions/adminEmailCampaign.js ─
 const { registerAdminEmailCampaign } = require('./adminEmailCampaign');

@@ -37,7 +37,13 @@ type NormalStubProps = {
     aspectRatio?: string;
 };
 
-type NormalTemplateId = 'classic_split' | 'editorial_luxury' | 'wide_banner' | 'free_hero_center' | 'free_editorial_left';
+type NormalTemplateId =
+    | 'classic_split'
+    | 'editorial_luxury'
+    | 'wide_banner'
+    | 'free_hero_center'
+    | 'free_editorial_left'
+    | 'header_card';
 type UiAspectRatio = '1:1' | '16:9' | '9:16';
 
 const slideYName = (px: number) => `mpNmSlideY_${Math.round(Math.max(3, px))}`;
@@ -78,6 +84,7 @@ const animStyle = (
     if (animation === 'fade') return { opacity: 0, animation: `mpFadeIn ${base}`, ...delayed };
     if (animation === 'slide') return { opacity: 0, transform: `translateY(${yv}px)`, animation: `${y} ${base}`, ...delayed };
     if (animation === 'pop') return { opacity: 0, transform: 'scale(0.92)', animation: `mpPopIn ${base}`, ...delayed };
+    if (animation === 'zoom') return { opacity: 0, transform: 'scale(0.55)', animation: `mpZoomIn ${base}`, ...delayed };
     return { opacity: 0, transform: `translateY(${Math.round(yv * 0.65)}px)`, animation: `${y} ${base}`, ...delayed };
 };
 
@@ -87,6 +94,7 @@ function normalizeTemplateId(input?: string): NormalTemplateId {
     if (v === 'wide_banner') return 'wide_banner';
     if (v === 'free_hero_center') return 'free_hero_center';
     if (v === 'free_editorial_left') return 'free_editorial_left';
+    if (v === 'header_card') return 'header_card';
     return 'classic_split';
 }
 
@@ -450,8 +458,42 @@ export default function SqNormalStubV1({
         );
     };
 
+    const renderHeaderCard = () => (
+        <div
+            style={{
+                position: 'relative',
+                zIndex: 2,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+            }}
+        >
+            <div style={{ flex: '0 0 46%', minHeight: 0, position: 'relative' }} />
+            <div
+                style={{
+                    flex: 1,
+                    padding: pad,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    gap: 8,
+                    background: `linear-gradient(180deg, ${hexToRgba(theme.bgPrimary, 0.96)} 0%, ${hexToRgba(theme.bgSecondary, 0.92)} 100%)`,
+                    borderTop: motionThemeOutlineBorder(theme),
+                    minWidth: 0,
+                    overflow: 'visible',
+                    ...animStyle(style.animation, style.durationMs, 80, slidePx),
+                }}
+            >
+                <div style={{ textAlign: 'start' }}>{titleBlock}</div>
+                {subtitleEl}
+                {descriptionEl}
+            </div>
+        </div>
+    );
+
     const renderTemplateLayout = () => {
         try {
+            if (normalizedTemplateId === 'header_card') return renderHeaderCard();
             if (normalizedTemplateId === 'editorial_luxury') return renderEditorialLuxury();
             if (normalizedTemplateId === 'wide_banner') return renderWideBanner();
             if (normalizedTemplateId === 'free_hero_center') return renderFreeHeroCenter();
@@ -540,11 +582,13 @@ export default function SqNormalStubV1({
                         alt=""
                         style={{
                             position: 'absolute',
-                            inset: 0,
+                            ...(normalizedTemplateId === 'header_card'
+                                ? { top: 0, left: 0, right: 0, height: '46%', bottom: 'auto' }
+                                : { inset: 0, height: '100%' }),
                             width: '100%',
-                            height: '100%',
                             objectFit: 'cover',
-                            objectPosition: imgPos,
+                            objectPosition:
+                                normalizedTemplateId === 'header_card' ? 'center top' : imgPos,
                             opacity: imageOpacity,
                             transform: normalizedTemplateId === 'wide_banner' ? 'scale(1.04)' : 'scale(1.02)',
                         }}
@@ -574,6 +618,7 @@ export default function SqNormalStubV1({
             <style>{`
                 @keyframes mpFadeIn { from { opacity: 0; } to { opacity: 1; } }
                 @keyframes mpPopIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+                @keyframes mpZoomIn { from { opacity: 0; transform: scale(0.55); } to { opacity: 1; transform: scale(1); } }
                 @keyframes ${skY} { from { opacity: 0; transform: translateY(${Math.max(3, slidePx)}px); } to { opacity: 1; transform: translateY(0); } }
             `}</style>
         </div>

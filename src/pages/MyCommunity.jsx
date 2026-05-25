@@ -4,7 +4,7 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
-import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope, FaStore } from 'react-icons/fa';
+import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope, FaStore, FaBell, FaBullhorn } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import './MyCommunity.css';
@@ -237,10 +237,31 @@ const MyCommunity = () => {
                 </button>
             </div>
 
-            {/* Hub shortcuts (tier-aware) */}
+            {/* Hub shortcuts */}
+            <div className="my-community-actions">
+                <button
+                    type="button"
+                    className="my-community-btn my-community-btn--story ios-tap-target"
+                    onClick={() => navigate('/settings/notifications')}
+                    title={t('notification_settings', 'Notification Settings')}
+                >
+                    <FaBell style={{ fontSize: '0.75rem' }} />
+                    {t('notification_settings', 'Notification Settings')}
+                </button>
+                <button
+                    type="button"
+                    className="my-community-btn my-community-btn--post ios-tap-target"
+                    onClick={() => navigate('/business-dashboard#business-notifications')}
+                    title={t('business_member_notifications', 'Member alerts & offers')}
+                >
+                    <FaBullhorn style={{ fontSize: '0.75rem' }} />
+                    {t('business_member_notifications', 'Member alerts')}
+                </button>
+            </div>
             <div className="my-community-actions">
                 {tierAccess.isPaid ? (
                     <button
+                        type="button"
                         onClick={() => navigate('/rankings')}
                         className="my-community-btn my-community-btn--post"
                     >
@@ -249,6 +270,7 @@ const MyCommunity = () => {
                 ) : null}
                 {tierAccess.isPaid ? (
                     <button
+                        type="button"
                         onClick={() => navigate('/notifications')}
                         className="my-community-btn my-community-btn--story"
                     >
@@ -256,6 +278,7 @@ const MyCommunity = () => {
                     </button>
                 ) : null}
                 <button
+                    type="button"
                     onClick={() => navigate('/invitations')}
                     className="my-community-btn my-community-btn--chat"
                 >

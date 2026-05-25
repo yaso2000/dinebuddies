@@ -19,7 +19,7 @@ import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { detectUserLocationContext } from '../utils/locationUtils';
-import { COLOR_SCHEMES, TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
+import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
 import {
     PUBLIC_VENUE_TYPES,
@@ -28,7 +28,7 @@ import {
     publicVenueTypeI18nKey,
 } from '../utils/publicInvitationVibes';
 import InvitationCard from '../components/InvitationCard';
-import { normalizeCoverAnimationType, PUBLIC_INVITATION_FONT_OPTIONS } from '../utils/aiInvitationThemeBinding';
+import PublicInviteCardStyleStudio from '../components/Invitations/publicCard/PublicInviteCardStyleStudio';
 import { invitationMessageMaxLength } from '../utils/invitationSmartDescription';
 
 import { goToLogin } from '../utils/goToLogin';
@@ -70,7 +70,6 @@ const CreateInvitation = () => {
     const mediaLibraryHydratedRef = useRef(false);
     const templateCarouselRef = useRef(null);
     const templateCarouselScrollTimerRef = useRef(null);
-    const colorScrollRef = useRef(null);
     const dragStateRef = useRef({
         activeKey: null,
         startX: 0,
@@ -312,7 +311,6 @@ const CreateInvitation = () => {
             editingInvitation?.templateType || prefilledData?.templateType || 'hero_1_1'
         ),
         cardFontFamily: editingInvitation?.cardFontFamily || '',
-        coverAnimationType: normalizeCoverAnimationType(editingInvitation?.coverAnimationType),
         // Override with editingInvitation data if present
         ...(editingInvitation ? {
             ...editingInvitation,
@@ -327,7 +325,6 @@ const CreateInvitation = () => {
             colorScheme: editingInvitation.colorScheme || 'oceanBlue',
             templateType: normalizePublicCardTemplateKey(editingInvitation.templateType || 'hero_1_1'),
             cardFontFamily: editingInvitation.cardFontFamily || '',
-            coverAnimationType: normalizeCoverAnimationType(editingInvitation.coverAnimationType),
             inviteMood:
                 editingInvitation.inviteMood ||
                 migrateLegacyOccasionToInviteMood(editingInvitation.occasionType),
@@ -356,7 +353,6 @@ const CreateInvitation = () => {
                         setFormData({
                             ...draft,
                             description: String(draft.description || '').slice(0, invitationMessageMaxLength),
-                            coverAnimationType: normalizeCoverAnimationType(draft.coverAnimationType),
                             inviteMood:
                                 draft.inviteMood || migrateLegacyOccasionToInviteMood(draft.occasionType),
                             type: normalizePublicVenueType(draft.type),
@@ -586,6 +582,7 @@ const CreateInvitation = () => {
             };
 
             draftData = stripUndefined(draftData);
+            delete draftData.coverAnimationType;
 
             // Remove old image field if exists
             if (draftData.image) {
@@ -600,7 +597,7 @@ const CreateInvitation = () => {
                 // Update existing draft
                 console.log('🔄 Updating existing draft:', draftId);
                 const invitationRef = doc(db, 'invitations', draftId);
-                await updateDoc(invitationRef, draftData);
+                await updateDoc(invitationRef, { ...draftData, coverAnimationType: deleteField() });
                 finalDraftId = draftId;
             } else {
                 // Create new draft
@@ -782,6 +779,7 @@ const CreateInvitation = () => {
             };
 
             cleanData = stripUndefined(cleanData);
+            delete cleanData.coverAnimationType;
 
             // Remove purely UI fields if strictly necessary, but Firestore ignores undefined usually.
             // If mediaFields provided a video, ensure we don't accidentally keep old image as primary if unnecessary
@@ -795,7 +793,7 @@ const CreateInvitation = () => {
                 console.log('📝 Updating invitation:', editingInvitation.id);
                 const invitationRef = doc(db, 'invitations', editingInvitation.id);
 
-                await updateDoc(invitationRef, cleanData);
+                await updateDoc(invitationRef, { ...cleanData, coverAnimationType: deleteField() });
                 console.log('✅ Invitation updated');
                 showToast(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }), 'success');
                 navigate(`/invitation/${editingInvitation.id}`);
@@ -926,7 +924,6 @@ const CreateInvitation = () => {
             inviteMood: formData.inviteMood,
             colorScheme: formData.colorScheme,
             cardFontFamily: formData.cardFontFamily || undefined,
-            coverAnimationType: normalizeCoverAnimationType(formData.coverAnimationType),
         };
     }, [
         formData.title,
@@ -944,7 +941,6 @@ const CreateInvitation = () => {
         formData.inviteMood,
         formData.colorScheme,
         formData.cardFontFamily,
-        formData.coverAnimationType,
         mediaData,
         previewHeroUrl,
         previewHostName,
@@ -1274,7 +1270,7 @@ const CreateInvitation = () => {
                     )}
                 </div>
 
-                <div className="form-grid">
+                <div className="form-grid inv-datetime-row">
                     <div className="form-group">
                         <label className="elegant-label">
                             <span className="label-icon">
@@ -1566,94 +1562,7 @@ const CreateInvitation = () => {
                     </div>
                 </div>
 
-                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
-                    <label className="elegant-label" style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>✍️</span>
-                        {t('invitation_card_font', { defaultValue: 'Title & message font' })}
-                    </label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        <button
-                            type="button"
-                            onClick={() => setFormData((prev) => ({ ...prev, cardFontFamily: '' }))}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '10px',
-                                border: !formData.cardFontFamily ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                background: !formData.cardFontFamily ? 'rgba(139, 92, 246, 0.12)' : 'var(--bg-card)',
-                                color: 'var(--text-main)',
-                                fontSize: '0.78rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                            }}
-                        >
-                            {t('invitation_font_default', { defaultValue: 'Default' })}
-                        </button>
-                        {PUBLIC_INVITATION_FONT_OPTIONS.map((f) => {
-                            const sel = formData.cardFontFamily === f.cssFamily;
-                            return (
-                                <button
-                                    key={f.label}
-                                    type="button"
-                                    onClick={() => setFormData((prev) => ({ ...prev, cardFontFamily: f.cssFamily }))}
-                                    style={{
-                                        padding: '8px 12px',
-                                        borderRadius: '10px',
-                                        border: sel ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                        background: sel ? 'rgba(139, 92, 246, 0.12)' : 'var(--bg-card)',
-                                        color: 'var(--text-main)',
-                                        fontFamily: f.cssFamily,
-                                        fontSize: '0.82rem',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    {f.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* Color Theme Horizontal Picker */}
-                <div className="form-group ui-form-surface public-invite-colors" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
-                    <label className="elegant-label" style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>🎨</span>
-                        {t('choose_color_theme', { defaultValue: 'Choose Color Theme' })}
-                    </label>
-
-                    <div
-                        className="hide-scroll-bar public-color-swatch-row"
-                        ref={colorScrollRef}
-                        onMouseDown={(e) => startHorizontalDrag('colors', colorScrollRef, e)}
-                        onMouseMove={(e) => moveHorizontalDrag('colors', colorScrollRef, e)}
-                        onMouseUp={() => endHorizontalDrag('colors', colorScrollRef)}
-                        onMouseLeave={() => endHorizontalDrag('colors', colorScrollRef)}
-                    >
-                        {Object.entries(COLOR_SCHEMES).map(([key, color]) => {
-                            const isSelected = formData.colorScheme === key;
-                            return (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    className={`public-color-swatch${isSelected ? ' is-selected' : ''}`}
-                                    style={{ background: color.gradient, boxShadow: isSelected ? `0 4px 12px ${color.shadow}` : '0 2px 6px rgba(0,0,0,0.12)' }}
-                                    onClick={() => setFormData({ ...formData, colorScheme: key })}
-                                    aria-pressed={isSelected}
-                                >
-                                    {isSelected && (
-                                        <span className="public-color-swatch__check" aria-hidden>
-                                            <FaCheckCircle />
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {/* Inject a tiny bit of CSS to hide webkit scrollbars for this specific row */}
-                    <style>{`.hide-scroll-bar::-webkit-scrollbar { display: none; }`}</style>
-                </div>
-
-                {/* Live template carousel — last section before submit (layout + motion + previews) */}
+                {/* Live template carousel — colors, fonts, motion rail + layout previews */}
                 <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
                     <label className="elegant-label" style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>{'\u{1F4D0}'}</span>
@@ -1664,26 +1573,14 @@ const CreateInvitation = () => {
                             defaultValue: 'Swipe or drag sideways to compare layouts. Your colors, font, and media apply to each preview — tap a card to select it.',
                         })}
                     </p>
-                    <div className="form-group" style={{ marginTop: 0, marginBottom: '1rem' }}>
-                        <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                            {t('cover_animation_label')}
-                        </label>
-                        <select
-                            className="input-field"
-                            value={normalizeCoverAnimationType(formData.coverAnimationType)}
-                            onChange={(e) =>
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    coverAnimationType: normalizeCoverAnimationType(e.target.value),
-                                }))
-                            }
-                        >
-                            <option value="elegant-fade">{t('cover_animation_elegant_fade')}</option>
-                            <option value="gentle-pulse">{t('cover_animation_gentle_pulse')}</option>
-                            <option value="glide-up">{t('cover_animation_glide_up')}</option>
-                            <option value="none">{t('cover_animation_none')}</option>
-                        </select>
-                    </div>
+                    <PublicInviteCardStyleStudio
+                        colorScheme={formData.colorScheme}
+                        onColorSchemeChange={(key) => setFormData((prev) => ({ ...prev, colorScheme: key }))}
+                        cardFontFamily={formData.cardFontFamily}
+                        onCardFontFamilyChange={(cssFamily) =>
+                            setFormData((prev) => ({ ...prev, cardFontFamily: cssFamily }))
+                        }
+                    >
                     <div
                         ref={templateCarouselRef}
                         role="listbox"
@@ -1800,6 +1697,7 @@ const CreateInvitation = () => {
                             );
                         })}
                     </div>
+                    </PublicInviteCardStyleStudio>
                     <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center', lineHeight: 1.4 }}>
                         {t('public_invitation_guests_hint', { defaultValue: 'Public invitations appear in the feed; guests tap join on the card after you publish.' })}
                     </p>

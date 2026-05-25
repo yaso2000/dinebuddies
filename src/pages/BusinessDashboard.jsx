@@ -7,11 +7,14 @@ import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
+import BusinessMemberNotificationsPanel from '../components/business/BusinessMemberNotificationsPanel';
 import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe, FaSearch } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe, FaSearch, FaBell } from 'react-icons/fa';
+import { useNotifications } from '../context/NotificationContext';
 const BusinessDashboard = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
@@ -19,6 +22,7 @@ const BusinessDashboard = () => {
     const { currentUser, userProfile, loading: authLoading, isBusiness } = useAuth();
     const { getCommunityMembers } = useInvitations();
     const { showToast } = useToast();
+    const { unreadBellCount } = useNotifications();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         memberCount: 0,
@@ -34,14 +38,19 @@ const BusinessDashboard = () => {
     const [offersLoading, setOffersLoading] = useState(false);
 
     const PUBLISH_ANCHOR = 'business-publish-profile';
+    const NOTIFICATIONS_ANCHOR = 'business-notifications';
+    const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
+
     useEffect(() => {
-        if (location.hash !== `#${PUBLISH_ANCHOR}`) return;
-        const el = document.getElementById(PUBLISH_ANCHOR);
+        if (loading) return;
+        const hash = location.hash?.replace('#', '');
+        if (!hash || (hash !== PUBLISH_ANCHOR && hash !== NOTIFICATIONS_ANCHOR)) return;
+        const el = document.getElementById(hash);
         if (!el) return;
-        const t = requestAnimationFrame(() => {
+        const frame = requestAnimationFrame(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
-        return () => cancelAnimationFrame(t);
+        return () => cancelAnimationFrame(frame);
     }, [location.pathname, location.hash, loading]);
 
 
@@ -306,6 +315,37 @@ const BusinessDashboard = () => {
                     📊 {t('business_dashboard', 'Business Dashboard')}
                 </h3>
                 <div style={{ display: 'flex', align: 'center', gap: '4px' }}>
+                    <button
+                        className="back-btn"
+                        onClick={() => navigate('/notifications')}
+                        aria-label={t('notifications', 'Notifications')}
+                        title={t('notifications', 'Notifications')}
+                        style={{ position: 'relative' }}
+                    >
+                        <FaBell />
+                        {unreadBellCount > 0 && (
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: 2,
+                                    right: 2,
+                                    minWidth: 16,
+                                    height: 16,
+                                    padding: '0 4px',
+                                    borderRadius: 8,
+                                    background: '#ef4444',
+                                    color: '#fff',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 800,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                {unreadBellCount > 9 ? '9+' : unreadBellCount}
+                            </span>
+                        )}
+                    </button>
                     <button
                         className="back-btn"
                         onClick={() => navigate('/search')}
@@ -873,9 +913,19 @@ const BusinessDashboard = () => {
                 <BusinessFeedbackInbox />
             </div>
 
+            <BusinessMemberNotificationsPanel
+                tierAccess={tierAccess}
+                memberCount={stats.memberCount}
+            />
+
             {/* Community Management */}
-            <div style={{ marginTop: '2rem' }}>
-                <CommunityManagement businessId={currentUser.uid} />
+            <div id="community-management" style={{ marginTop: '1rem' }}>
+                <CommunityManagement
+                    businessId={currentUser.uid}
+                    businessName={userProfile?.display_name || userProfile?.businessInfo?.name}
+                    currentUserId={currentUser.uid}
+                    canUseMemberNotifications={tierAccess.canUseMemberNotifications}
+                />
             </div>
         </div>
     );

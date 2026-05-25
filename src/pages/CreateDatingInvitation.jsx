@@ -731,7 +731,7 @@ const CreateDatingInvitation = () => {
                     </div>
 
                     {/* Date & Time */}
-                    <div className="form-row mb-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div className="inv-datetime-row mb-4">
                         <div className="form-group">
                             <label className="elegant-label"><FaCalendarAlt /> {t('date')}</label>
                             <input

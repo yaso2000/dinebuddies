@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FaUsers, FaTrash, FaEnvelope, FaUserShield, FaBan, FaCheck } from 'react-icons/fa';
+import { FaUsers, FaTrash, FaEnvelope, FaUserShield, FaCheck, FaCrown } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -12,8 +13,9 @@ import { useChat } from '../context/ChatContext';
  * {t('community_management', 'Community Management')} Panel for Business Partners
  * Allows business accounts to manage their community members
  */
-const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
+const CommunityManagement = ({ businessId, businessName, currentUserId, canUseMemberNotifications = false }) => {
     const profileId = businessId;
+    const navigate = useNavigate();
     const { showToast } = useToast();
     const { t } = useTranslation();
     const { getCommunityMembers } = useInvitations();
@@ -103,8 +105,18 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
         }
     };
 
+    const promptUpgradeForMessaging = () => {
+        showToast(t('member_notifications_locked', 'Member messaging is included in the paid business plan.'), 'info');
+        navigate('/settings/subscription');
+    };
+
     // Send message to selected members
     const sendMessageToMembers = async () => {
+        if (!canUseMemberNotifications) {
+            promptUpgradeForMessaging();
+            return;
+        }
+
         if (!message.trim()) {
             showToast(t('please_enter_message', 'Please enter a message'), 'error');
             return;
@@ -167,9 +179,51 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                     {t('community_management', 'Community Management')}
                 </h3>
 
+                {!canUseMemberNotifications && (
+                    <div
+                        style={{
+                            marginBottom: '1rem',
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            background: 'rgba(245, 158, 11, 0.1)',
+                            border: '1px solid rgba(245, 158, 11, 0.35)',
+                            fontSize: '0.85rem',
+                            color: 'var(--text-muted)',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                        }}
+                    >
+                        <FaCrown style={{ color: '#f59e0b', flexShrink: 0, marginTop: '2px' }} />
+                        <div>
+                            <div style={{ fontWeight: '700', color: 'var(--text-main)', marginBottom: '4px' }}>
+                                {t('business_member_notifications', 'Member alerts & offers')}
+                            </div>
+                            {t('member_notifications_locked', 'Member messaging is included in the paid business plan.')}
+                            <button
+                                type="button"
+                                onClick={() => navigate('/settings/subscription')}
+                                style={{
+                                    display: 'block',
+                                    marginTop: '8px',
+                                    padding: 0,
+                                    border: 'none',
+                                    background: 'none',
+                                    color: 'var(--primary)',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                }}
+                            >
+                                {t('upgrade_now', 'Upgrade Now')} →
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* 2. Action Buttons */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                    {selectedMembers.length > 0 ? (
+                    {canUseMemberNotifications && selectedMembers.length > 0 ? (
                         <>
                             <button
                                 onClick={() => setShowMessageModal(true)}
@@ -206,8 +260,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                                 {t('deselect_all', 'Deselect All')}
                             </button>
                         </>
-                    ) : (
-                        members.length > 0 && (
+                    ) : canUseMemberNotifications && members.length > 0 ? (
                             <button
                                 onClick={selectAll}
                                 style={{
@@ -223,8 +276,7 @@ const CommunityManagement = ({ businessId, businessName, currentUserId }) => {
                             >
                                 {t('select_all_broadcast', 'Select All (Group Message)')}
                             </button>
-                        )
-                    )}
+                    ) : null}
                 </div>
 
                 {/* 3. Stats */}

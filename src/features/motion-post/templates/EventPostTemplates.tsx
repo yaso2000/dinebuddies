@@ -58,6 +58,7 @@ function animStyle(
     if (animation === 'fade') return { opacity: 0, animation: `mpEv2FadeIn ${base}`, ...d };
     if (animation === 'slide') return { opacity: 0, transform: `translateY(${y}px)`, animation: `${sk} ${base}`, ...d };
     if (animation === 'pop') return { opacity: 0, transform: 'scale(0.94)', animation: `mpEv2PopIn ${base}`, ...d };
+    if (animation === 'zoom') return { opacity: 0, transform: 'scale(0.55)', animation: `mpEv2ZoomIn ${base}`, ...d };
     return { opacity: 0, transform: `translateY(${Math.round(y * 0.65)}px)`, animation: `${sk} ${base}`, ...d };
 }
 
@@ -67,6 +68,7 @@ function Keyframes({ slidePx }: { slidePx: number }) {
         <style>{`
             @keyframes mpEv2FadeIn { from { opacity: 0; } to { opacity: 1; } }
             @keyframes mpEv2PopIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+            @keyframes mpEv2ZoomIn { from { opacity: 0; transform: scale(0.55); } to { opacity: 1; transform: scale(1); } }
             @keyframes ${sk} { from { opacity: 0; transform: translateY(${slidePx}px); } to { opacity: 1; transform: translateY(0); } }
         `}</style>
     );

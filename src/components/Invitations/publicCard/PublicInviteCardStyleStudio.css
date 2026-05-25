@@ -1,0 +1,91 @@
+.public-invite-style-studio {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.public-invite-style-studio__colors,
+.public-invite-style-studio__fonts {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding: 2px 0 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    touch-action: pan-x;
+    cursor: grab;
+}
+
+.public-invite-style-studio__colors::-webkit-scrollbar,
+.public-invite-style-studio__fonts::-webkit-scrollbar {
+    display: none;
+}
+
+.public-invite-style-studio__colors.is-dragging,
+.public-invite-style-studio__fonts.is-dragging {
+    cursor: grabbing;
+    scroll-snap-type: none;
+    user-select: none;
+}
+
+.public-invite-style-studio__color-dot {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    padding: 0;
+    scroll-snap-align: center;
+    transition: transform 0.15s, border-color 0.15s;
+}
+
+.public-invite-style-studio__color-dot.is-selected {
+    border-color: var(--text-main);
+    transform: scale(1.08);
+}
+
+.public-invite-style-studio__color-dot__check {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 0.62rem;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+    pointer-events: none;
+}
+
+.public-invite-style-studio__font-chip {
+    flex-shrink: 0;
+    scroll-snap-align: center;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 2px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+    font-size: 0.8rem;
+    font-weight: 650;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.public-invite-style-studio__font-chip.is-selected {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.12);
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.22);
+}
+
+.public-invite-style-studio__preview {
+    min-width: 0;
+}

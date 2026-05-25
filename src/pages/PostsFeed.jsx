@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { collection, query, orderBy, onSnapshot, getDocs, limit, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, addDoc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs, limit, where, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
+import MotionPostFeedCard from '../components/MotionPostFeedCard';
 import StoriesBar from '../components/StoriesBar';
 import StoryViewer from '../components/StoryViewer';
 import FeaturedPostSlideCard from '../components/FeaturedPostSlideCard';
+import { normalizeFeaturedPostDoc } from '../services/featuredPostService';
 import InlinePostEditor from '../components/InlinePostEditor';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { FaRegCommentDots } from 'react-icons/fa';
@@ -16,6 +18,8 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { createNotification } from '../utils/notificationHelpers';
 import { useTranslation } from 'react-i18next';
 import { asUidArray } from '../utils/userSocialLists';
+import useFeedAudienceGraph from '../hooks/useFeedAudienceGraph';
+import { authorIdFromPost, buildConsumerHomeFeed } from '../utils/feedSocialGraph';
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 
 const PostsFeed = () => {
@@ -39,10 +43,11 @@ const PostsFeed = () => {
         }
     }, [location.state, location.pathname, navigate]);
     const [posts, setPosts] = useState([]);
+    const [motionPosts, setMotionPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewingStory, setViewingStory] = useState(null);
-    const [geoFilter, setGeoFilter] = useState('local');
     const [isSearchActive, setIsSearchActive] = useState(false);
+    const { graph: audienceGraph } = useFeedAudienceGraph(currentUser, userProfile);
     const [searchQuery, setSearchQuery] = useState('');
 
     // Featured posts (elite slides from business partners)
@@ -82,6 +87,24 @@ const PostsFeed = () => {
         return () => unsub();
     }, []);
 
+    /** Published studio posts not yet mirrored to communityPosts (legacy publishes). */
+    useEffect(() => {
+        const q = query(
+            collection(db, 'business_motion_posts'),
+            where('status', '==', 'published'),
+            orderBy('publishedAt', 'desc'),
+            limit(40)
+        );
+        const unsub = onSnapshot(
+            q,
+            (snap) => {
+                setMotionPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+            },
+            (err) => console.error('[PostsFeed] business_motion_posts error:', err)
+        );
+        return () => unsub();
+    }, []);
+
     // Fetch elite featured posts with live updates so likes/reposts refresh
     useEffect(() => {
         let unsub;
@@ -89,12 +112,13 @@ const PostsFeed = () => {
             try {
                 const q = query(
                     collection(db, 'featured_posts'),
-                    limit(20)
+                    orderBy('createdAt', 'desc'),
+                    limit(50)
                 );
                 unsub = onSnapshot(q, (snap) => {
                     const fp = snap.docs
-                        .map(d => ({ id: d.id, ...d.data(), _isFeatured: true }))
-                        .filter(p => (!p.type || p.type === 'elite_slide') && (p.status === 'published' || !p.status));
+                        .map((d) => normalizeFeaturedPostDoc(d.id, d.data()))
+                        .filter((p) => p.status === 'published' || !p.status);
                     setFeaturedPosts(fp);
                 }, err => console.error('[PostsFeed] featured_posts error:', err));
             } catch (e) {
@@ -105,102 +129,194 @@ const PostsFeed = () => {
         return () => unsub?.();
     }, []);
 
-    const calculateDistance = (lat1, lon1, lat2, lon2) => {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
-
     const filteredPosts = useMemo(() => {
-        const norm = (v) => String(v || '').trim().toLowerCase();
-        const userCountry = norm(userProfile?.country);
-        const userCountryCode = norm(userProfile?.countryCode);
-        const userCity = norm(userProfile?.city);
-        const userCoords = userProfile?.coordinates;
-
-        const canViewLocalPost = (p) => {
-            if (p.authorId === currentUser?.uid) return true;
-            if (!userProfile) return false;
-
-            const pCountry = norm(p.country);
-            const pCountryCode = norm(p.countryCode);
-            const pCity = norm(p.city);
-            const sameCountry =
-                (userCountry && pCountry && userCountry === pCountry) ||
-                (userCountryCode && pCountryCode && userCountryCode === pCountryCode);
-
-            const pLat = p.coordinates?.lat || p.attachedInvitation?.lat || p.lat;
-            const pLng = p.coordinates?.lng || p.attachedInvitation?.lng || p.lng;
-            const hasCoords = userCoords?.lat != null && userCoords?.lng != null && pLat != null && pLng != null;
-            const radiusKm = 500;
-            const nearEnough = hasCoords
-                ? calculateDistance(userCoords.lat, userCoords.lng, pLat, pLng) < radiusKm
-                : false;
-            const sameCity = Boolean(userCity && pCity && userCity === pCity);
-
-            return sameCountry || sameCity || nearEnough;
-        };
-
         const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
-        let result = posts.filter(p => p.status !== 'draft');
+        let result = posts.filter((p) => p.status !== 'draft');
         if (blocked.size > 0) {
-            result = result.filter((p) => !p.authorId || !blocked.has(p.authorId));
-        }
-
-        // Scope-aware visibility:
-        // - global posts are visible to everyone
-        // - local posts are visible only within matching local audience
-        result = result.filter((p) => {
-            const scope = (p.visibilityScope || 'local').toLowerCase();
-            if (geoFilter === 'global') {
-                // Global tab is a broad feed: includes both global and local posts
-                return scope === 'global' || canViewLocalPost(p);
-            }
-            // Local tab: local audience posts only
-            if (scope === 'global') return false;
-            return canViewLocalPost(p);
-        });
-
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            result = result.filter(p => p.content?.toLowerCase().includes(q) || p.author?.name?.toLowerCase().includes(q));
-        }
-        if (userProfile?.coordinates && geoFilter === 'local') {
-            const { lat: uLat, lng: uLng } = userProfile.coordinates;
-            result = result.filter(p => {
-                // Bypass distance filter for events so they are visible everywhere
-                if (p.type === 'event') return true;
-
-                const pLat = p.coordinates?.lat || p.attachedInvitation?.lat || p.lat;
-                const pLng = p.coordinates?.lng || p.attachedInvitation?.lng || p.lng;
-                if (!pLat || !pLng) return false;
-                const d = calculateDistance(uLat, uLng, pLat, pLng);
-                return d < 500;
+            result = result.filter((p) => {
+                const aid = authorIdFromPost(p);
+                return !aid || !blocked.has(aid);
             });
         }
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(
+                (p) =>
+                    p.content?.toLowerCase().includes(q) ||
+                    p.author?.name?.toLowerCase().includes(q)
+            );
+        }
         return result;
-    }, [posts, geoFilter, userProfile, searchQuery, userProfile?.blockedUserIds]);
+    }, [posts, searchQuery, userProfile?.blockedUserIds]);
 
-    // Helper: extract a comparable timestamp number from any post
-    const getTimestamp = (p) => {
-        const ts = p.publishedAt || p.updatedAt || p.createdAt;
-        if (!ts) return 0;
-        return typeof ts.toDate === 'function' ? ts.toDate().getTime() : new Date(ts).getTime();
-    };
-
-    // Merge featured + regular posts into one feed sorted newest-first
-    const mergedFeed = useMemo(() => {
+    const motionFeedPosts = useMemo(() => {
         const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
-        const featured = featuredPosts
-            .map(p => ({ ...p, _isFeatured: true }))
-            .filter((p) => !p.authorId || !blocked.has(p.authorId));
-        return [
-            ...featured,
-            ...filteredPosts.map(p => ({ ...p, _isFeatured: false }))
-        ].sort((a, b) => getTimestamp(b) - getTimestamp(a));
-    }, [featuredPosts, filteredPosts, userProfile?.blockedUserIds]);
+        const mirroredIds = new Set(
+            posts.filter((p) => p.motionPostId).map((p) => String(p.motionPostId))
+        );
+
+        return motionPosts
+            .filter((m) => !mirroredIds.has(m.id))
+            .filter((m) => !m.ownerId || !blocked.has(m.ownerId))
+            .map((m) => ({
+                id: `motion_${m.id}`,
+                type: 'motion_post',
+                motionPostId: m.id,
+                authorId: m.ownerId,
+                businessId: m.businessId,
+                author: {
+                    id: m.ownerId,
+                    name: m.feedAuthorName || m._feedAuthorName,
+                    avatar: m.feedAuthorAvatar || m._feedAuthorAvatar,
+                },
+                content: String(
+                    (m.content && typeof m.content === 'object' && m.content.title) ||
+                        (m.content && typeof m.content === 'object' && m.content.description) ||
+                        ''
+                ),
+                publishedAt: m.publishedAt,
+                updatedAt: m.updatedAt,
+                createdAt: m.createdAt || m.publishedAt,
+                motionPostSnapshot: m,
+                _isMotionPost: true,
+            }));
+    }, [motionPosts, posts, userProfile?.blockedUserIds]);
+
+    const motionPostById = useMemo(() => {
+        const map = new Map();
+        for (const m of motionPosts) {
+            map.set(String(m.id), m);
+        }
+        return map;
+    }, [motionPosts]);
+
+    const communityFeedPosts = useMemo(() => {
+        const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
+        return filteredPosts
+            .map((p) => {
+                const motionId = p.motionPostId ? String(p.motionPostId) : null;
+                const motionSource = motionId ? motionPostById.get(motionId) : null;
+                const hydrated =
+                    motionSource && (!p.motionPostSnapshot || !p.studioEditor)
+                        ? {
+                              ...p,
+                              type: 'motion_post',
+                              motionPostSnapshot: p.motionPostSnapshot || motionSource,
+                              studioEditor: p.studioEditor || motionSource.studioEditor,
+                          }
+                        : p;
+
+                const isFeaturedMirror =
+                    Boolean(p.featuredPostId) ||
+                    p.type === 'elite_slide' ||
+                    p.source === 'featured_post';
+
+                if (isFeaturedMirror) {
+                    const fpId = p.featuredPostId ? String(p.featuredPostId) : null;
+                    const snap =
+                        p.featuredPostSnapshot && typeof p.featuredPostSnapshot === 'object'
+                            ? p.featuredPostSnapshot
+                            : {};
+                    return {
+                        ...hydrated,
+                        ...snap,
+                        type: 'elite_slide',
+                        featuredPostId: fpId,
+                        partnerId: hydrated.partnerId || p.partnerId,
+                        businessName: hydrated.businessName || p.businessName || snap.businessName,
+                        businessLogoUrl:
+                            hydrated.businessLogoUrl || p.businessLogoUrl || snap.businessLogoUrl,
+                        _isFeatured: true,
+                        _isMotionPost: false,
+                    };
+                }
+
+                const isStudioFeed =
+                    hydrated.type === 'motion_post' ||
+                    hydrated.motionPostId ||
+                    hydrated.motionPostSnapshot ||
+                    (hydrated.source === 'smart_post_studio' && hydrated.mediaUrl);
+                if (!isStudioFeed) {
+                    return { ...hydrated, _isFeatured: false, _isMotionPost: false };
+                }
+                return {
+                    ...hydrated,
+                    type: 'motion_post',
+                    _isFeatured: false,
+                    _isMotionPost: true,
+                    id: hydrated.id,
+                    motionPostId: hydrated.motionPostId || motionSource?.id,
+                };
+            })
+            .filter((p) => {
+                const aid = authorIdFromPost(p);
+                return !aid || !blocked.has(aid);
+            });
+    }, [filteredPosts, motionPostById, userProfile?.blockedUserIds]);
+
+    /** Social ranking + followed businesses in main feed; discover strip for other businesses. */
+    const { mainFeed, discoverFeed } = useMemo(() => {
+        const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
+        const featured = featuredPosts.map((p) => ({ ...p, _isFeatured: true, _isMotionPost: false }));
+        const pool = [...featured, ...communityFeedPosts, ...motionFeedPosts];
+        return buildConsumerHomeFeed(pool, audienceGraph, currentUser?.uid, { blockedSet: blocked });
+    }, [
+        featuredPosts,
+        communityFeedPosts,
+        motionFeedPosts,
+        userProfile?.blockedUserIds,
+        audienceGraph,
+        currentUser?.uid,
+    ]);
+
+    const hasFeedItems = mainFeed.length > 0 || discoverFeed.length > 0;
+
+    const communityPostIdByMotionId = useMemo(() => {
+        const map = new Map();
+        for (const p of posts) {
+            if (p.motionPostId) map.set(String(p.motionPostId), p.id);
+        }
+        return map;
+    }, [posts]);
+
+    const renderFeedPost = (post) => {
+        const isMotion =
+            post._isMotionPost ||
+            post.type === 'motion_post' ||
+            post.motionPostId ||
+            post.motionPostSnapshot ||
+            (post.source === 'smart_post_studio' && post.mediaUrl);
+        if (isMotion) {
+            if (!String(post.id).startsWith('motion_')) {
+                return <PostCard key={post.id} post={post} showInChat={false} />;
+            }
+            try {
+                const motionDoc = post.motionPostSnapshot
+                    ? { id: post.motionPostId || post.id, ...post.motionPostSnapshot }
+                    : post;
+                const cardPost = {
+                    ...motionDoc,
+                    _feedAuthorName: post.author?.name || motionDoc.feedAuthorName,
+                    _feedAuthorAvatar: post.author?.avatar || motionDoc.feedAuthorAvatar,
+                    publishedAt: post.publishedAt || motionDoc.publishedAt,
+                    updatedAt: post.updatedAt || motionDoc.updatedAt,
+                    businessId: post.businessId || motionDoc.businessId,
+                };
+                const motionId = post.motionPostId || String(post.id).replace(/^motion_/, '');
+                return (
+                    <MotionPostFeedCard
+                        key={post.id}
+                        post={cardPost}
+                        communityPostId={communityPostIdByMotionId.get(motionId) || null}
+                    />
+                );
+            } catch (err) {
+                console.error('[PostsFeed] motion card render failed', post?.id, err);
+                return null;
+            }
+        }
+        return <PostCard key={post.id} post={post} showInChat={false} />;
+    };
 
     if (loading) {
         return (
@@ -251,40 +367,54 @@ const PostsFeed = () => {
                         </button>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', width: '100%', gap: '4px', alignItems: 'center' }}>
-                        {[
-                            { id: 'local', label: t('post_scope_local', 'Local'), icon: '📍' },
-                            { id: 'global', label: t('global', 'Global'), icon: '🌍' }
-                        ].map(tab => (
-                            <button key={tab.id} onClick={() => setGeoFilter(tab.id)} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: geoFilter === tab.id ? 'var(--primary)' : 'transparent', color: geoFilter === tab.id ? 'white' : 'var(--text-muted)', fontWeight: geoFilter === tab.id ? '800' : '600', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                <span>{tab.icon}</span><span>{tab.label}</span>
-                            </button>
-                        ))}
-                        <div style={{ width: 1, height: 24, background: 'var(--border-color)', margin: '0 2px' }} />
-                        <button onClick={() => setIsSearchActive(true)} style={{ width: 36, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--text-muted)' }}>🔍</button>
+                    <div style={{ display: 'flex', width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsSearchActive(true)}
+                            style={{
+                                width: 36,
+                                height: 36,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer',
+                                fontSize: '1.1rem',
+                                color: 'var(--text-muted)',
+                            }}
+                            aria-label={t('search_posts', 'Search posts')}
+                        >
+                            🔍
+                        </button>
                     </div>
                 )}
             </div>
 
             {/* Desktop filter bar — only visible on desktop */}
-            <div className="desktop-feed-filters" style={{ gap: '6px', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', alignItems: 'center' }}>
-                {[
-                    { id: 'local', label: t('post_scope_local', 'Local'), icon: '📍' },
-                    { id: 'global', label: t('global', 'Global'), icon: '🌍' }
-                ].map(tab => (
-                    <button key={tab.id} onClick={() => setGeoFilter(tab.id)} style={{ padding: '6px 14px', borderRadius: '9999px', border: 'none', background: geoFilter === tab.id ? 'var(--primary)' : 'transparent', color: geoFilter === tab.id ? 'white' : 'var(--text-muted)', fontWeight: geoFilter === tab.id ? '800' : '600', cursor: 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span>{tab.icon}</span> {tab.label}
-                    </button>
-                ))}
-                <div style={{ marginLeft: 'auto' }}>
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder={t('search_posts', 'Search posts...')}
-                        style={{ padding: '6px 14px', borderRadius: '9999px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-main)', fontSize: '0.85rem', outline: 'none', width: '180px' }}
-                    />
-                </div>
+            <div
+                className="desktop-feed-filters"
+                style={{
+                    gap: '6px',
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--border-color)',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                }}
+            >
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t('search_posts', 'Search posts...')}
+                    style={{
+                        padding: '6px 14px',
+                        borderRadius: '9999px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-input)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.85rem',
+                        outline: 'none',
+                        width: 'min(280px, 100%)',
+                    }}
+                />
             </div>
 
             {/* Unified Feed — featured + regular merged by date */}
@@ -298,14 +428,54 @@ const PostsFeed = () => {
                     />
                 </div>
 
-                {mergedFeed.length === 0 ? (
+                {!hasFeedItems ? (
                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
                         {searchQuery.trim() ? t('no_results', 'No results found.') : t('no_posts_yet', 'No posts yet.')}
                     </div>
                 ) : (
-                    mergedFeed.map((post, idx) => (
-                        <PostCard key={post.id} post={post} showInChat={false} />
-                    ))
+                    <>
+                        {mainFeed.map((post) => renderFeedPost(post)).filter(Boolean)}
+                        {discoverFeed.length > 0 ? (
+                            <section
+                                className="feed-discover-business"
+                                aria-label={t('feed_discover_business', 'Discover businesses')}
+                                style={{ marginTop: mainFeed.length ? 8 : 0 }}
+                            >
+                                <header
+                                    style={{
+                                        padding: '8px 16px 4px',
+                                        borderTop: mainFeed.length
+                                            ? '1px solid var(--border-color)'
+                                            : 'none',
+                                    }}
+                                >
+                                    <h2
+                                        style={{
+                                            margin: 0,
+                                            fontSize: '0.95rem',
+                                            fontWeight: 800,
+                                            color: 'var(--text-main)',
+                                        }}
+                                    >
+                                        {t('feed_discover_business', 'Discover businesses')}
+                                    </h2>
+                                    <p
+                                        style={{
+                                            margin: '4px 0 0',
+                                            fontSize: '0.8rem',
+                                            color: 'var(--text-muted)',
+                                        }}
+                                    >
+                                        {t(
+                                            'feed_discover_business_sub',
+                                            'Recent updates from places you may want to follow'
+                                        )}
+                                    </p>
+                                </header>
+                                {discoverFeed.map((post) => renderFeedPost(post)).filter(Boolean)}
+                            </section>
+                        ) : null}
+                    </>
                 )}
             </div>
 

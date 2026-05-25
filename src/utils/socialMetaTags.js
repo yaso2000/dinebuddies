@@ -112,6 +112,46 @@ export const generateBusinessMetaTags = (business) => {
 export const generatePartnerMetaTags = generateBusinessMetaTags;
 
 /**
+ * Open Graph data for a community / featured post page.
+ */
+export const generatePostMetaTags = (post) => {
+    if (!post) return {};
+    const content =
+        typeof post.content === 'string'
+            ? post.content
+            : post.caption || post.description || '';
+    const titleText =
+        (typeof post.content === 'object' && post.content?.title) ||
+        String(content).split('\n')[0]?.slice(0, 80) ||
+        'DineBuddies Post';
+    const description =
+        (typeof post.content === 'object' && (post.content.description || post.content.subtitle)) ||
+        String(content).slice(0, 200) ||
+        'See this post on DineBuddies';
+    const image =
+        post.mediaUrl ||
+        post.image ||
+        post.thumbnailUrl ||
+        (post.media && typeof post.media === 'object' ? post.media.imageUrl : null) ||
+        'https://www.dinebuddies.com/icon-light-512.png';
+    const absImage =
+        image.startsWith('http') || image.startsWith('data:')
+            ? image
+            : typeof window !== 'undefined'
+              ? `${window.location.origin}${image.startsWith('/') ? image : `/${image}`}`
+              : image;
+    const path = post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`;
+    const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+    return {
+        title: `${titleText} - DineBuddies`,
+        description,
+        image: absImage,
+        url: shareUrl,
+        type: 'article',
+    };
+};
+
+/**
  * Reset meta tags to default
  */
 export const resetSocialMetaTags = () => {

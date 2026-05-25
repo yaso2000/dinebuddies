@@ -62,7 +62,6 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isCheckingImage, setIsCheckingImage] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [visibilityScope, setVisibilityScope] = useState('local'); // 'local' | 'global'
     const [attachedInvitation, setAttachedInvitation] = useState(attachedInvitationProp);
 
     const fileInputRef = useRef(null);
@@ -188,7 +187,11 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
                 country: userProfile?.country || null,
                 countryCode: userProfile?.countryCode || null,
                 coordinates: userProfile?.coordinates || null,
-                visibilityScope,
+                authorInterests: Array.isArray(userProfile?.interests)
+                    ? userProfile.interests
+                    : Array.isArray(userProfile?.hobbies)
+                      ? userProfile.hobbies
+                      : [],
                 attachedInvitation: attachedInvitation || null,
             };
 
@@ -200,7 +203,6 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
             setEmbedData(null);
             setAttachedInvitation(null);
             onClearAttachedInvitation?.();
-            setVisibilityScope('local');
             setUploadProgress(0);
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
             showToast(t('post_created', 'Post created successfully!'), 'success');
@@ -446,27 +448,6 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={() => setVisibilityScope((prev) => prev === 'local' ? 'global' : 'local')}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '999px',
-                        padding: '6px 10px',
-                        background: 'var(--bg-input)',
-                        cursor: 'pointer',
-                        color: 'var(--text-muted)',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        flexShrink: 0
-                    }}
-                >
-                    <span aria-hidden>{visibilityScope === 'local' ? '📍' : '🌍'}</span>
-                    <span>{visibilityScope === 'local' ? t('post_scope_local', 'Local') : t('post_scope_global', 'Global')}</span>
-                </button>
             </div>
 
             <input

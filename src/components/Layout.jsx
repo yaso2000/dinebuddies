@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaTimes, FaLock, FaHeart } from 'react-icons/fa';
+import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaTimes, FaLock, FaHeart, FaEdit } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
@@ -16,7 +16,7 @@ import AppRouteLoading from './AppRouteLoading';
 import AppShellLoading from './AppShellLoading';
 import RankingSidebarWidget from './RankingSidebarWidget';
 import PushNotificationPrompt from './PushNotificationPrompt';
-import PushRegistrationSync from './PushRegistrationSync';
+import PushSessionManager from './PushSessionManager';
 import InvitationInboxOverlay from './Invitations/InvitationInboxOverlay';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
@@ -24,6 +24,8 @@ import { goToLogin } from '../utils/goToLogin';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { useToast } from '../context/ToastContext';
 import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
+import { attachHideBottomNavOnKeyboard } from '../utils/hideBottomNavOnKeyboard';
+import { isIOS, isStandalonePwa, markIosPwaLaunch } from '../services/notificationService';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -111,6 +113,26 @@ const Layout = ({ children }) => {
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [businessCreateOpen, inviteCreateOpen]);
+
+    // Mobile: hide bottom tab bar while any field is focused / keyboard is open (feed composer, comments, forms).
+    useEffect(() => {
+        return attachHideBottomNavOnKeyboard();
+    }, []);
+
+    useEffect(() => {
+        if (!isIOS()) return;
+        if (isStandalonePwa()) {
+            markIosPwaLaunch();
+            return;
+        }
+        try {
+            if (!window.matchMedia('(display-mode: browser)').matches) {
+                markIosPwaLaunch();
+            }
+        } catch {
+            /* ignore */
+        }
+    }, []);
 
     // iOS: keep fixed app header aligned with the visual viewport when the keyboard opens (feed, comments, etc.)
     useEffect(() => {
@@ -249,6 +271,8 @@ const Layout = ({ children }) => {
     const showConversationSidebar = isChatRoute && !isMessagesIndex;
     const isCommunityRoute = location.pathname.startsWith('/community/');
     const isStoryRoute = location.pathname === '/create-story';
+    const isStudioRoute =
+        location.pathname === '/create-post' || location.pathname === '/create-featured-post';
     const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
     const isSearchRoute = location.pathname === '/search';
     const isAdminRoute = location.pathname.startsWith('/admin');
@@ -485,7 +509,7 @@ const Layout = ({ children }) => {
         <div className={`app-layout${isSearchRoute ? ' app-layout--search' : ''}`} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
 
             <PushNotificationPrompt />
-            <PushRegistrationSync />
+            <PushSessionManager />
             {currentUser?.uid && !isGuest && !isBusinessAccount && respondToPrivateInvitation && (
                 <InvitationInboxOverlay
                     invitations={privateInvitations}
@@ -586,25 +610,20 @@ const Layout = ({ children }) => {
 
                         {!isGuest && (
                             <>
-                                {/* Messages & Notifications: hidden for business (available in dashboard) */}
-                                {!isBusinessAccount && (
-                                    <>
-                                        <Link to="/messages" className={`ds-nav-item ${isActive('/messages') ? 'active' : ''}`}>
-                                            <div style={{ position: 'relative', display: 'inline-flex' }}>
-                                                <FaComments />
-                                                <Badge count={totalChatUnread} absolute />
-                                            </div>
-                                            <span>{t('nav_messages', 'Messages')}</span>
-                                        </Link>
-                                        <Link to="/notifications" className={`ds-nav-item ${isActive('/notifications') ? 'active' : ''}`}>
-                                            <div style={{ position: 'relative', display: 'inline-flex' }}>
-                                                <FaBell />
-                                                <Badge count={unreadBellCount} absolute />
-                                            </div>
-                                            <span>{t('notifications', 'Notifications')}</span>
-                                        </Link>
-                                    </>
-                                )}
+                                <Link to="/messages" className={`ds-nav-item ${isActive('/messages') ? 'active' : ''}`}>
+                                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                        <FaComments />
+                                        <Badge count={totalChatUnread} absolute />
+                                    </div>
+                                    <span>{t('nav_messages', 'Messages')}</span>
+                                </Link>
+                                <Link to="/notifications" className={`ds-nav-item ${isActive('/notifications') ? 'active' : ''}`}>
+                                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                        <FaBell />
+                                        <Badge count={unreadBellCount} absolute />
+                                    </div>
+                                    <span>{t('notifications', 'Notifications')}</span>
+                                </Link>
                                 <Link to={isBusinessAccount ? '/business-dashboard' : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-dashboard') ? 'active' : ''}`}>
                                     <FaUser /><span>{isBusinessAccount ? t('dashboard', 'Dashboard') : t('profile', 'Profile')}</span>
                                 </Link>
@@ -653,7 +672,7 @@ const Layout = ({ children }) => {
                 ))}
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isSearchRoute ? ' app-main--search' : ''}`}>
+                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isSearchRoute ? ' app-main--search' : ''}`}>
                     {!isSearchRoute && <EmailVerificationBusinessBanner />}
                     {!isSearchRoute && <UnpublishedBusinessReminder />}
                     {children}
@@ -667,7 +686,7 @@ const Layout = ({ children }) => {
             </div>
 
             {/* ── MOBILE BOTTOM NAV (admin uses embedded nav in AdminLayout) ── */}
-            {!isChatScreen && !isAdminRoute && (
+            {!isChatScreen && !isAdminRoute && !isStudioRoute && (
                 <nav className="bottom-nav user-nav">
                     <Link to={feedHomePath} className={`nav-item ${isFeedHomeActive ? 'active' : ''}`}>
                         <FaHome className="nav-icon" />
@@ -868,7 +887,7 @@ const Layout = ({ children }) => {
                                 className="business-create-option"
                                 onClick={() => {
                                     setBusinessCreateOpen(false);
-                                    navigate('/create-post');
+                                    navigate('/create-featured-post');
                                 }}
                             >
                                 <span className="business-create-option__icon business-create-option__icon--featured">
@@ -881,7 +900,30 @@ const Layout = ({ children }) => {
                                     <span className="business-create-option__desc">
                                         {t(
                                             'business_create_featured_desc',
-                                            'Create a regular or featured business post.'
+                                            'Elite slide on the home feed for all users.'
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                className="business-create-option"
+                                onClick={() => {
+                                    setBusinessCreateOpen(false);
+                                    navigate('/create-post');
+                                }}
+                            >
+                                <span className="business-create-option__icon business-create-option__icon--post">
+                                    <FaEdit />
+                                </span>
+                                <span className="business-create-option__text">
+                                    <span className="business-create-option__label">
+                                        {t('business_create_studio_title', 'Motion post')}
+                                    </span>
+                                    <span className="business-create-option__desc">
+                                        {t(
+                                            'business_create_studio_desc',
+                                            'Animated studio post in the community feed.'
                                         )}
                                     </span>
                                 </span>

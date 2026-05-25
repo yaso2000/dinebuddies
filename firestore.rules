@@ -241,6 +241,16 @@ service cloud.firestore {
         // Case 3: Regular user deleting themselves (role must not be admin)
         (isOwner(userId) && resource.data.get('role', 'user') != 'admin');
       
+      // Push registration diagnostics (iOS PWA debugging — owner write only)
+      match /pushRegistrationLogs/{logId} {
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['step', 'ok', 'at'])
+          && request.resource.data.step is string
+          && request.resource.data.ok is bool
+          && request.resource.data.at == request.time;
+        allow read: if isOwner(userId) || isAdminOrPanelStaff();
+      }
+
       // USER REVIEWS SUBCOLLECTION
       match /reviews/{reviewId} {
         // Anyone can read reviews
@@ -783,6 +793,30 @@ service cloud.firestore {
     // Referral click rate limits (Cloud Functions only)
     match /referral_rate_limits/{docId} {
       allow read, write: if false;
+    }
+
+    // ============================================
+    // BUSINESS MOTION POSTS (Smart Post Studio)
+    // ============================================
+    match /business_motion_posts/{postId} {
+      // Published posts are public (feed); owners and staff can read drafts too.
+      allow read: if resource.data.status == 'published' ||
+                     (isSignedIn() && resource.data.ownerId == request.auth.uid) ||
+                     isAdminOrPanelStaff();
+
+      allow create: if isPartner() &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.businessId is string &&
+                       request.resource.data.status == 'draft';
+
+      allow update: if isSignedIn() &&
+                       resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.ownerId == resource.data.ownerId &&
+                       request.resource.data.businessId == resource.data.businessId &&
+                       resource.data.status != 'archived';
+
+      allow delete: if isSignedIn() &&
+                       (resource.data.ownerId == request.auth.uid || isAdminOrPanelStaff());
     }
 
     // ============================================

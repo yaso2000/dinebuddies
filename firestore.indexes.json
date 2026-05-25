@@ -257,6 +257,22 @@
                 { "fieldPath": "agentUid", "order": "ASCENDING" },
                 { "fieldPath": "createdAt", "order": "DESCENDING" }
             ]
+        },
+        {
+            "collectionGroup": "business_motion_posts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "ownerId", "order": "ASCENDING" },
+                { "fieldPath": "businessId", "order": "ASCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "business_motion_posts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "status", "order": "ASCENDING" },
+                { "fieldPath": "publishedAt", "order": "DESCENDING" }
+            ]
         }
     ],
     "fieldOverrides": []

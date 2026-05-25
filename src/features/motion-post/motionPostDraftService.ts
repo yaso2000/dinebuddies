@@ -9,11 +9,10 @@ import {
     updateDoc,
     where,
 } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import app from '../../firebase/config';
 import { db } from '../../firebase/config';
-
-const FUNCTIONS_REGION = 'us-central1';
+import { stripUndefinedDeep } from '../../utils/firestoreSanitize';
+import { syncPublishedMotionPostToCommunityFeed } from './motionPostFeedPublish';
+import { notifyBusinessPostPublished } from '../../services/businessPostNotifyService';
 import { MOTION_TEMPLATE_REGISTRY, type MotionPostType, type MotionTemplateId } from './templates/registry';
 
 type SaveDraftInput = {
@@ -36,7 +35,7 @@ type SaveDraftInput = {
             imageUrl?: string;
         };
         style: {
-            animation: 'fade' | 'slide' | 'pop' | 'stagger';
+            animation: 'fade' | 'slide' | 'pop' | 'stagger' | 'zoom';
             themeId: 'midnight' | 'sunset' | 'emerald' | 'violet' | 'mono' | 'rose';
             durationMs: number;
         };
@@ -60,6 +59,13 @@ type SaveDraftInput = {
             imageUrl: string;
         } | null;
     };
+    /** Smart Post Studio editor state — used for pixel-accurate feed rendering. */
+    studioEditor?: {
+        layoutModel: 'square' | 'story' | 'header_card';
+        style: Record<string, unknown>;
+        promoStickers?: { id: string; stickerId: string; slot?: string }[];
+        textAnimation?: string;
+    };
 };
 
 const toCategory = (type: MotionPostType) => {
@@ -70,7 +76,9 @@ const toCategory = (type: MotionPostType) => {
 
 export async function createMotionPostDraft(input: SaveDraftInput) {
     const def = MOTION_TEMPLATE_REGISTRY[input.payload.templateId];
-    const docRef = await addDoc(collection(db, 'business_motion_posts'), {
+    const docRef = await addDoc(
+        collection(db, 'business_motion_posts'),
+        stripUndefinedDeep({
         businessId: input.businessId,
         ownerId: input.ownerId,
         type: input.payload.type,
@@ -99,11 +107,14 @@ export async function createMotionPostDraft(input: SaveDraftInput) {
             aiDesign: input.ui?.aiDesign || null,
             finalImage: input.ui?.finalImage || null,
         },
+        studioEditor: input.studioEditor || null,
+        source: 'smart_post_studio',
         status: 'draft',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         subscriptionTierAtCreation: String(input.subscriptionTier || 'free').toLowerCase(),
-    });
+        })
+    );
     return docRef.id;
 }
 
@@ -120,7 +131,9 @@ export async function updateMotionPostDraft(postId: string, input: SaveDraftInpu
     }
 
     const def = MOTION_TEMPLATE_REGISTRY[input.payload.templateId];
-    await updateDoc(ref, {
+    await updateDoc(
+        ref,
+        stripUndefinedDeep({
         type: input.payload.type,
         templateId: input.payload.templateId,
         templateVersion: def?.version || 1,
@@ -147,8 +160,10 @@ export async function updateMotionPostDraft(postId: string, input: SaveDraftInpu
             aiDesign: input.ui?.aiDesign || null,
             finalImage: input.ui?.finalImage || null,
         },
+        studioEditor: input.studioEditor || null,
         updatedAt: serverTimestamp(),
-    });
+        })
+    );
 }
 
 export async function archiveMotionPost(postId: string, ownerId: string, businessId: string) {
@@ -183,9 +198,34 @@ export async function publishMotionPost(postId: string, ownerId: string, busines
         throw new Error('Archived posts cannot be published');
     }
 
-    const functions = getFunctions(app, FUNCTIONS_REGION);
-    const publishFn = httpsCallable(functions, 'publishBusinessMotionPost');
-    await publishFn({ postId });
+    await updateDoc(ref, {
+        status: 'published',
+        publishedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    });
+
+    const communityPostId = await syncPublishedMotionPostToCommunityFeed(
+        postId,
+        ownerId,
+        businessId
+    );
+
+    const content =
+        data.content && typeof data.content === 'object'
+            ? (data.content as Record<string, unknown>)
+            : {};
+    const notifyTitle = String(content.title || content.description || '').trim();
+
+    try {
+        await notifyBusinessPostPublished({
+            motionPostId: postId,
+            communityPostId,
+            title: notifyTitle,
+            notifyMembers: true,
+        });
+    } catch (err) {
+        console.warn('[publishMotionPost] member notify failed', err);
+    }
 }
 
 export async function unpublishMotionPost(postId: string, ownerId: string, businessId: string) {

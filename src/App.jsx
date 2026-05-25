@@ -69,6 +69,8 @@ const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationMan
 const CreatePrivateInvitation = lazy(() => import('./pages/CreatePrivateInvitation'));
 const CreateDatingInvitation = lazy(() => import('./pages/CreateDatingInvitation'));
 const CreatePost = lazy(() => import('./pages/CreatePost'));
+const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
+const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateStory = lazy(() => import('./pages/CreateStory'));
 const EmailSettings = lazy(() => import('./pages/EmailSettings'));
 const PasswordSettings = lazy(() => import('./pages/PasswordSettings'));
@@ -226,7 +228,8 @@ function App() {
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-dating" element={<GuestBlockedRoute><CreateDatingInvitation /></GuestBlockedRoute>} />
-                                                    <Route path="/create-post" element={<GuestBlockedRoute><CreatePost /></GuestBlockedRoute>} />
+                                                    <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
+                                                    <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />
                                                     <Route path="/create-story" element={<GuestBlockedRoute><CreateStory /></GuestBlockedRoute>} />
 
                                                     <Route path="/settings/email" element={<GuestBlockedRoute><EmailSettings /></GuestBlockedRoute>} />

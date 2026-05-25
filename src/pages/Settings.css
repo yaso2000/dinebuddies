@@ -91,12 +91,25 @@
 
 /* List rows: theme-aware hover (replaces inline purple tint) */
 .settings-row {
+    width: 100%;
     padding: 1rem 1.25rem;
     display: flex;
     align-items: center;
     gap: 1rem;
     cursor: pointer;
     transition: background 0.2s ease;
+    border: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+button.settings-row {
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .settings-row:not(:last-child) {

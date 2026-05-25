@@ -98,7 +98,7 @@ export default function FeaturedPostSlideCard({ data, businessName, businessLogo
     const descShadow   = description?.shadow !== false && description?.shadow !== 'off';
 
     const descStyle = {
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: description?.fontFamily || 'system-ui, sans-serif',
         fontSize:   description?.fontSize ? `${description.fontSize}px` : '0.95rem',
         color:      description?.color    || 'rgba(255,255,255,0.9)',
         fontWeight: description?.fontWeight === 'bold'   ? 700     : 400,

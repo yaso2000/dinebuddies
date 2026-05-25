@@ -23,7 +23,7 @@ export type EventTemplateId = (typeof EVENT_TEMPLATE_IDS)[number];
 
 export type MotionTemplateId = SpecialOfferTemplateId | EventTemplateId | 'normal_post_stub_v1';
 
-export type MotionAnimation = 'fade' | 'slide' | 'pop' | 'stagger';
+export type MotionAnimation = 'fade' | 'slide' | 'pop' | 'stagger' | 'zoom';
 
 export type MotionTemplateMaxLengths = {
     title: number;
@@ -67,7 +67,7 @@ const EVENT_MAX_LENGTHS: MotionTemplateMaxLengths = {
     locationText: 96,
 };
 
-const SHARED_ANIMATIONS: MotionAnimation[] = ['fade', 'slide', 'pop', 'stagger'];
+const SHARED_ANIMATIONS: MotionAnimation[] = ['fade', 'slide', 'pop', 'stagger', 'zoom'];
 const SHARED_THEMES: MotionThemeId[] = ['midnight', 'sunset', 'emerald', 'violet', 'mono', 'rose', 'noir'];
 
 const OFFER_DEFAULTS = {

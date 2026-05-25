@@ -5,23 +5,34 @@ import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, ge
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaRegCommentDots, FaTrash, FaEllipsisH, FaEdit, FaEyeSlash, FaRegSmile } from 'react-icons/fa';
+import { FaRegCommentDots, FaTrash, FaEllipsisH, FaEdit, FaEyeSlash } from 'react-icons/fa';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { BiRepost } from 'react-icons/bi';
-import { IoShareSocialOutline, IoSend } from 'react-icons/io5';
+import { IoShareSocialOutline } from 'react-icons/io5';
 import TikTokEmbed from './TikTokEmbed';
 import ShareButtons from './ShareButtons';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import FeaturedPostSlideCard from './FeaturedPostSlideCard';
+import MotionPostBody from './MotionPostBody';
+import { isCommunityMotionPost, motionDocFromPost } from '../features/motion-post/motionPostFeedUtils';
 import { FaCalendarAlt, FaMapMarkerAlt, FaImage, FaYoutube, FaTiktok, FaInstagram, FaPlay } from 'react-icons/fa';
 import { globalMediaManager } from '../utils/mediaUtils';
 import './PostCard.css';
+import './comments/PostComments.css';
+import PostCommentRow from './comments/PostCommentRow';
+import PostCommentComposer from './comments/PostCommentComposer';
+import PostCommentsList from './comments/PostCommentsList';
 import { createNotification } from '../utils/notificationHelpers';
+import { notifyCommentLikeActivity, notifyPostCommentActivity } from '../utils/postCommentNotifications';
 import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 
 // Detect if a post object is an elite featured slide
-const isFeaturedSlide = (p) => p && (p.type === 'elite_slide' || (p.background && p.title?.text !== undefined));
+const isFeaturedSlide = (p) =>
+    p &&
+    (p._isFeatured === true ||
+        p.type === 'elite_slide' ||
+        (p.background && p.title?.text !== undefined));
 
 const getCommentTimeMs = (c) => {
     if (!c?.createdAt) return 0;
@@ -32,7 +43,7 @@ const getCommentTimeMs = (c) => {
 };
 
 const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
@@ -40,9 +51,10 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const [showComments, setShowComments] = useState(defaultExpandComments);
     const [showMenu, setShowMenu] = useState(false);
     const [showShare, setShowShare] = useState(false);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [newComment, setNewComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [expandedReplyIds, setExpandedReplyIds] = useState(() => new Set());
     const [userData, setUserData] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [editedContent, setEditedContent] = useState('');
@@ -62,6 +74,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const detailCommentsScrollRef = useRef(null);
     const detailScrollRestoreRef = useRef(null);
     const detailLoadMoreCooldownRef = useRef(0);
+    const postMenuRef = useRef(null);
+    const [postMenuAlignStart, setPostMenuAlignStart] = useState(false);
 
     const sortedComments = useMemo(() => {
         const raw = post.comments || [];
@@ -69,7 +83,25 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         return [...raw].sort((a, b) => getCommentTimeMs(a) - getCommentTimeMs(b));
     }, [post.comments]);
 
+    const { topLevelComments, repliesByParentId } = useMemo(() => {
+        const tops = [];
+        const byParent = {};
+        sortedComments.forEach((c) => {
+            const pid = c.parentId;
+            if (!pid) {
+                tops.push(c);
+                return;
+            }
+            if (!byParent[pid]) byParent[pid] = [];
+            byParent[pid].push(c);
+        });
+        return { topLevelComments: tops, repliesByParentId: byParent };
+    }, [sortedComments]);
+
     const lastCommentPreview = sortedComments.length ? sortedComments[sortedComments.length - 1] : null;
+
+    const commenterDisplayName =
+        userProfile?.displayName || userProfile?.display_name || currentUser?.displayName || t('you', 'You');
 
     useEffect(() => {
         const core = post.type === 'repost' && post.originalPost ? post.originalPost : post;
@@ -98,7 +130,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const handleDetailCommentsScroll = (e) => {
         if (!showInChat) return;
         const el = e.currentTarget;
-        const total = sortedComments.length;
+        const total = topLevelComments.length;
         if (total <= detailCommentWindow) return;
         if (el.scrollTop > 56) return;
         if (Date.now() - detailLoadMoreCooldownRef.current < 450) return;
@@ -106,6 +138,18 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         detailScrollRestoreRef.current = { top: el.scrollTop, height: el.scrollHeight };
         setDetailCommentWindow((w) => Math.min(w + 5, total));
     };
+
+    useLayoutEffect(() => {
+        if (!showMenu || !postMenuRef.current) {
+            setPostMenuAlignStart(false);
+            return;
+        }
+        const rect = postMenuRef.current.getBoundingClientRect();
+        const pad = 12;
+        const overflowLeft = rect.left < pad;
+        const overflowRight = rect.right > window.innerWidth - pad;
+        setPostMenuAlignStart(overflowLeft && !overflowRight);
+    }, [showMenu, i18n.language]);
 
     useEffect(() => {
         if (!mediaContainerRef.current) return;
@@ -192,13 +236,15 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     // Derived State — based on LOCAL optimistic likes, not raw post.likes
     const hasLiked = localLikes.includes(currentUser?.uid || '');
 
-    const collectionName = post._isFeatured ? 'featured_posts' : 'communityPosts';
+    const featuredDocId = post.featuredPostId || (post._isFeatured ? post.id : null);
+    const collectionName = featuredDocId ? 'featured_posts' : 'communityPosts';
+    const postDocId = featuredDocId || post.id;
 
     const handleHide = async (e) => {
         e.stopPropagation();
         if (!window.confirm("Are you sure you want to hide this post? It will be moved to your drafts.")) return;
         try {
-            await updateDoc(doc(db, collectionName, post.id), { status: 'draft' });
+            await updateDoc(doc(db, collectionName, postDocId), { status: 'draft' });
             showToast("Post hidden from feed.", 'success');
         } catch (err) { showToast("Failed to hide post.", 'error'); }
         setShowMenu(false);
@@ -206,15 +252,41 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
     const handleEditClick = (e) => {
         e.stopPropagation();
+        e.preventDefault();
         setShowMenu(false);
-        if (post.type === 'event') {
-            navigate('/business-dashboard');
-        } else if (post.type === 'elite_slide') {
-            navigate('/business-dashboard');
-        } else {
-            setEditedContent(post.content || post.caption || '');
-            setIsEditing(true);
+
+        const core = post.type === 'repost' && post.originalPost ? post.originalPost : post;
+        const featuredEditId =
+            core.featuredPostId ||
+            (core._isFeatured && core.type === 'elite_slide' ? core.id : null) ||
+            (core.source === 'featured_post' ? core.featuredPostId || core.id : null);
+        const motionEditId =
+            core.motionPostId ||
+            (core.motionPostSnapshot && typeof core.motionPostSnapshot === 'object'
+                ? core.motionPostSnapshot.id
+                : null);
+
+        if (featuredEditId) {
+            navigate('/create-featured-post', { state: { editFeaturedPostId: String(featuredEditId) } });
+            return;
         }
+        if (core.type === 'elite_slide' || core.source === 'featured_post') {
+            navigate('/create-featured-post', { state: { editFeaturedPostId: String(core.id) } });
+            return;
+        }
+        if (core.type === 'motion_post' || motionEditId) {
+            navigate('/create-post', {
+                state: { editMotionPostId: motionEditId ? String(motionEditId) : undefined },
+            });
+            return;
+        }
+        if (core.type === 'event') {
+            navigate('/business-dashboard');
+            return;
+        }
+
+        setEditedContent(core.content || core.caption || '');
+        setIsEditing(true);
     };
 
     const handleSaveEdit = async (e) => {
@@ -222,7 +294,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         if (!editedContent.trim() || savingEdit) return;
         setSavingEdit(true);
         try {
-            await updateDoc(doc(db, collectionName, post.id), {
+            await updateDoc(doc(db, collectionName, postDocId), {
                 content: editedContent.trim(),
                 updatedAt: serverTimestamp()
             });
@@ -243,7 +315,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         );
         likeInFlight.current = true;
         try {
-            const postRef = doc(db, collectionName, post.id);
+            const postRef = doc(db, collectionName, postDocId);
             if (wasLiked) {
                 await updateDoc(postRef, { likes: arrayRemove(currentUser.uid) });
             } else {
@@ -276,7 +348,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         if (!window.confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
 
         try {
-            await deleteDoc(doc(db, collectionName, post.id));
+            await deleteDoc(doc(db, collectionName, postDocId));
             // UI should update automatically if parent is listening to snapshots
         } catch (error) {
             console.error("Error deleting post:", error);
@@ -290,15 +362,18 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         if (!currentUser || !newComment.trim() || submitting) return;
 
         setSubmitting(true);
+        const replyTarget = replyingTo;
         try {
-            const postRef = doc(db, collectionName, post.id);
+            const postRef = doc(db, collectionName, postDocId);
             const comment = {
                 id: Date.now().toString(),
                 userId: currentUser.uid,
                 userName: currentUser.displayName || 'User',
                 userPhoto: getSafeAvatar(userProfile || currentUser),
                 text: newComment.trim(),
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                likes: [],
+                ...(replyTarget?.id ? { parentId: replyTarget.id } : {}),
             };
 
             await updateDoc(postRef, {
@@ -306,18 +381,21 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             });
 
             setNewComment('');
-
-            // Notify the post author, unless they commented on their own post
-            if (authorId && authorId !== currentUser.uid) {
-                const commenterName = userProfile?.displayName || userProfile?.display_name || currentUser.displayName || 'Someone';
-                createNotification({
-                    userId: authorId,
-                    type: 'comment',
-                    title: `${commenterName} commented on your post`,
-                    message: comment.text.slice(0, 80),
-                    actionUrl: `/post/${post.id}`
-                }).catch(() => { });
+            if (replyTarget?.id) {
+                setExpandedReplyIds((prev) => new Set(prev).add(replyTarget.id));
             }
+            setReplyingTo(null);
+
+            const commenterName =
+                userProfile?.displayName || userProfile?.display_name || currentUser.displayName || 'Someone';
+            notifyPostCommentActivity({
+                post,
+                comment,
+                replyTarget,
+                postAuthorId: authorId,
+                commenterUid: currentUser.uid,
+                commenterName,
+            });
         } catch (error) {
             console.error('Error adding comment:', error);
         } finally {
@@ -325,13 +403,60 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         }
     };
 
-    const commentsRaw = post.comments || [];
-
-    const truncateText = (s, max = 100) => {
-        if (!s) return '';
-        const t = String(s).trim();
-        return t.length <= max ? t : `${t.slice(0, max)}…`;
+    const handleCommentLike = async (comment) => {
+        if (!currentUser || !comment?.id) return;
+        const cid = comment.id;
+        const wasLiked = Array.isArray(comment.likes) && comment.likes.includes(currentUser.uid);
+        const nextComments = sortedComments.map((c) => {
+            if (c.id !== cid) return c;
+            const likes = Array.isArray(c.likes) ? [...c.likes] : [];
+            const idx = likes.indexOf(currentUser.uid);
+            if (idx >= 0) likes.splice(idx, 1);
+            else likes.push(currentUser.uid);
+            return { ...c, likes };
+        });
+        try {
+            const postRef = doc(db, collectionName, postDocId);
+            await updateDoc(postRef, { comments: nextComments });
+            if (!wasLiked) {
+                const likerName =
+                    userProfile?.displayName || userProfile?.display_name || currentUser.displayName || 'Someone';
+                notifyCommentLikeActivity({
+                    post,
+                    comment,
+                    commenterUid: currentUser.uid,
+                    commenterName: likerName,
+                });
+            }
+        } catch (error) {
+            console.error('Error liking comment:', error);
+        }
     };
+
+    const handleReplyToComment = (comment) => {
+        setReplyingTo(comment);
+        setShowComments(true);
+    };
+
+    const handleCommentAuthorClick = (uid) => {
+        if (!uid) return;
+        navigate(`/user/${uid}`);
+    };
+
+    const toggleReplyThread = (parentId) => {
+        setExpandedReplyIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(parentId)) next.delete(parentId);
+            else next.add(parentId);
+            return next;
+        });
+    };
+
+    const composerPlaceholder = replyingTo
+        ? t('comment_reply_to', 'Reply to {{name}}', { name: replyingTo.userName })
+        : t('comment_as', 'Comment as {{name}}', { name: commenterDisplayName });
+
+    const commentsRaw = post.comments || [];
 
     const formatDate = (timestamp) => {
         if (!timestamp) return '';
@@ -412,13 +537,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     // but the MAIN content is the original post.
     const isRepost = post.type === 'repost' && post.originalPost;
     const displayPost = isRepost ? post.originalPost : post;
+    const isMotionPost = isCommunityMotionPost(displayPost);
+    const motionDoc = useMemo(() => motionDocFromPost(displayPost), [displayPost]);
     const isVideoPost = displayPost.mediaType === 'video';
-    const feedCommentPreviews = isVideoPost
-        ? sortedComments.slice(-3)
-        : lastCommentPreview
-            ? [lastCommentPreview]
-            : [];
-
     // Resolve Display Post Author (Original Author)
     let displayAuthorName = displayPost.businessName || displayPost.partnerName || displayPost.author?.name || displayPost.userName || displayPost.user_name || displayPost.displayName || 'User';
     let displayAuthorId = displayPost.partnerId || displayPost.author?.id || displayPost.authorId || displayPost.userId || displayPost.uid;
@@ -509,78 +630,78 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </div>
                 </div>
 
-                <div style={{ marginLeft: 'auto', position: 'relative' }}>
+                <div className="post-card-actions">
                     <button
+                        type="button"
                         className="icon-btn-small"
                         onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
                         style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px' }}
+                        aria-expanded={showMenu}
+                        aria-haspopup="menu"
                     >
                         <FaEllipsisH size={16} />
                     </button>
 
-                    {/* Dropdown Menu */}
-                    {showMenu && (
-                        <div style={{
-                            position: 'absolute', top: '100%', right: 0,
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-                            zIndex: 10, minWidth: '120px', overflow: 'hidden'
-                        }}>
-                            {(currentUser?.uid === authorId) ? (
+                    {showMenu ? (
+                        <div
+                            ref={postMenuRef}
+                            className={`post-card-menu${postMenuAlignStart ? ' post-card-menu--align-start' : ''}`}
+                            role="menu"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {currentUser?.uid === authorId ? (
                                 <>
+                                    <button type="button" className="post-card-menu__item" role="menuitem" onClick={handleEditClick}>
+                                        <FaEdit size={14} aria-hidden />
+                                        {t('edit', 'Edit')}
+                                    </button>
+                                    <button type="button" className="post-card-menu__item" role="menuitem" onClick={handleHide}>
+                                        <FaEyeSlash size={14} aria-hidden />
+                                        {t('hide', 'Hide')}
+                                    </button>
                                     <button
-                                        onClick={handleEditClick}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '8px',
-                                            padding: '10px 16px', width: '100%', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                            background: 'transparent', color: 'var(--text-main)', cursor: 'pointer',
-                                            fontSize: '0.9rem', textAlign: 'left'
-                                        }}
-                                    >
-                                        <FaEdit size={14} /> {t('edit', 'Edit')}</button>
-                                    <button
-                                        onClick={handleHide}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '8px',
-                                            padding: '10px 16px', width: '100%', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                            background: 'transparent', color: 'var(--text-main)', cursor: 'pointer',
-                                            fontSize: '0.9rem', textAlign: 'left'
-                                        }}
-                                    >
-                                        <FaEyeSlash size={14} /> {t('hide', 'Hide')}</button>
-                                    <button
+                                        type="button"
+                                        className="post-card-menu__item post-card-menu__item--danger"
+                                        role="menuitem"
                                         onClick={handleDelete}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '8px',
-                                            padding: '10px 16px', width: '100%', border: 'none',
-                                            background: 'transparent', color: 'red', cursor: 'pointer',
-                                            fontSize: '0.9rem', textAlign: 'left'
-                                        }}
                                     >
-                                        <FaTrash size={14} /> {t('delete', 'Delete')}</button>
+                                        <FaTrash size={14} aria-hidden />
+                                        {t('delete', 'Delete')}
+                                    </button>
                                 </>
                             ) : (
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); showToast("Reported.", 'success'); setShowMenu(false); }}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: '8px',
-                                        padding: '10px 16px', width: '100%', border: 'none',
-                                        background: 'transparent', color: 'var(--text-main)', cursor: 'pointer',
-                                        fontSize: '0.9rem', textAlign: 'left'
+                                    type="button"
+                                    className="post-card-menu__item"
+                                    role="menuitem"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        showToast('Reported.', 'success');
+                                        setShowMenu(false);
                                     }}
-                                >{t('report_post', 'Report Post')}</button>
+                                >
+                                    {t('report_post', 'Report Post')}
+                                </button>
                             )}
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </div>
 
             {/* CONTENT BODY (Full Width) */}
             <div className="post-content-body" style={{ width: '100%' }}>
-                {/* Repost of a featured slide OR the featured slide itself show the slide visual */}
-                {isFeaturedSlide(displayPost) ? (
+                {isMotionPost && motionDoc ? (
+                    <div
+                        className="motion-post-card__canvas"
+                        style={{ padding: '0 16px 12px', width: '100%', boxSizing: 'border-box' }}
+                    >
+                        <MotionPostBody
+                            post={motionDoc}
+                            scrollReveal={!showInChat}
+                            playOnMount={showInChat}
+                        />
+                    </div>
+                ) : isFeaturedSlide(displayPost) ? (
                     <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: 8 }}>
                         <FeaturedPostSlideCard
                             data={displayPost}
@@ -643,7 +764,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         </div>
                     </div>
                 ) : (
-                    /* Regular post content */
+                    /* Regular post content (not motion studio canvas) */
                     <div style={{
                         backgroundColor: displayPost.textStyle?.backgroundColor || 'transparent',
                         color: displayPost.textStyle?.color || 'inherit',
@@ -669,6 +790,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                 </div>
                             </div>
                         ) : (
+                            !isMotionPost &&
                             (displayPost.content || (!displayPost.overlayText && displayPost.caption)) && (
                                 <div className="post-text" style={{
                                     whiteSpace: 'pre-wrap',
@@ -687,7 +809,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         )}
 
                         {/* Media Container (Video/YouTube/TikTok/Images) */}
-                        {(displayPost.mediaUrl || displayPost.images?.length > 0 || displayPost.image) && (
+                        {!isMotionPost &&
+                        (displayPost.mediaUrl || displayPost.images?.length > 0 || displayPost.image) && (
                             <div ref={mediaContainerRef} className="post-media-container" onClick={() => { if (!isEditing) navigate(post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`); }} style={{ position: 'relative', overflow: 'hidden', marginTop: '10px', width: '100%', background: '#000' }}>
                                 {displayPost.mediaType === 'youtube' ? (
                                     isPlaying ? (
@@ -832,10 +955,39 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </div>
                 )}
 
-                {/* Stats Row — likes only; comment count lives in preview below */}
-                {localLikes.length > 0 && (
-                    <div className="post-stats-row" style={{ display: 'flex', justifyContent: 'flex-start', padding: '10px 16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                        <span>👍 {localLikes.length}</span>
+                {/* Engagement row — Facebook-style counts */}
+                {(localLikes.length > 0 || commentsRaw.length > 0) && (
+                    <div
+                        className="post-engagement-row"
+                        onClick={(e) => {
+                            if (commentsRaw.length > 0) {
+                                e.stopPropagation();
+                                setShowComments(true);
+                            }
+                        }}
+                    >
+                        <div className="post-engagement-row__left">
+                            {localLikes.length > 0 ? (
+                                <span className="post-engagement-row__stat">👍 {localLikes.length}</span>
+                            ) : null}
+                        </div>
+                        <div className="post-engagement-row__right">
+                            {commentsRaw.length > 0 ? (
+                                <span
+                                    className="post-engagement-row__stat post-engagement-row__stat--link"
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.stopPropagation();
+                                            setShowComments(true);
+                                        }
+                                    }}
+                                >
+                                    {commentsRaw.length} {t('comments', 'Comments')}
+                                </span>
+                            ) : null}
+                        </div>
                     </div>
                 )}
 
@@ -875,12 +1027,12 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </button>
                 </div>
 
-                {/* Feed preview: count + last comment only (click to open chat-style comments) */}
-                {!showInChat && commentsRaw.length > 0 && (
+                {/* Feed preview: last comment with avatar (Facebook-style) */}
+                {!showInChat && !showComments && lastCommentPreview && (
                     <div
                         role="button"
                         tabIndex={0}
-                        className={`post-comments-preview${isVideoPost ? ' post-comments-preview--video' : ''}`}
+                        className={`post-comments-preview-fb${isVideoPost ? ' post-comments-preview--video' : ''}`}
                         onClick={(e) => {
                             e.stopPropagation();
                             setShowComments(true);
@@ -893,216 +1045,112 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             }
                         }}
                     >
-                        <div className="post-comments-preview__count">
-                            {commentsRaw.length} {t('comments', 'Comments')}
-                        </div>
-                        {feedCommentPreviews.map((comment) => (
-                            <div
-                                key={comment.id || `${comment.userId}-${comment.createdAt}`}
-                                className="post-comments-preview__last"
-                            >
-                                <span className="post-comments-preview__name">{comment.userName}</span>
-                                <span className="post-comments-preview__text">{truncateText(comment.text, 120)}</span>
+                        {commentsRaw.length > 1 ? (
+                            <div className="post-comments-preview-fb__count">
+                                {t('comment_view_all', 'View all {{count}} comments', { count: commentsRaw.length })}
                             </div>
-                        ))}
+                        ) : null}
+                        <PostCommentRow
+                            comment={lastCommentPreview}
+                            postAuthorId={authorId}
+                            currentUserId={currentUser?.uid}
+                            onLike={handleCommentLike}
+                            onReply={handleReplyToComment}
+                            onAuthorClick={handleCommentAuthorClick}
+                            t={t}
+                        />
                     </div>
                 )}
 
-                {/* Standalone post page: composer on top, last N comments below (+ load older on scroll up) */}
-                {showComments && showInChat && (
+                {/* Expanded comments — Facebook-style panel */}
+                {showComments && (
                     <div
-                        className={`comments-section comments-section--detail${isVideoPost ? ' comments-section--video-detail' : ''}`}
+                        className={`comments-section fb-comments-panel${
+                            showInChat ? ' comments-section--detail' : ' comments-section--chat'
+                        }${isVideoPost ? (showInChat ? ' comments-section--video-detail' : ' comments-section--video-feed') : ''}`}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="post-comment-composer-wrap">
-                            <form onSubmit={handleAddComment} className="comment-input-row comment-input-row--footer">
-                                <input
-                                    type="text"
-                                    className="comment-input comment-input--inline"
-                                    placeholder={t('post_reply', 'Post your reply')}
-                                    value={newComment}
-                                    onChange={(e) => setNewComment(e.target.value)}
-                                />
-                                <div style={{ position: 'absolute', insetInlineEnd: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setShowEmojiPicker((prev) => !prev);
-                                        }}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: 'var(--text-muted)',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            padding: '4px',
-                                            transition: 'color 0.2s',
-                                            outline: 'none'
-                                        }}
-                                    >
-                                        <FaRegSmile size={20} />
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={!newComment.trim() || submitting}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            cursor: !newComment.trim() || submitting ? 'not-allowed' : 'pointer',
-                                            color: !newComment.trim() || submitting ? 'var(--border-color)' : 'var(--primary)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            padding: '4px',
-                                            transition: 'color 0.2s, transform 0.1s',
-                                            outline: 'none',
-                                            transform: newComment.trim() ? 'scale(1)' : 'scale(0.95)'
-                                        }}
-                                    >
-                                        <IoSend size={22} style={{ marginLeft: '2px' }} />
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                        <button type="button" className="fb-comments-sort" onClick={(e) => e.stopPropagation()}>
+                            {t('comments_most_relevant', 'Most relevant')}
+                            <span className="fb-comments-sort__chevron" aria-hidden>
+                                ▾
+                            </span>
+                        </button>
 
-                        {showEmojiPicker && (
-                            <div className="comments-emoji-strip">
-                                {['❤️', '😂', '🔥', '👏', '😍', '👍', '🙏', '😢', '🎉'].map((emoji) => (
-                                    <button
-                                        key={emoji}
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setNewComment((prev) => prev + emoji);
-                                        }}
-                                    >
-                                        {emoji}
-                                    </button>
-                                ))}
+                        {replyingTo ? (
+                            <div className="comments-replying-hint">
+                                <span>
+                                    {t('comment_replying_to', 'Replying to {{name}}', { name: replyingTo.userName })}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReplyingTo(null);
+                                    }}
+                                >
+                                    {t('cancel', 'Cancel')}
+                                </button>
                             </div>
-                        )}
+                        ) : null}
+
+                        {showInChat ? (
+                            <PostCommentComposer
+                                currentUser={currentUser}
+                                userProfile={userProfile}
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                onSubmit={handleAddComment}
+                                submitting={submitting}
+                                placeholder={composerPlaceholder}
+                            />
+                        ) : null}
 
                         <div
-                            ref={detailCommentsScrollRef}
-                            className="post-detail-comments-scroll"
-                            onScroll={handleDetailCommentsScroll}
+                            ref={showInChat ? detailCommentsScrollRef : undefined}
+                            className={showInChat ? 'fb-comments-panel__scroll' : undefined}
+                            onScroll={showInChat ? handleDetailCommentsScroll : undefined}
                         >
-                            {sortedComments.length > detailCommentWindow && (
-                                <div className="post-detail-comments-pull-hint">
+                            {showInChat && sortedComments.length > detailCommentWindow ? (
+                                <div className="fb-comments-panel__scroll-hint">
                                     {t('comments_scroll_load_older', 'Scroll up for older comments')}
                                 </div>
-                            )}
-                            {sortedComments.slice(-Math.min(detailCommentWindow, sortedComments.length)).map((comment) => (
-                                <div key={comment.id || `${comment.userId}-${comment.createdAt}`} className="comments-thread__item comments-thread__item--detail">
-                                    <div className="comments-thread__meta">
-                                        <span className="comments-thread__author">{comment.userName}</span>
-                                        <span className="comments-thread__time">{formatDate(comment.createdAt)}</span>
-                                    </div>
-                                    <div className="comments-thread__body">{comment.text}</div>
-                                </div>
-                            ))}
+                            ) : null}
+                            <PostCommentsList
+                                topLevelComments={
+                                    showInChat
+                                        ? topLevelComments.slice(
+                                              -Math.min(
+                                                  detailCommentWindow,
+                                                  topLevelComments.length
+                                              )
+                                          )
+                                        : topLevelComments
+                                }
+                                repliesByParentId={repliesByParentId}
+                                expandedReplyIds={expandedReplyIds}
+                                onToggleReplies={toggleReplyThread}
+                                postAuthorId={authorId}
+                                currentUserId={currentUser?.uid}
+                                onLike={handleCommentLike}
+                                onReply={handleReplyToComment}
+                                onAuthorClick={handleCommentAuthorClick}
+                                t={t}
+                            />
                         </div>
-                    </div>
-                )}
 
-                {/* Feed: last comment preview + composer below */}
-                {showComments && !showInChat && (
-                    <div
-                        className={`comments-section comments-section--chat${isVideoPost ? ' comments-section--video-feed' : ''}`}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {feedCommentPreviews.map((comment) => (
-                            <div
-                                key={comment.id || `${comment.userId}-${comment.createdAt}`}
-                                className="comments-inline-last"
-                            >
-                                <div className="comments-thread__meta">
-                                    <span className="comments-thread__author">{comment.userName}</span>
-                                    <span className="comments-thread__time">{formatDate(comment.createdAt)}</span>
-                                </div>
-                                <div className="comments-thread__body">{comment.text}</div>
-                            </div>
-                        ))}
-
-                        {showEmojiPicker && (
-                            <div className="comments-emoji-strip">
-                                {['❤️', '😂', '🔥', '👏', '😍', '👍', '🙏', '😢', '🎉'].map((emoji) => (
-                                    <button
-                                        key={emoji}
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setNewComment((prev) => prev + emoji);
-                                        }}
-                                    >
-                                        {emoji}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        <div className="post-comment-composer-wrap">
-                            <form onSubmit={handleAddComment} className="comment-input-row comment-input-row--footer">
-                                <input
-                                    type="text"
-                                    className="comment-input comment-input--inline"
-                                    placeholder={t('post_reply', 'Post your reply')}
-                                    value={newComment}
-                                    onChange={(e) => setNewComment(e.target.value)}
-                                />
-
-                                <div style={{ position: 'absolute', insetInlineEnd: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setShowEmojiPicker((prev) => !prev);
-                                        }}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: 'var(--text-muted)',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            padding: '4px',
-                                            transition: 'color 0.2s',
-                                            outline: 'none'
-                                        }}
-                                    >
-                                        <FaRegSmile size={20} />
-                                    </button>
-
-                                    <button
-                                        type="submit"
-                                        disabled={!newComment.trim() || submitting}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            cursor: !newComment.trim() || submitting ? 'not-allowed' : 'pointer',
-                                            color: !newComment.trim() || submitting ? 'var(--border-color)' : 'var(--primary)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            padding: '4px',
-                                            transition: 'color 0.2s, transform 0.1s',
-                                            outline: 'none',
-                                            transform: newComment.trim() ? 'scale(1)' : 'scale(0.95)'
-                                        }}
-                                    >
-                                        <IoSend size={22} style={{ marginLeft: '2px' }} />
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                        {!showInChat ? (
+                            <PostCommentComposer
+                                currentUser={currentUser}
+                                userProfile={userProfile}
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                onSubmit={handleAddComment}
+                                submitting={submitting}
+                                placeholder={composerPlaceholder}
+                                sticky
+                            />
+                        ) : null}
                     </div>
                 )}
             </div>
@@ -1119,27 +1167,61 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     >
                         <h3 style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>{t('share_post')}</h3>
                         <ShareButtons
-                            url={window.location.href}
+                            url={
+                                typeof window !== 'undefined'
+                                    ? `${window.location.origin}${
+                                          post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`
+                                      }`
+                                    : ''
+                            }
                             title={`Post by ${authorName}`}
-                            description={post.caption || post.content || 'Check out this post on DineBuddies!'}
+                            description={
+                                typeof displayPost.content === 'string'
+                                    ? displayPost.content
+                                    : displayPost.caption ||
+                                      displayPost.content?.description ||
+                                      'Check out this post on DineBuddies!'
+                            }
                             type="post"
                             sharedData={{
                                 type: 'post',
                                 id: post.id,
                                 title: `Post by ${authorName}`,
-                                description: post.caption || post.content || '',
-                                image: post.mediaUrl || post.image || null,
-                                mediaType: post.mediaType || 'image',
+                                description:
+                                    typeof displayPost.content === 'string'
+                                        ? displayPost.content
+                                        : displayPost.caption || displayPost.content?.description || '',
+                                image:
+                                    displayPost.mediaUrl ||
+                                    displayPost.image ||
+                                    displayPost.thumbnailUrl ||
+                                    motionDoc?.media?.imageUrl ||
+                                    null,
+                                mediaType: displayPost.mediaType || 'image',
                                 authorName: authorName,
                                 authorAvatar: authorAvatar,
-                                url: window.location.href
+                                url:
+                                    typeof window !== 'undefined'
+                                        ? `${window.location.origin}${
+                                              post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`
+                                          }`
+                                        : '',
                             }}
                             storyData={{
                                 title: `Post by ${authorName}`,
-                                image: post.mediaUrl || post.image,
-                                description: post.caption || post.content,
+                                image:
+                                    displayPost.mediaUrl ||
+                                    displayPost.image ||
+                                    displayPost.thumbnailUrl ||
+                                    motionDoc?.media?.imageUrl ||
+                                    null,
+                                description:
+                                    typeof displayPost.content === 'string'
+                                        ? displayPost.content
+                                        : displayPost.caption || displayPost.content?.description,
                                 hostName: authorName,
-                                hostImage: authorAvatar
+                                hostImage: authorAvatar,
+                                mediaType: displayPost.mediaType || 'image',
                             }}
                         />
                         <button

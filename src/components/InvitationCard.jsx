@@ -8,48 +8,12 @@ import { useNavigate } from 'react-router-dom';
 import NewReportModal from './NewReportModal';
 import { getTemplateStyle, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
-import { motion } from 'framer-motion';
-import { getCoverTextMotionProps } from '../utils/invitationCoverTextMotion';
-
 const INVITATION_CARD_IMAGE_FALLBACK =
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
 import { goToLogin } from '../utils/goToLogin';
-
-function InvMotionTitle({ mode, style, children }) {
-    const motionProps = getCoverTextMotionProps(mode);
-    if (!motionProps) {
-        return <h3 style={style}>{children}</h3>;
-    }
-    return (
-        <motion.h3
-            style={{ ...style, transformOrigin: 'center top', willChange: 'transform, opacity' }}
-            animate={motionProps.animate}
-            transition={motionProps.transition}
-        >
-            {children}
-        </motion.h3>
-    );
-}
-
-function InvMotionDescription({ mode, style, children }) {
-    const motionProps = getCoverTextMotionProps(mode);
-    if (!motionProps) {
-        return <p style={style}>{children}</p>;
-    }
-    const dur = typeof motionProps.transition.duration === 'number' ? motionProps.transition.duration : 2.5;
-    return (
-        <motion.p
-            style={{ ...style, transformOrigin: 'center top', willChange: 'transform, opacity' }}
-            animate={motionProps.animate}
-            transition={{ ...motionProps.transition, duration: dur * 1.08 }}
-        >
-            {children}
-        </motion.p>
-    );
-}
 
 const InvitationCard = ({ invitation }) => {
     const { t, i18n } = useTranslation();
@@ -74,8 +38,7 @@ const InvitationCard = ({ invitation }) => {
         image, time, description, genderPreference, ageRange,
         // NEW: Video fields
         mediaSource, mediaType, customVideo, videoThumbnail,
-        customImage, restaurantImage, occasionType, inviteMood,
-        coverAnimationType
+        customImage, restaurantImage, occasionType, inviteMood
     } = invitation;
 
     const templateKey = normalizePublicCardTemplateKey(invitation.templateType || 'classic');
@@ -615,15 +578,11 @@ const InvitationCard = ({ invitation }) => {
                 </div>
 
                 <div style={{ padding: '14px 16px 16px', color: '#111827', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <InvMotionTitle
-                        mode={coverAnimationType}
-                        style={{ margin: '0', fontSize: '1.15rem', fontWeight: 900, color: '#111827', lineHeight: 1.35 }}
-                    >
+                    <h3 style={{ margin: '0', fontSize: '1.15rem', fontWeight: 900, color: '#111827', lineHeight: 1.35 }}>
                         {title}
-                    </InvMotionTitle>
+                    </h3>
                     {description && (
-                        <InvMotionDescription
-                            mode={coverAnimationType}
+                        <p
                             style={{
                                 margin: '0',
                                 color: '#4b5563',
@@ -636,7 +595,7 @@ const InvitationCard = ({ invitation }) => {
                             }}
                         >
                             {description}
-                        </InvMotionDescription>
+                        </p>
                     )}
 
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 10, background: '#f9fafb', border: '1px solid #e5e7eb', fontWeight: 700, fontSize: '0.88rem' }}>
@@ -750,8 +709,7 @@ const InvitationCard = ({ invitation }) => {
                         </div>
 
                         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '18px 18px 16px', zIndex: 5 }}>
-                            <InvMotionTitle
-                                mode={coverAnimationType}
+                            <h3
                                 style={{
                                     fontSize: templateStyles.layout?.titleSize || '1.35rem',
                                     fontWeight: 900,
@@ -762,10 +720,9 @@ const InvitationCard = ({ invitation }) => {
                                 }}
                             >
                                 {title}
-                            </InvMotionTitle>
+                            </h3>
                             {templateStyles.layout?.displayDescription !== false && description && (
-                                <InvMotionDescription
-                                    mode={coverAnimationType}
+                                <p
                                     style={{
                                         margin: '8px 0 0',
                                         fontSize: '0.88rem',
@@ -779,7 +736,7 @@ const InvitationCard = ({ invitation }) => {
                                     }}
                                 >
                                     {description}
-                                </InvMotionDescription>
+                                </p>
                             )}
                         </div>
                     </div>
@@ -937,8 +894,7 @@ const InvitationCard = ({ invitation }) => {
                     textAlign: isPhotoBottom ? 'left' : 'center',
                     fontFamily: templateStyles.layout?.fontFamily || 'inherit',
                 }}>
-                    <InvMotionTitle
-                        mode={coverAnimationType}
+                    <h3
                         style={{
                             fontSize: templateStyles.layout?.titleSize || '1.35rem',
                             fontWeight: 900,
@@ -949,10 +905,9 @@ const InvitationCard = ({ invitation }) => {
                         }}
                     >
                         {title}
-                    </InvMotionTitle>
+                    </h3>
                     {templateStyles.layout?.displayDescription !== false && description && (
-                        <InvMotionDescription
-                            mode={coverAnimationType}
+                        <p
                             style={{
                                 margin: '8px 0 0',
                                 fontSize: '0.88rem',
@@ -966,7 +921,7 @@ const InvitationCard = ({ invitation }) => {
                             }}
                         >
                             {description}
-                        </InvMotionDescription>
+                        </p>
                     )}
                 </div>
 

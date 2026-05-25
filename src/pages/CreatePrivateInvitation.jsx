@@ -764,9 +764,9 @@ const CreatePrivateInvitation = () => {
                 )}
             </div>
 
-            <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+            <div className="private-form-container">
                 <form onSubmit={handlePreview} className="elegant-form">
-                    <div className="form-row mb-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div className="inv-datetime-row mb-4">
                         <div className="form-group">
                             <label className="elegant-label"><FaCalendarAlt /> {t('date')}</label>
                             <input

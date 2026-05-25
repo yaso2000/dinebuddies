@@ -1,9 +1,8 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from './UserAvatar';
-import { renderMotionPost } from '../features/motion-post/renderMotionPost';
-import { motionFirestoreDocToPreviewPayload, motionPostPreviewAspectFromDoc } from '../features/motion-post/motionPostFeedUtils';
+import MotionPostBody from './MotionPostBody';
 import { getGenderBorderColor } from '../utils/avatarUtils';
 
 const formatFeedTime = (ts) => {
@@ -14,45 +13,50 @@ const formatFeedTime = (ts) => {
 };
 
 /**
- * Public feed card for published motion posts (`business_motion_posts`).
- * No navigation to a detail page — stays in feed (requirement).
+ * Legacy feed card when a motion post is not yet mirrored to communityPosts.
+ * Prefer PostCard for synced motion_post items (likes, comments, detail page).
  */
-export default function MotionPostFeedCard({ post }) {
+export default function MotionPostFeedCard({ post, communityPostId = null }) {
     const { t } = useTranslation();
     const navigate = useNavigate();
-
-    const previewPayload = useMemo(() => motionFirestoreDocToPreviewPayload(post), [post]);
-    const previewAspect = useMemo(() => motionPostPreviewAspectFromDoc(post), [post]);
-    const previewMaxWidth = previewAspect === 'landscape' ? 520 : previewAspect === 'vertical' ? 300 : 420;
 
     const authorName = post._feedAuthorName || t('business', 'Business');
     const authorAvatar = post._feedAuthorAvatar || null;
     const timeSource = post.publishedAt || post.updatedAt;
-    const authorObj = useMemo(
-        () => ({
-            displayName: authorName,
-            display_name: authorName,
-            role: 'business',
-            photo_url: authorAvatar,
-            photoURL: authorAvatar,
-            avatarUrl: authorAvatar,
-        }),
-        [authorName, authorAvatar]
-    );
+    const authorObj = {
+        displayName: authorName,
+        display_name: authorName,
+        role: 'business',
+        photo_url: authorAvatar,
+        photoURL: authorAvatar,
+        avatarUrl: authorAvatar,
+    };
+
+    const openDetail = () => {
+        if (communityPostId) {
+            navigate(`/post/${communityPostId}`);
+            return;
+        }
+        const motionId = post.motionPostId || post.id;
+        if (motionId) navigate(`/post/${motionId}`);
+    };
 
     return (
         <div
             className="post-card motion-post-feed-card"
             role="article"
-            onClick={(e) => e.stopPropagation()}
+            onClick={openDetail}
             style={{
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 0,
-                cursor: 'default',
+                cursor: communityPostId || post.motionPostId || post.id ? 'pointer' : 'default',
             }}
         >
-            <div className="post-header-row" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, padding: '16px 16px 4px 16px' }}>
+            <div
+                className="post-header-row"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, padding: '16px 16px 4px 16px' }}
+            >
                 <UserAvatar
                     user={authorObj}
                     src={authorAvatar || undefined}
@@ -91,9 +95,7 @@ export default function MotionPostFeedCard({ post }) {
                 className="post-content-body motion-post-feed-card__canvas"
                 style={{ width: '100%', padding: '0 16px 16px', boxSizing: 'border-box' }}
             >
-                <div style={{ maxWidth: previewMaxWidth, margin: '0 auto', width: '100%' }}>
-                    {renderMotionPost(previewPayload, { previewAspect })}
-                </div>
+                <MotionPostBody post={post} scrollReveal />
             </div>
         </div>
     );

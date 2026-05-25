@@ -110,6 +110,12 @@
      * Tab bar: flush to the physical bottom (bottom:0). Safe area only via padding inside the bar.
      * constant() = legacy iOS; env() = current. Never use bottom: env(safe-area…) — that lifts the bar and leaves a gap.
      */
+    html[data-keyboard-open] .bottom-nav {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
     .bottom-nav {
         box-sizing: border-box !important;
         bottom: 0 !important;

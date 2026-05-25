@@ -25,6 +25,10 @@
 .private-create-wrapper {
     background: var(--bg-body);
     min-height: 100vh;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
 }
 
 .private-theme .page-container {
@@ -486,6 +490,31 @@
 .private-theme input[type='date'].elegant-input,
 .private-theme input[type='time'].elegant-input {
     color-scheme: dark;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.private-form-container {
+    width: 100%;
+    max-width: min(600px, 100%);
+    margin-inline: auto;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+.private-theme .inv-datetime-row {
+    width: 100%;
+    max-width: 100%;
+}
+
+.private-theme .elegant-form {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .private-theme .private-friend-search-input {

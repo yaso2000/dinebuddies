@@ -858,10 +858,46 @@ body {
   }
 }
 
-/* Fullscreen pages (e.g. Create Story): no bottom padding on all sizes */
+/* Fullscreen pages (e.g. Create Story, Smart Post Studio): no bottom padding, no outer scroll */
 .app-main--fullscreen {
   padding-bottom: 0 !important;
   overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.app-main--fullscreen > .sps-page--premium {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.app-main--fullscreen > .fp-page {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-main--fullscreen .fp-studio {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
 }
 
 /* PostsFeed filter bars — mobile first */
@@ -1469,6 +1505,13 @@ html:not([data-theme='light']) .app-header .app-name {
   transform: scale(1.1);
 }
 
+/* Reliable taps on iOS Safari / PWA */
+.ios-tap-target {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
 .fab-nav-item {
   overflow: visible;
   margin-top: 0;
@@ -1652,6 +1695,10 @@ html:not([data-theme='light']) .app-header .app-name {
   gap: 1rem;
   /* compact */
   padding-bottom: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .form-group {
@@ -1670,10 +1717,20 @@ html:not([data-theme='light']) .app-header .app-name {
   gap: 0.5rem;
 }
 
-.form-grid {
+.form-grid,
+.inv-datetime-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.form-grid > .form-group,
+.inv-datetime-row > .form-group {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .input-field {
@@ -1750,6 +1807,52 @@ html:not([data-theme='light']) .input-field[type="datetime-local"]::-webkit-cale
 [data-theme='light'] .input-field[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: none;
   opacity: 0.8;
+}
+
+/* Invitation + forms: keep native date/time inside the screen (iOS Safari overflow fix) */
+.form-grid .input-field[type='date'],
+.form-grid .input-field[type='time'],
+.inv-datetime-row .input-field[type='date'],
+.inv-datetime-row .input-field[type='time'],
+.inv-datetime-row .elegant-input[type='date'],
+.inv-datetime-row .elegant-input[type='time'] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .form-grid .input-field[type='date'],
+  .form-grid .input-field[type='time'],
+  .inv-datetime-row .input-field[type='date'],
+  .inv-datetime-row .input-field[type='time'],
+  .inv-datetime-row .elegant-input[type='date'],
+  .inv-datetime-row .elegant-input[type='time'] {
+    font-size: max(16px, 1rem);
+    padding: 0.75rem 0.55rem;
+  }
+
+  .form-grid .input-field[type='date']::-webkit-date-and-time-value,
+  .form-grid .input-field[type='time']::-webkit-date-and-time-value,
+  .inv-datetime-row .input-field[type='date']::-webkit-date-and-time-value,
+  .inv-datetime-row .input-field[type='time']::-webkit-date-and-time-value,
+  .inv-datetime-row .elegant-input[type='date']::-webkit-date-and-time-value,
+  .inv-datetime-row .elegant-input[type='time']::-webkit-date-and-time-value {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: start;
+  }
+}
+
+@media (max-width: 380px) {
+  .form-grid,
+  .inv-datetime-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 select.input-field {
@@ -2623,7 +2726,36 @@ button.notification-bell {
   /* Existing content up to the end */
 }
 
-/* Modern Solution: Hide bottom nav automatically when chat input is focused */
+/* Hide bottom nav while the on-screen keyboard is open (JS: html[data-keyboard-open]) */
+@media (max-width: 1023px) {
+  html[data-keyboard-open] .bottom-nav {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transform: translate3d(0, 120%, 0) !important;
+  }
+
+  html[data-keyboard-open] .app-main:not(.app-main--chat):not(.app-main--fullscreen):not(.app-main--admin) {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* CSS fallback when focus moves to inputs (before visualViewport resize) */
+@media (max-width: 1023px) {
+  body:has(
+      input:focus:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='reset']),
+      textarea:focus,
+      select:focus,
+      [contenteditable='true']:focus
+    )
+    .bottom-nav {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
+/* Legacy: group chat composer */
 body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: none !important;
 }

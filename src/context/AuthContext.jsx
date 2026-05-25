@@ -122,11 +122,9 @@ const loadFacebookSDK = () => new Promise((resolve) => {
 
 import { fetchIpLocation, reverseGeocode } from '../utils/locationUtils';
 import {
-    initNotifications,
-    removeFcmToken,
+    unlinkDeviceTokenFromUser,
     isIosDevice,
-    isPushEnabledInPrefs,
-    ensurePushRegistration,
+    runPushBootstrap,
 } from '../services/notificationService';
 
 import {
@@ -301,24 +299,8 @@ export const AuthProvider = ({ children }) => {
                         authLoadingTimeoutRef.current = null;
                     }, 5000);
                 }
-                // Initialize push notifications (request permission + save FCM token).
-                // iOS PWA: first cold start can race the messaging SW — retry once after a few seconds.
-                const bootPush = () => {
-                    (async () => {
-                        if (!(await isPushEnabledInPrefs(user.uid))) return;
-                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                            await ensurePushRegistration(user.uid);
-                        } else {
-                            await initNotifications(user.uid);
-                        }
-                    })().catch((e) => {
-                        console.warn('[FCM] init after login:', e?.message || e);
-                    });
-                };
-                bootPush();
-                if (isIosDevice()) {
-                    setTimeout(bootPush, 3500);
-                }
+                // Refresh FCM token only when permission already granted (never request permission here — iOS requires a tap).
+                void runPushBootstrap(user.uid);
             } else {
                 lastAuthUidRef.current = null;
                 if (authLoadingTimeoutRef.current) {
@@ -1356,9 +1338,9 @@ export const AuthProvider = ({ children }) => {
                     /* ignore */
                 }
                 await Promise.race([
-                    removeFcmToken(uid),
+                    unlinkDeviceTokenFromUser(uid),
                     new Promise((resolve) => setTimeout(resolve, 2000)),
-                ]).catch(() => { });
+                ]).catch(() => {});
             }
             await firebaseSignOut(auth);
             setUserProfile(null);

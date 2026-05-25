@@ -13,6 +13,8 @@
     "postbuild": "node -e \"require('fs').copyFileSync('public/firebase-messaging-sw.js','dist/firebase-messaging-sw.js')\"",
     "build:firebase": "node scripts/ensure-maps-key-for-build.mjs && node scripts/sync-dating-invitation-templates.mjs && vite build && node -e \"require('fs').copyFileSync('public/firebase-messaging-sw.js','dist/firebase-messaging-sw.js')\"",
     "vercel-build": "node scripts/vercel-build.mjs",
+    "vercel": "node scripts/vercel-cli.mjs",
+    "vercel:login": "node scripts/vercel-cli.mjs login",
     "deploy:predist": "node scripts/deploy-vercel.mjs --predist",
     "deploy:vercel": "node scripts/deploy-vercel.mjs",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",

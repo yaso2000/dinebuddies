@@ -3,6 +3,7 @@ import { FaWhatsapp, FaTwitter, FaFacebook, FaTelegram, FaLink, FaShareAlt, FaIn
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
+import { fetchPostImageFile, nativeShareWithImage } from '../utils/sharePostMedia';
 import InstagramStoryTemplate from './InstagramStoryTemplate';
 import InternalShareModal from './InternalShareModal';
 import { FaCommentDots } from 'react-icons/fa';
@@ -12,9 +13,19 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
     const { showToast } = useToast();
     const [generatingCard, setGeneratingCard] = useState(false);
     const [generatingStory, setGeneratingStory] = useState(false);
+    const [sharingImage, setSharingImage] = useState(false);
     const [cardPreviewUrl, setCardPreviewUrl] = useState(null);
     const [showInternalShare, setShowInternalShare] = useState(false);
     const storyRef = useRef(null);
+
+    const shareImageUrl =
+        storyData?.image ||
+        storyData?.mainImage ||
+        sharedData?.image ||
+        null;
+    const isVideoShare =
+        sharedData?.mediaType === 'video' ||
+        storyData?.mediaType === 'video';
 
     const shareText = `${title}${description ? `\n\n${description}` : ''}`;
     const encodedText = encodeURIComponent(shareText);
@@ -25,10 +36,65 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
         showToast(t('link_copied_clipboard', 'Link copied!'), 'success');
     };
 
+    const openTextOnlyWhatsApp = () => {
+        window.open(`https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`, '_blank', 'noopener,noreferrer');
+    };
+
+    /** Share post photo + caption via OS sheet (WhatsApp attaches image on mobile). */
+    const shareWithPostImage = async () => {
+        if (!shareImageUrl || isVideoShare) return false;
+        setSharingImage(true);
+        try {
+            const file = await fetchPostImageFile(shareImageUrl);
+            if (!file) return false;
+
+            const shared = await nativeShareWithImage({
+                file,
+                title,
+                text: shareText,
+                url,
+            });
+            if (shared) return true;
+
+            setCardPreviewUrl(URL.createObjectURL(file));
+            showToast(
+                t('share_image_download_hint', 'Download the image, then attach it in WhatsApp with the link.'),
+                'info'
+            );
+            return true;
+        } catch (err) {
+            if (err?.name !== 'AbortError') {
+                console.error('Image share error:', err);
+            }
+            return false;
+        } finally {
+            setSharingImage(false);
+        }
+    };
+
+    const handleWhatsAppShare = async () => {
+        if (shareImageUrl && !isVideoShare) {
+            const ok = await shareWithPostImage();
+            if (ok) return;
+        }
+        openTextOnlyWhatsApp();
+    };
+
     const handleNativeShare = async () => {
+        if (shareImageUrl && !isVideoShare) {
+            try {
+                const ok = await shareWithPostImage();
+                if (ok) return;
+            } catch {
+                /* fall through */
+            }
+        }
         if (navigator.share) {
-            try { await navigator.share({ title, text: description, url }); }
-            catch (e) { /* cancelled */ }
+            try {
+                await navigator.share({ title, text: `${shareText}\n\n${url}`, url });
+            } catch {
+                /* cancelled */
+            }
         } else {
             copyToClipboard();
         }
@@ -94,7 +160,14 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
         { name: t('share_chat', { defaultValue: 'Send in Chat' }), icon: <FaCommentDots />, action: () => setShowInternalShare(true), color: '#3b82f6', show: true },
         { name: generatingCard ? '⏳' : t('share_card', { defaultValue: 'Share Card' }), icon: <FaImage />, action: handleShareCard, color: '#a78bfa', show: !!storyData, disabled: generatingCard },
         { name: t('share', { defaultValue: 'Share' }), icon: <FaShareAlt />, action: handleNativeShare, color: 'var(--primary)', show: !!navigator.share },
-        { name: 'WhatsApp', icon: <FaWhatsapp />, url: `https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`, color: '#25D366', show: true },
+        {
+            name: sharingImage ? '⏳' : 'WhatsApp',
+            icon: <FaWhatsapp />,
+            action: handleWhatsAppShare,
+            color: '#25D366',
+            show: true,
+            disabled: sharingImage,
+        },
         { name: generatingStory ? '⏳' : 'Instagram', icon: <FaInstagram />, action: handleInstagramStory, color: '#E1306C', show: true, disabled: generatingStory },
         { name: 'Facebook', icon: <FaFacebook />, url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`, color: '#1877F2', show: true },
         { name: 'Twitter', icon: <FaTwitter />, url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`, color: '#1DA1F2', show: true },
@@ -198,7 +271,7 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
                     id: url.split('/').pop(), 
                     title, 
                     description, 
-                    image: storyData?.mainImage || null,
+                    image: shareImageUrl || storyData?.mainImage || null,
                     url 
                 }} 
             />
