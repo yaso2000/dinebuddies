@@ -1,39 +1,20 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { grantPaidCreditsInTransaction, isBusinessUserDoc, priceIdToCreditPackage } = require('./creditsCore');
+const { getCheckoutProductByPriceId, normalizeProductId } = require('./paymentPlans');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-// Map planId → weeklyPrivateQuota  (-1 = unlimited)
-const PLAN_QUOTA_MAP = {
-    // User plans
-    'pro': 2,
-    'premium': -1,
-    // Partner plans (no private invites — they are business accounts)
-    'professional': 0,
-    'elite': 0,
-};
-
-function getQuotaForPlan(planId) {
-    if (!planId) return 0;
-    const id = planId.toLowerCase();
-    if (id in PLAN_QUOTA_MAP) return PLAN_QUOTA_MAP[id];
-    // Fallback by keyword
-    if (id.includes('premium')) return -1;
-    if (id.includes('pro')) return 2;
-    return 0;
+function stripeId(value) {
+    return typeof value === 'string' ? value : value?.id;
 }
 
-function getTierForPlan(planId) {
-    if (!planId) return 'free';
-    const id = planId.toLowerCase();
-    if (id.includes('elite')) return 'elite';
-    if (id.includes('professional')) return 'professional';
-    if (id.includes('premium')) return 'premium';
-    if (id.includes('pro')) return 'pro';
-    return 'free';
+async function getCheckoutSessionPriceId(session) {
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+    const first = lineItems.data?.[0];
+    return stripeId(first?.price);
 }
 
 /**
@@ -90,13 +71,14 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
 async function handleDineCreditsPurchase(session) {
     const userId = session.metadata?.userId;
-    const credits = Math.floor(Number(session.metadata?.credits));
-    const packageId = String(session.metadata?.packageId || '');
+    const paidPriceId = await getCheckoutSessionPriceId(session);
+    const paidPackage = priceIdToCreditPackage()[paidPriceId];
 
-    if (!userId || !Number.isFinite(credits) || credits <= 0) {
-        console.error('Invalid dine credits checkout metadata', session.metadata);
-        return;
+    if (!userId || !paidPackage) {
+        throw new Error(`Invalid dine credits checkout fulfillment for session ${session.id}`);
     }
+
+    const { credits, packageId } = paidPackage;
 
     const fulfillRef = db.collection('stripe_dine_credit_fulfillments').doc(session.id);
     const userRef = db.collection('users').doc(userId);
@@ -135,8 +117,7 @@ async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
 
     const userId = session.metadata?.userId;
-    const planId = session.metadata?.planId;
-    const subscriptionId = session.subscription;
+    const subscriptionId = stripeId(session.subscription);
 
     if (!userId) {
         console.error('No userId in session metadata');
@@ -148,53 +129,97 @@ async function handleCheckoutComplete(session) {
         return;
     }
 
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
+    const paidPriceId = await getCheckoutSessionPriceId(session);
+    const product = getCheckoutProductByPriceId(paidPriceId);
+    if (!product) {
+        throw new Error(`Unsupported Stripe checkout price ${paidPriceId || '(missing)'} for session ${session.id}`);
+    }
+    if (session.mode !== product.mode) {
+        throw new Error(`Checkout mode mismatch for ${session.id}: paid ${session.mode}, expected ${product.mode}`);
+    }
+    const metadataPlanId = normalizeProductId(session.metadata?.planId);
+    if (metadataPlanId && metadataPlanId !== product.id) {
+        console.warn(`Checkout metadata/product mismatch for ${session.id}: metadata=${metadataPlanId}, paid=${product.id}`);
+    }
 
-    try {
-        if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
-            await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
-        } else {
-            // Subscription plan
-            await db.collection('users').doc(userId).update({
-                subscriptionStatus: 'active',
-                subscriptionId: subscriptionId,
-                subscriptionTier: tier,
-                currentPlan: planId,
-                weeklyPrivateQuota: weeklyQuota,
-                usedPrivateCreditsThisWeek: 0,
-                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
-                stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
-            });
-
-            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
+    const fulfillRef = db.collection('stripe_checkout_fulfillments').doc(session.id);
+    const userRef = db.collection('users').doc(userId);
+    const result = await db.runTransaction(async (tx) => {
+        const [done, userSnap] = await Promise.all([tx.get(fulfillRef), tx.get(userRef)]);
+        if (done.exists) return { duplicate: true };
+        if (!userSnap.exists) {
+            throw new Error(`User ${userId} not found for checkout session ${session.id}`);
         }
 
-        // Save subscription record
-        await db.collection('user_subscriptions').add({
-            userId,
-            planId,
-            subscriptionId,
-            status: 'active',
-            startDate: admin.firestore.FieldValue.serverTimestamp(),
-            sessionId: session.id
-        });
+        if (product.mode === 'payment') {
+            if (product.purchaseType === 'private_invitation_credits') {
+                tx.update(userRef, {
+                    purchasedPrivateCredits: admin.firestore.FieldValue.increment(product.credits),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else if (product.purchaseType === 'offer_credits') {
+                tx.update(userRef, {
+                    offerCredits: admin.firestore.FieldValue.increment(product.credits),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                throw new Error(`Unsupported one-time checkout product ${product.id}`);
+            }
+        } else {
+            const updates = {
+                subscriptionStatus: 'active',
+                subscriptionId: subscriptionId || null,
+                subscriptionTier: product.subscriptionTier,
+                currentPlan: product.id,
+                weeklyPrivateQuota: product.weeklyPrivateQuota,
+                usedPrivateCreditsThisWeek: 0,
+                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+            const customerId = stripeId(session.customer);
+            if (customerId) updates.stripeCustomerId = customerId;
+            tx.update(userRef, updates);
+            tx.set(db.collection('user_subscriptions').doc(session.id), {
+                userId,
+                planId: product.id,
+                subscriptionTier: product.subscriptionTier,
+                subscriptionId: subscriptionId || null,
+                status: 'active',
+                startDate: admin.firestore.FieldValue.serverTimestamp(),
+                sessionId: session.id
+            });
+        }
 
-    } catch (error) {
-        console.error('Error updating user subscription:', error);
+        tx.set(fulfillRef, {
+            userId,
+            productId: product.id,
+            priceId: paidPriceId,
+            mode: product.mode,
+            subscriptionId: subscriptionId || null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return { duplicate: false };
+    });
+
+    if (result.duplicate) {
+        console.log(`↩️ Checkout session ${session.id} already fulfilled`);
+    } else if (product.mode === 'payment') {
+        console.log(`✅ User ${userId} received ${product.credits} ${product.purchaseType}`);
+    } else {
+        console.log(`✅ User ${userId} → product: ${product.id}, tier: ${product.subscriptionTier}, quota: ${product.weeklyPrivateQuota}`);
     }
 }
 
 async function handleSubscriptionUpdate(subscription) {
     console.log('🔄 Subscription updated:', subscription.id);
 
-    const customer = subscription.customer;
+    const customer = stripeId(subscription.customer);
+    const priceId = stripeId(subscription.items?.data?.[0]?.price);
+    const product = getCheckoutProductByPriceId(priceId);
+    if (!product || product.mode !== 'subscription') {
+        console.warn(`Unsupported subscription price ${priceId || '(missing)'} for subscription ${subscription.id}`);
+        return;
+    }
 
     const usersSnapshot = await db.collection('users')
         .where('stripeCustomerId', '==', customer)
@@ -207,24 +232,21 @@ async function handleSubscriptionUpdate(subscription) {
     }
 
     const userId = usersSnapshot.docs[0].id;
-    const planId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-
     await db.collection('users').doc(userId).update({
         subscriptionStatus: subscription.status,
-        subscriptionTier: tier,
-        weeklyPrivateQuota: weeklyQuota,
+        subscriptionTier: product.subscriptionTier,
+        currentPlan: product.id,
+        weeklyPrivateQuota: product.weeklyPrivateQuota,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`✅ User ${userId} updated → tier: ${tier}, quota: ${weeklyQuota}, status: ${subscription.status}`);
+    console.log(`✅ User ${userId} updated → tier: ${product.subscriptionTier}, quota: ${product.weeklyPrivateQuota}, status: ${subscription.status}`);
 }
 
 async function handleSubscriptionCanceled(subscription) {
     console.log('❌ Subscription canceled:', subscription.id);
 
-    const customer = subscription.customer;
+    const customer = stripeId(subscription.customer);
 
     const usersSnapshot = await db.collection('users')
         .where('stripeCustomerId', '==', customer)
