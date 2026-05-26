@@ -4,11 +4,14 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const admin = require('firebase-admin');
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const { CREDIT_COSTS, spendCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -258,10 +261,6 @@ async function assertAdminContext(context) {
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
     const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
-
-    const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
@@ -675,6 +674,10 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                     usedThisMonth = 0;
                 }
                 const purchasedCredits = Math.max(0, Number(user.purchasedPrivateCredits) || 0);
+                const dineCreditCost = String(inv.type || '').toLowerCase() === 'dating'
+                    ? CREDIT_COSTS.DATING_INVITATION
+                    : CREDIT_COSTS.PRIVATE_INVITATION;
+                const dineCredits = Math.max(0, Number(user.freeCredits) || 0) + Math.max(0, Number(user.paidCredits) || 0);
                 if (quota > 0 && usedThisMonth < quota) {
                     chargedSource = 'monthly';
                     userCreditPatch = {
@@ -686,6 +689,16 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                     userCreditPatch = {
                         purchasedPrivateCredits: purchasedCredits - 1
                     };
+                } else if (dineCredits >= dineCreditCost) {
+                    chargedSource = 'dine_credits';
+                    spendCreditsInTransaction(tx, userRef, user, {
+                        uid,
+                        accountRole: isBusinessUserDoc(user) ? 'business' : 'user',
+                        amount: dineCreditCost,
+                        type: 'spend',
+                        reason: 'publish_private_invitation',
+                        relatedId: invitationId,
+                    });
                 } else {
                     throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
                 }
@@ -1189,9 +1202,17 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const currentClaims = targetUser.customClaims || {};
+    const targetIsConfiguredSuperOwner =
+        SUPER_OWNER_UIDS.includes(targetUid) ||
+        SUPER_OWNER_EMAILS.includes((targetUser.email || '').toLowerCase()) ||
+        currentClaims.superOwner === true;
+    await admin.auth().setCustomUserClaims(targetUid, {
+        ...currentClaims,
+        admin: true,
+        ...(targetIsConfiguredSuperOwner ? { superOwner: true } : {}),
+    });
 
     return { success: true, targetUid };
 });
