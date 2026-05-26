@@ -4,7 +4,9 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const admin = require('firebase-admin');
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
