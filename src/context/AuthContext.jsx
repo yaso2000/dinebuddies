@@ -639,41 +639,8 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            let grantedCredits = 0;
             let showWelcomeNotification = false;
-
-            // Generate a unique identifier (email or phone)
-            const uniqueId = userData.email?.toLowerCase() || auth.currentUser?.phoneNumber || null;
-
-            // welcome_gifts_claimed must be allowed in firestore.rules; if missing/denied, skip and still create users/{uid}.
-            if (uniqueId) {
-                try {
-                    const giftRef = doc(db, 'welcome_gifts_claimed', uniqueId);
-                    const giftSnap = await getDoc(giftRef);
-
-                    if (!giftSnap.exists()) {
-                        grantedCredits = 5;
-                        showWelcomeNotification = true;
-                        try {
-                            await setDoc(giftRef, {
-                                claimedAt: serverTimestamp(),
-                                userId: userId,
-                                authProvider: userData.authProvider || 'unknown'
-                            });
-                        } catch (giftWriteErr) {
-                            console.warn('welcome_gifts_claimed write skipped:', giftWriteErr?.message || giftWriteErr);
-                        }
-                    }
-                } catch (giftReadErr) {
-                    console.warn('welcome gift eligibility check skipped:', giftReadErr?.message || giftReadErr);
-                    grantedCredits = 5;
-                    showWelcomeNotification = true;
-                }
-            } else {
-                // Fallback if no unique identity can be verified (rare in Firebase Auth)
-                grantedCredits = 5;
-                showWelcomeNotification = true;
-            }
+            // Entitlements are server-managed; client profile creation must not mint credits.
 
             const existingSnap = await getDoc(doc(db, 'users', userId));
             const existing = existingSnap.exists() ? existingSnap.data() : null;
@@ -685,10 +652,6 @@ export const AuthProvider = ({ children }) => {
                 display_name: finalDisplayName,
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
-                reputation: 100,
-                purchasedPrivateCredits: grantedCredits,
-                usedPrivateCreditsThisMonth: 0,
-                lastPrivateResetMonth: '',
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
