@@ -17,8 +17,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() &&
              (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+              request.auth.token.role == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
@@ -101,6 +100,105 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function protectedUserSelfCreateFields() {
+      return [
+        'admin',
+        'superOwner',
+        'isAdmin',
+        'permissions',
+        'freeCredits',
+        'paidCredits',
+        'purchasedPrivateCredits',
+        'offerCredits',
+        'offerSlotCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'subscriptionId',
+        'subscriptionStatus',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'customLimits',
+        'customLimitsExpiry',
+        'reputation',
+        'banned',
+        'bannedAt'
+      ];
+    }
+
+    function protectedUserSelfUpdateFields() {
+      return protectedUserSelfCreateFields().concat([
+        'role',
+        'accountType',
+        'subscriptionTier'
+      ]);
+    }
+
+    function protectedUserSelfSignupFields() {
+      return protectedUserSelfCreateFields().concat([
+        'subscriptionTier'
+      ]);
+    }
+
+    function hasSafeInitialUserRole() {
+      return !request.resource.data.keys().hasAny(['role']) ||
+             request.resource.data.role == 'user' ||
+             request.resource.data.role == 'business' ||
+             request.resource.data.role == 'partner';
+    }
+
+    function hasSafeInitialAccountType() {
+      return !request.resource.data.keys().hasAny(['accountType']) ||
+             request.resource.data.accountType == 'user' ||
+             request.resource.data.accountType == 'business';
+    }
+
+    function hasSafeInitialSubscriptionTier() {
+      return !request.resource.data.keys().hasAny(['subscriptionTier']) ||
+             request.resource.data.subscriptionTier == 'free';
+    }
+
+    function isSafeOwnerUserCreate() {
+      return !request.resource.data.keys().hasAny(protectedUserSelfCreateFields()) &&
+             hasSafeInitialUserRole() &&
+             hasSafeInitialAccountType() &&
+             hasSafeInitialSubscriptionTier();
+    }
+
+    function isSafeOwnerUserUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(protectedUserSelfUpdateFields());
+    }
+
+    function isSafeSignupRoleCompletion() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(protectedUserSelfSignupFields()) &&
+        hasSafeInitialUserRole() &&
+        hasSafeInitialAccountType() &&
+        hasSafeInitialSubscriptionTier();
+    }
+
+    function isPrivateInvitationDraftWrite() {
+      return (!request.resource.data.keys().hasAny(['publishedAt']) ||
+              request.resource.data.publishedAt == null) &&
+             (!request.resource.data.keys().hasAny(['status']) ||
+              request.resource.data.status == 'draft');
+    }
+
+    function doesNotPublishPrivateInvitation() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['publishedAt']) &&
+             (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
+              request.resource.data.status == 'draft');
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,26 +210,31 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isOwner(userId) && isSafeOwnerUserCreate();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       isSafeSignupRoleCompletion();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       isSafeSignupRoleCompletion();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) &&
+                       isBusinessSignupCompletionFromIntent() &&
+                       isSafeSignupRoleCompletion();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) &&
+                       isUpgradingStubToBusinessProfile() &&
+                       isSafeSignupRoleCompletion();
       allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                       isSafeOwnerUserUpdate();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
@@ -281,13 +384,15 @@ service cloud.firestore {
       // Any signed-in user can create (author must be self)
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                        request.resource.data.author.id == request.auth.uid) &&
+                       isPrivateInvitationDraftWrite();
 
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
+                       (((resource.data.authorId == request.auth.uid ||
+                         (resource.data.author != null &&
+                          resource.data.author.id == request.auth.uid)) &&
+                         doesNotPublishPrivateInvitation()) ||
                         (request.auth.uid in resource.data.invitedFriends &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
                          request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
