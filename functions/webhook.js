@@ -1,7 +1,8 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { grantPaidCreditsInTransaction, isBusinessUserDoc, priceIdToCreditPackage } = require('./creditsCore');
+const { getCheckoutPlan, getCheckoutPlanByPriceId } = require('./paymentPlans');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -34,6 +35,56 @@ function getTierForPlan(planId) {
     if (id.includes('premium')) return 'premium';
     if (id.includes('pro')) return 'pro';
     return 'free';
+}
+
+async function getSessionLineItemPriceId(session) {
+    const embeddedPriceId = session.line_items?.data?.[0]?.price?.id;
+    if (embeddedPriceId) return embeddedPriceId;
+    if (!session.id) return null;
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 2 });
+    const first = lineItems?.data?.[0];
+    if (!first || lineItems.data.length !== 1) return null;
+    return first.price?.id || null;
+}
+
+async function getVerifiedCatalogPlan(session) {
+    const paidPriceId = await getSessionLineItemPriceId(session);
+    const paidPlan = getCheckoutPlanByPriceId(paidPriceId);
+    if (!paidPlan) {
+        console.error('Unknown Stripe checkout price; refusing fulfillment', {
+            sessionId: session.id,
+            paidPriceId,
+            metadata: session.metadata || {}
+        });
+        return null;
+    }
+
+    const metadataPlan = getCheckoutPlan(session.metadata?.planId);
+    if (metadataPlan && metadataPlan.priceId !== paidPlan.priceId) {
+        console.error('Checkout metadata/price mismatch; fulfilling actual paid price only', {
+            sessionId: session.id,
+            metadataPlanId: metadataPlan.id,
+            metadataPriceId: metadataPlan.priceId,
+            paidPlanId: paidPlan.id,
+            paidPriceId
+        });
+    }
+    return paidPlan;
+}
+
+async function getVerifiedDineCreditPackage(session) {
+    const paidPriceId = await getSessionLineItemPriceId(session);
+    const byPrice = priceIdToCreditPackage();
+    const verified = byPrice[paidPriceId];
+    if (!verified) {
+        console.error('Unknown Dine Credits checkout price; refusing fulfillment', {
+            sessionId: session.id,
+            paidPriceId,
+            metadata: session.metadata || {}
+        });
+        return null;
+    }
+    return verified;
 }
 
 /**
@@ -88,10 +139,10 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
 // ===== Event Handlers =====
 
-async function handleDineCreditsPurchase(session) {
+async function handleDineCreditsPurchase(session, verifiedPackage) {
     const userId = session.metadata?.userId;
-    const credits = Math.floor(Number(session.metadata?.credits));
-    const packageId = String(session.metadata?.packageId || '');
+    const credits = Math.floor(Number(verifiedPackage?.credits));
+    const packageId = String(verifiedPackage?.packageId || '');
 
     if (!userId || !Number.isFinite(credits) || credits <= 0) {
         console.error('Invalid dine credits checkout metadata', session.metadata);
@@ -135,7 +186,6 @@ async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
 
     const userId = session.metadata?.userId;
-    const planId = session.metadata?.planId;
     const subscriptionId = session.subscription;
 
     if (!userId) {
@@ -143,52 +193,101 @@ async function handleCheckoutComplete(session) {
         return;
     }
 
-    if (session.mode === 'payment' && session.metadata?.purchaseType === 'dine_credits') {
-        await handleDineCreditsPurchase(session);
+    if (session.mode === 'payment' && session.payment_status && session.payment_status !== 'paid') {
+        console.log('Payment checkout not paid yet; skipping fulfillment:', session.id, session.payment_status);
         return;
     }
 
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
+    if (session.mode === 'payment' && session.metadata?.purchaseType === 'dine_credits') {
+        const verifiedPackage = await getVerifiedDineCreditPackage(session);
+        if (verifiedPackage) await handleDineCreditsPurchase(session, verifiedPackage);
+        return;
+    }
+
+    const plan = await getVerifiedCatalogPlan(session);
+    if (!plan) return;
+
+    if (plan.mode === 'payment') {
+        await handleCatalogPaymentPurchase(session, plan);
+        return;
+    }
+
+    const planId = plan.id;
+    const weeklyQuota = Number.isFinite(plan.weeklyPrivateQuota) ? plan.weeklyPrivateQuota : getQuotaForPlan(plan.subscriptionTier || planId);
+    const tier = plan.subscriptionTier || getTierForPlan(planId);
 
     try {
-        if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
-            await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
-        } else {
-            // Subscription plan
-            await db.collection('users').doc(userId).update({
-                subscriptionStatus: 'active',
-                subscriptionId: subscriptionId,
-                subscriptionTier: tier,
-                currentPlan: planId,
-                weeklyPrivateQuota: weeklyQuota,
-                usedPrivateCreditsThisWeek: 0,
-                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
-                stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
-            });
+        // Subscription plan
+        await db.collection('users').doc(userId).update({
+            subscriptionStatus: 'active',
+            subscriptionId: subscriptionId,
+            subscriptionTier: tier,
+            currentPlan: planId,
+            weeklyPrivateQuota: weeklyQuota,
+            usedPrivateCreditsThisWeek: 0,
+            subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+            stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
+        });
 
-            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
-        }
+        console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
 
         // Save subscription record
-        await db.collection('user_subscriptions').add({
+        await db.collection('user_subscriptions').doc(session.id).set({
             userId,
             planId,
             subscriptionId,
             status: 'active',
             startDate: admin.firestore.FieldValue.serverTimestamp(),
-            sessionId: session.id
-        });
+            sessionId: session.id,
+            stripePriceId: plan.priceId
+        }, { merge: true });
 
     } catch (error) {
         console.error('Error updating user subscription:', error);
     }
+}
+
+async function handleCatalogPaymentPurchase(session, plan) {
+    const userId = session.metadata?.userId;
+    const fulfillRef = db.collection('stripe_checkout_fulfillments').doc(session.id);
+    const userRef = db.collection('users').doc(userId);
+
+    await db.runTransaction(async (tx) => {
+        const done = await tx.get(fulfillRef);
+        if (done.exists) return;
+
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) {
+            console.error('User not found for catalog checkout:', userId, session.id);
+            return;
+        }
+
+        const updates = {
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        if (plan.purchaseType === 'private_invitation_pack') {
+            updates.purchasedPrivateCredits = admin.firestore.FieldValue.increment(plan.privateCredits || 0);
+        } else if (plan.purchaseType === 'offer_slot_pack') {
+            updates.offerCredits = admin.firestore.FieldValue.increment(plan.offerCredits || 0);
+        } else {
+            console.error('Unsupported one-time checkout plan:', plan);
+            return;
+        }
+
+        tx.update(userRef, updates);
+        tx.set(fulfillRef, {
+            userId,
+            planId: plan.id,
+            purchaseType: plan.purchaseType,
+            privateCredits: plan.privateCredits || 0,
+            offerCredits: plan.offerCredits || 0,
+            stripePriceId: plan.priceId,
+            sessionId: session.id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    });
+
+    console.log(`✅ Fulfilled one-time checkout ${session.id} for user ${userId}: ${plan.id}`);
 }
 
 async function handleSubscriptionUpdate(subscription) {
@@ -207,13 +306,20 @@ async function handleSubscriptionUpdate(subscription) {
     }
 
     const userId = usersSnapshot.docs[0].id;
-    const planId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
+    const subscriptionPriceId = subscription.items?.data?.[0]?.price?.id || null;
+    const plan = getCheckoutPlanByPriceId(subscriptionPriceId) ||
+        getCheckoutPlan(subscription.metadata?.planId) ||
+        getCheckoutPlan(usersSnapshot.docs[0].data().currentPlan);
+    const planId = plan?.id || subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
+    const weeklyQuota = plan && Number.isFinite(plan.weeklyPrivateQuota)
+        ? plan.weeklyPrivateQuota
+        : getQuotaForPlan(planId);
+    const tier = plan?.subscriptionTier || getTierForPlan(planId);
 
     await db.collection('users').doc(userId).update({
         subscriptionStatus: subscription.status,
         subscriptionTier: tier,
+        currentPlan: planId,
         weeklyPrivateQuota: weeklyQuota,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
