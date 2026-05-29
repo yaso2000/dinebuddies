@@ -216,6 +216,21 @@ service firebase.storage {
                    && request.resource.size < 25 * 1024 * 1024;
     }
 
+    // Business motion / Smart Post Studio cover images
+    match /business-motion/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Legacy AI image path (server-side uploads before folder fix — read-only for existing URLs)
+    match /users/{userId}/invitations/ai/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Featured posts background images (Business Pro feature)
     match /featured_posts/{userId}/{fileName} {
       allow read: if true;

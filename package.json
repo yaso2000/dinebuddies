@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npx --yes serve dist -p 4173",
     "dev:src": "vite",
+    "dev:vercel": "node scripts/vercel-cli.mjs dev --local-config vercel-dev.json",
     "dev:network": "vite --host",
     "sync:dating-templates": "node scripts/sync-dating-invitation-templates.mjs",
     "prebuild": "npm run sync:dating-templates",
@@ -17,6 +18,9 @@
     "vercel:login": "node scripts/vercel-cli.mjs login",
     "deploy:predist": "node scripts/deploy-vercel.mjs --predist",
     "deploy:vercel": "node scripts/deploy-vercel.mjs",
+    "verify:firebase-admin": "node scripts/verify-firebase-admin-env.mjs",
+    "set:firebase-admin-env": "node scripts/set-firebase-admin-env-from-json.mjs",
+    "minify:service-account": "node scripts/minify-service-account-json.mjs",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",

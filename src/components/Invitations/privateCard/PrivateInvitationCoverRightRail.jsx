@@ -9,7 +9,8 @@ import {
 import {
     isSamePrivateCoverMedia,
     PRIVATE_COVER_STASH_MAX_IMAGES,
-    PRIVATE_COVER_STASH_MAX_VIDEOS
+    PRIVATE_COVER_STASH_MAX_VIDEOS,
+    PRIVATE_COVER_STASH_MAX_AI_IMAGES
 } from '../../../utils/privateCoverMediaStash';
 import '../datingCard/DatingPreviewRightRail.css';
 import './PrivateInvitationCoverRightRail.css';
@@ -45,16 +46,31 @@ function TemplateThumb({ resolveCandidates, optionId, selected, onClick, title }
     );
 }
 
-function StashMediaThumb({ selected, onSelect, onClear, children }) {
+function StashMediaThumb({ selected, onSelect, onClear, committing, children }) {
     return (
-        <div className={`dating-preview-rail__thumb-wrap${selected ? ' dating-preview-rail__thumb-wrap--selected' : ''}`}>
+        <div
+            className={[
+                'dating-preview-rail__thumb-wrap',
+                selected ? 'dating-preview-rail__thumb-wrap--selected' : '',
+                committing ? 'dating-preview-rail__thumb-wrap--committing' : ''
+            ]
+                .filter(Boolean)
+                .join(' ')}
+        >
             <button
                 type="button"
                 className="dating-preview-rail__thumb dating-preview-rail__thumb--media"
                 onClick={onSelect}
                 aria-pressed={selected}
+                disabled={committing}
+                aria-busy={committing}
             >
                 {children}
+                {committing ? (
+                    <span className="dating-preview-rail__thumb-loading" aria-hidden>
+                        <span className="dating-preview-rail__thumb-spinner" />
+                    </span>
+                ) : null}
             </button>
             {onClear && (
                 <button
@@ -85,6 +101,7 @@ export default function PrivateInvitationCoverRightRail({
     coverStash = [],
     onSelectStashItem,
     onRemoveStashItem,
+    committingStashId = null,
     /** @type {'private'|'dating'} */
     templateVariant = 'private'
 }) {
@@ -105,6 +122,10 @@ export default function PrivateInvitationCoverRightRail({
         () => coverStash.filter((e) => e.kind === 'upload' && e.media?.type === 'image'),
         [coverStash]
     );
+    const aiItems = useMemo(
+        () => coverStash.filter((e) => e.kind === 'ai' && e.media?.type === 'image'),
+        [coverStash]
+    );
     const cameraItems = useMemo(
         () => coverStash.filter((e) => e.kind === 'camera' && e.media?.type === 'video'),
         [coverStash]
@@ -119,6 +140,11 @@ export default function PrivateInvitationCoverRightRail({
         count: uploadItems.length,
         max: PRIVATE_COVER_STASH_MAX_IMAGES
     });
+    const aiLabel = t('private_cover_ai_rail_label', {
+        defaultValue: 'AI photos ({{count}}/{{max}})',
+        count: aiItems.length,
+        max: PRIVATE_COVER_STASH_MAX_AI_IMAGES
+    });
     const cameraLabel = t('private_cover_video_rail_label', {
         defaultValue: 'Your videos ({{count}}/{{max}})',
         count: cameraItems.length,
@@ -126,11 +152,18 @@ export default function PrivateInvitationCoverRightRail({
     });
 
     const sectionLabel =
-        mode === 'template' ? templateLabel : mode === 'upload' ? uploadLabel : cameraLabel;
+        mode === 'template'
+            ? templateLabel
+            : mode === 'upload'
+              ? uploadLabel
+              : mode === 'ai'
+                ? aiLabel
+                : cameraLabel;
 
     const scrollRole = mode === 'template' ? 'radiogroup' : 'group';
-    const isMediaMode = mode === 'upload' || mode === 'camera';
-    const mediaItems = mode === 'upload' ? uploadItems : mode === 'camera' ? cameraItems : [];
+    const isMediaMode = mode === 'upload' || mode === 'camera' || mode === 'ai';
+    const mediaItems =
+        mode === 'upload' ? uploadItems : mode === 'ai' ? aiItems : mode === 'camera' ? cameraItems : [];
 
     return (
         <div
@@ -186,11 +219,17 @@ export default function PrivateInvitationCoverRightRail({
                                       'Tap “Upload photo” to add from your device (up to {{max}}).',
                                   max: PRIVATE_COVER_STASH_MAX_IMAGES
                               })
-                            : t('private_cover_video_rail_empty', {
-                                  defaultValue:
-                                      'Tap “Record video” to capture a clip (up to {{max}}).',
-                                  max: PRIVATE_COVER_STASH_MAX_VIDEOS
-                              })}
+                            : mode === 'ai'
+                              ? t('private_cover_ai_rail_empty', {
+                                    defaultValue:
+                                        'Use “Generate with AI” above to create covers (up to {{max}}).',
+                                    max: PRIVATE_COVER_STASH_MAX_AI_IMAGES
+                                })
+                              : t('private_cover_video_rail_empty', {
+                                    defaultValue:
+                                        'Tap “Record video” to capture a clip (up to {{max}}).',
+                                    max: PRIVATE_COVER_STASH_MAX_VIDEOS
+                                })}
                     </p>
                 )}
 
@@ -201,6 +240,7 @@ export default function PrivateInvitationCoverRightRail({
                             <StashMediaThumb
                                 key={entry.id}
                                 selected={selected}
+                                committing={committingStashId === entry.id}
                                 onSelect={() => onSelectStashItem?.(entry.id)}
                                 onClear={() => onRemoveStashItem?.(entry.id)}
                             >

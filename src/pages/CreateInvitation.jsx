@@ -19,7 +19,7 @@ import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { detectUserLocationContext } from '../utils/locationUtils';
-import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
+import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey, templateTypeToMagicCoverAspect } from '../utils/invitationTemplates';
 import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
 import {
     PUBLIC_VENUE_TYPES,
@@ -30,6 +30,9 @@ import {
 import InvitationCard from '../components/InvitationCard';
 import PublicInviteCardStyleStudio from '../components/Invitations/publicCard/PublicInviteCardStyleStudio';
 import { invitationMessageMaxLength } from '../utils/invitationSmartDescription';
+import AIFloatingLauncher from '../components/AIFloatingLauncher';
+import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { useDragScrollRail } from '../hooks/useDragScrollRail';
 
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
@@ -68,44 +71,20 @@ const CreateInvitation = () => {
     const editingInvitation = location.state?.editingInvitation; // Editing PUBLISHED invitation
     const editVideoHydratedRef = useRef(null);
     const mediaLibraryHydratedRef = useRef(false);
-    const templateCarouselRef = useRef(null);
     const templateCarouselScrollTimerRef = useRef(null);
-    const dragStateRef = useRef({
-        activeKey: null,
-        startX: 0,
-        startScrollLeft: 0,
-    });
+    const {
+        railRef: templateCarouselRef,
+        onPointerDown: onTemplateCarouselDown,
+        onPointerMove: onTemplateCarouselMove,
+        onPointerUp: onTemplateCarouselUp,
+        onPointerCancel: onTemplateCarouselCancel,
+        wasDragged: templateCarouselWasDragged,
+    } = useDragScrollRail();
 
     const mediaLibraryStorageKey = React.useMemo(() => {
         const userId = currentUser?.id || authUser?.uid;
         return userId ? `db_invitation_media_library_${userId}` : null;
     }, [currentUser?.id, authUser?.uid]);
-
-    const startHorizontalDrag = (key, ref, event) => {
-        if (event.button !== 0 || !ref.current) return;
-        dragStateRef.current = {
-            activeKey: key,
-            startX: event.clientX,
-            startScrollLeft: ref.current.scrollLeft,
-        };
-        ref.current.style.cursor = 'grabbing';
-        ref.current.style.userSelect = 'none';
-    };
-
-    const moveHorizontalDrag = (key, ref, event) => {
-        const s = dragStateRef.current;
-        if (s.activeKey !== key || !ref.current) return;
-        const dx = event.clientX - s.startX;
-        ref.current.scrollLeft = s.startScrollLeft - dx;
-    };
-
-    const endHorizontalDrag = (key, ref) => {
-        const s = dragStateRef.current;
-        if (s.activeKey !== key || !ref.current) return;
-        dragStateRef.current.activeKey = null;
-        ref.current.style.cursor = 'grab';
-        ref.current.style.removeProperty('user-select');
-    };
 
     useEffect(() => {
         if (!editingInvitation?.id) editVideoHydratedRef.current = null;
@@ -868,6 +847,73 @@ const CreateInvitation = () => {
         checkRestrictions();
     }, [currentUser]);
 
+    const invitationAiContext = useMemo(() => {
+        const venueType = PUBLIC_VENUE_TYPES.includes(formData.type)
+            ? t(publicVenueTypeI18nKey(formData.type), formData.type)
+            : '';
+        const venueName = (formData.restaurantName || formData.location || '').trim();
+        return { venueType, venueName };
+    }, [formData.type, formData.restaurantName, formData.location, t]);
+
+    const buildInvitationAiPrompt = useCallback(() => {
+        const parts = [
+            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
+            formData.guestsNeeded && `عدد المقاعد: ${formData.guestsNeeded}`,
+            formData.paymentType && `الدفع: ${formData.paymentType}`,
+            formData.title?.trim() && `عنوان حالي: ${formData.title.trim()}`,
+            formData.description?.trim() && `رسالة حالية: ${formData.description.trim()}`,
+        ].filter(Boolean);
+        return parts.join('\n') || 'اكتب عنوان دعوة ورسالة ترحيبية مناسبة للسياق أعلاه';
+    }, [formData]);
+
+    const handleInvitationAiContent = useCallback(
+        (data) => {
+            const fields = extractAIContentFields('invitation', data);
+            setFormData((prev) => {
+                const next = { ...prev };
+                if (fields.title) {
+                    next.title = fields.title;
+                }
+                if (fields.description) {
+                    next.description = fields.description.slice(0, invitationMessageMaxLength);
+                }
+                return next;
+            });
+        },
+        []
+    );
+
+    const handleMagicCoverGenerated = useCallback((imageUrl) => {
+        if (!imageUrl || typeof imageUrl !== 'string') return;
+        setLibraryImages((prev) => [imageUrl, ...prev.filter((u) => u !== imageUrl)].slice(0, 24));
+        handleMediaSelect({
+            source: 'custom_image',
+            type: 'image',
+            file: null,
+            url: imageUrl,
+            preview: imageUrl,
+            fromLibrary: true,
+        });
+    }, [handleMediaSelect]);
+
+    const buildMagicCoverBrief = useCallback(() => {
+        const parts = [
+            invitationAiContext.venueName && `المكان: ${invitationAiContext.venueName}`,
+            invitationAiContext.venueType && `نوع المكان: ${invitationAiContext.venueType}`,
+            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
+            formData.title?.trim() && `عنوان الدعوة: ${formData.title.trim()}`,
+        ].filter(Boolean);
+        return (
+            parts.join('\n') ||
+            'غلاف دعوة جذاب بلا نص مكتوب — أجواء دافئة مناسبة للمكان والمناسبة.'
+        );
+    }, [formData.date, formData.time, formData.title, invitationAiContext]);
+
+    const invitationCoverAspect = useMemo(
+        () => templateTypeToMagicCoverAspect(formData.templateType),
+        [formData.templateType]
+    );
+
     // Derived Data for UI
     const currentCountry = Country.getCountryByCode(formData.country);
 
@@ -1253,6 +1299,19 @@ const CreateInvitation = () => {
                             style={{ minHeight: '44px' }}
                         />
                     </div>
+                    <div style={{ marginBottom: '1rem' }}>
+                        <AIFloatingLauncher
+                            postType="invitation"
+                            subType="public"
+                            onTextSuccess={handleInvitationAiContent}
+                            buildContextPrompt={buildInvitationAiPrompt}
+                            disabled={isSubmitting}
+                            invitationVenue={{
+                                venueType: invitationAiContext.venueType,
+                                venueName: invitationAiContext.venueName,
+                            }}
+                        />
+                    </div>
                     <div className="form-group" style={{ marginBottom: '1rem' }}>
                         <label>{t('form_payment_label')}</label>
                         <select name="paymentType" value={formData.paymentType} onChange={handleChange} className="input-field">
@@ -1477,6 +1536,17 @@ const CreateInvitation = () => {
                         onDeleteLibraryImage={deleteLibraryImage}
                         onImageUploadError={(err) => notifyImageUploadError(showToast, err, t, 'media_upload_failed')}
                         onMediaSelect={handleMediaSelect}
+                        magicCover={{
+                            enabled: true,
+                            subType: 'public',
+                            venueType: invitationAiContext.venueType,
+                            venueName: invitationAiContext.venueName,
+                            aspectRatio: invitationCoverAspect,
+                            buildBrief: buildMagicCoverBrief,
+                            onImageGenerated: handleMagicCoverGenerated,
+                            disabled: isSubmitting,
+                            requireVenue: true,
+                        }}
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
                         <div
@@ -1563,7 +1633,7 @@ const CreateInvitation = () => {
                 </div>
 
                 {/* Live template carousel — colors, fonts, motion rail + layout previews */}
-                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflow: 'hidden' }}>
+                <div className="form-group ui-form-surface" style={{ marginTop: '1.5rem', overflowX: 'hidden' }}>
                     <label className="elegant-label" style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>{'\u{1F4D0}'}</span>
                         {t('invitation_card_layout', { defaultValue: 'Card layout' })}
@@ -1586,10 +1656,10 @@ const CreateInvitation = () => {
                         role="listbox"
                         aria-label={t('invitation_card_layout', { defaultValue: 'Card layout' })}
                         onScroll={onTemplateCarouselScroll}
-                        onMouseDown={(e) => startHorizontalDrag('templateCarousel', templateCarouselRef, e)}
-                        onMouseMove={(e) => moveHorizontalDrag('templateCarousel', templateCarouselRef, e)}
-                        onMouseUp={() => endHorizontalDrag('templateCarousel', templateCarouselRef)}
-                        onMouseLeave={() => endHorizontalDrag('templateCarousel', templateCarouselRef)}
+                        onPointerDown={onTemplateCarouselDown}
+                        onPointerMove={onTemplateCarouselMove}
+                        onPointerUp={onTemplateCarouselUp}
+                        onPointerCancel={onTemplateCarouselCancel}
                         style={{
                             display: 'flex',
                             alignItems: 'flex-start',
@@ -1617,7 +1687,10 @@ const CreateInvitation = () => {
                                     data-template-slide="1"
                                     data-template-key={key}
                                     tabIndex={0}
-                                    onClick={() => setFormData((prev) => ({ ...prev, templateType: key }))}
+                                    onClick={() => {
+                                        if (templateCarouselWasDragged()) return;
+                                        setFormData((prev) => ({ ...prev, templateType: key }));
+                                    }}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' || e.key === ' ') {
                                             e.preventDefault();

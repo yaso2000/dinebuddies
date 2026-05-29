@@ -1,0 +1,21 @@
+{
+    "framework": "vite",
+    "installCommand": "npm install",
+    "devCommand": "node scripts/vercel-vite-dev.mjs",
+    "buildCommand": "npm run vercel-build",
+    "outputDirectory": "dist",
+    "rewrites": [
+        {
+            "source": "/__/auth/:path*",
+            "destination": "https://dinebuddies.firebaseapp.com/__/auth/:path*"
+        },
+        {
+            "source": "/__/firebase-config",
+            "destination": "https://dinebuddies.firebaseapp.com/__/firebase-config"
+        },
+        {
+            "source": "/sitemap.xml",
+            "destination": "/api/sitemap"
+        }
+    ]
+}

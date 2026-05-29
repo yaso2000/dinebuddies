@@ -1,0 +1,178 @@
+/* Inline trigger — lives in the form layout (not position: fixed) */
+.ai-floating-launcher {
+    display: block;
+    width: 100%;
+}
+
+.ai-floating-launcher__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    border: none;
+    border-radius: 14px;
+    padding: 0.78rem 1.15rem;
+    font-size: 0.92rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(
+        135deg,
+        var(--primary),
+        color-mix(in srgb, var(--primary) 62%, #6366f1)
+    );
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent),
+        0 8px 22px color-mix(in srgb, var(--primary) 38%, transparent),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        filter 0.15s ease;
+}
+
+.ai-floating-launcher__trigger:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--primary) 32%, transparent),
+        0 12px 28px color-mix(in srgb, var(--primary) 45%, transparent),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.ai-floating-launcher__trigger:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.ai-floating-launcher__trigger:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    filter: grayscale(0.15);
+}
+
+.ai-floating-launcher__trigger-icon {
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+.ai-floating-launcher--compact .ai-floating-launcher__trigger {
+    padding: 0.62rem 0.9rem;
+    font-size: 0.84rem;
+}
+
+/* Centered floating dialog (portal) */
+.ai-floating-sheet__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+        max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+    background: rgba(8, 10, 18, 0.55);
+    backdrop-filter: blur(6px);
+}
+
+.ai-floating-sheet {
+    width: min(100%, 520px);
+    max-height: min(88vh, 720px);
+    display: flex;
+    flex-direction: column;
+    margin: auto;
+    border-radius: 20px;
+    border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border-color));
+    background: var(--bg-card, #fff);
+    box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.28),
+        0 0 0 1px rgba(255, 255, 255, 0.04);
+    animation: ai-floating-sheet-in 0.26s ease;
+}
+
+@keyframes ai-floating-sheet-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.ai-floating-sheet__handle {
+    display: none;
+}
+
+.ai-floating-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.55rem;
+    flex-shrink: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.ai-floating-sheet__title {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.ai-floating-sheet__title svg {
+    color: var(--primary);
+}
+
+.ai-floating-sheet__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--border-color) 50%, transparent);
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.ai-floating-sheet__tabs {
+    display: flex;
+    gap: 0.45rem;
+    padding: 0.75rem 1rem 0.65rem;
+    flex-shrink: 0;
+}
+
+.ai-floating-sheet__tab {
+    flex: 1;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    background: var(--bg-input, var(--bg-main));
+    color: var(--text-muted, #64748b);
+    cursor: pointer;
+}
+
+.ai-floating-sheet__tab--active {
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-input, var(--bg-main)));
+    color: var(--text-main);
+}
+
+.ai-floating-sheet__body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.85rem 1rem 1.25rem;
+    -webkit-overflow-scrolling: touch;
+}

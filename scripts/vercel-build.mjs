@@ -63,4 +63,16 @@ const vite = spawnSync('npx', ['vite', 'build'], {
     cwd: process.cwd(),
     shell: true,
 });
-process.exit(vite.status === 0 || vite.status === null ? 0 : vite.status ?? 1);
+if (vite.status !== 0 && vite.status !== null) {
+    process.exit(vite.status);
+}
+
+const swSrc = 'public/firebase-messaging-sw.js';
+const swDest = 'dist/firebase-messaging-sw.js';
+if (!existsSync(swSrc)) {
+    console.error('[vercel-build] public/firebase-messaging-sw.js is missing.');
+    process.exit(1);
+}
+copyFileSync(swSrc, swDest);
+console.log('[vercel-build] copied firebase-messaging-sw.js → dist/');
+process.exit(0);

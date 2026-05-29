@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
@@ -6,14 +6,14 @@ import {
     FaMoneyBillWave, FaUsers, FaBriefcase,
     FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
     FaStar, FaHome, FaFilm, FaFutbol, FaFire,
-    FaCamera, FaUpload, FaImage
+    FaCamera, FaUpload, FaImage, FaMagic
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import VenueLocationPicker from '../components/VenueLocationPicker';
-import { processInvitationMedia } from '../services/mediaService';
+import { processInvitationMedia, commitInvitationAiCover } from '../services/mediaService';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getFollowing } from '../utils/followHelpers';
 import { db } from '../firebase/config';
@@ -57,10 +57,14 @@ import {
     isSamePrivateCoverMedia,
     PRIVATE_COVER_STASH_MAX_IMAGES,
     PRIVATE_COVER_STASH_MAX_VIDEOS,
+    PRIVATE_COVER_STASH_MAX_AI_IMAGES,
     revokeAllPrivateCoverStash,
     revokePrivateCoverMedia,
     revokePrivateCoverStashEntry
 } from '../utils/privateCoverMediaStash';
+import AIFloatingLauncher from '../components/AIFloatingLauncher';
+import MagicCoverGeneratePanel from '../components/Invitations/MagicCoverGeneratePanel';
+import { extractAIContentFields } from '../utils/aiContentFieldMapper';
 
 function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
     return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
@@ -98,6 +102,7 @@ const CreatePrivateInvitation = () => {
     );
     const [privateCoverTab, setPrivateCoverTab] = useState(() => (editInvitation ? 'camera' : 'template'));
     const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
+    const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
     const [privateCardShowHostAndMessage, setPrivateCardShowHostAndMessage] = useState(true);
     const [privateCardTextBackdropTone, setPrivateCardTextBackdropTone] = useState(
         DEFAULT_PRIVATE_TEXT_BACKDROP_TONE
@@ -105,7 +110,7 @@ const CreatePrivateInvitation = () => {
     /** Temp upload/video drafts shown as thumbnails until publish. */
     const [coverMediaStash, setCoverMediaStash] = useState([]);
 
-    const privateCoverDraftsRef = useRef({ template: null, upload: null, camera: null });
+    const privateCoverDraftsRef = useRef({ template: null, upload: null, camera: null, ai: null });
     const mediaDataRef = useRef(null);
     const privateCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
     const coverUploadInputRef = useRef(null);
@@ -478,6 +483,14 @@ const CreatePrivateInvitation = () => {
                 }),
                 'error'
             );
+        } else if (kind === 'ai') {
+            showToast(
+                t('private_cover_stash_max_ai', {
+                    defaultValue: `You can keep up to ${PRIVATE_COVER_STASH_MAX_AI_IMAGES} AI covers. Remove one from the thumbnails to generate another.`,
+                    max: PRIVATE_COVER_STASH_MAX_AI_IMAGES
+                }),
+                'error'
+            );
         } else {
             showToast(
                 t('private_cover_stash_max_videos', {
@@ -487,6 +500,38 @@ const CreatePrivateInvitation = () => {
                 'error'
             );
         }
+    };
+
+    /** Switch to AI cover tab (MagicCoverGeneratePanel lives in the cover section). */
+    const handlePrivateCoverAiTabClick = () => {
+        handlePrivateCoverTab('ai');
+    };
+
+    const commitAiCoverMedia = async (media, stashId = null) => {
+        if (media?.publishedUrl) return media;
+        if (stashId) setAiCoverCommittingId(stashId);
+        try {
+            const authorUid = resolvePrivateInvitationAuthorUid(authUser, currentUser);
+            if (!authorUid) {
+                throw new Error('not_signed_in');
+            }
+            const publishedUrl = await commitInvitationAiCover(media, authorUid);
+            return {
+                ...media,
+                source: 'ai_generated',
+                url: publishedUrl,
+                preview: publishedUrl,
+                publishedUrl,
+            };
+        } finally {
+            if (stashId) setAiCoverCommittingId(null);
+        }
+    };
+
+    const updateAiStashMedia = (stashId, media) => {
+        setCoverMediaStash((prev) =>
+            prev.map((entry) => (entry.id === stashId ? { ...entry, media } : entry))
+        );
     };
 
     /** Stage 1: switch to Upload tab (thumbnails). Stage 2: open file picker. */
@@ -562,13 +607,31 @@ const CreatePrivateInvitation = () => {
         privateCoverDraftsRef.current.upload = media;
     };
 
-    const handleSelectCoverStashItem = (id) => {
+    const handleSelectCoverStashItem = async (id) => {
         const entry = coverMediaStashRef.current.find((e) => e.id === id);
         if (!entry) return;
         privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
+
+        let media = entry.media;
+        if (entry.kind === 'ai' && !media.publishedUrl) {
+            try {
+                media = await commitAiCoverMedia(media, id);
+                updateAiStashMedia(id, media);
+            } catch (err) {
+                console.error('AI cover commit failed:', err);
+                showToast(
+                    err?.message === 'not_signed_in'
+                        ? t('please_sign_in', { defaultValue: 'Please sign in to continue.' })
+                        : t('media_upload_failed', { defaultValue: 'Failed to upload media.' }),
+                    'error'
+                );
+                return;
+            }
+        }
+
         setPrivateCoverTab(entry.kind);
-        setMediaData(entry.media);
-        privateCoverDraftsRef.current[entry.kind] = entry.media;
+        setMediaData(media);
+        privateCoverDraftsRef.current[entry.kind] = media;
     };
 
     const handleRemoveCoverStashItem = (id) => {
@@ -596,6 +659,86 @@ const CreatePrivateInvitation = () => {
     const triggerPrivateCoverUpload = () => {
         coverUploadInputRef.current?.click();
     };
+
+    const buildPrivateInvitationAiPrompt = useCallback(() => {
+        const parts = [
+            formData.occasionType && `المناسبة: ${formData.occasionType}`,
+            formData.location?.trim() && `المكان: ${formData.location.trim()}`,
+            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
+            formData.title?.trim() && `عنوان حالي: ${formData.title.trim()}`,
+            formData.description?.trim() && `رسالة حالية: ${formData.description.trim()}`,
+        ].filter(Boolean);
+        return parts.join('\n') || 'اكتب عنوان دعوة خاصة ورسالة ترحيبية مناسبة للمناسبة والمكان';
+    }, [formData]);
+
+    const handlePrivateInvitationAiContent = useCallback((data) => {
+        const fields = extractAIContentFields('invitation', data);
+        setFormData((prev) => {
+            const next = { ...prev };
+            if (fields.title) {
+                next.title = fields.title.slice(0, INVITATION_CARD_TITLE_MAX);
+            }
+            if (fields.description) {
+                next.description = fields.description.slice(0, INVITATION_CARD_MESSAGE_MAX);
+            }
+            return next;
+        });
+    }, []);
+
+    const buildPrivateMagicCoverBrief = useCallback(() => {
+        const parts = [
+            formData.occasionType && `المناسبة: ${formData.occasionType}`,
+            formData.location?.trim() && `المكان: ${formData.location.trim()}`,
+            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
+            formData.title?.trim() && `عنوان: ${formData.title.trim()}`,
+        ].filter(Boolean);
+        return (
+            parts.join('\n') ||
+            'غلاف دعوة خاصة جذاب بلا نص مكتوب — أجواء مناسبة للمناسبة.'
+        );
+    }, [formData]);
+
+    const handlePrivateAiCoverImage = useCallback(
+        async (url) => {
+            if (!url) return;
+            const stagedMedia = {
+                source: 'ai_generated',
+                type: 'image',
+                file: null,
+                url,
+                preview: url,
+            };
+            privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
+            if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'ai')) {
+                toastCoverStashLimit('ai');
+                return;
+            }
+            const entry = { id: createPrivateCoverStashId(), kind: 'ai', media: stagedMedia };
+            setCoverMediaStash((prev) => [...prev, entry]);
+            setPrivateCoverTab('ai');
+
+            try {
+                const committed = await commitAiCoverMedia(stagedMedia, entry.id);
+                updateAiStashMedia(entry.id, committed);
+                setMediaData(committed);
+                privateCoverDraftsRef.current.ai = committed;
+            } catch (err) {
+                console.error('AI cover commit failed:', err);
+                setMediaData(stagedMedia);
+                privateCoverDraftsRef.current.ai = stagedMedia;
+                showToast(
+                    err?.message === 'not_signed_in'
+                        ? t('please_sign_in', { defaultValue: 'Please sign in to continue.' })
+                        : t('private_cover_ai_commit_pending', {
+                              defaultValue:
+                                  'Cover saved in AI photos. It will upload when you select it or publish.',
+                          }),
+                    err?.message === 'not_signed_in' ? 'error' : 'info'
+                );
+            }
+        },
+        [privateCoverTab, toastCoverStashLimit, authUser, currentUser, showToast, t]
+    );
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -636,8 +779,34 @@ const CreatePrivateInvitation = () => {
             }
 
             let mediaFields = {};
-            if (mediaData) {
-                const isVideoUpload = mediaData.type === 'video' || mediaData.source === 'custom_video';
+            let activeMedia = mediaData;
+            if (activeMedia?.source === 'ai_generated' && !activeMedia.publishedUrl) {
+                showToast(
+                    t('private_cover_ai_uploading', {
+                        defaultValue: 'Saving your AI cover to storage…',
+                    }),
+                    'info',
+                    null,
+                    4000
+                );
+                try {
+                    const stashEntry = coverMediaStashRef.current.find((e) =>
+                        isSamePrivateCoverMedia(e.media, activeMedia)
+                    );
+                    activeMedia = await commitAiCoverMedia(activeMedia, stashEntry?.id ?? null);
+                    if (stashEntry) {
+                        updateAiStashMedia(stashEntry.id, activeMedia);
+                    }
+                    setMediaData(activeMedia);
+                    privateCoverDraftsRef.current.ai = activeMedia;
+                } catch (mediaError) {
+                    console.error('❌ AI cover commit failed:', mediaError);
+                    notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
+                    return;
+                }
+            }
+            if (activeMedia) {
+                const isVideoUpload = activeMedia.type === 'video' || activeMedia.source === 'custom_video';
                 if (isVideoUpload) {
                     showToast(
                         t('private_cover_video_uploading', {
@@ -649,7 +818,7 @@ const CreatePrivateInvitation = () => {
                     );
                 }
                 try {
-                    mediaFields = await processInvitationMedia(mediaData, authorUid);
+                    mediaFields = await processInvitationMedia(activeMedia, authorUid);
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
                     notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
@@ -898,6 +1067,16 @@ const CreatePrivateInvitation = () => {
                         ></textarea>
                     </div>
 
+                    <div className="mb-4">
+                        <AIFloatingLauncher
+                            postType="invitation"
+                            subType="private"
+                            onTextSuccess={handlePrivateInvitationAiContent}
+                            buildContextPrompt={buildPrivateInvitationAiPrompt}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+
                     {/* Card + cover: occasion art, then camera / upload / template + preview row (same flow as dating). */}
                     <div className="private-section-card private-section-card--templates mb-4">
                         <h3 className="private-section-card__title">
@@ -951,6 +1130,15 @@ const CreatePrivateInvitation = () => {
                             <button
                                 type="button"
                                 role="tab"
+                                aria-selected={privateCoverTab === 'ai'}
+                                onClick={handlePrivateCoverAiTabClick}
+                                className={`private-cover-tab${privateCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
+                            >
+                                <FaMagic /> {t('private_cover_tab_ai_open', { defaultValue: 'AI photos' })}
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
                                 aria-selected={privateCoverTab === 'template'}
                                 onClick={() => handlePrivateCoverTab('template')}
                                 className={`private-cover-tab${privateCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
@@ -961,6 +1149,18 @@ const CreatePrivateInvitation = () => {
 
                         {privateCoverTab === 'camera' && (
                             <DatingCoverCameraPanel onMediaSelect={handleCameraCoverMedia} openNonce={cameraOpenNonce} />
+                        )}
+
+                        {privateCoverTab === 'ai' && (
+                            <MagicCoverGeneratePanel
+                                subType="private"
+                                aspectRatio="9:16"
+                                buildBrief={buildPrivateMagicCoverBrief}
+                                onImageGenerated={handlePrivateAiCoverImage}
+                                requireVenue={false}
+                                disabled={isSubmitting}
+                                embedded
+                            />
                         )}
 
                         <div className="private-card-show-content-block">
@@ -1042,6 +1242,7 @@ const CreatePrivateInvitation = () => {
                                     coverStash={coverMediaStash}
                                     onSelectStashItem={handleSelectCoverStashItem}
                                     onRemoveStashItem={handleRemoveCoverStashItem}
+                                    committingStashId={aiCoverCommittingId}
                                 />
                             </div>
                             <div style={{ marginTop: 12 }}>

@@ -4,6 +4,7 @@ import { generateThumbnail } from '../utils/thumbnailGenerator';
 import { compressImage } from '../utils/imageUpload';
 import { uploadImageWithModeration } from './moderatedImageUpload';
 import { folderToImageZone } from './imageUploadZones';
+import { isRestrictedFirebaseStorageUrl } from '../utils/aiGeneratedMediaUrl';
 
 /**
  * Upload media file (image or video) to Firebase Storage
@@ -171,9 +172,8 @@ export const uploadPlacePhotoFromUrl = async (url, userId, folder = 'businesses'
  * @returns {Promise<string>} - Firebase Storage URL
  */
 export const uploadGoogleImage = async (url, userId, folder = 'invitations') => {
-    // Optimization: if already Firebase URL, just return it
     if (!url) return null;
-    if (url.includes('firebasestorage')) {
+    if (url.includes('firebasestorage') && !isRestrictedFirebaseStorageUrl(url)) {
         return url;
     }
     // Block Google Place photo URLs completely (cost-control emergency mode).
@@ -225,6 +225,36 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
 };
 
 /**
+ * Re-upload a remote image (blocked Firebase path or external URL) to a public Storage folder.
+ * @param {string} url
+ * @param {string} userId
+ * @param {string} [folder='invitations']
+ * @returns {Promise<string|null>}
+ */
+export const ensurePublicImageUrl = async (url, userId, folder = 'invitations') => {
+    return uploadGoogleImage(url, userId, folder);
+};
+
+/**
+ * Persist a staged AI cover image to a public Storage folder when the user selects it.
+ * @param {{ url?: string, preview?: string, publishedUrl?: string }} mediaData
+ * @param {string} userId
+ * @returns {Promise<string>}
+ */
+export const commitInvitationAiCover = async (mediaData, userId) => {
+    if (mediaData?.publishedUrl) return mediaData.publishedUrl;
+    const remoteUrl = mediaData?.url || mediaData?.preview;
+    if (!remoteUrl || typeof remoteUrl !== 'string') {
+        throw new Error('No AI image URL to commit');
+    }
+    const publishedUrl = await ensurePublicImageUrl(remoteUrl, userId, 'invitations');
+    if (!publishedUrl) {
+        throw new Error('Failed to save AI cover image');
+    }
+    return publishedUrl;
+};
+
+/**
  * Get video duration helper
  */
 const getVideoDuration = (file) => {
@@ -268,16 +298,34 @@ export const processInvitationMedia = async (mediaData, userId) => {
                 };
 
             case 'custom_image':
-                // Upload custom image if file present, otherwise assume preview is url
+                // Upload custom image if file present; otherwise persist remote/AI URL to public folder
                 let imageUrl;
                 if (file) {
                     imageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                } else if (mediaData.publishedUrl) {
+                    imageUrl = mediaData.publishedUrl;
                 } else {
-                    imageUrl = mediaData.preview;
+                    const remoteUrl = url || mediaData.preview;
+                    imageUrl = await ensurePublicImageUrl(remoteUrl, userId, 'invitations');
                 }
                 return {
                     mediaSource: 'custom_image',
                     customImage: imageUrl,
+                    mediaType: 'image'
+                };
+
+            case 'ai_generated':
+                let aiImageUrl;
+                if (mediaData.publishedUrl) {
+                    aiImageUrl = mediaData.publishedUrl;
+                } else if (file) {
+                    aiImageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                } else {
+                    aiImageUrl = await ensurePublicImageUrl(url || mediaData.preview, userId, 'invitations');
+                }
+                return {
+                    mediaSource: 'custom_image',
+                    customImage: aiImageUrl,
                     mediaType: 'image'
                 };
 

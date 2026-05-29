@@ -1,4 +1,4 @@
-/** @typedef {'upload' | 'camera'} PrivateCoverStashKind */
+/** @typedef {'upload' | 'camera' | 'ai'} PrivateCoverStashKind */
 
 /**
  * @typedef {object} PrivateCoverStashEntry
@@ -9,6 +9,7 @@
 
 export const PRIVATE_COVER_STASH_MAX_IMAGES = 5;
 export const PRIVATE_COVER_STASH_MAX_VIDEOS = 3;
+export const PRIVATE_COVER_STASH_MAX_AI_IMAGES = 5;
 
 export function createPrivateCoverStashId() {
     return `cover-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -22,7 +23,12 @@ export function countCoverStashByKind(stash, kind) {
 
 /** @param {PrivateCoverStashEntry[]} stash @param {PrivateCoverStashKind} kind */
 export function isCoverStashKindAtLimit(stash, kind) {
-    const max = kind === 'upload' ? PRIVATE_COVER_STASH_MAX_IMAGES : PRIVATE_COVER_STASH_MAX_VIDEOS;
+    const max =
+        kind === 'upload'
+            ? PRIVATE_COVER_STASH_MAX_IMAGES
+            : kind === 'ai'
+              ? PRIVATE_COVER_STASH_MAX_AI_IMAGES
+              : PRIVATE_COVER_STASH_MAX_VIDEOS;
     return countCoverStashByKind(stash, kind) >= max;
 }
 
