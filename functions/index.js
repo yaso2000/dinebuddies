@@ -9,6 +9,8 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const { CREDIT_COSTS, spendCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { consumeAiCredits } = require('./aiCreditsHelper');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -78,6 +80,31 @@ const REPORT_ALLOWED_KEYS = new Set([
     'details',
     'metadata'
 ]);
+
+function isDatingPrivateInvitation(inv) {
+    const rawType = String(inv?.type || inv?.occasionType || '').trim().toLowerCase();
+    return (
+        rawType === 'dating' ||
+        inv?.type === 'Dating' ||
+        (inv?.datingInvitationPreference != null && inv.datingInvitationPreference !== false)
+    );
+}
+
+function getPrivateInvitationCreditCost(inv) {
+    return isDatingPrivateInvitation(inv)
+        ? CREDIT_COSTS.DATING_INVITATION
+        : CREDIT_COSTS.PRIVATE_INVITATION;
+}
+
+function mapCreditSpendError(err, fallbackMessage) {
+    if (err?.code === 'INSUFFICIENT_CREDITS') {
+        return new functions.https.HttpsError('failed-precondition', fallbackMessage);
+    }
+    if (err?.code === 'not-found') {
+        return new functions.https.HttpsError('not-found', 'User profile not found.');
+    }
+    return err;
+}
 
 function assertAllowedKeys(data, allowedKeys, label) {
     const payload = data && typeof data === 'object' ? data : {};
@@ -258,10 +285,6 @@ async function assertAdminContext(context) {
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
     const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
-
-    const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
@@ -665,29 +688,43 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             let userCreditPatch = null;
 
             if (!isBypassUser) {
-                const tier = user.subscriptionTier || 'free';
-                const quota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
-                const now = new Date();
-                const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
-                let usedThisMonth = Number(user.usedPrivateCreditsThisMonth) || 0;
-                const lastResetMonth = user.lastPrivateResetMonth || '';
-                if (quota > 0 && lastResetMonth !== currentMonth) {
-                    usedThisMonth = 0;
-                }
-                const purchasedCredits = Math.max(0, Number(user.purchasedPrivateCredits) || 0);
-                if (quota > 0 && usedThisMonth < quota) {
-                    chargedSource = 'monthly';
-                    userCreditPatch = {
-                        usedPrivateCreditsThisMonth: usedThisMonth + 1,
-                        lastPrivateResetMonth: currentMonth
-                    };
-                } else if (purchasedCredits > 0) {
-                    chargedSource = 'purchased';
-                    userCreditPatch = {
-                        purchasedPrivateCredits: purchasedCredits - 1
-                    };
+                const creditCost = getPrivateInvitationCreditCost(inv);
+                const dineCredits = Math.max(0, Number(user.freeCredits) || 0) + Math.max(0, Number(user.paidCredits) || 0);
+                if (dineCredits >= creditCost) {
+                    const spend = spendCreditsInTransaction(tx, userRef, user, {
+                        uid,
+                        accountRole: isBusinessUserDoc(user) ? 'business' : 'user',
+                        amount: creditCost,
+                        type: 'spend',
+                        reason: isDatingPrivateInvitation(inv) ? 'dating_invitation_publish' : 'private_invitation_publish',
+                        relatedId: invitationId,
+                    });
+                    chargedSource = `dine_credits:${spend.balanceType}`;
                 } else {
-                    throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
+                    const tier = user.subscriptionTier || 'free';
+                    const quota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
+                    const now = new Date();
+                    const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
+                    let usedThisMonth = Number(user.usedPrivateCreditsThisMonth) || 0;
+                    const lastResetMonth = user.lastPrivateResetMonth || '';
+                    if (quota > 0 && lastResetMonth !== currentMonth) {
+                        usedThisMonth = 0;
+                    }
+                    const purchasedCredits = Math.max(0, Number(user.purchasedPrivateCredits) || 0);
+                    if (quota > 0 && usedThisMonth < quota) {
+                        chargedSource = 'monthly';
+                        userCreditPatch = {
+                            usedPrivateCreditsThisMonth: usedThisMonth + 1,
+                            lastPrivateResetMonth: currentMonth
+                        };
+                    } else if (purchasedCredits > 0) {
+                        chargedSource = 'purchased';
+                        userCreditPatch = {
+                            purchasedPrivateCredits: purchasedCredits - 1
+                        };
+                    } else {
+                        throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
+                    }
                 }
             }
 
@@ -764,7 +801,18 @@ exports.suggestInvitationMessages = onCallV2(
             perDay: 150,
             cooldownMs: 3000
         });
-        return runSuggestInvitationMessages(request.data, { auth: request.auth });
+        let creditCharge = null;
+        try {
+            creditCharge = await consumeAiCredits(uid, 'ai_text_generate');
+        } catch (err) {
+            const mapped = mapCreditSpendError(err, 'Not enough Dine Credits for AI suggestions.');
+            if (mapped instanceof functions.https.HttpsError) {
+                throw new HttpsErrorV2(mapped.code, mapped.message);
+            }
+            throw err;
+        }
+        const result = await runSuggestInvitationMessages(request.data, { auth: request.auth });
+        return { ...result, creditCharge };
     }
 );
 
@@ -1189,9 +1237,17 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const currentClaims = targetUser.customClaims || {};
+    const targetEmail = (targetUser.email || '').toLowerCase();
+    const targetIsConfiguredSuperOwner =
+        SUPER_OWNER_UIDS.includes(targetUid) || SUPER_OWNER_EMAILS.includes(targetEmail) || currentClaims.superOwner === true;
+
+    await admin.auth().setCustomUserClaims(targetUid, {
+        ...currentClaims,
+        admin: true,
+        superOwner: targetIsConfiguredSuperOwner,
+    });
 
     return { success: true, targetUid };
 });
