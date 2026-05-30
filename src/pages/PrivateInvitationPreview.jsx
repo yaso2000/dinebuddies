@@ -4,7 +4,13 @@ import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaLock, FaArrowLeft } fro
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { isPrivateInvitationDraft, isPrivateInvitationPublished } from '../utils/privateInvitationDraft';
+import {
+    isPrivateInvitationDraft,
+    isPrivateInvitationPublished,
+    getPrivateInvitationCreatePath,
+    getPrivateDraftRecoveryCreatePath,
+    rememberPrivateDraftCreateKind,
+} from '../utils/privateInvitationDraft';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
 import { useInvitations } from '../context/InvitationContext';
@@ -43,7 +49,7 @@ const PrivateInvitationPreview = () => {
 
         const fetchDraft = async () => {
             if (!draftId) {
-                navigate('/create-private', { replace: true });
+                navigate(getPrivateDraftRecoveryCreatePath(), { replace: true });
                 return;
             }
 
@@ -83,6 +89,7 @@ const PrivateInvitationPreview = () => {
                 }
 
                 setInvitation({ id: draftId, ...data });
+                rememberPrivateDraftCreateKind(data);
             } catch (error) {
                 console.error('Error fetching private draft:', error);
                 const code = error?.code || '';
@@ -188,7 +195,7 @@ const PrivateInvitationPreview = () => {
                 <button
                     type="button"
                     className="vip-btn vip-btn-primary"
-                    onClick={() => navigate('/create-private', { replace: true })}
+                    onClick={() => navigate(getPrivateDraftRecoveryCreatePath(), { replace: true })}
                 >
                     {t('back_to_create', { defaultValue: 'Back to create invitation' })}
                 </button>
@@ -434,7 +441,11 @@ const PrivateInvitationPreview = () => {
                 <button
                     type="button"
                     className="vip-btn ui-btn ui-btn--secondary"
-                    onClick={() => navigate('/create-private', { state: { editInvitation: invitation } })}
+                    onClick={() =>
+                        navigate(getPrivateInvitationCreatePath(invitation), {
+                            state: { editInvitation: invitation },
+                        })
+                    }
                     style={{ flex: 1, height: '50px', borderRadius: 15 }}
                     disabled={isPublishing}
                 >

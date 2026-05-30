@@ -226,8 +226,15 @@ const Layout = ({ children }) => {
     // That tore down AdminRoute/AdminLayout and felt like "desktop↔mobile" or home↔admin flicker.
     const isAdminPath = location.pathname.startsWith('/admin');
     const adminBypassConsumerGate = isAdminIdentity(currentUser, userProfile);
+    const isCreateInvitationPath =
+        location.pathname === '/create-dating' ||
+        location.pathname === '/create-private' ||
+        location.pathname === '/create' ||
+        location.pathname.startsWith('/create/');
+    const keepOutletMountedWhileLoading =
+        (isAdminPath || isCreateInvitationPath) && Boolean(currentUser?.uid);
 
-    if (loading && !(isAdminPath && currentUser?.uid)) {
+    if (loading && !keepOutletMountedWhileLoading) {
         return <AppShellLoading variant="session" />;
     }
 
@@ -235,7 +242,11 @@ const Layout = ({ children }) => {
     // For business accounts, we allow them to continue but show the EmailVerificationBusinessBanner instead of force redirect.
     const isAdminAccount = isAdminIdentity(currentUser, userProfile);
     const privateInvitationPath =
-        location.pathname.startsWith('/invitation/private/');
+        location.pathname.startsWith('/invitation/private/') ||
+        location.pathname === '/create-dating' ||
+        location.pathname === '/create-private' ||
+        location.pathname === '/create' ||
+        location.pathname.startsWith('/create/');
     if (
         !isAdminAccount &&
         !isGuest &&

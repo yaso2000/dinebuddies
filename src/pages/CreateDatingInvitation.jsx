@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
@@ -18,7 +19,6 @@ import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { detectUserLocationContext } from '../utils/locationUtils';
 import './PrivateInvitation.css';
-import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import { getTotalDineCredits, DATING_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
@@ -57,7 +57,23 @@ import {
 } from '../utils/privateCoverMediaStash';
 import AIFloatingLauncher from '../components/AIFloatingLauncher';
 import MagicCoverGeneratePanel from '../components/Invitations/MagicCoverGeneratePanel';
-import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { applyInvitationAiFields } from '../utils/aiContentFieldMapper';
+import { validateDatingAiContext, createDatingAiContextFromForm } from '../utils/datingAiRequestPayload';
+import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
+import { rememberPrivateDraftCreateKind } from '../utils/privateInvitationDraft';
+
+function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
+    return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
+}
+
+/** Firestore rejects `undefined` field values. */
+function sanitizeFirestoreDraft(obj) {
+    const clean = {};
+    Object.entries(obj).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+    return clean;
+}
 
 const CreateDatingInvitation = () => {
     const { t } = useTranslation();
@@ -100,12 +116,37 @@ const CreateDatingInvitation = () => {
     /** Temp upload/video drafts shown as thumbnails until publish. */
     const [coverMediaStash, setCoverMediaStash] = useState([]);
 
+    const [formData, setFormData] = useState({
+        title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
+        restaurantId: restaurantData?.id || null,
+        restaurantName: restaurantData?.name || '',
+        city: restaurantData?.city || '',
+        date: '',
+        time: '',
+        location: restaurantData?.address || restaurantData?.location || '',
+        description: '',
+        privacy: 'private',
+        invitedFriends: [],
+        country: restaurantData?.country || '',
+        lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
+        lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
+        userLat: null,
+        userLng: null,
+        occasionType: 'Dating',
+        venueType: restaurantData?.businessType || 'Restaurant',
+    });
+
     /** Persist cover media per tab when switching Camera / Upload / Template */
     const datingCoverDraftsRef = useRef({ template: null, upload: null, camera: null, ai: null });
     const mediaDataRef = useRef(null);
     const datingCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
     const coverUploadInputRef = useRef(null);
+    const datingAiFieldsRef = useRef(null);
+    const [datingAiFieldsPulse, setDatingAiFieldsPulse] = useState(false);
+    const formDataRef = useRef(null);
+    const mutualFriendsRef = useRef([]);
     const coverMediaStashRef = useRef([]);
+    const cardBackgroundIdRef = useRef(cardBackgroundId);
 
     useEffect(() => {
         mediaDataRef.current = mediaData;
@@ -116,6 +157,10 @@ const CreateDatingInvitation = () => {
     useEffect(() => {
         coverMediaStashRef.current = coverMediaStash;
     }, [coverMediaStash]);
+
+    formDataRef.current = formData;
+    mutualFriendsRef.current = mutualFriends;
+    cardBackgroundIdRef.current = cardBackgroundId;
 
     useEffect(() => {
         return () => {
@@ -142,25 +187,6 @@ const CreateDatingInvitation = () => {
         return t(fr.labelKey, { defaultValue: fr.defaultLabel });
     }, [datingCardThemeColor, cardFrameColorId, t]);
 
-    const [formData, setFormData] = useState({
-        title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
-        restaurantId: restaurantData?.id || null,
-        restaurantName: restaurantData?.name || '',
-        city: restaurantData?.city || '',
-        date: '',
-        time: '',
-        location: restaurantData?.address || restaurantData?.location || '',
-        description: '',
-        privacy: 'private',
-        invitedFriends: [],
-        country: restaurantData?.country || '',
-        lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
-        lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
-        userLat: null,
-        userLng: null,
-        occasionType: 'Dating',
-    });
-
     // Populate when editing
     useEffect(() => {
         if (editInvitation) {
@@ -182,6 +208,7 @@ const CreateDatingInvitation = () => {
                 userLat: editInvitation.userLat || null,
                 userLng: editInvitation.userLng || null,
                 occasionType: 'Dating',
+                venueType: editInvitation.venueType || 'Restaurant',
             });
             setDatingCardShowHostAndMessage(editInvitation.datingCardShowHostAndMessage !== false);
             const backdrop = getDatingCardTextBackdropFromInvitation(editInvitation);
@@ -265,13 +292,6 @@ const CreateDatingInvitation = () => {
         setCardBackgroundId((prev) => (prev && opts.some((o) => o.id === prev) ? prev : opts[0].id));
     }, [editInvitation?.id]);
 
-    // Redirect guests
-    useEffect(() => {
-        if (userProfile?.isGuest || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
-            goToLogin();
-        }
-    }, [userProfile, currentUser, navigate]);
-
     // Fetch mutual followers
     useEffect(() => {
         const fetchFriends = async () => {
@@ -342,6 +362,11 @@ const CreateDatingInvitation = () => {
             restaurantId: placeData.restaurantId || null,
             restaurantName: placeData.restaurantName || placeData.name || prev.restaurantName,
             city: placeData.city || prev.city,
+            venueType:
+                placeData.businessType ||
+                placeData.venueType ||
+                prev.venueType ||
+                'Restaurant',
             title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title
         }));
     };
@@ -352,44 +377,35 @@ const CreateDatingInvitation = () => {
         [mutualFriends, selectedInviteeId]
     );
 
-    const hasDatingVenue = useMemo(() => {
-        const loc = String(formData.location || '').trim();
-        if (!loc) return false;
-        if (formData.restaurantId) return true;
-        return formData.lat != null && formData.lng != null;
-    }, [formData.location, formData.restaurantId, formData.lat, formData.lng]);
-
-    const datingAiReady = useMemo(
-        () =>
-            Boolean(selectedInviteeId) &&
-            Boolean(formData.date?.trim()) &&
-            Boolean(formData.time?.trim()) &&
-            hasDatingVenue,
-        [selectedInviteeId, formData.date, formData.time, hasDatingVenue]
+    const datingAiContext = useMemo(
+        () => createDatingAiContextFromForm(formData, selectedInvitee?.display_name || '', cardBackgroundId),
+        [formData, selectedInvitee, cardBackgroundId]
     );
 
-    const datingAiContext = useMemo(() => {
-        if (!datingAiReady) return undefined;
-        return {
-            inviteeId: selectedInviteeId,
-            date: formData.date,
-            time: formData.time,
-            venueDetails: {
-                venueId: formData.restaurantId || undefined,
-                name: formData.restaurantName || formData.location?.trim() || '',
-                address: formData.location?.trim() || '',
-                city: formData.city || undefined,
-                country: formData.country || undefined,
-                lat: formData.lat ?? undefined,
-                lng: formData.lng ?? undefined,
-            },
-        };
-    }, [datingAiReady, selectedInviteeId, formData]);
+    /** Always reads latest form state (safe inside floating portal). */
+    const getDatingAiContext = useCallback(() => {
+        const fd = formDataRef.current || formData;
+        const friends = mutualFriendsRef.current || mutualFriends;
+        const inviteeId = fd?.invitedFriends?.[0] || '';
+        const invitee = friends.find((f) => f.id === inviteeId);
+        return createDatingAiContextFromForm(
+            fd,
+            invitee?.display_name || '',
+            cardBackgroundIdRef.current || cardBackgroundId
+        );
+    }, [formData, mutualFriends, cardBackgroundId]);
 
-    const datingAiDisabledHint = t('dating_ai_prerequisites_hint', {
-        defaultValue:
-            'Select your invitee, venue, date, and time above to unlock AI text generation.',
-    });
+    const datingAiReady = useMemo(
+        () => validateDatingAiContext(datingAiContext).ok,
+        [datingAiContext]
+    );
+
+    const datingAiDisabledHint = useMemo(() => {
+        if (datingAiReady) return undefined;
+        return t('dating_ai_all_fields_required', {
+            defaultValue: 'يرجى ملء جميع الحقول أولاً لتخصيص الدعوة.',
+        });
+    }, [datingAiReady, t]);
 
     const filteredFriends = mutualFriends.filter(friend =>
         friend.display_name?.toLowerCase().includes(friendSearchQuery.toLowerCase())
@@ -660,18 +676,51 @@ const CreateDatingInvitation = () => {
     }, [formData, selectedInvitee]);
 
     const handleDatingInvitationAiContent = useCallback((data) => {
-        const fields = extractAIContentFields('invitation', data);
-        setFormData((prev) => {
-            const next = { ...prev };
-            if (fields.title) {
-                next.title = fields.title.slice(0, INVITATION_CARD_TITLE_MAX);
-            }
-            if (fields.description) {
-                next.description = fields.description.slice(0, INVITATION_CARD_MESSAGE_MAX);
-            }
-            return next;
+        const applied = applyInvitationAiFields(data, {
+            titleMax: INVITATION_CARD_TITLE_MAX,
+            descriptionMax: INVITATION_CARD_MESSAGE_MAX,
+            cardStructure: resolveCardStructureFromBackgroundId(cardBackgroundId),
         });
-    }, []);
+
+        if (!applied.hasContent) {
+            console.warn('[CreateDatingInvitation] AI response had no mappable title/description', data);
+            showToast(
+                t(
+                    'dating_ai_fields_empty',
+                    'تم التوليد لكن لم نتمكن من قراءة العنوان أو الرسالة. حاول مرة أخرى.'
+                ),
+                'error'
+            );
+            return false;
+        }
+
+        flushSync(() => {
+            setFormData((prev) => ({
+                ...prev,
+                title: applied.hasTitle ? applied.title : prev.title,
+                description: applied.hasDescription ? applied.description : prev.description,
+            }));
+        });
+
+        setDatingAiFieldsPulse(true);
+        window.setTimeout(() => setDatingAiFieldsPulse(false), 1600);
+
+        requestAnimationFrame(() => {
+            datingAiFieldsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        if (!applied.hasDescription) {
+            showToast(
+                t(
+                    'dating_ai_description_missing',
+                    'تم ملء العنوان فقط — أعد التوليد أو اكتب الرسالة يدوياً.'
+                ),
+                'info'
+            );
+        }
+
+        return true;
+    }, [showToast, t, cardBackgroundId]);
 
     const buildDatingMagicCoverBrief = useCallback(() => {
         const parts = [
@@ -759,6 +808,12 @@ const CreateDatingInvitation = () => {
 
         setIsSubmitting(true);
         try {
+            const authorUid = resolvePrivateInvitationAuthorUid(authUser, currentUser);
+            if (!authorUid) {
+                showToast(t('please_sign_in', { defaultValue: 'Please sign in to continue.' }), 'error');
+                return;
+            }
+
             let mediaFields = {};
             let activeMedia = mediaData;
             if (activeMedia?.source === 'ai_generated' && !activeMedia.publishedUrl) {
@@ -788,8 +843,7 @@ const CreateDatingInvitation = () => {
             }
             if (activeMedia) {
                 try {
-                    const userId = currentUser?.id || authUser?.uid;
-                    mediaFields = await processInvitationMedia(activeMedia, userId);
+                    mediaFields = await processInvitationMedia(activeMedia, authorUid);
                 } catch (mediaError) {
                     console.error('❌ Media processing failed:', mediaError);
                     notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
@@ -802,7 +856,7 @@ const CreateDatingInvitation = () => {
                 initialRsvps[friendId] = 'pending';
             });
 
-            const draftData = {
+            const draftData = sanitizeFirestoreDraft({
                 ...formData,
                 ...mediaFields,
                 cardFrameColorId,
@@ -815,19 +869,28 @@ const CreateDatingInvitation = () => {
                 rsvps: initialRsvps,
                 type: 'Dating',
                 status: 'draft',
-                createdAt: serverTimestamp()
-            };
+            });
+
+            rememberPrivateDraftCreateKind('dating');
 
             if (existingDraftId) {
                 const draftRef = doc(db, 'private_invitations', existingDraftId);
-                await updateDoc(draftRef, { ...draftData, updatedAt: serverTimestamp() });
+                await updateDoc(draftRef, {
+                    ...draftData,
+                    updatedAt: serverTimestamp(),
+                });
+                navigate(`/invitation/private/preview/${existingDraftId}`, { replace: true });
                 clearCoverMediaStashAfterPublish();
-                navigate(`/invitation/private/preview/${existingDraftId}`);
             } else {
-                const draftId = await addPrivateInvitation(draftData);
+                const draftId = await addPrivateInvitation({
+                    ...draftData,
+                    createdAt: serverTimestamp(),
+                });
                 if (draftId) {
+                    navigate(`/invitation/private/preview/${draftId}`, { replace: true });
                     clearCoverMediaStashAfterPublish();
-                    navigate(`/invitation/private/preview/${draftId}`);
+                } else {
+                    showToast(t('failed_create_invitation'), 'error');
                 }
             }
         } catch (error) {
@@ -890,61 +953,6 @@ const CreateDatingInvitation = () => {
 
             <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
                 <form onSubmit={handlePreview} className="elegant-form">
-
-                    {/* Title */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            {t('invitation_title')}
-                            <span
-                                style={{
-                                    fontSize: '0.75rem',
-                                    color:
-                                        (formData.title?.length || 0) >= INVITATION_CARD_TITLE_MAX
-                                            ? '#f87171'
-                                            : 'var(--text-muted)'
-                                }}
-                            >
-                                {(formData.title?.length || 0)}/{INVITATION_CARD_TITLE_MAX}
-                            </span>
-                        </label>
-                        <input
-                            type="text"
-                            name="title"
-                            value={formData.title}
-                            onChange={handleChange}
-                            placeholder={t('enter_title')}
-                            className="elegant-input"
-                            maxLength={INVITATION_CARD_TITLE_MAX}
-                            required
-                        />
-                    </div>
-
-                    {/* Message — directly under title */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            {t('message_to_friends')}
-                            <span
-                                style={{
-                                    fontSize: '0.75rem',
-                                    color:
-                                        (formData.description?.length || 0) >= INVITATION_CARD_MESSAGE_MAX
-                                            ? '#f87171'
-                                            : 'var(--text-muted)'
-                                }}
-                            >
-                                {(formData.description?.length || 0)}/{INVITATION_CARD_MESSAGE_MAX}
-                            </span>
-                        </label>
-                        <textarea
-                            name="description"
-                            value={formData.description}
-                            onChange={handleChange}
-                            placeholder={t('write_something_personal')}
-                            className="elegant-textarea"
-                            rows="3"
-                            maxLength={INVITATION_CARD_MESSAGE_MAX}
-                        />
-                    </div>
 
                     {/* Date & Time */}
                     <div className="inv-datetime-row mb-4">
@@ -1092,9 +1100,83 @@ const CreateDatingInvitation = () => {
                             onTextSuccess={handleDatingInvitationAiContent}
                             buildContextPrompt={buildDatingInvitationAiPrompt}
                             datingAiContext={datingAiContext}
-                            disabled={isSubmitting || !datingAiReady}
+                            getDatingAiContext={getDatingAiContext}
+                            disabled={isSubmitting}
                             disabledHint={!datingAiReady ? datingAiDisabledHint : undefined}
                         />
+                    </div>
+
+                    <div
+                        ref={datingAiFieldsRef}
+                        className={`dating-ai-text-fields mb-4${datingAiFieldsPulse ? ' dating-ai-text-fields--pulse' : ''}`}
+                    >
+                        <p
+                            className="dating-ai-text-fields__hint"
+                            style={{
+                                fontSize: '0.78rem',
+                                color: 'var(--text-muted)',
+                                margin: '0 0 12px',
+                                lineHeight: 1.45,
+                            }}
+                        >
+                            {t('dating_ai_text_fields_hint', {
+                                defaultValue:
+                                    'Use AI above to draft the title and message, or write them yourself.'
+                            })}
+                        </p>
+
+                        <div className="form-group mb-4">
+                            <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                {t('invitation_title')}
+                                <span
+                                    style={{
+                                        fontSize: '0.75rem',
+                                        color:
+                                            (formData.title?.length || 0) >= INVITATION_CARD_TITLE_MAX
+                                                ? '#f87171'
+                                                : 'var(--text-muted)'
+                                    }}
+                                >
+                                    {(formData.title?.length || 0)}/{INVITATION_CARD_TITLE_MAX}
+                                </span>
+                            </label>
+                            <input
+                                type="text"
+                                name="title"
+                                value={formData.title}
+                                onChange={handleChange}
+                                placeholder={t('enter_title')}
+                                className="elegant-input"
+                                maxLength={INVITATION_CARD_TITLE_MAX}
+                                required
+                            />
+                        </div>
+
+                        <div className="form-group mb-4">
+                            <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                {t('message_to_friends')}
+                                <span
+                                    style={{
+                                        fontSize: '0.75rem',
+                                        color:
+                                            (formData.description?.length || 0) >= INVITATION_CARD_MESSAGE_MAX
+                                                ? '#f87171'
+                                                : 'var(--text-muted)'
+                                    }}
+                                >
+                                    {(formData.description?.length || 0)}/{INVITATION_CARD_MESSAGE_MAX}
+                                </span>
+                            </label>
+                            <textarea
+                                name="description"
+                                value={formData.description}
+                                onChange={handleChange}
+                                placeholder={t('write_something_personal')}
+                                className="elegant-textarea"
+                                rows="3"
+                                maxLength={INVITATION_CARD_MESSAGE_MAX}
+                            />
+                        </div>
                     </div>
 
                     {/* Card + cover: one preview row; thumbnails only on the right (template / upload / camera) */}
@@ -1179,6 +1261,12 @@ const CreateDatingInvitation = () => {
                             <MagicCoverGeneratePanel
                                 subType="date"
                                 aspectRatio="9:16"
+                                venueType={formData.venueType || 'Restaurant'}
+                                venueName={
+                                    formData.restaurantName?.trim() ||
+                                    formData.location?.trim() ||
+                                    ''
+                                }
                                 buildBrief={buildDatingMagicCoverBrief}
                                 onImageGenerated={handleDatingAiCoverImage}
                                 requireVenue={false}
@@ -1237,6 +1325,7 @@ const CreateDatingInvitation = () => {
                                         cardMotionId={cardMotionId}
                                         occasionType={formData.occasionType}
                                         cardBackgroundId={cardBackgroundId}
+                                        cardStructure={datingAiContext.cardStructure}
                                         heroCoverSrc={datingHeroCover?.src ?? null}
                                         heroCoverMediaType={datingHeroCover?.mediaType ?? null}
                                         heroCoverPoster={datingHeroCover?.poster ?? null}

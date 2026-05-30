@@ -6,6 +6,7 @@ const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
 const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation']);
 const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
 const ASPECT_RATIOS = new Set(['1:1', '9:16']);
+const CARD_STRUCTURES = new Set(['arch_luxury', 'vintage_ticket', 'modern_minimal']);
 
 /**
  * @param {unknown} body
@@ -28,6 +29,7 @@ export function parseAiGenerateBody(body) {
         date,
         time,
         venueDetails,
+        cardStructure,
     } = record;
 
     if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
@@ -156,7 +158,9 @@ export function parseAiGenerateBody(body) {
                 date: datingCtx.date,
                 time: datingCtx.time,
                 venueDetails: datingCtx.venueDetails,
-                venueName: datingCtx.venueDetails.name,
+                venueType: pickOptionalString(venueType),
+                venueName: datingCtx.venueDetails.name || pickOptionalString(venueName),
+                cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
             };
         }
 
@@ -168,6 +172,7 @@ export function parseAiGenerateBody(body) {
             subType,
             venueType: pickOptionalString(venueType),
             venueName: pickOptionalString(venueName),
+            cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
         };
     }
 
@@ -181,6 +186,12 @@ export function parseAiGenerateBody(body) {
         postType: normalizedPostType,
         userPrompt: trimmedPrompt,
     };
+}
+
+/** @param {unknown} value */
+function pickCardStructure(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    return CARD_STRUCTURES.has(raw) ? raw : undefined;
 }
 
 /** @param {unknown} value */
@@ -214,13 +225,33 @@ function parseDatingTextContext(record) {
     const inviteeId = pickOptionalString(record.inviteeId);
     const date = pickOptionalString(record.date);
     const time = pickOptionalString(record.time);
-    const venueDetails = pickVenueDetails(record.venueDetails);
+    let venueDetails = pickVenueDetails(record.venueDetails);
 
-    if (!inviteeId) return { ok: false, error: 'inviteeId is required for dating invitation AI text' };
-    if (!date) return { ok: false, error: 'date is required for dating invitation AI text' };
-    if (!time) return { ok: false, error: 'time is required for dating invitation AI text' };
     if (!venueDetails) {
-        return { ok: false, error: 'venueDetails with name or venueId is required for dating invitation AI text' };
+        const topLevelName = pickOptionalString(record.venueName);
+        const topLevelId = pickOptionalString(record.venueId);
+        if (topLevelName || topLevelId) {
+            venueDetails = {
+                ...(topLevelId ? { venueId: topLevelId } : {}),
+                ...(topLevelName ? { name: topLevelName } : {}),
+            };
+        }
+    }
+
+    /** @type {string[]} */
+    const missing = [];
+    if (!inviteeId) missing.push('inviteeId');
+    if (!date) missing.push('date');
+    if (!time) missing.push('time');
+    if (!venueDetails) missing.push('venueDetails');
+
+    if (missing.length > 0) {
+        return {
+            ok: false,
+            error: 'dating_context_incomplete',
+            missing,
+            message: `Missing required dating fields: ${missing.join(', ')}`,
+        };
     }
 
     return {

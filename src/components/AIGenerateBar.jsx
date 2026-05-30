@@ -1,9 +1,14 @@
 import React, { useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { FaMagic, FaWallet } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { generateAIContent, formatAiErrorMessage, isInsufficientCreditsError } from '../services/generateAIContent';
+import {
+    validateDatingAiContext,
+} from '../utils/datingAiRequestPayload';
+import { applyInvitationAiFields, normalizeInvitationAiData } from '../utils/aiContentFieldMapper';
 import {
     AI_IMAGE_GENERATION_CREDITS,
     AI_INVITATION_BUNDLE_CREDITS,
@@ -40,7 +45,8 @@ const PACKAGE_OPTIONS = /** @type {const} */ ([
  *   compact?: boolean,
  *   embedded?: boolean,
  *   invitationVenue?: { venueType?: string, venueName?: string },
- *   datingAiContext?: { inviteeId?: string, date?: string, time?: string, venueDetails?: Record<string, unknown> },
+ *   datingAiContext?: import('../utils/datingAiRequestPayload.js').DatingAiContext,
+ *   getDatingAiContext?: () => import('../utils/datingAiRequestPayload.js').DatingAiContext | undefined,
  *   disabledHint?: string,
  * }} props
  */
@@ -56,6 +62,7 @@ export default function AIGenerateBar({
     embedded = false,
     invitationVenue,
     datingAiContext,
+    getDatingAiContext,
     disabledHint,
 }) {
     const { t } = useTranslation();
@@ -66,6 +73,24 @@ export default function AIGenerateBar({
     const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState('');
     const [generationPackage, setGenerationPackage] = useState(/** @type {GenerationPackage} */ ('text'));
     const [aspectRatio, setAspectRatio] = useState(defaultAspectRatio);
+    const [invitationPreview, setInvitationPreview] = useState(/** @type {{ title: string, description: string } | null} */ (null));
+
+    const isDatingInvitation = postType === 'invitation' && subType === 'date';
+
+    const liveDatingContextForUi = isDatingInvitation
+        ? getDatingAiContext?.() ?? datingAiContext ?? null
+        : null;
+
+    const datingContextReady = isDatingInvitation
+        ? validateDatingAiContext(liveDatingContextForUi).ok
+        : true;
+
+    const generateDisabled = disabled || loading || (isDatingInvitation && !datingContextReady);
+
+    const datingPrerequisiteMessage = t(
+        'dating_ai_all_fields_required',
+        'يرجى ملء جميع الحقول أولاً لتخصيص الدعوة.'
+    );
 
     const showMultimodalPackages = multimodalMode && postType !== 'invitation';
 
@@ -80,7 +105,23 @@ export default function AIGenerateBar({
     );
 
     const handleGenerate = async () => {
-        if (loading || disabled) return;
+        if (generateDisabled) return;
+
+        const liveDatingContext = isDatingInvitation
+            ? getDatingAiContext?.() ?? datingAiContext
+            : undefined;
+
+        if (isDatingInvitation) {
+            const check = validateDatingAiContext(liveDatingContext);
+            if (!check.ok) {
+                console.warn('[AIGenerateBar] dating context incomplete', {
+                    context: liveDatingContext,
+                    missing: check.missing,
+                });
+                showToast(datingPrerequisiteMessage, 'error');
+                return;
+            }
+        }
 
         const userPrompt = (prompt.trim() || buildContextPrompt?.() || '').trim();
         if (!userPrompt) {
@@ -94,17 +135,21 @@ export default function AIGenerateBar({
         setLoading(true);
         try {
             const pkg = showMultimodalPackages ? generationPackage : undefined;
-            const result = await generateAIContent(userPrompt, postType, subType, {
-                generationPackage: pkg,
-                aspectRatio:
-                    pkg === 'image' || pkg === 'invitation_bundle' ? aspectRatio : undefined,
-                venueType: invitationVenue?.venueType,
-                venueName: invitationVenue?.venueName,
-                inviteeId: datingAiContext?.inviteeId,
-                date: datingAiContext?.date,
-                time: datingAiContext?.time,
-                venueDetails: datingAiContext?.venueDetails,
-            });
+
+            const result = await generateAIContent(
+                userPrompt,
+                isDatingInvitation ? 'invitation' : postType,
+                isDatingInvitation ? 'date' : subType,
+                isDatingInvitation
+                    ? { datingContext: liveDatingContext }
+                    : {
+                          generationPackage: pkg,
+                          aspectRatio:
+                              pkg === 'image' || pkg === 'invitation_bundle' ? aspectRatio : undefined,
+                          venueType: invitationVenue?.venueType,
+                          venueName: invitationVenue?.venueName,
+                      }
+            );
 
             if (!result.success) {
                 if (isInsufficientCreditsError(result)) {
@@ -123,11 +168,55 @@ export default function AIGenerateBar({
                     return;
                 }
 
-                showToast(formatAiErrorMessage(result, t), 'error');
+                showToast(formatAiErrorMessage(result, t) || datingPrerequisiteMessage, 'error');
                 return;
             }
 
-            onSuccess(result.data, result.meta);
+            const normalizedData =
+                postType === 'invitation'
+                    ? normalizeInvitationAiData(result.data)
+                    : result.data;
+
+            if (postType === 'invitation') {
+                const applied = applyInvitationAiFields(normalizedData, {
+                    ...(isDatingInvitation && liveDatingContextForUi?.cardStructure
+                        ? { cardStructure: liveDatingContextForUi.cardStructure }
+                        : {}),
+                });
+
+                if (!applied.hasContent) {
+                    console.warn('[AIGenerateBar] invitation AI response had no mappable fields', result.data);
+                    showToast(
+                        t(
+                            'dating_ai_fields_empty',
+                            'تم التوليد لكن لم نتمكن من قراءة العنوان أو الرسالة. حاول مرة أخرى.'
+                        ),
+                        'error'
+                    );
+                    return;
+                }
+
+                setInvitationPreview({
+                    title: applied.title,
+                    description: applied.description,
+                });
+
+                flushSync(() => {
+                    onSuccess(normalizedData, result.meta);
+                });
+
+                if (applied.hasTitle && !applied.hasDescription) {
+                    showToast(
+                        t(
+                            'dating_ai_description_missing',
+                            'تم ملء العنوان فقط — أعد التوليد أو اكتب الرسالة يدوياً.'
+                        ),
+                        'info'
+                    );
+                }
+            } else {
+                onSuccess(normalizedData, result.meta);
+            }
 
             const hasImage = Boolean(result.data?.image?.url || result.data?.image?.mediaLibraryItem?.url);
             const creditsCharged =
@@ -139,6 +228,14 @@ export default function AIGenerateBar({
                 if (creditsCharged) {
                     showToast(t('magic_cover_charged_notice', { cost: creditsCharged }), 'info');
                 }
+            } else if (postType === 'invitation') {
+                showToast(
+                    t(
+                        'dating_ai_fields_applied',
+                        'تم ملء العنوان والرسالة في الحقول أدناه — يمكنك تعديلهما قبل المعاينة.'
+                    ),
+                    'success'
+                );
             } else {
                 showToast(t('ai_generate_success', 'تم توليد المحتوى بنجاح.'), 'success');
             }
@@ -229,10 +326,28 @@ export default function AIGenerateBar({
                     </fieldset>
                 ) : null}
 
-                {disabled && disabledHint ? (
+                {(disabled && disabledHint) || (isDatingInvitation && !datingContextReady) ? (
                     <p className="ai-generate-bar__venue-hint" role="status">
-                        {disabledHint}
+                        {disabledHint || datingPrerequisiteMessage}
                     </p>
+                ) : null}
+
+                {postType === 'invitation' && invitationPreview ? (
+                    <div className="ai-generate-bar__invitation-preview" role="status">
+                        <p className="ai-generate-bar__invitation-preview-label">
+                            {t('dating_ai_preview_label', 'معاينة النص المُولَّد')}
+                        </p>
+                        {invitationPreview.title ? (
+                            <p className="ai-generate-bar__invitation-preview-title">
+                                <strong>{t('invitation_title')}:</strong> {invitationPreview.title}
+                            </p>
+                        ) : null}
+                        {invitationPreview.description ? (
+                            <p className="ai-generate-bar__invitation-preview-message">
+                                <strong>{t('message_to_friends')}:</strong> {invitationPreview.description}
+                            </p>
+                        ) : null}
+                    </div>
                 ) : null}
 
                 <textarea
@@ -245,7 +360,7 @@ export default function AIGenerateBar({
                         'ai_prompt_placeholder',
                         'صف ما تريد (مثال: عرض غداء نهاية الأسبوع في مطعم إيطالي…) — أو اتركه فارغاً لاستخدام تفاصيل النموذج.'
                     )}
-                    disabled={loading || disabled}
+                    disabled={generateDisabled}
                 />
 
                 <div className="ai-generate-bar__actions">
@@ -253,8 +368,9 @@ export default function AIGenerateBar({
                         type="button"
                         className="ai-generate-bar__btn ios-tap-target"
                         onClick={handleGenerate}
-                        disabled={loading || disabled}
+                        disabled={generateDisabled}
                         aria-busy={loading}
+                        title={isDatingInvitation && !datingContextReady ? datingPrerequisiteMessage : undefined}
                     >
                         {loading ? (
                             <>

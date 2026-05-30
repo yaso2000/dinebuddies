@@ -10,7 +10,7 @@ import { requireAuth } from '../_auth.js';
 import { ensureFirebaseAdmin } from '../_firebaseAdmin.js';
 import { ensureFirebaseClientApp } from '../_firebaseClient.js';
 import { takeRateLimit } from '../_rateLimit.js';
-import { uploadInvitationAiImage } from '../_aiStorage.js';
+import { uploadInvitationAiImage, persistUserMediaLibraryItem } from '../_aiStorage.js';
 import { resolveInvitationCallerContext } from '../_aiInvitationContext.js';
 import { resolveDatingInvitationPersonalization } from '../_datingAiPersonalization.js';
 import { parseAiGenerateBody } from './parseAiRequest.js';
@@ -123,6 +123,9 @@ export default async function handler(req: any, res: any) {
             success: false,
             error: parsed.error,
             code: 'VALIDATION_ERROR',
+            ...(Array.isArray(parsed.missing) && parsed.missing.length
+                ? { missing: parsed.missing, message: parsed.message || parsed.error }
+                : {}),
         });
     }
 
@@ -209,6 +212,20 @@ export default async function handler(req: any, res: any) {
                         pipelineResult.pendingImage.mimeType,
                         request.postType,
                     );
+                    try {
+                        const persisted = await persistUserMediaLibraryItem(
+                            authResult.uid,
+                            uploaded.mediaLibraryItem,
+                        );
+                        if (persisted?.id) {
+                            uploaded.mediaLibraryItem.id = persisted.id;
+                        }
+                    } catch (libraryErr) {
+                        console.warn(
+                            '[api/ai/generate] media_library_persist',
+                            libraryErr instanceof Error ? libraryErr.message : libraryErr,
+                        );
+                    }
                 } catch (uploadErr) {
                     const uploadDetail = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
                     console.error('[api/ai/generate] storage_upload', uploadDetail);
@@ -268,6 +285,7 @@ export default async function handler(req: any, res: any) {
             accountType: callerContext.accountType,
             businessContext: callerContext.businessContext,
             datingContext,
+            cardStructure: request.cardStructure || 'modern_minimal',
         });
 
         if (result.success === false) {
@@ -275,7 +293,12 @@ export default async function handler(req: any, res: any) {
             return res.status(statusForServiceError(result)).json(result);
         }
 
-        return res.status(200).json(result);
+        return res.status(200).json({
+            ...result,
+            meta: {
+                creditsCharged: creditCost,
+            },
+        });
     } catch (error) {
         console.error('[api/ai/generate]', error);
         if (db && userRef && charged) {

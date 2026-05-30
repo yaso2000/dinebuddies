@@ -9,7 +9,7 @@
 import { requireAuth } from '../_auth.js';
 import { ensureFirebaseClientApp } from '../_firebaseClient.js';
 import { takeRateLimit } from '../_rateLimit.js';
-import { uploadInvitationAiImage } from '../_aiStorage.js';
+import { uploadInvitationAiImage, persistUserMediaLibraryItem } from '../_aiStorage.js';
 import { resolveInvitationCallerContext } from '../_aiInvitationContext.js';
 import { parseAiGenerateBody } from './parseAiRequest.js';
 import { refundAiCredits, spendAiCredits } from './_runAiWithCredits.js';
@@ -106,6 +106,9 @@ export default async function handler(req, res) {
             success: false,
             error: parsed.error,
             code: 'VALIDATION_ERROR',
+            ...(Array.isArray(parsed.missing) && parsed.missing.length
+                ? { missing: parsed.missing, message: parsed.message || parsed.error }
+                : {}),
         });
     }
 
@@ -194,6 +197,20 @@ export default async function handler(req, res) {
                     pipelineResult.pendingImage.mimeType,
                     request.postType,
                 );
+                try {
+                    const persisted = await persistUserMediaLibraryItem(
+                        authResult.uid,
+                        uploaded.mediaLibraryItem,
+                    );
+                    if (persisted?.id) {
+                        uploaded.mediaLibraryItem.id = persisted.id;
+                    }
+                } catch (libraryErr) {
+                    console.warn(
+                        '[api/ai/multi-generate] media_library_persist',
+                        libraryErr instanceof Error ? libraryErr.message : libraryErr,
+                    );
+                }
             } catch (uploadErr) {
                 const uploadDetail = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
                 console.error('[api/ai/multi-generate] storage_upload', uploadDetail);

@@ -116,6 +116,10 @@ export async function resolveDatingInvitationPersonalization(db, hostUid, hostUs
 
     let inviteeName = '';
     let inviteeCommunities = [];
+    let inviteeGender = '';
+    let inviteeAgeGroup = '';
+    /** @type {string[]} */
+    let inviteeFavoriteFoods = [];
 
     try {
         const inviteeSnap = await db.collection('users').doc(inviteeId).get();
@@ -123,15 +127,34 @@ export async function resolveDatingInvitationPersonalization(db, hostUid, hostUs
             const data = inviteeSnap.data() || {};
             inviteeName = pickString(data.display_name, data.displayName, data.name);
             inviteeCommunities = normalizeIdList(data.joinedCommunities);
+            inviteeGender = pickString(data.gender, data.sex, data.profileGender);
+            inviteeAgeGroup = pickString(data.ageGroup, data.age_group, data.ageRange);
+            if (Array.isArray(data.favoriteFoods)) {
+                inviteeFavoriteFoods = data.favoriteFoods
+                    .filter((f) => typeof f === 'string' && f.trim())
+                    .map((f) => f.trim())
+                    .slice(0, 8);
+            }
         }
     } catch (e) {
         console.warn('[datingAiPersonalization] invitee profile fetch failed', e);
+    }
+
+    /** @type {string[]} */
+    const inviteeCommunityNames = [];
+    for (const communityId of inviteeCommunities.slice(0, 6)) {
+        const card = await fetchCommunityBusinessCard(db, communityId);
+        if (card?.name) inviteeCommunityNames.push(card.name);
     }
 
     const hostCommunities = normalizeIdList(hostUserData?.joinedCommunities);
     const sharedCommunities = await resolveSharedCommunities(db, hostCommunities, inviteeCommunities);
 
     context.inviteeName = inviteeName || undefined;
+    context.inviteeGender = inviteeGender || undefined;
+    context.inviteeAgeGroup = inviteeAgeGroup || undefined;
+    context.inviteeFavoriteFoods = inviteeFavoriteFoods.length ? inviteeFavoriteFoods : undefined;
+    context.inviteeCommunityNames = inviteeCommunityNames.length ? inviteeCommunityNames : undefined;
     context.sharedCommunities = sharedCommunities;
     context.hostCommunityCount = hostCommunities.length;
     context.inviteeCommunityCount = inviteeCommunities.length;

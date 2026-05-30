@@ -1,9 +1,19 @@
-import { getApp } from 'firebase/app';
+﻿import { getApp } from 'firebase/app';
 import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend } from 'firebase/ai';
+import {
+    coalesceInvitationAiText,
+    extractInvitationFieldsFromRaw,
+} from '../utils/invitationAiTextExtract.js';
+import {
+    buildCardStructurePromptBlock,
+    enforceCardStructureTextLimits,
+    normalizeCardStructure,
+} from '../utils/cardStructure.js';
 
 export type TextPostType = 'regular_post' | 'featured_post' | 'animated_post' | 'invitation';
 export type PostType = TextPostType | 'magic_cover';
 export type InvitationSubType = 'public' | 'private' | 'date';
+export type CardStructure = 'arch_luxury' | 'vintage_ticket' | 'modern_minimal';
 export type AnimationType = 'slide-up' | 'fade-in' | 'zoom-in';
 export type InvitationAccountType = 'user' | 'business';
 export type GenerationPackage = 'text' | 'image' | 'invitation_bundle';
@@ -46,6 +56,10 @@ export interface DatingInvitationContext {
         lng?: number;
     };
     sharedCommunities?: DatingCommunityContext[];
+    inviteeGender?: string;
+    inviteeAgeGroup?: string;
+    inviteeFavoriteFoods?: string[];
+    inviteeCommunityNames?: string[];
 }
 
 export interface GenerateContentInput {
@@ -57,6 +71,7 @@ export interface GenerateContentInput {
     accountType?: InvitationAccountType;
     businessContext?: BusinessInvitationContext;
     datingContext?: DatingInvitationContext;
+    cardStructure?: CardStructure;
 }
 
 export interface InvitationContent {
@@ -171,7 +186,7 @@ export type MultimodalPipelineError = {
 
 export type MultimodalPipelineResult = MultimodalPipelineSuccess | MultimodalPipelineError;
 
-/** Text + vision tasks (1.5 retired — use 2.5 Flash). Override via GEMINI_MODEL. */
+/** Text + vision tasks (1.5 retired ΓÇö use 2.5 Flash). Override via GEMINI_MODEL. */
 const TEXT_MODEL_NAME =
     (typeof process !== 'undefined' && process.env?.GEMINI_MODEL?.trim()) || 'gemini-2.5-flash';
 
@@ -201,52 +216,55 @@ function isNonEmptyString(value: unknown): value is string {
 function buildInvitationSystemInstruction(
     subType: InvitationSubType | undefined,
     accountType: InvitationAccountType,
+    cardStructure: CardStructure = 'modern_minimal',
 ): string {
-    const baseRule = `Return exactly: {"title":"...","description":"..."}. No other keys. Do not invent a venue address. Use venueType and venueName from context only. title max ${INVITATION_TITLE_MAX_LENGTH} chars.`;
+    const baseRule = `Return exactly: {"title":"...","description":"..."}. No other keys. Do not invent a venue address. Use venueType and venueName from context only. Both title and description are REQUIRED — never leave description empty.`;
+
+    let toneRule = '';
 
     if (accountType === 'business') {
-        let businessRule =
+        toneRule =
             'Write a promotional business invitation in Arabic: welcoming, professional, and marketing-oriented. Speak as the venue inviting guests. Weave in businessName, tagline, profileDescription, and activeOffers from context when provided — never invent offers, discounts, or locations not in context.';
 
         if (subType === 'public') {
-            businessRule +=
+            toneRule +=
                 ' Public invitation: catchy title featuring the business; description highlights what makes the venue special and any active offer.';
         } else if (subType === 'private') {
-            businessRule += ' Private invitation: exclusive, VIP tone while staying professional.';
+            toneRule += ' Private invitation: exclusive, VIP tone while staying professional.';
         } else if (subType === 'date') {
-            businessRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
+            toneRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
         }
+    } else {
+        toneRule =
+            'Write a personal social invitation in Arabic: warm, casual, and informal — like a friend inviting friends to meet up at a venue.';
 
-        return baseRule + ' ' + businessRule;
+        if (subType === 'public') {
+            toneRule +=
+                ' Public invitation: catchy title (venue name allowed from context), friendly open invite for the venue type.';
+        } else if (subType === 'private') {
+            toneRule += ' Private invitation: warm, personal, close-friends tone.';
+        } else if (subType === 'date') {
+            toneRule +=
+                ' Date invitation: romantic, light, and practical tone. Factor in the specific date and time so the Arabic sounds natural. When inviteeName, inviteeGender, or sharedCommunities appear in context, personalize elegantly with correct Arabic pronouns. Never invent communities, venues, or facts not in context.';
+        }
     }
 
-    let personalRule =
-        'Write a personal social invitation in Arabic: warm, casual, and informal — like a friend inviting friends to meet up at a venue.';
-
-    if (subType === 'public') {
-        personalRule +=
-            ' Public invitation: catchy title (venue name allowed from context), friendly open invite for the venue type.';
-    } else if (subType === 'private') {
-        personalRule += ' Private invitation: warm, personal, close-friends tone.';
-    } else if (subType === 'date') {
-        personalRule +=
-            ' Date invitation: romantic, light, and practical tone. Factor in the specific date and time so the Arabic sounds natural (e.g., Friday evening → «مساء الجمعة»; two days away → «بعد يومين»). When inviteeName or sharedCommunities appear in context, personalize elegantly. If a shared community matches the venue cuisine/type, weave one subtle reference (e.g., «وبما إننا في مجتمع السوشي…»). Never invent communities, venues, or facts not in context.';
-    }
-
-    return baseRule + ' ' + personalRule;
+    const structureBlock = buildCardStructurePromptBlock(normalizeCardStructure(cardStructure));
+    return `${baseRule} ${toneRule}${structureBlock}`;
 }
 
 function buildSystemInstruction(
     postType: TextPostType,
     subType?: InvitationSubType,
     accountType: InvitationAccountType = 'user',
+    cardStructure: CardStructure = 'modern_minimal',
 ): string {
     const languageRule =
         'Write only in natural, engaging Arabic. Output must match the JSON shape described in the user message.';
 
     switch (postType) {
         case 'invitation':
-            return `${JSON_OUTPUT_RULE} ${languageRule} ${buildInvitationSystemInstruction(subType, accountType)}`;
+            return `${JSON_OUTPUT_RULE} ${languageRule} ${buildInvitationSystemInstruction(subType, accountType, cardStructure)}`;
 
         case 'regular_post':
             return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"text":"..."}. Facebook-style post with fitting emoji. No title field.`;
@@ -289,7 +307,7 @@ function buildUserPrompt(input: GenerateContentInput): string {
                     lines.push('activeOffers:');
                     for (const offer of ctx.offers) {
                         const offerLine = offer.description
-                            ? `- ${offer.title} — ${offer.description}`
+                            ? `- ${offer.title} ΓÇö ${offer.description}`
                             : `- ${offer.title}`;
                         lines.push(offerLine);
                     }
@@ -306,6 +324,14 @@ function buildUserPrompt(input: GenerateContentInput): string {
         if (dating) {
             appendContextLine(lines, 'inviteeName', dating.inviteeName);
             appendContextLine(lines, 'inviteeId', dating.inviteeId);
+            appendContextLine(lines, 'inviteeGender', dating.inviteeGender);
+            appendContextLine(lines, 'inviteeAgeGroup', dating.inviteeAgeGroup);
+            if (dating.inviteeFavoriteFoods?.length) {
+                lines.push(`inviteeFavoriteFoods: ${dating.inviteeFavoriteFoods.join(', ')}`);
+            }
+            if (dating.inviteeCommunityNames?.length) {
+                lines.push(`inviteeCommunities: ${dating.inviteeCommunityNames.join(', ')}`);
+            }
             appendContextLine(lines, 'date', dating.date);
             appendContextLine(lines, 'time', dating.time);
             const vd = dating.venueDetails;
@@ -323,6 +349,8 @@ function buildUserPrompt(input: GenerateContentInput): string {
                 }
             }
         }
+
+        appendContextLine(lines, 'cardStructure', input.cardStructure);
     }
 
     const trimmed = userPrompt.trim();
@@ -388,10 +416,10 @@ async function invokeGeminiJsonWithImage(
 
 function extractJsonBody(rawText: string): string {
     let body = rawText.trim();
-    const fenced = body.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-    if (fenced) {
-        body = fenced[1].trim();
-    }
+    if (!body) return body;
+
+    body = body.replace(/```(?:json|javascript|js)?\s*/gi, '').replace(/```/g, '').trim();
+
     const objectMatch = body.match(/\{[\s\S]*\}/);
     if (objectMatch) {
         body = objectMatch[0];
@@ -410,7 +438,22 @@ function safeParseModelJson(rawText: string): { ok: true; value: unknown } | { o
     try {
         return { ok: true, value: parseModelJson(rawText) };
     } catch {
-        return { ok: false };
+        const body = extractJsonBody(rawText);
+        try {
+            return { ok: true, value: JSON.parse(body) };
+        } catch {
+            const fromRaw = extractInvitationFieldsFromRaw(body);
+            if (fromRaw.title || fromRaw.description) {
+                return {
+                    ok: true,
+                    value: {
+                        ...(fromRaw.title ? { title: fromRaw.title } : {}),
+                        ...(fromRaw.description ? { description: fromRaw.description } : {}),
+                    },
+                };
+            }
+            return { ok: false };
+        }
     }
 }
 
@@ -462,7 +505,7 @@ function validateGeneratedContent(postType: TextPostType, value: unknown): strin
 }
 
 export async function generateContent(input: GenerateContentInput): Promise<GenerateContentResult> {
-    const { userPrompt, postType, subType, accountType = 'user' } = input;
+    const { userPrompt, postType, subType, accountType = 'user', cardStructure = 'modern_minimal' } = input;
 
     if (!isNonEmptyString(userPrompt)) {
         return {
@@ -473,10 +516,19 @@ export async function generateContent(input: GenerateContentInput): Promise<Gene
     }
 
     const prompt = buildUserPrompt(input);
-    const systemInstruction = buildSystemInstruction(postType, subType, accountType);
+    const systemInstruction = buildSystemInstruction(
+        postType,
+        subType,
+        accountType,
+        normalizeCardStructure(cardStructure),
+    );
 
     try {
-        const rawText = await invokeGeminiJsonModel(prompt, systemInstruction);
+        const rawText = await invokeGeminiJsonModel(
+            prompt,
+            systemInstruction,
+            postType === 'invitation' ? 2048 : 1024,
+        );
 
         if (!rawText || !rawText.trim()) {
             return {
@@ -486,14 +538,29 @@ export async function generateContent(input: GenerateContentInput): Promise<Gene
             };
         }
 
-        let parsed: unknown;
-        try {
-            parsed = parseModelJson(rawText);
-        } catch {
+        const parsedResult = safeParseModelJson(rawText);
+        if (parsedResult.ok === false) {
             return {
                 success: false,
                 error: 'Gemini returned malformed JSON',
                 code: 'MALFORMED_JSON',
+            };
+        }
+
+        let parsed: unknown = parsedResult.value;
+
+        if (postType === 'invitation') {
+            parsed = coalesceInvitationAiText(parsed, rawText);
+            const record = parsed as Record<string, unknown>;
+            const limited = enforceCardStructureTextLimits(
+                normalizeCardStructure(cardStructure),
+                isNonEmptyString(record.title) ? record.title : '',
+                isNonEmptyString(record.description) ? record.description : '',
+            );
+            parsed = {
+                ...record,
+                ...(limited.title ? { title: limited.title } : {}),
+                ...(limited.description ? { description: limited.description } : {}),
             };
         }
 
@@ -528,7 +595,7 @@ function buildImagePromptSystemInstruction(accountType: InvitationAccountType): 
         return `${JSON_OUTPUT_RULE} ${shape} Create a professional promotional cover prompt for Imagen: highlight signature dishes, elegant interior, or brand ambiance using businessName, businessType, tagline, profileDescription, and activeOffers from context. High-end hospitality marketing look.`;
     }
 
-    return `${JSON_OUTPUT_RULE} ${shape} Create a welcoming social dining cover prompt for Imagen: friends enjoying a casual meal that matches venueType and venueName — warm, authentic, lifestyle photography.`;
+    return `${JSON_OUTPUT_RULE} ${shape} Create a welcoming social dining cover prompt for Imagen: friends enjoying a casual meal that matches venueType and venueName ΓÇö warm, authentic, lifestyle photography.`;
 }
 
 function buildImagePromptUserContext(input: MultimodalPipelineInput, invitationText?: InvitationContent): string {
@@ -544,7 +611,7 @@ function buildImagePromptUserContext(input: MultimodalPipelineInput, invitationT
         if (ctx.offers?.length) {
             lines.push('activeOffers:');
             for (const offer of ctx.offers) {
-                lines.push(offer.description ? `- ${offer.title} — ${offer.description}` : `- ${offer.title}`);
+                lines.push(offer.description ? `- ${offer.title} ΓÇö ${offer.description}` : `- ${offer.title}`);
             }
         }
     }
@@ -613,6 +680,16 @@ export async function generateImagePrompt(
     }
 }
 
+function sanitizeImagenPrompt(prompt: string): string {
+    return String(prompt || '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        .replace(/```(?:json)?/gi, '')
+        .replace(/[`<>{}[\]\\|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 2000);
+}
+
 export async function generateCoverImage(
     imagePrompt: string,
     aspectRatio: CoverAspectRatio = '1:1',
@@ -620,6 +697,15 @@ export async function generateCoverImage(
     | { success: true; bytesBase64: string; mimeType: string; filteredReason?: string }
     | { success: false; error: string; code: 'IMAGE_GENERATION_FAILED' | 'GEMINI_API_ERROR' }
 > {
+    const safePrompt = sanitizeImagenPrompt(imagePrompt);
+    if (!safePrompt) {
+        return {
+            success: false,
+            error: 'Image prompt is empty after sanitization',
+            code: 'IMAGE_GENERATION_FAILED',
+        };
+    }
+
     const ai = getAi();
     /** @type {string[]} */
     const modelsToTry = [...new Set(IMAGEN_MODEL_FALLBACKS)];
@@ -636,7 +722,7 @@ export async function generateCoverImage(
                 },
             });
 
-            const response = await model.generateImages(imagePrompt);
+            const response = await model.generateImages(safePrompt);
             const first = response.images?.[0];
 
             if (!first?.bytesBase64Encoded) {
@@ -717,7 +803,7 @@ export async function analyzeImageModeration(
 }
 
 /**
- * Stage 0–3 multimodal pipeline: role context → text (+ image prompt) → Imagen → moderation.
+ * Stage 0ΓÇô3 multimodal pipeline: role context ΓåÆ text (+ image prompt) ΓåÆ Imagen ΓåÆ moderation.
  * Upload to storage is handled by the API layer after moderation passes.
  */
 export async function runMultimodalPipeline(

@@ -24,6 +24,8 @@ import {
     privateTextBackdropToneToRgba
 } from './privateCardTextBackdrop';
 import { INVITATION_CARD_MESSAGE_MAX } from '../../../constants/invitationCardLimits';
+import { resolveCardStructureFromBackgroundId } from '../../../utils/cardStructure';
+import CardTextOverlay from '../../CardTextOverlay';
 import './PrivateInvitationCardPreview.css';
 
 function formatPreviewDate(dateStr, locale) {
@@ -92,7 +94,9 @@ export default function PrivateInvitationCardPreview({
     /** When false, hide occasion headline, custom title, message, and host; only date/place meta stay. */
     showHostAndMessage = true,
     /** `dark` | `light` | `none` — panel behind copy when `showHostAndMessage` on photo backgrounds. */
-    textBackdropTone = DEFAULT_PRIVATE_TEXT_BACKDROP_TONE
+    textBackdropTone = DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
+    /** Visual structure for template safe zones (dating AI templates). */
+    cardStructure: cardStructureProp = null,
 }) {
     const { t } = useTranslation();
     const frame = useMemo(() => getFrameColorById(frameColorId), [frameColorId]);
@@ -129,6 +133,19 @@ export default function PrivateInvitationCardPreview({
     }, [cardTemplateSet, categoryId, cardBackgroundId]);
     const hasHeroCover = Boolean(heroCoverSrc && heroCoverMediaType);
     const hasPhotoBackground = templateArtActive || hasHeroCover;
+    const resolvedCardStructure = useMemo(() => {
+        if (cardStructureProp) return cardStructureProp;
+        if (cardTemplateSet === 'dating' && cardBackgroundId) {
+            return resolveCardStructureFromBackgroundId(cardBackgroundId);
+        }
+        return null;
+    }, [cardStructureProp, cardTemplateSet, cardBackgroundId]);
+    const useStructureTextOverlay =
+        showHostAndMessage &&
+        templateArtActive &&
+        !hasHeroCover &&
+        cardTemplateSet === 'dating' &&
+        Boolean(resolvedCardStructure);
 
     const textBackdropRgba = useMemo(() => {
         if (!showHostAndMessage || !hasPhotoBackground) return null;
@@ -283,6 +300,15 @@ export default function PrivateInvitationCardPreview({
                     <div className="private-invitation-card-preview__bg" />
                 )}
 
+                {useStructureTextOverlay ? (
+                    <CardTextOverlay
+                        title={titleTrimmed}
+                        description={descText}
+                        selectedTemplate={resolvedCardStructure}
+                        showBrandMark={false}
+                    />
+                ) : null}
+
                 <div
                     className="private-invitation-card-preview__text-stack"
                     style={
@@ -307,12 +333,12 @@ export default function PrivateInvitationCardPreview({
                                 </div>
                             )}
 
-                            {hasCardTitle ? (
+                            {hasCardTitle && !useStructureTextOverlay ? (
                                 <h3 className="private-invitation-card-preview__title" style={textStyles.title}>
                                     {titleTrimmed}
                                 </h3>
                             ) : null}
-                            {descText ? (
+                            {descText && !useStructureTextOverlay ? (
                                 <p className="private-invitation-card-preview__message" style={textStyles.message}>
                                     {descText.length > INVITATION_CARD_MESSAGE_MAX
                                         ? `${descText.slice(0, INVITATION_CARD_MESSAGE_MAX - 1)}…`

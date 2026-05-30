@@ -21,7 +21,8 @@ import './AIFloatingLauncher.css';
  *   compact?: boolean,
  *   className?: string,
  *   invitationVenue?: { venueType?: string, venueName?: string },
- *   datingAiContext?: { inviteeId?: string, date?: string, time?: string, venueDetails?: Record<string, unknown> },
+ *   datingAiContext?: import('../utils/datingAiRequestPayload.js').DatingAiContext,
+ *   getDatingAiContext?: () => import('../utils/datingAiRequestPayload.js').DatingAiContext | undefined,
  *   disabledHint?: string,
  * }} props
  */
@@ -37,6 +38,7 @@ export default function AIFloatingLauncher({
     className = '',
     invitationVenue,
     datingAiContext,
+    getDatingAiContext,
     disabledHint,
 }) {
     const { t } = useTranslation();
@@ -97,8 +99,10 @@ export default function AIFloatingLauncher({
                         postType={postType}
                         subType={subType}
                         onSuccess={(data, meta) => {
-                            onTextSuccess(data, meta);
-                            close();
+                            const applied = onTextSuccess(data, meta);
+                            if (applied !== false) {
+                                window.setTimeout(() => close(), 400);
+                            }
                         }}
                         buildContextPrompt={buildContextPrompt}
                         multimodalMode={multimodalMode}
@@ -107,6 +111,7 @@ export default function AIFloatingLauncher({
                         embedded
                         invitationVenue={invitationVenue}
                         datingAiContext={datingAiContext}
+                        getDatingAiContext={getDatingAiContext}
                         disabledHint={disabledHint}
                     />
                 </div>
@@ -129,6 +134,11 @@ export default function AIFloatingLauncher({
                 <FaMagic className="ai-floating-launcher__trigger-icon" aria-hidden />
                 {t('ai_floating_open_btn', 'توليد بالذكاء الاصطناعي')}
             </button>
+            {disabledHint ? (
+                <p className="ai-floating-launcher__hint" role="status">
+                    {disabledHint}
+                </p>
+            ) : null}
             {typeof document !== 'undefined' ? createPortal(sheet, document.body) : null}
         </div>
     );

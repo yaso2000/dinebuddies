@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { ensureFirebaseAdmin, getFirebaseAdminCertConfig } from './_firebaseAdmin.js';
 
@@ -131,6 +132,30 @@ export async function uploadInvitationAiImage(uid, bytesBase64, mimeType = 'imag
             url,
             source: 'ai_generated',
             createdAt,
+            path: objectPath,
+            mimeType,
         },
     };
+}
+
+/**
+ * Persist AI-generated media metadata to the user's invitation media library (server-side).
+ * @param {string} uid
+ * @param {{ url: string, path?: string, mimeType?: string, source?: string, createdAt?: string }} item
+ */
+export async function persistUserMediaLibraryItem(uid, item) {
+    if (!uid || !item?.url) return null;
+    ensureFirebaseAdmin();
+    const db = getFirestore();
+    const docRef = db.collection('users').doc(uid).collection('invitation_media_library').doc();
+    const payload = {
+        url: String(item.url),
+        source: item.source || 'ai_generated',
+        path: item.path ? String(item.path) : null,
+        mimeType: item.mimeType ? String(item.mimeType) : null,
+        createdAt: FieldValue.serverTimestamp(),
+        clientCreatedAt: item.createdAt || new Date().toISOString(),
+    };
+    await docRef.set(payload);
+    return { id: docRef.id, ...payload };
 }

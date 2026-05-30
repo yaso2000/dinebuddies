@@ -18,6 +18,8 @@ export function isChunkLoadError(error) {
     );
 }
 
+import { getPrivateDraftRecoveryCreatePath } from './privateInvitationDraft';
+
 /** Safe route for the current area of the app (full path, no origin). */
 export function getFatalUiRecoveryTarget(pathname = '') {
     const p = String(pathname || (typeof window !== 'undefined' ? window.location.pathname : '') || '');
@@ -25,7 +27,8 @@ export function getFatalUiRecoveryTarget(pathname = '') {
     if (p.startsWith('/admin')) return '/login';
     if (p.startsWith('/business')) return '/business-dashboard';
     if (p === '/login' || p.startsWith('/login')) return '/login';
-    if (p.startsWith('/invitation/private/preview/')) return '/create-private';
+    if (p.startsWith('/invitation/private/preview/')) return getPrivateDraftRecoveryCreatePath();
+    if (p.startsWith('/create-dating')) return '/create-dating';
     if (p.startsWith('/create-private')) return '/create-private';
     if (p === '/create-featured-post') return '/create-featured-post';
     if (p === '/create-post') return '/create-post';

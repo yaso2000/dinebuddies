@@ -1,7 +1,40 @@
 import { auth } from '../firebase/config';
+import { unwrapAiResponseData } from '../utils/aiContentFieldMapper';
+import { buildDatingAiGenerateBody } from '../utils/datingAiRequestPayload';
+import { enforceCardStructureTextLimits, normalizeCardStructure } from '../utils/cardStructure';
 
 const AI_GENERATE_PATH = '/api/ai/generate';
 const AI_MULTI_GENERATE_PATH = '/api/ai/multi-generate';
+
+/** Obtain Bearer token; refresh only when needed or after 401 retry. */
+async function getAuthBearerToken(forceRefresh = false) {
+    const user = auth.currentUser;
+    if (!user) return null;
+    try {
+        return await user.getIdToken(forceRefresh);
+    } catch (err) {
+        console.warn('[generateAIContent] getIdToken failed', err);
+        if (!forceRefresh) {
+            try {
+                return await user.getIdToken(true);
+            } catch {
+                return null;
+            }
+        }
+        return null;
+    }
+}
+
+async function postAiJson(endpoint, body, token) {
+    return fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+    });
+}
 
 /**
  * @typedef {'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'magic_cover'} AIGeneratePostType
@@ -43,7 +76,10 @@ async function parseAiApiResponse(response) {
     }
 
     if (payload && typeof payload === 'object' && payload.success === true) {
-        return payload;
+        return {
+            ...payload,
+            data: unwrapAiResponseData(payload.data),
+        };
     }
 
     if (response.status === 400 && payload?.code === 'VALIDATION_ERROR') {
@@ -51,7 +87,13 @@ async function parseAiApiResponse(response) {
             success: false,
             error: payload?.error || 'validation_error',
             code: 'VALIDATION_ERROR',
-            message: typeof payload?.error === 'string' ? payload.error : undefined,
+            message:
+                typeof payload?.message === 'string'
+                    ? payload.message
+                    : typeof payload?.error === 'string'
+                      ? payload.error
+                      : undefined,
+            missing: Array.isArray(payload?.missing) ? payload.missing : undefined,
             status: 400,
         };
     }
@@ -128,7 +170,7 @@ async function parseAiApiResponse(response) {
  * @param {string} userPrompt
  * @param {AIGeneratePostType} postType
  * @param {AIInvitationSubType} [subType]
- * @param {{ venueType?: string, venueName?: string, generationPackage?: 'text' | 'image' | 'invitation_bundle', aspectRatio?: '1:1' | '9:16', inviteeId?: string, date?: string, time?: string, venueDetails?: Record<string, unknown> }} [options]
+ * @param {{ venueType?: string, venueName?: string, generationPackage?: 'text' | 'image' | 'invitation_bundle', aspectRatio?: '1:1' | '9:16', inviteeId?: string, inviteeName?: string, date?: string, time?: string, venueId?: string, address?: string, city?: string, country?: string, lat?: number, lng?: number, venueDetails?: Record<string, unknown>, datingContext?: import('../utils/datingAiRequestPayload.js').DatingAiContext, cardStructure?: string }} [options]
  * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
  */
 export async function generateAIContent(userPrompt, postType, subType, options = {}) {
@@ -137,50 +179,75 @@ export async function generateAIContent(userPrompt, postType, subType, options =
         return { success: false, error: 'userPrompt is required', code: 'VALIDATION_ERROR' };
     }
 
-    const user = auth.currentUser;
-    if (!user) {
+    if (!auth.currentUser) {
         return { success: false, error: 'Sign in required', code: 'UNAUTHORIZED', status: 401 };
     }
 
-    let token;
-    try {
-        token = await user.getIdToken(true);
-    } catch {
+    let token = await getAuthBearerToken(false);
+    if (!token) {
         return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
     }
 
     /** @type {Record<string, unknown>} */
-    const body = { userPrompt: trimmedPrompt, postType };
+    let body;
 
-    if (postType === 'invitation') {
-        if (!subType) {
+    if (postType === 'invitation' && subType === 'date') {
+        const datingContext = options.datingContext || {
+            inviteeId: options.inviteeId,
+            inviteeName: options.inviteeName,
+            date: options.date,
+            time: options.time,
+            venueType: options.venueType,
+            venueName: options.venueName,
+            venueId: options.venueId,
+            address: options.address,
+            city: options.city,
+            country: options.country,
+            lat: options.lat,
+            lng: options.lng,
+            venueDetails: options.venueDetails,
+        };
+
+        const datingPayload = buildDatingAiGenerateBody(trimmedPrompt, datingContext);
+
+        if (!datingPayload.ok) {
+            console.warn('[generateAIContent] dating payload incomplete', {
+                context: datingContext,
+                missing: datingPayload.missing,
+            });
             return {
                 success: false,
-                error: 'subType is required for invitation text generation',
+                error: datingPayload.error || 'dating_context_incomplete',
                 code: 'VALIDATION_ERROR',
+                message: 'dating_context_incomplete',
+                missing: datingPayload.missing,
             };
         }
-        body.subType = subType;
-        if (subType === 'public') {
-            const venueType = String(options.venueType || '').trim();
-            const venueName = String(options.venueName || '').trim();
-            if (venueType) body.venueType = venueType;
-            if (venueName) body.venueName = venueName;
-        } else if (subType === 'date') {
-            const inviteeId = String(options.inviteeId || '').trim();
-            const date = String(options.date || '').trim();
-            const time = String(options.time || '').trim();
-            const venueDetails = options.venueDetails;
-            if (inviteeId) body.inviteeId = inviteeId;
-            if (date) body.date = date;
-            if (time) body.time = time;
-            if (venueDetails && typeof venueDetails === 'object') {
-                body.venueDetails = venueDetails;
+
+        body = datingPayload.body;
+    } else {
+        body = { userPrompt: trimmedPrompt, postType };
+
+        if (postType === 'invitation') {
+            if (!subType) {
+                return {
+                    success: false,
+                    error: 'subType is required for invitation text generation',
+                    code: 'VALIDATION_ERROR',
+                };
             }
+            body.subType = subType;
+            if (subType === 'public') {
+                const venueType = String(options.venueType || '').trim();
+                const venueName = String(options.venueName || '').trim();
+                if (venueType) body.venueType = venueType;
+                if (venueName) body.venueName = venueName;
+            }
+        } else if (options.generationPackage && options.generationPackage !== 'text') {
+            body.generationPackage = options.generationPackage;
+            if (options.aspectRatio) body.aspectRatio = options.aspectRatio;
         }
-    } else if (options.generationPackage && options.generationPackage !== 'text') {
-        body.generationPackage = options.generationPackage;
-        if (options.aspectRatio) body.aspectRatio = options.aspectRatio;
+
     }
 
     const endpoint =
@@ -189,16 +256,18 @@ export async function generateAIContent(userPrompt, postType, subType, options =
             : options.generationPackage === 'image' || options.generationPackage === 'invitation_bundle'
               ? AI_MULTI_GENERATE_PATH
               : AI_GENERATE_PATH;
+
+    console.log('=== CRITICAL OUTGOING AI PAYLOAD ===', { endpoint, body });
+
     let response;
     try {
-        response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(body),
-        });
+        response = await postAiJson(endpoint, body, token);
+        if (response.status === 401) {
+            token = await getAuthBearerToken(true);
+            if (token) {
+                response = await postAiJson(endpoint, body, token);
+            }
+        }
     } catch {
         return {
             success: false,
@@ -236,7 +305,26 @@ export function formatAiErrorMessage(result, t) {
         );
     }
 
-    const raw = String(result.message || result.error || '');
+    if (result.code === 'VALIDATION_ERROR') {
+        if (
+            result.error === 'dating_context_incomplete' ||
+            (Array.isArray(result.missing) && result.missing.length > 0)
+        ) {
+            return t(
+                'dating_ai_all_fields_required',
+                'يرجى ملء جميع الحقول أولاً لتخصيص الدعوة.'
+            );
+        }
+        const validationMsg = [result.message, result.error]
+            .filter((v) => typeof v === 'string' && v.trim())
+            .join(' — ');
+        if (validationMsg) return validationMsg;
+    }
+
+    const raw = String(result.message || result.error || '').trim();
+    if (raw === 'undefined' || raw === 'null') {
+        return t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.');
+    }
     if (/unterminated string|malformed json|unexpected token|not valid json/i.test(raw)) {
         return t(
             'ai_malformed_response',
@@ -305,20 +393,17 @@ export async function generateAIMagicCover({
         };
     }
 
-    const user = auth.currentUser;
-    if (!user) {
+    if (!auth.currentUser) {
         return { success: false, error: 'Sign in required', code: 'UNAUTHORIZED', status: 401 };
     }
 
-    let token;
-    try {
-        token = await user.getIdToken(true);
-    } catch {
+    let token = await getAuthBearerToken(false);
+    if (!token) {
         return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
     }
 
     const body = {
-        userPrompt: trimmedPrompt,
+        userPrompt: trimmedPrompt.slice(0, 2000),
         postType: 'invitation',
         subType,
         generationPackage: 'image',
@@ -330,16 +415,17 @@ export async function generateAIMagicCover({
     if (venueTypeStr) body.venueType = venueTypeStr;
     if (venueNameStr) body.venueName = venueNameStr;
 
+    console.log('=== CRITICAL OUTGOING AI PAYLOAD ===', { endpoint: AI_MULTI_GENERATE_PATH, body });
+
     let response;
     try {
-        response = await fetch(AI_MULTI_GENERATE_PATH, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(body),
-        });
+        response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token);
+        if (response.status === 401) {
+            token = await getAuthBearerToken(true);
+            if (token) {
+                response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token);
+            }
+        }
     } catch {
         return {
             success: false,
