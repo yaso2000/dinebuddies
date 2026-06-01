@@ -17,8 +17,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() &&
              (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+              request.auth.token.role == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
@@ -34,6 +33,13 @@ service cloud.firestore {
               request.auth.token.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
+    }
+
+    function canUsePremiumOffers() {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let tier = userData.get('subscriptionTier', 'free');
+      return tier in ['paid', 'elite'] ||
+             (tier == 'professional' && userData.get('offerCredits', 0) > 0);
     }
 
     function isCommunityMember(partnerId) {
@@ -101,6 +107,105 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function protectedUserUpdateFields() {
+      return [
+        'role',
+        'accountType',
+        'admin',
+        'isAdmin',
+        'superOwner',
+        'banned',
+        'bannedAt',
+        'subscriptionTier',
+        'subscriptionStatus',
+        'subscriptionId',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'monthlyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'stripePriceId',
+        'freeCredits',
+        'paidCredits',
+        'dineCredits',
+        'purchasedPrivateCredits',
+        'offerCredits',
+        'offerSlotCredits',
+        'reputation',
+        'adminGrantedAt',
+        'adminGrantedBy'
+      ];
+    }
+
+    function protectedUserCreateFields() {
+      return [
+        'admin',
+        'isAdmin',
+        'superOwner',
+        'banned',
+        'bannedAt',
+        'subscriptionTier',
+        'subscriptionStatus',
+        'subscriptionId',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'monthlyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'stripePriceId',
+        'freeCredits',
+        'paidCredits',
+        'dineCredits',
+        'purchasedPrivateCredits',
+        'offerCredits',
+        'offerSlotCredits',
+        'reputation',
+        'adminGrantedAt',
+        'adminGrantedBy'
+      ];
+    }
+
+    function protectedBusinessInfoFieldsChanged() {
+      return request.resource.data.get('businessInfo', {})
+        .diff(resource.data.get('businessInfo', {})).affectedKeys()
+        .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes', 'lastAdminUpdate']);
+    }
+
+    function protectedBusinessInfoFieldsCreated() {
+      return request.resource.data.get('businessInfo', {}).keys()
+        .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes', 'lastAdminUpdate']);
+    }
+
+    function isSafeSelfUserCreate() {
+      return !request.resource.data.keys().hasAny(protectedUserCreateFields()) &&
+             !protectedBusinessInfoFieldsCreated() &&
+             (!request.resource.data.keys().hasAny(['role']) ||
+              request.resource.data.role in ['user', 'business', 'partner', 'guest']) &&
+             (!request.resource.data.keys().hasAny(['accountType']) ||
+              request.resource.data.accountType in ['business', 'guest']);
+    }
+
+    function isSafeSelfUserUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(protectedUserUpdateFields()) &&
+             !protectedBusinessInfoFieldsChanged();
+    }
+
+    function isSafeFirstRoleUpdate() {
+      return !request.resource.data.keys().hasAny(protectedUserCreateFields()) &&
+             !protectedBusinessInfoFieldsChanged();
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,26 +217,23 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isOwner(userId) && isSafeSelfUserCreate();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       isSafeFirstRoleUpdate();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
-      // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
-      // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       isSafeFirstRoleUpdate();
       allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                       isSafeSelfUserUpdate();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
@@ -278,19 +380,28 @@ service cloud.firestore {
                            request.auth.uid in resource.data.invitedFriends
                          );
 
-      // Any signed-in user can create (author must be self)
+      // Any signed-in user can create drafts (author must be self). Publishing is server-only.
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                        request.resource.data.author.id == request.auth.uid) &&
+                       request.resource.data.get('status', 'draft') == 'draft' &&
+                       !request.resource.data.keys().hasAny(['publishedAt']);
 
-      // Host can update freely; invited friends can update only their RSVP
+      // Host can edit drafts only; trusted Cloud Function publishes and charges credits.
       allow update: if isSignedIn() &&
                        (resource.data.authorId == request.auth.uid ||
                         (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
-                        (request.auth.uid in resource.data.invitedFriends &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
-                         request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
+                         resource.data.author.id == request.auth.uid)) &&
+                       resource.data.get('status', 'draft') == 'draft' &&
+                       !resource.data.keys().hasAny(['publishedAt']) &&
+                       request.resource.data.get('status', 'draft') == 'draft' &&
+                       !request.resource.data.keys().hasAny(['publishedAt']);
+
+      // Invited friends can update only their own RSVP.
+      allow update: if isSignedIn() &&
+                       request.auth.uid in resource.data.invitedFriends &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
+                       request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid]);
 
       // Only host or admin can delete
       allow delete: if isSignedIn() &&
@@ -540,12 +651,14 @@ service cloud.firestore {
     match /offers/{offerId} {
       allow read: if true;
       
-      // Create: Must be partner, and partnerId must match their UID
+      // Premium offer publishing is paid/credit-gated; clients cannot self-grant the tier/credits.
       allow create: if isPartner() && 
+                       canUsePremiumOffers() &&
                        request.resource.data.partnerId == request.auth.uid;
       
       // Update: Must be partner, own the offer, and cannot modify protected fields
       allow update: if isPartner() && 
+                       canUsePremiumOffers() &&
                        resource.data.partnerId == request.auth.uid &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['platform_commission', 'global_status']);
@@ -556,17 +669,30 @@ service cloud.firestore {
 
     match /active_offers/{offerId} {
       allow read: if true;
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
+      allow create: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       request.resource.data.partnerId == request.auth.uid;
+      allow update: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       resource.data.partnerId == request.auth.uid;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
 
     match /special_offers/{offerId} {
       allow read: if true;
       // Security: bind created special offer to authenticated partner owner
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
-      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+      allow create: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       (request.resource.data.partnerId == request.auth.uid ||
+                        request.resource.data.restaurantId == request.auth.uid);
+      allow update: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       (resource.data.partnerId == request.auth.uid ||
+                        resource.data.restaurantId == request.auth.uid);
+      allow delete: if (isPartner() &&
+                        (resource.data.partnerId == request.auth.uid ||
+                         resource.data.restaurantId == request.auth.uid)) ||
+                       isAdmin();
     }
     
     // ============================================
