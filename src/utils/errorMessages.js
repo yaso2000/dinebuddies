@@ -49,6 +49,12 @@ export function getAuthErrorMessage(error) {
     if (/redirect_uri_mismatch|invalid_client|OAuth 2 parameters/i.test(combined)) {
         return tAuth('auth_oauth_setup_hint', 'OAuth setup error. Check Google Cloud and Firebase Auth domains.');
     }
+    if (/disallowed_useragent|doesn't comply with Google's OAuth 2.0 policy/i.test(combined)) {
+        return tAuth(
+            'auth_webview_blocked',
+            'Google blocks sign-in inside embedded browsers. Open this page in Chrome instead.'
+        );
+    }
     if (/apple\.com|Sign in with Apple|invalid.*apple/i.test(combined) && error?.code === 'auth/operation-not-allowed') {
         return tAuth(
             'auth_apple_not_enabled',

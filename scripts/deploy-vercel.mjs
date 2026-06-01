@@ -1,18 +1,19 @@
 /**
- * Vercel deploy with Node system CA store (fixes "unable to verify the first certificate" on Windows).
+ * Production deploy via Vercel CLI (system CA on Windows).
  */
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
-const extra = process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : '';
-if (!extra.includes('--use-system-ca')) {
-    process.env.NODE_OPTIONS = `${extra}--use-system-ca`.trim();
+const scriptsDir = dirname(fileURLToPath(import.meta.url));
+const vercelCli = join(scriptsDir, 'vercel-cli.mjs');
+const deployArgs = ['--prod'];
+if (process.argv.includes('--predist')) {
+    deployArgs.push('-b', 'VERCEL_PREDIST=1');
 }
 
-const args = ['vercel', '--prod', ...(process.argv.includes('--predist') ? ['-b', 'VERCEL_PREDIST=1'] : [])];
-
-const result = spawnSync('npx', args, {
+const result = spawnSync(process.execPath, [vercelCli, ...deployArgs], {
     stdio: 'inherit',
-    shell: true,
     env: process.env,
 });
 

@@ -12,7 +12,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import App from './App.jsx';
 import { bootDocumentTheme } from './theme/bootDocumentTheme';
 import { installFatalUiRecoveryListeners } from './utils/fatalUiRecovery';
-
+import { getFirebaseRedirectResultOnce } from './firebase/authBootstrap';
 bootDocumentTheme();
 installFatalUiRecoveryListeners();
 
@@ -60,7 +60,12 @@ if (!rootEl) {
  * App is imported statically so Vite does not emit a separate async chunk + CSS preload for
  * `App-*.css` (dynamic `import('./App.jsx')` has caused "Unable to preload CSS" and blank screens).
  */
-function boot() {
+async function boot() {
+    try {
+        await getFirebaseRedirectResultOnce();
+    } catch (err) {
+        console.warn('[boot] Firebase redirect bootstrap:', err?.message || err);
+    }
     try {
         ReactDOM.createRoot(rootEl).render(
             <HelmetProvider>
@@ -89,4 +94,4 @@ function boot() {
     }
 }
 
-boot();
+void boot();

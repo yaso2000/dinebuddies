@@ -1,10 +1,14 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase/config';
+import { storage, auth } from '../firebase/config';
 import { generateThumbnail } from '../utils/thumbnailGenerator';
 import { compressImage } from '../utils/imageUpload';
 import { uploadImageWithModeration } from './moderatedImageUpload';
 import { folderToImageZone } from './imageUploadZones';
-import { isRestrictedFirebaseStorageUrl } from '../utils/aiGeneratedMediaUrl';
+import {
+    decodeFirebaseStorageObjectPath,
+    isRestrictedFirebaseStorageUrl,
+    isServerPersistedAiCoverUrl,
+} from '../utils/aiGeneratedMediaUrl';
 
 /**
  * Upload media file (image or video) to Firebase Storage
@@ -185,44 +189,220 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
         return null;
     }
 
-    console.log('🔄 Fetching image via proxy to bypass CORS:', url);
-
-    // In dev: uses vite middleware. In prod: uses Vercel function
-    const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
-    const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
-
     try {
-        const response = await fetch(proxyUrl);
-
-        if (!response.ok) {
-            throw new Error(`Proxy fetch failed with status: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        console.log(`📦 Proxy Blob: Size=${blob.size}, Type=${blob.type}`);
-
-        if (blob.size < 1000) {
-            console.warn('⚠️ Blob too small, likely an error page.');
-            // Optional: read text to debug, but proceed with caution
-            const text = await blob.text();
-            console.error('Proxy Response:', text);
-        }
-
-        // Generate unique filename
+        const blob = await fetchRemoteImageBlob(url);
         const filename = `google_place_${Date.now()}.jpg`;
-        const file = new File([blob], filename, { type: 'image/jpeg' });
-
+        const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
         console.log('📤 Uploading proxied image to storage...');
         const uploadedUrl = await uploadMedia(file, userId, 'image', folder);
         console.log('✅ Image permanently stored:', uploadedUrl);
-
         return uploadedUrl;
     } catch (error) {
-        console.error("Failed to upload Google image:", error);
-        // Silently fail or track error without intrusive alert
+        console.error('Failed to upload Google image:', error);
         throw error;
     }
 };
+
+/**
+ * Fetch a remote image through the app proxy (or directly if already on public Storage).
+ * @param {string} url
+ * @returns {Promise<Blob>}
+ */
+export async function fetchRemoteImageBlob(url, { attempts = 3 } = {}) {
+    if (!url || typeof url !== 'string') {
+        throw new Error('No image URL');
+    }
+
+    const tryFetch = async (targetUrl) => {
+        const response = await fetch(targetUrl);
+        if (!response.ok) {
+            return { ok: false, status: response.status };
+        }
+        const blob = await response.blob();
+        if (blob.size < 500) {
+            return { ok: false, status: 0, error: new Error('Image payload too small') };
+        }
+        return { ok: true, blob };
+    };
+
+    if (url.includes('firebasestorage') && !isRestrictedFirebaseStorageUrl(url)) {
+        let lastStatus = 0;
+        for (let i = 0; i < attempts; i++) {
+            const result = await tryFetch(url);
+            if (result.ok) {
+                return result.blob;
+            }
+            lastStatus = result.status;
+            if (result.status === 404 || result.status === 503) {
+                if (i < attempts - 1) {
+                    await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+                    continue;
+                }
+            }
+            if (result.error) {
+                throw result.error;
+            }
+            break;
+        }
+        throw new Error(`Storage fetch failed with status: ${lastStatus || 'unknown'}`);
+    }
+
+    console.log('🔄 Fetching image via proxy to bypass CORS:', url);
+    const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
+    const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) {
+        throw new Error(`Proxy fetch failed with status: ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (blob.size < 500) {
+        throw new Error('Proxied image payload too small');
+    }
+    return blob;
+}
+
+/**
+ * Confirm a public Storage download URL returns an image (handles brief propagation lag).
+ * @param {string} url
+ * @param {{ attempts?: number, delayMs?: number }} [opts]
+ */
+export async function verifyPublicStorageImageUrl(url, { attempts = 6, delayMs = 450 } = {}) {
+    if (!url || typeof url !== 'string') return false;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+            if (response.ok) {
+                const blob = await response.blob();
+                if (blob.size >= 500) {
+                    return true;
+                }
+            }
+        } catch {
+            /* retry */
+        }
+        if (i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+        }
+    }
+    return false;
+}
+
+async function fetchServerAiCoverBlobViaApi(objectPath) {
+    const user = auth.currentUser;
+    if (!user) {
+        throw new Error('not_signed_in');
+    }
+    const idToken = await user.getIdToken();
+    const response = await fetch(`/api/storage-image?path=${encodeURIComponent(objectPath)}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+    });
+    if (!response.ok) {
+        throw new Error(`storage_image_api_${response.status}`);
+    }
+    const blob = await response.blob();
+    if (blob.size < 500) {
+        throw new Error('storage_image_too_small');
+    }
+    return blob;
+}
+
+async function publishAiCoverBlob(blob, userId, remoteUrl) {
+    const blobPreview = URL.createObjectURL(blob);
+    const file = new File([blob], `ai_cover_${Date.now()}.jpg`, {
+        type: blob.type?.startsWith('image/') ? blob.type : 'image/jpeg',
+    });
+    try {
+        const publishedUrl = await uploadMedia(file, userId, 'image', 'invitations');
+        try {
+            URL.revokeObjectURL(blobPreview);
+        } catch {
+            /* ignore */
+        }
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file: null,
+            url: publishedUrl,
+            preview: publishedUrl,
+            publishedUrl,
+        };
+    } catch (uploadErr) {
+        console.warn('[prepareAiCoverMediaFromRemoteUrl] re-upload failed, keeping blob preview:', uploadErr);
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file,
+            url: remoteUrl,
+            preview: blobPreview,
+        };
+    }
+}
+
+/**
+ * Download an AI cover, show a local blob preview, and publish to Storage when possible.
+ * Avoids broken thumbnails from short-lived / CORS-blocked provider URLs in img tags.
+ * @param {string} remoteUrl
+ * @param {string} userId
+ */
+export async function prepareAiCoverMediaFromRemoteUrl(remoteUrl, userId) {
+    if (isServerPersistedAiCoverUrl(remoteUrl)) {
+        const ready = await verifyPublicStorageImageUrl(remoteUrl);
+        if (ready) {
+            return {
+                source: 'ai_generated',
+                type: 'image',
+                file: null,
+                url: remoteUrl,
+                preview: remoteUrl,
+                publishedUrl: remoteUrl,
+            };
+        }
+
+        const objectPath = decodeFirebaseStorageObjectPath(remoteUrl);
+        if (objectPath) {
+            try {
+                const blob = await fetchServerAiCoverBlobViaApi(objectPath);
+                return publishAiCoverBlob(blob, userId, remoteUrl);
+            } catch (apiErr) {
+                console.warn('[prepareAiCoverMediaFromRemoteUrl] storage-image API fallback failed:', apiErr);
+            }
+        }
+
+        throw new Error('ai_cover_storage_not_ready');
+    }
+
+    const blob = await fetchRemoteImageBlob(remoteUrl);
+    const blobPreview = URL.createObjectURL(blob);
+    const file = new File([blob], `ai_cover_${Date.now()}.jpg`, {
+        type: blob.type?.startsWith('image/') ? blob.type : 'image/jpeg',
+    });
+
+    try {
+        const publishedUrl = await uploadMedia(file, userId, 'image', 'invitations');
+        try {
+            URL.revokeObjectURL(blobPreview);
+        } catch {
+            /* ignore */
+        }
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file: null,
+            url: publishedUrl,
+            preview: publishedUrl,
+            publishedUrl,
+        };
+    } catch (uploadErr) {
+        console.warn('[prepareAiCoverMediaFromRemoteUrl] upload failed, keeping blob preview:', uploadErr);
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file,
+            url: remoteUrl,
+            preview: blobPreview,
+        };
+    }
+}
 
 /**
  * Re-upload a remote image (blocked Firebase path or external URL) to a public Storage folder.
@@ -243,9 +423,19 @@ export const ensurePublicImageUrl = async (url, userId, folder = 'invitations') 
  */
 export const commitInvitationAiCover = async (mediaData, userId) => {
     if (mediaData?.publishedUrl) return mediaData.publishedUrl;
+    if (mediaData?.file instanceof File) {
+        const publishedUrl = await uploadMedia(mediaData.file, userId, 'image', 'invitations');
+        if (!publishedUrl) {
+            throw new Error('Failed to save AI cover image');
+        }
+        return publishedUrl;
+    }
     const remoteUrl = mediaData?.url || mediaData?.preview;
-    if (!remoteUrl || typeof remoteUrl !== 'string') {
+    if (!remoteUrl || typeof remoteUrl !== 'string' || String(remoteUrl).startsWith('blob:')) {
         throw new Error('No AI image URL to commit');
+    }
+    if (isServerPersistedAiCoverUrl(remoteUrl)) {
+        return remoteUrl;
     }
     const publishedUrl = await ensurePublicImageUrl(remoteUrl, userId, 'invitations');
     if (!publishedUrl) {

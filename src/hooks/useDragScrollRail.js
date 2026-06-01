@@ -19,15 +19,14 @@ export function useDragScrollRail() {
         const el = railRef.current;
         if (!el || e.button > 0) return;
 
-        const onChip = Boolean(e.target.closest('button, [role="option"]'));
-        const isMouse = e.pointerType === 'mouse';
+        /* Touch: rely on native overflow scrolling so vertical page scroll is not blocked. */
+        if (e.pointerType !== 'mouse') return;
 
-        /* Touch on chips: tap only. Mouse on chips: drag after small movement. */
-        if (onChip && !isMouse) return;
+        const onChip = Boolean(e.target.closest('button, [role="option"]'));
 
         dragRef.current = {
             active: !onChip,
-            pending: onChip && isMouse,
+            pending: onChip,
             startX: e.clientX,
             scrollLeft: el.scrollLeft,
             moved: false,
@@ -99,7 +98,6 @@ export function useDragScrollRail() {
         const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
         if (!delta) return;
         el.scrollLeft += delta;
-        e.preventDefault();
     }, []);
 
     const scrollItemIntoView = useCallback((node) => {

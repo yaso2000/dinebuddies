@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { asUidArray } from '../utils/userSocialLists';
 import useFeedAudienceGraph from '../hooks/useFeedAudienceGraph';
 import { authorIdFromPost, buildConsumerHomeFeed } from '../utils/feedSocialGraph';
+import { deleteFeedPostCascade, filterOrphanedCommunityPosts } from '../utils/postDeleteCascade';
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 
 const PostsFeed = () => {
@@ -64,9 +65,14 @@ const PostsFeed = () => {
     }, []);
 
     const deletePost = useCallback(async (id) => {
-        await deleteDoc(doc(db, 'featured_posts', id));
+        const featured = featuredPosts.find((p) => p.id === id);
+        if (featured) {
+            await deleteFeedPostCascade(featured);
+        } else {
+            await deleteDoc(doc(db, 'featured_posts', id));
+        }
         setConfirmDeleteId(null);
-    }, []);
+    }, [featuredPosts]);
 
     // Close menu on outside click
     useEffect(() => {
@@ -129,9 +135,20 @@ const PostsFeed = () => {
         return () => unsub?.();
     }, []);
 
+    const publishedFeaturedIds = useMemo(
+        () => new Set(featuredPosts.map((p) => String(p.id))),
+        [featuredPosts]
+    );
+
+    const publishedMotionIds = useMemo(
+        () => new Set(motionPosts.map((m) => String(m.id))),
+        [motionPosts]
+    );
+
     const filteredPosts = useMemo(() => {
         const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
         let result = posts.filter((p) => p.status !== 'draft');
+        result = filterOrphanedCommunityPosts(result, publishedFeaturedIds, publishedMotionIds);
         if (blocked.size > 0) {
             result = result.filter((p) => {
                 const aid = authorIdFromPost(p);
@@ -147,7 +164,7 @@ const PostsFeed = () => {
             );
         }
         return result;
-    }, [posts, searchQuery, userProfile?.blockedUserIds]);
+    }, [posts, searchQuery, userProfile?.blockedUserIds, publishedFeaturedIds, publishedMotionIds]);
 
     const motionFeedPosts = useMemo(() => {
         const blocked = new Set(asUidArray(userProfile?.blockedUserIds));

@@ -64,7 +64,7 @@
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__title {
     margin-bottom: 0.625em;
-    font-size: 1.1em;
+    font-size: 1.18em;
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__message {
@@ -239,15 +239,16 @@
 }
 
 .private-invitation-card-preview--text-backdrop .private-invitation-card-preview__main {
-    width: 70%;
-    max-width: 70%;
+    width: 84%;
+    max-width: 84%;
     height: auto;
     min-height: 0;
     margin-inline: auto;
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: 14px;
     background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.55));
     box-sizing: border-box;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.38);
 }
 
 .private-invitation-card-preview--text-backdrop .private-invitation-card-preview__meta {
@@ -294,12 +295,26 @@
 
 .private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__text-stack {
+    justify-content: center;
+    align-items: center;
+}
+
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__inner--photo-bg
     .private-invitation-card-preview__main {
     flex: 0 0 auto;
-    width: 70%;
-    max-width: 70%;
+    width: 84%;
+    max-width: 84%;
     height: auto;
-    padding: 10px 14px;
+    padding: 12px 16px;
+    justify-content: flex-start;
+}
+
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__meta {
+    margin-top: 0;
+    flex: 0 0 auto;
 }
 
 /* All card copy hidden: only date/place meta; collapse empty main */
@@ -391,7 +406,7 @@
 
 .private-invitation-card-preview--photo-bg .private-invitation-card-preview__main .private-invitation-card-preview__title {
     width: 100%;
-    max-width: min(84%, 264px);
+    max-width: min(92%, 280px);
     text-align: center;
     margin-left: auto;
     margin-right: auto;
@@ -401,7 +416,7 @@
 /* Keep body text inside the decorative frame — narrower column + wrap */
 .private-invitation-card-preview--photo-bg .private-invitation-card-preview__main .private-invitation-card-preview__message {
     width: 100%;
-    max-width: min(66%, 208px);
+    max-width: min(88%, 240px);
     text-align: center;
     margin-left: auto;
     margin-right: auto;
@@ -414,14 +429,15 @@
 /* Showcase + template art: slightly smaller type so text stays inside artwork safe area */
 .private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__title {
-    font-size: 1.02em;
+    font-size: 1.14em;
     line-height: 1.22;
 }
 
 .private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__message {
-    font-size: 0.72em;
+    font-size: 0.76em;
     line-height: 1.42;
+    max-width: 96%;
 }
 
 .private-invitation-card-preview__inner--photo-bg .private-invitation-card-preview__host {

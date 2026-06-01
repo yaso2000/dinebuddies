@@ -19,7 +19,7 @@
     padding: 2px 0 4px;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    touch-action: pan-x;
+    touch-action: pan-x pan-y;
     cursor: grab;
 }
 

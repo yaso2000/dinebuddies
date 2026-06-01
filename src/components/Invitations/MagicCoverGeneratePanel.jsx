@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FaMagic, FaWallet } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,7 @@ import '../AIGenerateBar.css';
  *   buildBrief?: () => string,
  *   onImageGenerated: (url: string) => void,
  *   disabled?: boolean,
+ *   prepareBusy?: boolean,
  *   requireVenue?: boolean,
  *   embedded?: boolean,
  * }} props
@@ -39,6 +40,7 @@ export default function MagicCoverGeneratePanel({
     buildBrief,
     onImageGenerated,
     disabled = false,
+    prepareBusy = false,
     requireVenue = true,
     embedded = false,
 }) {
@@ -49,6 +51,9 @@ export default function MagicCoverGeneratePanel({
     const [loading, setLoading] = useState(false);
     const [aspectRatio, setAspectRatio] = useState(defaultAspectRatio);
     const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState('');
+    const generationSeqRef = useRef(0);
+
+    const isBusy = loading || prepareBusy;
 
     useEffect(() => {
         setAspectRatio(defaultAspectRatio);
@@ -60,7 +65,7 @@ export default function MagicCoverGeneratePanel({
     const needsVenue = requireVenue && !String(venueName || '').trim();
 
     const handleGenerate = async () => {
-        if (loading || disabled || needsVenue) return;
+        if (isBusy || disabled || needsVenue) return;
 
         const userPrompt = (prompt.trim() || buildBrief?.() || '').trim();
         if (!userPrompt) {
@@ -71,6 +76,7 @@ export default function MagicCoverGeneratePanel({
             return;
         }
 
+        const generationId = ++generationSeqRef.current;
         setLoading(true);
         try {
             const result = await generateAIMagicCover({
@@ -80,6 +86,10 @@ export default function MagicCoverGeneratePanel({
                 venueName,
                 aspectRatio: effectiveAspectRatio,
             });
+
+            if (generationId !== generationSeqRef.current) {
+                return;
+            }
 
             if (!result.success) {
                 if (isInsufficientCreditsError(result)) {
@@ -98,6 +108,17 @@ export default function MagicCoverGeneratePanel({
                     return;
                 }
 
+                if (result.code === 'AI_REQUEST_TIMEOUT') {
+                    showToast(
+                        t('ai_request_timeout', {
+                            defaultValue:
+                                'Image generation timed out. The server may still be working — wait and try again.',
+                        }),
+                        'error'
+                    );
+                    return;
+                }
+
                 showToast(formatAiErrorMessage(result, t), 'error');
                 return;
             }
@@ -105,6 +126,10 @@ export default function MagicCoverGeneratePanel({
             const imageUrl = extractAIImageUrl(result.data);
             if (!imageUrl) {
                 showToast(t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.'), 'error');
+                return;
+            }
+
+            if (generationId !== generationSeqRef.current) {
                 return;
             }
 
@@ -137,7 +162,7 @@ export default function MagicCoverGeneratePanel({
         <>
             <div
                 className={`ai-generate-bar ai-generate-bar--magic magic-cover-panel${embedded ? ' ai-generate-bar--embedded' : ''}`}
-                aria-busy={loading}
+                aria-busy={isBusy}
                 style={embedded ? undefined : { marginBottom: 14 }}
             >
                 <div className="ai-generate-bar__magic-header">
@@ -146,7 +171,7 @@ export default function MagicCoverGeneratePanel({
                 </div>
 
                 {!lockAspectRatio ? (
-                    <fieldset className="ai-generate-bar__aspect" disabled={loading || disabled}>
+                    <fieldset className="ai-generate-bar__aspect" disabled={isBusy || disabled}>
                         <legend className="ai-generate-bar__aspect-legend">{t('magic_cover_aspect_label')}</legend>
                         <p className="ai-generate-bar__aspect-hint">{t('magic_cover_aspect_hint')}</p>
                         <div className="ai-generate-bar__aspect-options">
@@ -190,7 +215,7 @@ export default function MagicCoverGeneratePanel({
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder={t('magic_cover_empty_brief_fallback')}
-                    disabled={loading || disabled}
+                    disabled={isBusy || disabled}
                 />
 
                 <div className="ai-generate-bar__actions">
@@ -198,7 +223,7 @@ export default function MagicCoverGeneratePanel({
                         type="button"
                         className="ai-generate-bar__btn ios-tap-target"
                         onClick={handleGenerate}
-                        disabled={loading || disabled || needsVenue}
+                        disabled={isBusy || disabled || needsVenue}
                         aria-busy={loading}
                     >
                         {loading ? (

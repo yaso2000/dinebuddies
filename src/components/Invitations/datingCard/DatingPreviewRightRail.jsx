@@ -134,7 +134,11 @@ export default function DatingPreviewRightRail({
                                 optionId={opt.id}
                                 selected={selected}
                                 onClick={() => onTemplateSelect(opt.id)}
-                                title={t(`card_bg_${opt.id.replace(/-/g, '_')}`, { defaultValue: opt.id })}
+                                title={
+                                    opt.labelKey
+                                        ? t(opt.labelKey, { defaultValue: opt.id })
+                                        : t(`card_bg_${opt.id.replace(/-/g, '_')}`, { defaultValue: opt.id })
+                                }
                             />
                         );
                     })}

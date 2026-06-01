@@ -38,7 +38,12 @@ export default function PushSessionManager() {
 
             const result = await revivePushDelivery(uid, { label: `wake-${reason}` });
             if (!result.ok) {
-                console.error('[FCM] PushSessionManager revive:', reason, result.reason, result.lastError);
+                const detail =
+                    result.reason ||
+                    result.lastError?.message ||
+                    (typeof result.lastError === 'string' ? result.lastError : '') ||
+                    'unknown';
+                console.warn('[FCM] PushSessionManager revive:', reason, detail);
             }
         };
 

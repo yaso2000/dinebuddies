@@ -17,11 +17,15 @@ export const uploadImage = async (file, userId, options = {}) => {
         const compressionOptions = {
             maxSizeMB: 0.5,
             maxWidthOrHeight: 1024,
-            useWebWorker: true,
+            useWebWorker: false,
             fileType: 'image/jpeg',
         };
         const compressedFile = await imageCompression(file, compressionOptions);
-        return uploadManagedImage(compressedFile, userId, zone);
+        
+        const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${compressedFile.name || 'image.jpg'}`;
+        const uniqueFile = new File([compressedFile], uniqueFileName, { type: compressedFile.type });
+
+        return uploadManagedImage(uniqueFile, userId, zone);
     } catch (error) {
         console.error('Error uploading image:', error);
         throw error;
@@ -37,7 +41,8 @@ export const uploadImage = async (file, userId, options = {}) => {
 export const uploadVoiceMessage = async (audioBlob, userId) => {
     try {
         const timestamp = Date.now();
-        const fileName = `${userId}_${timestamp}.webm`;
+        const uniqueId = Math.random().toString(36).substring(2, 8);
+        const fileName = `${userId}_${timestamp}_${uniqueId}.webm`;
         const storageRef = ref(storage, `voice_messages/${userId}/${fileName}`);
 
         await uploadBytes(storageRef, audioBlob);
@@ -65,7 +70,8 @@ export const uploadFile = async (file, userId) => {
             throw new Error(`File must be under ${MAX_FILE_MB}MB (current: ${sizeMB.toFixed(1)}MB)`);
         }
         const timestamp = Date.now();
-        const fileName = `${userId}_${timestamp}_${file.name}`;
+        const uniqueId = Math.random().toString(36).substring(2, 8);
+        const fileName = `${userId}_${timestamp}_${uniqueId}_${file.name}`;
         const storageRef = ref(storage, `chat_files/${userId}/${fileName}`);
 
         await uploadBytes(storageRef, file);

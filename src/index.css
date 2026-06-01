@@ -1091,6 +1091,9 @@ html:not([data-theme='light']) .app-header .app-name {
 
 .invitation-template-carousel {
   align-items: flex-start;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 
 .invitation-template-carousel [data-template-slide] {
@@ -1699,6 +1702,11 @@ html:not([data-theme='light']) .app-header .app-name {
   max-width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
+  touch-action: pan-y;
+}
+
+.page-container.form-page.create-public-invitation {
+  touch-action: pan-y;
 }
 
 .form-group {

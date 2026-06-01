@@ -13,7 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import VenueLocationPicker from '../components/VenueLocationPicker';
-import { processInvitationMedia, commitInvitationAiCover } from '../services/mediaService';
+import { processInvitationMedia, commitInvitationAiCover, prepareAiCoverMediaFromRemoteUrl } from '../services/mediaService';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getFollowing } from '../utils/followHelpers';
 import { db } from '../firebase/config';
@@ -21,7 +21,7 @@ import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { serverTimestamp, updateDoc, doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { detectUserLocationContext } from '../utils/locationUtils';
 import './PrivateInvitation.css';
-import { goToLogin } from '../utils/goToLogin';
+import { rememberPrivateDraftCreateKind } from '../utils/privateInvitationDraft';
 import { isExcludedFromUserDocSearch } from '../utils/consumerSearchExclusions';
 import { searchAccounts } from '../services/accountSearch';
 import { resolveVenueCountryIso } from '../utils/countryIso';
@@ -516,6 +516,9 @@ const CreatePrivateInvitation = () => {
                 throw new Error('not_signed_in');
             }
             const publishedUrl = await commitInvitationAiCover(media, authorUid);
+            if (media.preview && String(media.preview).startsWith('blob:')) {
+                revokePrivateCoverMedia({ preview: media.preview });
+            }
             return {
                 ...media,
                 source: 'ai_generated',
@@ -701,40 +704,45 @@ const CreatePrivateInvitation = () => {
     const handlePrivateAiCoverImage = useCallback(
         async (url) => {
             if (!url) return;
-            const stagedMedia = {
-                source: 'ai_generated',
-                type: 'image',
-                file: null,
-                url,
-                preview: url,
-            };
             privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
             if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'ai')) {
                 toastCoverStashLimit('ai');
                 return;
             }
-            const entry = { id: createPrivateCoverStashId(), kind: 'ai', media: stagedMedia };
-            setCoverMediaStash((prev) => [...prev, entry]);
+
+            const entryId = createPrivateCoverStashId();
+            setCoverMediaStash((prev) => [
+                ...prev,
+                { id: entryId, kind: 'ai', media: { type: 'image', pending: true } },
+            ]);
             setPrivateCoverTab('ai');
+            setAiCoverCommittingId(entryId);
 
             try {
-                const committed = await commitAiCoverMedia(stagedMedia, entry.id);
-                updateAiStashMedia(entry.id, committed);
-                setMediaData(committed);
-                privateCoverDraftsRef.current.ai = committed;
+                const authorUid = resolvePrivateInvitationAuthorUid(authUser, currentUser);
+                if (!authorUid) {
+                    throw new Error('not_signed_in');
+                }
+                const media = await prepareAiCoverMediaFromRemoteUrl(url, authorUid);
+                updateAiStashMedia(entryId, media);
+                setMediaData(media);
+                privateCoverDraftsRef.current.ai = media;
             } catch (err) {
-                console.error('AI cover commit failed:', err);
-                setMediaData(stagedMedia);
-                privateCoverDraftsRef.current.ai = stagedMedia;
+                console.error('AI cover prepare failed:', err);
+                setCoverMediaStash((prev) => prev.filter((e) => e.id !== entryId));
                 showToast(
                     err?.message === 'not_signed_in'
                         ? t('please_sign_in', { defaultValue: 'Please sign in to continue.' })
-                        : t('private_cover_ai_commit_pending', {
-                              defaultValue:
-                                  'Cover saved in AI photos. It will upload when you select it or publish.',
-                          }),
-                    err?.message === 'not_signed_in' ? 'error' : 'info'
+                        : err?.message === 'ai_cover_storage_not_ready'
+                          ? t('ai_cover_storage_not_ready', {
+                                defaultValue:
+                                    'The image was not ready in storage yet. Wait a few seconds and generate again.',
+                            })
+                          : t('ai_generate_failed', { defaultValue: 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.' }),
+                    'error'
                 );
+            } finally {
+                setAiCoverCommittingId(null);
             }
         },
         [privateCoverTab, toastCoverStashLimit, authUser, currentUser, showToast, t]
@@ -848,6 +856,8 @@ const CreatePrivateInvitation = () => {
                 createdAt: serverTimestamp()
             };
 
+            rememberPrivateDraftCreateKind('private');
+
             if (existingDraftId) {
                 // UPDATE EXISTING
                 const draftRef = doc(db, 'private_invitations', existingDraftId);
@@ -855,16 +865,16 @@ const CreatePrivateInvitation = () => {
                     ...draftData,
                     updatedAt: serverTimestamp()
                 });
-                clearCoverMediaStashAfterPublish();
                 navigate(`/invitation/private/preview/${existingDraftId}`, { replace: true });
+                clearCoverMediaStashAfterPublish();
             } else {
                 // CREATE NEW
                 console.log('🔏 Creating private invitation draft...');
                 const draftId = await addPrivateInvitation(draftData);
                 console.log('📋 Draft result:', draftId);
                 if (draftId) {
-                    clearCoverMediaStashAfterPublish();
                     navigate(`/invitation/private/preview/${draftId}`, { replace: true });
+                    clearCoverMediaStashAfterPublish();
                 } else {
                     showToast(t('failed_create_invitation'), 'error');
                 }
@@ -1159,6 +1169,7 @@ const CreatePrivateInvitation = () => {
                                 onImageGenerated={handlePrivateAiCoverImage}
                                 requireVenue={false}
                                 disabled={isSubmitting}
+                                prepareBusy={Boolean(aiCoverCommittingId)}
                                 embedded
                             />
                         )}

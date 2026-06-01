@@ -46,6 +46,33 @@ function TemplateThumb({ resolveCandidates, optionId, selected, onClick, title }
     );
 }
 
+function StashImageThumb({ media }) {
+    const candidates = useMemo(() => {
+        const list = [media?.preview, media?.publishedUrl, media?.url].filter(
+            (u) => u && typeof u === 'string'
+        );
+        return [...new Set(list)];
+    }, [media?.preview, media?.publishedUrl, media?.url]);
+    const [idx, setIdx] = useState(0);
+    const src = candidates[idx];
+
+    useEffect(() => {
+        setIdx(0);
+    }, [candidates]);
+
+    if (!src) return null;
+
+    return (
+        <img
+            src={src}
+            alt=""
+            className="dating-preview-rail__thumb-img"
+            draggable={false}
+            onError={() => setIdx((i) => (i + 1 < candidates.length ? i + 1 : i))}
+        />
+    );
+}
+
 function StashMediaThumb({ selected, onSelect, onClear, committing, children }) {
     return (
         <div
@@ -236,15 +263,16 @@ export default function PrivateInvitationCoverRightRail({
                 {isMediaMode &&
                     mediaItems.map((entry) => {
                         const selected = isSamePrivateCoverMedia(entry.media, mediaData);
+                        const isPending = Boolean(entry.media?.pending);
                         return (
                             <StashMediaThumb
                                 key={entry.id}
                                 selected={selected}
-                                committing={committingStashId === entry.id}
+                                committing={committingStashId === entry.id || isPending}
                                 onSelect={() => onSelectStashItem?.(entry.id)}
                                 onClear={() => onRemoveStashItem?.(entry.id)}
                             >
-                                {entry.media.type === 'video' ? (
+                                {isPending ? null : entry.media.type === 'video' ? (
                                     <video
                                         src={entry.media.preview}
                                         poster={entry.media.videoThumbnail || undefined}
@@ -254,12 +282,7 @@ export default function PrivateInvitationCoverRightRail({
                                         preload="metadata"
                                     />
                                 ) : (
-                                    <img
-                                        src={entry.media.preview || entry.media.url}
-                                        alt=""
-                                        className="dating-preview-rail__thumb-img"
-                                        draggable={false}
-                                    />
+                                    <StashImageThumb media={entry.media} />
                                 )}
                             </StashMediaThumb>
                         );

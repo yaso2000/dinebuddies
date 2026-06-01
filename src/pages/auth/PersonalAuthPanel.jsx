@@ -179,7 +179,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         setError('');
         try {
             if (provider === 'google') {
-                await signInWithGoogle();
+                const googleRes = await signInWithGoogle();
+                if (googleRes && googleRes.__oauthRedirect) return;
             } else if (provider === 'apple') {
                 const appleRes = await signInWithApple();
                 if (appleRes && appleRes.__oauthRedirect) return;
@@ -308,7 +309,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                         className="btn-auth-social btn-facebook personal-auth-social"
                         style={{ ...btn, opacity: loading ? 0.65 : 1 }}
                     >
-                        <FaFacebook size={22} color="#1877F2" /> {t('continue_with_facebook', 'Continue with Facebook')}
+                        <FaFacebook size={22} color="#1877F2" />{' '}
+                        {t('continue_with_facebook', 'Continue with Facebook')}
                     </button>
                     <button
                         type="button"

@@ -44,3 +44,31 @@
     opacity: 0.45;
     cursor: not-allowed;
 }
+
+/* Vertical icon rail on card preview (right edge) */
+.private-card-motion-picker--rail {
+    position: absolute;
+    z-index: 4;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+    pointer-events: auto;
+}
+
+.private-card-motion-picker--rail .private-card-motion-picker__chips {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+
+.private-card-motion-picker--rail .private-card-motion-picker__chip--icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.82rem;
+}

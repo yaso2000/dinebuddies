@@ -138,3 +138,32 @@
 .dating-preview-rail__placeholder--video-slot {
     padding: 0;
 }
+
+.dating-preview-rail__thumb-wrap--committing .dating-preview-rail__thumb {
+    pointer-events: none;
+}
+
+.dating-preview-rail__thumb-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 10px;
+}
+
+.dating-preview-rail__thumb-spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: dating-preview-rail-spin 0.7s linear infinite;
+}
+
+@keyframes dating-preview-rail-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

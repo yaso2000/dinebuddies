@@ -1,34 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { ensureFirebaseAdmin, getFirebaseAdminCertConfig } from './_firebaseAdmin.js';
+import { ensureFirebaseAdmin, getFirebaseAdminCertConfig, getFirebaseStorageBucketName } from './_firebaseAdmin.js';
 
 /**
  * Resolve the Storage bucket for AI image uploads.
  * Prefer explicit env; otherwise derive from project id.
  */
 function resolveStorageBucketName() {
-    const explicit = String(
-        process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-    ).trim();
-    if (explicit) {
-        return explicit.replace(/^gs:\/\//, '');
-    }
-
-    try {
-        const { projectId } = getFirebaseAdminCertConfig();
-        if (projectId) {
-            return `${projectId}.firebasestorage.app`;
-        }
-    } catch {
-        /* fall through */
-    }
-
-    return null;
+    return getFirebaseStorageBucketName() || null;
 }
 
 /** @returns {string[]} unique bucket names to try, in order */
-function bucketCandidates() {
+export function bucketCandidates() {
     const names = [];
     const primary = resolveStorageBucketName();
     if (primary) names.push(primary);
@@ -44,19 +28,102 @@ function bucketCandidates() {
 
     names.push(''); // Admin SDK default bucket (last resort)
 
-    return [...new Set(names)];
+    return [...new Set(names.filter((n, i, arr) => n !== '' || i === arr.length - 1))];
+}
+
+async function probeDownloadUrl(url) {
+    try {
+        const response = await fetch(url, { method: 'GET' });
+        if (!response.ok) return false;
+        const buffer = Buffer.from(await response.arrayBuffer());
+        return buffer.length >= 500;
+    } catch {
+        return false;
+    }
+}
+
+function buildTokenDownloadUrl(bucketName, objectPath, token) {
+    const encodedPath = encodeURIComponent(objectPath);
+    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${token}`;
 }
 
 async function saveToBucket(bucket, objectPath, buffer, mimeType, token) {
-    await bucket.file(objectPath).save(buffer, {
+    const fileRef = bucket.file(objectPath);
+    await fileRef.save(buffer, {
+        contentType: mimeType,
+        resumable: false,
         metadata: {
-            contentType: mimeType,
-            metadata: {
-                firebaseStorageDownloadTokens: token,
-                source: 'ai_generated',
-            },
+            cacheControl: 'public, max-age=31536000',
         },
     });
+    await fileRef.setMetadata({
+        contentType: mimeType,
+        metadata: {
+            firebaseStorageDownloadTokens: token,
+            source: 'ai_generated',
+        },
+    });
+}
+
+async function resolvePublicDownloadUrl(fileRef, bucket, objectPath, token) {
+    const primaryUrl = buildTokenDownloadUrl(bucket.name, objectPath, token);
+    if (await probeDownloadUrl(primaryUrl)) {
+        return primaryUrl;
+    }
+
+    const altBucketName = bucket.name.includes('.appspot.com')
+        ? bucket.name.replace('.appspot.com', '.firebasestorage.app')
+        : bucket.name.replace('.firebasestorage.app', '.appspot.com');
+    if (altBucketName !== bucket.name) {
+        const altUrl = buildTokenDownloadUrl(altBucketName, objectPath, token);
+        if (await probeDownloadUrl(altUrl)) {
+            return altUrl;
+        }
+    }
+
+    const [signedUrl] = await fileRef.getSignedUrl({
+        version: 'v4',
+        action: 'read',
+        expires: Date.now() + 10 * 365 * 24 * 60 * 60 * 1000,
+    });
+    if (await probeDownloadUrl(signedUrl)) {
+        return signedUrl;
+    }
+
+    throw new Error(`storage_download_url_verify_failed (${objectPath})`);
+}
+
+/**
+ * Download a storage object via Admin SDK (tries all configured buckets).
+ * @param {string} objectPath
+ * @returns {Promise<{ buffer: Buffer, contentType: string, bucketName: string }>}
+ */
+export async function downloadStorageObjectBuffer(objectPath) {
+    ensureFirebaseAdmin();
+    const storage = getStorage();
+    let lastError = null;
+
+    for (const name of bucketCandidates()) {
+        const bucket = name ? storage.bucket(name) : storage.bucket();
+        const fileRef = bucket.file(objectPath);
+        try {
+            const [exists] = await fileRef.exists();
+            if (!exists) continue;
+            const [buffer] = await fileRef.download();
+            const [metadata] = await fileRef.getMetadata();
+            return {
+                buffer,
+                contentType: metadata.contentType || 'image/jpeg',
+                bucketName: bucket.name,
+            };
+        } catch (err) {
+            lastError = err;
+        }
+    }
+
+    throw lastError instanceof Error
+        ? lastError
+        : new Error(lastError ? String(lastError) : 'storage_object_not_found');
 }
 
 /** Map AI post type to a Storage folder with public read in storage.rules */
@@ -120,8 +187,13 @@ export async function uploadInvitationAiImage(uid, bytesBase64, mimeType = 'imag
             : new Error(lastError ? String(lastError) : 'storage_upload_failed');
     }
 
-    const encodedPath = encodeURIComponent(objectPath);
-    const url = `https://firebasestorage.googleapis.com/v0/b/${usedBucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+    const fileRef = usedBucket.file(objectPath);
+    const [exists] = await fileRef.exists();
+    if (!exists) {
+        throw new Error(`storage_verify_failed: object missing after upload (${objectPath})`);
+    }
+
+    const url = await resolvePublicDownloadUrl(fileRef, usedBucket, objectPath, token);
     const createdAt = new Date().toISOString();
 
     return {

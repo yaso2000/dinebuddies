@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import MediaUpload from '../Shared/MediaUpload';
 import UnifiedCamera from '../UnifiedCamera';
 import ImageModerationOverlay from '../Shared/ImageModerationOverlay';
+import MagicCoverGeneratePanel from './MagicCoverGeneratePanel';
 
 import './MediaSelector.css';
 
@@ -27,6 +28,8 @@ const MediaSelector = ({
     hideTabBar = false,
     /** When set to `camera` or `upload`, that panel is shown regardless of internal tab state. */
     externalSource = null,
+    /** When set, shows invitation Magic Cover AI panel in the upload/gallery section. */
+    magicCover = null,
 }) => {
     const { t } = useTranslation();
     /** camera = capture photo/video | upload = image files from device */
@@ -203,6 +206,13 @@ const MediaSelector = ({
         onMediaSelect(mediaData);
     };
 
+    const handleMagicCoverImage = (url) => {
+        if (!url) return;
+        magicCover?.onImageGenerated?.(url);
+        setSource('upload');
+        selectLibraryImage(url);
+    };
+
     const hasRestaurantImage = restaurant && (restaurant.image || restaurant.restaurantImage);
     const restaurantCoverUrl = hasRestaurantImage ? restaurant.image || restaurant.restaurantImage : null;
 
@@ -297,6 +307,19 @@ const MediaSelector = ({
                     </div>
                 </div>
             )}
+
+            {magicCover?.enabled ? (
+                <MagicCoverGeneratePanel
+                    subType={magicCover.subType}
+                    venueType={magicCover.venueType}
+                    venueName={magicCover.venueName}
+                    aspectRatio={magicCover.aspectRatio}
+                    buildBrief={magicCover.buildBrief}
+                    onImageGenerated={handleMagicCoverImage}
+                    disabled={magicCover.disabled}
+                    requireVenue={magicCover.requireVenue !== false}
+                />
+            ) : null}
 
             <div
                 className="media-tabs"

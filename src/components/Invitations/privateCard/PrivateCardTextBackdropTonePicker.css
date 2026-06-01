@@ -60,3 +60,111 @@
     opacity: 0.45;
     cursor: not-allowed;
 }
+
+/* Overlaid on the card preview — sits on the text panel band */
+.private-card-text-backdrop-tone--on-panel {
+    position: absolute;
+    z-index: 4;
+    top: 38%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(72%, 168px);
+    margin: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.62);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    pointer-events: auto;
+}
+
+.private-card-text-backdrop-tone--on-panel .private-card-text-backdrop-tone__chip {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 0.65rem;
+}
+
+/* Top of card preview — below show/hide text toggle */
+.private-card-text-backdrop-tone--on-preview-top {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    margin: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.62);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    pointer-events: auto;
+}
+
+.private-card-text-backdrop-tone--on-preview-top .private-card-text-backdrop-tone__chip {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 4px 6px;
+    font-size: 0.62rem;
+}
+
+/* Three icon buttons: white / black / none */
+.private-card-text-backdrop-tone--icons {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+}
+
+.private-card-text-backdrop-tone__chip--icon {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.private-card-text-backdrop-tone__chip--icon.private-card-text-backdrop-tone__chip--sel {
+    border-color: var(--luxury-gold, #d4af37);
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.4);
+}
+
+.private-card-text-backdrop-tone__swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    display: block;
+}
+
+.private-card-text-backdrop-tone__swatch--light {
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.25);
+}
+
+.private-card-text-backdrop-tone__swatch--dark {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dating-card-preview-stage__top .private-card-text-backdrop-tone__chip--icon {
+    width: 24px;
+    height: 24px;
+}
+
+.private-card-text-backdrop-tone__ban-icon {
+    font-size: 0.7rem;
+    color: rgba(248, 250, 252, 0.88);
+}

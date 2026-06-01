@@ -17,15 +17,14 @@ import { getPrivateCardFontById, DEFAULT_FONT_ID } from './privateCardFonts';
 import { DEFAULT_MOTION_ID, isPrivateCardMotionId } from './privateCardMotions';
 import {
     adjustFrameTextForDarkTemplate,
-    DARK_TEMPLATE_TEXT_SHADOW
+    DARK_TEMPLATE_TEXT_SHADOW,
+    PHOTO_BACKGROUND_TEXT_SHADOW
 } from './privateCardFrameTextContrast';
 import {
     DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
     privateTextBackdropToneToRgba
 } from './privateCardTextBackdrop';
 import { INVITATION_CARD_MESSAGE_MAX } from '../../../constants/invitationCardLimits';
-import { resolveCardStructureFromBackgroundId } from '../../../utils/cardStructure';
-import CardTextOverlay from '../../CardTextOverlay';
 import './PrivateInvitationCardPreview.css';
 
 function formatPreviewDate(dateStr, locale) {
@@ -95,8 +94,8 @@ export default function PrivateInvitationCardPreview({
     showHostAndMessage = true,
     /** `dark` | `light` | `none` — panel behind copy when `showHostAndMessage` on photo backgrounds. */
     textBackdropTone = DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
-    /** Visual structure for template safe zones (dating AI templates). */
-    cardStructure: cardStructureProp = null,
+    /** Visual structure for template safe zones (dating AI templates). Reserved for future layout hooks. */
+    cardStructure: _cardStructureProp = null,
 }) {
     const { t } = useTranslation();
     const frame = useMemo(() => getFrameColorById(frameColorId), [frameColorId]);
@@ -133,24 +132,12 @@ export default function PrivateInvitationCardPreview({
     }, [cardTemplateSet, categoryId, cardBackgroundId]);
     const hasHeroCover = Boolean(heroCoverSrc && heroCoverMediaType);
     const hasPhotoBackground = templateArtActive || hasHeroCover;
-    const resolvedCardStructure = useMemo(() => {
-        if (cardStructureProp) return cardStructureProp;
-        if (cardTemplateSet === 'dating' && cardBackgroundId) {
-            return resolveCardStructureFromBackgroundId(cardBackgroundId);
-        }
-        return null;
-    }, [cardStructureProp, cardTemplateSet, cardBackgroundId]);
-    const useStructureTextOverlay =
-        showHostAndMessage &&
-        templateArtActive &&
-        !hasHeroCover &&
-        cardTemplateSet === 'dating' &&
-        Boolean(resolvedCardStructure);
 
     const textBackdropRgba = useMemo(() => {
         if (!showHostAndMessage || !hasPhotoBackground) return null;
         return privateTextBackdropToneToRgba(textBackdropTone);
     }, [showHostAndMessage, hasPhotoBackground, textBackdropTone]);
+
     const darkTemplateArt =
         !hasHeroCover &&
         templateArtActive &&
@@ -183,6 +170,12 @@ export default function PrivateInvitationCardPreview({
             const flat = { color: resolvedThemeHex, textShadow: 'none' };
             return { occasion: flat, title: flat, message: flat, host: flat };
         }
+        const photoShadow =
+            hasPhotoBackground && textBackdropTone === 'none'
+                ? PHOTO_BACKGROUND_TEXT_SHADOW
+                : hasPhotoBackground
+                  ? '0 1px 2px rgba(0, 0, 0, 0.45)'
+                  : 'none';
         if (templateArtActive) {
             if (darkTemplateArt) {
                 const shadow = DARK_TEMPLATE_TEXT_SHADOW;
@@ -205,11 +198,22 @@ export default function PrivateInvitationCardPreview({
                     }
                 };
             }
+            const withShadow = (color) => ({ color, textShadow: photoShadow });
             return {
-                occasion: { color: frame.textMeta, textShadow: 'none' },
-                title: { color: frame.textTitle, textShadow: 'none' },
-                message: { color: frame.textMessage, textShadow: 'none' },
-                host: { color: frame.textHost, textShadow: 'none' }
+                occasion: withShadow(frame.textMeta),
+                title: withShadow(frame.textTitle),
+                message: withShadow(frame.textMessage),
+                host: withShadow(frame.textHost)
+            };
+        }
+
+        if (hasHeroCover) {
+            const withShadow = (color) => ({ color, textShadow: photoShadow });
+            return {
+                occasion: withShadow('rgba(255, 255, 255, 0.82)'),
+                title: withShadow('#fafafa'),
+                message: withShadow('rgba(255, 255, 255, 0.78)'),
+                host: withShadow('rgba(255, 255, 255, 0.9)')
             };
         }
 
@@ -219,7 +223,7 @@ export default function PrivateInvitationCardPreview({
             message: { color: 'rgba(255, 255, 255, 0.78)', textShadow: 'none' },
             host: { color: 'rgba(255, 255, 255, 0.9)', textShadow: 'none' }
         };
-    }, [frame, templateArtActive, darkTemplateArt, resolvedThemeHex]);
+    }, [frame, templateArtActive, darkTemplateArt, resolvedThemeHex, hasPhotoBackground, hasHeroCover, textBackdropTone]);
 
     const metaLineStyle = resolvedThemeHex ? { color: resolvedThemeHex, textShadow: 'none' } : undefined;
 
@@ -300,15 +304,6 @@ export default function PrivateInvitationCardPreview({
                     <div className="private-invitation-card-preview__bg" />
                 )}
 
-                {useStructureTextOverlay ? (
-                    <CardTextOverlay
-                        title={titleTrimmed}
-                        description={descText}
-                        selectedTemplate={resolvedCardStructure}
-                        showBrandMark={false}
-                    />
-                ) : null}
-
                 <div
                     className="private-invitation-card-preview__text-stack"
                     style={
@@ -333,12 +328,12 @@ export default function PrivateInvitationCardPreview({
                                 </div>
                             )}
 
-                            {hasCardTitle && !useStructureTextOverlay ? (
+                            {hasCardTitle ? (
                                 <h3 className="private-invitation-card-preview__title" style={textStyles.title}>
                                     {titleTrimmed}
                                 </h3>
                             ) : null}
-                            {descText && !useStructureTextOverlay ? (
+                            {descText ? (
                                 <p className="private-invitation-card-preview__message" style={textStyles.message}>
                                     {descText.length > INVITATION_CARD_MESSAGE_MAX
                                         ? `${descText.slice(0, INVITATION_CARD_MESSAGE_MAX - 1)}…`

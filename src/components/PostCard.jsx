@@ -26,6 +26,7 @@ import PostCommentsList from './comments/PostCommentsList';
 import { createNotification } from '../utils/notificationHelpers';
 import { notifyCommentLikeActivity, notifyPostCommentActivity } from '../utils/postCommentNotifications';
 import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
+import { deleteFeedPostCascade } from '../utils/postDeleteCascade';
 
 // Detect if a post object is an elite featured slide
 const isFeaturedSlide = (p) =>
@@ -348,11 +349,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         if (!window.confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
 
         try {
-            await deleteDoc(doc(db, collectionName, postDocId));
-            // UI should update automatically if parent is listening to snapshots
+            await deleteFeedPostCascade(post);
+            showToast(t('post_delete_success', 'تم حذف المنشور.'), 'success');
         } catch (error) {
-            console.error("Error deleting post:", error);
-            showToast("Failed to delete post.", 'error');
+            console.error('Error deleting post:', error);
+            showToast(t('post_delete_failed', 'تعذّر حذف المنشور.'), 'error');
         }
     };
 

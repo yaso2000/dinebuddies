@@ -983,7 +983,16 @@ export async function registerAndSaveFcmToken(uid, { label = 'registerAndSave' }
     setLocalDeviceFcmToken(token, uid);
     attachForegroundMessageListener(getMsg());
     const savedCount = await getSavedFcmTokenCount(uid);
-    return { ok: savedCount > 0, token, savedCount };
+    if (savedCount === 0) {
+        return {
+            ok: false,
+            reason: 'token_count_zero',
+            lastError: getLastFcmRegistrationError(),
+            token,
+            savedCount,
+        };
+    }
+    return { ok: true, token, savedCount };
 }
 
 export async function saveFcmToken(uid, token) {

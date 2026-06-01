@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -11,6 +11,10 @@ import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { FaArrowLeft, FaImage, FaVideo, FaSmile, FaTimes, FaFont, FaPalette, FaCircle, FaFileUpload, FaBold, FaItalic, FaAlignLeft, FaAlignCenter, FaAlignRight } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
+import AIFloatingLauncher from '../components/AIFloatingLauncher';
+import { extractAIContentFields, extractAIImageUrl } from '../utils/aiContentFieldMapper';
+import { pickAiRemoteImageUrl } from '../utils/aiGeneratedMediaUrl';
+import { ensurePublicImageUrl } from '../services/mediaService';
 import './CreatePost.css';
 
 const FONTS = [
@@ -102,6 +106,24 @@ const CreatePost = () => {
         }
     }, [currentUser, userProfile]);
 
+    const buildRegularPostAiPrompt = useCallback(() => {
+        if (text.trim()) return text.trim();
+        if (attachedInvitation?.title) {
+            return `منشور مرتبط بدعوة: ${attachedInvitation.title}`;
+        }
+        return 'منشور مجتمعي قصير وودّي';
+    }, [text, attachedInvitation]);
+
+    const handleRegularPostAiContent = useCallback((data) => {
+        const fields = extractAIContentFields('regular_post', data);
+        if (fields.text) setText(fields.text.slice(0, 300));
+        const imageUrl = extractAIImageUrl(data);
+        if (imageUrl) {
+            setMedia({ type: 'image', preview: imageUrl, url: imageUrl });
+            setShowOverlayInput(true);
+        }
+    }, []);
+
     const startCamera = () => {
         setShowCamera(true);
     };
@@ -154,6 +176,12 @@ const CreatePost = () => {
                     (p) => setUploadProgress(Math.round(p)),
                     mediaType
                 );
+            } else {
+                const remoteImage = pickAiRemoteImageUrl(media);
+                if (remoteImage) {
+                    mediaUrl = await ensurePublicImageUrl(remoteImage, currentUser.uid, 'community-posts');
+                    mediaType = 'image';
+                }
             }
 
             const postData = {
@@ -211,6 +239,7 @@ const CreatePost = () => {
         <div className="create-post-container" style={{
             display: 'flex', flexDirection: 'column',
             background: 'var(--bg-body)',
+            minHeight: 0,
         }}>
             {/* Header */}
             <div style={{
@@ -266,8 +295,8 @@ const CreatePost = () => {
                 </div>
             )}
 
-            {/* Main Content (Scrollable) */}
-            <div style={{ flex: 1, padding: '16px', paddingBottom: '70px', overflowY: 'auto' }}>
+            {/* Main Content — scroll via .app-main (avoid nested scroll trap on mobile) */}
+            <div style={{ flex: '1 1 auto', minHeight: 0, padding: '16px', paddingBottom: '70px' }}>
 
                 {/* Content Card (Text + Media) */}
                 <div style={{
@@ -305,6 +334,16 @@ const CreatePost = () => {
                             marginBottom: '8px'
                         }}
                     />
+
+                    <div style={{ marginTop: '10px', marginBottom: '4px' }}>
+                        <AIFloatingLauncher
+                            postType="regular_post"
+                            onTextSuccess={handleRegularPostAiContent}
+                            buildContextPrompt={buildRegularPostAiPrompt}
+                            disabled={loading}
+                            compact
+                        />
+                    </div>
 
                     {/* Media Display inside Card */}
                     {media && (

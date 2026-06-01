@@ -73,15 +73,39 @@ export function getFirebaseAdminCertConfig() {
     return config;
 }
 
+export function getFirebaseStorageBucketName() {
+    const explicit = String(
+        process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+    ).trim();
+    if (explicit) {
+        return explicit.replace(/^gs:\/\//, '');
+    }
+    try {
+        const { projectId } = getFirebaseAdminCertConfig();
+        if (projectId) {
+            return `${projectId}.firebasestorage.app`;
+        }
+    } catch {
+        /* fall through */
+    }
+    return undefined;
+}
+
 export function ensureFirebaseAdmin() {
     if (getApps().length) {
         return;
     }
 
     try {
-        initializeApp({
+        /** @type {import('firebase-admin/app').AppOptions} */
+        const options = {
             credential: cert(getFirebaseAdminCertConfig()),
-        });
+        };
+        const storageBucket = getFirebaseStorageBucketName();
+        if (storageBucket) {
+            options.storageBucket = storageBucket;
+        }
+        initializeApp(options);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (/already exists/i.test(message)) {

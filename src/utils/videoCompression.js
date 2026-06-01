@@ -17,8 +17,6 @@ export const compressVideo = async (videoFile, onProgress = () => { }) => {
 
             // Create video element
             const video = document.createElement('video');
-            video.src = URL.createObjectURL(videoFile);
-            video.muted = true;
 
             video.onloadedmetadata = async () => {
                 try {
@@ -69,6 +67,9 @@ export const compressVideo = async (videoFile, onProgress = () => { }) => {
             video.onerror = () => {
                 reject(new Error('Failed to load video'));
             };
+
+            video.muted = true;
+            video.src = URL.createObjectURL(videoFile);
         } catch (error) {
             reject(error);
         }
@@ -83,7 +84,6 @@ export const compressVideo = async (videoFile, onProgress = () => { }) => {
 export const getVideoDuration = (videoFile) => {
     return new Promise((resolve, reject) => {
         const video = document.createElement('video');
-        video.src = URL.createObjectURL(videoFile);
 
         video.onloadedmetadata = () => {
             resolve(video.duration);
@@ -93,6 +93,7 @@ export const getVideoDuration = (videoFile) => {
         video.onerror = () => {
             reject(new Error('Failed to load video metadata'));
         };
+        video.src = URL.createObjectURL(videoFile);
     });
 };
 
@@ -104,7 +105,6 @@ export const getVideoDuration = (videoFile) => {
 export const getVideoDimensions = (videoFile) => {
     return new Promise((resolve, reject) => {
         const video = document.createElement('video');
-        video.src = URL.createObjectURL(videoFile);
 
         video.onloadedmetadata = () => {
             resolve({
@@ -117,6 +117,7 @@ export const getVideoDimensions = (videoFile) => {
         video.onerror = () => {
             reject(new Error('Failed to load video metadata'));
         };
+        video.src = URL.createObjectURL(videoFile);
     });
 };
 

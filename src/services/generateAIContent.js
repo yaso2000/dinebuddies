@@ -25,15 +25,27 @@ async function getAuthBearerToken(forceRefresh = false) {
     }
 }
 
-async function postAiJson(endpoint, body, token) {
-    return fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-    });
+async function postAiJson(endpoint, body, token, { timeoutMs = 120000 } = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+    } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+            throw new Error('AI_REQUEST_TIMEOUT');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /**
@@ -419,14 +431,24 @@ export async function generateAIMagicCover({
 
     let response;
     try {
-        response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token);
+        response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
         if (response.status === 401) {
             token = await getAuthBearerToken(true);
             if (token) {
-                response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token);
+                response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
             }
         }
-    } catch {
+    } catch (err) {
+        if (err instanceof Error && err.message === 'AI_REQUEST_TIMEOUT') {
+            return {
+                success: false,
+                error: 'request_timeout',
+                code: 'AI_REQUEST_TIMEOUT',
+                message:
+                    'انتهت مهلة انتظار توليد الصورة. قد يكون التوليد ما زال جارياً على الخادم — انتظر ثم حاول مرة أخرى.',
+                status: 408,
+            };
+        }
         return {
             success: false,
             error: 'Network error while contacting AI service',

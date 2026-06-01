@@ -14,9 +14,12 @@
         "rules": "firestore.rules",
         "indexes": "firestore.indexes.json"
     },
-    "storage": {
-        "rules": "storage.rules"
-    },
+    "storage": [
+        {
+            "bucket": "dinebuddies.firebasestorage.app",
+            "rules": "storage.rules"
+        }
+    ],
     "hosting": {
         "site": "dinebuddies",
         "public": "dist",

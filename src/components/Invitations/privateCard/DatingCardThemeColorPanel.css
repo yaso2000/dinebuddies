@@ -16,6 +16,43 @@
     background: transparent;
 }
 
+.dating-card-theme-color-panel__presets--row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.dating-card-theme-color-panel__presets--row .dating-card-theme-color-panel__preset {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    max-width: none;
+    margin: 0;
+}
+
+.dating-card-theme-color-panel__presets--compact.dating-card-theme-color-panel__presets--row {
+    gap: 5px;
+}
+
+.dating-card-theme-color-panel__presets--compact.dating-card-theme-color-panel__presets--row
+    .dating-card-theme-color-panel__preset {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border-width: 1.5px;
+}
+
+.dating-card-theme-color-panel__presets--compact.dating-card-theme-color-panel__presets--row
+    .dating-card-theme-color-panel__preset--sel {
+    outline-width: 2px;
+    outline-offset: 1px;
+}
+
 .dating-card-theme-color-panel__preset {
     width: 100%;
     aspect-ratio: 1;

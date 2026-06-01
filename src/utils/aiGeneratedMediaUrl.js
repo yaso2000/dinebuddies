@@ -44,6 +44,22 @@ export function isRestrictedFirebaseStorageUrl(url) {
 }
 
 /**
+ * True when URL is a server-uploaded AI cover in a public Storage folder (invitations/…/ai_*).
+ * @param {string} url
+ */
+export function isServerPersistedAiCoverUrl(url) {
+    if (typeof url !== 'string' || !url.includes('firebasestorage.googleapis.com')) {
+        return false;
+    }
+    if (isRestrictedFirebaseStorageUrl(url)) {
+        return false;
+    }
+    const objectPath = decodeFirebaseStorageObjectPath(url);
+    if (!objectPath) return false;
+    return /^invitations\/[^/]+\/ai_\d+_[a-f0-9-]+\.(png|jpe?g|webp)$/i.test(objectPath);
+}
+
+/**
  * Firebase Storage / HTTPS URL from AI generation (preview set without a local File).
  *
  * @param {{ preview?: string, url?: string } | null | undefined} media

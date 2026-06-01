@@ -26,6 +26,8 @@ import { sendVerificationEmailResend } from '../services/verificationEmailServic
 import { isEmailRegisteredAsAffiliate, isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
 import { assertProfileMatchesPortal, AUTH_PORTAL } from '../utils/authPortalGate';
 import { resolveAppleDisplayName } from '../utils/appleAuth';
+import { isLocalDevHost, isEmbeddedPreviewBrowser, markOAuthRedirectComplete, markOAuthRedirectPending, preferGoogleOAuthRedirect } from '../utils/localDevAuth';
+import { getFirebaseRedirectResultOnce } from '../firebase/authBootstrap';
 import { PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
@@ -36,7 +38,6 @@ import {
     signInWithPopup,
     signInWithCredential,
     signInWithRedirect,
-    getRedirectResult,
     GoogleAuthProvider,
     OAuthProvider,
     signOut as firebaseSignOut,
@@ -72,6 +73,7 @@ const isInAppBrowser = () => {
  */
 /** Safari / iOS WebKit: popup OAuth is unreliable — use Firebase redirect. */
 const preferWebOAuthRedirectAuth = () => {
+    if (isLocalDevHost()) return true;
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
     if (/iPad|iPhone|iPod/i.test(ua)) return true;
@@ -762,7 +764,22 @@ export const AuthProvider = ({ children }) => {
             }
             provider.addScope('email');
             provider.addScope('profile');
-            const result = await signInWithPopup(auth, provider);
+            if (preferGoogleOAuthRedirect()) {
+                markOAuthRedirectPending();
+                signInWithRedirect(auth, provider);
+                return { __oauthRedirect: true };
+            }
+            let result;
+            try {
+                result = await signInWithPopup(auth, provider);
+            } catch (popupErr) {
+                if (popupErr?.code === 'auth/popup-blocked') {
+                    markOAuthRedirectPending();
+                    signInWithRedirect(auth, provider);
+                    return { __oauthRedirect: true };
+                }
+                throw popupErr;
+            }
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -847,6 +864,7 @@ export const AuthProvider = ({ children }) => {
             provider.addScope('email');
             provider.addScope('public_profile');
             // Do not await — navigation may unload the page before the promise settles.
+            markOAuthRedirectPending();
             signInWithRedirect(auth, provider);
             return { __oauthRedirect: true };
         }
@@ -955,6 +973,7 @@ export const AuthProvider = ({ children }) => {
         provider.addScope('email');
         provider.addScope('name');
         if (preferWebOAuthRedirectAuth()) {
+            markOAuthRedirectPending();
             signInWithRedirect(auth, provider);
             return { __oauthRedirect: true };
         }
@@ -1163,17 +1182,19 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Complete Facebook / Apple sign-in after `signInWithRedirect` (Safari / iOS).
+    // Complete OAuth sign-in after `signInWithRedirect` (uses shared bootstrap promise from main.jsx).
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
-                const result = await getRedirectResult(auth);
+                const result = await getFirebaseRedirectResultOnce();
                 if (cancelled || !result?.user) return;
+                markOAuthRedirectComplete();
                 const pid = result.providerId || result.user?.providerData?.[0]?.providerId;
-                if (pid !== 'facebook.com' && pid !== 'apple.com') return;
+                if (pid !== 'facebook.com' && pid !== 'apple.com' && pid !== 'google.com') return;
 
-                const authProvider = pid === 'apple.com' ? 'apple' : 'facebook';
+                const authProvider =
+                    pid === 'apple.com' ? 'apple' : pid === 'google.com' ? 'google' : 'facebook';
                 const u = result.user;
                 const userDoc = await getDoc(doc(db, 'users', u.uid));
                 if (!userDoc.exists()) {
@@ -1189,7 +1210,12 @@ export const AuthProvider = ({ children }) => {
                     });
                 } else {
                     assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
-                    if (u.photoURL) {
+                    if (authProvider === 'google') {
+                        await updateDoc(doc(db, 'users', u.uid), {
+                            photo_url: u.photoURL || userDoc.data().photo_url,
+                            last_active_time: serverTimestamp(),
+                        });
+                    } else if (u.photoURL) {
                         const data = userDoc.data();
                         const currentPhoto = data.photoURL || data.photo_url;
                         if (!currentPhoto || String(currentPhoto).includes('data:image/svg+xml') || String(currentPhoto).length < 10) {

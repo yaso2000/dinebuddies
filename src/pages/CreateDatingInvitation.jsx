@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
-    FaClock, FaUserFriends, FaLock, FaChevronLeft, FaSearch,
+    FaUserFriends, FaLock, FaChevronLeft, FaSearch,
     FaHeart, FaCamera, FaUpload, FaImage, FaMagic
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
@@ -11,7 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import VenueLocationPicker from '../components/VenueLocationPicker';
-import { processInvitationMedia, commitInvitationAiCover } from '../services/mediaService';
+import { processInvitationMedia, commitInvitationAiCover, prepareAiCoverMediaFromRemoteUrl } from '../services/mediaService';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getMutualFollowers } from '../utils/followHelpers';
 import { db } from '../firebase/config';
@@ -26,15 +26,13 @@ import {
     INVITATION_CARD_MESSAGE_MAX,
     INVITATION_CARD_TITLE_MAX
 } from '../constants/invitationCardLimits';
-import PrivateCardDatingTypographySheet from '../components/Invitations/privateCard/PrivateCardDatingTypographySheet';
-import PrivateCardTextBackdropTonePicker from '../components/Invitations/privateCard/PrivateCardTextBackdropTonePicker';
-import PrivateCardMotionPicker from '../components/Invitations/privateCard/PrivateCardMotionPicker';
+import DatingCardPreviewStage from '../components/Invitations/privateCard/DatingCardPreviewStage';
 import {
     DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
     getDatingCardTextBackdropFromInvitation
 } from '../components/Invitations/privateCard/privateCardTextBackdrop';
-import { DEFAULT_FRAME_COLOR_ID, getFrameColorById } from '../components/Invitations/privateCard/privateCardFrameColors';
-import { DEFAULT_FONT_ID, PRIVATE_CARD_FONTS } from '../components/Invitations/privateCard/privateCardFonts';
+import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
+import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
 import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
 import {
     getDatingCardBackgroundOptions,
@@ -99,7 +97,6 @@ const CreateDatingInvitation = () => {
     const [cardFrameColorId, setCardFrameColorId] = useState(DEFAULT_FRAME_COLOR_ID);
     /** `#rrggbb` or null — one color for frame border + all text; null uses `cardFrameColorId` preset. */
     const [datingCardThemeColor, setDatingCardThemeColor] = useState(null);
-    const [typographySheetOpen, setTypographySheetOpen] = useState(false);
     const [cardMotionId, setCardMotionId] = useState(DEFAULT_MOTION_ID);
     const [cardBackgroundId, setCardBackgroundId] = useState(
         () => editInvitation?.cardBackgroundId || DEFAULT_DATING_CARD_BACKGROUND_ID
@@ -174,18 +171,6 @@ const CreateDatingInvitation = () => {
         if (datingHeroCover?.src) return true;
         return getDatingCardBackgroundOptions().some((o) => o.id === cardBackgroundId);
     }, [datingHeroCover?.src, cardBackgroundId]);
-
-    const datingFontSummary = useMemo(() => {
-        const f = PRIVATE_CARD_FONTS.find((x) => x.id === cardFontId);
-        return f ? t(f.labelKey, { defaultValue: f.defaultLabel }) : cardFontId;
-    }, [cardFontId, t]);
-
-    const datingCardColorSummary = useMemo(() => {
-        const raw = typeof datingCardThemeColor === 'string' ? datingCardThemeColor.trim() : '';
-        if (/^#[0-9A-Fa-f]{6}$/.test(raw)) return raw;
-        const fr = getFrameColorById(cardFrameColorId);
-        return t(fr.labelKey, { defaultValue: fr.defaultLabel });
-    }, [datingCardThemeColor, cardFrameColorId, t]);
 
     // Populate when editing
     useEffect(() => {
@@ -521,6 +506,9 @@ const CreateDatingInvitation = () => {
                 throw new Error('not_signed_in');
             }
             const publishedUrl = await commitInvitationAiCover(media, userId);
+            if (media.preview && String(media.preview).startsWith('blob:')) {
+                revokePrivateCoverMedia({ preview: media.preview });
+            }
             return {
                 ...media,
                 source: 'ai_generated',
@@ -737,40 +725,45 @@ const CreateDatingInvitation = () => {
     const handleDatingAiCoverImage = useCallback(
         async (url) => {
             if (!url) return;
-            const stagedMedia = {
-                source: 'ai_generated',
-                type: 'image',
-                file: null,
-                url,
-                preview: url,
-            };
             datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
             if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'ai')) {
                 toastCoverStashLimit('ai');
                 return;
             }
-            const entry = { id: createPrivateCoverStashId(), kind: 'ai', media: stagedMedia };
-            setCoverMediaStash((prev) => [...prev, entry]);
+
+            const entryId = createPrivateCoverStashId();
+            setCoverMediaStash((prev) => [
+                ...prev,
+                { id: entryId, kind: 'ai', media: { type: 'image', pending: true } },
+            ]);
             setDatingCoverTab('ai');
+            setAiCoverCommittingId(entryId);
 
             try {
-                const committed = await commitAiCoverMedia(stagedMedia, entry.id);
-                updateAiStashMedia(entry.id, committed);
-                setMediaData(committed);
-                datingCoverDraftsRef.current.ai = committed;
+                const userId = currentUser?.id || authUser?.uid;
+                if (!userId) {
+                    throw new Error('not_signed_in');
+                }
+                const media = await prepareAiCoverMediaFromRemoteUrl(url, userId);
+                updateAiStashMedia(entryId, media);
+                setMediaData(media);
+                datingCoverDraftsRef.current.ai = media;
             } catch (err) {
-                console.error('AI cover commit failed:', err);
-                setMediaData(stagedMedia);
-                datingCoverDraftsRef.current.ai = stagedMedia;
+                console.error('AI cover prepare failed:', err);
+                setCoverMediaStash((prev) => prev.filter((e) => e.id !== entryId));
                 showToast(
                     err?.message === 'not_signed_in'
                         ? t('please_sign_in', { defaultValue: 'Please sign in to continue.' })
-                        : t('private_cover_ai_commit_pending', {
-                              defaultValue:
-                                  'Cover saved in AI photos. It will upload when you select it or publish.',
-                          }),
-                    err?.message === 'not_signed_in' ? 'error' : 'info'
+                        : err?.message === 'ai_cover_storage_not_ready'
+                          ? t('ai_cover_storage_not_ready', {
+                                defaultValue:
+                                    'The image was not ready in storage yet. Wait a few seconds and generate again.',
+                            })
+                          : t('ai_generate_failed', { defaultValue: 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.' }),
+                    'error'
                 );
+            } finally {
+                setAiCoverCommittingId(null);
             }
         },
         [datingCoverTab, toastCoverStashLimit, authUser, currentUser, showToast, t]
@@ -908,16 +901,26 @@ const CreateDatingInvitation = () => {
     const publishCost = DATING_INVITATION_PUBLISH_CREDITS;
     const lowCredits = !isUnlimited && !profilePending && dineBalance < publishCost;
 
+    const datingCoverTabLabel = useMemo(() => {
+        const labels = {
+            camera: t('private_cover_tab_camera_record', { defaultValue: 'Record video' }),
+            upload: t('private_cover_tab_upload_device', { defaultValue: 'Upload from device' }),
+            ai: t('private_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' }),
+            template: t('dating_cover_tab_template', { defaultValue: 'Template' })
+        };
+        return labels[datingCoverTab] || '';
+    }, [datingCoverTab, t]);
+
     return (
-        <div className="private-create-wrapper private-theme">
-            <div className="private-header-premium" style={{ background: 'linear-gradient(135deg, #1a0010, #2d0020, #1a0010)' }}>
+        <div className="private-create-wrapper private-theme dating-invite-page">
+            <div className="private-header-premium dating-invite-header">
                 <button onClick={() => navigate(-1)} className="private-back-btn">
                     <FaChevronLeft />
                 </button>
-                <div className="private-header-badge" style={{ background: 'rgba(236,72,153,0.2)', color: '#ec4899', border: '1px solid rgba(236,72,153,0.4)' }}>
+                <div className="private-header-badge dating-invite-header__badge">
                     💑 {t('dinebuddy_date', 'DineBuddy Date')}
                 </div>
-                <h2 className="private-header-title" style={{ color: '#ec4899' }}>
+                <h2 className="private-header-title dating-invite-header__title">
                     <FaHeart />
                     {t('dinebuddy_date', 'DineBuddy Date')}
                 </h2>
@@ -926,19 +929,13 @@ const CreateDatingInvitation = () => {
                 </p>
 
                 {!quotaInfo.profileLoading && (
-                    <div style={{
-                        margin: '12px 0 0',
-                        padding: '10px 16px',
-                        borderRadius: '12px',
-                        background: isUnlimited ? 'rgba(236,72,153,0.1)' : lowCredits ? 'rgba(239,68,68,0.1)' : 'rgba(236,72,153,0.1)',
-                        border: `1px solid ${isUnlimited ? 'rgba(236,72,153,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(236,72,153,0.3)'}`,
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        fontSize: '0.875rem',
-                        color: isUnlimited ? '#ec4899' : lowCredits ? '#f87171' : '#ec4899',
-                        fontWeight: 600
-                    }}>
+                    <div
+                        className={`dating-invite-header__credits${
+                            lowCredits ? ' dating-invite-header__credits--low' : ''
+                        }${isUnlimited ? ' dating-invite-header__credits--unlimited' : ''}`}
+                    >
                         <span>{isUnlimited ? '∞' : `${dineBalance}`}</span>
-                        <span style={{ opacity: 0.85, fontWeight: 400 }}>
+                        <span className="dating-invite-header__credits-text">
                             {isUnlimited
                                 ? t('unlimited_date_invitations', 'Unlimited date invitations')
                                 : t(
@@ -954,37 +951,39 @@ const CreateDatingInvitation = () => {
             <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
                 <form onSubmit={handlePreview} className="elegant-form">
 
-                    {/* Date & Time */}
-                    <div className="inv-datetime-row mb-4">
-                        <div className="form-group">
-                            <label className="elegant-label"><FaCalendarAlt /> {t('date')}</label>
+                    {/* Date & time — one compact row */}
+                    <div className="form-group mb-3 dating-datetime-inline">
+                        <label className="elegant-label dating-datetime-inline__label">
+                            <FaCalendarAlt aria-hidden /> {t('date_and_time', 'Date & time')}
+                        </label>
+                        <div className="dating-datetime-inline__row">
                             <input
                                 type="date"
                                 name="date"
                                 value={formData.date}
                                 onChange={handleChange}
-                                className="elegant-input"
+                                className="elegant-input dating-datetime-inline__input"
                                 min={new Date().toISOString().split('T')[0]}
                                 required
+                                aria-label={t('date')}
                             />
-                        </div>
-                        <div className="form-group">
-                            <label className="elegant-label"><FaClock /> {t('time')}</label>
                             <input
                                 type="time"
                                 name="time"
                                 value={formData.time}
                                 onChange={handleChange}
-                                className="elegant-input"
+                                className="elegant-input dating-datetime-inline__input"
                                 required
+                                aria-label={t('time')}
                             />
                         </div>
                     </div>
 
                     {/* Location */}
-                    <div className="form-group mb-4 venue-search-stack">
+                    <div className="form-group mb-3 venue-search-stack">
                         <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
                         <VenueLocationPicker
+                            compact
                             value={formData.location}
                             onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                             onSelect={handleLocationSelect}
@@ -1185,12 +1184,6 @@ const CreateDatingInvitation = () => {
                             <span aria-hidden>🃏</span>{' '}
                             {t('private_section_templates_title', { defaultValue: 'Ready card looks' })}
                         </h3>
-                        <p className="private-section-card__hint">
-                            {t('private_section_card_art_beside_hint', {
-                                defaultValue:
-                                    'Template shows artwork beside the card. Tap Upload or Camera to open that tab, then tap again to add photos or record video.'
-                            })}
-                        </p>
                         <input
                             ref={coverUploadInputRef}
                             type="file"
@@ -1200,22 +1193,25 @@ const CreateDatingInvitation = () => {
                             tabIndex={-1}
                             aria-hidden
                         />
-                        <div
-                            role="tablist"
-                            aria-label={t('dating_cover_tabs_label', { defaultValue: 'Cover source' })}
-                            className="private-cover-tabs"
-                        >
+                        <div className="private-cover-tabs-wrap">
+                            <p className="private-cover-tabs__active-label" aria-live="polite">
+                                {datingCoverTabLabel}
+                            </p>
+                            <div
+                                role="tablist"
+                                aria-label={t('dating_cover_tabs_label', { defaultValue: 'Cover source' })}
+                                className="private-cover-tabs private-cover-tabs--icons-only"
+                            >
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={datingCoverTab === 'camera'}
                                 onClick={handleDatingCoverCameraTabClick}
                                 className={`private-cover-tab${datingCoverTab === 'camera' ? ' private-cover-tab--active' : ''}`}
+                                title={t('private_cover_tab_camera_open', { defaultValue: 'Video' })}
+                                aria-label={t('private_cover_tab_camera_open', { defaultValue: 'Video' })}
                             >
-                                <FaCamera />{' '}
-                                {datingCoverTab === 'camera'
-                                    ? t('private_cover_tab_camera_record', { defaultValue: 'Record video' })
-                                    : t('private_cover_tab_camera_open', { defaultValue: 'Video' })}
+                                <FaCamera aria-hidden />
                             </button>
                             <button
                                 type="button"
@@ -1223,11 +1219,10 @@ const CreateDatingInvitation = () => {
                                 aria-selected={datingCoverTab === 'upload'}
                                 onClick={handleDatingCoverUploadTabClick}
                                 className={`private-cover-tab${datingCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
+                                title={t('private_cover_tab_upload_open', { defaultValue: 'From device' })}
+                                aria-label={t('private_cover_tab_upload_open', { defaultValue: 'From device' })}
                             >
-                                <FaUpload />{' '}
-                                {datingCoverTab === 'upload'
-                                    ? t('private_cover_tab_upload_add', { defaultValue: 'Upload photo' })
-                                    : t('private_cover_tab_upload_open', { defaultValue: 'From device' })}
+                                <FaUpload aria-hidden />
                             </button>
                             <button
                                 type="button"
@@ -1235,9 +1230,10 @@ const CreateDatingInvitation = () => {
                                 aria-selected={datingCoverTab === 'ai'}
                                 onClick={handleDatingCoverAiTabClick}
                                 className={`private-cover-tab${datingCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
+                                title={t('private_cover_tab_ai_open', { defaultValue: 'AI photos' })}
+                                aria-label={t('private_cover_tab_ai_open', { defaultValue: 'AI photos' })}
                             >
-                                <FaMagic />{' '}
-                                {t('private_cover_tab_ai_open', { defaultValue: 'AI photos' })}
+                                <FaMagic aria-hidden />
                             </button>
                             <button
                                 type="button"
@@ -1245,9 +1241,12 @@ const CreateDatingInvitation = () => {
                                 aria-selected={datingCoverTab === 'template'}
                                 onClick={() => handleDatingCoverTab('template')}
                                 className={`private-cover-tab${datingCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
+                                title={t('dating_cover_tab_template', { defaultValue: 'Template' })}
+                                aria-label={t('dating_cover_tab_template', { defaultValue: 'Template' })}
                             >
-                                <FaImage /> {t('dating_cover_tab_template', { defaultValue: 'Template' })}
+                                <FaImage aria-hidden />
                             </button>
+                            </div>
                         </div>
 
                         {datingCoverTab === 'camera' && (
@@ -1271,54 +1270,30 @@ const CreateDatingInvitation = () => {
                                 onImageGenerated={handleDatingAiCoverImage}
                                 requireVenue={false}
                                 disabled={isSubmitting}
+                                prepareBusy={Boolean(aiCoverCommittingId)}
                                 embedded
                             />
                         )}
 
-                        <div className="private-card-show-content-block">
-                            <div
-                                className="dating-card-show-content-toggle"
-                                title={t('dating_card_show_content_title', {
-                                    defaultValue:
-                                        'Off: date and place only on the card. On: show title, message, and profile photo.'
-                                })}
-                            >
-                                <span className="dating-card-show-content-toggle__label">
-                                    {t('dating_card_show_content_label', {
-                                        defaultValue: 'Show title, message & profile on card'
-                                    })}
-                                </span>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    className="dating-card-show-content-toggle__switch"
-                                    aria-checked={datingCardShowHostAndMessage}
-                                    aria-label={t('dating_card_show_content_label', {
-                                        defaultValue: 'Show title, message & profile on card'
-                                    })}
-                                    onClick={() => setDatingCardShowHostAndMessage((v) => !v)}
-                                >
-                                    <span className="dating-card-show-content-toggle__thumb" aria-hidden />
-                                </button>
-                            </div>
-                            {datingCardShowHostAndMessage && editorPhotoBackgroundActive && (
-                                <PrivateCardTextBackdropTonePicker
-                                    tone={datingCardTextBackdropTone}
-                                    onToneChange={setDatingCardTextBackdropTone}
-                                />
-                            )}
-                        </div>
-
                         <div className="form-group mb-0">
-                            <label className="elegant-label">
-                                {t('private_card_preview_label', { defaultValue: 'Invitation card' })}
-                            </label>
-                            <PrivateCardMotionPicker value={cardMotionId} onChange={setCardMotionId} />
                             <div className="private-card-preview-with-bg">
                                 <div className="private-card-preview-with-bg__preview-wrap">
-                                    <PrivateInvitationCardPreview
+                                    <DatingCardPreviewStage
+                                        showHostAndMessage={datingCardShowHostAndMessage}
+                                        onShowHostAndMessageChange={setDatingCardShowHostAndMessage}
+                                        editorPhotoBackgroundActive={editorPhotoBackgroundActive}
+                                        textBackdropTone={datingCardTextBackdropTone}
+                                        onTextBackdropToneChange={setDatingCardTextBackdropTone}
+                                        cardMotionId={cardMotionId}
+                                        onCardMotionChange={setCardMotionId}
+                                        fontId={cardFontId}
+                                        themeColorHex={datingCardThemeColor}
+                                        onFontChange={setCardFontId}
+                                        onThemeColorChange={setDatingCardThemeColor}
+                                    >
+                                        <PrivateInvitationCardPreview
                                         cardTemplateSet="dating"
-                                        className="private-invitation-card-preview--showcase private-invitation-card-preview--showcase-compact"
+                                        className="private-invitation-card-preview--showcase private-invitation-card-preview--showcase-compact private-invitation-card-preview--dating-editor-meta"
                                         frameColorId={cardFrameColorId}
                                         cardThemeColor={datingCardThemeColor}
                                         cardFontId={cardFontId}
@@ -1345,6 +1320,7 @@ const CreateDatingInvitation = () => {
                                         showHostAndMessage={datingCardShowHostAndMessage}
                                         textBackdropTone={datingCardTextBackdropTone}
                                     />
+                                    </DatingCardPreviewStage>
                                 </div>
                                 <PrivateInvitationCoverRightRail
                                     templateVariant="dating"
@@ -1359,38 +1335,6 @@ const CreateDatingInvitation = () => {
                                     committingStashId={aiCoverCommittingId}
                                 />
                             </div>
-                            <div style={{ marginTop: 12 }}>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTypographySheetOpen(true)}
-                                        style={{
-                                            padding: '10px 16px',
-                                            borderRadius: 12,
-                                            border: '2px solid rgba(236,72,153,0.55)',
-                                            background: 'rgba(236,72,153,0.12)',
-                                            color: '#ec4899',
-                                            fontWeight: 800,
-                                            fontSize: '0.85rem',
-                                            cursor: 'pointer',
-                                            touchAction: 'manipulation'
-                                        }}
-                                    >
-                                        {t('dating_card_style_btn', { defaultValue: 'Font & card color' })}
-                                    </button>
-                                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flex: '1 1 160px', minWidth: 0 }}>
-                                        {datingFontSummary} · {datingCardColorSummary}
-                                    </span>
-                                </div>
-                            </div>
-                            <PrivateCardDatingTypographySheet
-                                open={typographySheetOpen}
-                                onClose={() => setTypographySheetOpen(false)}
-                                fontId={cardFontId}
-                                themeColorHex={datingCardThemeColor}
-                                onFontChange={setCardFontId}
-                                onThemeColorChange={setDatingCardThemeColor}
-                            />
                         </div>
                     </div>
 

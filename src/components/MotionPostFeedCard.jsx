@@ -1,9 +1,13 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { FaTrash } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import UserAvatar from './UserAvatar';
 import MotionPostBody from './MotionPostBody';
 import { getGenderBorderColor } from '../utils/avatarUtils';
+import { deleteFeedPostCascade } from '../utils/postDeleteCascade';
 
 const formatFeedTime = (ts) => {
     if (!ts) return '';
@@ -19,6 +23,12 @@ const formatFeedTime = (ts) => {
 export default function MotionPostFeedCard({ post, communityPostId = null }) {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const { currentUser } = useAuth();
+    const { showToast } = useToast();
+
+    const motionDocId = post.motionPostId || post.id;
+    const ownerId = post.ownerId || post.authorId;
+    const canDelete = Boolean(currentUser?.uid && ownerId && currentUser.uid === ownerId);
 
     const authorName = post._feedAuthorName || t('business', 'Business');
     const authorAvatar = post._feedAuthorAvatar || null;
@@ -39,6 +49,27 @@ export default function MotionPostFeedCard({ post, communityPostId = null }) {
         }
         const motionId = post.motionPostId || post.id;
         if (motionId) navigate(`/post/${motionId}`);
+    };
+
+    const handleDelete = async (e) => {
+        e.stopPropagation();
+        if (
+            !window.confirm(
+                t('post_delete_confirm', 'هل أنت متأكد من حذف هذا المنشور؟ لا يمكن التراجع.')
+            )
+        ) {
+            return;
+        }
+        try {
+            await deleteFeedPostCascade({
+                id: motionDocId ? `motion_${motionDocId}` : post.id,
+                motionPostId: motionDocId,
+            });
+            showToast(t('post_delete_success', 'تم حذف المنشور.'), 'success');
+        } catch (err) {
+            console.error('[MotionPostFeedCard] delete', err);
+            showToast(t('post_delete_failed', 'تعذّر حذف المنشور.'), 'error');
+        }
     };
 
     return (
@@ -89,6 +120,23 @@ export default function MotionPostFeedCard({ post, communityPostId = null }) {
                         </span>
                     </div>
                 </div>
+                {canDelete ? (
+                    <button
+                        type="button"
+                        className="ios-tap-target"
+                        onClick={handleDelete}
+                        aria-label={t('delete', 'Delete')}
+                        style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: 'var(--text-muted)',
+                            padding: 8,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        <FaTrash aria-hidden />
+                    </button>
+                ) : null}
             </div>
 
             <div

@@ -19,7 +19,7 @@ export const CARD_THEME_COLOR_PRESETS = [
 ];
 
 /** Cross-browser color UI: 12 preset swatches only (no spectrum / grid / hex editor). */
-export default function DatingCardThemeColorPanel({ valueHex, onColorChange }) {
+export default function DatingCardThemeColorPanel({ valueHex, onColorChange, layout = 'grid', compact = false }) {
     const { t } = useTranslation();
 
     const effectiveHex = useMemo(() => {
@@ -36,7 +36,11 @@ export default function DatingCardThemeColorPanel({ valueHex, onColorChange }) {
 
     return (
         <div
-            className="dating-card-theme-color-panel dating-card-theme-color-panel__presets dating-card-theme-color-panel__presets--grid"
+            className={`dating-card-theme-color-panel dating-card-theme-color-panel__presets${
+                layout === 'row'
+                    ? ' dating-card-theme-color-panel__presets--row'
+                    : ' dating-card-theme-color-panel__presets--grid'
+            }${compact ? ' dating-card-theme-color-panel__presets--compact' : ''}`}
             role="group"
             aria-label={t('dating_color_presets_aria', { defaultValue: 'Card color choices' })}
         >

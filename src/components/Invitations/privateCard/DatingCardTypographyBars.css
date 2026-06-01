@@ -1,0 +1,92 @@
+.dating-card-typography-bars {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: var(--private-preview-w, clamp(218px, 56vw, 292px));
+}
+
+.dating-card-typography-bars--below {
+    margin-top: 6px;
+    gap: 4px;
+}
+
+.dating-card-typography-bars__toggle {
+    align-self: flex-start;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(236, 72, 153, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+    color: #ec4899;
+    font-size: 0.72rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.dating-card-typography-bars__toggle--open {
+    background: rgba(236, 72, 153, 0.16);
+    border-color: rgba(236, 72, 153, 0.75);
+}
+
+.dating-card-typography-bars__panels {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.dating-card-typography-bars__scroll {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 1px 0 3px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.dating-card-typography-bars__scroll--colors {
+    align-items: center;
+}
+
+.dating-card-typography-bars__font-chip {
+    flex: 0 0 auto;
+    padding: 3px 8px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main, #f5f5f5);
+    font-size: 0.62rem;
+    font-weight: 650;
+    cursor: pointer;
+    white-space: nowrap;
+    touch-action: manipulation;
+    line-height: 1.2;
+}
+
+.dating-card-typography-bars__font-chip--sel {
+    border-color: rgba(236, 72, 153, 0.75);
+    box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.22);
+    background: rgba(236, 72, 153, 0.12);
+}
+
+.dating-card-typography-bars__reset {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 7px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+    font-size: 0.58rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}

@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npx --yes serve dist -p 4173",
+    "dev": "vite",
+    "dev:dist": "npx --yes serve dist -p 4173",
     "dev:src": "vite",
     "dev:vercel": "node scripts/vercel-cli.mjs dev --local-config vercel-dev.json",
     "dev:network": "vite --host",

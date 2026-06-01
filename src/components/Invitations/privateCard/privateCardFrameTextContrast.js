@@ -87,3 +87,7 @@ export function adjustFrameTextForDarkTemplate(cssColor) {
 /** Soft halation on busy dark imagery */
 export const DARK_TEMPLATE_TEXT_SHADOW =
     '0 1px 2px rgba(0, 0, 0, 0.65), 0 0 18px rgba(0, 0, 0, 0.35)';
+
+/** Readable copy on photo / hero backgrounds (templates and user media). */
+export const PHOTO_BACKGROUND_TEXT_SHADOW =
+    '0 1px 2px rgba(0, 0, 0, 0.62), 0 2px 14px rgba(0, 0, 0, 0.42)';

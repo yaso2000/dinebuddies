@@ -73,6 +73,10 @@ import {
     STUDIO_TEXT_ANIMATIONS,
     normalizeStudioTextAnimation,
 } from '../../features/motion-post/studio/studioTextAnimation';
+import AIFloatingLauncher from '../../components/AIFloatingLauncher';
+import { extractAIContentFields, extractAIImageUrl, mapAiAnimationToStudio } from '../../utils/aiContentFieldMapper';
+import { pickAiRemoteImageUrl } from '../../utils/aiGeneratedMediaUrl';
+import { ensurePublicImageUrl } from '../../services/mediaService';
 import './SmartPostStudio.css';
 
 const DEFAULT_STYLE = {
@@ -420,6 +424,32 @@ export default function SmartPostStudio() {
         setAnimPlayKey((k) => k + 1);
     }, []);
 
+    const buildAnimatedAiPrompt = useCallback(() => {
+        const parts = [
+            title.trim() && `عنوان حالي: ${title.trim()}`,
+            body.trim() && `وصف حالي: ${body.trim()}`,
+        ].filter(Boolean);
+        return parts.join('\n') || 'منشور متحرك ترويجي للمجتمع';
+    }, [title, body]);
+
+    const handleAnimatedAiContent = useCallback(
+        (data) => {
+            const fields = extractAIContentFields('animated_post', data);
+            if (fields.title) setTitle(fields.title);
+            if (fields.description) setBody(fields.description);
+            if (fields.animation_type) {
+                selectTextAnimation(mapAiAnimationToStudio(fields.animation_type));
+            }
+
+            const imageUrl = extractAIImageUrl(data);
+            if (imageUrl) {
+                setMedia({ preview: imageUrl });
+                setCoverHidden(false);
+            }
+        },
+        [selectTextAnimation]
+    );
+
     const openImagePicker = () => {
         if (coverHidden && media?.preview) {
             setStudioStyle((s) => ({ ...s, backgroundColor: 'transparent' }));
@@ -456,11 +486,13 @@ export default function SmartPostStudio() {
 
     const buildDraftInput = useCallback(async () => {
         if (!currentUser?.uid) throw new Error('Not signed in');
-        let imageUrl = '';
+        let imageUrl = pickAiRemoteImageUrl(media);
         if (media?.file) {
             const safeName = String(media.file.name || 'cover.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
             const path = `business-motion/${currentUser.uid}/studio_${Date.now()}_${safeName}`;
             imageUrl = await uploadPostMedia(media.file, currentUser.uid, path, null, 'image');
+        } else if (imageUrl) {
+            imageUrl = await ensurePublicImageUrl(imageUrl, currentUser.uid, 'business-motion');
         }
 
         const motionUi = layoutToMotionUi(layoutModel);
@@ -510,6 +542,8 @@ export default function SmartPostStudio() {
         currentUser?.uid,
         layoutModel,
         media?.file,
+        media?.preview,
+        media?.url,
         previewStyle,
         promoStickers,
         studioStyle.animation,
@@ -774,6 +808,17 @@ export default function SmartPostStudio() {
 
             <section className="sps-editor-dock">
                 {activeTool && <div className="sps-editor-panels">{renderToolPanel()}</div>}
+
+                <div className="sps-editor-dock__ai">
+                    <AIFloatingLauncher
+                        postType="animated_post"
+                        onTextSuccess={handleAnimatedAiContent}
+                        buildContextPrompt={buildAnimatedAiPrompt}
+                        multimodalMode
+                        disabled={isBusy}
+                        compact
+                    />
+                </div>
 
                 <div className="sps-editor-dock__footer">
                     <StudioQuickStyles

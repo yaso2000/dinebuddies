@@ -28,7 +28,8 @@ const VenueLocationPicker = ({
     userLng,
     /** Invitation venue type (Restaurant, Cafe, …) — ranks matching partners & Google predictions. */
     invitationType,
-    className = ''
+    className = '',
+    compact = false
 }) => {
     const { t } = useTranslation();
     const [source, setSource] = useState('dinebuddies'); // 'dinebuddies' | 'google'
@@ -167,29 +168,45 @@ const VenueLocationPicker = ({
     };
 
     return (
-        <div ref={wrapperRef} className="venue-location-picker">
+        <div ref={wrapperRef} className={`venue-location-picker${compact ? ' venue-location-picker--compact' : ''}`}>
             {/* Toggle */}
-            <div className="venue-search-segment">
+            <div className={`venue-search-segment${compact ? ' venue-search-segment--compact' : ''}`}>
                 <button
                     type="button"
                     onClick={() => switchSource('dinebuddies')}
                     className={`venue-search-segment__btn${source === 'dinebuddies' ? ' venue-search-segment__btn--active' : ''}`}
+                    title={t('dinbuddies_venues', 'DineBuddies Venues')}
+                    aria-label={t('dinbuddies_venues', 'DineBuddies Venues')}
                 >
-                    <FaStore style={{ fontSize: '0.85rem' }} />
-                    {t('dinbuddies_venues', 'DineBuddies Venues')}
+                    <FaStore style={{ fontSize: compact ? '0.72rem' : '0.85rem' }} />
+                    {compact ? (
+                        <span className="venue-search-segment__compact-label">
+                            {t('dinbuddies_venues_short', { defaultValue: 'DineBuddies' })}
+                        </span>
+                    ) : (
+                        t('dinbuddies_venues', 'DineBuddies Venues')
+                    )}
                 </button>
 
                 <button
                     type="button"
                     onClick={() => switchSource('google')}
                     className={`venue-search-segment__btn${source === 'google' ? ' venue-search-segment__btn--active' : ''}`}
+                    title={t('google_places', 'Google Places')}
+                    aria-label={t('google_places', 'Google Places')}
                 >
-                    <FaGlobe style={{ fontSize: '0.85rem' }} />
-                    {t('google_places', 'Google Places')}
+                    <FaGlobe style={{ fontSize: compact ? '0.72rem' : '0.85rem' }} />
+                    {compact ? (
+                        <span className="venue-search-segment__compact-label">
+                            {t('google_places_short', { defaultValue: 'Google' })}
+                        </span>
+                    ) : (
+                        t('google_places', 'Google Places')
+                    )}
                 </button>
             </div>
 
-            {source === 'google' && (
+            {source === 'google' && !compact && (
                 <p style={{
                     fontSize: '0.72rem',
                     color: 'var(--text-muted)',

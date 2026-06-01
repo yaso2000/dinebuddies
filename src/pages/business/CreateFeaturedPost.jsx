@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -30,10 +30,13 @@ import {
     updateFeaturedSlide,
 } from '../../services/featuredPostService';
 import { uploadImageWithModeration } from '../../services/moderatedImageUpload';
+import { ensurePublicImageUrl } from '../../services/mediaService';
 import { ImageUploadZone } from '../../services/imageUploadZones';
 import { notifyImageUploadError } from '../../utils/imageModerationErrors';
 import { useDragScrollRail } from '../../hooks/useDragScrollRail';
 import { useKeyboardOverlayViewport } from '../../hooks/useKeyboardOverlayViewport';
+import AIFloatingLauncher from '../../components/AIFloatingLauncher';
+import { extractAIContentFields, extractAIImageUrl } from '../../utils/aiContentFieldMapper';
 import './CreateFeaturedPost.css';
 
 export default function CreateFeaturedPost() {
@@ -151,6 +154,27 @@ export default function CreateFeaturedPost() {
         return { type: 'gradient', value: preset.value };
     }, [backgroundMode, bgImageUrl, gradientId]);
 
+    const buildFeaturedAiPrompt = useCallback(() => {
+        const parts = [
+            businessName && `اسم المنشأة: ${businessName}`,
+            title.trim() && `عنوان حالي: ${title.trim()}`,
+            description.trim() && `وصف حالي: ${description.trim()}`,
+        ].filter(Boolean);
+        return parts.join('\n') || `منشور مميز لـ ${businessName}`;
+    }, [businessName, title, description]);
+
+    const handleFeaturedAiContent = useCallback((data) => {
+        const fields = extractAIContentFields('featured_post', data);
+        if (fields.title) setTitle(fields.title);
+        if (fields.description) setDescription(fields.description);
+
+        const imageUrl = extractAIImageUrl(data);
+        if (imageUrl) {
+            setBgImageUrl(imageUrl);
+            setBackgroundMode('image');
+        }
+    }, []);
+
     const pickGradient = (id, el) => {
         setGradientId(id);
         setBackgroundMode('gradient');
@@ -250,6 +274,16 @@ export default function CreateFeaturedPost() {
         if (!currentUser?.uid) return;
         setPublishing(true);
         try {
+            let publishBackground = background;
+            if (backgroundMode === 'image' && bgImageUrl) {
+                const persistedUrl = await ensurePublicImageUrl(
+                    bgImageUrl,
+                    currentUser.uid,
+                    'featured_posts'
+                );
+                publishBackground = { type: 'image', value: persistedUrl };
+            }
+
             if (editingFeaturedId) {
                 await updateFeaturedSlide({
                     featuredPostId: editingFeaturedId,
@@ -258,7 +292,7 @@ export default function CreateFeaturedPost() {
                     titleStyle,
                     descriptionText: description,
                     descriptionStyle: descStyle,
-                    background,
+                    background: publishBackground,
                     layout: 'center',
                 });
                 showToast(t('featured_post_updated', 'Featured post updated.'), 'success');
@@ -271,7 +305,7 @@ export default function CreateFeaturedPost() {
                     titleStyle,
                     descriptionText: description,
                     descriptionStyle: descStyle,
-                    background,
+                    background: publishBackground,
                     layout: 'center',
                 });
                 const sent = Number(result?.notifyResult?.sent || 0);
@@ -560,6 +594,17 @@ export default function CreateFeaturedPost() {
                                     {t('featured_bg_remove_photo', 'إزالة الصورة واستخدام تدرج')}
                                 </button>
                             ) : null}
+                        </div>
+
+                        <div className="fp-controls__row">
+                            <AIFloatingLauncher
+                                postType="featured_post"
+                                onTextSuccess={handleFeaturedAiContent}
+                                buildContextPrompt={buildFeaturedAiPrompt}
+                                multimodalMode
+                                disabled={publishing || uploadingBg}
+                                compact
+                            />
                         </div>
                 </div>
             </section>

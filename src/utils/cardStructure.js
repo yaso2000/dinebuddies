@@ -127,3 +127,16 @@ export function getCardTextOverlayLayoutClass(structure) {
             return 'card-text-overlay card-text-overlay--modern-minimal';
     }
 }
+
+/** Preview card root modifier — same safe zones, unified with theme/font stack */
+export function getCardPreviewStructureClass(structure) {
+    switch (normalizeCardStructure(structure)) {
+        case 'arch_luxury':
+            return 'private-invitation-card-preview--structure-arch-luxury';
+        case 'vintage_ticket':
+            return 'private-invitation-card-preview--structure-vintage-ticket';
+        case 'modern_minimal':
+        default:
+            return 'private-invitation-card-preview--structure-modern-minimal';
+    }
+}

@@ -1,28 +1,45 @@
 /**
- * Dating card backgrounds: files synced from repo-root `dating-invitation-templates/backgrounds/`
- * into `public/dating-invitation-templates/backgrounds/` (see scripts/sync-dating-invitation-templates.mjs).
+ * Dating card backgrounds: files in `public/dating-invitation-templates/backgrounds/`
+ * (synced from repo-root `dating-invitation-templates/` via `npm run sync:dating-templates`).
  */
 import {
     publicAssetUrl,
     CARD_BACKGROUND_IMAGE_PLACEHOLDER
 } from '../privateCard/privateCardBackgrounds';
 
-/** Template ids whose art is dark enough to need lifted frame text (extend when adding assets). */
-export const DATING_DARK_TEMPLATE_BACKGROUND_IDS = new Set(['dating-city', 'dating-minimal']);
+/** Template ids whose art is dark enough to need lifted frame text. */
+export const DATING_DARK_TEMPLATE_BACKGROUND_IDS = new Set([
+    'dating-city',
+    'dating-minimal',
+    'dating-mystery-entrance',
+    'dating-candle-room',
+    'dating-candlelight-table',
+    'dating-restaurant-chemistry',
+]);
 
 export const DATING_CARD_BACKGROUNDS = [
-    { id: 'dating-rose' },
-    { id: 'dating-city' },
-    { id: 'dating-minimal' }
+    { id: 'dating-luxury-floral', labelKey: 'dating_tpl_luxury_floral' },
+    { id: 'dating-rooftop-dinner', labelKey: 'dating_tpl_rooftop_dinner' },
+    { id: 'dating-mystery-entrance', labelKey: 'dating_tpl_mystery_entrance' },
+    { id: 'dating-restaurant-chemistry', labelKey: 'dating_tpl_restaurant_chemistry' },
+    { id: 'dating-sunset-beach', labelKey: 'dating_tpl_sunset_beach' },
+    { id: 'dating-rainy-coffee', labelKey: 'dating_tpl_rainy_coffee' },
+    { id: 'dating-rose-pathway', labelKey: 'dating_tpl_rose_pathway' },
+    { id: 'dating-heart-roses', labelKey: 'dating_tpl_heart_roses' },
+    { id: 'dating-candlelight-table', labelKey: 'dating_tpl_candlelight_table' },
+    { id: 'dating-candle-room', labelKey: 'dating_tpl_candle_room' },
+    /** Legacy SVG placeholders — kept for old invitations, hidden from picker */
+    { id: 'dating-rose', legacyOnly: true },
+    { id: 'dating-city', legacyOnly: true },
+    { id: 'dating-minimal', legacyOnly: true },
 ];
 
-/** Default dating template when opening the editor (matches private `birthday-warm` pattern). */
-export const DEFAULT_DATING_CARD_BACKGROUND_ID = 'dating-rose';
+export const DEFAULT_DATING_CARD_BACKGROUND_ID = 'dating-luxury-floral';
 
 const BACKGROUND_FILE_FALLBACK_EXTS = ['webp', 'jpg', 'jpeg', 'png', 'svg'];
 
 export function getDatingCardBackgroundOptions() {
-    return DATING_CARD_BACKGROUNDS;
+    return DATING_CARD_BACKGROUNDS.filter((o) => !o.legacyOnly);
 }
 
 export function resolveCanonicalDatingBackgroundId(assetId) {
@@ -38,6 +55,9 @@ export function resolveDatingCardBackgroundUrlCandidates(assetId) {
     const canonical = resolveCanonicalDatingBackgroundId(assetId);
     if (!canonical) return [];
     const opt = DATING_CARD_BACKGROUNDS.find((o) => o.id === canonical);
+    if (opt?.assetPath) {
+        return [publicAssetUrl(opt.assetPath), CARD_BACKGROUND_IMAGE_PLACEHOLDER];
+    }
     const stem = opt?.fileStem ? String(opt.fileStem).replace(/\.(webp|png|jpe?g|svg)$/i, '') : canonical;
     const preferred = opt?.ext ? [String(opt.ext).toLowerCase().replace(/^\./, '')] : [];
     const rest = BACKGROUND_FILE_FALLBACK_EXTS.filter((e) => !preferred.includes(e));

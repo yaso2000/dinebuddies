@@ -320,6 +320,11 @@
     overflow: hidden;
 }
 
+.sps-editor-dock__ai {
+    flex-shrink: 0;
+    padding: 8px 12px 0;
+}
+
 .sps-editor-dock__footer {
     flex-shrink: 0;
     display: flex;

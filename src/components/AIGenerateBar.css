@@ -284,3 +284,43 @@
     color: var(--text-main);
     background: color-mix(in srgb, var(--border-color) 55%, transparent);
 }
+
+.ai-generate-bar__invitation-preview {
+    margin: 0 0 0.75rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.ai-generate-bar__invitation-preview-label {
+    margin: 0 0 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.ai-generate-bar__invitation-preview-title,
+.ai-generate-bar__invitation-preview-message {
+    margin: 0.35rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--text-main);
+    white-space: pre-wrap;
+}
+
+.dating-ai-text-fields--pulse {
+    animation: dating-ai-fields-pulse 1.4s ease;
+}
+
+@keyframes dating-ai-fields-pulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, #ec4899 35%, transparent);
+    }
+    40% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, #ec4899 18%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+}
