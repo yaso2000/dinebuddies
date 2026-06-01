@@ -35,6 +35,13 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
 
+    function canUsePremiumOffers() {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let tier = userData.get('subscriptionTier', 'free');
+      return tier in ['paid', 'elite'] ||
+             (tier == 'professional' && userData.get('offerCredits', 0) > 0);
+    }
+
     function isCommunityMember(partnerId) {
       let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
@@ -644,12 +651,14 @@ service cloud.firestore {
     match /offers/{offerId} {
       allow read: if true;
       
-      // Create: Must be partner, and partnerId must match their UID
+      // Premium offer publishing is paid/credit-gated; clients cannot self-grant the tier/credits.
       allow create: if isPartner() && 
+                       canUsePremiumOffers() &&
                        request.resource.data.partnerId == request.auth.uid;
       
       // Update: Must be partner, own the offer, and cannot modify protected fields
       allow update: if isPartner() && 
+                       canUsePremiumOffers() &&
                        resource.data.partnerId == request.auth.uid &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['platform_commission', 'global_status']);
@@ -660,17 +669,30 @@ service cloud.firestore {
 
     match /active_offers/{offerId} {
       allow read: if true;
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
+      allow create: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       request.resource.data.partnerId == request.auth.uid;
+      allow update: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       resource.data.partnerId == request.auth.uid;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
 
     match /special_offers/{offerId} {
       allow read: if true;
       // Security: bind created special offer to authenticated partner owner
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
-      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+      allow create: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       (request.resource.data.partnerId == request.auth.uid ||
+                        request.resource.data.restaurantId == request.auth.uid);
+      allow update: if isPartner() &&
+                       canUsePremiumOffers() &&
+                       (resource.data.partnerId == request.auth.uid ||
+                        resource.data.restaurantId == request.auth.uid);
+      allow delete: if (isPartner() &&
+                        (resource.data.partnerId == request.auth.uid ||
+                         resource.data.restaurantId == request.auth.uid)) ||
+                       isAdmin();
     }
     
     // ============================================
