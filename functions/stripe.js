@@ -2,12 +2,19 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getCheckoutItem } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 
 const db = admin.firestore();
+
+function appendSessionId(url) {
+    const value = String(url || '').trim();
+    if (!value) return '';
+    return `${value}${value.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`;
+}
 
 /**
  * إنشاء جلسة دفع Stripe Checkout
@@ -21,14 +28,21 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { planId, planName } = data;
     const userId = context.auth.uid;
 
-    if (!priceId) {
+    const checkoutItem = getCheckoutItem(planId);
+    if (!checkoutItem) {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Invalid checkout plan'
         );
+    }
+
+    const successUrl = String(data?.successUrl || '').trim();
+    const cancelUrl = String(data?.cancelUrl || '').trim();
+    if (!successUrl || !cancelUrl) {
+        throw new functions.https.HttpsError('invalid-argument', 'successUrl and cancelUrl are required');
     }
 
     try {
@@ -54,23 +68,22 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             }, { merge: true });
         }
 
-        // إنشاء Checkout Session
         const session = await stripe.checkout.sessions.create({
             customer: customerId,
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: checkoutItem.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl,
+            mode: checkoutItem.mode,
+            success_url: appendSessionId(successUrl),
+            cancel_url: cancelUrl,
             metadata: {
                 userId: userId,
-                planId: planId,
-                planName: planName
+                planId: checkoutItem.id,
+                planName: planName || checkoutItem.name
             }
         });
 
