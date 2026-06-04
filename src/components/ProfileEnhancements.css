@@ -49,6 +49,114 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.cover-edit-fab {
+    display: none;
+    position: absolute;
+    bottom: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 4;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+}
+
+.profile-cover--editable .cover-overlay {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.profile-cover--editable:hover .cover-overlay,
+.profile-cover--editable:focus-within .cover-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    .profile-cover--editable .cover-edit-fab {
+        display: inline-flex;
+    }
+
+    .profile-cover--editable .cover-overlay {
+        display: none;
+    }
+}
+
+@media (hover: hover) {
+    .profile-cover--editable .cover-edit-fab {
+        display: none;
+    }
+
+    .profile-cover--editable .cover-overlay {
+        display: flex;
+        opacity: 0;
+    }
+
+    .profile-cover--editable:hover .cover-overlay {
+        opacity: 1;
+    }
+}
+
+.profile-cover--readonly {
+    margin-bottom: 1rem;
+    border-radius: 16px;
+}
+
+.profile-header--consumer {
+    position: relative;
+    margin-bottom: 0.5rem;
+}
+
+.profile-header--consumer .profile-cover {
+    border-radius: 16px;
+    margin-bottom: 0;
+}
+
+.profile-header--consumer:has(.profile-cover) .profile-identity {
+    position: relative;
+    z-index: 2;
+    padding-top: 0;
+    text-align: center;
+}
+
+.profile-header--consumer:has(.profile-cover) .profile-avatar-over-cover {
+    position: relative;
+    z-index: 3;
+    margin-top: -3.25rem;
+}
+
+.profile-header--consumer:has(.profile-cover) .profile-avatar-over-cover--lg {
+    margin-top: -4.25rem;
+}
+
+.profile-header--consumer:has(.profile-cover) .host-avatar-container {
+    box-shadow: 0 0 0 4px var(--bg-card, var(--bg-main));
+}
+
+.profile-header--consumer:has(.profile-cover) .profile-avatar-edit-row {
+    justify-content: center;
+}
+
+.profile-header--consumer:has(.profile-cover) .profile-avatar-edit-row .host-avatar-container,
+.profile-header--consumer:has(.profile-cover) .profile-avatar-over-cover .host-avatar-container {
+    margin-inline: auto;
+}
+
+.profile-header-actions {
+    position: absolute;
+    top: 0.55rem;
+    inset-inline-end: 0.55rem;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
 .cover-settings-btn {
     position: absolute;
     top: 1rem;

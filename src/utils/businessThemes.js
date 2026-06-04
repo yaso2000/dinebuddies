@@ -1,10 +1,90 @@
 /**
  * Business Profile Theme Registry
- * 6 Carefully curated themes ranging from Luxury to Modern.
+ * Curated themes + DineBuddies default (app primary orange).
  * Fully compatible with both Dark and Light modes using alpha-transparencies.
  */
 
+export const DINEBUDDIES_THEME_ID = 'dinebuddies';
+export const APP_PRIMARY_COLOR = '#E86E2E';
+export const APP_PRIMARY_HOVER = '#d85a20';
+
+/** UI colors derived from app primary — used for profile sections (hours, menu, gallery). */
+export function buildUiColorsFromPrimary(primary = APP_PRIMARY_COLOR, secondary = APP_PRIMARY_HOVER) {
+    return {
+        cardBg: null,
+        gradientFrom: 'rgba(232, 110, 46, 0.85)',
+        gradientTo: 'rgba(216, 90, 32, 0.95)',
+        accent: primary,
+        accentText: '#ffffff',
+        border: `color-mix(in srgb, ${primary} 30%, transparent)`,
+        footerBg: `linear-gradient(135deg, ${primary}, ${secondary})`,
+        badgeBg: `color-mix(in srgb, ${primary} 12%, transparent)`,
+        badgeText: primary,
+        headerGlow: `0 0 30px color-mix(in srgb, ${primary} 30%, transparent)`,
+        tabActive: primary,
+        swatchGradient: `linear-gradient(135deg, #ea7a40, ${primary})`,
+        btnShadow: `0 4px 15px color-mix(in srgb, ${primary} 30%, transparent)`,
+        cardShadow: `0 4px 20px color-mix(in srgb, ${primary} 15%, transparent), 0 0 0 1px color-mix(in srgb, ${primary} 20%, transparent)`,
+        btnBorderRadius: '14px',
+    };
+}
+
+/** Resolve stored theme id; empty/unknown → DineBuddies default. */
+export function resolveBusinessProfileThemeId(themeId) {
+    const id = String(themeId || '').trim();
+    if (!id || id === 'default') return DINEBUDDIES_THEME_ID;
+    if (BUSINESS_THEMES.some((t) => t.id === id)) return id;
+    return DINEBUDDIES_THEME_ID;
+}
+
+const LEGACY_GOLD_PRIMARIES = new Set(['#d4af37', '#997a00', 'd4af37', '997a00']);
+
+function normalizeBrandPrimaryForUi(brandPrimaryColor) {
+    if (!brandPrimaryColor) return null;
+    const key = String(brandPrimaryColor).trim().toLowerCase();
+    const withHash = key.startsWith('#') ? key : `#${key}`;
+    if (LEGACY_GOLD_PRIMARIES.has(key) || LEGACY_GOLD_PRIMARIES.has(withHash)) {
+        return null;
+    }
+    return brandPrimaryColor;
+}
+
+/**
+ * Colors for profile UI (tabs, hours, menu, gallery).
+ * Priority: brandKit.primaryColor → selected theme → app default.
+ */
+export function getBusinessProfileUiColors(brandPrimaryColor, themeColors) {
+    const primary = normalizeBrandPrimaryForUi(brandPrimaryColor);
+    if (primary) {
+        const secondary =
+            themeColors?.badgeText && themeColors.badgeText !== primary
+                ? themeColors.badgeText
+                : themeColors?.accent && themeColors.accent !== primary
+                  ? themeColors.accent
+                  : primary;
+        return { ...buildUiColorsFromPrimary(primary, secondary), ...(themeColors || {}) };
+    }
+    if (themeColors?.accent) {
+        const accent = themeColors.accent;
+        const secondary = themeColors.badgeText || accent;
+        return {
+            ...buildUiColorsFromPrimary(accent, secondary),
+            ...themeColors,
+            tabActive: themeColors.tabActive || accent,
+        };
+    }
+    return buildUiColorsFromPrimary();
+}
+
 export const BUSINESS_THEMES = [
+    {
+        id: DINEBUDDIES_THEME_ID,
+        name: 'DineBuddies',
+        emoji: '🍊',
+        isPremium: false,
+        description: 'Default app brand orange',
+        colors: buildUiColorsFromPrimary(),
+    },
     {
         id: 'golden_elegance',
         name: 'Golden Elegance',
@@ -248,5 +328,7 @@ export const BUSINESS_THEMES = [
     }
 ];
 
-export const getTheme = (id) =>
-    BUSINESS_THEMES.find(t => t.id === id) || BUSINESS_THEMES[0];
+export const getTheme = (id) => {
+    const resolved = resolveBusinessProfileThemeId(id);
+    return BUSINESS_THEMES.find((t) => t.id === resolved) || BUSINESS_THEMES[0];
+};

@@ -222,7 +222,7 @@ const MyCommunity = () => {
                     Story
                 </button>
                 <button
-                    onClick={() => navigate('/create-post')}
+                    onClick={() => navigate('/posts-feed', { state: { scrollToComposer: true } })}
                     className="my-community-btn my-community-btn--post"
                 >
                     <FaEdit style={{ fontSize: '0.8rem' }} />

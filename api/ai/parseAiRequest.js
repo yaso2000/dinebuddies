@@ -3,9 +3,25 @@
  */
 
 const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
-const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation']);
+const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio']);
 const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
-const ASPECT_RATIOS = new Set(['1:1', '9:16']);
+const ASPECT_RATIOS = new Set(['1:1', '9:16', '16:9']);
+const DESIGN_STUDIO_CATEGORIES = new Set([
+    'square',
+    'story',
+    'landscape',
+    'profile_picture',
+    'profile_cover',
+    'business_logo',
+]);
+const DESIGN_CATEGORY_ASPECT = {
+    square: '1:1',
+    story: '9:16',
+    landscape: '16:9',
+    profile_picture: '1:1',
+    profile_cover: '16:9',
+    business_logo: '1:1',
+};
 const CARD_STRUCTURES = new Set(['arch_luxury', 'vintage_ticket', 'modern_minimal']);
 
 /**
@@ -30,6 +46,7 @@ export function parseAiGenerateBody(body) {
         time,
         venueDetails,
         cardStructure,
+        designCategory,
     } = record;
 
     if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
@@ -52,6 +69,36 @@ export function parseAiGenerateBody(body) {
     }
 
     if (resolvedPackage === 'image' || normalizedPostType === 'magic_cover') {
+        const designCategoryRaw =
+            typeof designCategory === 'string' ? designCategory.trim() : '';
+        const isDesignStudio =
+            normalizedPostType === 'design_studio' ||
+            (designCategoryRaw && DESIGN_STUDIO_CATEGORIES.has(designCategoryRaw));
+
+        if (isDesignStudio) {
+            if (!DESIGN_STUDIO_CATEGORIES.has(designCategoryRaw)) {
+                return {
+                    ok: false,
+                    error: 'designCategory is required for design_studio image generation',
+                };
+            }
+
+            const ratioFromCategory = DESIGN_CATEGORY_ASPECT[designCategoryRaw] || '1:1';
+            const ratio =
+                typeof aspectRatio === 'string' && ASPECT_RATIOS.has(aspectRatio.trim())
+                    ? aspectRatio.trim()
+                    : ratioFromCategory;
+
+            return {
+                ok: true,
+                generationPackage: 'image',
+                postType: 'design_studio',
+                userPrompt: trimmedPrompt,
+                aspectRatio: ratio,
+                designCategory: designCategoryRaw,
+            };
+        }
+
         const postTypeForImage =
             normalizedPostType === 'magic_cover' || !normalizedPostType
                 ? 'invitation'
@@ -136,6 +183,13 @@ export function parseAiGenerateBody(body) {
 
     if (!normalizedPostType || !TEXT_POST_TYPES.has(normalizedPostType)) {
         return { ok: false, error: 'postType is required and must be a supported value' };
+    }
+
+    if (normalizedPostType === 'design_studio') {
+        return {
+            ok: false,
+            error: 'design_studio requires generationPackage image with designCategory',
+        };
     }
 
     if (normalizedPostType === 'invitation') {

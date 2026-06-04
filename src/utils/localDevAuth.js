@@ -22,9 +22,13 @@ export function isEmbeddedPreviewBrowser() {
     return false;
 }
 
-/** Google: popup on Chrome localhost + Cursor preview; redirect on Safari. */
-export function preferGoogleOAuthRedirect() {
+/**
+ * Firebase OAuth redirect (not popup) — reliable on localhost and Safari.
+ * Embedded preview (Cursor iframe): use popup; redirect often breaks in iframes.
+ */
+export function preferOAuthRedirectOnThisDevice() {
     if (isEmbeddedPreviewBrowser()) return false;
+    // Chrome/Firefox on localhost: popup is more reliable than redirect + getRedirectResult.
     if (isLocalDevHost()) return false;
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
@@ -34,6 +38,62 @@ export function preferGoogleOAuthRedirect() {
     if (/Chrome|Chromium|Edg[/\s]|Firefox|OPR|Brave/i.test(ua)) return false;
     const vendor = navigator.vendor || '';
     return /Safari/i.test(ua) && /Apple/i.test(vendor);
+}
+
+/** @deprecated Use preferOAuthRedirectOnThisDevice */
+export function preferGoogleOAuthRedirect() {
+    return preferOAuthRedirectOnThisDevice();
+}
+
+/** Remove Firebase OAuth hash/query after redirect so the SPA URL stays clean. */
+export function stripFirebaseAuthParamsFromUrl() {
+    if (typeof window === 'undefined') return;
+    if (!hasFirebaseAuthReturnInUrl()) return;
+    try {
+        const { pathname, search } = window.location;
+        const params = new URLSearchParams(search);
+        ['apiKey', 'authType', 'mode', 'oobCode', 'continueUrl', 'lang'].forEach((k) => params.delete(k));
+        const nextSearch = params.toString();
+        const clean = pathname + (nextSearch ? `?${nextSearch}` : '');
+        window.history.replaceState({}, document.title, clean);
+    } catch {
+        /* ignore */
+    }
+}
+
+export function stashOAuthRedirectError(error) {
+    if (!error) return;
+    try {
+        sessionStorage.setItem(
+            'dineb_oauth_redirect_error',
+            JSON.stringify({
+                code: error.code || '',
+                message: error.message || String(error),
+            })
+        );
+    } catch {
+        /* ignore */
+    }
+}
+
+/** @returns {{ code?: string, message?: string } | null} */
+export function consumeOAuthRedirectError() {
+    try {
+        const raw = sessionStorage.getItem('dineb_oauth_redirect_error');
+        sessionStorage.removeItem('dineb_oauth_redirect_error');
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+export function clearOAuthRedirectPending() {
+    try {
+        sessionStorage.removeItem('dineb_oauth_redirect_pending');
+    } catch {
+        /* ignore */
+    }
 }
 
 export function getLocalDevLoginUrl() {
@@ -73,6 +133,14 @@ export function markOAuthRedirectPending() {
         sessionStorage.removeItem('dineb_oauth_redirect_complete');
     } catch {
         /* ignore */
+    }
+}
+
+export function peekOAuthRedirectComplete() {
+    try {
+        return sessionStorage.getItem('dineb_oauth_redirect_complete') === '1';
+    } catch {
+        return false;
     }
 }
 

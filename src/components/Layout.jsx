@@ -1,6 +1,29 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire, FaSearch, FaSignInAlt, FaStar, FaTimes, FaLock, FaHeart, FaEdit } from 'react-icons/fa';
+import {
+    FaHome,
+    FaPlusCircle,
+    FaBell,
+    FaStore,
+    FaUsers,
+    FaComments,
+    FaCrown,
+    FaCog,
+    FaEnvelope,
+    FaUser,
+    FaClock,
+    FaFire,
+    FaSearch,
+    FaSignInAlt,
+    FaTimes,
+    FaLock,
+    FaHeart,
+    FaMagic,
+    FaImages,
+    FaPhotoVideo,
+    FaGlobe,
+    FaChevronRight,
+} from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
@@ -10,6 +33,7 @@ import { useTheme } from '../context/ThemeContext';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import AppRouteLoading from './AppRouteLoading';
@@ -26,6 +50,7 @@ import { useToast } from '../context/ToastContext';
 import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
 import { attachHideBottomNavOnKeyboard } from '../utils/hideBottomNavOnKeyboard';
 import { isIOS, isStandalonePwa, markIosPwaLaunch } from '../services/notificationService';
+import { isAuthRoutePath } from '../utils/authRoutePaths';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -232,7 +257,8 @@ const Layout = ({ children }) => {
         location.pathname === '/create' ||
         location.pathname.startsWith('/create/');
     const keepOutletMountedWhileLoading =
-        (isAdminPath || isCreateInvitationPath) && Boolean(currentUser?.uid);
+        isAuthRoutePath(location.pathname) ||
+        ((isAdminPath || isCreateInvitationPath) && Boolean(currentUser?.uid));
 
     if (loading && !keepOutletMountedWhileLoading) {
         return <AppShellLoading variant="session" />;
@@ -282,6 +308,7 @@ const Layout = ({ children }) => {
     const showConversationSidebar = isChatRoute && !isMessagesIndex;
     const isCommunityRoute = location.pathname.startsWith('/community/');
     const isStoryRoute = location.pathname === '/create-story';
+    const isAiDesignRoute = location.pathname === '/ai-design-studio';
     const isStudioRoute =
         location.pathname === '/create-post' || location.pathname === '/create-featured-post';
     const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
@@ -337,9 +364,11 @@ const Layout = ({ children }) => {
                                 transition: 'background 0.15s',
                             }}
                         >
-                            <img src={ou.photoURL || ou.avatar || '/default-avatar.png'} alt={ou.displayName}
-                                style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                                onError={e => { e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%238b5cf6" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="18"%3E👤%3C/text%3E%3C/svg%3E'; }}
+                            <UserAvatar
+                                user={ou}
+                                src={ou?.photoURL || ou?.avatar}
+                                alt={ou?.displayName}
+                                style={{ width: 38, height: 38, flexShrink: 0 }}
                             />
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: '700', fontSize: '0.88rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ou.displayName}</div>
@@ -517,7 +546,7 @@ const Layout = ({ children }) => {
     );
 
     return (
-        <div className={`app-layout${isSearchRoute ? ' app-layout--search' : ''}`} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+        <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
 
             <PushNotificationPrompt />
             <PushSessionManager />
@@ -530,14 +559,22 @@ const Layout = ({ children }) => {
                     enabled={!loading}
                 />
             )}
-            {/* ── HEADER ── hidden on mobile chat & search (search has its own bar) ── */}
-            <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}${isSearchRoute ? ' app-header--search-route' : ''}`}>
+            {/* ── HEADER ── hidden on mobile chat only (chat has its own bar) ── */}
+            <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}`}>
                 <div className="logo-wrapper" onClick={() => navigate(feedHomePath)}>
                     <img src="/db-logo.svg" alt="DineBuddies" className="app-logo-img" />
                 </div>
                 <div className="header-actions">
                     {!isGuest && userProfile?.role !== 'guest' ? (
                         <>
+                            <Link
+                                to="/ai-design-studio"
+                                className={`notification-bell header-ai-studio-btn${isAiDesignRoute ? ' active' : ''}`}
+                                title={t('ai_design_studio_nav', 'AI Design Studio')}
+                                aria-label={t('ai_design_studio_nav', 'AI Design Studio')}
+                            >
+                                <FaMagic />
+                            </Link>
                             <button
                                 className={`notification-bell nav-search-btn${isActive('/search') ? ' active' : ''}`}
                                 onClick={() => navigate('/search')}
@@ -561,12 +598,12 @@ const Layout = ({ children }) => {
                             <div
                                 className="header-profile-pic"
                                 onClick={() => navigate(isBusinessAccount ? `/business/${currentUser.uid}` : '/profile')}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'pointer', position: 'relative', background: 'var(--bg-card)' }}
+                                style={{ cursor: 'pointer', position: 'relative', lineHeight: 0 }}
                             >
-                                <img
-                                    src={getSafeAvatar(userProfile)}
+                                <UserAvatar
+                                    user={userProfile || currentUser}
                                     alt="Profile"
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    style={{ width: 40, height: 40 }}
                                 />
                             </div>
                         </>
@@ -599,6 +636,11 @@ const Layout = ({ children }) => {
                         <Link to="/invitations" className={`ds-nav-item ${isActive('/invitations') ? 'active' : ''}`}>
                             <FaEnvelope /><span>{t('nav_invitations', 'Invitations')}</span>
                         </Link>
+                        {!isGuest && userProfile?.role !== 'guest' && (
+                            <Link to="/ai-design-studio" className={`ds-nav-item ${isAiDesignRoute ? 'active' : ''}`}>
+                                <FaMagic /><span>{t('ai_design_studio_nav', 'AI Design')}</span>
+                            </Link>
+                        )}
                         {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' && currentUser && (
                             <button
                                 type="button"
@@ -683,7 +725,7 @@ const Layout = ({ children }) => {
                 ))}
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isSearchRoute ? ' app-main--search' : ''}`}>
+                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}`}>
                     {!isSearchRoute && <EmailVerificationBusinessBanner />}
                     {!isSearchRoute && <UnpublishedBusinessReminder />}
                     {children}
@@ -801,8 +843,8 @@ const Layout = ({ children }) => {
                                 className="business-create-option"
                                 onClick={() => finishInviteCreateManual('public')}
                             >
-                                <span className="business-create-option__icon business-create-option__icon--featured">
-                                    <FaEnvelope />
+                                <span className="business-create-option__icon business-create-option__icon--public" aria-hidden>
+                                    <FaGlobe />
                                 </span>
                                 <span className="business-create-option__text">
                                     <span className="business-create-option__label">
@@ -815,13 +857,14 @@ const Layout = ({ children }) => {
                                         )}
                                     </span>
                                 </span>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
                             </button>
                             <button
                                 type="button"
                                 className="business-create-option"
                                 onClick={() => finishInviteCreateManual('private')}
                             >
-                                <span className="business-create-option__icon business-create-option__icon--motion">
+                                <span className="business-create-option__icon business-create-option__icon--private" aria-hidden>
                                     <FaLock />
                                 </span>
                                 <span className="business-create-option__text">
@@ -835,13 +878,14 @@ const Layout = ({ children }) => {
                                         )}
                                     </span>
                                 </span>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
                             </button>
                             <button
                                 type="button"
                                 className="business-create-option"
                                 onClick={() => finishInviteCreateManual('dating')}
                             >
-                                <span className="business-create-option__icon business-create-option__icon--featured">
+                                <span className="business-create-option__icon business-create-option__icon--dating" aria-hidden>
                                     <FaHeart />
                                 </span>
                                 <span className="business-create-option__text">
@@ -855,6 +899,7 @@ const Layout = ({ children }) => {
                                         )}
                                     </span>
                                 </span>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
                             </button>
                         </div>
                     </div>
@@ -901,8 +946,8 @@ const Layout = ({ children }) => {
                                     navigate('/create-featured-post');
                                 }}
                             >
-                                <span className="business-create-option__icon business-create-option__icon--featured">
-                                    <FaStar />
+                                <span className="business-create-option__icon business-create-option__icon--featured" aria-hidden>
+                                    <FaImages />
                                 </span>
                                 <span className="business-create-option__text">
                                     <span className="business-create-option__label">
@@ -915,6 +960,7 @@ const Layout = ({ children }) => {
                                         )}
                                     </span>
                                 </span>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
                             </button>
                             <button
                                 type="button"
@@ -924,8 +970,8 @@ const Layout = ({ children }) => {
                                     navigate('/create-post');
                                 }}
                             >
-                                <span className="business-create-option__icon business-create-option__icon--post">
-                                    <FaEdit />
+                                <span className="business-create-option__icon business-create-option__icon--motion" aria-hidden>
+                                    <FaPhotoVideo />
                                 </span>
                                 <span className="business-create-option__text">
                                     <span className="business-create-option__label">
@@ -938,6 +984,7 @@ const Layout = ({ children }) => {
                                         )}
                                     </span>
                                 </span>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
                             </button>
                         </div>
                     </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaUsers, FaTrash, FaEnvelope, FaUserShield, FaCheck, FaCrown } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 import { useTranslation } from 'react-i18next';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { createNotification } from '../utils/notificationHelpers';
@@ -325,17 +326,10 @@ const CommunityManagement = ({ businessId, businessName, currentUserId, canUseMe
                             </div>
 
                             {/* Avatar */}
-                            <img
-                                src={getSafeAvatar(member)}
+                            <UserAvatar
+                                user={member}
                                 alt={member.name}
-                                style={{
-                                    width: '48px',
-                                    height: '48px',
-                                    borderRadius: '50%',
-                                    objectFit: 'cover',
-                                    flexShrink: 0
-                                }}
-                                onError={(e) => { e.target.src = getSafeAvatar(null); }}
+                                style={{ width: 48, height: 48, flexShrink: 0 }}
                             />
 
                             {/* Member Info */}

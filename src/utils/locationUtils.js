@@ -168,13 +168,10 @@ export const geocode = async (address) => {
 
         // Append a random cache buster to avoid 403 from some networks
         const cacheBuster = Math.floor(Math.random() * 1000000);
+        const { nominatimHeaders } = await import('./osmPhotonSearch');
         const response = await fetch(
             `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&accept-language=en&cb=${cacheBuster}`,
-            {
-                headers: {
-                    'Accept-Language': 'en'
-                }
-            }
+            { headers: nominatimHeaders() }
         );
 
         if (response.status === 403 || !response.ok) {
@@ -201,6 +198,45 @@ export const geocode = async (address) => {
             sessionStorage.setItem('NOMINATIM_BLOCKED', 'true');
         }
         return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Geocode for map display — Nominatim first, then Photon (no API key, works when Nominatim is blocked).
+ */
+export const geocodeAddress = async (address) => {
+    const nominatim = await geocode(address);
+    if (nominatim.success) return nominatim;
+
+    try {
+        const q = encodeURIComponent(String(address || '').trim());
+        if (!q) return nominatim;
+
+        const res = await fetch(`https://photon.komoot.io/api/?q=${q}&limit=1&lang=en`);
+        if (!res.ok) return nominatim;
+
+        const data = await res.json();
+        const feature = data?.features?.[0];
+        const coords = feature?.geometry?.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return nominatim;
+
+        const lat = parseFloat(coords[1]);
+        const lng = parseFloat(coords[0]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return nominatim;
+
+        return {
+            success: true,
+            source: 'photon',
+            results: [{
+                lat,
+                lng,
+                displayName: feature.properties?.name || address,
+                raw: feature,
+            }],
+        };
+    } catch (err) {
+        console.warn('Photon geocode failed:', err?.message || err);
+        return nominatim;
     }
 };
 

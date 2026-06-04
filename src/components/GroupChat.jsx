@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown, FaPause, FaPlay, FaArrowLeft } from 'react-icons/fa';
 import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 import EmojiPickerPortal, { isTouchOrCoarsePointer } from './EmojiPickerPortal';
 import '../pages/CommunityChatRoom.css';
 
@@ -334,11 +335,11 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
                             >
                                 {/* Avatar for Incoming */}
                                 {!isMe && (
-                                    <img
-                                        src={getSafeAvatar({ photo_url: msg.senderAvatar, display_name: msg.senderName })}
-                                        alt=""
+                                    <UserAvatar
+                                        user={{ photo_url: msg.senderAvatar, display_name: msg.senderName, gender: msg.senderGender }}
                                         className="sender-avatar"
-                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden' }}
+                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden', width: 32, height: 32 }}
+                                        alt=""
                                     />
                                 )}
 

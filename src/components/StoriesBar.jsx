@@ -119,7 +119,8 @@ const StoriesBar = ({ onStoryClick }) => {
                                 return {
                                     ...userGroup,
                                     partnerName: pName,
-                                    partnerLogo: pLogo
+                                    partnerLogo: pLogo,
+                                    partnerGender: profile.gender,
                                 };
                             }
 
@@ -317,7 +318,8 @@ const StoriesBar = ({ onStoryClick }) => {
                         partner={{
                             id: user.userId,
                             name: user.partnerName,
-                            logo: user.partnerLogo
+                            logo: user.partnerLogo,
+                            gender: user.partnerGender,
                         }}
                         hasNewStory={user.hasNewActiveStory}
                         onClick={() => onStoryClick({

@@ -86,7 +86,9 @@ const PushNotificationPrompt = () => {
             return undefined;
         }
 
-        console.log('[PushDebug]', getPushCapabilitySnapshot(currentUser.uid));
+        if (import.meta.env.DEV && localStorage.getItem('DEBUG_PUSH') === '1') {
+            console.log('[PushDebug]', getPushCapabilitySnapshot(currentUser.uid));
+        }
 
         const uid = currentUser.uid;
         let cancelled = false;

@@ -13,6 +13,7 @@ import {
 import { db } from '../firebase/config';
 import { normalizeFeaturedPostDoc } from './featuredPostService';
 import { stripUndefinedDeep } from '../utils/firestoreSanitize';
+import { publishGeoFromStoredDoc } from '../utils/postPublishGeo';
 
 function businessAuthorFromUser(data: Record<string, unknown> | undefined, ownerId: string) {
     const bi = (data?.businessInfo as Record<string, unknown>) || {};
@@ -81,6 +82,7 @@ export async function syncPublishedFeaturedPostToCommunityFeed(
         mediaUrl,
         mediaType: mediaUrl ? 'image' : null,
         status: 'published',
+        ...publishGeoFromStoredDoc(raw),
         authorInterests: Array.isArray(profile.interests)
             ? profile.interests
             : Array.isArray(profile.hobbies)

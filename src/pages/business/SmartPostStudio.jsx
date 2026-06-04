@@ -11,7 +11,6 @@ import {
     FaSlidersH,
     FaTextHeight,
     FaTags,
-    FaArrowsAlt,
     FaAdjust,
     FaArrowUp,
     FaExpandAlt,
@@ -74,7 +73,8 @@ import {
     normalizeStudioTextAnimation,
 } from '../../features/motion-post/studio/studioTextAnimation';
 import AIFloatingLauncher from '../../components/AIFloatingLauncher';
-import { extractAIContentFields, extractAIImageUrl, mapAiAnimationToStudio } from '../../utils/aiContentFieldMapper';
+import { extractAIContentFields, mapAiAnimationToStudio } from '../../utils/aiContentFieldMapper';
+import { parseAiStudioImageFromState } from '../../utils/aiStudioImagePayload';
 import { pickAiRemoteImageUrl } from '../../utils/aiGeneratedMediaUrl';
 import { ensurePublicImageUrl } from '../../services/mediaService';
 import './SmartPostStudio.css';
@@ -245,7 +245,6 @@ export default function SmartPostStudio() {
     const [activeTool, setActiveTool] = useState(null);
     const [publishing, setPublishing] = useState(false);
     const [savingDraft, setSavingDraft] = useState(false);
-    const [showGrid, setShowGrid] = useState(true);
     const [promoStickers, setPromoStickers] = useState(
         /** @type {{ id: string; stickerId: string; slot: string }[]} */ ([])
     );
@@ -271,6 +270,13 @@ export default function SmartPostStudio() {
             }
         };
     }, [media?.preview]);
+
+    useEffect(() => {
+        const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
+        if (!studio) return;
+        setMedia({ preview: studio.publishedUrl, url: studio.publishedUrl });
+        setCoverHidden(false);
+    }, [location.state?.aiStudioImage]);
 
     useEffect(() => {
         if (!editMotionPostId || !currentUser?.uid) {
@@ -439,12 +445,6 @@ export default function SmartPostStudio() {
             if (fields.description) setBody(fields.description);
             if (fields.animation_type) {
                 selectTextAnimation(mapAiAnimationToStudio(fields.animation_type));
-            }
-
-            const imageUrl = extractAIImageUrl(data);
-            if (imageUrl) {
-                setMedia({ preview: imageUrl });
-                setCoverHidden(false);
             }
         },
         [selectTextAnimation]
@@ -699,7 +699,6 @@ export default function SmartPostStudio() {
 
     const previewBlock = (
         <>
-            {showGrid && <div className="sps-canvas-stage__grid" aria-hidden />}
             <div
                 ref={cardRef}
                 className={`sps-canvas-stage__card${isTyping && previewSize ? ' sps-canvas-stage__card--locked' : ''}`}
@@ -727,15 +726,6 @@ export default function SmartPostStudio() {
                     animPlayKey={animPlayKey}
                 />
             </div>
-            <button
-                type="button"
-                className="sps-canvas-float"
-                onClick={() => setShowGrid((g) => !g)}
-                aria-pressed={showGrid}
-                title={t('studio_toggle_grid', 'شبكة المحاذاة')}
-            >
-                <FaArrowsAlt />
-            </button>
             {media?.preview && (
                 <button
                     type="button"
@@ -814,7 +804,6 @@ export default function SmartPostStudio() {
                         postType="animated_post"
                         onTextSuccess={handleAnimatedAiContent}
                         buildContextPrompt={buildAnimatedAiPrompt}
-                        multimodalMode
                         disabled={isBusy}
                         compact
                     />

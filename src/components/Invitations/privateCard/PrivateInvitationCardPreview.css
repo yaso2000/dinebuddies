@@ -71,7 +71,13 @@
     max-width: 92%;
     margin-bottom: 0.875em;
     font-size: 0.78em;
-    color: rgba(255, 255, 255, 0.78);
+}
+
+.private-invitation-card-preview--showcase .private-invitation-card-preview__message,
+.private-invitation-card-preview--showcase .private-invitation-card-preview__title,
+.private-invitation-card-preview--showcase .private-invitation-card-preview__occasion,
+.private-invitation-card-preview--showcase .private-invitation-card-preview__host-name {
+    color: inherit;
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__host {
@@ -177,6 +183,45 @@
     pointer-events: none;
 }
 
+/* Pending overlay when hero cover is uploading / propagating */
+.private-invitation-card-preview__pending {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+.private-invitation-card-preview__pending-inner {
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+}
+.private-invitation-card-preview__pending-spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset;
+    border: 2px solid rgba(255,255,255,0.18);
+    border-top-color: rgba(255,255,255,0.9);
+    animation: pj-spin 1s linear infinite;
+}
+.private-invitation-card-preview__pending-text {
+    font-size: 0.78em;
+    font-weight: 600;
+}
+
+@keyframes pj-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* Template art: use <img> so decoding matches file type (PNG/JPEG/WebP) and fallbacks work */
 .private-invitation-card-preview__bg--image {
     width: 100%;
@@ -210,7 +255,12 @@
     font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.08em;
+    font-family: inherit;
     opacity: 0.95;
+}
+
+.private-invitation-card-preview__bidi {
+    unicode-bidi: isolate;
 }
 
 [dir='rtl'] .private-invitation-card-preview__occasion {
@@ -231,16 +281,24 @@
     gap: 8px;
 }
 
-/* Text panel: 70% card width, height follows copy */
+/* Text panel: 50% of card (background image) width; max height 50% of card */
+.private-invitation-card-preview--text-backdrop {
+    --private-text-backdrop-width: 50%;
+    --private-text-backdrop-max-height: 50%;
+}
+
 .private-invitation-card-preview--showcase.private-invitation-card-preview--text-backdrop
     .private-invitation-card-preview__main {
     padding: 0.625em 0.875em;
     border-radius: 0.875em;
 }
 
-.private-invitation-card-preview--text-backdrop .private-invitation-card-preview__main {
-    width: 84%;
-    max-width: 84%;
+/* Text panel: 50% of card (background) — fixed box behind copy */
+.private-invitation-card-preview--text-backdrop .private-invitation-card-preview__text-panel,
+.private-invitation-card-preview--text-backdrop .private-invitation-card-preview__main.private-invitation-card-preview__text-panel {
+    width: var(--private-text-backdrop-width, 50%) !important;
+    max-width: var(--private-text-backdrop-width, 50%) !important;
+    max-height: var(--private-text-backdrop-max-height, 50%) !important;
     height: auto;
     min-height: 0;
     margin-inline: auto;
@@ -249,11 +307,31 @@
     background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.55));
     box-sizing: border-box;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.38);
+    overflow: auto;
+    flex: 0 1 auto !important;
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Frosted glass tone — stronger blur */
+.private-invitation-card-preview--text-backdrop-frosted .private-invitation-card-preview__text-panel,
+.private-invitation-card-preview--text-backdrop-frosted .private-invitation-card-preview__main.private-invitation-card-preview__text-panel,
+.private-invitation-card-preview--text-backdrop-frosted.private-invitation-card-preview--structure-layout
+    .private-invitation-card-preview__copy-zone,
+.private-invitation-card-preview--text-backdrop-frosted.private-invitation-card-preview--structure-layout
+    .private-invitation-card-preview__signatory {
+    backdrop-filter: blur(22px) saturate(1.45);
+    -webkit-backdrop-filter: blur(22px) saturate(1.45);
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        0 8px 28px rgba(0, 0, 0, 0.28);
 }
 
 .private-invitation-card-preview--text-backdrop .private-invitation-card-preview__meta {
     width: fit-content;
-    max-width: calc(100% - 16px);
+    max-width: var(--private-text-backdrop-width, 50%);
     margin-inline: auto;
     margin-top: 0;
     padding: 8px 12px;
@@ -263,6 +341,15 @@
     -webkit-backdrop-filter: none;
     border-color: transparent;
     box-shadow: none;
+}
+
+.private-invitation-card-preview--text-backdrop-frosted .private-invitation-card-preview__meta {
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .private-invitation-card-preview__main {
@@ -302,10 +389,14 @@
 
 .private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__inner--photo-bg
-    .private-invitation-card-preview__main {
-    flex: 0 0 auto;
-    width: 84%;
-    max-width: 84%;
+    .private-invitation-card-preview__text-panel,
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__main.private-invitation-card-preview__text-panel {
+    flex: 0 0 auto !important;
+    width: var(--private-text-backdrop-width, 50%) !important;
+    max-width: var(--private-text-backdrop-width, 50%) !important;
+    max-height: var(--private-text-backdrop-max-height, 50%) !important;
     height: auto;
     padding: 12px 16px;
     justify-content: flex-start;
@@ -315,6 +406,103 @@
     .private-invitation-card-preview__meta {
     margin-top: 0;
     flex: 0 0 auto;
+}
+
+/* Template safe zones — title/message top, occasion/host bottom; same font + frame colors */
+.private-invitation-card-preview__copy-zone,
+.private-invitation-card-preview__signatory {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.private-invitation-card-preview--structure-layout.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__main {
+    flex: 1 1 0;
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.private-invitation-card-preview--structure-arch-luxury.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main {
+    padding: 14% 10% 20%;
+}
+
+.private-invitation-card-preview--structure-vintage-ticket.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main {
+    padding: 18% 12%;
+    justify-content: center;
+    gap: 12%;
+}
+
+.private-invitation-card-preview--structure-vintage-ticket.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__signatory {
+    margin-top: 0;
+}
+
+.private-invitation-card-preview--structure-modern-minimal.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main {
+    padding: 12% 10%;
+    justify-content: center;
+    gap: 14%;
+}
+
+.private-invitation-card-preview--structure-layout.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__signatory {
+    margin-top: auto;
+}
+
+.private-invitation-card-preview--structure-layout.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__signatory
+    .private-invitation-card-preview__occasion {
+    margin-bottom: 6px;
+}
+
+.private-invitation-card-preview--structure-layout.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__signatory
+    .private-invitation-card-preview__host {
+    margin-bottom: 0;
+}
+
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout
+    .private-invitation-card-preview__main {
+    background: transparent;
+    box-shadow: none;
+}
+
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout
+    .private-invitation-card-preview__copy-zone,
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout
+    .private-invitation-card-preview__signatory {
+    width: var(--private-text-backdrop-width, 50%);
+    max-width: var(--private-text-backdrop-width, 50%);
+    max-height: var(--private-text-backdrop-max-height, 50%);
+    margin-inline: auto;
+    padding: 0.625em 0.875em;
+    border-radius: 0.875em;
+    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.55));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.38);
+    overflow: auto;
+}
+
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout.private-invitation-card-preview--showcase
+    .private-invitation-card-preview__copy-zone,
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout.private-invitation-card-preview--showcase
+    .private-invitation-card-preview__signatory {
+    padding: 0.625em 0.875em;
+    border-radius: 0.875em;
 }
 
 /* All card copy hidden: only date/place meta; collapse empty main */
@@ -404,6 +592,13 @@
     text-decoration: none;
 }
 
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__title {
+    width: 100%;
+    max-width: 100%;
+}
+
 .private-invitation-card-preview--photo-bg .private-invitation-card-preview__main .private-invitation-card-preview__title {
     width: 100%;
     max-width: min(92%, 280px);
@@ -413,7 +608,14 @@
     box-sizing: border-box;
 }
 
-/* Keep body text inside the decorative frame — narrower column + wrap */
+/* Keep body text inside the decorative frame — wrap at word boundaries (Arabic-friendly) */
+.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__message {
+    width: 100%;
+    max-width: 100%;
+}
+
 .private-invitation-card-preview--photo-bg .private-invitation-card-preview__main .private-invitation-card-preview__message {
     width: 100%;
     max-width: min(88%, 240px);
@@ -421,9 +623,11 @@
     margin-left: auto;
     margin-right: auto;
     box-sizing: border-box;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    hyphens: auto;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+    white-space: normal;
+    text-wrap: pretty;
 }
 
 /* Showcase + template art: slightly smaller type so text stays inside artwork safe area */
@@ -436,8 +640,51 @@
 .private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__message {
     font-size: 0.76em;
-    line-height: 1.42;
+    line-height: 1.55;
     max-width: 96%;
+}
+
+/* Dating: one centered panel (message + host) instead of split safe zones */
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__text-stack {
+    flex: 1 1 0;
+    justify-content: center;
+    align-items: center;
+}
+
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__text-panel,
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__main.private-invitation-card-preview__text-panel {
+    flex: 0 1 auto !important;
+    width: var(--private-text-backdrop-width, 50%) !important;
+    max-width: var(--private-text-backdrop-width, 50%) !important;
+    max-height: var(--private-text-backdrop-max-height, 50%) !important;
+    margin-inline: auto;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+    .private-invitation-card-preview__message {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 0.65em;
+    line-height: 1.55;
+}
+
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+    .private-invitation-card-preview__occasion {
+    margin-bottom: 0.45em;
+}
+
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+    .private-invitation-card-preview__host {
+    margin-bottom: 0;
 }
 
 .private-invitation-card-preview__inner--photo-bg .private-invitation-card-preview__host {
@@ -470,7 +717,7 @@
 
 .private-invitation-card-preview__icon-wrap {
     margin-bottom: 10px;
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--private-card-icon-fg, rgba(255, 255, 255, 0.92));
 }
 
 .private-invitation-card-preview__title {
@@ -478,7 +725,6 @@
     font-size: 1.05rem;
     font-weight: 800;
     line-height: 1.25;
-    color: #fafafa;
     font-family: inherit;
     max-width: 100%;
     word-break: break-word;
@@ -488,7 +734,7 @@
     margin: 0 0 12px;
     font-size: 0.78rem;
     line-height: 1.45;
-    color: rgba(255, 255, 255, 0.72);
+    font-family: inherit;
     max-width: 100%;
     min-height: 2.2em;
 }
@@ -518,23 +764,12 @@
     border-style: dashed;
 }
 
-/* Sender name: fixed face (not the card decorative font); color comes from frame palette inline */
+/* Host name follows the card decorative font + frame palette (inline styles). */
 .private-invitation-card-preview__host-name {
-    font-family:
-        'Montserrat',
-        system-ui,
-        -apple-system,
-        'Segoe UI',
-        Roboto,
-        'Helvetica Neue',
-        Arial,
-        'Noto Sans Arabic',
-        'Noto Naskh Arabic',
-        sans-serif;
+    font-family: inherit;
     font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.88);
 }
 
 /**
@@ -580,8 +815,8 @@
     font-size: 0.68rem;
     font-weight: 600;
     line-height: 1.35;
-    color: rgba(248, 250, 252, 0.96);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    color: var(--private-card-meta-fg, rgba(248, 250, 252, 0.96));
+    text-shadow: var(--private-card-meta-shadow, 0 1px 3px rgba(0, 0, 0, 0.45));
     word-break: break-word;
     max-width: 100%;
 }
@@ -601,7 +836,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.95);
+    color: inherit;
 }
 
 .private-card-cat-icon svg {

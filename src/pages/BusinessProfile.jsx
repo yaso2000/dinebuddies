@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, onSnapshot, addDoc, serverTimestamp, updateDoc, increment, DocumentReference } from 'firebase/firestore';
@@ -19,6 +19,13 @@ import { useTranslation } from 'react-i18next';
 import { getSafeAvatar, getSafeCoverImage, getShareableCoverImage } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import DeliveryLinksSection from '../components/DeliveryLinksSection';
+import BusinessLocationMap from '../components/BusinessLocationMap';
+import { geocodeAddress } from '../utils/locationUtils';
+import { getUserDocLatLng } from '../utils/userDocCoords';
+import {
+    normalizeDeliveryLinks,
+    deliveryLinksReadyToSave,
+} from '../utils/deliveryLinkMeta';
 import BusinessHours from '../components/BusinessHours';
 import EnhancedGallery from '../components/EnhancedGallery';
 import EnhancedReviews from '../components/EnhancedReviews';
@@ -32,10 +39,15 @@ import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import ServiceModal, { SERVICE_ICONS } from '../components/ServiceModal';
 import { getContrastText } from '../utils/colorUtils';
 import { isBusinessUser } from '../utils/accountRole';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import { normalizeUserProfile } from '../utils/userProfileNormalize';
 import PremiumBadge from '../components/PremiumBadge';
 import PremiumPaywallModal from '../components/PremiumPaywallModal';
-import { getTheme } from '../utils/businessThemes';
+import {
+    getTheme,
+    getBusinessProfileUiColors,
+    resolveBusinessProfileThemeId,
+} from '../utils/businessThemes';
 import DraftSavedModal from '../components/DraftSavedModal';
 import BrandKit from './business-pro/BrandKit';
 import PlanBadge from '../components/PlanBadge';
@@ -171,6 +183,13 @@ const BusinessProfile = () => {
     const lastBizSnapshotSigRef = useRef('');
 
     const [business, setBusiness] = useState(null);
+    const tierAccess = useMemo(
+        () => getBusinessSubscriptionAccess(business?.subscriptionTier),
+        [business?.subscriptionTier]
+    );
+    const isPaid = tierAccess.isPaid;
+    const isElite = tierAccess.isPaid;
+    const isPremium = tierAccess.isPaid;
     const [loading, setLoading] = useState(true);
     /** Visitors only: hidden until business email is verified on the account. Owner always sees/edits — not gated by email. */
     const [publicProfileHidden, setPublicProfileHidden] = useState(false);
@@ -201,13 +220,8 @@ const BusinessProfile = () => {
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
 
-    // Delivery Links states (Premium feature)
-    const [deliveryLinks, setDeliveryLinks] = useState({
-        uberEats: '',
-        menulog: '',
-        doorDash: '',
-        deliveroo: ''
-    });
+    // Delivery Links states (Premium feature) — array of { id, url, name, icon, ... }
+    const [deliveryLinks, setDeliveryLinks] = useState([]);
     const [editingDeliveryLinks, setEditingDeliveryLinks] = useState(false);
 
     // Highlights state
@@ -224,12 +238,7 @@ const BusinessProfile = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
-    const [tempDeliveryLinks, setTempDeliveryLinks] = useState({
-        uberEats: '',
-        menulog: '',
-        doorDash: '',
-        deliveroo: ''
-    });
+    const [tempDeliveryLinks, setTempDeliveryLinks] = useState([]);
 
     // Like/share counts: single source of truth = Firestore (onSnapshot). No local override state.
     // Optimistic share count so number doesn’t flash back to zero
@@ -591,7 +600,7 @@ const BusinessProfile = () => {
                     fetchActiveInvitations(),
                     fetchReviews()
                 ]);
-                if ((business?.subscriptionTier || '').toLowerCase() === 'elite') {
+                if (getBusinessSubscriptionAccess(business?.subscriptionTier).isPaid) {
                     fetchFeaturedPosts();
                 }
             }
@@ -604,19 +613,9 @@ const BusinessProfile = () => {
     // Load delivery links when partner data changes
     useEffect(() => {
         if (business?.businessInfo?.deliveryLinks) {
-            const links = business.businessInfo.deliveryLinks;
-            setDeliveryLinks({
-                uberEats: links.uberEats || '',
-                menulog: links.menulog || '',
-                doorDash: links.doorDash || '',
-                deliveroo: links.deliveroo || ''
-            });
-            setTempDeliveryLinks({
-                uberEats: links.uberEats || '',
-                menulog: links.menulog || '',
-                doorDash: links.doorDash || '',
-                deliveroo: links.deliveroo || ''
-            });
+            const normalized = normalizeDeliveryLinks(business.businessInfo.deliveryLinks);
+            setDeliveryLinks(normalized);
+            setTempDeliveryLinks(normalized.map((l) => ({ ...l })));
         }
     }, [deliveryLinksKey]);
 
@@ -1033,11 +1032,13 @@ const BusinessProfile = () => {
         }
 
         try {
+            const toSave = deliveryLinksReadyToSave(tempDeliveryLinks);
             const userRef = doc(db, 'users', profileId);
             await updateDoc(userRef, {
-                'businessInfo.deliveryLinks': tempDeliveryLinks
+                'businessInfo.deliveryLinks': toSave
             });
-            setDeliveryLinks(tempDeliveryLinks);
+            setDeliveryLinks(toSave);
+            setTempDeliveryLinks(toSave.map((l) => ({ ...l })));
             setEditingDeliveryLinks(false);
         } catch (error) {
             console.error('❌ Error saving delivery links:', error);
@@ -1046,7 +1047,7 @@ const BusinessProfile = () => {
     };
 
     const handleCancelDeliveryLinks = () => {
-        setTempDeliveryLinks(deliveryLinks);
+        setTempDeliveryLinks(deliveryLinks.map((l) => ({ ...l })));
         setEditingDeliveryLinks(false);
     };
 
@@ -1195,6 +1196,20 @@ const BusinessProfile = () => {
             };
             if (business?.businessProfileSetupPending) {
                 payload.businessProfileSetupPending = false;
+            }
+            const addressLine = [contactForm.address, contactForm.city, businessInfo.country]
+                .filter(Boolean)
+                .join(', ')
+                .trim();
+            if (addressLine) {
+                const geo = await geocodeAddress(addressLine);
+                if (geo.success && geo.results?.[0]) {
+                    payload['businessInfo.lat'] = geo.results[0].lat;
+                    payload['businessInfo.lng'] = geo.results[0].lng;
+                }
+            } else {
+                payload['businessInfo.lat'] = null;
+                payload['businessInfo.lng'] = null;
             }
             await updateDoc(doc(db, 'users', profileId), payload);
             setShowContactModal(false);
@@ -1350,21 +1365,19 @@ const BusinessProfile = () => {
         ? { ...rawBusinessInfo, ...rawBusinessInfo.drafts }
         : rawBusinessInfo;
 
+    const profileMapCoords = getUserDocLatLng(business);
+
     const hasDrafts = isOwner && rawBusinessInfo.drafts && Object.keys(rawBusinessInfo.drafts).length > 0;
 
-    const tier = business.subscriptionTier || 'free';
-    const isPaid = tier === 'professional' || tier === 'elite';
-    const isElite = tier === 'elite';
-    const isPremium = isPaid;
-
     // ── Theme & Brand Kit Engine ──
-    const theme = getTheme(businessInfo?.theme || 'golden_elegance');
-    const tc = theme?.colors || null;
-
     const brandKit = (isPreviewMode && previewBrandKit) ? previewBrandKit : (businessInfo?.brandKit || {});
-    // Fallback: BrandKit -> Theme -> Native CSS
-    const _p = brandKit.primaryColor || tc?.accent;
-    const _s = brandKit.secondaryColor || tc?.accent || _p;
+    const _p = brandKit.primaryColor || null;
+    const uiThemeId = resolveBusinessProfileThemeId(
+        businessInfo?.theme || brandKit.templateId
+    );
+    const theme = getTheme(uiThemeId);
+    const tc = getBusinessProfileUiColors(_p, theme?.colors);
+    const _s = brandKit.secondaryColor || theme?.colors?.badgeText || tc?.accent;
     const _br = brandKit.buttonStyle || tc?.btnBorderRadius || '14px';
     const _ff = 'system-ui, sans-serif';
 
@@ -1498,17 +1511,24 @@ const BusinessProfile = () => {
     } : null;
 
     return (
-        <div className="profile-shell page-container" style={{
-            '--primary': _p || 'var(--primary)',
-            '--primary-dark': _s || 'var(--primary-dark)',
-            '--brand-primary': _p || 'var(--primary)',
-            '--brand-secondary': _s || 'var(--primary-dark)',
-            '--brand-radius': _br,
-            '--brand-font': _ff,
-            paddingTop: '0',
-            background: th(tc?.cardBg, undefined),
-            fontFamily: 'var(--brand-font), sans-serif',
-        }}>
+        <div
+            className="profile-shell page-container"
+            style={{
+                ...(tc?.accent
+                    ? {
+                          '--primary': tc.accent,
+                          '--brand-primary': tc.accent,
+                          '--primary-hover': _s || tc.accent,
+                      }
+                    : {}),
+                ...(_s ? { '--primary-dark': _s, '--brand-secondary': _s } : {}),
+                '--brand-radius': _br,
+                '--brand-font': _ff,
+                paddingTop: '0',
+                background: th(tc?.cardBg, undefined),
+                fontFamily: 'var(--brand-font), sans-serif',
+            }}
+        >
             
             {/* Dynamic SEO Meta Tags & JSON-LD */ }
             {business && (
@@ -1590,13 +1610,35 @@ const BusinessProfile = () => {
                                 const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
                                 const isOpen = businessInfo.workingHours?.[today]?.isOpen;
                                 const badgePill = (color, dot, label) => (
-                                    <span style={{
-                                        padding: '5px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '800',
-                                        background: `rgba(${color},0.18)`, border: `1px solid rgba(${color},0.45)`,
-                                        color: `rgb(${color})`, display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                        backdropFilter: 'blur(8px)',
-                                    }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: `rgb(${dot})`, boxShadow: `0 0 5px rgb(${dot})`, display: 'inline-block' }} />
+                                    <span
+                                        style={{
+                                            padding: '5px 10px',
+                                            borderRadius: '20px',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '800',
+                                            background: 'rgba(11, 10, 18, 0.92)',
+                                            border: `1px solid rgba(${color}, 0.55)`,
+                                            color: `rgb(${color})`,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
+                                            backdropFilter: 'blur(12px)',
+                                            WebkitBackdropFilter: 'blur(12px)',
+                                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
+                                        }}
+                                    >
+                                        <span
+                                            style={{
+                                                width: 6,
+                                                height: 6,
+                                                borderRadius: '50%',
+                                                background: `rgb(${dot})`,
+                                                boxShadow: `0 0 6px rgb(${dot})`,
+                                                display: 'inline-block',
+                                                flexShrink: 0,
+                                            }}
+                                        />
                                         {label}
                                     </span>
                                 );
@@ -1896,9 +1938,11 @@ const BusinessProfile = () => {
                                 top: '10px',
                                 zIndex: 50,
                                 background: 'color-mix(in srgb, var(--bg-card) 90%, transparent)',
-                                border: `1px solid var(--border-color)`,
+                                border: tc?.accent
+                                    ? `1px solid color-mix(in srgb, ${tc.accent} 28%, var(--border-color))`
+                                    : '1px solid var(--border-color)',
                                 borderRadius: 'var(--profile-card-radius, 20px)',
-                                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                                boxShadow: tc?.btnShadow || '0 4px 20px rgba(0,0,0,0.08)',
                                 overflow: 'hidden',
                             }}
                         >
@@ -1912,10 +1956,15 @@ const BusinessProfile = () => {
                                         setActiveTab(id);
                                     }}
                                     style={{
-                                        background: activeTab === id && !locked ? 'var(--brand-primary)' : 'transparent',
-                                        boxShadow: activeTab === id && !locked ? '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)' : 'none',
-                                        color: locked ? 'var(--text-muted)' : activeTab === id ? 'rgba(255, 255, 255, 1)' : 'var(--text-main)',
-                                        opacity: locked ? 0.75 : 1
+                                        color: locked ? 'var(--text-muted)' : undefined,
+                                        opacity: locked ? 0.75 : 1,
+                                        ...(activeTab === id && !locked && tc?.accent
+                                            ? {
+                                                  background: tc.footerBg,
+                                                  color: tc.accentText || '#fff',
+                                                  boxShadow: tc.btnShadow,
+                                              }
+                                            : {}),
                                     }}
                                 >
                                     {label}
@@ -2419,8 +2468,15 @@ const BusinessProfile = () => {
                                     <div><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('address', 'Address')}</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem' }}>{businessInfo.address} {businessInfo.city && `, ${businessInfo.city}`}</div></div>
                                 </div>
 
-                                <div style={{ height: '320px', borderRadius: '20px', overflow: 'hidden', border: `2px solid var(--border-color)`, position: 'relative', boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.1)' }}>
-                                    <iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : ''))}&output=embed`} style={{ width: '100%', height: '100%', border: 0 }} loading="lazy" allowFullScreen title="Business Location" />
+                                <div style={{ position: 'relative' }}>
+                                    <BusinessLocationMap
+                                        lat={businessInfo.lat ?? profileMapCoords?.lat}
+                                        lng={businessInfo.lng ?? profileMapCoords?.lng}
+                                        businessName={businessInfo.name || businessInfo.businessName}
+                                        address={businessInfo.address}
+                                        city={businessInfo.city}
+                                        country={businessInfo.country}
+                                    />
                                     {!isPaid && (
                                         <div onClick={() => { setPaywallFeature("Interactive Maps"); setShowPaywall(true); }} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(30,30,46,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }} title={t('upgrade_map')}>
                                             <div style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', padding: '12px 24px', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
@@ -2953,8 +3009,8 @@ const BusinessProfile = () => {
             {/* Brand Kit Modal Editor */}
             {
                 showBrandKitModal && (
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg-body)', overflowY: 'auto' }}>
-                        <BrandKit onBack={() => setShowBrandKitModal(false)} />
+                    <div className="brand-kit-overlay">
+                        <BrandKit inAppColumn onBack={() => setShowBrandKitModal(false)} />
                     </div>
                 )
             }

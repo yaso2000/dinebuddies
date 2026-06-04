@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import NewReportModal from './NewReportModal';
 import { getTemplateStyle, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 const INVITATION_CARD_IMAGE_FALLBACK =
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
@@ -347,16 +348,10 @@ const InvitationCard = ({ invitation }) => {
             style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}
         >
             <div style={{ position: 'relative' }}>
-                <img
-                    src={getSafeAvatar(author)}
-                    onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                <UserAvatar
+                    user={author}
                     alt={author?.name}
-                    style={{
-                        width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover',
-                        border: '2px solid rgba(255,255,255,0.85)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
-                        background: 'white',
-                    }}
+                    style={{ width: 36, height: 36, boxShadow: '0 2px 8px rgba(0,0,0,0.35)', background: 'white' }}
                 />
                 {!isHost && !isFollowing && author?.role !== 'business' && userProfile?.role !== 'business' && (
                     <button
@@ -423,16 +418,10 @@ const InvitationCard = ({ invitation }) => {
             style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
         >
             <div style={{ position: 'relative' }}>
-                <img
-                    src={getSafeAvatar(author)}
-                    onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
+                <UserAvatar
+                    user={author}
                     alt={author?.name}
-                    style={{
-                        width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover',
-                        border: '2px solid #e5e7eb',
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-                        background: 'white',
-                    }}
+                    style={{ width: 36, height: 36, boxShadow: '0 1px 4px rgba(0,0,0,0.08)', background: 'white' }}
                 />
                 {!isHost && !isFollowing && author?.role !== 'business' && userProfile?.role !== 'business' && (
                     <button
@@ -512,23 +501,17 @@ const InvitationCard = ({ invitation }) => {
                             WebkitBackdropFilter: 'blur(5px)',
                         }}
                     >
-                        <div style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: '50%',
-                            overflow: 'hidden',
-                            border: '2px solid rgba(255,255,255,0.9)',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-                            background: '#fff',
-                            flexShrink: 0,
-                        }}>
-                            <img
-                                src={getSafeAvatar(author)}
-                                onError={(e) => { e.target.onerror = null; e.target.src = getSafeAvatar(null); }}
-                                alt={author?.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            />
-                        </div>
+                        <UserAvatar
+                            user={author}
+                            alt={author?.name}
+                            style={{
+                                width: 30,
+                                height: 30,
+                                flexShrink: 0,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                                background: '#fff',
+                            }}
+                        />
                         <span style={{
                             color: '#fff',
                             fontSize: '0.78rem',

@@ -148,53 +148,21 @@ function isBlockedPost(post, blockedSet) {
     return Boolean(aid && blockedSet.has(aid));
 }
 
+/** Newest publish time first (featured, business, and personal posts in one list). */
+export function sortFeedPostsByPublishDate(posts) {
+    return [...posts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+}
+
 /**
- * Consumer home feed: ranked social posts + followed businesses, plus a discover strip
- * of recent business posts (createdAt desc) for accounts the viewer does not follow yet.
+ * Consumer home feed: all post types in one list, newest publish date first.
  *
  * @returns {{ mainFeed: object[], discoverFeed: object[] }}
  */
-export function buildConsumerHomeFeed(posts, graph, viewerUid, options = {}) {
-    const discoverLimit =
-        typeof options.discoverLimit === 'number' ? options.discoverLimit : DISCOVER_BUSINESS_LIMIT;
+export function buildConsumerHomeFeed(posts, _graph, _viewerUid, options = {}) {
     const blocked = options.blockedSet instanceof Set ? options.blockedSet : new Set();
-
     const visible = dedupeFeedPosts(posts).filter((p) => !isBlockedPost(p, blocked));
-
-    const businessPosts = [];
-    const regularPosts = [];
-
-    for (const post of visible) {
-        if (isBusinessFeedPost(post)) businessPosts.push(post);
-        else regularPosts.push(post);
-    }
-
-    const followingSet = graph?.followingSet || new Set();
-    const businessFollowing = [];
-    const businessDiscoverPool = [];
-
-    for (const post of businessPosts) {
-        const authorId = authorIdFromPost(post);
-        if (authorId && followingSet.has(authorId)) {
-            businessFollowing.push(post);
-        } else if (viewerUid && authorId === viewerUid) {
-            businessFollowing.push(post);
-        } else {
-            businessDiscoverPool.push(post);
-        }
-    }
-
-    const discoverFeed = businessDiscoverPool
-        .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
-        .slice(0, discoverLimit);
-
-    const mainFeed = rankPostsForSocialFeed(
-        [...regularPosts, ...businessFollowing],
-        graph,
-        viewerUid
-    );
-
-    return { mainFeed, discoverFeed };
+    const mainFeed = sortFeedPostsByPublishDate(visible);
+    return { mainFeed, discoverFeed: [] };
 }
 
 /**

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaApple, FaFacebook, FaUser } from 'react-icons/fa';
@@ -11,6 +11,16 @@ import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 import { canConsumerEnterApp } from '../../utils/consumerProfileComplete';
+import LocalDevOAuthNotice from '../../components/LocalDevOAuthNotice';
+import {
+    clearOAuthRedirectPending,
+    consumeOAuthRedirectComplete,
+    consumeOAuthRedirectError,
+    hasFirebaseAuthReturnInUrl,
+    isEmbeddedPreviewBrowser,
+    openLoginInExternalBrowser,
+    peekOAuthRedirectComplete,
+} from '../../utils/localDevAuth';
 
 /**
  * Consumer (personal) account only: Google, Facebook, and Apple — no email/password on this page.
@@ -32,13 +42,24 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         currentUser,
         isGuest,
         loading: authLoading,
-        profileServerSynced,
-        consumerEntryStatus,
     } = useAuth();
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [justLoggedIn, setJustLoggedIn] = useState(false);
+
+    const missingFirebaseEnv = useMemo(() => {
+        if (!import.meta.env.DEV) return [];
+        const keys = [
+            ['VITE_FIREBASE_API_KEY', import.meta.env.VITE_FIREBASE_API_KEY],
+            ['VITE_FIREBASE_AUTH_DOMAIN', import.meta.env.VITE_FIREBASE_AUTH_DOMAIN],
+            ['VITE_FIREBASE_PROJECT_ID', import.meta.env.VITE_FIREBASE_PROJECT_ID],
+            ['VITE_FIREBASE_APP_ID', import.meta.env.VITE_FIREBASE_APP_ID],
+        ];
+        return keys
+            .filter(([, v]) => !v || String(v).includes('your-'))
+            .map(([k]) => k);
+    }, []);
 
     const nextPath = sanitizeNextPath(new URLSearchParams(location.search).get('next'));
 
@@ -70,58 +91,6 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
             /* ignore */
         }
     };
-
-    useEffect(() => {
-        if (!justLoggedIn || !currentUser) return;
-        if (userProfile && !profileServerSynced) return;
-
-        if (userProfile) {
-            if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
-                navigate('/admin/users', { replace: true });
-                return;
-            }
-            if (isAffiliateAgent(userProfile)) {
-                setError(
-                    t(
-                        'auth_affiliate_portal_only',
-                        'This account is an affiliate partner. Sign in from the affiliate portal only.'
-                    )
-                );
-                rejectWrongAccountType();
-                return;
-            }
-            if (isBusinessUser(userProfile)) {
-                setError(
-                    t(
-                        'auth_business_portal_only',
-                        'This account is a business account. Use Business sign-in (email and password).'
-                    )
-                );
-                rejectWrongAccountType();
-                return;
-            }
-            if (needsEmailPasswordVerification(currentUser, userProfile)) {
-                navigate('/verify-email', { replace: true });
-                return;
-            }
-            if (!profileServerSynced || consumerEntryStatus === 'pending') return;
-            if (consumerEntryStatus === 'blocked' || !canConsumerEnterApp(userProfile)) {
-                navigate('/complete-profile', { replace: true });
-            } else {
-                navigate(nextPath || '/posts-feed', { replace: true });
-            }
-            return;
-        }
-
-        const tmr = setTimeout(() => {
-            if (shouldLandOnAdminDashboard(currentUser, null)) {
-                navigate('/admin/users', { replace: true });
-            } else {
-                navigate('/', { replace: true });
-            }
-        }, 1500);
-        return () => clearTimeout(tmr);
-    }, [justLoggedIn, currentUser, userProfile, profileServerSynced, consumerEntryStatus, navigate, nextPath, t]);
 
     useEffect(() => {
         try {
@@ -174,24 +143,147 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         }
     }, []);
 
+    useEffect(() => {
+        const redirectErr = consumeOAuthRedirectError();
+        if (redirectErr) {
+            setError(getAuthErrorMessage(redirectErr) || redirectErr.message);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (authLoading) return;
+        if (currentUser) return;
+        consumeOAuthRedirectComplete();
+        clearOAuthRedirectPending();
+    }, [authLoading, currentUser]);
+
+    const finishLoginNavigation = useCallback(() => {
+        if (!currentUser || guestLike) return;
+
+        if (userProfile) {
+            if (shouldLandOnAdminDashboard(currentUser, userProfile)) {
+                navigate('/admin/users', { replace: true });
+                return;
+            }
+            if (isAffiliateAgent(userProfile)) {
+                setError(
+                    t(
+                        'auth_affiliate_portal_only',
+                        'This account is an affiliate partner. Sign in from the affiliate portal only.'
+                    )
+                );
+                rejectWrongAccountType();
+                return;
+            }
+            if (isBusinessUser(userProfile)) {
+                setError(
+                    t(
+                        'auth_business_portal_only',
+                        'This account is a business account. Use Business sign-in (email and password).'
+                    )
+                );
+                rejectWrongAccountType();
+                return;
+            }
+            if (needsEmailPasswordVerification(currentUser, userProfile)) {
+                navigate('/verify-email', { replace: true });
+                return;
+            }
+            consumeOAuthRedirectComplete();
+            if (!canConsumerEnterApp(userProfile)) {
+                navigate('/complete-profile', { replace: true });
+            } else {
+                navigate(nextPath || '/posts-feed', { replace: true });
+            }
+            return;
+        }
+
+        if (!authLoading && shouldLandOnAdminDashboard(currentUser, null)) {
+            navigate('/admin/users', { replace: true });
+        }
+    }, [
+        currentUser,
+        userProfile,
+        guestLike,
+        authLoading,
+        navigate,
+        nextPath,
+        t,
+        rejectWrongAccountType,
+    ]);
+
+    useEffect(() => {
+        if (!justLoggedIn && !peekOAuthRedirectComplete()) return;
+        finishLoginNavigation();
+    }, [justLoggedIn, finishLoginNavigation, currentUser, userProfile]);
+
+    useEffect(() => {
+        if (!hasFirebaseAuthReturnInUrl()) return;
+        if (authLoading) return undefined;
+
+        const timer = setTimeout(() => {
+            if (currentUser) return;
+            const redirectErr = consumeOAuthRedirectError();
+            setError(
+                getAuthErrorMessage(redirectErr) ||
+                    t(
+                        'auth_oauth_redirect_failed',
+                        'Sign-in was cancelled or OAuth is not configured for localhost. Expand the yellow setup box below.'
+                    )
+            );
+        }, 2500);
+
+        return () => clearTimeout(timer);
+    }, [authLoading, currentUser, t]);
+
     const handleOAuth = async (provider) => {
         setLoading(true);
         setError('');
+        let startedRedirect = false;
         try {
             if (provider === 'google') {
                 const googleRes = await signInWithGoogle();
-                if (googleRes && googleRes.__oauthRedirect) return;
+                if (googleRes?.__oauthRedirect) {
+                    startedRedirect = true;
+                    return;
+                }
             } else if (provider === 'apple') {
                 const appleRes = await signInWithApple();
-                if (appleRes && appleRes.__oauthRedirect) return;
+                if (appleRes?.__oauthRedirect) {
+                    startedRedirect = true;
+                    return;
+                }
             } else {
                 const fbRes = await signInWithFacebook();
-                if (fbRes && fbRes.__oauthRedirect) return;
+                if (fbRes?.__oauthRedirect) {
+                    startedRedirect = true;
+                    return;
+                }
             }
             setJustLoggedIn(true);
         } catch (err) {
             if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
                 /* ignore */
+            } else if (
+                isEmbeddedPreviewBrowser() &&
+                (err.code === 'auth/popup-blocked' ||
+                    err.code === 'auth/cancelled-popup-request' ||
+                    /disallowed_useragent|popup/i.test(String(err.message || '')))
+            ) {
+                const opened = await openLoginInExternalBrowser();
+                setError(
+                    opened.ok
+                        ? t(
+                              'auth_open_chrome_for_oauth',
+                              opened.mode === 'clipboard'
+                                  ? 'Login link copied. Open Chrome/Safari and paste the URL to sign in.'
+                                  : 'Login opened in a new browser tab — complete sign-in there.'
+                          )
+                        : t(
+                              'auth_open_chrome_for_oauth',
+                              `Open this URL in Chrome: ${window.location.origin}/login`
+                          )
+                );
             } else if (err.code === 'auth/in-app-browser') {
                 setError(
                     t('auth_in_app_browser_hint', 'Open this site in Safari or Chrome to sign in.')
@@ -272,6 +364,42 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                         {t('continue_to_app', 'Continue to the app →')}
                     </button>
                 </div>
+            )}
+
+            <LocalDevOAuthNotice />
+
+            {missingFirebaseEnv.length > 0 && (
+                <div
+                    role="alert"
+                    style={{
+                        background: 'rgba(239,68,68,0.12)',
+                        color: '#f87171',
+                        padding: '0.75rem',
+                        borderRadius: '12px',
+                        marginBottom: '1rem',
+                        fontSize: '0.85rem',
+                        border: '1px solid rgba(239,68,68,0.2)',
+                    }}
+                >
+                    {t(
+                        'auth_firebase_env_missing',
+                        'Firebase is not configured. Copy .env.example → .env and restart npm run dev. Missing: {{keys}}',
+                        { keys: missingFirebaseEnv.join(', ') }
+                    )}
+                </div>
+            )}
+
+            {import.meta.env.DEV && typeof window !== 'undefined' && (
+                <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', textAlign: 'center' }}>
+                    <a
+                        href={`${window.location.origin}/login`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#2563eb', fontWeight: 700 }}
+                    >
+                        {t('auth_open_login_in_browser', 'Open login in Chrome / Safari')}
+                    </a>
+                </p>
             )}
 
             {error && (

@@ -58,6 +58,29 @@
     background: var(--bg-input);
 }
 
+[dir='rtl'] .settings-back-btn svg {
+    transform: scaleX(-1);
+}
+
+.settings-row-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.settings-row-chevron--danger {
+    color: var(--color-danger, #ef4444);
+}
+
+/* RTL: row arrows point outward (toward the leading edge) */
+[dir='rtl'] .settings-row-chevron {
+    transform: scaleX(-1);
+}
+
+[dir='rtl'] .settings-page-responsive .back-btn svg {
+    transform: scaleX(-1);
+}
+
 .settings-title {
     font-size: 1.2rem;
     font-weight: 800;

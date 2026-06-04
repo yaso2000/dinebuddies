@@ -10,12 +10,14 @@ import './PrivateCardTextBackdropTonePicker.css';
 const TONE_LABEL_KEYS = {
     dark: 'private_card_text_backdrop_tone_dark',
     light: 'private_card_text_backdrop_tone_light',
+    glass: 'private_card_text_backdrop_tone_glass',
     none: 'private_card_text_backdrop_tone_none'
 };
 
 const TONE_DEFAULTS = {
     dark: 'Dark',
     light: 'Light',
+    glass: 'Glass',
     none: 'None'
 };
 
@@ -25,6 +27,9 @@ function ToneIcon({ toneId }) {
     }
     if (toneId === 'dark') {
         return <span className="private-card-text-backdrop-tone__swatch private-card-text-backdrop-tone__swatch--dark" aria-hidden />;
+    }
+    if (toneId === 'glass') {
+        return <span className="private-card-text-backdrop-tone__swatch private-card-text-backdrop-tone__swatch--glass" aria-hidden />;
     }
     return <FaBan aria-hidden className="private-card-text-backdrop-tone__ban-icon" />;
 }
@@ -71,7 +76,8 @@ export default function PrivateCardTextBackdropTonePicker({
                         className={`private-card-text-backdrop-tone__chip${
                             selected ? ' private-card-text-backdrop-tone__chip--sel' : ''
                         }${id === 'light' && !isIcons ? ' private-card-text-backdrop-tone__chip--light' : ''}${
-                            id === 'none' && !isIcons ? ' private-card-text-backdrop-tone__chip--none' : ''
+                            id === 'glass' && !isIcons ? ' private-card-text-backdrop-tone__chip--glass' : ''
+                        }${id === 'none' && !isIcons ? ' private-card-text-backdrop-tone__chip--none' : ''
                         }${isIcons ? ' private-card-text-backdrop-tone__chip--icon' : ''}`}
                         disabled={disabled}
                         aria-pressed={selected}

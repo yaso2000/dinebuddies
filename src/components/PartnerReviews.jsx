@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaStar, FaRegStar, FaStarHalfAlt, FaUserCircle } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 
 const PartnerReviews = ({ partnerId, partnerName }) => {
     const { currentUser } = useAuth();
@@ -375,15 +376,10 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
                                 {/* User Info */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                                     {review.userPhoto ? (
-                                        <img
-                                            src={getSafeAvatar({ photoURL: review.userPhoto })}
+                                        <UserAvatar
+                                            user={{ photoURL: review.userPhoto, display_name: review.userName, gender: review.userGender }}
                                             alt={review.userName}
-                                            style={{
-                                                width: '40px',
-                                                height: '40px',
-                                                borderRadius: '50%',
-                                                objectFit: 'cover'
-                                            }}
+                                            style={{ width: 40, height: 40 }}
                                         />
                                     ) : (
                                         <FaUserCircle style={{ fontSize: '40px', color: 'var(--text-muted)' }} />

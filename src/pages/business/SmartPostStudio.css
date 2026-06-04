@@ -214,19 +214,6 @@
     container-type: size;
 }
 
-.sps-canvas-stage__grid {
-    position: absolute;
-    inset: 4%;
-    border-radius: 28px;
-    pointer-events: none;
-    background-image:
-        linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-    background-size: 28px 28px;
-    mask-image: radial-gradient(ellipse 85% 85% at center, #000 30%, transparent 100%);
-    opacity: 0.65;
-}
-
 .sps-canvas-stage__card {
     position: relative;
     z-index: 1;
@@ -265,29 +252,6 @@
     width: auto;
     max-height: 100%;
     max-width: min(100cqw, 100%);
-}
-
-.sps-canvas-float {
-    position: absolute;
-    inset-inline-end: 4px;
-    bottom: 4px;
-    z-index: 3;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    border: 1px solid var(--sps-glass-border);
-    background: var(--sps-glass);
-    backdrop-filter: blur(12px);
-    color: var(--sps-text);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.sps-canvas-float[aria-pressed='true'] {
-    color: var(--sps-neon);
-    box-shadow: 0 0 14px color-mix(in srgb, var(--sps-neon) 35%, transparent);
 }
 
 .sps-canvas-clear {
@@ -1438,7 +1402,6 @@
 
     .sps-page--premium.sps-page--typing .sps-tool-rail,
     .sps-page--premium.sps-page--typing .sps-anim-rail,
-    .sps-page--premium.sps-page--typing .sps-canvas-float,
     .sps-page--premium.sps-page--typing .sps-canvas-clear {
         z-index: 30;
     }
@@ -1486,11 +1449,6 @@
     .sps-anim-rail__btn {
         width: 30px;
         height: 30px;
-    }
-
-    .sps-canvas-float {
-        width: 34px;
-        height: 34px;
     }
 
     .sps-quick-chip {

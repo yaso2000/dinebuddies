@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { FaPlus } from 'react-icons/fa';
 import {
     layoutToPreviewAspect,
-    STUDIO_NEON_BG,
     STUDIO_PROMO_STICKERS,
     studioOverlayFill,
 } from './studioConstants';
@@ -153,8 +152,8 @@ export default function StudioLivePreview({
         style.backgroundColor && style.backgroundColor !== 'transparent'
             ? style.backgroundColor
             : null;
-    /** Unified canvas: custom color, or default panel tone when posting without a photo. */
-    const canvasBg = userBackdrop || (!hasImage ? STUDIO_NEON_BG : null);
+    /** Custom canvas color only; default empty canvas uses --sps-preview-bg from theme CSS. */
+    const canvasBg = userBackdrop || null;
     const useHeaderSplit = layoutModel === 'header_card' && hasImage;
 
     const headerPanelBg =
@@ -169,7 +168,7 @@ export default function StudioLivePreview({
     const overlayFill = studioOverlayFill(overlayTint, overlayAlpha);
     const showPhotoOverlay = hasImage && overlayTint !== 'transparent' && overlayAlpha > 0;
     const useTextScrim =
-        !useHeaderSplit && !showPhotoOverlay && !hasImage && !canvasBg;
+        !useHeaderSplit && !showPhotoOverlay && !hasImage && Boolean(userBackdrop);
 
     const vAlign = style.textVerticalAlign || 'center';
     const vAlignClass = `sps-preview__text-zone--${vAlign}`;

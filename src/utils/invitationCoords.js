@@ -52,3 +52,41 @@ export function enrichInvitationCoords(inv) {
     if (!coords) return { ...inv };
     return { ...inv, lat: coords.lat, lng: coords.lng };
 }
+
+/**
+ * Resolve venue pin before save: keep explicit lat/lng, else geocode location + city + country.
+ * @returns {Promise<{ lat: number | null, lng: number | null, geocoded: boolean }>}
+ */
+export async function resolveVenueCoordinates({
+    lat,
+    lng,
+    location,
+    city,
+    country,
+} = {}) {
+    const resolvedLat = toFiniteCoord(lat);
+    const resolvedLng = toFiniteCoord(lng);
+    if (isValidLatLng(resolvedLat, resolvedLng)) {
+        return { lat: resolvedLat, lng: resolvedLng, geocoded: false };
+    }
+
+    const { geocode } = await import('./locationUtils');
+    const parts = [location, city, country]
+        .map((v) => (v == null ? '' : String(v).trim()))
+        .filter(Boolean);
+    if (!parts.length) {
+        return { lat: null, lng: null, geocoded: false };
+    }
+
+    const result = await geocode(parts.join(', '));
+    if (result.success && result.results?.[0]) {
+        const hit = result.results[0];
+        const geoLat = toFiniteCoord(hit.lat);
+        const geoLng = toFiniteCoord(hit.lng);
+        if (isValidLatLng(geoLat, geoLng)) {
+            return { lat: geoLat, lng: geoLng, geocoded: true };
+        }
+    }
+
+    return { lat: null, lng: null, geocoded: false };
+}

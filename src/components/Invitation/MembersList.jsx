@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { getSafeAvatar } from '../../utils/avatarUtils';
+import UserAvatar from '../UserAvatar';
 
 const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
     const { t } = useTranslation();
@@ -27,12 +27,12 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                         position: 'relative',
                         boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
                     }}>
-                        <img
-                            src={getSafeAvatar(author)}
+                        <UserAvatar
+                            user={author}
                             alt={author?.name}
                             title={`${author?.name} (${t('host', { defaultValue: 'Host' })})`}
-                            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-                            onError={(e) => { e.target.src = getSafeAvatar(null); }}
+                            ringColorOverride="var(--luxury-gold, #fbbf24)"
+                            style={{ width: '100%', height: '100%' }}
                         />
                         <div style={{
                             position: 'absolute',
@@ -56,23 +56,16 @@ const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
                     const member = safeMembersData[userId] || { name: t('member'), avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
                     return (
                         <div key={userId} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate(`/profile/${userId}`)}>
-                            <div style={{
-                                width: '56px',
-                                height: '56px',
-                                borderRadius: '50%',
-                                border: '2px solid var(--primary)',
-                                padding: '2px',
-                                transition: 'transform 0.2s'
-                            }}
-                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                            <div
+                                style={{ width: '56px', height: '56px', transition: 'transform 0.2s' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                             >
-                                <img
-                                    src={getSafeAvatar(member)}
+                                <UserAvatar
+                                    user={member}
                                     alt={member.name}
                                     title={member.name}
-                                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-                                    onError={(e) => { e.target.src = getSafeAvatar(null); }}
+                                    style={{ width: '100%', height: '100%' }}
                                 />
                             </div>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</span>

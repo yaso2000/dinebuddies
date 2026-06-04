@@ -4,22 +4,24 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
     FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
     FaUserFriends, FaLock, FaChevronLeft, FaSearch,
-    FaHeart, FaCamera, FaUpload, FaImage, FaMagic
+    FaHeart, FaCamera, FaUpload, FaImage
 } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import VenueLocationPicker from '../components/VenueLocationPicker';
-import { processInvitationMedia, commitInvitationAiCover, prepareAiCoverMediaFromRemoteUrl } from '../services/mediaService';
+import { processInvitationMedia, commitInvitationAiCover, verifyPublicStorageImageUrl } from '../services/mediaService';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getMutualFollowers } from '../utils/followHelpers';
 import { db } from '../firebase/config';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { detectUserLocationContext } from '../utils/locationUtils';
 import './PrivateInvitation.css';
 import { resolveVenueCountryIso } from '../utils/countryIso';
+import { getAppBidiFieldProps } from '../utils/bidiText';
 import { getTotalDineCredits, DATING_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
 import {
@@ -54,8 +56,8 @@ import {
     revokePrivateCoverStashEntry
 } from '../utils/privateCoverMediaStash';
 import AIFloatingLauncher from '../components/AIFloatingLauncher';
-import MagicCoverGeneratePanel from '../components/Invitations/MagicCoverGeneratePanel';
 import { applyInvitationAiFields } from '../utils/aiContentFieldMapper';
+import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { validateDatingAiContext, createDatingAiContextFromForm } from '../utils/datingAiRequestPayload';
 import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
 import { rememberPrivateDraftCreateKind } from '../utils/privateInvitationDraft';
@@ -74,7 +76,8 @@ function sanitizeFirestoreDraft(obj) {
 }
 
 const CreateDatingInvitation = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const bidiFieldProps = useMemo(() => getAppBidiFieldProps(i18n.language), [i18n.language]);
     const navigate = useNavigate();
     const location = useLocation();
     const { addPrivateInvitation, currentUser, canCreatePrivateInvitation } = useInvitations();
@@ -155,6 +158,23 @@ const CreateDatingInvitation = () => {
         coverMediaStashRef.current = coverMediaStash;
     }, [coverMediaStash]);
 
+    const aiStudioAppliedRef = useRef(false);
+    useEffect(() => {
+        const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
+        if (!studio || aiStudioAppliedRef.current) return;
+        aiStudioAppliedRef.current = true;
+        const media = {
+            source: 'ai_generated',
+            type: 'image',
+            url: studio.publishedUrl,
+            preview: studio.publishedUrl,
+            publishedUrl: studio.publishedUrl,
+        };
+        setMediaData(media);
+        setDatingCoverTab('upload');
+        datingCoverDraftsRef.current.upload = media;
+    }, [location.state?.aiStudioImage]);
+
     formDataRef.current = formData;
     mutualFriendsRef.current = mutualFriends;
     cardBackgroundIdRef.current = cardBackgroundId;
@@ -166,6 +186,12 @@ const CreateDatingInvitation = () => {
     }, []);
 
     const datingHeroCover = useMemo(() => getDatingHeroCoverFromMediaData(mediaData), [mediaData]);
+
+    const heroCoverPending = useMemo(() => {
+        if (!mediaData) return false;
+        // mediaData may be a pending AI image entry (pending:true) or an ai_generated preview without publishedUrl
+        return Boolean(mediaData?.pending || (mediaData?.source === 'ai_generated' && !mediaData?.publishedUrl));
+    }, [mediaData]);
 
     const editorPhotoBackgroundActive = useMemo(() => {
         if (datingHeroCover?.src) return true;
@@ -493,10 +519,6 @@ const CreateDatingInvitation = () => {
         }
     };
 
-    const handleDatingCoverAiTabClick = () => {
-        handleDatingCoverTab('ai');
-    };
-
     const commitAiCoverMedia = async (media, stashId = null) => {
         if (media?.publishedUrl) return media;
         if (stashId) setAiCoverCommittingId(stashId);
@@ -507,7 +529,23 @@ const CreateDatingInvitation = () => {
             }
             const publishedUrl = await commitInvitationAiCover(media, userId);
             if (media.preview && String(media.preview).startsWith('blob:')) {
-                revokePrivateCoverMedia({ preview: media.preview });
+                const ready = await verifyPublicStorageImageUrl(publishedUrl, { attempts: 4, delayMs: 400 });
+                if (ready) {
+                    revokePrivateCoverMedia({ preview: media.preview });
+                    return {
+                        ...media,
+                        source: 'ai_generated',
+                        url: publishedUrl,
+                        preview: publishedUrl,
+                        publishedUrl,
+                    };
+                }
+                return {
+                    ...media,
+                    source: 'ai_generated',
+                    url: publishedUrl,
+                    publishedUrl,
+                };
             }
             return {
                 ...media,
@@ -710,65 +748,6 @@ const CreateDatingInvitation = () => {
         return true;
     }, [showToast, t, cardBackgroundId]);
 
-    const buildDatingMagicCoverBrief = useCallback(() => {
-        const parts = [
-            formData.location?.trim() && `المكان: ${formData.location.trim()}`,
-            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
-            formData.title?.trim() && `عنوان: ${formData.title.trim()}`,
-        ].filter(Boolean);
-        return (
-            parts.join('\n') ||
-            'غلاف دعوة موعد رومانسي بلا نص مكتوب — أجواء دافئة مناسبة للموعد.'
-        );
-    }, [formData]);
-
-    const handleDatingAiCoverImage = useCallback(
-        async (url) => {
-            if (!url) return;
-            datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
-            if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'ai')) {
-                toastCoverStashLimit('ai');
-                return;
-            }
-
-            const entryId = createPrivateCoverStashId();
-            setCoverMediaStash((prev) => [
-                ...prev,
-                { id: entryId, kind: 'ai', media: { type: 'image', pending: true } },
-            ]);
-            setDatingCoverTab('ai');
-            setAiCoverCommittingId(entryId);
-
-            try {
-                const userId = currentUser?.id || authUser?.uid;
-                if (!userId) {
-                    throw new Error('not_signed_in');
-                }
-                const media = await prepareAiCoverMediaFromRemoteUrl(url, userId);
-                updateAiStashMedia(entryId, media);
-                setMediaData(media);
-                datingCoverDraftsRef.current.ai = media;
-            } catch (err) {
-                console.error('AI cover prepare failed:', err);
-                setCoverMediaStash((prev) => prev.filter((e) => e.id !== entryId));
-                showToast(
-                    err?.message === 'not_signed_in'
-                        ? t('please_sign_in', { defaultValue: 'Please sign in to continue.' })
-                        : err?.message === 'ai_cover_storage_not_ready'
-                          ? t('ai_cover_storage_not_ready', {
-                                defaultValue:
-                                    'The image was not ready in storage yet. Wait a few seconds and generate again.',
-                            })
-                          : t('ai_generate_failed', { defaultValue: 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.' }),
-                    'error'
-                );
-            } finally {
-                setAiCoverCommittingId(null);
-            }
-        },
-        [datingCoverTab, toastCoverStashLimit, authUser, currentUser, showToast, t]
-    );
-
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -905,7 +884,6 @@ const CreateDatingInvitation = () => {
         const labels = {
             camera: t('private_cover_tab_camera_record', { defaultValue: 'Record video' }),
             upload: t('private_cover_tab_upload_device', { defaultValue: 'Upload from device' }),
-            ai: t('private_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' }),
             template: t('dating_cover_tab_template', { defaultValue: 'Template' })
         };
         return labels[datingCoverTab] || '';
@@ -1068,10 +1046,11 @@ const CreateDatingInvitation = () => {
                                                     <FaHeart style={{ color: 'white', fontSize: '0.5rem' }} />
                                                 </div>
                                             )}
-                                            <img
-                                                src={getSafeAvatar(friend)}
+                                            <UserAvatar
+                                                user={friend}
                                                 alt={friend.display_name}
-                                                style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${isSelected ? '#ec4899' : getGenderBorderColor(friend)}` }}
+                                                ringColorOverride={isSelected ? '#ec4899' : undefined}
+                                                style={{ width: 48, height: 48 }}
                                             />
                                             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: isSelected ? '#ec4899' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {friend.display_name?.split(' ')[0]}
@@ -1148,6 +1127,9 @@ const CreateDatingInvitation = () => {
                                 className="elegant-input"
                                 maxLength={INVITATION_CARD_TITLE_MAX}
                                 required
+                                dir={bidiFieldProps.dir}
+                                lang={bidiFieldProps.lang}
+                                style={bidiFieldProps.style}
                             />
                         </div>
 
@@ -1174,6 +1156,9 @@ const CreateDatingInvitation = () => {
                                 className="elegant-textarea"
                                 rows="3"
                                 maxLength={INVITATION_CARD_MESSAGE_MAX}
+                                dir={bidiFieldProps.dir}
+                                lang={bidiFieldProps.lang}
+                                style={bidiFieldProps.style}
                             />
                         </div>
                     </div>
@@ -1227,17 +1212,6 @@ const CreateDatingInvitation = () => {
                             <button
                                 type="button"
                                 role="tab"
-                                aria-selected={datingCoverTab === 'ai'}
-                                onClick={handleDatingCoverAiTabClick}
-                                className={`private-cover-tab${datingCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
-                                title={t('private_cover_tab_ai_open', { defaultValue: 'AI photos' })}
-                                aria-label={t('private_cover_tab_ai_open', { defaultValue: 'AI photos' })}
-                            >
-                                <FaMagic aria-hidden />
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
                                 aria-selected={datingCoverTab === 'template'}
                                 onClick={() => handleDatingCoverTab('template')}
                                 className={`private-cover-tab${datingCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
@@ -1253,25 +1227,6 @@ const CreateDatingInvitation = () => {
                             <DatingCoverCameraPanel
                                 onMediaSelect={handleCameraCoverMedia}
                                 openNonce={cameraOpenNonce}
-                            />
-                        )}
-
-                        {datingCoverTab === 'ai' && (
-                            <MagicCoverGeneratePanel
-                                subType="date"
-                                aspectRatio="9:16"
-                                venueType={formData.venueType || 'Restaurant'}
-                                venueName={
-                                    formData.restaurantName?.trim() ||
-                                    formData.location?.trim() ||
-                                    ''
-                                }
-                                buildBrief={buildDatingMagicCoverBrief}
-                                onImageGenerated={handleDatingAiCoverImage}
-                                requireVenue={false}
-                                disabled={isSubmitting}
-                                prepareBusy={Boolean(aiCoverCommittingId)}
-                                embedded
                             />
                         )}
 
@@ -1304,6 +1259,7 @@ const CreateDatingInvitation = () => {
                                         heroCoverSrc={datingHeroCover?.src ?? null}
                                         heroCoverMediaType={datingHeroCover?.mediaType ?? null}
                                         heroCoverPoster={datingHeroCover?.poster ?? null}
+                                            heroCoverPending={heroCoverPending}
                                         title={formData.title}
                                         description={formData.description}
                                         date={formData.date}

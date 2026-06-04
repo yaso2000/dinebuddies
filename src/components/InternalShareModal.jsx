@@ -7,6 +7,7 @@ import { useChat } from '../context/ChatContext';
 import { useToast } from '../context/ToastContext';
 import { FaTimes, FaSearch, FaCheck, FaPaperPlane, FaUsers, FaUser } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 
 const InternalShareModal = ({ isOpen, onClose, shareData }) => {
     const { t } = useTranslation();
@@ -254,7 +255,7 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                                     const status = sentStatus[otherUser.uid];
                                     return (
                                         <div key={convo.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <img src={getSafeAvatar(otherUser)} alt="" style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                                            <UserAvatar user={otherUser} alt="" style={{ width: 44, height: 44, flexShrink: 0 }} />
                                             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                                                 <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{otherUser.displayName}</h4>
                                             </div>
@@ -286,7 +287,7 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
                                     const status = sentStatus[comm.id];
                                     return (
                                         <div key={comm.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <img src={getSafeAvatar(comm)} alt="" style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                                            <UserAvatar user={{ ...comm, role: 'business' }} alt="" style={{ width: 44, height: 44, flexShrink: 0 }} />
                                             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                                                 <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{comm.businessName || comm.display_name}</h4>
                                                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Community</p>

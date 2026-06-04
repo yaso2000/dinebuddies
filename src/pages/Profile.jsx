@@ -4,18 +4,18 @@ import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaChevronRight, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaCog, FaBirthdayCake, FaHeart, FaBan, FaQuestionCircle } from 'react-icons/fa';
+import { FaChevronRight, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaBirthdayCake, FaHeart, FaBan, FaQuestionCircle } from 'react-icons/fa';
 import { uploadProfilePicture } from '../utils/imageUpload';
 import { getFollowersCount } from '../utils/followHelpers';
 import ImageUpload from '../components/ImageUpload';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 // Profile Enhancements
-import { StatisticsCards, Achievements } from '../components/ProfileEnhancements';
+import { StatisticsCards, Achievements, CoverPhoto } from '../components/ProfileEnhancements';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { goToLogin } from '../utils/goToLogin';
 import {
     getPrivateInvitationDetailsPath,
@@ -308,8 +308,17 @@ const Profile = () => {
             <div className="profile-content">
 
                 <div className="personal-view">
-                    {/* Theme Toggle Button */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0.5rem 0', gap: '10px' }}>
+                    <div className="profile-header profile-header--consumer">
+                        {currentUser?.uid ? (
+                            <CoverPhoto
+                                userId={currentUser.uid}
+                                coverPhoto={realtimeUser?.cover_photo || userProfile?.cover_photo}
+                                onUpdate={(url) =>
+                                    setRealtimeUser((prev) => ({ ...(prev || {}), cover_photo: url }))
+                                }
+                            />
+                        ) : null}
+                        <div className="profile-header-actions">
                         {/* Help & Support Button */}
                         {isOwnProfile && (
                             <button
@@ -334,39 +343,14 @@ const Profile = () => {
                             </button>
                         )}
 
-                        {/* Settings Button */}
-                        {isOwnProfile && (
-                            <button
-                                className="profile-top-btn"
-                                onClick={() => navigate('/settings')}
-                                title={t('settings')}
-                                style={{
-                                    background: 'var(--bg-card)',
-                                    color: 'var(--text-main)',
-                                    border: 'none',
-                                    borderRadius: '50%',
-                                    width: '36px',
-                                    height: '36px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                }}
-                            >
-                                <FaCog size={18} />
-                            </button>
-                        )}
-
-                        {/* Theme Toggle Button */}
-                        <button onClick={toggleTheme} className="profile-theme-toggle" style={{ color: isDark ? 'var(--luxury-gold)' : 'var(--primary)', marginLeft: '4px' }}>
+                        <button onClick={toggleTheme} className="profile-theme-toggle" style={{ color: isDark ? 'var(--luxury-gold)' : 'var(--primary)' }}>
                             {isDark ? <FaSun size={18} /> : <FaMoon size={18} />}
                         </button>
-                    </div>
+                        </div>
 
                     <div className="profile-identity" style={{ marginBottom: 'var(--profile-stack-gap)' }}>
                         <div
-                            className="profile-avatar-edit-row"
+                            className="profile-avatar-edit-row profile-avatar-over-cover"
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -421,7 +405,7 @@ const Profile = () => {
                                         width: '100px',
                                         height: '100px',
                                         margin: '0 auto',
-                                        border: `3px solid ${(userProfile?.role === 'business' || realtimeUser?.role === 'business') ? 'var(--border-color)' : (realtimeUser?.gender === 'female' ? '#ec4899' : realtimeUser?.gender === 'male' ? '#3b82f6' : '#a855f7')}`,
+                                        border: `3px solid ${getGenderBorderColor(realtimeUser || userProfile)}`,
                                         position: 'relative',
                                         background: 'var(--hover-overlay)'
                                     }}
@@ -694,6 +678,7 @@ const Profile = () => {
                         )}
                         </>
                         )}
+                    </div>
                     </div>
 
 

@@ -14,6 +14,12 @@ import { resolveInvitationCallerContext } from '../_aiInvitationContext.js';
 import { parseAiGenerateBody } from './parseAiRequest.js';
 import { refundAiCredits, spendAiCredits } from './_runAiWithCredits.js';
 import { resolveCreditCost } from './aiCredits.js';
+import {
+    GEMINI_PROVIDER_BILLING_CODE,
+    geminiProviderBillingUserMessage,
+    isGeminiProviderBillingExhausted,
+    normalizeGeminiProviderBillingError,
+} from '../../src/utils/geminiProviderErrors.js';
 
 function statusForPipelineError(result) {
     if (result.code === 'VALIDATION_ERROR' || result.code === 'MALFORMED_JSON') {
@@ -24,6 +30,12 @@ function statusForPipelineError(result) {
     }
     if (result.code === 'IMAGE_GENERATION_FAILED') {
         return 422;
+    }
+    if (
+        result.code === GEMINI_PROVIDER_BILLING_CODE ||
+        isGeminiProviderBillingExhausted(result.error)
+    ) {
+        return 503;
     }
     if (
         result.code === 'GEMINI_API_ERROR' &&
@@ -37,6 +49,12 @@ function statusForPipelineError(result) {
 }
 
 function userMessageForPipelineError(result) {
+    if (
+        result.code === GEMINI_PROVIDER_BILLING_CODE ||
+        isGeminiProviderBillingExhausted(result.error)
+    ) {
+        return geminiProviderBillingUserMessage('ar');
+    }
     if (result.code === 'MODERATION_FAILED') {
         return 'لم تجتز الصورة المُولَّدة فحص الاعتدال. تُسترد الكريدتات عند فشل الطلب على الخادم.';
     }
@@ -175,6 +193,7 @@ export default async function handler(req, res) {
             accountType: callerContext.accountType,
             businessContext: callerContext.businessContext,
             aspectRatio: request.aspectRatio,
+            designCategory: request.designCategory,
         });
 
         if (pipelineResult.success === false) {
@@ -240,6 +259,17 @@ export default async function handler(req, res) {
             meta: {
                 ...pipelineResult.meta,
                 creditsCharged: creditCost,
+                ...(request.postType === 'design_studio' && request.designCategory
+                    ? {
+                          designStudio: {
+                              status: 'success',
+                              category: request.designCategory,
+                              aspect_ratio: request.aspectRatio || '1:1',
+                              optimized_prompt: responseData.imagePrompt || '',
+                              allow_download: true,
+                          },
+                      }
+                    : {}),
             },
         });
     } catch (error) {
@@ -250,6 +280,10 @@ export default async function handler(req, res) {
             } catch (refundErr) {
                 console.error('[api/ai/multi-generate] refund_failed', refundErr);
             }
+        }
+        const billing = normalizeGeminiProviderBillingError(error);
+        if (billing) {
+            return res.status(503).json({ success: false, ...billing });
         }
         const detail = error instanceof Error ? error.message : 'Internal server error';
         const isClientConfig = /firebase client config|VITE_FIREBASE/i.test(detail);

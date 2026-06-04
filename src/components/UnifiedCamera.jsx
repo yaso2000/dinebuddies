@@ -46,12 +46,20 @@ const UnifiedCamera = ({
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [facingMode, setFacingMode] = useState('user'); // 'user' (front) or 'environment' (back)
+    const [captureMode, setCaptureMode] = useState(mode === 'photo' ? 'photo' : 'video');
     const [cameraError, setCameraError] = useState(null);
     const [previewMedia, setPreviewMedia] = useState(null); // { url, type, file, thumbnailUrl? }
 
     useEffect(() => {
         previewMediaRef.current = previewMedia;
     }, [previewMedia]);
+
+    useEffect(() => {
+        if (mode === 'both') return;
+        setCaptureMode(mode === 'photo' ? 'photo' : 'video');
+    }, [mode]);
+
+    const activeCaptureMode = mode === 'both' ? captureMode : mode === 'photo' ? 'photo' : 'video';
 
     // Start camera on mount / when switching front-back
     useEffect(() => {
@@ -381,9 +389,9 @@ const UnifiedCamera = ({
                           padding: '12px 16px',
                           paddingBottom: 'max(20px, calc(10px + env(safe-area-inset-bottom, 0px)))',
                           display: 'flex',
-                          justifyContent: 'space-around',
+                          flexDirection: 'column',
                           alignItems: 'center',
-                          gap: 8,
+                          gap: 10,
                           background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)'
                       }
                     : {
@@ -394,13 +402,58 @@ const UnifiedCamera = ({
                           padding: '40px 20px',
                           paddingBottom: `max(20px, env(safe-area-inset-bottom))`,
                           display: 'flex',
-                          justifyContent: 'space-around',
+                          flexDirection: 'column',
                           alignItems: 'center',
+                          gap: 10,
                           background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)',
                           zIndex: 30
                       }
             }
         >
+            {mode === 'both' && !previewMedia && !cameraError ? (
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: 6,
+                        padding: 4,
+                        borderRadius: 999,
+                        background: 'rgba(255,255,255,0.12)',
+                    }}
+                >
+                    {['photo', 'video'].map((option) => (
+                        <button
+                            key={option}
+                            type="button"
+                            onClick={() => setCaptureMode(option)}
+                            disabled={isRecording}
+                            style={{
+                                border: 'none',
+                                borderRadius: 999,
+                                padding: '8px 18px',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                cursor: isRecording ? 'not-allowed' : 'pointer',
+                                opacity: isRecording ? 0.5 : 1,
+                                background: activeCaptureMode === option ? 'white' : 'transparent',
+                                color: activeCaptureMode === option ? '#111' : 'white',
+                            }}
+                        >
+                            {option === 'photo'
+                                ? t('take_photo', { defaultValue: 'Photo' })
+                                : t('record_video', { defaultValue: 'Video' })}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+            <div
+                style={{
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'space-around',
+                    alignItems: 'center',
+                    gap: 8,
+                }}
+            >
             {previewMedia ? (
                 <>
                     <button
@@ -458,14 +511,14 @@ const UnifiedCamera = ({
 
                     <button
                         type="button"
-                        onClick={mode === 'photo' ? capturePhoto : isRecording ? stopRecording : startRecording}
+                        onClick={activeCaptureMode === 'photo' ? capturePhoto : isRecording ? stopRecording : startRecording}
                         style={{
                             width: compactCapture ? 72 : 76,
                             height: compactCapture ? 72 : 76,
                             borderRadius: '50%',
-                            background: mode === 'photo' ? 'white' : isRecording ? 'transparent' : accentColor || 'red',
+                            background: activeCaptureMode === 'photo' ? 'white' : isRecording ? 'transparent' : accentColor || 'red',
                             border:
-                                mode === 'photo'
+                                activeCaptureMode === 'photo'
                                     ? '4px solid rgba(255,255,255,0.5)'
                                     : isRecording
                                       ? `4px solid ${accentColor || 'red'}`
@@ -474,7 +527,7 @@ const UnifiedCamera = ({
                             alignItems: 'center',
                             justifyContent: 'center',
                             boxShadow:
-                                mode === 'photo'
+                                activeCaptureMode === 'photo'
                                     ? '0 0 0 4px rgba(255,255,255,0.2)'
                                     : accentColor
                                       ? `0 0 0 6px ${accentColor}40, 0 8px 28px rgba(0,0,0,0.45)`
@@ -518,6 +571,7 @@ const UnifiedCamera = ({
                     </button>
                 </>
             )}
+            </div>
         </div>
     );
 

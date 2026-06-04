@@ -5,6 +5,7 @@ import './index.css';
 import './styles/invitation-card-fonts.css';
 import './styles/profile-shared.css';
 import './styles/ui-primitives.css';
+import './styles/composerFields.css';
 import './mobile-optimizations.css';
 import './i18n';
 import './utils/numberFormatOverrides';
@@ -13,6 +14,7 @@ import App from './App.jsx';
 import { bootDocumentTheme } from './theme/bootDocumentTheme';
 import { installFatalUiRecoveryListeners } from './utils/fatalUiRecovery';
 import { getFirebaseRedirectResultOnce } from './firebase/authBootstrap';
+import { clearStaleOAuthRedirectFlags } from './utils/localDevAuth';
 bootDocumentTheme();
 installFatalUiRecoveryListeners();
 
@@ -61,6 +63,7 @@ if (!rootEl) {
  * `App-*.css` (dynamic `import('./App.jsx')` has caused "Unable to preload CSS" and blank screens).
  */
 async function boot() {
+    clearStaleOAuthRedirectFlags();
     try {
         await getFirebaseRedirectResultOnce();
     } catch (err) {

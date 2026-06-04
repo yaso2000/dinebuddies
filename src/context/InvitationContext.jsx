@@ -28,6 +28,7 @@ import { useToast } from './ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 import notificationSound from '../utils/notificationSound';
 import { resolvePrivateInviteCategory } from '../utils/inviteCategory';
+import { getInvitationLatLng } from '../utils/invitationCoords';
 import { followUser, unfollowUser } from '../utils/followHelpers';
 import { convertFromUSD, getCurrencyByCountry } from '../utils/currencyConverter';
 import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../config/planDefaults';
@@ -226,7 +227,7 @@ export const InvitationProvider = ({ children }) => {
                     type: info.businessType || 'Restaurant',
                     image: pickSafeDisplayImageUrl(info.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
                     avatar: data.avatarUrl || '',
-                    location: info.city || info.address || 'Sydney',
+                    location: info.city || info.address || '',
                     description: info.description || '',
                     phone: '',
                     rating: 5.0,
@@ -564,6 +565,7 @@ export const InvitationProvider = ({ children }) => {
         }
         try {
             if (!newInvite.title) return false;
+            const coords = getInvitationLatLng(newInvite);
             const inviteData = {
                 ...newInvite,
                 inviteCategory: 'public',
@@ -577,11 +579,16 @@ export const InvitationProvider = ({ children }) => {
                 requests: [], joined: [], chat: [], meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
                 time: newInvite.time || '20:30',
-                lat: newInvite.lat || (-33.8688 + (Math.random() - 0.5) * 0.1),
-                lng: newInvite.lng || (151.2093 + (Math.random() - 0.5) * 0.1),
                 privacy: newInvite.privacy || 'public',
                 createdAt: serverTimestamp()
             };
+            if (coords) {
+                inviteData.lat = coords.lat;
+                inviteData.lng = coords.lng;
+            } else {
+                delete inviteData.lat;
+                delete inviteData.lng;
+            }
 
             const docRef = await addDoc(collection(db, 'invitations'), inviteData);
             

@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { stripUndefinedDeep } from '../../utils/firestoreSanitize';
+import { publishGeoFromStoredDoc } from '../../utils/postPublishGeo';
 
 function businessAuthorFromUser(data: Record<string, unknown> | undefined, ownerId: string) {
     const bi = (data?.businessInfo as Record<string, unknown>) || {};
@@ -67,6 +68,7 @@ export async function syncPublishedMotionPostToCommunityFeed(
         mediaUrl: imageUrl,
         mediaType: imageUrl ? 'image' : null,
         status: 'published',
+        ...publishGeoFromStoredDoc(motion as Record<string, unknown>),
         authorInterests: Array.isArray(profile.interests)
             ? profile.interests
             : Array.isArray(profile.hobbies)

@@ -1,5 +1,5 @@
 ﻿import { getApp } from 'firebase/app';
-import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend } from 'firebase/ai';
+import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend, VertexAIBackend } from 'firebase/ai';
 import {
     coalesceInvitationAiText,
     extractInvitationFieldsFromRaw,
@@ -9,15 +9,31 @@ import {
     enforceCardStructureTextLimits,
     normalizeCardStructure,
 } from '../utils/cardStructure.js';
+import {
+    buildDatingInvitationContextLines,
+    buildDatingInvitationSystemInstruction,
+} from '../utils/datingInvitationAiPrompt.js';
+import {
+    GEMINI_PROVIDER_BILLING_CODE,
+    isGeminiProviderBillingExhausted,
+    normalizeGeminiProviderBillingError,
+} from '../utils/geminiProviderErrors.js';
 
-export type TextPostType = 'regular_post' | 'featured_post' | 'animated_post' | 'invitation';
+export type TextPostType = 'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'design_studio';
 export type PostType = TextPostType | 'magic_cover';
 export type InvitationSubType = 'public' | 'private' | 'date';
 export type CardStructure = 'arch_luxury' | 'vintage_ticket' | 'modern_minimal';
 export type AnimationType = 'slide-up' | 'fade-in' | 'zoom-in';
 export type InvitationAccountType = 'user' | 'business';
 export type GenerationPackage = 'text' | 'image' | 'invitation_bundle';
-export type CoverAspectRatio = '1:1' | '9:16';
+export type CoverAspectRatio = '1:1' | '9:16' | '16:9';
+export type DesignStudioCategory =
+    | 'square'
+    | 'story'
+    | 'landscape'
+    | 'profile_picture'
+    | 'profile_cover'
+    | 'business_logo';
 
 export interface BusinessOfferContext {
     title: string;
@@ -60,6 +76,16 @@ export interface DatingInvitationContext {
     inviteeAgeGroup?: string;
     inviteeFavoriteFoods?: string[];
     inviteeCommunityNames?: string[];
+    inviteePersonalityVibe?: string;
+    senderFirstName?: string;
+    senderGender?: string;
+    senderAgeGroup?: string;
+    senderPersonalityVibe?: string;
+    senderFavoriteFoods?: string[];
+    ageGap?: string;
+    sharedInterests?: string[];
+    sharedFoodPreferences?: string[];
+    venueName?: string;
 }
 
 export interface GenerateContentInput {
@@ -108,7 +134,11 @@ export type GenerateContentSuccess = {
 export type GenerateContentError = {
     success: false;
     error: string;
-    code: 'GEMINI_API_ERROR' | 'MALFORMED_JSON' | 'VALIDATION_ERROR';
+    code:
+        | 'GEMINI_API_ERROR'
+        | 'GEMINI_PROVIDER_BILLING_EXHAUSTED'
+        | 'MALFORMED_JSON'
+        | 'VALIDATION_ERROR';
 };
 
 export type GenerateContentResult = GenerateContentSuccess | GenerateContentError;
@@ -152,6 +182,7 @@ export interface MultimodalPipelineInput {
     accountType: InvitationAccountType;
     businessContext?: BusinessInvitationContext;
     aspectRatio?: CoverAspectRatio;
+    designCategory?: DesignStudioCategory;
 }
 
 export interface MultimodalPipelineData {
@@ -205,8 +236,99 @@ const INVITATION_TITLE_MAX_LENGTH = 120;
 const JSON_OUTPUT_RULE =
     'Respond with one valid JSON object only. No markdown, no code fences, no ```json wrapper, and no extra text.';
 
-function getAi() {
-    return getAI(getApp(), { backend: new GoogleAIBackend() });
+type AiBackendMode = 'google' | 'vertex';
+
+/** google only | vertex only | auto = google then vertex on prepay/billing 429 */
+function resolveBackendChain(): AiBackendMode[] {
+    const configured = String(
+        (typeof process !== 'undefined' && process.env?.GEMINI_BACKEND) || 'auto',
+    )
+        .trim()
+        .toLowerCase();
+    if (configured === 'vertex' || configured === 'vertexai') return ['vertex'];
+    if (configured === 'google') return ['google'];
+    return ['google', 'vertex'];
+}
+
+function vertexLocation(): string {
+    return (
+        (typeof process !== 'undefined' && process.env?.GEMINI_VERTEX_LOCATION?.trim()) ||
+        'us-central1'
+    );
+}
+
+function createAi(mode: AiBackendMode) {
+    const backend =
+        mode === 'vertex' ? new VertexAIBackend(vertexLocation()) : new GoogleAIBackend();
+    return getAI(getApp(), { backend });
+}
+
+function isRetryableProviderBillingFailure(error: unknown): boolean {
+    return isGeminiProviderBillingExhausted(error instanceof Error ? error.message : error);
+}
+
+function isBillingFailureResult(result: {
+    success?: boolean;
+    error?: string;
+    code?: string;
+}): boolean {
+    if (!result || result.success !== false) return false;
+    if (result.code === GEMINI_PROVIDER_BILLING_CODE) return true;
+    return isGeminiProviderBillingExhausted(result.error);
+}
+
+async function withBackendFallback<T>(fn: (mode: AiBackendMode) => Promise<T>): Promise<T> {
+    const chain = resolveBackendChain();
+    let lastError: unknown;
+    for (let i = 0; i < chain.length; i += 1) {
+        try {
+            return await fn(chain[i]);
+        } catch (error) {
+            lastError = error;
+            const hasNext = i < chain.length - 1;
+            if (!hasNext || !isRetryableProviderBillingFailure(error)) {
+                throw error;
+            }
+            console.warn(
+                `[GeminiService] ${chain[i]} billing exhausted, retrying with ${chain[i + 1]}`,
+            );
+        }
+    }
+    throw lastError;
+}
+
+async function withBackendFallbackResult<T extends { success: boolean; error?: string; code?: string }>(
+    fn: (mode: AiBackendMode) => Promise<T>,
+): Promise<T> {
+    const chain = resolveBackendChain();
+    let lastResult: T | undefined;
+    for (let i = 0; i < chain.length; i += 1) {
+        const result = await fn(chain[i]);
+        lastResult = result;
+        if (result.success !== false) return result;
+        const hasNext = i < chain.length - 1;
+        if (!hasNext || !isBillingFailureResult(result)) return result;
+        console.warn(
+            `[GeminiService] ${chain[i]} billing exhausted for images, retrying with ${chain[i + 1]}`,
+        );
+    }
+    return lastResult as T;
+}
+
+function geminiFailureFromError(error: unknown, fallback = 'Unknown Gemini API error'): GenerateContentError {
+    const billing = normalizeGeminiProviderBillingError(error);
+    if (billing) {
+        return {
+            success: false,
+            error: billing.message,
+            code: GEMINI_PROVIDER_BILLING_CODE,
+        };
+    }
+    return {
+        success: false,
+        error: error instanceof Error ? error.message : fallback,
+        code: 'GEMINI_API_ERROR',
+    };
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -244,8 +366,7 @@ function buildInvitationSystemInstruction(
         } else if (subType === 'private') {
             toneRule += ' Private invitation: warm, personal, close-friends tone.';
         } else if (subType === 'date') {
-            toneRule +=
-                ' Date invitation: romantic, light, and practical tone. Factor in the specific date and time so the Arabic sounds natural. When inviteeName, inviteeGender, or sharedCommunities appear in context, personalize elegantly with correct Arabic pronouns. Never invent communities, venues, or facts not in context.';
+            return buildDatingInvitationSystemInstruction(cardStructure);
         }
     }
 
@@ -322,30 +443,34 @@ function buildUserPrompt(input: GenerateContentInput): string {
 
         const dating = input.datingContext;
         if (dating) {
-            appendContextLine(lines, 'inviteeName', dating.inviteeName);
-            appendContextLine(lines, 'inviteeId', dating.inviteeId);
-            appendContextLine(lines, 'inviteeGender', dating.inviteeGender);
-            appendContextLine(lines, 'inviteeAgeGroup', dating.inviteeAgeGroup);
-            if (dating.inviteeFavoriteFoods?.length) {
-                lines.push(`inviteeFavoriteFoods: ${dating.inviteeFavoriteFoods.join(', ')}`);
-            }
-            if (dating.inviteeCommunityNames?.length) {
-                lines.push(`inviteeCommunities: ${dating.inviteeCommunityNames.join(', ')}`);
-            }
-            appendContextLine(lines, 'date', dating.date);
-            appendContextLine(lines, 'time', dating.time);
-            const vd = dating.venueDetails;
-            if (vd) {
-                appendContextLine(lines, 'venueId', vd.venueId);
-                appendContextLine(lines, 'venueName', vd.name);
-                appendContextLine(lines, 'venueAddress', vd.address);
-                appendContextLine(lines, 'venueCity', vd.city);
-                appendContextLine(lines, 'venueCountry', vd.country);
-            }
-            if (dating.sharedCommunities?.length) {
-                lines.push('sharedCommunities:');
-                for (const c of dating.sharedCommunities) {
-                    lines.push(`- ${c.name} (${c.type})`);
+            if (input.subType === 'date') {
+                lines.push(...buildDatingInvitationContextLines(dating));
+            } else {
+                appendContextLine(lines, 'inviteeName', dating.inviteeName);
+                appendContextLine(lines, 'inviteeId', dating.inviteeId);
+                appendContextLine(lines, 'inviteeGender', dating.inviteeGender);
+                appendContextLine(lines, 'inviteeAgeGroup', dating.inviteeAgeGroup);
+                if (dating.inviteeFavoriteFoods?.length) {
+                    lines.push(`inviteeFavoriteFoods: ${dating.inviteeFavoriteFoods.join(', ')}`);
+                }
+                if (dating.inviteeCommunityNames?.length) {
+                    lines.push(`inviteeCommunities: ${dating.inviteeCommunityNames.join(', ')}`);
+                }
+                appendContextLine(lines, 'date', dating.date);
+                appendContextLine(lines, 'time', dating.time);
+                const vd = dating.venueDetails;
+                if (vd) {
+                    appendContextLine(lines, 'venueId', vd.venueId);
+                    appendContextLine(lines, 'venueName', vd.name);
+                    appendContextLine(lines, 'venueAddress', vd.address);
+                    appendContextLine(lines, 'venueCity', vd.city);
+                    appendContextLine(lines, 'venueCountry', vd.country);
+                }
+                if (dating.sharedCommunities?.length) {
+                    lines.push('sharedCommunities:');
+                    for (const c of dating.sharedCommunities) {
+                        lines.push(`- ${c.name} (${c.type})`);
+                    }
                 }
             }
         }
@@ -370,19 +495,21 @@ async function invokeGeminiJsonModel(
     systemInstruction: string,
     maxOutputTokens = 1024,
 ): Promise<string> {
-    const ai = getAi();
-    const model = getGenerativeModel(ai, { model: TEXT_MODEL_NAME });
+    return withBackendFallback(async (mode) => {
+        const ai = createAi(mode);
+        const model = getGenerativeModel(ai, { model: TEXT_MODEL_NAME });
 
-    const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction,
-        generationConfig: {
-            responseMimeType: 'application/json',
-            maxOutputTokens,
-        },
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            systemInstruction,
+            generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens,
+            },
+        });
+
+        return result.response.text();
     });
-
-    return result.response.text();
 }
 
 async function invokeGeminiJsonWithImage(
@@ -391,27 +518,29 @@ async function invokeGeminiJsonWithImage(
     mimeType: string,
     userText: string,
 ): Promise<string> {
-    const ai = getAi();
-    const model = getGenerativeModel(ai, { model: TEXT_MODEL_NAME });
+    return withBackendFallback(async (mode) => {
+        const ai = createAi(mode);
+        const model = getGenerativeModel(ai, { model: TEXT_MODEL_NAME });
 
-    const result = await model.generateContent({
-        contents: [
-            {
-                role: 'user',
-                parts: [
-                    { inlineData: { mimeType, data: imageBase64 } },
-                    { text: userText },
-                ],
+        const result = await model.generateContent({
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        { inlineData: { mimeType, data: imageBase64 } },
+                        { text: userText },
+                    ],
+                },
+            ],
+            systemInstruction,
+            generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens: 1024,
             },
-        ],
-        systemInstruction,
-        generationConfig: {
-            responseMimeType: 'application/json',
-            maxOutputTokens: 1024,
-        },
-    });
+        });
 
-    return result.response.text();
+        return result.response.text();
+    });
 }
 
 function extractJsonBody(rawText: string): string {
@@ -578,16 +707,36 @@ export async function generateContent(input: GenerateContentInput): Promise<Gene
             data: parsed as GeneratedContent,
         };
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown Gemini API error';
-        return {
-            success: false,
-            error: message,
-            code: 'GEMINI_API_ERROR',
-        };
+        return geminiFailureFromError(error);
     }
 }
 
-function buildImagePromptSystemInstruction(accountType: InvitationAccountType): string {
+function buildImagePromptSystemInstruction(
+    accountType: InvitationAccountType,
+    postType?: TextPostType,
+    designCategory?: DesignStudioCategory,
+): string {
+    if (postType === 'design_studio' && designCategory) {
+        const categoryRules: Record<DesignStudioCategory, string> = {
+            square:
+                'General square social graphic. Balanced centered composition, vibrant but clean, studio or lifestyle lighting.',
+            story:
+                'Vertical mobile story/reel cover. Strong focal point in safe center, mobile-first framing, bold visual hierarchy.',
+            landscape:
+                'Horizontal widescreen banner. Cinematic panoramic composition, wide depth, editorial photography or illustration.',
+            profile_picture:
+                'Profile avatar photo. Close-up portrait, centered subject, clean soft background, flattering professional headshot lighting.',
+            profile_cover:
+                'Profile header cover. Wide panoramic scene with negative space for text overlay, contextual mood, soft gradients allowed.',
+            business_logo:
+                'Business logo mark. Flat vector-style logo icon, minimalist, isolated on solid color background, no photorealistic photography, no mockup scene, no watermark.',
+        };
+
+        const rule = categoryRules[designCategory] || categoryRules.square;
+
+        return `${JSON_OUTPUT_RULE} You are the DineBuddies AI Design Studio prompt engine (Mode 2). Return exactly one JSON object with keys: status ("success"), category (the design category id), aspect_ratio (e.g. 1:1, 9:16, 16:9), optimized_prompt (highly detailed English Imagen prompt), allow_download (true), and imagePrompt (same English text as optimized_prompt). No markdown, no extra text. Category rule: ${rule} Never embed readable text, watermarks, or logos in the image unless the user explicitly requests text for a logo wordmark.`;
+    }
+
     const shape =
         'Return exactly: {"imagePrompt":"...","styleHints":"..."}. imagePrompt must be English, detailed, photorealistic, no text/watermarks/logos in the image. styleHints is optional.';
 
@@ -619,6 +768,8 @@ function buildImagePromptUserContext(input: MultimodalPipelineInput, invitationT
     appendContextLine(lines, 'venueType', input.venueType);
     appendContextLine(lines, 'venueName', input.venueName);
     appendContextLine(lines, 'aspectRatio', input.aspectRatio || '1:1');
+    appendContextLine(lines, 'designCategory', input.designCategory);
+    appendContextLine(lines, 'postType', input.postType || 'invitation');
 
     if (invitationText) {
         appendContextLine(lines, 'invitationTitle', invitationText.title);
@@ -642,7 +793,11 @@ export async function generateImagePrompt(
     try {
         const rawText = await invokeGeminiJsonModel(
             buildImagePromptUserContext(input, invitationText),
-            buildImagePromptSystemInstruction(input.accountType),
+            buildImagePromptSystemInstruction(
+                input.accountType,
+                input.postType,
+                input.designCategory,
+            ),
             2048,
         );
 
@@ -656,10 +811,15 @@ export async function generateImagePrompt(
         }
 
         const parsed = parsedResult.value as Record<string, unknown>;
-        if (!isNonEmptyString(parsed.imagePrompt)) {
+        const imagePromptRaw =
+            (isNonEmptyString(parsed.optimized_prompt) && parsed.optimized_prompt.trim()) ||
+            (isNonEmptyString(parsed.imagePrompt) && parsed.imagePrompt.trim()) ||
+            '';
+
+        if (!imagePromptRaw) {
             return {
                 success: false,
-                error: 'Missing or empty "imagePrompt"',
+                error: 'Missing or empty "imagePrompt" / "optimized_prompt"',
                 code: 'VALIDATION_ERROR',
             };
         }
@@ -667,16 +827,12 @@ export async function generateImagePrompt(
         return {
             success: true,
             data: {
-                imagePrompt: parsed.imagePrompt.trim(),
+                imagePrompt: imagePromptRaw,
                 styleHints: isNonEmptyString(parsed.styleHints) ? parsed.styleHints.trim() : undefined,
             },
         };
     } catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Image prompt generation failed',
-            code: 'GEMINI_API_ERROR',
-        };
+        return geminiFailureFromError(error, 'Image prompt generation failed');
     }
 }
 
@@ -695,7 +851,11 @@ export async function generateCoverImage(
     aspectRatio: CoverAspectRatio = '1:1',
 ): Promise<
     | { success: true; bytesBase64: string; mimeType: string; filteredReason?: string }
-    | { success: false; error: string; code: 'IMAGE_GENERATION_FAILED' | 'GEMINI_API_ERROR' }
+    | {
+          success: false;
+          error: string;
+          code: 'IMAGE_GENERATION_FAILED' | 'GEMINI_API_ERROR' | typeof GEMINI_PROVIDER_BILLING_CODE;
+      }
 > {
     const safePrompt = sanitizeImagenPrompt(imagePrompt);
     if (!safePrompt) {
@@ -706,53 +866,58 @@ export async function generateCoverImage(
         };
     }
 
-    const ai = getAi();
-    /** @type {string[]} */
-    const modelsToTry = [...new Set(IMAGEN_MODEL_FALLBACKS)];
-    /** @type {string | undefined} */
-    let lastError;
+    return withBackendFallbackResult(async (mode) => {
+        const ai = createAi(mode);
+        const modelsToTry = [...new Set(IMAGEN_MODEL_FALLBACKS)];
+        let lastError: string | undefined;
 
-    for (const modelName of modelsToTry) {
-        try {
-            const model = getImagenModel(ai, {
-                model: modelName,
-                generationConfig: {
-                    numberOfImages: 1,
-                    aspectRatio,
-                },
-            });
+        for (const modelName of modelsToTry) {
+            try {
+                const model = getImagenModel(ai, {
+                    model: modelName,
+                    generationConfig: {
+                        numberOfImages: 1,
+                        aspectRatio,
+                    },
+                });
 
-            const response = await model.generateImages(safePrompt);
-            const first = response.images?.[0];
+                const response = await model.generateImages(safePrompt);
+                const first = response.images?.[0];
 
-            if (!first?.bytesBase64Encoded) {
-                lastError =
-                    response.filteredReason ||
-                    `Imagen (${modelName}) returned no image (prompt may have been filtered)`;
-                continue;
+                if (!first?.bytesBase64Encoded) {
+                    lastError =
+                        response.filteredReason ||
+                        `Imagen (${modelName}) returned no image (prompt may have been filtered)`;
+                    continue;
+                }
+
+                return {
+                    success: true,
+                    bytesBase64: first.bytesBase64Encoded,
+                    mimeType: first.mimeType || 'image/jpeg',
+                    filteredReason: response.filteredReason,
+                };
+            } catch (error) {
+                lastError = error instanceof Error ? error.message : String(error);
+                console.warn('[generateCoverImage] model failed', mode, modelName, lastError);
             }
-
-            return {
-                success: true,
-                bytesBase64: first.bytesBase64Encoded,
-                mimeType: first.mimeType || 'image/jpeg',
-                filteredReason: response.filteredReason,
-            };
-        } catch (error) {
-            lastError = error instanceof Error ? error.message : String(error);
-            console.warn('[generateCoverImage] model failed', modelName, lastError);
         }
-    }
 
-    const errText = lastError || 'Imagen generation failed';
-    const isFiltered =
-        /filtered|no image|safety|blocked/i.test(errText) && !/unavailable|503|404|not found|permission/i.test(errText);
+        const errText = lastError || 'Imagen generation failed';
+        const billing = normalizeGeminiProviderBillingError(errText);
+        if (billing) {
+            return { success: false, error: billing.message, code: GEMINI_PROVIDER_BILLING_CODE };
+        }
+        const isFiltered =
+            /filtered|no image|safety|blocked/i.test(errText) &&
+            !/unavailable|503|404|not found|permission/i.test(errText);
 
-    return {
-        success: false,
-        error: errText,
-        code: isFiltered ? 'IMAGE_GENERATION_FAILED' : 'GEMINI_API_ERROR',
-    };
+        return {
+            success: false,
+            error: errText,
+            code: isFiltered ? 'IMAGE_GENERATION_FAILED' : 'GEMINI_API_ERROR',
+        };
+    });
 }
 
 export async function analyzeImageModeration(
@@ -793,12 +958,7 @@ export async function analyzeImageModeration(
 
         return { success: true, data: moderation };
     } catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Image moderation failed',
-            code: 'GEMINI_API_ERROR',
-            stage: 'image_moderation',
-        };
+        return { ...geminiFailureFromError(error, 'Image moderation failed'), stage: 'image_moderation' };
     }
 }
 

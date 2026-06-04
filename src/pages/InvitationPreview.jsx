@@ -31,9 +31,17 @@ const InvitationPreview = () => {
         invitation.inviteMood || invitation.occasionType,
         { cardFontFamily: invitation.cardFontFamily }
     ) : null;
-    const previewTextColor = templateStyles?.card?.color || 'var(--text-main)';
-    const previewMutedColor = templateStyles?.card?.color ? 'rgba(255,255,255,0.82)' : 'var(--text-secondary)';
-    const previewSubtleColor = templateStyles?.card?.color ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)';
+    const cardUsesThemeTypography =
+        !templateStyles?.card?.color || templateStyles?.card?.background === 'transparent';
+    const previewTextColor = cardUsesThemeTypography
+        ? 'var(--text-main)'
+        : templateStyles.card.color;
+    const previewMutedColor = cardUsesThemeTypography
+        ? 'var(--text-secondary)'
+        : 'rgba(255,255,255,0.82)';
+    const previewSubtleColor = cardUsesThemeTypography
+        ? 'var(--text-muted)'
+        : 'rgba(255,255,255,0.7)';
 
     // Fetch draft invitation from Firestore
     useEffect(() => {
@@ -311,9 +319,9 @@ const InvitationPreview = () => {
                     }}>
                         <span className="meta-badge" style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
-                            background: templateStyles.card?.color ? 'rgba(255,255,255,0.1)' : 'var(--bg-input)', padding: '6px 14px',
-                            borderRadius: '12px', fontSize: '0.9rem', color: templateStyles.card?.color || 'var(--text-main)',
-                            fontWeight: '700', border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
+                            background: !cardUsesThemeTypography ? 'rgba(255,255,255,0.1)' : 'var(--bg-input)', padding: '6px 14px',
+                            borderRadius: '12px', fontSize: '0.9rem', color: previewTextColor,
+                            fontWeight: '700', border: !cardUsesThemeTypography ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
                         }}>
                             <FaCalendarAlt style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} />
                             {(() => {
@@ -324,9 +332,9 @@ const InvitationPreview = () => {
                         </span>
                         <span className="meta-badge" style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
-                            background: templateStyles.card?.color ? 'rgba(255,255,255,0.1)' : 'var(--bg-input)', padding: '6px 14px',
-                            borderRadius: '12px', fontSize: '0.9rem', color: templateStyles.card?.color || 'var(--text-main)',
-                            fontWeight: '700', border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
+                            background: !cardUsesThemeTypography ? 'rgba(255,255,255,0.1)' : 'var(--bg-input)', padding: '6px 14px',
+                            borderRadius: '12px', fontSize: '0.9rem', color: previewTextColor,
+                            fontWeight: '700', border: !cardUsesThemeTypography ? '1px solid rgba(255,255,255,0.1)' : '1px solid var(--border-color)'
                         }}>
                             <FaClock style={{ color: templateStyles.layout?.accentColor || '#fbbf24' }} /> {invitation.time}
                         </span>
@@ -336,7 +344,7 @@ const InvitationPreview = () => {
                     <h3 style={{
                         fontSize: templateStyles.layout?.titleSize || '1.6rem',
                         fontWeight: '900',
-                        color: templateStyles.card?.color || 'var(--text-main)',
+                        color: previewTextColor,
                         margin: '0 0 1rem 0',
                         lineHeight: 1.2,
                         fontFamily: templateStyles.layout?.fontFamily || 'inherit'
@@ -368,9 +376,9 @@ const InvitationPreview = () => {
                         fontWeight: '700',
                         marginBottom: '1.5rem',
                         padding: '0.5rem 1rem',
-                        background: templateStyles.card?.color ? 'rgba(255,255,255,0.12)' : 'var(--bg-input)',
+                        background: !cardUsesThemeTypography ? 'rgba(255,255,255,0.12)' : 'var(--bg-input)',
                         borderRadius: '12px',
-                        border: templateStyles.card?.color ? '1px solid rgba(255,255,255,0.2)' : '1px solid var(--border-color)'
+                        border: !cardUsesThemeTypography ? '1px solid rgba(255,255,255,0.2)' : '1px solid var(--border-color)'
                     }}>
                         <FaMapMarkerAlt style={{ color: '#f87171' }} />
                         <span>

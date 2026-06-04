@@ -1,0 +1,96 @@
+/* Post / comment / reply composer shells — distinct border + fill */
+
+:root {
+    --composer-post-bg: color-mix(in srgb, var(--primary) 7%, var(--bg-card));
+    --composer-post-border: color-mix(in srgb, var(--primary) 55%, var(--border-color));
+    --composer-post-focus-ring: color-mix(in srgb, var(--primary) 40%, transparent);
+
+    --composer-comment-bg: color-mix(in srgb, var(--text-muted) 6%, var(--bg-card));
+    --composer-comment-border: color-mix(in srgb, var(--text-muted) 28%, var(--border-color));
+    --composer-comment-focus-ring: color-mix(in srgb, var(--text-muted) 22%, transparent);
+
+    --composer-reply-bg: color-mix(in srgb, #8b5cf6 10%, var(--bg-card));
+    --composer-reply-border: color-mix(in srgb, #8b5cf6 50%, var(--border-color));
+    --composer-reply-focus-ring: color-mix(in srgb, #8b5cf6 38%, transparent);
+    --composer-reply-accent: #a78bfa;
+}
+
+/* ── Feed / inline new post ── */
+.composer-shell--post {
+    background: var(--composer-post-bg) !important;
+    border: 1.5px solid var(--composer-post-border) !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.composer-field--post {
+    position: relative;
+    border: 1.5px solid var(--composer-post-border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-main) 40%, var(--composer-post-bg));
+    padding: 10px 12px;
+    padding-inline-end: 46px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.composer-field--post:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--composer-post-focus-ring);
+}
+
+.composer-field--post .composer-field__input {
+    width: 100%;
+    min-height: 60px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.95rem;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    cursor: text;
+}
+
+.composer-field--post .composer-field__input::placeholder {
+    color: var(--text-muted);
+}
+
+/* ── Post comments ── */
+.fb-comment-composer--comment .fb-comment-composer__input {
+    border: 1.5px solid var(--composer-comment-border);
+    background: var(--composer-comment-bg);
+}
+
+.fb-comment-composer--comment .fb-comment-composer__input:focus {
+    border-color: color-mix(in srgb, var(--text-muted) 45%, var(--border-color));
+    box-shadow: 0 0 0 3px var(--composer-comment-focus-ring);
+}
+
+.fb-comment-composer--reply {
+    background: color-mix(in srgb, #8b5cf6 6%, var(--bg-card));
+    border-top-color: color-mix(in srgb, #8b5cf6 35%, var(--border-color)) !important;
+}
+
+.fb-comment-composer--reply .fb-comment-composer__input {
+    border: 1.5px solid var(--composer-reply-border);
+    background: var(--composer-reply-bg);
+}
+
+.fb-comment-composer--reply .fb-comment-composer__input:focus {
+    border-color: var(--composer-reply-accent);
+    box-shadow: 0 0 0 3px var(--composer-reply-focus-ring);
+}
+
+.fb-comment-composer--reply .fb-comment-composer__send:not(:disabled) {
+    color: var(--composer-reply-accent);
+}
+
+.comments-replying-hint {
+    border-inline: 3px solid var(--composer-reply-accent);
+    background: var(--composer-reply-bg);
+    color: var(--text-main);
+}
+
+.comments-replying-hint span {
+    font-weight: 600;
+}

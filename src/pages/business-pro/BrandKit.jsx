@@ -8,9 +8,22 @@ import { BUSINESS_THEMES } from '../../utils/businessThemes';
 import PremiumBadge from '../../components/PremiumBadge';
 import PremiumPaywallModal from '../../components/PremiumPaywallModal';
 import DraftSavedModal from '../../components/DraftSavedModal';
+import './BrandKit.css';
 // ─── 12 Curated Brand Templates ─────────────────────────────────────────────
 // textColor = color used for headings/badges on dark card backgrounds
 const BRAND_TEMPLATES = [
+    {
+        id: 'dinebuddies', name: 'DineBuddies', emoji: '🍊', desc: 'Default brand orange',
+        preview: ['#E86E2E', '#d85a20'],
+        kit: {
+            primaryColor: '#E86E2E', secondaryColor: '#d85a20', textColor: '#ffffff',
+            fontFamily: "system-ui, sans-serif", buttonStyle: '14px',
+            tabBorderColor: '#E86E2E', tabBgColor: 'rgba(232,110,46,0.1)', tabTextColor: '#E86E2E',
+            joinBtnBg: '#E86E2E', joinBtnTextColor: '#ffffff',
+            inviteBtnBg: 'transparent', inviteBtnTextColor: '#E86E2E',
+            starColor: '#E86E2E', btnTextColor: '#ffffff', btnBorderColor: '#E86E2E',
+        }
+    },
     {
         id: 'golden_elegance', name: 'Golden Elegance', emoji: '✨', desc: 'Luxurious gold & amber',
         preview: ['#d4af37', '#997a00'],
@@ -155,7 +168,7 @@ const ColorSwatch = ({ color, selected, onClick }) => (
     />
 );
 
-const BrandKit = ({ onBack }) => {
+const BrandKit = ({ onBack, inAppColumn = true }) => {
     const { currentUser, userProfile } = useAuth();
     const navigate = useNavigate();
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -165,6 +178,9 @@ const BrandKit = ({ onBack }) => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    /** Side preview only on wide viewports; modal uses app column (~500px) so editor stacks */
+    const showSidePreview = !inAppColumn && !isMobile;
 
     const currentTheme = BUSINESS_THEMES.find(t => t.id === userProfile?.businessInfo?.theme) || BUSINESS_THEMES[0];
     const defaultPrimary = currentTheme?.colors?.accent || '#a78bfa';
@@ -222,9 +238,14 @@ const BrandKit = ({ onBack }) => {
             const userRef = doc(db, 'users', currentUser.uid);
             // Always save directly — brand kit is free for all businesses
             // Force sans-serif font regardless of template selection
-            await updateDoc(userRef, {
-                'businessInfo.brandKit': { ...allProps, fontFamily: 'system-ui, sans-serif' }
-            });
+            const themeId = selectedTemplate || allProps.templateId;
+            const payload = {
+                'businessInfo.brandKit': { ...allProps, fontFamily: 'system-ui, sans-serif' },
+            };
+            if (themeId) {
+                payload['businessInfo.theme'] = themeId;
+            }
+            await updateDoc(userRef, payload);
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch (e) {
@@ -257,7 +278,7 @@ const BrandKit = ({ onBack }) => {
     );
 
     return (
-        <div style={{ paddingBottom: isMobile ? '160px' : '0px', position: 'relative' }}>
+        <div className="brand-kit-page" style={{ paddingBottom: isMobile ? '160px' : '1rem' }}>
             {/* Breadcrumb */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
                 <button onClick={onBack}
@@ -284,7 +305,7 @@ const BrandKit = ({ onBack }) => {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 360px', gap: 24, alignItems: 'start' }}>
+            <div className="brand-kit-layout">
 
                 {/* LEFT: Editor */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -340,18 +361,9 @@ const BrandKit = ({ onBack }) => {
                     </div>
 
                     {/* Save Wrapper (Sticky on Mobile, above Nav Bar) */}
-                    <div style={{
-                        position: isMobile ? 'fixed' : 'relative',
-                        bottom: isMobile ? '80px' : 'auto',  /* Account for the bottom nav bar */
-                        left: isMobile ? 0 : 'auto',
-                        right: isMobile ? 0 : 'auto',
-                        padding: isMobile ? '16px' : '0',
-                        background: isMobile ? '#0f172a' : 'transparent',
-                        borderTop: isMobile ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                        zIndex: 99999, /* Force it above everything */
-                        display: 'flex',
-                        boxShadow: isMobile ? '0 -10px 30px rgba(0,0,0,0.5)' : 'none'
-                    }}>
+                    <div
+                        className={`brand-kit-save-bar${isMobile ? ' brand-kit-save-bar--fixed' : ' brand-kit-save-bar--inline'}`}
+                    >
                         <button onClick={handleSave} disabled={saving} className="bpro-btn-primary"
                             style={{ flex: 1, width: '100%', justifyContent: 'center', height: 48, fontSize: '0.95rem', gap: 10 }}>
                             {saved ? <><FaCheck /> Saved!</> : saving ? 'Saving…' : <><FaSave /> {isMobile ? 'Save Changes' : 'Save Brand Kit'}</>}
@@ -359,8 +371,8 @@ const BrandKit = ({ onBack }) => {
                     </div>
                 </div>
 
-                {/* RIGHT: Live Profile Preview (Desktop Only) */}
-                {!isMobile && (
+                {/* RIGHT: Live Profile Preview (wide desktop only — hidden in app column modal) */}
+                {showSidePreview && (
                     <div style={{ position: 'sticky', top: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Preview</div>

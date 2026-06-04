@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import UserAvatar from './UserAvatar';
 import MotionPostBody from './MotionPostBody';
-import { getGenderBorderColor } from '../utils/avatarUtils';
 import { deleteFeedPostCascade } from '../utils/postDeleteCascade';
 
 const formatFeedTime = (ts) => {
@@ -93,14 +92,7 @@ export default function MotionPostFeedCard({ post, communityPostId = null }) {
                     src={authorAvatar || undefined}
                     className="post-avatar"
                     alt={authorName}
-                    style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        cursor: 'pointer',
-                        border: `2px solid ${getGenderBorderColor(authorObj)}`,
-                    }}
+                    style={{ width: 40, height: 40, cursor: 'pointer' }}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (post.businessId) navigate(`/business/${post.businessId}`);

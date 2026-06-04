@@ -407,7 +407,7 @@ const Settings = () => {
                                     <div style={{ fontWeight: '700', marginBottom: '2px' }}>{t('welcome_language', 'Language')}</div>
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('english', 'English')}</div>
                                 </div>
-                                <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }} />
+                                <FaChevronRight className="settings-row-chevron" />
                             </div>
                         </div>
                     </div>
@@ -538,7 +538,7 @@ const Settings = () => {
                                     )}
                                 </div>
 
-                                <FaChevronRight style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }} />
+                                <FaChevronRight className="settings-row-chevron" />
                             </button>
                         ))}
                     </div>
@@ -570,7 +570,7 @@ const Settings = () => {
                         <div style={{ flex: 1, fontWeight: '700', color: '#ef4444' }}>
                             {t('logout')}
                         </div>
-                        <FaChevronRight style={{ color: '#ef4444', fontSize: '0.9rem' }} />
+                        <FaChevronRight className="settings-row-chevron settings-row-chevron--danger" />
                     </div>
 
                     {/* Delete Account */}
@@ -611,7 +611,7 @@ const Settings = () => {
                                 animation: 'spin 1s linear infinite'
                             }} />
                         ) : (
-                            <FaChevronRight style={{ color: '#ef4444', fontSize: '0.9rem' }} />
+                            <FaChevronRight className="settings-row-chevron settings-row-chevron--danger" />
                         )}
                     </div>
                 </div>

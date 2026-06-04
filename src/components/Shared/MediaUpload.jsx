@@ -39,7 +39,17 @@ const MediaUpload = ({
         setModerationStatus(null);
 
         try {
-            if (type === 'video') {
+            const isVideoFile = file.type.startsWith('video/');
+            const isImageFile = file.type.startsWith('image/');
+
+            if (type === 'both') {
+                if (!isVideoFile && !isImageFile) {
+                    setError(t('media_invalid_file', { defaultValue: 'Please choose a photo or video file.' }));
+                    return;
+                }
+            }
+
+            if (type === 'video' || (type === 'both' && isVideoFile)) {
                 // Validate video
                 setUploading(true);
                 setProgress(10);
@@ -160,7 +170,7 @@ const MediaUpload = ({
             <input
                 ref={fileInputRef}
                 type="file"
-                accept={type === 'video' ? 'video/*' : 'image/*'}
+                accept={type === 'video' ? 'video/*' : type === 'both' ? 'image/*,video/*' : 'image/*'}
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
             />
@@ -173,16 +183,18 @@ const MediaUpload = ({
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
                     >
-                        {type === 'video' ? <FaVideo size={32} /> : <FaImage size={32} />}
+                        {type === 'video' ? <FaVideo size={32} /> : type === 'both' ? <FaImage size={32} /> : <FaImage size={32} />}
                         <span>
                             {uploading && moderationStatus === 'checking'
                                 ? t('image_upload_checking')
                                 : uploading
                                     ? `${t('processing', 'Processing…')} ${progress}%`
-                                    : `Select ${type === 'video' ? 'Video' : 'Photo'}`}
+                                    : type === 'both'
+                                        ? t('media_select_photo_or_video', { defaultValue: 'Choose photo or video' })
+                                        : `Select ${type === 'video' ? 'Video' : 'Photo'}`}
                         </span>
-                        {type === 'video' && (
-                            <small>Max {maxDuration}s, {maxSize}MB</small>
+                        {(type === 'video' || type === 'both') && (
+                            <small>{t('media_video_limits', { defaultValue: 'Video max {{duration}}s, {{size}}MB', duration: maxDuration, size: maxSize })}</small>
                         )}
                     </button>
 
@@ -205,7 +217,7 @@ const MediaUpload = ({
             ) : (
                 <div className="preview-area">
                     <div className="preview-container">
-                        {type === 'video' ? (
+                        {type === 'video' || (type === 'both' && selectedFile?.type?.startsWith('video/')) ? (
                             <>
                                 <video
                                     src={preview}

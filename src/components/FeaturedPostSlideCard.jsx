@@ -97,13 +97,20 @@ export default function FeaturedPostSlideCard({ data, businessName, businessLogo
     const descSC       = description?.shadowColor  || 'rgba(0,0,0,0.4)';
     const descShadow   = description?.shadow !== false && description?.shadow !== 'off';
 
+    const layoutKey = data?.layout || 'center';
+    const layoutStyle = LAYOUT_OPTIONS.find((l) => l.value === layoutKey) || LAYOUT_OPTIONS[0];
+    const feedCentered = compact && !noRadius;
+    const contentLayout = feedCentered ? LAYOUT_OPTIONS[0] : layoutStyle;
+    const titleTextAlign = feedCentered ? 'center' : title?.textAlign || 'left';
+    const descTextAlign = feedCentered ? 'center' : description?.textAlign || 'left';
+
     const descStyle = {
         fontFamily: description?.fontFamily || 'system-ui, sans-serif',
         fontSize:   description?.fontSize ? `${description.fontSize}px` : '0.95rem',
         color:      description?.color    || 'rgba(255,255,255,0.9)',
         fontWeight: description?.fontWeight === 'bold'   ? 700     : 400,
         fontStyle:  description?.fontStyle  === 'italic' ? 'italic': 'normal',
-        textAlign:  description?.textAlign  || 'left',
+        textAlign:  descTextAlign,
         margin:     0,
         lineHeight: 1.5,
         whiteSpace: 'pre-wrap',
@@ -117,41 +124,51 @@ export default function FeaturedPostSlideCard({ data, businessName, businessLogo
         : [description?.singleText || description?.text].filter(Boolean);
     const paragraphIcons      = Array.isArray(description?.paragraphIcons)      ? description.paragraphIcons      : ['','','','',''];
     const paragraphIconsAfter = Array.isArray(description?.paragraphIconsAfter) ? description.paragraphIconsAfter : ['','','','',''];
-    const descPosition = description?.positionVertical || 'center';
-    const descJustify  = descPosition === 'top' ? 'flex-start' : descPosition === 'bottom' ? 'flex-end' : 'center';
-
     const titleStyle = {
         fontFamily: title?.fontFamily || 'Inter, sans-serif',
         fontSize:   title?.fontSize   ? `${title.fontSize}px` : '1.75rem',
         color:      title?.color      || '#fff',
         fontWeight: title?.fontWeight === 'bold'   ? 700     : 400,
         fontStyle:  title?.fontStyle  === 'italic' ? 'italic': 'normal',
-        textAlign:  title?.textAlign  || 'left',
+        textAlign:  titleTextAlign,
         margin: 0, lineHeight: 1.2, width: '100%',
         wordBreak: 'break-word', overflowWrap: 'break-word',
         ...(borderWidth > 0 && { WebkitTextStroke: `${borderWidth}px ${borderColor}` }),
         ...(hasShadow      && { textShadow: `0 2px 8px ${shadowColor}` }),
     };
 
-    const layoutKey   = data?.layout    || 'center';
-    const layoutStyle = LAYOUT_OPTIONS.find(l => l.value === layoutKey) || LAYOUT_OPTIONS[0];
     const animKey     = data?.animation || 'stagger';
     const baseClass   = `elite-slide-${animState} elite-slide-anim-${animKey}`;
     const cardStyle   = {
-        position: 'relative', overflow: 'hidden',
+        position: 'relative',
+        overflow: 'hidden',
         borderRadius: noRadius ? 0 : 16,
         boxSizing: 'border-box',
-        padding: compact ? '24px 16px' : '80px 24px', // Symmetric top/bottom margins, larger than before
+        padding: compact ? '24px 16px' : '80px 24px',
         width: '100%',
-        minHeight: '56.25cqw', // 16:9 ratio
-        maxHeight: '177.77cqw', // 9:16 ratio
-        height: 'auto',
-        maxWidth: (compact && !noRadius) ? 420 : '100%',
+        maxWidth: feedCentered ? 420 : '100%',
+        marginInline: feedCentered ? 'auto' : undefined,
+        minHeight: feedCentered ? undefined : '56.25cqw',
+        maxHeight: feedCentered ? undefined : '177.77cqw',
+        aspectRatio: feedCentered ? '16 / 9' : undefined,
+        height: feedCentered ? 'auto' : 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
         ...bgStyle,
     };
 
     return (
-        <div style={{ containerType: 'inline-size', width: '100%' }}>
+        <div
+            className="elite-featured-slide-outer"
+            style={{
+                containerType: 'inline-size',
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+            }}
+        >
             <div ref={containerRef} className={`elite-featured-slide ${baseClass}`} style={cardStyle}>
             <style>{`
                 .elite-slide-waiting .elite-slide-title, .elite-slide-waiting .elite-slide-desc, .elite-slide-waiting .elite-slide-para { opacity: 0; }
@@ -191,14 +208,42 @@ export default function FeaturedPostSlideCard({ data, businessName, businessLogo
                 @keyframes eliteScaleIn    { to { opacity: 1; transform: scale(1); } }
             `}</style>
 
-            <div ref={contentRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: layoutStyle.justifyContent, alignItems: layoutStyle.alignItems }}>
-                {/* Title + Description always grouped — title is 20px above paragraphs */}
-                <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div
+                ref={contentRef}
+                className="elite-slide-content"
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: '1 1 auto',
+                    width: '100%',
+                    minHeight: 0,
+                    justifyContent: contentLayout.justifyContent,
+                    alignItems: contentLayout.alignItems,
+                }}
+            >
+                {/* Title + Description — centered as a block in feed (compact) */}
+                <div
+                    style={{
+                        width: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: feedCentered ? 'center' : 'stretch',
+                    }}
+                >
                     {/* Title */}
-                    <h2 className="elite-slide-title" style={{ ...titleStyle, marginBottom: 20 }}>{title?.text || 'Title'}</h2>
+                    <h2 className="elite-slide-title" style={{ ...titleStyle, marginBottom: 20 }}>
+                        {title?.text || 'Title'}
+                    </h2>
 
                     {/* Paragraphs */}
-                    <div className="elite-slide-desc" style={{ textAlign: description?.textAlign || 'left' }}>
+                    <div
+                        className="elite-slide-desc"
+                        style={{
+                            textAlign: descTextAlign,
+                            width: '100%',
+                            alignItems: feedCentered ? 'center' : 'stretch',
+                        }}
+                    >
                         {paragraphs.map((p, i) => {
                             if (!p || !String(p).trim()) return null;
                             const isBoxOn = !!description?.boxEnabled;
@@ -217,7 +262,11 @@ export default function FeaturedPostSlideCard({ data, businessName, businessLogo
                                 padding:      '6px 10px',
                             } : {};
                             return (
-                                <div key={i} className={`elite-slide-para elite-slide-para-${i}`} style={{ ...paraBoxStyle, textAlign: description?.textAlign || 'left' }}>
+                                <div
+                                    key={i}
+                                    className={`elite-slide-para elite-slide-para-${i}`}
+                                    style={{ ...paraBoxStyle, textAlign: descTextAlign }}
+                                >
                                     <p style={{ ...descStyle, margin: 0 }}>
                                         {paragraphIcons[i] && (
                                             <span style={{ fontSize: descStyle.fontSize, marginRight: 6, display: 'inline-block' }}>

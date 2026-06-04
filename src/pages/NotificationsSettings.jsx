@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { sendTestPushToMe } from '../services/pushDeviceService';
-import { getSavedFcmTokenCount } from '../services/notificationService';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import {
     disablePushNotifications,
     syncPushDeviceRegistration,
     registerPushDeviceFromUserGesture,
-    registerAndSaveFcmToken,
     isIOS,
     isStandalonePwa,
     getPushCapabilitySnapshot,
@@ -94,9 +91,6 @@ const NotificationsSettings = () => {
     const [permissionState, setPermissionState] = useState(
         typeof Notification !== 'undefined' ? Notification.permission : 'unavailable'
     );
-    const [savedTokenCount, setSavedTokenCount] = useState(null);
-    const [testPushBusy, setTestPushBusy] = useState(false);
-
     const iosNeedsHomeScreen = isIOS() && !isStandalonePwa();
     const canTurnPushOn =
         typeof Notification !== 'undefined' && permissionState !== 'denied';
@@ -125,12 +119,7 @@ const NotificationsSettings = () => {
                 typeof Notification !== 'undefined' &&
                 Notification.permission === 'granted'
             ) {
-                void revivePushDelivery(currentUser.uid, { label: 'settings-resume' }).then(async (r) => {
-                    if (r.ok) {
-                        const count = await getSavedFcmTokenCount(currentUser.uid);
-                        setSavedTokenCount(count);
-                    }
-                });
+                void revivePushDelivery(currentUser.uid, { label: 'settings-resume' });
             }
         };
         document.addEventListener('visibilitychange', onVis);
@@ -167,8 +156,6 @@ const NotificationsSettings = () => {
             if (merged.pushEnabled) {
                 syncPushDeviceRegistration(currentUser.uid, true);
             }
-            const count = await getSavedFcmTokenCount(currentUser.uid);
-            setSavedTokenCount(count);
         } catch (error) {
             console.error('Error loading notification settings:', error);
         } finally {
@@ -236,8 +223,6 @@ const NotificationsSettings = () => {
                 return;
             }
 
-            const tokenCount = result.savedCount ?? (await getSavedFcmTokenCount(currentUser.uid));
-            setSavedTokenCount(tokenCount);
             showToast(
                 t('push_enabled_success', 'Push notifications enabled for this device.'),
                 'success'
@@ -279,66 +264,6 @@ const NotificationsSettings = () => {
                 setPushBusy(false);
             }
         })();
-    };
-
-    const runTestPush = async () => {
-        if (!currentUser?.uid || testPushBusy) return;
-
-        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-            showToast(
-                t('push_test_need_permission', 'Allow notifications first, then try the test again.'),
-                'error'
-            );
-            return;
-        }
-
-        setTestPushBusy(true);
-
-        try {
-            const reg = await registerAndSaveFcmToken(currentUser.uid, { label: 'test-button' });
-            if (!reg.ok) {
-                const detail = formatPushRegistrationError(reg.lastError || getLastFcmRegistrationError());
-                console.error('[FCM] test-button registration failed:', reg.reason, detail);
-                showToast(
-                    detail
-                        ? t('push_test_register_failed', 'Could not register device: {{detail}}', { detail })
-                        : pushErrorMessage(reg.reason || 'token_failed'),
-                    'error'
-                );
-                return;
-            }
-
-            setSavedTokenCount(reg.savedCount ?? (await getSavedFcmTokenCount(currentUser.uid)));
-
-            const res = await sendTestPushToMe();
-            const count = await getSavedFcmTokenCount(currentUser.uid);
-            setSavedTokenCount(count);
-
-            if (res?.pushDelivered) {
-                showToast(
-                    t(
-                        'push_test_fcm_ok',
-                        'FCM ok={{count}}/{{tokens}}. Lock the screen to see the banner.',
-                        { count: res.fcmSuccessCount ?? 1, tokens: res.tokenCount ?? 1 }
-                    ),
-                    'success'
-                );
-            } else if (res?.reason === 'no_tokens') {
-                showToast(
-                    t('push_test_no_token', 'No token on server after registration. Check console for [FCM] errors.'),
-                    'error'
-                );
-            } else {
-                const codes = (res?.fcmErrors || []).join(', ') || res?.hint || res?.reason || 'unknown';
-                console.error('[FCM] sendTestPushToMe:', res);
-                showToast(t('push_test_fcm_failed', 'FCM did not deliver: {{codes}}', { codes }), 'error');
-            }
-        } catch (err) {
-            console.error('[FCM] runTestPush failed:', err);
-            showToast(formatPushRegistrationError(err) || t('push_test_failed', 'Test push could not be sent.'), 'error');
-        } finally {
-            setTestPushBusy(false);
-        }
     };
 
     const saveSettings = async () => {
@@ -524,74 +449,6 @@ const NotificationsSettings = () => {
                                 'This iPhone already allows notifications. Turn on the switch below to register this device.'
                             )}
                         </p>
-                    )}
-
-                    {settings.pushEnabled && permissionState === 'granted' && !iosNeedsHomeScreen && (
-                        <div style={{ marginBottom: '14px' }}>
-                            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
-                                {savedTokenCount != null && savedTokenCount > 0
-                                    ? t('push_device_registered', 'This account has {{count}} registered device(s).', {
-                                          count: savedTokenCount,
-                                      })
-                                    : t(
-                                          'push_device_not_registered',
-                                          'Permission granted but this iPhone is not registered yet — tap Allow again or wait a few seconds.'
-                                      )}
-                            </p>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <button
-                                    type="button"
-                                    className="save-button"
-                                    style={{ width: '100%', opacity: testPushBusy ? 0.85 : 1 }}
-                                    disabled={testPushBusy || pushBusy}
-                                    onClick={() => void runTestPush()}
-                                >
-                                    {testPushBusy
-                                        ? t('sending', 'Sending…')
-                                        : t('push_send_test', 'Send FCM test notification')}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="save-button"
-                                    style={{
-                                        width: '100%',
-                                        background: 'var(--bg-input)',
-                                        color: 'var(--text-main)',
-                                    }}
-                                    disabled={testPushBusy || pushBusy}
-                                    onClick={() => {
-                                        if (!currentUser?.uid) return;
-                                        void revivePushDelivery(currentUser.uid, {
-                                            label: 'manual-sw-test',
-                                            showLocalTest: true,
-                                        }).then(async (r) => {
-                                            if (r.ok) {
-                                                const count = await getSavedFcmTokenCount(currentUser.uid);
-                                                setSavedTokenCount(count);
-                                                showToast(
-                                                    t(
-                                                        'push_sw_test_sent',
-                                                        'Push channel restored. You should see a test banner now.'
-                                                    ),
-                                                    'success'
-                                                );
-                                            } else {
-                                                showToast(
-                                                    formatPushRegistrationError(r.lastError) ||
-                                                        t(
-                                                            'push_sw_test_failed',
-                                                            'Could not wake service worker. Reopen from Home Screen.'
-                                                        ),
-                                                    'error'
-                                                );
-                                            }
-                                        });
-                                    }}
-                                >
-                                    {t('push_sw_test', 'Test service worker (local)')}
-                                </button>
-                            </div>
-                        </div>
                     )}
 
                     <div className="setting-item">

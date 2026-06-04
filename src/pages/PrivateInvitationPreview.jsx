@@ -229,68 +229,22 @@ const PrivateInvitationPreview = () => {
                 </div>
             )}
 
-            <div
-                className="preview-sticky-header"
-                style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 1000,
-                    background: 'rgba(0,0,0,0.6)',
-                    backdropFilter: 'blur(15px)',
-                    padding: '15px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '10px',
-                    borderRadius: '0 0 20px 20px'
-                }}
-            >
+            <div className="preview-sticky-header invitation-preview-chrome__header">
                 <button
                     type="button"
+                    className="invitation-preview-chrome__back-btn"
                     onClick={() => navigate(-1)}
-                    style={{
-                        background: 'rgba(255,255,255,0.1)',
-                        border: 'none',
-                        color: 'white',
-                        padding: '8px 15px',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontWeight: '600'
-                    }}
                 >
                     <FaArrowLeft /> {t('back')}
                 </button>
-                <div
-                    style={{
-                        color: 'var(--luxury-gold)',
-                        fontWeight: '900',
-                        fontSize: '1rem',
-                        textShadow: '0 2px 10px rgba(0,0,0,0.3)'
-                    }}
-                >
+                <div className="invitation-preview-chrome__mode-label">
                     ✨ {t('preview_mode')}
                 </div>
             </div>
 
-            <div
-                className="premium-banner-warning"
-                style={{
-                    margin: '15px',
-                    padding: '15px',
-                    background: 'rgba(251, 191, 36, 0.1)',
-                    border: '1px solid rgba(251, 191, 36, 0.3)',
-                    borderRadius: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    fontSize: '0.9rem',
-                    backdropFilter: 'blur(5px)'
-                }}
-            >
-                <FaExclamationTriangle color="var(--luxury-gold)" size={20} />
-                <span style={{ color: 'rgba(255,255,255,0.95)', fontWeight: '600' }}>
+            <div className="premium-banner-warning invitation-preview-chrome__warning">
+                <FaExclamationTriangle color="var(--luxury-gold)" size={20} aria-hidden />
+                <span className="invitation-preview-chrome__warning-text">
                     {t('preview_warning_private')}
                 </span>
             </div>
@@ -366,7 +320,7 @@ const PrivateInvitationPreview = () => {
                                 justifyContent: 'center'
                             }}
                         >
-                            <FaLock size={40} color="rgba(255,255,255,0.2)" />
+                            <FaLock size={40} className="invitation-preview-chrome__hero-placeholder-icon" aria-hidden />
                         </div>
                     )}
                     <div
@@ -378,15 +332,11 @@ const PrivateInvitationPreview = () => {
                     />
                 </div>
 
-                <div className="reveal-text private-title-heavy reveal-delay-1" style={{ textAlign: 'center' }}>
+                <div className="reveal-text private-title-heavy reveal-delay-1 invitation-preview-chrome__title-block">
                     <h1
+                        className="invitation-preview-chrome__title"
                         style={{
-                            fontFamily: templateStyles?.layout?.fontFamily || 'inherit',
-                            fontSize: '2rem',
-                            fontWeight: '900',
-                            color: 'white',
-                            marginBottom: '10px',
-                            lineHeight: '1.2'
+                            fontFamily: templateStyles?.layout?.fontFamily || 'inherit'
                         }}
                     >
                         {invitation.title}
@@ -394,15 +344,9 @@ const PrivateInvitationPreview = () => {
 
                     {invitation.venueName && (
                         <div
+                            className="invitation-preview-chrome__venue-chip"
                             style={{
-                                color: templateStyles?.layout?.accentColor || 'var(--luxury-gold)',
-                                fontSize: '1.2rem',
-                                fontWeight: '700',
-                                marginBottom: '20px',
-                                background: 'rgba(255,255,255,0.05)',
-                                display: 'inline-block',
-                                padding: '5px 15px',
-                                borderRadius: '12px'
+                                color: templateStyles?.layout?.accentColor || 'var(--luxury-gold)'
                             }}
                         >
                             @ {invitation.venueName}
@@ -419,7 +363,7 @@ const PrivateInvitationPreview = () => {
                         className="reveal-text premium-glass-card reveal-delay-3"
                         style={{ marginBottom: '2rem', padding: '1.5rem', borderRadius: '24px' }}
                     >
-                        <p style={{ color: 'rgba(255,255,255,0.95)', fontSize: '1.05rem', lineHeight: '1.6' }}>
+                        <p className="invitation-preview-chrome__description">
                             {invitation.description}
                         </p>
                     </div>

@@ -19,6 +19,12 @@ import { resolveCreditCost } from './aiCredits.js';
 import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 
 import type { GenerateContentResult } from '../../src/services/GeminiService.js';
+import {
+    GEMINI_PROVIDER_BILLING_CODE,
+    geminiProviderBillingUserMessage,
+    isGeminiProviderBillingExhausted,
+    normalizeGeminiProviderBillingError,
+} from '../../src/utils/geminiProviderErrors.js';
 
 type AuthDenied = {
     ok: false;
@@ -34,12 +40,29 @@ function statusForServiceError(result: Extract<GenerateContentResult, { success:
         return 400;
     }
     if (
+        result.code === GEMINI_PROVIDER_BILLING_CODE ||
+        isGeminiProviderBillingExhausted(result.error)
+    ) {
+        return 503;
+    }
+    if (
         result.code === 'GEMINI_API_ERROR' &&
         /\b503\b|service unavailable|unavailable|RETIRED_MODEL|\b404\b|retired/i.test(result.error)
     ) {
         return 503;
     }
     return 500;
+}
+
+function enrichServiceErrorResponse(result: Extract<GenerateContentResult, { success: false }>) {
+    if (
+        result.code === GEMINI_PROVIDER_BILLING_CODE ||
+        isGeminiProviderBillingExhausted(result.error)
+    ) {
+        const msg = geminiProviderBillingUserMessage('ar');
+        return { ...result, code: GEMINI_PROVIDER_BILLING_CODE, error: msg, message: msg };
+    }
+    return result;
 }
 
 function statusForPipelineError(result: { code?: string; error?: string }) {
@@ -290,7 +313,7 @@ export default async function handler(req: any, res: any) {
 
         if (result.success === false) {
             await refundAiCredits(db, userRef, charged);
-            return res.status(statusForServiceError(result)).json(result);
+            return res.status(statusForServiceError(result)).json(enrichServiceErrorResponse(result));
         }
 
         return res.status(200).json({
@@ -307,6 +330,10 @@ export default async function handler(req: any, res: any) {
             } catch (e) {
                 console.error('[api/ai/generate] refund_failed', e);
             }
+        }
+        const billing = normalizeGeminiProviderBillingError(error);
+        if (billing) {
+            return res.status(503).json({ success: false, ...billing });
         }
         return res.status(500).json({
             success: false,

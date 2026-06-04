@@ -1,7 +1,8 @@
-import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { POST_BACKGROUND_GRADIENTS } from '../constants/postBackgroundGradients';
 import { db } from '../firebase/config';
 import { stripUndefinedDeep } from '../utils/firestoreSanitize';
+import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../utils/postPublishGeo';
 import { syncPublishedFeaturedPostToCommunityFeed } from './featuredPostFeedPublish';
 import { notifyBusinessPostPublished } from './businessPostNotifyService';
 
@@ -62,6 +63,15 @@ export async function publishFeaturedSlide({
     if (!title) throw new Error('featured_title_required');
     const desc = String(descriptionText || '').trim();
 
+    let publishGeoFields = {};
+    try {
+        const userSnap = await getDoc(doc(db, 'users', partnerId));
+        const publishGeo = await resolvePostPublishGeo(userSnap.exists() ? userSnap.data() : null);
+        publishGeoFields = publishGeoFirestoreFields(publishGeo);
+    } catch (err) {
+        console.warn('[publishFeaturedSlide] publish geo resolve failed', err);
+    }
+
     const payload = stripUndefinedDeep({
         partnerId,
         type: 'elite_slide',
@@ -80,6 +90,7 @@ export async function publishFeaturedSlide({
         createdAt: serverTimestamp(),
         publishedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        ...publishGeoFields,
     });
 
     const ref = await addDoc(collection(db, 'featured_posts'), payload);

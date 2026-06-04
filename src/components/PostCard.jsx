@@ -11,7 +11,7 @@ import { BiRepost } from 'react-icons/bi';
 import { IoShareSocialOutline } from 'react-icons/io5';
 import TikTokEmbed from './TikTokEmbed';
 import ShareButtons from './ShareButtons';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import FeaturedPostSlideCard from './FeaturedPostSlideCard';
 import MotionPostBody from './MotionPostBody';
@@ -27,6 +27,11 @@ import { createNotification } from '../utils/notificationHelpers';
 import { notifyCommentLikeActivity, notifyPostCommentActivity } from '../utils/postCommentNotifications';
 import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { deleteFeedPostCascade } from '../utils/postDeleteCascade';
+import {
+    buildPostCommentThreads,
+    getCommentThreadRootId,
+    resolveReplyParentId,
+} from '../utils/postComments';
 
 // Detect if a post object is an elite featured slide
 const isFeaturedSlide = (p) =>
@@ -84,20 +89,10 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         return [...raw].sort((a, b) => getCommentTimeMs(a) - getCommentTimeMs(b));
     }, [post.comments]);
 
-    const { topLevelComments, repliesByParentId } = useMemo(() => {
-        const tops = [];
-        const byParent = {};
-        sortedComments.forEach((c) => {
-            const pid = c.parentId;
-            if (!pid) {
-                tops.push(c);
-                return;
-            }
-            if (!byParent[pid]) byParent[pid] = [];
-            byParent[pid].push(c);
-        });
-        return { topLevelComments: tops, repliesByParentId: byParent };
-    }, [sortedComments]);
+    const { topLevelComments, repliesByParentId } = useMemo(
+        () => buildPostCommentThreads(sortedComments),
+        [sortedComments]
+    );
 
     const lastCommentPreview = sortedComments.length ? sortedComments[sortedComments.length - 1] : null;
 
@@ -371,10 +366,13 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                 userId: currentUser.uid,
                 userName: currentUser.displayName || 'User',
                 userPhoto: getSafeAvatar(userProfile || currentUser),
+                userGender: userProfile?.gender || currentUser?.gender || '',
                 text: newComment.trim(),
                 createdAt: new Date().toISOString(),
                 likes: [],
-                ...(replyTarget?.id ? { parentId: replyTarget.id } : {}),
+                ...(replyTarget?.id
+                    ? { parentId: resolveReplyParentId(replyTarget, sortedComments) }
+                    : {}),
             };
 
             await updateDoc(postRef, {
@@ -383,7 +381,10 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
             setNewComment('');
             if (replyTarget?.id) {
-                setExpandedReplyIds((prev) => new Set(prev).add(replyTarget.id));
+                const threadRootId = getCommentThreadRootId(replyTarget, sortedComments);
+                if (threadRootId) {
+                    setExpandedReplyIds((prev) => new Set(prev).add(threadRootId));
+                }
             }
             setReplyingTo(null);
 
@@ -437,11 +438,15 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const handleReplyToComment = (comment) => {
         setReplyingTo(comment);
         setShowComments(true);
+        const threadRootId = getCommentThreadRootId(comment, sortedComments);
+        if (threadRootId) {
+            setExpandedReplyIds((prev) => new Set(prev).add(threadRootId));
+        }
     };
 
     const handleCommentAuthorClick = (uid) => {
         if (!uid) return;
-        navigate(`/user/${uid}`);
+        navigate(`/profile/${uid}`);
     };
 
     const toggleReplyThread = (parentId) => {
@@ -605,7 +610,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     src={displayAuthorAvatar}
                     className="post-avatar"
                     alt={displayAuthorName}
-                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer', border: `2px solid ${getGenderBorderColor(displayAuthorObj)}` }}
+                    style={{ width: '40px', height: '40px', cursor: 'pointer' }}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (displayPost.partnerId) navigate(`/business/${displayPost.partnerId}`);
@@ -703,7 +708,18 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         />
                     </div>
                 ) : isFeaturedSlide(displayPost) ? (
-                    <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: 8 }}>
+                    <div
+                        className="post-featured-slide-wrap"
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            width: '100%',
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            border: '1px solid var(--border-color)',
+                            marginBottom: 8,
+                        }}
+                    >
                         <FeaturedPostSlideCard
                             data={displayPost}
                             businessName={displayPost.businessName}
@@ -776,13 +792,16 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     }}>
                         {isEditing ? (
                             <div style={{ padding: '0 16px', marginBottom: '8px' }}>
-                                <textarea
-                                    value={editedContent}
-                                    onChange={(e) => setEditedContent(e.target.value)}
-                                    style={{ width: '100%', minHeight: '80px', background: 'var(--bg-elevated)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', fontSize: '0.95rem', resize: 'vertical' }}
-                                    autoFocus
-                                    onClick={(e) => e.stopPropagation()}
-                                />
+                                <div className="composer-field composer-field--post">
+                                    <textarea
+                                        className="composer-field__input"
+                                        value={editedContent}
+                                        onChange={(e) => setEditedContent(e.target.value)}
+                                        style={{ minHeight: '80px', resize: 'vertical' }}
+                                        autoFocus
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
                                     <button onClick={(e) => { e.stopPropagation(); setIsEditing(false); }} style={{ padding: '6px 14px', borderRadius: '20px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer' }}>{t('cancel', 'Cancel')}</button>
                                     <button onClick={handleSaveEdit} disabled={savingEdit || !editedContent.trim()} style={{ padding: '6px 14px', borderRadius: '20px', background: 'var(--primary)', border: 'none', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
@@ -956,7 +975,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     </div>
                 )}
 
-                {/* Engagement row — Facebook-style counts */}
+                {/* Engagement row — post layer: post likes only | comment count only */}
                 {(localLikes.length > 0 || commentsRaw.length > 0) && (
                     <div
                         className="post-engagement-row"
@@ -969,7 +988,10 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     >
                         <div className="post-engagement-row__left">
                             {localLikes.length > 0 ? (
-                                <span className="post-engagement-row__stat">👍 {localLikes.length}</span>
+                                <span className="post-engagement-row__stat post-engagement-row__stat--likes">
+                                    <AiFillHeart size={14} aria-hidden />
+                                    {localLikes.length}
+                                </span>
                             ) : null}
                         </div>
                         <div className="post-engagement-row__right">
@@ -1001,6 +1023,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     >
                         {hasLiked ? <AiFillHeart size={20} /> : <AiOutlineHeart size={20} />}
                         <span>{t('like', 'Like')}</span>
+                        {localLikes.length > 0 ? (
+                            <span className="action-count">{localLikes.length}</span>
+                        ) : null}
                     </button>
 
                     {/* Comment */}
@@ -1013,6 +1038,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     >
                         <FaRegCommentDots size={19} />
                         <span>{t('comment', 'Comment')}</span>
+                        {commentsRaw.length > 0 ? (
+                            <span className="action-count">{commentsRaw.length}</span>
+                        ) : null}
                     </button>
 
                     {/* Share */}
@@ -1058,6 +1086,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             onLike={handleCommentLike}
                             onReply={handleReplyToComment}
                             onAuthorClick={handleCommentAuthorClick}
+                            replyCount={
+                                lastCommentPreview?.id && !lastCommentPreview.parentId
+                                    ? (repliesByParentId[lastCommentPreview.id] || []).length
+                                    : 0
+                            }
                             t={t}
                         />
                     </div>
@@ -1071,6 +1104,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         }${isVideoPost ? (showInChat ? ' comments-section--video-detail' : ' comments-section--video-feed') : ''}`}
                         onClick={(e) => e.stopPropagation()}
                     >
+                        {commentsRaw.length > 0 ? (
+                            <div className="fb-comments-panel__header-count" aria-live="polite">
+                                {commentsRaw.length} {t('comments', 'Comments')}
+                            </div>
+                        ) : null}
                         <button type="button" className="fb-comments-sort" onClick={(e) => e.stopPropagation()}>
                             {t('comments_most_relevant', 'Most relevant')}
                             <span className="fb-comments-sort__chevron" aria-hidden>
@@ -1078,24 +1116,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             </span>
                         </button>
 
-                        {replyingTo ? (
-                            <div className="comments-replying-hint">
-                                <span>
-                                    {t('comment_replying_to', 'Replying to {{name}}', { name: replyingTo.userName })}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setReplyingTo(null);
-                                    }}
-                                >
-                                    {t('cancel', 'Cancel')}
-                                </button>
-                            </div>
-                        ) : null}
-
-                        {showInChat ? (
+                        {showInChat && !replyingTo ? (
                             <PostCommentComposer
                                 currentUser={currentUser}
                                 userProfile={userProfile}
@@ -1136,11 +1157,22 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                 onLike={handleCommentLike}
                                 onReply={handleReplyToComment}
                                 onAuthorClick={handleCommentAuthorClick}
+                                replyingTo={replyingTo}
+                                replyComposerProps={{
+                                    currentUser,
+                                    userProfile,
+                                    value: newComment,
+                                    onChange: (e) => setNewComment(e.target.value),
+                                    onSubmit: handleAddComment,
+                                    submitting,
+                                    placeholder: composerPlaceholder,
+                                    onCancel: () => setReplyingTo(null),
+                                }}
                                 t={t}
                             />
                         </div>
 
-                        {!showInChat ? (
+                        {!showInChat && !replyingTo ? (
                             <PostCommentComposer
                                 currentUser={currentUser}
                                 userProfile={userProfile}

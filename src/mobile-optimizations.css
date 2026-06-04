@@ -99,13 +99,6 @@
         touch-action: pan-y;
     }
 
-    .app-main--search {
-        overflow: visible !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 0 !important;
-    }
-
     /*
      * Tab bar: flush to the physical bottom (bottom:0). Safe area only via padding inside the bar.
      * constant() = legacy iOS; env() = current. Never use bottom: env(safe-area…) — that lifts the bar and leaves a gap.
@@ -119,17 +112,18 @@
     .bottom-nav {
         box-sizing: border-box !important;
         bottom: 0 !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: 100% !important;
+        max-width: var(--max-width) !important;
+        margin: 0 !important;
         padding-bottom: constant(safe-area-inset-bottom) !important;
         padding-bottom: env(safe-area-inset-bottom, 0px) !important;
         padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
         padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
         min-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px)) !important;
         height: auto !important;
-        max-width: none !important;
-        width: 100% !important;
-        left: 0 !important;
-        right: 0 !important;
-        margin: 0 !important;
     }
 
     /*
@@ -139,20 +133,16 @@
      * (:has → skip when chat hides the main header.)
      */
     @supports (-webkit-touch-callout: none) {
-        .app-layout:has(> header.app-header:not(.app-header--chat):not(.app-header--search-route)) {
+        .app-layout:has(> header.app-header:not(.app-header--chat)) {
             padding-top: 0 !important;
         }
 
-        .app-layout:has(> header.app-header:not(.app-header--chat):not(.app-header--search-route)) .ds-body-grid {
+        .app-layout:has(> header.app-header:not(.app-header--chat)) .ds-body-grid {
             padding-top: calc(var(--header-height) + env(safe-area-inset-top, 0px));
             box-sizing: border-box;
         }
 
-        .app-layout--search .ds-body-grid {
-            padding-top: 0 !important;
-        }
-
-        .app-header:not(.app-header--chat):not(.app-header--search-route) {
+        .app-header:not(.app-header--chat) {
             position: fixed !important;
             /* JS sets --ios-vv-header-offset when keyboard shifts the layout viewport (iOS). */
             top: var(--ios-vv-header-offset, 0px) !important;

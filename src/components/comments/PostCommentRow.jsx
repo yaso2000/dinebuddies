@@ -1,5 +1,6 @@
 import React from 'react';
-import { AiFillLike, AiOutlineLike } from 'react-icons/ai';
+import { AiFillHeart, AiOutlineHeart } from 'react-icons/ai';
+import { FaReply } from 'react-icons/fa';
 import UserAvatar from '../UserAvatar';
 import { formatCommentTime } from '../../utils/commentTime';
 
@@ -11,6 +12,7 @@ export default function PostCommentRow({
     onReply,
     onAuthorClick,
     nested = false,
+    replyCount = 0,
     t,
 }) {
     const likes = Array.isArray(comment.likes) ? comment.likes : [];
@@ -23,6 +25,7 @@ export default function PostCommentRow({
         photo_url: comment.userPhoto,
         photoURL: comment.userPhoto,
         avatarUrl: comment.userPhoto,
+        gender: comment.userGender ?? comment.gender,
     };
 
     return (
@@ -63,34 +66,40 @@ export default function PostCommentRow({
                 <div className="fb-comment-actions">
                     <button
                         type="button"
-                        className={`fb-comment-actions__btn${hasLiked ? ' fb-comment-actions__btn--liked' : ''}`}
+                        className={`fb-comment-actions__btn fb-comment-actions__btn--icon fb-comment-actions__btn--like${hasLiked ? ' fb-comment-actions__btn--liked' : ''}`}
+                        aria-label={t('like', 'Like')}
+                        title={t('like', 'Like')}
                         onClick={(e) => {
                             e.stopPropagation();
                             onLike?.(comment);
                         }}
                     >
-                        {t('like', 'Like')}
+                        {hasLiked ? <AiFillHeart size={16} aria-hidden /> : <AiOutlineHeart size={16} aria-hidden />}
+                        {likeCount > 0 ? (
+                            <span className="fb-comment-actions__count">{likeCount}</span>
+                        ) : null}
                     </button>
                     <button
                         type="button"
-                        className="fb-comment-actions__btn"
+                        className="fb-comment-actions__btn fb-comment-actions__btn--icon fb-comment-actions__btn--reply"
+                        aria-label={
+                            replyCount > 0
+                                ? t('comment_view_replies', 'View {{count}} replies', { count: replyCount })
+                                : t('reply', 'Reply')
+                        }
+                        title={t('reply', 'Reply')}
                         onClick={(e) => {
                             e.stopPropagation();
                             onReply?.(comment);
                         }}
                     >
-                        {t('reply', 'Reply')}
+                        <FaReply size={14} aria-hidden />
+                        {!nested && replyCount > 0 ? (
+                            <span className="fb-comment-actions__count">{replyCount}</span>
+                        ) : null}
                     </button>
                     <span className="fb-comment-actions__time">{formatCommentTime(comment.createdAt, t)}</span>
                 </div>
-                {likeCount > 0 ? (
-                    <div className="fb-comment-reactions">
-                        <span className="fb-comment-reactions__icon" aria-hidden>
-                            {hasLiked ? <AiFillLike size={14} /> : <AiOutlineLike size={14} />}
-                        </span>
-                        <span>{likeCount}</span>
-                    </div>
-                ) : null}
             </div>
         </div>
     );

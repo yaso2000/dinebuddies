@@ -36,7 +36,8 @@ import { notifyImageUploadError } from '../../utils/imageModerationErrors';
 import { useDragScrollRail } from '../../hooks/useDragScrollRail';
 import { useKeyboardOverlayViewport } from '../../hooks/useKeyboardOverlayViewport';
 import AIFloatingLauncher from '../../components/AIFloatingLauncher';
-import { extractAIContentFields, extractAIImageUrl } from '../../utils/aiContentFieldMapper';
+import { extractAIContentFields } from '../../utils/aiContentFieldMapper';
+import { parseAiStudioImageFromState } from '../../utils/aiStudioImagePayload';
 import './CreateFeaturedPost.css';
 
 export default function CreateFeaturedPost() {
@@ -121,6 +122,13 @@ export default function CreateFeaturedPost() {
 
     useKeyboardOverlayViewport(showMobilePreviewChrome);
 
+    useEffect(() => {
+        const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
+        if (!studio) return;
+        setBgImageUrl(studio.publishedUrl);
+        setBackgroundMode('image');
+    }, [location.state?.aiStudioImage]);
+
     const fontFamily = useMemo(() => {
         const preset = FEATURED_FONT_OPTIONS.find((f) => f.id === fontId);
         return preset?.fontFamily || DEFAULT_FEATURED_TITLE_STYLE.fontFamily;
@@ -167,12 +175,6 @@ export default function CreateFeaturedPost() {
         const fields = extractAIContentFields('featured_post', data);
         if (fields.title) setTitle(fields.title);
         if (fields.description) setDescription(fields.description);
-
-        const imageUrl = extractAIImageUrl(data);
-        if (imageUrl) {
-            setBgImageUrl(imageUrl);
-            setBackgroundMode('image');
-        }
     }, []);
 
     const pickGradient = (id, el) => {
@@ -601,7 +603,6 @@ export default function CreateFeaturedPost() {
                                 postType="featured_post"
                                 onTextSuccess={handleFeaturedAiContent}
                                 buildContextPrompt={buildFeaturedAiPrompt}
-                                multimodalMode
                                 disabled={publishing || uploadingBg}
                                 compact
                             />

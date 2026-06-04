@@ -7,6 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { uploadPostMedia } from '../utils/imageUpload';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
+import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
+import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../utils/postPublishGeo';
 import { FaImage, FaTimes, FaSmile, FaPaperPlane } from 'react-icons/fa';
 import TikTokEmbed from './TikTokEmbed';
 
@@ -49,7 +52,12 @@ const extractAndRemoveLink = (inputText) => {
     return { text: newText, embed: null };
 };
 
-const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, onClearAttachedInvitation }) => {
+const InlinePostEditor = ({
+    attachedInvitation: attachedInvitationProp = null,
+    onClearAttachedInvitation,
+    initialAiStudioImage = null,
+    onClearInitialAiStudioImage,
+}) => {
     const { t, i18n } = useTranslation();
     const isRtl = i18n.language === 'ar' || i18n.language?.startsWith('ar');
     const { currentUser, userProfile } = useAuth();
@@ -77,6 +85,13 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
             setAttachedInvitation(attachedInvitationProp);
         }
     }, [attachedInvitationProp]);
+
+    useEffect(() => {
+        const studio = parseAiStudioImageFromState(initialAiStudioImage);
+        if (!studio) return;
+        setMedia({ type: 'image', preview: studio.publishedUrl, url: studio.publishedUrl });
+        setEmbedData(null);
+    }, [initialAiStudioImage]);
 
     useEffect(() => {
         if (userProfile) {
@@ -155,7 +170,12 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
                     (p) => setUploadProgress(Math.round(p)),
                     'image'
                 );
+            } else if (media?.url) {
+                mediaUrl = media.url;
+                mediaType = 'image';
             }
+
+            const publishGeo = await resolvePostPublishGeo(userProfile);
 
             const postData = {
                 author: {
@@ -182,11 +202,7 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
                 likes: [],
                 comments: [],
                 reposts: [],
-                location: userProfile?.location || null,
-                city: userProfile?.city || null,
-                country: userProfile?.country || null,
-                countryCode: userProfile?.countryCode || null,
-                coordinates: userProfile?.coordinates || null,
+                ...publishGeoFirestoreFields(publishGeo),
                 authorInterests: Array.isArray(userProfile?.interests)
                     ? userProfile.interests
                     : Array.isArray(userProfile?.hobbies)
@@ -203,6 +219,7 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
             setEmbedData(null);
             setAttachedInvitation(null);
             onClearAttachedInvitation?.();
+            onClearInitialAiStudioImage?.();
             setUploadProgress(0);
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
             showToast(t('post_created', 'Post created successfully!'), 'success');
@@ -218,7 +235,10 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
     };
 
     return (
-        <div className="inline-post-editor" style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '12px 16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div
+            className="inline-post-editor composer-shell composer-shell--post"
+            style={{ borderRadius: 8, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+        >
             {attachedInvitation ? (
                 <div
                     style={{
@@ -264,36 +284,23 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
                 </div>
             ) : null}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                <img
-                    src={getSafeAvatar(userProfile || currentUser)}
+                <UserAvatar
+                    user={userProfile || currentUser}
                     alt="User avatar"
-                    style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+                    style={{ width: 40, height: 40, flexShrink: 0 }}
                 />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
-                    <div style={{ position: 'relative' }}>
+                    <div
+                        className="composer-field composer-field--post"
+                        style={{ textAlign: isRtl ? 'right' : 'left', direction: isRtl ? 'rtl' : 'ltr' }}
+                    >
                         <textarea
                             ref={textareaRef}
+                            className="composer-field__input"
                             placeholder={t('whats_on_your_mind', "What's on your mind?")}
                             value={text}
                             onChange={handleTextChange}
                             maxLength={300}
-                            style={{
-                                width: '100%',
-                                background: 'transparent',
-                                padding: '4px 0 6px',
-                                paddingInlineEnd: '46px',
-                                minHeight: '60px',
-                                borderRadius: '0',
-                                border: 'none',
-                                color: 'var(--text-main)',
-                                fontSize: '0.95rem',
-                                resize: 'none',
-                                outline: 'none',
-                                fontFamily: 'inherit',
-                                cursor: 'text',
-                                textAlign: isRtl ? 'right' : 'left',
-                                direction: isRtl ? 'rtl' : 'ltr',
-                            }}
                         />
                         <button
                             type="button"
@@ -302,8 +309,8 @@ const InlinePostEditor = ({ attachedInvitation: attachedInvitationProp = null, o
                             aria-label={t('post', 'Post')}
                             style={{
                                 position: 'absolute',
-                                insetInlineEnd: 0,
-                                bottom: 6,
+                                insetInlineEnd: 10,
+                                bottom: 10,
                                 width: 34,
                                 height: 34,
                                 borderRadius: '50%',

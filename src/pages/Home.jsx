@@ -9,8 +9,14 @@ import { FaMapMarkedAlt, FaSearch, FaBullseye, FaStar, FaCheck, FaExpand, FaComp
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
 import './HomeMobileFeed.css';
+import {
+    detachLeafletMap,
+    ensureLeafletMapDetachedIfOrphan,
+} from '../utils/leafletMapLifecycle';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { useTheme } from '../context/ThemeContext';
 import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
@@ -120,13 +126,6 @@ const Home = () => {
 
 
 
-    const locationFilters = [
-        { id: 'All', label: t('all'), icon: '🌍' },
-        { id: 'nearby', label: t('near_me'), icon: '📍' },
-        { id: 'city', label: t('in_my_city'), icon: '🏙️' },
-        { id: 'country', label: t('in_my_country'), icon: '🗺️' }
-    ];
-
     const categories = [
         { id: 'All', label: t('filter_all'), icon: null },
         { id: 'Restaurant', label: t('type_restaurant'), icon: '🍴' },
@@ -186,13 +185,13 @@ const Home = () => {
                 if (!isOwn && !isFollowing) return false;
             }
 
-            // 4. SEARCH FILTER (Matching RestaurantDirectory logic)
+            // 4. SEARCH FILTER
             const matchesSearch = !searchQuery ||
                 (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-            // 5. CATEGORY FILTER (Matching RestaurantDirectory logic)
+            // 5. CATEGORY FILTER
             const matchesCategory = activeFilter === 'All' || inv.type === activeFilter;
 
             return matchesSearch && matchesCategory;
@@ -275,10 +274,11 @@ const Home = () => {
         }
     };
 
+    useEffect(() => () => detachLeafletMap(mapInstance), []);
+
     useEffect(() => {
         if (viewMode === 'map' && mapRef.current) {
-            const L = window.L;
-            if (!L) return;
+            ensureLeafletMapDetachedIfOrphan(mapInstance, mapRef.current);
 
             if (!mapInstance.current) {
                 // Smart Initialization Logic:
@@ -715,14 +715,11 @@ const Home = () => {
 
 
 
-            {/* Title row + List/Map toggle — normal scrollable content */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px 4px' }}>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>
-                    {t('feed_header')}
-                </h2>
+            {/* List/Map toggle — compact; nav label is enough, no page title */}
+            <div className="home-invitations-toolbar">
                 <div className="view-mode-toggle">
-                    <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{t('list_view')}</button>
-                    <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{t('map_view')}</button>
+                    <button type="button" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{t('list_view')}</button>
+                    <button type="button" onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{t('map_view')}</button>
                 </div>
             </div>
 
@@ -731,9 +728,9 @@ const Home = () => {
             <div className="filter-bar" style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px',
+                gap: '6px',
                 background: 'var(--bg-card)',
-                padding: '6px 12px',
+                padding: '6px 10px',
                 borderRadius: '16px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                 position: 'relative',
@@ -762,8 +759,6 @@ const Home = () => {
 
                 {/* Row 1: Search + Location Filter */}
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-
-                    {/* Search Input - Always Visible */}
                     <div style={{ position: 'relative', flex: '1 1 auto' }}>
                         <FaSearch className="search-icon" style={{ position: 'absolute', ...(i18n.dir() === 'rtl' ? { right: '12px' } : { left: '12px' }), top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
                         <input
@@ -784,7 +779,6 @@ const Home = () => {
                         />
                     </div>
 
-                    {/* Location Filter Dropdown - Restore Control */}
                     <div style={{ flex: '0 0 auto' }}>
                         <select
                             value={geoFilter}
@@ -879,8 +873,15 @@ const Home = () => {
                     background: 'var(--bg-body)'
                 }}
             >
-                <div className="map-wrapper" style={{ borderRadius: '0', overflow: 'hidden', width: '100%', height: isFullscreen ? '100vh' : 'calc(100vh - 200px)', position: 'relative' }}>
-                    <div ref={mapRef} className="responsive-map-container" style={{ width: '100%', height: '100%', minHeight: isFullscreen ? '100vh' : 'calc(100vh - 200px)', outline: 'none' }}></div>
+                <div
+                    className={`map-wrapper${isFullscreen ? ' directory-map-wrapper--fullscreen' : ''}`}
+                    style={{ borderRadius: isFullscreen ? 0 : undefined, overflow: 'hidden', width: '100%', position: 'relative' }}
+                >
+                    <div
+                        ref={mapRef}
+                        className="responsive-map-container leaflet-container-home"
+                        style={{ width: '100%', height: '100%', minHeight: isFullscreen ? '100dvh' : undefined, outline: 'none' }}
+                    />
 
                     {/* Zoom Controls + Fullscreen + Recenter */}
                     <div className="map-zoom-controls">

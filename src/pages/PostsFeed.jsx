@@ -18,9 +18,13 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { createNotification } from '../utils/notificationHelpers';
 import { useTranslation } from 'react-i18next';
 import { asUidArray } from '../utils/userSocialLists';
-import useFeedAudienceGraph from '../hooks/useFeedAudienceGraph';
 import { authorIdFromPost, buildConsumerHomeFeed } from '../utils/feedSocialGraph';
 import { deleteFeedPostCascade, filterOrphanedCommunityPosts } from '../utils/postDeleteCascade';
+import {
+    buildFollowingAuthorSet,
+    filterPostsByFeedScope,
+    normalizePlaceLabel,
+} from '../utils/postsFeedScope';
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 
 const PostsFeed = () => {
@@ -31,13 +35,25 @@ const PostsFeed = () => {
     const menuRef = useRef({});
     const composerRef = useRef(null);
     const [composerInvitation, setComposerInvitation] = useState(null);
+    const [composerAiImage, setComposerAiImage] = useState(null);
 
     useEffect(() => {
         const inv = location.state?.attachedInvitation;
-        if (!inv?.id) return;
-        setComposerInvitation(inv);
-        navigate(location.pathname, { replace: true, state: {} });
-        if (location.state?.scrollToComposer) {
+        const aiStudioImage = location.state?.aiStudioImage;
+        const scrollToComposer = location.state?.scrollToComposer;
+
+        if (inv?.id) {
+            setComposerInvitation(inv);
+        }
+        if (aiStudioImage) {
+            setComposerAiImage(aiStudioImage);
+        }
+
+        if (inv?.id || aiStudioImage) {
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+
+        if (scrollToComposer) {
             requestAnimationFrame(() => {
                 composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
@@ -48,8 +64,12 @@ const PostsFeed = () => {
     const [loading, setLoading] = useState(true);
     const [viewingStory, setViewingStory] = useState(null);
     const [isSearchActive, setIsSearchActive] = useState(false);
-    const { graph: audienceGraph } = useFeedAudienceGraph(currentUser, userProfile);
     const [searchQuery, setSearchQuery] = useState('');
+    /** @type {'global' | 'local'} */
+    const [feedGeoScope, setFeedGeoScope] = useState('global');
+    /** @type {'all' | 'following'} */
+    const [feedAudienceScope, setFeedAudienceScope] = useState('all');
+    const [userLocation, setUserLocation] = useState(null);
 
     // Featured posts (elite slides from business partners)
     const [featuredPosts, setFeaturedPosts] = useState([]);
@@ -73,6 +93,89 @@ const PostsFeed = () => {
         }
         setConfirmDeleteId(null);
     }, [featuredPosts]);
+
+    useEffect(() => {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserLocation({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                });
+            },
+            () => setUserLocation(null)
+        );
+    }, []);
+
+    const geoScopeFilters = useMemo(
+        () => [
+            { id: 'global', label: t('feed_scope_global', t('global', 'Global')), icon: '🌍' },
+            { id: 'local', label: t('feed_scope_local', t('in_my_city', 'My city')), icon: '🏙️' },
+        ],
+        [t]
+    );
+
+    const audienceScopeFilters = useMemo(
+        () => [
+            { id: 'all', label: t('feed_scope_all_users', 'Everyone'), icon: '👥' },
+            { id: 'following', label: t('feed_scope_following', t('following', 'Following')), icon: '✓' },
+        ],
+        [t]
+    );
+
+    const followingAuthorIds = useMemo(
+        () => buildFollowingAuthorSet(currentUser, userProfile),
+        [currentUser?.following, userProfile?.following]
+    );
+
+    const userCityNorm = useMemo(
+        () => normalizePlaceLabel(userProfile?.city),
+        [userProfile?.city]
+    );
+
+    const userCountryNorm = useMemo(
+        () => normalizePlaceLabel(userProfile?.country),
+        [userProfile?.country]
+    );
+
+    const hasFeedScopeFilters =
+        feedGeoScope !== 'global' || feedAudienceScope !== 'all';
+
+    const renderFeedScopeChips = () => (
+        <div
+            className="posts-feed-scope-chips"
+            role="group"
+            aria-label={`${t('feed_scope_geo_aria', 'Area')}, ${t('feed_scope_audience_aria', 'People')}`}
+        >
+            {geoScopeFilters.map((f) => (
+                <button
+                    key={f.id}
+                    type="button"
+                    className={`home-geo-chip home-geo-chip--compact${feedGeoScope === f.id ? ' home-geo-chip--active' : ''}`}
+                    onClick={() => setFeedGeoScope(f.id)}
+                >
+                    <span className="home-geo-chip__icon" aria-hidden>
+                        {f.icon}
+                    </span>
+                    <span>{f.label}</span>
+                </button>
+            ))}
+            <span className="posts-feed-scope-chips__divider" aria-hidden />
+            {audienceScopeFilters.map((f) => (
+                <button
+                    key={f.id}
+                    type="button"
+                    className={`home-geo-chip home-geo-chip--compact${feedAudienceScope === f.id ? ' home-geo-chip--active' : ''}`}
+                    onClick={() => setFeedAudienceScope(f.id)}
+                >
+                    <span className="home-geo-chip__icon" aria-hidden>
+                        {f.icon}
+                    </span>
+                    <span>{f.label}</span>
+                </button>
+            ))}
+        </div>
+    );
 
     // Close menu on outside click
     useEffect(() => {
@@ -271,22 +374,36 @@ const PostsFeed = () => {
             });
     }, [filteredPosts, motionPostById, userProfile?.blockedUserIds]);
 
-    /** Social ranking + followed businesses in main feed; discover strip for other businesses. */
-    const { mainFeed, discoverFeed } = useMemo(() => {
+    /** All post types merged and sorted by publish date (newest first). */
+    const feedPosts = useMemo(() => {
         const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
         const featured = featuredPosts.map((p) => ({ ...p, _isFeatured: true, _isMotionPost: false }));
         const pool = [...featured, ...communityFeedPosts, ...motionFeedPosts];
-        return buildConsumerHomeFeed(pool, audienceGraph, currentUser?.uid, { blockedSet: blocked });
+        const merged = buildConsumerHomeFeed(pool, null, currentUser?.uid, { blockedSet: blocked }).mainFeed;
+        return filterPostsByFeedScope(merged, {
+            geoScope: feedGeoScope,
+            audienceScope: feedAudienceScope,
+            userLocation,
+            userCityNorm,
+            userCountryNorm,
+            followingSet: followingAuthorIds,
+            viewerUid: currentUser?.uid,
+        });
     }, [
         featuredPosts,
         communityFeedPosts,
         motionFeedPosts,
         userProfile?.blockedUserIds,
-        audienceGraph,
         currentUser?.uid,
+        feedGeoScope,
+        feedAudienceScope,
+        userLocation,
+        userCityNorm,
+        userCountryNorm,
+        followingAuthorIds,
     ]);
 
-    const hasFeedItems = mainFeed.length > 0 || discoverFeed.length > 0;
+    const hasFeedItems = feedPosts.length > 0;
 
     const communityPostIdByMotionId = useMemo(() => {
         const map = new Map();
@@ -350,88 +467,58 @@ const PostsFeed = () => {
             <StoriesBar onStoryClick={setViewingStory} />
 
             {/* Mobile filter bar (hidden on desktop via CSS) */}
-            <div className="mobile-filter-bar" style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '16px', margin: '0 12px 12px', border: '1px solid var(--border-color)', alignItems: 'center', minHeight: '44px' }}>
+            <div className="mobile-filter-bar posts-feed-scope-bar">
                 {isSearchActive ? (
-                    <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: '6px' }}>
+                    <div className="posts-feed-scope-search-row">
                         <input
-                            type="text" autoFocus value={searchQuery}
+                            type="text"
+                            autoFocus
+                            value={searchQuery}
                             placeholder={t('search_posts', 'Search...')}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            onBlur={() => { if (!searchQuery?.trim()) setIsSearchActive(false); }}
-                            style={{ flex: 1, padding: '8px 12px', borderRadius: '12px', border: 'none', background: 'var(--bg-input)', outline: 'none', fontSize: '0.9rem', color: 'var(--text-main)' }}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onBlur={() => {
+                                if (!searchQuery?.trim()) setIsSearchActive(false);
+                            }}
+                            className="posts-feed-scope-search-input"
                         />
                         <button
+                            type="button"
+                            className="posts-feed-scope-icon-btn"
                             onClick={() => {
                                 setSearchQuery('');
                                 setIsSearchActive(false);
                             }}
                             aria-label={t('close_search', 'Close search')}
-                            style={{
-                                width: 36,
-                                height: 36,
-                                border: 'none',
-                                borderRadius: '10px',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                                fontSize: '1.05rem',
-                                color: 'var(--text-muted)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
                         >
                             ✕
                         </button>
                     </div>
-                ) : (
-                    <div style={{ display: 'flex', width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
+                ) : null}
+                <div className="posts-feed-scope-toolbar">
+                    {renderFeedScopeChips()}
+                    {!isSearchActive && (
                         <button
                             type="button"
+                            className="posts-feed-scope-icon-btn"
                             onClick={() => setIsSearchActive(true)}
-                            style={{
-                                width: 36,
-                                height: 36,
-                                border: 'none',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                                fontSize: '1.1rem',
-                                color: 'var(--text-muted)',
-                            }}
                             aria-label={t('search_posts', 'Search posts')}
                         >
                             🔍
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Desktop filter bar — only visible on desktop */}
-            <div
-                className="desktop-feed-filters"
-                style={{
-                    gap: '6px',
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--border-color)',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                }}
-            >
+            <div className="desktop-feed-filters posts-feed-scope-bar posts-feed-scope-bar--desktop">
                 <input
                     type="text"
+                    className="posts-feed-scope-search-input posts-feed-scope-search-input--desktop"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('search_posts', 'Search posts...')}
-                    style={{
-                        padding: '6px 14px',
-                        borderRadius: '9999px',
-                        border: '1px solid var(--border-color)',
-                        background: 'var(--bg-input)',
-                        color: 'var(--text-main)',
-                        fontSize: '0.85rem',
-                        outline: 'none',
-                        width: 'min(280px, 100%)',
-                    }}
                 />
+                {renderFeedScopeChips()}
             </div>
 
             {/* Unified Feed — featured + regular merged by date */}
@@ -442,57 +529,44 @@ const PostsFeed = () => {
                     <InlinePostEditor
                         attachedInvitation={composerInvitation}
                         onClearAttachedInvitation={() => setComposerInvitation(null)}
+                        initialAiStudioImage={composerAiImage}
+                        onClearInitialAiStudioImage={() => setComposerAiImage(null)}
                     />
                 </div>
 
                 {!hasFeedItems ? (
                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-                        {searchQuery.trim() ? t('no_results', 'No results found.') : t('no_posts_yet', 'No posts yet.')}
+                        {searchQuery.trim() || hasFeedScopeFilters ? (
+                            <>
+                                <p style={{ margin: '0 0 12px' }}>{t('no_results', 'No results found.')}</p>
+                                {(hasFeedScopeFilters || searchQuery.trim()) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchQuery('');
+                                            setFeedGeoScope('global');
+                                            setFeedAudienceScope('all');
+                                        }}
+                                        style={{
+                                            padding: '8px 16px',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--primary)',
+                                            background: 'transparent',
+                                            color: 'var(--primary)',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {t('try_different_filters', 'Try different filters')}
+                                    </button>
+                                )}
+                            </>
+                        ) : (
+                            t('no_posts_yet', 'No posts yet.')
+                        )}
                     </div>
                 ) : (
-                    <>
-                        {mainFeed.map((post) => renderFeedPost(post)).filter(Boolean)}
-                        {discoverFeed.length > 0 ? (
-                            <section
-                                className="feed-discover-business"
-                                aria-label={t('feed_discover_business', 'Discover businesses')}
-                                style={{ marginTop: mainFeed.length ? 8 : 0 }}
-                            >
-                                <header
-                                    style={{
-                                        padding: '8px 16px 4px',
-                                        borderTop: mainFeed.length
-                                            ? '1px solid var(--border-color)'
-                                            : 'none',
-                                    }}
-                                >
-                                    <h2
-                                        style={{
-                                            margin: 0,
-                                            fontSize: '0.95rem',
-                                            fontWeight: 800,
-                                            color: 'var(--text-main)',
-                                        }}
-                                    >
-                                        {t('feed_discover_business', 'Discover businesses')}
-                                    </h2>
-                                    <p
-                                        style={{
-                                            margin: '4px 0 0',
-                                            fontSize: '0.8rem',
-                                            color: 'var(--text-muted)',
-                                        }}
-                                    >
-                                        {t(
-                                            'feed_discover_business_sub',
-                                            'Recent updates from places you may want to follow'
-                                        )}
-                                    </p>
-                                </header>
-                                {discoverFeed.map((post) => renderFeedPost(post)).filter(Boolean)}
-                            </section>
-                        ) : null}
-                    </>
+                    feedPosts.map((post) => renderFeedPost(post)).filter(Boolean)
                 )}
             </div>
 

@@ -30,6 +30,8 @@ const MediaSelector = ({
     externalSource = null,
     /** When set, shows invitation Magic Cover AI panel in the upload/gallery section. */
     magicCover = null,
+    /** Two tabs only: device upload (photo or video) + camera. Hides venue cover, library, and sub-modes. */
+    simplified = false,
 }) => {
     const { t } = useTranslation();
     /** camera = capture photo/video | upload = image files from device */
@@ -39,6 +41,7 @@ const MediaSelector = ({
         return null;
     });
     const [cameraSubMode, setCameraSubMode] = useState(null);
+    const [cameraOpen, setCameraOpen] = useState(false);
     const [selectedMedia, setSelectedMedia] = useState(initialData || null);
     const [videoPersisting, setVideoPersisting] = useState(false);
     const [imagePersisting, setImagePersisting] = useState(false);
@@ -66,14 +69,17 @@ const MediaSelector = ({
     useEffect(() => {
         if (hideTabBar && externalSource) return;
         if (source !== null) return;
-        setSource('camera');
-    }, [source, hideTabBar, externalSource]);
+        setSource(simplified ? 'upload' : 'camera');
+    }, [source, hideTabBar, externalSource, simplified]);
 
     const effectiveSource = externalSource || source;
 
     const handleSourceChange = (newSource) => {
         setCameraSubMode(null);
         setSource(newSource);
+        if (simplified) {
+            setCameraOpen(newSource === 'camera');
+        }
     };
 
     const handleRestaurantImageSelect = (url) => {
@@ -87,7 +93,9 @@ const MediaSelector = ({
     };
 
     const isVenueSelection = selectedMedia?.source === 'restaurant' || selectedMedia?.source === 'google_place';
-    const isUploadSelection = effectiveSource === 'upload' && selectedMedia?.source === 'custom_image';
+    const isUploadSelection =
+        effectiveSource === 'upload' &&
+        (selectedMedia?.source === 'custom_image' || selectedMedia?.source === 'custom_video');
     const isCameraPhotoSelection =
         effectiveSource === 'camera' && selectedMedia?.source === 'custom_image' && !!selectedMedia?.file;
     const isVenueUrlSelected = (url) =>
@@ -193,6 +201,15 @@ const MediaSelector = ({
         onMediaSelect(mediaData);
     };
 
+    const handleCameraMediaCaptured = (file, previewUrl, type) => {
+        if (type === 'video') {
+            handleRecording(file, previewUrl);
+        } else {
+            handlePhotoCapture(file, previewUrl);
+        }
+        setCameraOpen(false);
+    };
+
     const selectLibraryImage = (url) => {
         if (!url) return;
         const mediaData = {
@@ -235,7 +252,7 @@ const MediaSelector = ({
 
     return (
         <div className={`media-selector ${className}`}>
-            {!hideVenueCover && hasRestaurantImage && restaurantCoverUrl && (
+            {!simplified && !hideVenueCover && hasRestaurantImage && restaurantCoverUrl && (
                 <div
                     className="media-selector-venue-cover"
                     style={{
@@ -321,34 +338,58 @@ const MediaSelector = ({
                 />
             ) : null}
 
-            <div
-                className="media-tabs"
-                style={{
-                    display: 'flex',
-                    gap: '8px',
-                    marginBottom: '16px',
-                    overflowX: 'auto',
-                    paddingBottom: '4px',
-                    borderBottom: '1px solid var(--border-color)',
-                    padding: '10px 0',
-                }}
-            >
-                <>
-                    <button type="button" onClick={() => handleSourceChange('camera')} style={tabBtnStyle(source === 'camera')}>
+            {!hideTabBar && (
+                <div
+                    className="media-tabs"
+                    style={{
+                        display: 'flex',
+                        gap: '8px',
+                        marginBottom: '16px',
+                        overflowX: 'auto',
+                        paddingBottom: '4px',
+                        borderBottom: simplified ? 'none' : '1px solid var(--border-color)',
+                        padding: '10px 0',
+                    }}
+                >
+                    <button type="button" onClick={() => handleSourceChange('upload')} style={tabBtnStyle(source === 'upload')}>
+                        <FaUpload />
+                        <span style={{ fontSize: '0.9rem' }}>
+                            {simplified
+                                ? t('media_tab_upload_device', 'From device')
+                                : t('media_tab_upload_photo', 'Upload photo')}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (simplified && source === 'camera') {
+                                setCameraOpen(true);
+                                return;
+                            }
+                            handleSourceChange('camera');
+                        }}
+                        style={tabBtnStyle(source === 'camera')}
+                    >
                         <FaCamera />
                         <span style={{ fontSize: '0.9rem' }}>{t('media_tab_camera', 'Camera')}</span>
                     </button>
-                    <button type="button" onClick={() => handleSourceChange('upload')} style={tabBtnStyle(source === 'upload')}>
-                        <FaUpload />
-                        <span style={{ fontSize: '0.9rem' }}>{t('media_tab_upload_photo', 'Upload photo')}</span>
-                    </button>
-                </>
-            </div>
+                </div>
+            )}
 
             <div className="tab-content">
-                {source === 'camera' && (
+                {effectiveSource === 'camera' && (
                     <div className="custom-video-container">
-                        {libraryVideo && (
+                        {simplified && cameraOpen && (
+                            <UnifiedCamera
+                                mode="both"
+                                maxDuration={15}
+                                allowFilePicker={false}
+                                onMediaCaptured={handleCameraMediaCaptured}
+                                stopCamera={() => setCameraOpen(false)}
+                            />
+                        )}
+
+                        {!simplified && libraryVideo && (
                             <div style={{ marginBottom: 14 }}>
                                 <p
                                     style={{
@@ -444,7 +485,7 @@ const MediaSelector = ({
                             </div>
                         )}
 
-                        {!libraryVideo && (
+                        {!simplified && !libraryVideo && (
                             <>
                                 {!cameraSubMode && (
                                     <div className="video-mode-selection">
@@ -649,13 +690,15 @@ const MediaSelector = ({
 
                 {effectiveSource === 'upload' && (
                     <div className="custom-image-container">
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12, textAlign: 'center' }}>
-                            {t('upload_photo_only_hint', {
-                                defaultValue:
-                                    'Choose an image from your device. Videos are not accepted here — use the Camera tab to record.',
-                            })}
-                        </p>
-                        {libraryImages.length > 0 && (
+                        {!simplified && (
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12, textAlign: 'center' }}>
+                                {t('upload_photo_only_hint', {
+                                    defaultValue:
+                                        'Choose an image from your device. Videos are not accepted here — use the Camera tab to record.',
+                                })}
+                            </p>
+                        )}
+                        {!simplified && libraryImages.length > 0 && (
                             <div style={{ marginBottom: 14 }}>
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>
                                     {t('saved_media_library', { defaultValue: 'Saved media library' })}
@@ -746,8 +789,9 @@ const MediaSelector = ({
 
                         {!isUploadSelection && !imageRejectedPreview && (
                             <MediaUpload
-                                type="image"
+                                type={simplified ? 'both' : 'image'}
                                 maxSize={10}
+                                maxDuration={15}
                                 awaitMediaSelect={!!onPersistImage}
                                 onMediaSelect={async (file, preview, type) => {
                                     if (onPersistImage && type === 'image') {
@@ -781,19 +825,33 @@ const MediaSelector = ({
                         )}
                         {isUploadSelection && (selectedMedia.preview || selectedMedia.url) && !imageRejectedPreview && (
                             <div className="media-preview" style={{ position: 'relative' }}>
-                                <ImageModerationOverlay status={imagePersisting ? 'checking' : null}>
-                                    <img
+                                {selectedMedia.type === 'video' ? (
+                                    <video
                                         src={selectedMedia.preview || selectedMedia.url}
-                                        alt="Selected"
-                                        className="preview-image"
+                                        controls
+                                        playsInline
+                                        className="preview-video"
                                         style={{
                                             width: '100%',
                                             maxHeight: '300px',
-                                            objectFit: 'cover',
                                             borderRadius: '12px',
                                         }}
                                     />
-                                </ImageModerationOverlay>
+                                ) : (
+                                    <ImageModerationOverlay status={imagePersisting ? 'checking' : null}>
+                                        <img
+                                            src={selectedMedia.preview || selectedMedia.url}
+                                            alt="Selected"
+                                            className="preview-image"
+                                            style={{
+                                                width: '100%',
+                                                maxHeight: '300px',
+                                                objectFit: 'cover',
+                                                borderRadius: '12px',
+                                            }}
+                                        />
+                                    </ImageModerationOverlay>
+                                )}
                                 <button
                                     type="button"
                                     className="remove-preview-btn"

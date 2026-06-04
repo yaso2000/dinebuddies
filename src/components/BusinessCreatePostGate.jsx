@@ -1,10 +1,10 @@
 import React, { Suspense, lazy, useMemo } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isBusinessUser } from '../utils/accountRole';
 import AppRouteLoading from './AppRouteLoading';
 
 const SmartPostStudio = lazy(() => import('../pages/business/SmartPostStudio'));
-const CreatePost = lazy(() => import('../pages/CreatePost'));
 
 function readBusinessNavHint(uid) {
     if (!uid) return false;
@@ -16,10 +16,11 @@ function readBusinessNavHint(uid) {
 }
 
 /**
- * Business accounts → Smart Post Studio; others → legacy create post.
- * Waits for profile hydrate so CreatePost never flashes for business users.
+ * `/create-post` is business-only → Smart Post Studio (motion post).
+ * Regular users compose at the top of `/posts-feed` (InlinePostEditor).
  */
 export default function BusinessCreatePostGate() {
+    const location = useLocation();
     const { currentUser, userProfile, loading, profileServerSynced, isBusiness } = useAuth();
 
     const businessNavHint = useMemo(
@@ -27,7 +28,7 @@ export default function BusinessCreatePostGate() {
         [currentUser?.uid]
     );
 
-    const preferStudio = isBusiness || isBusinessUser(userProfile) || businessNavHint;
+    const isBusinessAccount = isBusiness || isBusinessUser(userProfile) || businessNavHint;
 
     if (loading) {
         return <AppRouteLoading variant="profile" fullViewport />;
@@ -37,9 +38,13 @@ export default function BusinessCreatePostGate() {
         return <AppRouteLoading variant="profile" fullViewport />;
     }
 
+    if (!isBusinessAccount) {
+        return <Navigate to="/posts-feed" replace state={location.state} />;
+    }
+
     return (
         <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
-            {preferStudio ? <SmartPostStudio /> : <CreatePost />}
+            <SmartPostStudio />
         </Suspense>
     );
 }

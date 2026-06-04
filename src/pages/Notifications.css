@@ -37,27 +37,74 @@
     flex-shrink: 0;
 }
 
-.settings-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
+/* Notification preferences — distinct from app Settings (gear) */
+.notif-preferences-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 10px 0 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, #f472b6 12%, var(--bg-card));
+    border: 1.5px solid color-mix(in srgb, #f472b6 42%, var(--border-color));
+    color: #f9a8d4;
     cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    font: inherit;
+    flex-shrink: 0;
+}
+
+.notif-preferences-btn:hover {
+    background: color-mix(in srgb, #f472b6 20%, var(--bg-card));
+    border-color: #f472b6;
+    color: #fbcfe8;
+}
+
+.notif-preferences-btn:active {
+    transform: scale(0.97);
+}
+
+.notif-preferences-btn__icon {
+    position: relative;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
-    font-size: 1.1rem;
-    padding: 0;
+    flex-shrink: 0;
+    font-size: 1rem;
 }
 
-.settings-btn:hover {
-    color: var(--primary);
-    border-color: var(--primary);
-    background: rgba(139, 92, 246, 0.05);
-    transform: rotate(90deg);
+.notif-preferences-btn__sliders {
+    position: absolute;
+    inset-inline-end: -2px;
+    bottom: -2px;
+    font-size: 0.55rem;
+    padding: 2px;
+    border-radius: 50%;
+    background: color-mix(in srgb, #0c0f18 85%, transparent);
+    color: #fda4af;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #f472b6 35%, transparent);
+}
+
+.notif-preferences-btn__label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: inherit;
+}
+
+@media (max-width: 380px) {
+    .notif-preferences-btn__label {
+        display: none;
+    }
+
+    .notif-preferences-btn {
+        width: 40px;
+        padding: 0;
+        justify-content: center;
+    }
 }
 
 .mark-all-btn {
@@ -124,25 +171,137 @@
     gap: 0.75rem;
 }
 
-/* Notification Item — ui-card provides base surface */
+/* Notification swipe — LTR geometry even in Arabic UI; actions pinned physical right */
+.notification-swipe {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    border-radius: var(--radius-lg, 12px);
+    --swipe-actions-width: 240px;
+    /* Opaque surface — global --bg-card is often rgba and lets actions bleed through */
+    --notification-surface: var(--bg-secondary, #1e1e2e);
+    direction: ltr;
+}
+
+[data-theme='light'] .notification-swipe {
+    --notification-surface: var(--bg-card, #ffffff);
+}
+
+.notification-swipe__actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--swipe-actions-width);
+    display: flex;
+    flex-direction: row;
+    z-index: 0;
+}
+
+.notification-swipe__slide {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    background-color: var(--notification-surface);
+    will-change: transform;
+    transition: transform 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
+    touch-action: pan-y;
+}
+
+.notification-swipe--dragging .notification-swipe__slide {
+    transition: none;
+    touch-action: none;
+}
+
+.notification-swipe__front {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: var(--notification-surface) !important;
+    background-image: none;
+    min-width: 0;
+}
+
+.notification-swipe .notification-swipe__front.ui-card {
+    background: var(--notification-surface) !important;
+}
+
+.notification-swipe .notification-item.unread {
+    background: linear-gradient(
+        135deg,
+        var(--notification-surface) 0%,
+        color-mix(in srgb, var(--notification-surface) 93%, var(--primary) 7%) 100%
+    ) !important;
+}
+
+.notification-swipe__action {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 100%;
+    border: none;
+    padding: 0 0.25rem;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
+    transition: filter 0.15s ease;
+}
+
+.notification-swipe__action:active {
+    filter: brightness(0.92);
+}
+
+.notification-swipe__action--delete {
+    background: #fe2c55;
+}
+
+.notification-swipe__action--mute {
+    background: #949494;
+}
+
+.notification-swipe__action--report {
+    background: #545454;
+}
+
 .notification-item {
     display: flex;
     align-items: flex-start;
     gap: 1rem;
     padding: 1rem 1.25rem;
-    cursor: pointer;
     position: relative;
-    transition: all 0.2s;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.notification-swipe .notification-item {
+    background-color: var(--notification-surface);
+}
+
+.notification-item__body {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+    direction: inherit;
+}
+
+[dir='rtl'] .notification-swipe .notification-item__body {
+    direction: rtl;
 }
 
 .notification-item:hover {
     border-color: var(--primary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.notification-item.unread {
-    background: linear-gradient(135deg, var(--card-bg) 0%, rgba(239, 68, 68, 0.03) 100%);
+.notification-item.unread,
+.notification-swipe .notification-item.unread {
     border-color: var(--primary);
 }
 
@@ -150,7 +309,7 @@
 .unread-dot {
     position: absolute;
     top: 1.25rem;
-    right: 1.25rem;
+    inset-inline-end: 1.25rem;
     width: 10px;
     height: 10px;
     background: var(--secondary);
@@ -250,33 +409,6 @@
     opacity: 0.7;
 }
 
-/* Delete Button */
-.delete-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-    flex-shrink: 0;
-    opacity: 0;
-}
-
-.notification-item:hover .delete-btn {
-    opacity: 1;
-}
-
-.delete-btn:hover {
-    background: #fee2e2;
-    color: #ef4444;
-    border-color: #ef4444;
-}
-
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -338,21 +470,20 @@
         font-size: 0.8rem;
     }
 
-    .notification-item {
-        padding: 0.875rem 1rem;
-        gap: 0.75rem;
-    }
-
     .notification-icon {
         width: 40px;
         height: 40px;
     }
 
-    .delete-btn {
-        opacity: 1;
+    .notification-item {
+        padding: 0.875rem 1rem;
+    }
+
+    .notification-item__body {
+        gap: 0.75rem;
     }
 
     .unread-dot {
-        right: 1rem;
+        inset-inline-end: 1rem;
     }
 }

@@ -5,9 +5,16 @@
 import dotenv from 'dotenv';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseAdmin, getFirebaseAdminCertConfig } from '../api/_firebaseAdmin.js';
+import { getStorage } from 'firebase-admin/storage';
+import {
+    ensureFirebaseAdmin,
+    getFirebaseAdminCertConfig,
+    getFirebaseStorageBucketName,
+} from '../api/_firebaseAdmin.js';
+import { bucketCandidates, uploadInvitationAiImage } from '../api/_aiStorage.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: resolve(root, '.env') });
@@ -70,6 +77,32 @@ try {
     await getFirestore().collection('users').limit(1).get();
     console.log('Firestore API         OK (service account can read Firestore)');
 
+    const bucketName = getFirebaseStorageBucketName();
+    console.log('FIREBASE_STORAGE_BUCKET ', bucketName || '(derived from project id)');
+
+    const probeUid = `env_probe_${randomUUID().slice(0, 8)}`;
+    const probePayload = Buffer.alloc(600, 0x89);
+    const uploaded = await uploadInvitationAiImage(
+        probeUid,
+        probePayload.toString('base64'),
+        'image/png',
+        'invitation',
+    );
+    console.log('Storage upload          OK', uploaded.path);
+
+    let cleaned = false;
+    for (const name of bucketCandidates()) {
+        const bucket = name ? getStorage().bucket(name) : getStorage().bucket();
+        try {
+            await bucket.file(uploaded.path).delete();
+            cleaned = true;
+            break;
+        } catch {
+            /* try next bucket */
+        }
+    }
+    console.log('Storage cleanup         ', cleaned ? 'OK' : 'skipped (delete manually if needed)');
+
     console.log('');
     console.log('PASS: keys are present and working.');
 } catch (err) {
@@ -79,6 +112,8 @@ try {
     console.error('Tips:');
     console.error('- Use private_key from service account JSON');
     console.error('- In .env use \\n for line breaks inside FIREBASE_PRIVATE_KEY');
+    console.error('- Set FIREBASE_STORAGE_BUCKET=dinebuddies.firebasestorage.app on Vercel');
+    console.error('- IAM: firebase-adminsdk-...@dinebuddies.iam.gserviceaccount.com needs Storage Object Admin');
     console.error('- Or set GOOGLE_APPLICATION_CREDENTIALS=path\\to\\key.json and skip pasted keys');
     process.exit(1);
 }

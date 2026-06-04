@@ -28,24 +28,24 @@ import './ProfileEnhancements.css';
 // ================================
 // 1. COVER PHOTO COMPONENT
 // ================================
-export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
+export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true }) => {
     const { t } = useTranslation();
     const { showToast } = useToast();
+    const { updateProfile } = useAuth();
     const [uploading, setUploading] = useState(false);
     const [hovered, setHovered] = useState(false);
 
     const handleCoverUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files?.[0];
+        if (!file || !editable) return;
 
-        // Validate file
         if (!file.type.startsWith('image/')) {
-            showToast('Please select an image file', 'error');
+            showToast(t('only_images_allowed', 'Please select an image file.'), 'error');
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            showToast('File too large. Max 5MB', 'error');
+            showToast(t('file_too_large_5mb', 'File too large. Max 5MB'), 'error');
             return;
         }
 
@@ -53,45 +53,65 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate }) => {
         try {
             const downloadURL = await uploadManagedImage(file, userId, ImageUploadZone.COVER);
 
-            // Update Firestore
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-                cover_photo: downloadURL
-            });
+            if (updateProfile) {
+                await updateProfile({ cover_photo: downloadURL });
+            } else {
+                await updateDoc(doc(db, 'users', userId), { cover_photo: downloadURL });
+            }
 
-            onUpdate && onUpdate(downloadURL);
+            onUpdate?.(downloadURL);
+            showToast(t('cover_photo_updated', 'تم تحديث صورة الغلاف'), 'success');
         } catch (error) {
             console.error('Error uploading cover:', error);
             notifyImageUploadError(showToast, error, t, 'failed_upload_image');
         } finally {
             setUploading(false);
+            e.target.value = '';
         }
     };
 
     const defaultCover = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
+    if (!editable && !coverPhoto) {
+        return null;
+    }
+
+    const inputId = `profile-cover-upload-${userId}`;
+
     return (
         <div
-            className="profile-cover"
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
+            className={`profile-cover${editable ? ' profile-cover--editable' : ' profile-cover--readonly'}`}
+            onMouseEnter={() => editable && setHovered(true)}
+            onMouseLeave={() => editable && setHovered(false)}
             style={{
-                background: coverPhoto ? `url(${coverPhoto})` : defaultCover
+                background: coverPhoto ? `url(${coverPhoto})` : defaultCover,
             }}
         >
-            <div className="cover-overlay" style={{ opacity: hovered ? 1 : 0 }}>
-                <label className="cover-upload-btn">
-                    <FaCamera />
-                    <span>{uploading ? t('uploading', 'Uploading...') : t('edit_cover', 'Edit Cover')}</span>
+            {editable ? (
+                <>
+                    <div className="cover-overlay" style={{ opacity: hovered ? 1 : undefined }}>
+                        <label className="cover-upload-btn" htmlFor={inputId}>
+                            <FaCamera aria-hidden />
+                            <span>
+                                {uploading
+                                    ? t('uploading', 'Uploading...')
+                                    : t('edit_cover', 'Edit Cover')}
+                            </span>
+                        </label>
+                    </div>
+                    <label className="cover-edit-fab ios-tap-target" htmlFor={inputId} aria-label={t('edit_cover', 'Edit Cover')}>
+                        <FaCamera aria-hidden />
+                    </label>
                     <input
+                        id={inputId}
                         type="file"
                         accept="image/*"
                         onChange={handleCoverUpload}
                         disabled={uploading}
-                        style={{ display: 'none' }}
+                        hidden
                     />
-                </label>
-            </div>
+                </>
+            ) : null}
         </div>
     );
 };

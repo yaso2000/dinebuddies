@@ -174,9 +174,10 @@
 }
 
 .ui-tab--compact.ui-tab--active {
-  background: var(--primary);
-  color: white;
+  background: var(--primary-hover, var(--primary));
+  color: var(--text-on-brand, #fff);
   border-bottom-color: transparent;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .ui-card-header {

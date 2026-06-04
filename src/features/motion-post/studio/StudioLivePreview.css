@@ -33,7 +33,7 @@
     flex: 0 0 42%;
     min-height: 0;
     position: relative;
-    background: #161920;
+    background: var(--sps-preview-panel-bg, #161920);
     overflow: hidden;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .sps-preview--no-image {
-    background: var(--sps-neon-bg, #0f1115);
+    background: var(--sps-preview-bg, var(--sps-neon-bg, #0f1115));
 }
 
 .sps-preview__image-zone--empty {

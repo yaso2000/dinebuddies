@@ -9,12 +9,13 @@ import { uploadPostMedia } from '../utils/imageUpload';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import { FaArrowLeft, FaImage, FaVideo, FaSmile, FaTimes, FaFont, FaPalette, FaCircle, FaFileUpload, FaBold, FaItalic, FaAlignLeft, FaAlignCenter, FaAlignRight } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
 import AIFloatingLauncher from '../components/AIFloatingLauncher';
-import { extractAIContentFields, extractAIImageUrl } from '../utils/aiContentFieldMapper';
-import { pickAiRemoteImageUrl } from '../utils/aiGeneratedMediaUrl';
-import { ensurePublicImageUrl } from '../services/mediaService';
+import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
+import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../utils/postPublishGeo';
 import './CreatePost.css';
 
 const FONTS = [
@@ -106,6 +107,13 @@ const CreatePost = () => {
         }
     }, [currentUser, userProfile]);
 
+    useEffect(() => {
+        const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
+        if (!studio) return;
+        setMedia({ type: 'image', preview: studio.publishedUrl, url: studio.publishedUrl });
+        setShowOverlayInput(true);
+    }, [location.state?.aiStudioImage]);
+
     const buildRegularPostAiPrompt = useCallback(() => {
         if (text.trim()) return text.trim();
         if (attachedInvitation?.title) {
@@ -117,11 +125,6 @@ const CreatePost = () => {
     const handleRegularPostAiContent = useCallback((data) => {
         const fields = extractAIContentFields('regular_post', data);
         if (fields.text) setText(fields.text.slice(0, 300));
-        const imageUrl = extractAIImageUrl(data);
-        if (imageUrl) {
-            setMedia({ type: 'image', preview: imageUrl, url: imageUrl });
-            setShowOverlayInput(true);
-        }
     }, []);
 
     const startCamera = () => {
@@ -176,13 +179,9 @@ const CreatePost = () => {
                     (p) => setUploadProgress(Math.round(p)),
                     mediaType
                 );
-            } else {
-                const remoteImage = pickAiRemoteImageUrl(media);
-                if (remoteImage) {
-                    mediaUrl = await ensurePublicImageUrl(remoteImage, currentUser.uid, 'community-posts');
-                    mediaType = 'image';
-                }
             }
+
+            const publishGeo = await resolvePostPublishGeo(userProfile);
 
             const postData = {
                 author: {
@@ -214,13 +213,7 @@ const CreatePost = () => {
                 likes: [],
                 comments: [],
                 reposts: [],
-                // Attach User Location (City/Country) automatically
-                location: userProfile?.location || null,
-                city: userProfile?.city || null,
-                country: userProfile?.country || null,
-                coordinates: userProfile?.coordinates || null,
-                // Fallback: If attached invitation has location, we might want to mirror it here or prioritize user location? 
-                // User said "reference is user location", so we stick to userProfile.
+                ...publishGeoFirestoreFields(publishGeo),
             };
 
             await addDoc(collection(db, 'communityPosts'), postData);
@@ -253,14 +246,10 @@ const CreatePost = () => {
                     <button onClick={() => { navigate(-1); }} className="icon-btn" style={{ color: 'var(--text-main)', background: 'var(--bg-input)' }}>
                         <FaArrowLeft size={20} />
                     </button>
-                    <img
-                        src={getSafeAvatar(userProfile || currentUser)}
+                    <UserAvatar
+                        user={userProfile || currentUser}
                         alt="Profile"
-                        style={{
-                            width: '32px', height: '32px', borderRadius: '50%',
-                            objectFit: 'cover', border: '1px solid var(--border-color)', flexShrink: 0
-                        }}
-                        onError={(e) => { e.target.src = getSafeAvatar(null); }}
+                        style={{ width: 32, height: 32, flexShrink: 0 }}
                     />
                 </div>
 

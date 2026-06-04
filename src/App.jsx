@@ -68,10 +68,10 @@ const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
 const CreatePrivateInvitation = lazy(() => import('./pages/CreatePrivateInvitation'));
 const CreateDatingInvitation = lazy(() => import('./pages/CreateDatingInvitation'));
-const CreatePost = lazy(() => import('./pages/CreatePost'));
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateStory = lazy(() => import('./pages/CreateStory'));
+const AiDesignStudio = lazy(() => import('./pages/AiDesignStudio'));
 const EmailSettings = lazy(() => import('./pages/EmailSettings'));
 const PasswordSettings = lazy(() => import('./pages/PasswordSettings'));
 const NotificationsSettings = lazy(() => import('./pages/NotificationsSettings'));
@@ -115,6 +115,12 @@ function RouteSuspenseLayout() {
 function RedirectBusinessInvitationsToCommunity() {
     const { businessId } = useParams();
     return <Navigate to={`/community/${businessId}`} replace />;
+}
+
+/** Legacy comment/profile links used `/user/:id` — canonical route is `/profile/:userId`. */
+function LegacyUserProfileRedirect() {
+    const { userId } = useParams();
+    return <Navigate to={`/profile/${userId}`} replace />;
 }
 
 /** Canonical business registration is `/signup/business`; legacy paths keep `?ref=` etc. */
@@ -212,6 +218,7 @@ function App() {
 
                                                     <Route path="/profile" element={<GuestBlockedRoute><Profile /></GuestBlockedRoute>} />
                                                     <Route path="/profile/:userId" element={<UserProfile />} />
+                                                    <Route path="/user/:userId" element={<LegacyUserProfileRedirect />} />
 
                                                     <Route path="/followers/:userId" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
                                                     <Route path="/followers" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
@@ -221,10 +228,11 @@ function App() {
                                                         path="/create/ai"
                                                         element={
                                                             <GuestBlockedRoute>
-                                                                <Navigate to="/create/manual" replace />
+                                                                <Navigate to="/ai-design-studio" replace />
                                                             </GuestBlockedRoute>
                                                         }
                                                     />
+                                                    <Route path="/ai-design-studio" element={<GuestBlockedRoute><AiDesignStudio /></GuestBlockedRoute>} />
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-dating" element={<GuestBlockedRoute><CreateDatingInvitation /></GuestBlockedRoute>} />

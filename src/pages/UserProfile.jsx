@@ -15,6 +15,7 @@ import { getPrivateInvitationDetailsPath } from '../utils/privateInvitationDraft
 import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage';
 import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
 import { useToast } from '../context/ToastContext';
+import { CoverPhoto } from '../components/ProfileEnhancements';
 
 /** ~5 invitation rows visible in scroll area (see .user-profile-invitation-list-scroll max-height). */
 const INVITATION_HISTORY_SCROLL_HINT_THRESHOLD = 5;
@@ -325,8 +326,14 @@ const UserProfile = () => {
 
             <div style={{ padding: '2rem 1.5rem' }}>
                 {/* Profile Header */}
-                <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                <div className="profile-header profile-header--consumer" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+                    <CoverPhoto
+                        userId={userId}
+                        coverPhoto={user.cover_photo}
+                        editable={false}
+                    />
+                    <div className="profile-identity">
+                    <div className="profile-avatar-over-cover profile-avatar-over-cover--lg" style={{ position: 'relative', display: 'inline-block' }}>
                         <div
                             className="host-avatar-container"
                             style={{
@@ -632,6 +639,7 @@ const UserProfile = () => {
                             )}
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {isReportModalOpen && (

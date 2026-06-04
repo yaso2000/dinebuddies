@@ -8,6 +8,7 @@ import { FaArrowLeft, FaBan } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { asUidArray, toggleUserBlock } from '../utils/userSocialLists';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from '../components/UserAvatar';
 import './SettingsPages.css';
 
 const BlockedUsersSettings = () => {
@@ -44,7 +45,8 @@ const BlockedUsersSettings = () => {
                     out.push({
                         id,
                         name: d.display_name || d.displayName || d.name || d.nickname || id.slice(0, 8) + '…',
-                        avatar: getSafeAvatar({ ...d, id })
+                        avatar: getSafeAvatar({ ...d, id }),
+                        gender: d.gender
                     });
                 } catch {
                     out.push({
@@ -133,20 +135,11 @@ const BlockedUsersSettings = () => {
                                         background: 'var(--bg-card)'
                                     }}
                                 >
-                                    <img
+                                    <UserAvatar
+                                        user={{ photo_url: row.avatar, display_name: row.name, gender: row.gender }}
                                         src={row.avatar}
                                         alt=""
-                                        style={{
-                                            width: 44,
-                                            height: 44,
-                                            borderRadius: '50%',
-                                            objectFit: 'cover',
-                                            flexShrink: 0,
-                                            border: '2px solid var(--border-color)'
-                                        }}
-                                        onError={(e) => {
-                                            e.target.src = getSafeAvatar(null);
-                                        }}
+                                        style={{ width: 44, height: 44, flexShrink: 0 }}
                                     />
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontWeight: 700, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

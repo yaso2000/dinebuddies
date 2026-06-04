@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import { FaCheckCircle, FaPhoneAlt, FaClock, FaExclamationCircle, FaLightbulb, FaSpinner, FaTimes, FaChevronDown } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import UserAvatar from './UserAvatar';
 
 export default function BusinessFeedbackInbox() {
     const { t } = useTranslation();
@@ -119,7 +120,7 @@ export default function BusinessFeedbackInbox() {
                         onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                         onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
                     >
-                        <img src={getSafeAvatar(item.userAvatar)} alt={item.userName} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                        <UserAvatar user={{ photo_url: item.userAvatar, display_name: item.userName, gender: item.userGender }} alt={item.userName} style={{ width: 44, height: 44, flexShrink: 0 }} />
                         
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -185,7 +186,7 @@ export default function BusinessFeedbackInbox() {
                             
                             {/* User Profile Info */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <img src={getSafeAvatar(selectedFeedback.userAvatar)} alt={selectedFeedback.userName} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }} />
+                                <UserAvatar user={{ photo_url: selectedFeedback.userAvatar, display_name: selectedFeedback.userName, gender: selectedFeedback.userGender }} alt={selectedFeedback.userName} style={{ width: 50, height: 50 }} />
                                 <div>
                                     <div style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)' }}>{selectedFeedback.userName || t('guest', 'Guest')}</div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

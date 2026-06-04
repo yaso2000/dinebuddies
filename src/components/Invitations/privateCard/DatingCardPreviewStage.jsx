@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaFont } from 'react-icons/fa';
 import PrivateCardTextBackdropTonePicker from './PrivateCardTextBackdropTonePicker';
+import { PRIVATE_TEXT_BACKDROP_ICON_ORDER } from './privateCardTextBackdrop';
 import PrivateCardMotionPicker from './PrivateCardMotionPicker';
 import DatingCardTypographyBars from './DatingCardTypographyBars';
 import './DatingCardPreviewStage.css';
 
-/** Icon order for dating preview: white panel, dark panel, none. */
-const BACKDROP_ICON_ORDER = ['light', 'dark', 'none'];
 
 /**
  * Preview chrome: show/hide button, backdrop icons, motion rail on card; typography below.
@@ -51,7 +50,7 @@ export default function DatingCardPreviewStage({
                     {showHostAndMessage && editorPhotoBackgroundActive ? (
                         <PrivateCardTextBackdropTonePicker
                             variant="icons"
-                            toneOrder={BACKDROP_ICON_ORDER}
+                            toneOrder={PRIVATE_TEXT_BACKDROP_ICON_ORDER}
                             tone={textBackdropTone}
                             onToneChange={onTextBackdropToneChange}
                         />

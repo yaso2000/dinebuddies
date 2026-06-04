@@ -26,7 +26,14 @@ import { sendVerificationEmailResend } from '../services/verificationEmailServic
 import { isEmailRegisteredAsAffiliate, isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
 import { assertProfileMatchesPortal, AUTH_PORTAL } from '../utils/authPortalGate';
 import { resolveAppleDisplayName } from '../utils/appleAuth';
-import { isLocalDevHost, isEmbeddedPreviewBrowser, markOAuthRedirectComplete, markOAuthRedirectPending, preferGoogleOAuthRedirect } from '../utils/localDevAuth';
+import {
+    clearOAuthRedirectPending,
+    markOAuthRedirectComplete,
+    markOAuthRedirectPending,
+    preferOAuthRedirectOnThisDevice,
+    stashOAuthRedirectError,
+    stripFirebaseAuthParamsFromUrl,
+} from '../utils/localDevAuth';
 import { getFirebaseRedirectResultOnce } from '../firebase/authBootstrap';
 import { PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
@@ -71,20 +78,7 @@ const isInAppBrowser = () => {
  * Facebook JS SDK `FB.login` relies on third-party cookies; Safari / iOS WebKit often return
  * `unknown` with no token. Firebase `signInWithRedirect` uses a first-party round-trip and works.
  */
-/** Safari / iOS WebKit: popup OAuth is unreliable — use Firebase redirect. */
-const preferWebOAuthRedirectAuth = () => {
-    if (isLocalDevHost()) return true;
-    if (typeof navigator === 'undefined') return false;
-    const ua = navigator.userAgent || '';
-    if (/iPad|iPhone|iPod/i.test(ua)) return true;
-    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
-    if (!/Macintosh|Mac OS X/i.test(ua)) return false;
-    if (/Chrome|Chromium|Edg[/\s]|Firefox|OPR|Brave/i.test(ua)) return false;
-    const vendor = navigator.vendor || '';
-    return /Safari/i.test(ua) && /Apple/i.test(vendor);
-};
-
-const preferFacebookRedirectAuth = preferWebOAuthRedirectAuth;
+const preferFacebookRedirectAuth = preferOAuthRedirectOnThisDevice;
 
 // Try to open the current URL in an external browser.
 // On Android: uses an intent URI to launch Chrome.
@@ -764,18 +758,28 @@ export const AuthProvider = ({ children }) => {
             }
             provider.addScope('email');
             provider.addScope('profile');
-            if (preferGoogleOAuthRedirect()) {
+            if (preferOAuthRedirectOnThisDevice()) {
                 markOAuthRedirectPending();
-                signInWithRedirect(auth, provider);
+                try {
+                    await signInWithRedirect(auth, provider);
+                } catch (redirectErr) {
+                    clearOAuthRedirectPending();
+                    throw redirectErr;
+                }
                 return { __oauthRedirect: true };
             }
             let result;
             try {
                 result = await signInWithPopup(auth, provider);
             } catch (popupErr) {
-                if (popupErr?.code === 'auth/popup-blocked') {
+                if (popupErr?.code === 'auth/popup-blocked' || popupErr?.code === 'auth/cancelled-popup-request') {
                     markOAuthRedirectPending();
-                    signInWithRedirect(auth, provider);
+                    try {
+                        await signInWithRedirect(auth, provider);
+                    } catch (redirectErr) {
+                        clearOAuthRedirectPending();
+                        throw redirectErr;
+                    }
                     return { __oauthRedirect: true };
                 }
                 throw popupErr;
@@ -865,7 +869,12 @@ export const AuthProvider = ({ children }) => {
             provider.addScope('public_profile');
             // Do not await — navigation may unload the page before the promise settles.
             markOAuthRedirectPending();
-            signInWithRedirect(auth, provider);
+            try {
+                await signInWithRedirect(auth, provider);
+            } catch (redirectErr) {
+                clearOAuthRedirectPending();
+                throw redirectErr;
+            }
             return { __oauthRedirect: true };
         }
         try {
@@ -972,9 +981,14 @@ export const AuthProvider = ({ children }) => {
         const provider = new OAuthProvider('apple.com');
         provider.addScope('email');
         provider.addScope('name');
-        if (preferWebOAuthRedirectAuth()) {
+        if (preferOAuthRedirectOnThisDevice()) {
             markOAuthRedirectPending();
-            signInWithRedirect(auth, provider);
+            try {
+                await signInWithRedirect(auth, provider);
+            } catch (redirectErr) {
+                clearOAuthRedirectPending();
+                throw redirectErr;
+            }
             return { __oauthRedirect: true };
         }
         try {
@@ -1188,6 +1202,7 @@ export const AuthProvider = ({ children }) => {
         (async () => {
             try {
                 const result = await getFirebaseRedirectResultOnce();
+                stripFirebaseAuthParamsFromUrl();
                 if (cancelled || !result?.user) return;
                 markOAuthRedirectComplete();
                 const pid = result.providerId || result.user?.providerData?.[0]?.providerId;
@@ -1228,6 +1243,7 @@ export const AuthProvider = ({ children }) => {
                     }
                 }
             } catch (error) {
+                stashOAuthRedirectError(error);
                 if (
                     error?.code === 'auth/affiliate-portal-only' ||
                     error?.code === 'auth/business-portal-only'

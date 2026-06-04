@@ -2,6 +2,11 @@ import { auth } from '../firebase/config';
 import { unwrapAiResponseData } from '../utils/aiContentFieldMapper';
 import { buildDatingAiGenerateBody } from '../utils/datingAiRequestPayload';
 import { enforceCardStructureTextLimits, normalizeCardStructure } from '../utils/cardStructure';
+import {
+    GEMINI_PROVIDER_BILLING_CODE,
+    geminiProviderBillingUserMessage,
+    isGeminiProviderBillingExhausted,
+} from '../utils/geminiProviderErrors.js';
 
 const AI_GENERATE_PATH = '/api/ai/generate';
 const AI_MULTI_GENERATE_PATH = '/api/ai/multi-generate';
@@ -249,6 +254,9 @@ export async function generateAIContent(userPrompt, postType, subType, options =
                 };
             }
             body.subType = subType;
+            if (options.cardStructure) {
+                body.cardStructure = normalizeCardStructure(options.cardStructure);
+            }
             if (subType === 'public') {
                 const venueType = String(options.venueType || '').trim();
                 const venueName = String(options.venueName || '').trim();
@@ -308,6 +316,13 @@ export function isInsufficientCreditsError(result) {
 export function formatAiErrorMessage(result, t) {
     if (!result || result.success !== false) {
         return t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.');
+    }
+
+    if (
+        result.code === GEMINI_PROVIDER_BILLING_CODE ||
+        isGeminiProviderBillingExhausted(result.message || result.error)
+    ) {
+        return t('ai_gemini_billing_exhausted', geminiProviderBillingUserMessage('ar'));
     }
 
     if (result.code === 'MALFORMED_JSON') {
@@ -428,6 +443,77 @@ export async function generateAIMagicCover({
     if (venueNameStr) body.venueName = venueNameStr;
 
     console.log('=== CRITICAL OUTGOING AI PAYLOAD ===', { endpoint: AI_MULTI_GENERATE_PATH, body });
+
+    let response;
+    try {
+        response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
+        if (response.status === 401) {
+            token = await getAuthBearerToken(true);
+            if (token) {
+                response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
+            }
+        }
+    } catch (err) {
+        if (err instanceof Error && err.message === 'AI_REQUEST_TIMEOUT') {
+            return {
+                success: false,
+                error: 'request_timeout',
+                code: 'AI_REQUEST_TIMEOUT',
+                message:
+                    'انتهت مهلة انتظار توليد الصورة. قد يكون التوليد ما زال جارياً على الخادم — انتظر ثم حاول مرة أخرى.',
+                status: 408,
+            };
+        }
+        return {
+            success: false,
+            error: 'Network error while contacting AI service',
+            code: 'GEMINI_API_ERROR',
+        };
+    }
+
+    return parseAiApiResponse(response);
+}
+
+/**
+ * AI Design Studio — standalone image generation (25 credits).
+ *
+ * @param {{
+ *   userPrompt: string,
+ *   designCategory: import('../constants/aiDesignStudioCategories.js').AiDesignStudioCategoryId,
+ *   aspectRatio?: '1:1' | '9:16' | '16:9',
+ * }} params
+ * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
+ */
+export async function generateAIDesignStudioImage({ userPrompt, designCategory, aspectRatio = '1:1' }) {
+    const trimmedPrompt = String(userPrompt || '').trim();
+    if (!trimmedPrompt) {
+        return { success: false, error: 'userPrompt is required', code: 'VALIDATION_ERROR' };
+    }
+
+    if (!designCategory) {
+        return {
+            success: false,
+            error: 'designCategory is required',
+            code: 'VALIDATION_ERROR',
+        };
+    }
+
+    if (!auth.currentUser) {
+        return { success: false, error: 'Sign in required', code: 'UNAUTHORIZED', status: 401 };
+    }
+
+    let token = await getAuthBearerToken(false);
+    if (!token) {
+        return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
+    }
+
+    const body = {
+        userPrompt: trimmedPrompt.slice(0, 2000),
+        postType: 'design_studio',
+        generationPackage: 'image',
+        designCategory,
+        aspectRatio,
+    };
 
     let response;
     try {

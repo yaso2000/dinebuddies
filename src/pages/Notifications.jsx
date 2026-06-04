@@ -15,12 +15,17 @@ import {
     FaHeart,
     FaExclamationCircle,
     FaSearch,
-    FaCog,
+    FaSlidersH,
     FaCheckDouble,
     FaLock
 } from 'react-icons/fa';
 import EmptyState from '../components/EmptyState';
 import UserAvatar from '../components/UserAvatar';
+import NotificationSwipeRow from '../components/NotificationSwipeRow';
+import NewReportModal from '../components/NewReportModal';
+import { useInvitations } from '../context/InvitationContext';
+import { useToast } from '../context/ToastContext';
+import { toggleUserMute } from '../utils/userSocialLists';
 import './Notifications.css';
 import { goToLogin } from '../utils/goToLogin';
 
@@ -131,6 +136,8 @@ const Notifications = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
+    const { showToast } = useToast();
+    const { submitReport } = useInvitations();
     const {
         notifications,
         unreadCount,
@@ -152,6 +159,72 @@ const Notifications = () => {
     const [filterStatus, setFilterStatus] = useState('all'); // all, unread, read
     const [filterType, setFilterType] = useState('all'); // all, follow, invitation_accepted, etc.
     const [searchQuery, setSearchQuery] = useState('');
+    const [openSwipeId, setOpenSwipeId] = useState(null);
+    const [reportModal, setReportModal] = useState(null);
+
+    const resolveActorId = (notif) =>
+        notif.fromUserId || notif.metadata?.senderId || notif.metadata?.fromUserId || null;
+
+    const handleMuteFromNotification = async (notif) => {
+        const actorId = resolveActorId(notif);
+        const myUid = currentUser?.uid;
+        if (!actorId || !myUid) {
+            showToast(t('notification_mute_unavailable', 'Cannot mute this notification.'), 'info');
+            return;
+        }
+        try {
+            await toggleUserMute(myUid, actorId, true);
+            showToast(
+                t('user_muted_toast', 'User muted for invitations and messages.'),
+                'success'
+            );
+            deleteNotification(notif.id, notif._collection || 'notifications');
+        } catch (err) {
+            console.error('[Notifications] mute', err);
+            showToast(t('error_update_settings', 'Something went wrong.'), 'error');
+        }
+    };
+
+    const openReportForNotification = (notif) => {
+        const actorId = resolveActorId(notif);
+        const invId = notif.metadata?.invitationId || notif.invitationId || null;
+        if (actorId) {
+            setReportModal({
+                reportType: 'user',
+                targetId: actorId,
+                targetName: notif.fromUserName || notif.senderName || t('someone', 'Someone'),
+                notificationId: notif.id,
+                collection: notif._collection || 'notifications',
+            });
+            return;
+        }
+        if (invId) {
+            setReportModal({
+                reportType: 'invitation',
+                targetId: invId,
+                targetName:
+                    notif.metadata?.invitationTitle ||
+                    notif.metadata?.title ||
+                    t('invitation', 'Invitation'),
+                notificationId: notif.id,
+                collection: notif._collection || 'notifications',
+            });
+            return;
+        }
+        showToast(t('notification_report_unavailable', 'Cannot report this notification.'), 'info');
+    };
+
+    useEffect(() => {
+        if (!openSwipeId) return undefined;
+        const close = (e) => {
+            if (e.target.closest('.notification-swipe__action')) return;
+            const row = e.target.closest('.notification-swipe');
+            if (row?.dataset?.notifId === openSwipeId) return;
+            setOpenSwipeId(null);
+        };
+        document.addEventListener('pointerdown', close);
+        return () => document.removeEventListener('pointerdown', close);
+    }, [openSwipeId]);
 
     const getIcon = (type, status) => {
         const iconStyle = { fontSize: '1.2rem' };
@@ -197,6 +270,15 @@ const Notifications = () => {
     };
 
     const handleNotificationClick = (notification) => {
+        if (openSwipeId === notification.id) {
+            setOpenSwipeId(null);
+            return;
+        }
+        if (openSwipeId) {
+            setOpenSwipeId(null);
+            return;
+        }
+
         // Mark as read
         if (!notification.read) {
             markAsRead(notification.id, notification._collection || 'notifications');
@@ -278,11 +360,17 @@ const Notifications = () => {
                     <button
                         type="button"
                         onClick={() => navigate('/settings/notifications')}
-                        className="settings-btn ui-btn ui-btn--secondary"
+                        className="notif-preferences-btn"
                         title={t('notification_settings', 'Notification Settings')}
                         aria-label={t('notification_settings', 'Notification Settings')}
                     >
-                        <FaCog />
+                        <span className="notif-preferences-btn__icon" aria-hidden>
+                            <FaBell />
+                            <FaSlidersH className="notif-preferences-btn__sliders" />
+                        </span>
+                        <span className="notif-preferences-btn__label">
+                            {t('notification_prefs_short', 'Alerts')}
+                        </span>
                     </button>
                     {notifications.length > 0 && (
                         <>
@@ -394,13 +482,31 @@ const Notifications = () => {
                         const cardImageUrl =
                             notif.metadata?.cardImageUrl || notif.cardImageUrl || null;
                         return (
-                        <div
+                        <NotificationSwipeRow
                             key={notif.id}
-                            className={`notification-item ui-card ${!notif.read ? 'unread' : ''}`}
-                            onClick={() => handleNotificationClick(notif)}
+                            rowId={notif.id}
+                            isOpen={openSwipeId === notif.id}
+                            onOpenChange={(open) => setOpenSwipeId(open ? notif.id : null)}
+                            onDelete={() =>
+                                deleteNotification(notif.id, notif._collection || 'notifications')
+                            }
+                            onMute={() => handleMuteFromNotification(notif)}
+                            onReport={() => openReportForNotification(notif)}
+                            className={`notification-item${!notif.read ? ' unread' : ''}`}
                         >
-                            {/* Unread Indicator */}
-                            {!notif.read && <div className="unread-dot"></div>}
+                        <div
+                            className="notification-item__body"
+                            onClick={() => handleNotificationClick(notif)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    handleNotificationClick(notif);
+                                }
+                            }}
+                        >
+                            {!notif.read && <div className="unread-dot" aria-hidden />}
 
                             <div className="notification-icon">
                                 {cardImageUrl && notif.type === 'private_invitation' ? (
@@ -430,29 +536,34 @@ const Notifications = () => {
                                 )}
                             </div>
 
-                            {/* Content */}
                             <div className="notification-content">
                                 <h4 className="notification-title">{getNotifTitle(notif, t)}</h4>
                                 <p className="notification-message">{getNotifMessage(notif, t)}</p>
                                 <span className="notification-time">{formatTime(notif.createdAt)}</span>
                             </div>
-
-                            {/* Delete Button */}
-                            <button
-                                className="delete-btn ui-btn--danger-outline"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteNotification(notif.id, notif._collection || 'notifications');
-                                }}
-                                title={t('delete', 'Delete')}
-                            >
-                                <FaTrash />
-                            </button>
                         </div>
+                        </NotificationSwipeRow>
                         );
                     })
                 )}
             </div>
+
+            {reportModal ? (
+                <NewReportModal
+                    isOpen
+                    onClose={() => setReportModal(null)}
+                    reportType={reportModal.reportType}
+                    targetId={reportModal.targetId}
+                    targetName={reportModal.targetName}
+                    onSubmit={async (report) => {
+                        await submitReport(report);
+                        if (reportModal.notificationId) {
+                            deleteNotification(reportModal.notificationId, reportModal.collection);
+                        }
+                        setReportModal(null);
+                    }}
+                />
+            ) : null}
         </div>
     );
 };

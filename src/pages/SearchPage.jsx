@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaChevronLeft, FaSearch, FaStore, FaTimes, FaUser } from 'react-icons/fa';
+import { FaSearch, FaStore, FaTimes, FaUser } from 'react-icons/fa';
 import UserAvatar from '../components/UserAvatar';
 import { searchAccounts } from '../services/accountSearch';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -80,10 +80,7 @@ export default function SearchPage() {
 
     return (
         <div className="search-page" dir={rtl ? 'rtl' : 'ltr'}>
-            <header className="search-header">
-                <button type="button" className="search-back" onClick={() => navigate(-1)} aria-label="Back">
-                    <FaChevronLeft style={{ transform: rtl ? 'rotate(180deg)' : 'none' }} />
-                </button>
+            <div className="search-toolbar">
                 <div className="search-field">
                     <FaSearch className="search-field-icon" aria-hidden />
                     <input
@@ -104,7 +101,7 @@ export default function SearchPage() {
                         </button>
                     ) : null}
                 </div>
-            </header>
+            </div>
 
             <div className="search-tabs" role="tablist">
                 {[

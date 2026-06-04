@@ -18,8 +18,9 @@ import { validateInvitationCreation } from '../utils/invitationValidation';
 import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { detectUserLocationContext } from '../utils/locationUtils';
-import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey, templateTypeToMagicCoverAspect } from '../utils/invitationTemplates';
+import { detectUserLocationContext, geocode } from '../utils/locationUtils';
+import { resolveVenueCoordinates } from '../utils/invitationCoords';
+import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
 import {
     PUBLIC_VENUE_TYPES,
@@ -28,14 +29,19 @@ import {
     publicVenueTypeI18nKey,
 } from '../utils/publicInvitationVibes';
 import InvitationCard from '../components/InvitationCard';
+import './CreateInvitation.css';
 import PublicInviteCardStyleStudio from '../components/Invitations/publicCard/PublicInviteCardStyleStudio';
 import { invitationMessageMaxLength } from '../utils/invitationSmartDescription';
 import AIFloatingLauncher from '../components/AIFloatingLauncher';
 import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { useDragScrollRail } from '../hooks/useDragScrollRail';
 
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
+
+const MAX_PUBLIC_GUESTS = 10;
+
 const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
@@ -226,6 +232,22 @@ const CreateInvitation = () => {
         setMediaData(data);
     }, [currentUser?.id, authUser?.uid]);
 
+    const aiStudioAppliedRef = useRef(false);
+    useEffect(() => {
+        const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
+        if (!studio || aiStudioAppliedRef.current) return;
+        aiStudioAppliedRef.current = true;
+        handleMediaSelect({
+            source: 'custom_image',
+            type: 'image',
+            file: null,
+            url: studio.publishedUrl,
+            preview: studio.publishedUrl,
+            publishedUrl: studio.publishedUrl,
+            fromLibrary: true,
+        });
+    }, [location.state?.aiStudioImage, handleMediaSelect]);
+
     // Normalize legacy invitation data for validation (Safety Check)
     const originalGenderGroups = React.useMemo(() => {
         if (!editingInvitation) return [];
@@ -298,7 +320,10 @@ const CreateInvitation = () => {
             description: String(editingInvitation.description || '').slice(0, invitationMessageMaxLength),
             date: editingInvitation.date,
             time: editingInvitation.time,
-            guestsNeeded: editingInvitation.guestsNeeded,
+            guestsNeeded: Math.min(
+                MAX_PUBLIC_GUESTS,
+                Math.max(1, Number(editingInvitation.guestsNeeded) || 3)
+            ),
             genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
             ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
             colorScheme: editingInvitation.colorScheme || 'oceanBlue',
@@ -552,13 +577,13 @@ const CreateInvitation = () => {
                 return newObj;
             };
 
-            let draftData = {
+            let draftData = await applyVenueCoordinates({
                 ...formData,
                 templateType,
                 ...mediaFields, // Merge media fields
                 isFollowersOnly: formData.privacy === 'followers',
                 status: 'draft' // Mark as draft
-            };
+            });
 
             draftData = stripUndefined(draftData);
             delete draftData.coverAnimationType;
@@ -749,13 +774,13 @@ const CreateInvitation = () => {
                 return newObj;
             };
 
-            let cleanData = {
+            let cleanData = await applyVenueCoordinates({
                 ...formData,
                 ...mediaFields, // Merge new media fields
                 templateType: normalizePublicCardTemplateKey(formData.templateType),
                 image: finalImageUrl !== undefined ? finalImageUrl : null, // Ensure backward compatibility for views using 'image'
                 isFollowersOnly: formData.privacy === 'followers'
-            };
+            });
 
             cleanData = stripUndefined(cleanData);
             delete cleanData.coverAnimationType;
@@ -798,17 +823,52 @@ const CreateInvitation = () => {
         return `${prefix} ${placeName}`;
     };
 
-    const handleLocationSelect = (placeData) => {
+    const applyVenueCoordinates = async (data) => {
+        const resolved = await resolveVenueCoordinates({
+            lat: data.lat,
+            lng: data.lng,
+            location: data.location,
+            city: data.city,
+            country: data.country,
+        });
+        const next = { ...data };
+        if (resolved.lat != null && resolved.lng != null) {
+            next.lat = resolved.lat;
+            next.lng = resolved.lng;
+        } else {
+            delete next.lat;
+            delete next.lng;
+        }
+        return next;
+    };
+
+    const handleLocationSelect = async (placeData) => {
         const name = placeData.name || placeData.fullAddress || '';
+        const address = placeData.fullAddress || name;
         const isDbVenue = !!(placeData.restaurantId || placeData.isDineBuddiesVenue);
+        let lat = placeData.lat ?? null;
+        let lng = placeData.lng ?? null;
+
+        if ((lat == null || lng == null) && address) {
+            const geoQuery = [address, placeData.city, placeData.country].filter(Boolean).join(', ');
+            const geo = await geocode(geoQuery);
+            if (geo.success && geo.results?.[0]) {
+                lat = geo.results[0].lat;
+                lng = geo.results[0].lng;
+            }
+        }
+
         setFormData((prev) => ({
             ...prev,
-            location: name || prev.location,
-            lat: placeData.lat ?? prev.lat,
-            lng: placeData.lng ?? prev.lng,
+            location: address || name || prev.location,
+            lat: lat ?? prev.lat,
+            lng: lng ?? prev.lng,
+            city: placeData.city || prev.city,
+            country: placeData.country || prev.country,
+            countryCode: placeData.countryCode || prev.countryCode,
             restaurantId: isDbVenue ? placeData.restaurantId || prev.restaurantId : null,
             restaurantName: isDbVenue ? (placeData.restaurantName || name || '').trim() : '',
-            title: generateTitle(name || 'Venue'),
+            title: generateTitle(name || address || 'Venue'),
             ...(isDbVenue && placeData.image ? { image: placeData.image } : {}),
         }));
     };
@@ -881,37 +941,6 @@ const CreateInvitation = () => {
             });
         },
         []
-    );
-
-    const handleMagicCoverGenerated = useCallback((imageUrl) => {
-        if (!imageUrl || typeof imageUrl !== 'string') return;
-        setLibraryImages((prev) => [imageUrl, ...prev.filter((u) => u !== imageUrl)].slice(0, 24));
-        handleMediaSelect({
-            source: 'custom_image',
-            type: 'image',
-            file: null,
-            url: imageUrl,
-            preview: imageUrl,
-            fromLibrary: true,
-        });
-    }, [handleMediaSelect]);
-
-    const buildMagicCoverBrief = useCallback(() => {
-        const parts = [
-            invitationAiContext.venueName && `المكان: ${invitationAiContext.venueName}`,
-            invitationAiContext.venueType && `نوع المكان: ${invitationAiContext.venueType}`,
-            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
-            formData.title?.trim() && `عنوان الدعوة: ${formData.title.trim()}`,
-        ].filter(Boolean);
-        return (
-            parts.join('\n') ||
-            'غلاف دعوة جذاب بلا نص مكتوب — أجواء دافئة مناسبة للمكان والمناسبة.'
-        );
-    }, [formData.date, formData.time, formData.title, invitationAiContext]);
-
-    const invitationCoverAspect = useMemo(
-        () => templateTypeToMagicCoverAspect(formData.templateType),
-        [formData.templateType]
     );
 
     // Derived Data for UI
@@ -1267,6 +1296,19 @@ const CreateInvitation = () => {
                     <h3 style={{ fontSize: '1.05rem', marginBottom: '0.85rem', fontWeight: 800 }}>
                         {t('create_section_core', { defaultValue: 'Invitation details' })}
                     </h3>
+                    <div style={{ marginBottom: '0.85rem' }}>
+                        <AIFloatingLauncher
+                            postType="invitation"
+                            subType="public"
+                            onTextSuccess={handleInvitationAiContent}
+                            buildContextPrompt={buildInvitationAiPrompt}
+                            disabled={isSubmitting}
+                            invitationVenue={{
+                                venueType: invitationAiContext.venueType,
+                                venueName: invitationAiContext.venueName,
+                            }}
+                        />
+                    </div>
                     <div className="form-group" style={{ marginBottom: '1rem' }}>
                         <label>{t('form_title_label')}</label>
                         <input
@@ -1299,25 +1341,36 @@ const CreateInvitation = () => {
                             style={{ minHeight: '44px' }}
                         />
                     </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                        <AIFloatingLauncher
-                            postType="invitation"
-                            subType="public"
-                            onTextSuccess={handleInvitationAiContent}
-                            buildContextPrompt={buildInvitationAiPrompt}
-                            disabled={isSubmitting}
-                            invitationVenue={{
-                                venueType: invitationAiContext.venueType,
-                                venueName: invitationAiContext.venueName,
-                            }}
-                        />
-                    </div>
                     <div className="form-group" style={{ marginBottom: '1rem' }}>
-                        <label>{t('form_payment_label')}</label>
-                        <select name="paymentType" value={formData.paymentType} onChange={handleChange} className="input-field">
-                            <option value="Split">{t('payment_split')}</option>
-                            <option value="Host Pays">{t('payment_host')}</option>
-                        </select>
+                        <label className="public-payment-label">
+                            <FaMoneyBillWave aria-hidden />
+                            {t('form_payment_label')}
+                        </label>
+                        <div className="public-payment-chips" role="radiogroup" aria-label={t('form_payment_label')}>
+                            {[
+                                { value: 'Split', label: t('payment_split'), Icon: FaUserFriends },
+                                { value: 'Host Pays', label: t('payment_host'), Icon: FaMoneyBillWave },
+                            ].map(({ value, label, Icon }) => {
+                                const selected = formData.paymentType === value;
+                                return (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        className={`public-payment-chip${selected ? ' public-payment-chip--active' : ''}`}
+                                        onClick={() =>
+                                            setFormData((prev) => ({ ...prev, paymentType: value }))
+                                        }
+                                    >
+                                        <span className="public-payment-chip__icon" aria-hidden>
+                                            <Icon />
+                                        </span>
+                                        <span className="public-payment-chip__label">{label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                     {editingInvitation && formData.location && (
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1329,7 +1382,7 @@ const CreateInvitation = () => {
                     )}
                 </div>
 
-                <div className="form-grid inv-datetime-row">
+                <div className="form-grid inv-datetime-row inv-datetime-row--compact">
                     <div className="form-group">
                         <label className="elegant-label">
                             <span className="label-icon">
@@ -1346,7 +1399,7 @@ const CreateInvitation = () => {
                             onChange={handleChange}
                             required
                             disabled={!!editingInvitation} // Lock Date
-                            className="input-field"
+                            className="input-field input-field--compact-datetime"
                             style={editingInvitation ? { opacity: 0.6, cursor: 'not-allowed', background: 'var(--hover-overlay)' } : {}}
                         />
                     </div>
@@ -1365,29 +1418,45 @@ const CreateInvitation = () => {
                             onChange={handleChange}
                             required
                             disabled={!!editingInvitation} // Lock Time
-                            className="input-field"
+                            className="input-field input-field--compact-datetime"
                             style={editingInvitation ? { opacity: 0.6, cursor: 'not-allowed', background: 'var(--hover-overlay)' } : {}}
                         />
                     </div>
                 </div>
 
-                <div className="form-group">
-                    <label className="elegant-label">
+                <div className="form-group public-guest-field">
+                    <label className="elegant-label public-guest-field__label">
                         <span className="label-icon">
                             <FaUserFriends />
                         </span>
                         {t('guests_needed_label', { defaultValue: 'Guests Needed' })}
+                        <span className="public-guest-field__max">
+                            {t('public_guests_max_hint', { max: MAX_PUBLIC_GUESTS, defaultValue: `Max ${MAX_PUBLIC_GUESTS}` })}
+                        </span>
                     </label>
-                    <input
-                        type="number"
-                        name="guestsNeeded"
-                        min="1"
-                        max="20"
-                        value={formData.guestsNeeded}
-                        onChange={handleChange}
-                        required
-                        className="input-field"
-                    />
+                    <div
+                        className="public-guest-cloud"
+                        role="radiogroup"
+                        aria-label={t('guests_needed_label', { defaultValue: 'Guests Needed' })}
+                    >
+                        {Array.from({ length: MAX_PUBLIC_GUESTS }, (_, i) => i + 1).map((count) => {
+                            const selected = Number(formData.guestsNeeded) === count;
+                            return (
+                                <button
+                                    key={count}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    className={`public-guest-chip${selected ? ' public-guest-chip--active' : ''}`}
+                                    onClick={() =>
+                                        setFormData((prev) => ({ ...prev, guestsNeeded: count }))
+                                    }
+                                >
+                                    {count}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 {/* Gender Groups Preference */}
@@ -1510,6 +1579,41 @@ const CreateInvitation = () => {
                     )}
                 </div>
 
+                <div className="form-group ui-form-surface public-privacy-field" style={{ marginBottom: '1rem' }}>
+                    <label className="elegant-label" style={{ marginBottom: '1rem' }}>
+                        <span className="label-icon"><FaLock /></span>
+                        {t('privacy_settings') || 'Privacy Settings'}
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                        {['public', 'followers'].map((mode) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, privacy: mode })}
+                                style={{
+                                    padding: '12px 8px',
+                                    borderRadius: '12px',
+                                    border: formData.privacy === mode ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                                    background: formData.privacy === mode ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
+                                    color: 'var(--text-main)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                {mode === 'public' && <FaGlobe style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
+                                {mode === 'followers' && <FaUserFriends style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
+                                <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
+                                    {mode === 'public' ? (t('public') || 'Public') : (t('followers_only') || 'Followers')}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 <div
                     style={{
                         background: 'var(--card-bg)',
@@ -1536,17 +1640,8 @@ const CreateInvitation = () => {
                         onDeleteLibraryImage={deleteLibraryImage}
                         onImageUploadError={(err) => notifyImageUploadError(showToast, err, t, 'media_upload_failed')}
                         onMediaSelect={handleMediaSelect}
-                        magicCover={{
-                            enabled: true,
-                            subType: 'public',
-                            venueType: invitationAiContext.venueType,
-                            venueName: invitationAiContext.venueName,
-                            aspectRatio: invitationCoverAspect,
-                            buildBrief: buildMagicCoverBrief,
-                            onImageGenerated: handleMagicCoverGenerated,
-                            disabled: isSubmitting,
-                            requireVenue: true,
-                        }}
+                        simplified
+                        hideVenueCover
                     />
                     {uploadProgress > 0 && uploadProgress < 100 && (
                         <div
@@ -1595,41 +1690,6 @@ const CreateInvitation = () => {
                             </div>
                         </div>
                     )}
-                </div>
-
-                <div className="form-group ui-form-surface" style={{ marginTop: '1rem' }}>
-                    <label className="elegant-label" style={{ marginBottom: '1rem' }}>
-                        <span className="label-icon"><FaLock /></span>
-                        {t('privacy_settings') || 'Privacy Settings'}
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                        {['public', 'followers'].map((mode) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setFormData({ ...formData, privacy: mode })}
-                                style={{
-                                    padding: '12px 8px',
-                                    borderRadius: '12px',
-                                    border: formData.privacy === mode ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                                    background: formData.privacy === mode ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-card)',
-                                    color: 'var(--text-main)',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
-                                {mode === 'public' && <FaGlobe style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
-                                {mode === 'followers' && <FaUserFriends style={{ fontSize: '1.4rem', color: formData.privacy === mode ? 'var(--primary)' : 'var(--text-muted)' }} />}
-                                <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
-                                    {mode === 'public' ? (t('public') || 'Public') : (t('followers_only') || 'Followers')}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
                 </div>
 
                 {/* Live template carousel — colors, fonts, motion rail + layout previews */}

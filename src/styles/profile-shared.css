@@ -6,6 +6,10 @@
 
 /* Profile tokens (extend index.css :root) */
 :root {
+  /* Profile avatar gender rings */
+  --avatar-ring-male: #3b82f6;
+  --avatar-ring-female: #ec4899;
+  --avatar-ring-unspecified: #a855f7;
   /* Single vertical rhythm between profile cards / stats / tabs (both Profile + BusinessProfile) */
   --profile-stack-gap: 0.75rem;
   --profile-shell-padding: 0 1rem 0.75rem;
@@ -371,6 +375,17 @@
   font-weight: 800;
   cursor: pointer;
   box-shadow: var(--shadow-glow);
+}
+
+/* Delivery links — fetch/save buttons readable on dark theme */
+.delivery-link-fetch-btn.ui-btn--primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover, #d85a20) 100%);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.delivery-link-fetch-btn.ui-btn--primary:disabled {
+  cursor: not-allowed;
 }
 
 /* profile-guest-prompt, profile-banner-warning, profile-clear-btn

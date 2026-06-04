@@ -13,6 +13,7 @@ import { db } from '../../firebase/config';
 import { stripUndefinedDeep } from '../../utils/firestoreSanitize';
 import { syncPublishedMotionPostToCommunityFeed } from './motionPostFeedPublish';
 import { notifyBusinessPostPublished } from '../../services/businessPostNotifyService';
+import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../../utils/postPublishGeo';
 import { MOTION_TEMPLATE_REGISTRY, type MotionPostType, type MotionTemplateId } from './templates/registry';
 
 type SaveDraftInput = {
@@ -198,10 +199,20 @@ export async function publishMotionPost(postId: string, ownerId: string, busines
         throw new Error('Archived posts cannot be published');
     }
 
+    let publishGeoFields: Record<string, unknown> = {};
+    try {
+        const userSnap = await getDoc(doc(db, 'users', ownerId));
+        const publishGeo = await resolvePostPublishGeo(userSnap.exists() ? userSnap.data() : null);
+        publishGeoFields = publishGeoFirestoreFields(publishGeo) as Record<string, unknown>;
+    } catch (err) {
+        console.warn('[publishMotionPost] publish geo resolve failed', err);
+    }
+
     await updateDoc(ref, {
         status: 'published',
         publishedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        ...publishGeoFields,
     });
 
     const communityPostId = await syncPublishedMotionPostToCommunityFeed(

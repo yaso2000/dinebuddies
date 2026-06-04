@@ -14,6 +14,7 @@ const PUBLIC_FIREBASE_PREFIXES = [
     'offers/',
     'invitation_cards/',
     'business_photos/',
+    'ai-design-studio/',
 ];
 
 /**
@@ -22,14 +23,27 @@ const PUBLIC_FIREBASE_PREFIXES = [
  * @returns {string}
  */
 export function decodeFirebaseStorageObjectPath(url) {
-    if (typeof url !== 'string' || !url.includes('firebasestorage.googleapis.com')) return '';
-    const match = url.match(/\/o\/([^?]+)/);
-    if (!match?.[1]) return '';
-    try {
-        return decodeURIComponent(match[1]);
-    } catch {
-        return match[1];
+    if (typeof url !== 'string') return '';
+
+    const pathMatch = url.match(/\/o\/([^?]+)/);
+    if (pathMatch?.[1]) {
+        try {
+            return decodeURIComponent(pathMatch[1]);
+        } catch {
+            return pathMatch[1];
+        }
     }
+
+    const storageMatch = url.match(/https:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i);
+    if (storageMatch?.[1]) {
+        try {
+            return decodeURIComponent(storageMatch[1]);
+        } catch {
+            return storageMatch[1];
+        }
+    }
+
+    return '';
 }
 
 /**
@@ -48,7 +62,7 @@ export function isRestrictedFirebaseStorageUrl(url) {
  * @param {string} url
  */
 export function isServerPersistedAiCoverUrl(url) {
-    if (typeof url !== 'string' || !url.includes('firebasestorage.googleapis.com')) {
+    if (typeof url !== 'string') {
         return false;
     }
     if (isRestrictedFirebaseStorageUrl(url)) {

@@ -5,7 +5,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowRight, FaComments, FaUserPlus, FaUserCheck, FaUsers, FaHeart } from 'react-icons/fa';
 import { getFollowers, getFollowing, getMutualFollowersCount } from '../utils/followHelpers';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -283,19 +283,14 @@ const FollowersList = () => {
                                 >
                                     {/* Avatar */}
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{
-                                            width: '50px',
-                                            height: '50px',
-                                            borderRadius: '50%',
-                                            border: `2px solid ${isMutualFollow(user) && isOwnProfile ? 'var(--primary)' : getGenderBorderColor(user)}`,
-                                            overflow: 'hidden'
-                                        }}>
-                                            <UserAvatar
-                                                user={user}
-                                                alt={user.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                            />
-                                        </div>
+                                        <UserAvatar
+                                            user={user}
+                                            alt={user.name}
+                                            ringColorOverride={
+                                                isMutualFollow(user) && isOwnProfile ? 'var(--primary)' : undefined
+                                            }
+                                            style={{ width: 50, height: 50 }}
+                                        />
                                         {/* Avatar Plus Badge just like in UserProfile */}
                                         {userProfile?.role !== 'business' && !user.isFollowedByMe && user.id !== (currentUser?.id || currentUser?.uid) && (
                                             <div

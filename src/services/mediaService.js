@@ -313,17 +313,30 @@ async function publishAiCoverBlob(blob, userId, remoteUrl) {
     });
     try {
         const publishedUrl = await uploadMedia(file, userId, 'image', 'invitations');
-        try {
-            URL.revokeObjectURL(blobPreview);
-        } catch {
-            /* ignore */
+        const ready = await verifyPublicStorageImageUrl(publishedUrl, { attempts: 5, delayMs: 400 });
+        if (ready) {
+            try {
+                URL.revokeObjectURL(blobPreview);
+            } catch {
+                /* ignore */
+            }
+            return {
+                source: 'ai_generated',
+                type: 'image',
+                file: null,
+                url: publishedUrl,
+                preview: publishedUrl,
+                publishedUrl,
+            };
         }
+
+        console.warn('[publishAiCoverBlob] uploaded URL not yet publicly readable, falling back to blob preview:', publishedUrl);
         return {
             source: 'ai_generated',
             type: 'image',
-            file: null,
+            file,
             url: publishedUrl,
-            preview: publishedUrl,
+            preview: blobPreview,
             publishedUrl,
         };
     } catch (uploadErr) {
@@ -366,6 +379,13 @@ export async function prepareAiCoverMediaFromRemoteUrl(remoteUrl, userId) {
             } catch (apiErr) {
                 console.warn('[prepareAiCoverMediaFromRemoteUrl] storage-image API fallback failed:', apiErr);
             }
+        }
+
+        try {
+            const blob = await fetchRemoteImageBlob(remoteUrl);
+            return publishAiCoverBlob(blob, userId, remoteUrl);
+        } catch (remoteErr) {
+            console.warn('[prepareAiCoverMediaFromRemoteUrl] direct fetch fallback failed:', remoteErr);
         }
 
         throw new Error('ai_cover_storage_not_ready');

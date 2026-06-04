@@ -1,18 +1,22 @@
 /** Fixed-opacity panels behind card copy on photo backgrounds (tone only — no slider). */
 export const DEFAULT_PRIVATE_TEXT_BACKDROP_TONE = 'dark';
 
-/** @typedef {'dark' | 'light' | 'none'} PrivateTextBackdropTone */
+/** @typedef {'dark' | 'light' | 'glass' | 'none'} PrivateTextBackdropTone */
 
-export const PRIVATE_TEXT_BACKDROP_TONE_IDS = ['dark', 'light', 'none'];
+export const PRIVATE_TEXT_BACKDROP_TONE_IDS = ['dark', 'light', 'glass', 'none'];
+
+/** Icon rail on create/edit preview (light → dark → glass → none). */
+export const PRIVATE_TEXT_BACKDROP_ICON_ORDER = ['light', 'dark', 'glass', 'none'];
 
 export const PRIVATE_TEXT_BACKDROP_TONES = {
     dark: { color: '#000000', opacity: 0.52 },
-    light: { color: '#ffffff', opacity: 0.52 }
+    light: { color: '#ffffff', opacity: 0.52 },
+    glass: { color: '#f8fafc', opacity: 0.22 }
 };
 
 /** @param {unknown} tone */
 export function resolvePrivateTextBackdropTone(tone) {
-    if (tone === 'light' || tone === 'none') return tone;
+    if (tone === 'light' || tone === 'none' || tone === 'glass') return tone;
     return 'dark';
 }
 
@@ -35,7 +39,7 @@ export function privateTextBackdropToneToRgba(tone) {
 function resolveCardTextBackdropFromInvitationFields(invitation, { toneField, colorField, showField }) {
     const showWithContent = invitation[showField] !== false;
     let tone = invitation[toneField];
-    if (tone !== 'light' && tone !== 'dark' && tone !== 'none') {
+    if (tone !== 'light' && tone !== 'dark' && tone !== 'glass' && tone !== 'none') {
         const rawColor =
             typeof invitation[colorField] === 'string'
                 ? invitation[colorField].trim().toLowerCase()

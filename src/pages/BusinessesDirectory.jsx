@@ -12,8 +12,14 @@ import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import { getContrastText } from '../utils/colorUtils';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
 import { goToLogin } from '../utils/goToLogin';
+import {
+    detachLeafletMap,
+    ensureLeafletMapDetachedIfOrphan,
+} from '../utils/leafletMapLifecycle';
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
     if (!members) return null;
@@ -883,11 +889,12 @@ const BusinessesDirectory = () => {
         }
     };
 
+    useEffect(() => () => detachLeafletMap(mapInstance), []);
+
     // Initialize Leaflet map
     useEffect(() => {
         if (viewMode === 'map' && mapRef.current) {
-            const L = window.L;
-            if (!L) return;
+            ensureLeafletMapDetachedIfOrphan(mapInstance, mapRef.current);
 
             if (!mapInstance.current) {
                 // Smart Initialization: User > Content > World
@@ -1357,7 +1364,11 @@ const BusinessesDirectory = () => {
                         className={`map-wrapper directory-map-wrapper${isFullscreen ? ' directory-map-wrapper--fullscreen' : ''}`}
                         style={{ borderRadius: '0', overflow: 'hidden', width: '100%', height: isFullscreen ? '100dvh' : undefined, position: 'relative' }}
                     >
-                        <div ref={mapRef} className="responsive-map-container" style={{ width: '100%', height: '100%', minHeight: isFullscreen ? '100dvh' : undefined, outline: 'none' }}></div>
+                        <div
+                            ref={mapRef}
+                            className="responsive-map-container leaflet-container-home"
+                            style={{ width: '100%', height: '100%', minHeight: isFullscreen ? '100dvh' : undefined, outline: 'none' }}
+                        />
 
                         {/* Zoom Controls + Fullscreen + Recenter */}
                         <div className="map-zoom-controls">
