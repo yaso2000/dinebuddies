@@ -12,6 +12,7 @@
     "vercel-build": "node scripts/vercel-build.mjs",
     "deploy:predist": "npx vercel --prod -b VERCEL_PREDIST=1",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "test:firestore-rules": "node scripts/test-firestore-rules.mjs",
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",

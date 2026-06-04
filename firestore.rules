@@ -101,6 +101,80 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function serverManagedUserBillingFields() {
+      return [
+        'freeCredits',
+        'paidCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'stripeCustomerId',
+        'subscriptionId',
+        'subscriptionStatus',
+        'subscriptionStartDate',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'offerSlotCredits'
+      ];
+    }
+
+    function legacyPrivateCreditFields() {
+      return [
+        'purchasedPrivateCredits',
+        'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth'
+      ];
+    }
+
+    function hasSafeInitialLegacyPrivateCredits() {
+      return
+        (!request.resource.data.keys().hasAny(['purchasedPrivateCredits']) ||
+          (request.resource.data.purchasedPrivateCredits is number &&
+           request.resource.data.purchasedPrivateCredits >= 0 &&
+           request.resource.data.purchasedPrivateCredits <= 5)) &&
+        (!request.resource.data.keys().hasAny(['usedPrivateCreditsThisMonth']) ||
+          (request.resource.data.usedPrivateCreditsThisMonth is number &&
+           request.resource.data.usedPrivateCreditsThisMonth == 0)) &&
+        (!request.resource.data.keys().hasAny(['lastPrivateResetMonth']) ||
+          request.resource.data.lastPrivateResetMonth is string);
+    }
+
+    function hasSafeClientUserRoleOnCreate() {
+      return !request.resource.data.keys().hasAny(['role']) ||
+             request.resource.data.role in ['user', 'business', 'partner'];
+    }
+
+    function hasSafeClientAccountTypeOnCreate() {
+      return !request.resource.data.keys().hasAny(['accountType']) ||
+             request.resource.data.accountType in ['user', 'business', 'partner'];
+    }
+
+    function hasSafeClientSubscriptionTierOnCreate() {
+      return !request.resource.data.keys().hasAny(['subscriptionTier']) ||
+             request.resource.data.subscriptionTier == 'free';
+    }
+
+    function hasBlockedClientUserCreateFields() {
+      return request.resource.data.keys().hasAny(serverManagedUserBillingFields()) ||
+             !hasSafeClientUserRoleOnCreate() ||
+             !hasSafeClientAccountTypeOnCreate() ||
+             !hasSafeClientSubscriptionTierOnCreate() ||
+             !hasSafeInitialLegacyPrivateCredits();
+    }
+
+    function isInitialPersonalProfileBootstrap() {
+      return userDocHasNoRoleField() &&
+             request.resource.data.role == 'user' &&
+             hasSafeInitialLegacyPrivateCredits();
+    }
+
+    function hasBlockedClientUserUpdateFields() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasAny(serverManagedUserBillingFields()) ||
+             changed.hasAny(['subscriptionTier']) ||
+             (changed.hasAny(legacyPrivateCreditFields()) && !isInitialPersonalProfileBootstrap());
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,26 +186,36 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       !hasBlockedClientUserCreateFields();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) &&
+                       !hasBlockedClientUserUpdateFields();
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       !hasBlockedClientUserUpdateFields();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       !hasBlockedClientUserUpdateFields();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) &&
+                       isBusinessSignupCompletionFromIntent() &&
+                       !hasBlockedClientUserUpdateFields();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) &&
+                       isUpgradingStubToBusinessProfile() &&
+                       !hasBlockedClientUserUpdateFields();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                         .hasAny(['role', 'accountType']) &&
+                       !hasBlockedClientUserUpdateFields();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
