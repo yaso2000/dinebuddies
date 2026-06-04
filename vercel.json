@@ -48,6 +48,22 @@
             "destination": "/api/sitemap"
         },
         {
+            "source": "/api/auth/send-business-otp",
+            "destination": "/api/send-business-otp"
+        },
+        {
+            "source": "/api/auth/verify-business-otp",
+            "destination": "/api/verify-business-otp"
+        },
+        {
+            "source": "/api/auth/twilio-health",
+            "destination": "/api/twilio-health"
+        },
+        {
+            "source": "/api/auth/login-resolver",
+            "destination": "/api/business-login-resolver"
+        },
+        {
             "source": "/((?!api/)(?!@vite)(?!@react-refresh)(?!@fs/)(?!@id/)(?!src/)(?!node_modules/)(?!__dev/)(?!firebase-messaging-sw\\.js)(?!manifest\\.json)(?!sw\\.js).*)",
             "destination": "/index.html"
         }

@@ -21,14 +21,19 @@ function pruneExpired(nowMs) {
 
 /**
  * @param {import('http').IncomingMessage & { headers: Record<string, string | string[] | undefined> }} req
- * @param {{ key: string, limit: number, windowMs: number }} opts
+ * @param {{ key: string, limit: number, windowMs: number, identifier?: string }} opts
+ *   When `identifier` is set, it is used instead of the client IP (e.g. E.164 for per-phone limits).
  */
 export function takeRateLimit(req, opts) {
     const now = Date.now();
     pruneExpired(now);
 
     const ip = getClientIp(req);
-    const rk = `${opts.key}:${ip}`;
+    const idPart =
+        opts.identifier != null && String(opts.identifier).trim()
+            ? String(opts.identifier).trim()
+            : ip;
+    const rk = `${opts.key}:${idPart}`;
     const existing = buckets.get(rk);
 
     if (!existing || existing.resetAt <= now) {

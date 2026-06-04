@@ -499,6 +499,11 @@ const devOperations = () => ({
     }
 })
 
+const devEnv = loadEnv(process.env.MODE || 'development', process.cwd(), '')
+/** In `npm run dev`, proxy /api/auth to production (or VITE_DEV_API_PROXY). Plain Vite does not run serverless API routes. */
+const devAuthApiProxy =
+    String(devEnv.VITE_DEV_API_PROXY || 'https://www.dinebuddies.com').trim() || 'https://www.dinebuddies.com'
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), devOperations()],
@@ -523,5 +528,12 @@ export default defineConfig({
         host: '0.0.0.0',
         port: 5176,
         strictPort: false,
-    }
+        proxy: {
+            '/api/auth': {
+                target: devAuthApiProxy,
+                changeOrigin: true,
+                secure: true,
+            },
+        },
+    },
 })
