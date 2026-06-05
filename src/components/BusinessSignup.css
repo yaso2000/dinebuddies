@@ -1,0 +1,187 @@
+.biz-phone-verify {
+    margin-bottom: 1.5rem;
+}
+
+.biz-phone-verify__recaptcha {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.biz-phone-verify__claim-banner {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 12px;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: var(--text-main);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.biz-phone-verify__label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.biz-phone-verify__inputs {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.biz-phone-verify__country {
+    flex: 0 0 auto;
+    min-width: 6.5rem;
+    padding: 0.85rem 0.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.biz-phone-verify__local-wrap {
+    position: relative;
+    flex: 1;
+}
+
+.biz-phone-verify__icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 1rem;
+    z-index: 2;
+}
+
+[dir='ltr'] .biz-phone-verify__icon {
+    left: 1rem;
+}
+
+[dir='rtl'] .biz-phone-verify__icon {
+    right: 1rem;
+    left: auto;
+}
+
+.biz-phone-verify__local {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+[dir='ltr'] .biz-phone-verify__local {
+    padding-left: 2.75rem;
+}
+
+[dir='rtl'] .biz-phone-verify__local {
+    padding-right: 2.75rem;
+}
+
+.biz-phone-verify__send-btn,
+.biz-phone-verify__verify-btn {
+    width: 100%;
+    margin-top: 0.75rem;
+    padding: 0.85rem 1rem;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    background: var(--bg-body);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+.biz-phone-verify__send-btn:disabled,
+.biz-phone-verify__verify-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.biz-phone-verify__verify-btn {
+    background: linear-gradient(135deg, var(--primary), #f97316);
+    color: #fff;
+    border: none;
+}
+
+.biz-phone-verify__verified {
+    margin-top: 0.75rem;
+    font-size: 0.88rem;
+    color: #22c55e;
+    font-weight: 600;
+}
+
+.biz-phone-verify__otp-block {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.biz-phone-verify__otp-hint {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+.biz-phone-verify__otp-row {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.biz-phone-verify__otp-cell {
+    width: 2.75rem;
+    height: 3rem;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    color: var(--text-primary);
+}
+
+.biz-phone-verify__error {
+    color: #ef4444;
+    font-size: 0.88rem;
+    margin: 0.5rem 0 0;
+}
+
+.biz-phone-verify__otp-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem;
+    color: var(--text-main);
+}
+
+.biz-phone-verify__otp-flow-msg {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    line-height: 1.45;
+}
+
+.biz-phone-verify__otp-single {
+    width: 100%;
+    max-width: 220px;
+    display: block;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    letter-spacing: 8px;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    box-sizing: border-box;
+}

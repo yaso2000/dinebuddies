@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } fro
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, EmailAuthProvider, linkWithCredential } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { sendVerificationEmailResend, verificationEmailErrorMessage } from '../services/verificationEmailService';
 import { useToast } from '../context/ToastContext';
@@ -28,7 +28,14 @@ import {
     toCountryCodeSelectValue,
 } from '../utils/phoneUtils';
 import { PHONE_COUNTRY_OPTIONS } from '../constants/phoneCountryCodes';
-import { sendBusinessOtp, verifyBusinessOtp, completeBusinessSignup } from '../services/businessPhoneOtpApi';
+import {
+    sendFirebaseBusinessPhoneOtp,
+    confirmFirebaseBusinessPhoneOtp,
+    clearBusinessPhoneRecaptcha,
+    firebasePhoneAuthErrorMessage,
+    BUSINESS_PHONE_RECAPTCHA_ID,
+} from '../services/businessPhoneFirebaseAuth';
+import { lookupBusinessPhone, finalizeBusinessSignup } from '../services/businessPhoneSignupApi';
 import { FaPhone } from 'react-icons/fa';
 import './BusinessSignup.css';
 
@@ -36,7 +43,7 @@ const OTP_LENGTH = 6;
 const SEND_COOLDOWN_SEC = 60;
 
 /**
- * حقول الهاتف + OTP + العد التنازلي (مطابق لتدفق send-business-otp).
+ * Business phone verification via Firebase Phone Auth (SMS OTP).
  * @param {{ defaultDialCode?: string, disabled?: boolean, lockFieldsAfterSend?: boolean, onVerified: Function }} props
  */
 export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfterSend = true, onVerified }) {
@@ -44,7 +51,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
     const { showToast } = useToast();
     const isRtl = typeof i18n.dir === 'function' && i18n.dir(i18n.language) === 'rtl';
 
-    const [countryCode, setCountryCode] = useState(() => toCountryCodeSelectValue(defaultDialCode || '20'));
+    const [countryCode, setCountryCode] = useState(() => toCountryCodeSelectValue(defaultDialCode || '61'));
     const [rawPhone, setRawPhone] = useState('');
     const [otpCode, setOtpCode] = useState('');
     const [isOtpSent, setIsOtpSent] = useState(false);
@@ -63,8 +70,13 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
     );
 
     useEffect(() => {
-        setCountryCode(toCountryCodeSelectValue(defaultDialCode || '20'));
+        setCountryCode(toCountryCodeSelectValue(defaultDialCode || '61'));
     }, [defaultDialCode]);
+
+    useEffect(() => () => clearBusinessPhoneRecaptcha(), []);
+
+    /** @type {React.MutableRefObject<import('firebase/auth').ConfirmationResult | null>} */
+    const confirmationRef = React.useRef(null);
 
     useEffect(() => {
         let timer;
@@ -91,41 +103,36 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
         showToast(t('business_phone_sending', 'جاري إرسال رمز التحقق…'), 'info');
 
         try {
-            const { ok, data } = await sendBusinessOtp({
-                standardizedPhone: standardized,
-                countryCode,
-                rawPhone,
-            });
-
-            if (!ok) {
+            const lookup = await lookupBusinessPhone(standardized);
+            if (!lookup.ok) {
                 setErrorMessage(
-                    data?.message ||
+                    lookup.data?.message ||
                         t('business_phone_send_failed', 'فشل إرسال الكود')
                 );
                 setCountdown(0);
                 return;
             }
 
-            setStandardizedPhone(data.standardizedPhone || standardized);
-            setIsOtpSent(true);
-            const status = data.status || (data.flow === 'claim' ? 'claim_flow' : 'new_register_flow');
-            setFlowType(status);
-
+            const status = lookup.data.status || 'new_register_flow';
             if (status === 'claim_flow') {
                 setClaimMeta({
-                    businessId: data.businessId,
-                    businessName: data.businessName,
+                    businessId: lookup.data.businessId,
+                    businessName: lookup.data.businessName,
                 });
+                setFlowType('claim_flow');
             } else {
                 setClaimMeta(null);
+                setFlowType('new_register_flow');
             }
 
-            if (data.message) {
-                showToast(data.message, 'info');
-            }
-        } catch {
-            setErrorMessage(t('business_phone_send_failed', 'حدث خطأ بالاتصال بالسيرفر'));
+            confirmationRef.current = await sendFirebaseBusinessPhoneOtp(standardized);
+            setStandardizedPhone(lookup.data.standardizedPhone || standardized);
+            setIsOtpSent(true);
+            showToast(t('business_phone_otp_sent', 'Verification code sent via SMS'), 'info');
+        } catch (err) {
+            setErrorMessage(firebasePhoneAuthErrorMessage(err));
             setCountdown(0);
+            clearBusinessPhoneRecaptcha();
         } finally {
             setSending(false);
         }
@@ -140,26 +147,24 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
         setErrorMessage('');
         setVerifying(true);
         try {
-            const { ok, data } = await verifyBusinessOtp({ standardizedPhone, code });
-            if (!ok) {
-                setErrorMessage(
-                    data?.message || t('business_phone_code_invalid', 'رمز التحقق غير صحيح')
-                );
+            if (!confirmationRef.current) {
+                setErrorMessage(t('business_phone_send_failed', 'Request a new code first'));
                 return;
             }
+            const confirmed = await confirmFirebaseBusinessPhoneOtp(confirmationRef.current, code);
             setPhoneVerified(true);
-            const flow =
-                flowType === 'claim_flow' || data.flow === 'claim' ? 'claim' : 'new';
+            const flow = flowType === 'claim_flow' ? 'claim' : 'new';
             onVerified({
-                standardizedPhone: data.standardizedPhone || standardizedPhone,
-                verificationToken: data.verificationToken,
+                standardizedPhone: confirmed.phoneNumber || standardizedPhone,
+                firebaseUid: confirmed.uid,
+                idToken: confirmed.idToken,
                 flow,
-                businessId: data.businessId || claimMeta?.businessId,
-                businessName: data.businessName || claimMeta?.businessName,
+                businessId: claimMeta?.businessId,
+                businessName: claimMeta?.businessName,
             });
             showToast(t('business_phone_verified', 'تم التحقق من الهاتف'), 'success');
-        } catch {
-            setErrorMessage(t('business_phone_verify_failed', 'فشل التحقق'));
+        } catch (err) {
+            setErrorMessage(firebasePhoneAuthErrorMessage(err));
         } finally {
             setVerifying(false);
         }
@@ -210,7 +215,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
                 </p>
             )}
 
-            {/* type="button" — لا form متداخل؛ form الأب (handleNext) كان يمنع طلب send-business-otp */}
+            <div id={BUSINESS_PHONE_RECAPTCHA_ID} className="biz-phone-verify__recaptcha" aria-hidden="true" />
             <button
                 type="button"
                 className="biz-phone-verify__send-btn"
@@ -383,10 +388,10 @@ const BusinessSignup = () => {
         return () => { mounted = false; };
     }, []);
 
-    const defaultDialCode = defaultDialCodeForCountryIso(businessData.countryCode || 'EG');
+    const defaultDialCode = defaultDialCodeForCountryIso(businessData.countryCode || 'AU');
 
     const validateAuth = () => {
-        if (!phoneVerification?.standardizedPhone || !phoneVerification?.verificationToken) {
+        if (!phoneVerification?.standardizedPhone || !phoneVerification?.firebaseUid) {
             showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
             return false;
         }
@@ -405,10 +410,23 @@ const BusinessSignup = () => {
         return true;
     };
 
-    const handleNext = (e) => {
+    const handleNext = async (e) => {
         e.preventDefault();
-        if (validateAuth()) {
+        if (!validateAuth()) return;
+
+        try {
+            const credential = EmailAuthProvider.credential(email.trim(), password);
+            await linkWithCredential(auth.currentUser, credential);
             setStep(STEPS.DETAILS);
+        } catch (err) {
+            const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
+            if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') {
+                showToast(t('auth_email_in_use', 'This email is already registered'), 'error');
+            } else if (code === 'auth/weak-password') {
+                showToast(t('error_password_length', 'Password must be at least 6 characters'), 'error');
+            } else {
+                showToast(err?.message || t('business_signup_err_create', 'Failed to link email'), 'error');
+            }
         }
     };
 
@@ -476,7 +494,7 @@ const BusinessSignup = () => {
             showToast(t('business_signup_err_details', 'Please search and select your business first.'), 'error');
             return;
         }
-        if (!phoneVerification?.standardizedPhone || !phoneVerification?.verificationToken) {
+        if (!phoneVerification?.standardizedPhone || !phoneVerification?.firebaseUid) {
             showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
             return;
         }
@@ -484,6 +502,12 @@ const BusinessSignup = () => {
         setLoading(true);
 
         try {
+            const idToken = await auth.currentUser?.getIdToken(true);
+            if (!idToken) {
+                showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
+                return;
+            }
+
             const businessInfo = {
                 businessName: businessData.businessName.trim(),
                 businessType: businessData.businessType,
@@ -512,16 +536,17 @@ const BusinessSignup = () => {
             };
 
             const pendingReferral = peekPendingReferralCode();
-            const { ok, data } = await completeBusinessSignup({
-                standardizedPhone: phoneVerification.standardizedPhone,
-                verificationToken: phoneVerification.verificationToken,
-                email: email.trim(),
-                password,
-                businessInfo,
-                claimBusinessId:
-                    phoneVerification.flow === 'claim' ? phoneVerification.businessId || null : null,
-                referredBy: pendingReferral || null,
-            });
+            const { ok, data } = await finalizeBusinessSignup(
+                {
+                    standardizedPhone: phoneVerification.standardizedPhone,
+                    email: email.trim(),
+                    businessInfo,
+                    claimBusinessId:
+                        phoneVerification.flow === 'claim' ? phoneVerification.businessId || null : null,
+                    referredBy: pendingReferral || null,
+                },
+                idToken
+            );
 
             if (!ok) {
                 const msg = data?.message || t('business_signup_err_create', 'Failed to create account.');
@@ -531,9 +556,6 @@ const BusinessSignup = () => {
                 } else if (data?.code === 'phone-already-in-use') {
                     showToast(t('business_phone_in_use', 'This phone is already registered to a business'), 'error');
                     setStep(STEPS.AUTH);
-                } else if (data?.code === 'verification-expired') {
-                    showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
-                    setStep(STEPS.AUTH);
                 } else {
                     showToast(msg, 'error');
                 }
@@ -542,8 +564,10 @@ const BusinessSignup = () => {
 
             if (pendingReferral) clearPendingReferralCode();
 
-            await signInWithEmailAndPassword(auth, email.trim(), password);
-            const uid = data.uid;
+            if (!auth.currentUser) {
+                await signInWithEmailAndPassword(auth, email.trim(), password);
+            }
+            const uid = data.uid || auth.currentUser?.uid;
 
             try {
                 await sendVerificationEmailResend('business_signup');

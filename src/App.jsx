@@ -57,7 +57,7 @@ const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
 
 const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
-const BusinessSignup = lazy(() => import('./pages/BusinessSignup'));
+const BusinessSignup = lazy(() => import('./components/BusinessSignup'));
 const BusinessOnboarding = lazy(() => import('./pages/BusinessOnboarding'));
 const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
 const PrivateInvitationDetails = lazy(() => import('./pages/PrivateInvitationDetails'));

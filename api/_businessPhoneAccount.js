@@ -1,18 +1,23 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ensureFirebaseAdmin } from './_firebaseAdmin.js';
-import {
-    consumeVerifiedPendingPhone,
-    lookupBusinessPhoneInUsers,
-} from './_businessPhoneRegistry.js';
+import { lookupBusinessPhoneInUsers } from './_businessPhoneRegistry.js';
 
 /**
- * إنشاء حساب Firebase Auth + مستند users/{uid} أو دمج ملف غير مُطالب به.
+ * @param {string | null | undefined} phone
+ */
+function normalizeAuthPhone(phone) {
+    const s = String(phone || '').trim();
+    if (!s) return '';
+    return s.startsWith('+') ? s : `+${s.replace(/\D/g, '')}`;
+}
+
+/**
+ * Finalize business Firestore profile after Firebase Phone Auth (+ email link on client).
  * @param {{
+ *   firebaseUid: string,
  *   standardizedPhone: string,
- *   verificationToken: string,
  *   email: string,
- *   password: string,
  *   businessInfo: Record<string, unknown>,
  *   claimBusinessId?: string | null,
  *   referredBy?: string | null,
@@ -23,18 +28,23 @@ export async function completeBusinessPhoneSignup(input) {
     const db = getFirestore();
     const auth = getAuth();
 
+    const firebaseUid = String(input.firebaseUid || '').trim();
     const standardizedPhone = String(input.standardizedPhone || '').trim();
-    const verificationToken = String(input.verificationToken || '').trim();
     const email = String(input.email || '').trim().toLowerCase();
-    const password = String(input.password || '');
 
-    if (!standardizedPhone || !verificationToken || !email || password.length < 6) {
+    if (!firebaseUid || !standardizedPhone || !email) {
         throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
     }
 
-    const consumed = await consumeVerifiedPendingPhone(standardizedPhone, verificationToken);
-    if (!consumed) {
-        throw Object.assign(new Error('VERIFICATION_EXPIRED'), { code: 'verification-expired' });
+    const userRecord = await auth.getUser(firebaseUid);
+    const accountPhone = normalizeAuthPhone(userRecord.phoneNumber);
+    if (!accountPhone || accountPhone !== standardizedPhone) {
+        throw Object.assign(new Error('PHONE_MISMATCH'), { code: 'phone-mismatch' });
+    }
+
+    const accountEmail = String(userRecord.email || '').trim().toLowerCase();
+    if (accountEmail && accountEmail !== email) {
+        throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
     }
 
     const lookup = await lookupBusinessPhoneInUsers(standardizedPhone);
@@ -66,30 +76,30 @@ export async function completeBusinessPhoneSignup(input) {
         mergedBusinessInfo.phone = standardizedPhone;
     }
 
-    let userRecord;
-    try {
-        userRecord = await auth.createUser({
-            email,
-            password,
-            displayName: String(mergedBusinessInfo.businessName || '').trim() || undefined,
-        });
-    } catch (err) {
-        const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
-        if (code === 'auth/email-already-exists') {
-            throw Object.assign(new Error('EMAIL_IN_USE'), { code: 'auth/email-already-in-use' });
+    if (!accountEmail) {
+        try {
+            await auth.updateUser(firebaseUid, {
+                email,
+                emailVerified: false,
+                displayName: String(mergedBusinessInfo.businessName || '').trim() || undefined,
+            });
+        } catch (err) {
+            const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
+            if (code === 'auth/email-already-exists') {
+                throw Object.assign(new Error('EMAIL_IN_USE'), { code: 'auth/email-already-in-use' });
+            }
+            throw err;
         }
-        throw err;
     }
 
-    const uid = userRecord.uid;
     const userPayload = {
-        uid,
+        uid: firebaseUid,
         email,
         authInfo: { email },
         accountType: 'business',
         role: 'partner',
         display_name: String(mergedBusinessInfo.businessName || '').trim() || email,
-        photo_url: null,
+        photo_url: userRecord.photoURL || null,
         created_at: FieldValue.serverTimestamp(),
         last_active_time: FieldValue.serverTimestamp(),
         pendingBusinessRegistration: false,
@@ -103,12 +113,12 @@ export async function completeBusinessPhoneSignup(input) {
         userPayload.referred_by = input.referredBy;
     }
 
-    await db.collection('users').doc(uid).set(userPayload);
+    await db.collection('users').doc(firebaseUid).set(userPayload, { merge: true });
 
-    if (claimId && claimId !== uid) {
+    if (claimId && claimId !== firebaseUid) {
         await db.collection('users').doc(claimId).set(
             {
-                unclaimedProfileMergedInto: uid,
+                unclaimedProfileMergedInto: firebaseUid,
                 mergedAt: FieldValue.serverTimestamp(),
                 businessInfo: {
                     isClaimed: true,
@@ -121,7 +131,7 @@ export async function completeBusinessPhoneSignup(input) {
     }
 
     return {
-        uid,
+        uid: firebaseUid,
         email,
         flow: claimId ? 'claim' : 'new',
         claimedFromBusinessId: claimId || null,

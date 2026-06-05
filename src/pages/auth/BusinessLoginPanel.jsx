@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { HiBuildingStorefront } from 'react-icons/hi2';
-import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash, FaUser } from 'react-icons/fa';
+import {
+    resolveBusinessLoginForSignIn,
+    requestBusinessPasswordReset,
+    BUSINESS_LOGIN_INVALID_MSG_EN,
+    BUSINESS_AI_UNCLAIMED_MSG_AR,
+} from '../../services/businessLoginApi';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
@@ -30,12 +36,14 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
         profileServerSynced,
     } = useAuth();
 
-    const [email, setEmail] = useState('');
+    const [loginId, setLoginId] = useState('');
+    const [countryCode, setCountryCode] = useState('+20');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [justLoggedIn, setJustLoggedIn] = useState(false);
+    const [aiUnclaimedHint, setAiUnclaimedHint] = useState(false);
 
     const goBusinessHome = () => {
         navigate(resolveBusinessPostLoginPath(location.search), { replace: true });
@@ -76,41 +84,68 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
         signOut('/login?tab=personal').catch(() => {});
     }, [justLoggedIn, currentUser, userProfile, authLoading, profileServerSynced, location.pathname, location.search, navigate, signOut, t]);
 
+    const invalidLoginMsg = t('business_login_invalid_credentials', BUSINESS_LOGIN_INVALID_MSG_EN);
+
+    const handleAiUnclaimed = () => {
+        setAiUnclaimedHint(true);
+        setError(t('business_ai_unclaimed_login', BUSINESS_AI_UNCLAIMED_MSG_AR));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setAiUnclaimedHint(false);
         try {
-            await signInWithEmail(email, password, { portal: AUTH_PORTAL.BUSINESS });
+            const emailForAuth = await resolveBusinessLoginForSignIn(loginId, password, countryCode);
+            await signInWithEmail(emailForAuth, password, { portal: AUTH_PORTAL.BUSINESS });
             setJustLoggedIn(true);
         } catch (err) {
-            setError(getAuthErrorMessage(err) || err.message || t('login_error', 'Sign-in failed'));
+            const code = err?.code || '';
+            if (code === 'unclaimed-ai-profile' || code === 'ai-unclaimed') {
+                handleAiUnclaimed();
+                return;
+            }
+            if (code === 'auth-failed') {
+                setError(err?.message || invalidLoginMsg);
+                return;
+            }
+            setError(invalidLoginMsg);
         } finally {
             setLoading(false);
         }
     };
 
     const handleForgotPassword = async () => {
-        const em = email.trim().toLowerCase();
-        if (!em) {
-            setError(
-                t(
-                    'auth_enter_email_reset',
-                    'Enter your email in the field above, then tap again to send the reset link.'
-                )
-            );
-            return;
-        }
         setLoading(true);
         setError('');
+        setAiUnclaimedHint(false);
         try {
-            await sendPasswordResetToEmail(em);
+            const reset = await requestBusinessPasswordReset(loginId, countryCode);
+            if (reset.genericOnly || !reset.email) {
+                showToast(
+                    reset.message ||
+                        t('auth_reset_generic_success', 'إذا كان الحساب موجوداً، فقد أرسلنا رابط الاستعادة.'),
+                    'success'
+                );
+                return;
+            }
+            await sendPasswordResetToEmail(reset.email);
             showToast(
-                t('auth_reset_email_sent', 'Check your inbox for a password reset link.'),
+                reset.message ||
+                    t('auth_reset_email_sent', 'Check your inbox for a password reset link.'),
                 'success'
             );
         } catch (err) {
-            setError(getAuthErrorMessage(err) || err.message || t('auth_reset_failed', 'Could not send reset email.'));
+            if (err?.code === 'invalid-input') {
+                setError(err?.message || t('auth_enter_email_reset', 'Enter your email or phone above.'));
+            } else {
+                setError(
+                    getAuthErrorMessage(err) ||
+                        err.message ||
+                        t('auth_reset_failed', 'Could not send reset email.')
+                );
+            }
         } finally {
             setLoading(false);
         }
@@ -261,13 +296,48 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                         }}
                     >
                         {error}
+                        {aiUnclaimedHint && (
+                            <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        navigate(
+                                            `/signup/business${typeof window !== 'undefined' ? window.location.search || '' : ''}`
+                                        )
+                                    }
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'var(--primary)',
+                                        fontWeight: 800,
+                                        textDecoration: 'underline',
+                                        cursor: 'pointer',
+                                        fontFamily: 'inherit',
+                                        fontSize: 'inherit',
+                                    }}
+                                >
+                                    {t('business_claim_account_cta', 'استعادة الحساب وتوثيقه')}
+                                </button>
+                            </p>
+                        )}
                     </div>
                 )}
 
                 <form onSubmit={handleSubmit} className="business-auth-form">
                     <div style={{ marginBottom: '1rem' }}>
+                        <label
+                            style={{
+                                display: 'block',
+                                marginBottom: '0.4rem',
+                                fontSize: '0.88rem',
+                                fontWeight: 600,
+                                color: 'var(--text-secondary)',
+                            }}
+                        >
+                            {t('business_login_credentials_label', 'بيانات الدخول')}
+                        </label>
                         <div style={{ position: 'relative' }}>
-                            <FaEnvelope
+                            <FaUser
                                 style={{
                                     position: 'absolute',
                                     left: '1rem',
@@ -278,11 +348,14 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                 }}
                             />
                             <input
-                                type="email"
-                                autoComplete="email"
-                                placeholder={t('business_email', 'Business email')}
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                type="text"
+                                autoComplete="username"
+                                placeholder={t(
+                                    'business_login_identifier',
+                                    'البريد الإلكتروني أو رقم الجوال التجاري'
+                                )}
+                                value={loginId}
+                                onChange={(e) => setLoginId(e.target.value)}
                                 required
                                 style={{
                                     width: '100%',
@@ -295,8 +368,52 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                 }}
                             />
                         </div>
+                        {!loginId.includes('@') && loginId.length > 0 && (
+                            <div style={{ marginTop: '0.5rem' }}>
+                                <label
+                                    style={{
+                                        display: 'block',
+                                        fontSize: '0.75rem',
+                                        color: 'var(--text-muted)',
+                                        marginBottom: '0.25rem',
+                                    }}
+                                >
+                                    {t('business_login_country_code_label', 'رمز دولة الهاتف التجاري')}
+                                </label>
+                                <select
+                                    value={countryCode}
+                                    onChange={(e) => setCountryCode(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '10px',
+                                        background: 'var(--bg-input)',
+                                        border: '1px solid var(--border-color)',
+                                        fontSize: '0.95rem',
+                                        color: 'var(--text-primary)',
+                                    }}
+                                    aria-label={t('business_login_country_code_label', 'رمز دولة الهاتف التجاري')}
+                                >
+                                    <option value="+20">{t('phone_country_eg', 'مصر')} (+20)</option>
+                                    <option value="+966">{t('phone_country_sa', 'السعودية')} (+966)</option>
+                                    <option value="+971">{t('phone_country_ae', 'الإمارات')} (+971)</option>
+                                    <option value="+962">{t('phone_country_jo', 'الأردن')} (+962)</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
                     <div style={{ marginBottom: '1.25rem' }}>
+                        <label
+                            style={{
+                                display: 'block',
+                                marginBottom: '0.4rem',
+                                fontSize: '0.88rem',
+                                fontWeight: 600,
+                                color: 'var(--text-secondary)',
+                            }}
+                        >
+                            {t('password', 'كلمة المرور')}
+                        </label>
                         <div style={{ position: 'relative' }}>
                             <FaLock
                                 style={{
@@ -368,7 +485,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                         {t('forgot_password', 'Forgot password?')}
                     </button>
                     <button type="submit" disabled={loading} style={primaryBtn}>
-                        {loading ? t('loading', 'Loading...') : t('sign_in', 'Sign In')}
+                        {loading ? t('business_login_verifying', 'جاري التحقق...') : t('sign_in', 'تسجيل الدخول')}
                         {!loading && <FaArrowRight />}
                     </button>
                 </form>

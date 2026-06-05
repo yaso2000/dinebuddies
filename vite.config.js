@@ -529,7 +529,7 @@ export default defineConfig({
         port: 5176,
         strictPort: false,
         proxy: {
-            '/api/auth': {
+            '/api': {
                 target: devAuthApiProxy,
                 changeOrigin: true,
                 secure: true,

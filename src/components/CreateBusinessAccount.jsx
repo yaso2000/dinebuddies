@@ -174,7 +174,8 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
         setError('');
 
         try {
-            // Create Firebase Auth account
+            await auth.signOut().catch(() => {});
+
             const userCredential = await createUserWithEmailAndPassword(
                 auth,
                 formData.email,
@@ -212,7 +213,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                     createdBy: 'admin',
                     createdAt: serverTimestamp()
                 },
-                businessPhoneVerificationToken: phoneVerification?.verificationToken || null,
+                businessPhoneVerifiedUid: phoneVerification?.firebaseUid || null,
             });
 
             // Sign out the newly created user (admin stays logged in)
