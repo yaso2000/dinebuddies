@@ -2,39 +2,14 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const {
+    getPaymentPlan,
+    findPaymentPlanByPriceId,
+    activeSubscriptionStatus,
+} = require('./paymentPlans');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-// Map planId → weeklyPrivateQuota  (-1 = unlimited)
-const PLAN_QUOTA_MAP = {
-    // User plans
-    'pro': 2,
-    'premium': -1,
-    // Partner plans (no private invites — they are business accounts)
-    'professional': 0,
-    'elite': 0,
-};
-
-function getQuotaForPlan(planId) {
-    if (!planId) return 0;
-    const id = planId.toLowerCase();
-    if (id in PLAN_QUOTA_MAP) return PLAN_QUOTA_MAP[id];
-    // Fallback by keyword
-    if (id.includes('premium')) return -1;
-    if (id.includes('pro')) return 2;
-    return 0;
-}
-
-function getTierForPlan(planId) {
-    if (!planId) return 'free';
-    const id = planId.toLowerCase();
-    if (id.includes('elite')) return 'elite';
-    if (id.includes('professional')) return 'professional';
-    if (id.includes('premium')) return 'premium';
-    if (id.includes('pro')) return 'pro';
-    return 'free';
-}
 
 /**
  * Stripe Webhook handler
@@ -136,7 +111,6 @@ async function handleCheckoutComplete(session) {
 
     const userId = session.metadata?.userId;
     const planId = session.metadata?.planId;
-    const subscriptionId = session.subscription;
 
     if (!userId) {
         console.error('No userId in session metadata');
@@ -148,96 +122,147 @@ async function handleCheckoutComplete(session) {
         return;
     }
 
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
+    const expectedPlan = getPaymentPlan(planId);
+    if (!expectedPlan || expectedPlan.mode !== session.mode) {
+        throw new Error(`Invalid checkout metadata for session ${session.id}`);
+    }
 
-    try {
-        if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
-            await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
-        } else {
-            // Subscription plan
-            await db.collection('users').doc(userId).update({
-                subscriptionStatus: 'active',
-                subscriptionId: subscriptionId,
-                subscriptionTier: tier,
-                currentPlan: planId,
-                weeklyPrivateQuota: weeklyQuota,
-                usedPrivateCreditsThisWeek: 0,
-                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
-                stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
-            });
+    const paidPriceId = await getCheckoutSessionPriceId(session.id);
+    if (paidPriceId !== expectedPlan.priceId) {
+        throw new Error(`Checkout price mismatch for ${session.id}: expected ${expectedPlan.priceId}, got ${paidPriceId || 'none'}`);
+    }
 
-            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
+    const fulfillRef = db.collection('stripe_checkout_fulfillments').doc(session.id);
+    const userRef = db.collection('users').doc(userId);
+
+    await db.runTransaction(async (tx) => {
+        const done = await tx.get(fulfillRef);
+        if (done.exists) return;
+
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) {
+            throw new Error(`User not found for checkout session ${session.id}: ${userId}`);
         }
 
-        // Save subscription record
-        await db.collection('user_subscriptions').add({
+        if (expectedPlan.mode === 'payment') {
+            const update = {
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            };
+            if (expectedPlan.fulfillment === 'private_invites') {
+                update.purchasedPrivateCredits = admin.firestore.FieldValue.increment(expectedPlan.credits);
+            } else if (expectedPlan.fulfillment === 'offer_credits') {
+                update.offerCredits = admin.firestore.FieldValue.increment(expectedPlan.credits);
+            } else {
+                throw new Error(`Unsupported one-time fulfillment ${expectedPlan.fulfillment}`);
+            }
+            tx.update(userRef, update);
+        } else {
+            tx.update(userRef, {
+                subscriptionStatus: 'active',
+                subscriptionId: session.subscription,
+                subscriptionTier: expectedPlan.tier,
+                currentPlan: expectedPlan.planId,
+                weeklyPrivateQuota: expectedPlan.weeklyPrivateQuota,
+                usedPrivateCreditsThisWeek: 0,
+                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+                stripeCustomerId: session.customer || admin.firestore.FieldValue.delete(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        }
+
+        tx.set(fulfillRef, {
             userId,
-            planId,
-            subscriptionId,
-            status: 'active',
-            startDate: admin.firestore.FieldValue.serverTimestamp(),
-            sessionId: session.id
+            planId: expectedPlan.planId,
+            priceId: paidPriceId,
+            mode: expectedPlan.mode,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-    } catch (error) {
-        console.error('Error updating user subscription:', error);
+        const subscriptionRef = db.collection('user_subscriptions').doc(session.id);
+        tx.set(subscriptionRef, {
+            userId,
+            planId: expectedPlan.planId,
+            subscriptionId: session.subscription || null,
+            status: expectedPlan.mode === 'subscription' ? 'active' : 'fulfilled',
+            startDate: admin.firestore.FieldValue.serverTimestamp(),
+            sessionId: session.id,
+        }, { merge: true });
+    });
+
+    console.log(`✅ Fulfilled checkout ${session.id} for ${userId} (${expectedPlan.planId})`);
+}
+
+async function getCheckoutSessionPriceId(sessionId) {
+    const lineItems = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 1 });
+    return lineItems.data?.[0]?.price?.id || null;
+}
+
+function getSubscriptionPriceId(subscription) {
+    return subscription.items?.data?.[0]?.price?.id || null;
+}
+
+function getInactiveSubscriptionPatch(status) {
+    return {
+        subscriptionStatus: status || 'inactive',
+        subscriptionTier: 'free',
+        currentPlan: 'free',
+        weeklyPrivateQuota: 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+}
+
+async function resolveSubscriptionUser(subscription) {
+    const metadataUserId = subscription.metadata?.userId;
+    if (metadataUserId) {
+        return metadataUserId;
     }
+
+    const usersSnapshot = await db.collection('users')
+        .where('stripeCustomerId', '==', subscription.customer)
+        .limit(1)
+        .get();
+
+    if (usersSnapshot.empty) return null;
+    return usersSnapshot.docs[0].id;
 }
 
 async function handleSubscriptionUpdate(subscription) {
     console.log('🔄 Subscription updated:', subscription.id);
 
-    const customer = subscription.customer;
-
-    const usersSnapshot = await db.collection('users')
-        .where('stripeCustomerId', '==', customer)
-        .limit(1)
-        .get();
-
-    if (usersSnapshot.empty) {
-        console.log('No user found for customer:', customer);
+    const userId = await resolveSubscriptionUser(subscription);
+    if (!userId) {
+        console.log('No user found for customer:', subscription.customer);
         return;
     }
 
-    const userId = usersSnapshot.docs[0].id;
-    const planId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
+    const priceId = getSubscriptionPriceId(subscription);
+    const plan = findPaymentPlanByPriceId(priceId);
+    const update = activeSubscriptionStatus(subscription.status) && plan?.mode === 'subscription'
+        ? {
+            subscriptionStatus: subscription.status,
+            subscriptionTier: plan.tier,
+            currentPlan: plan.planId,
+            weeklyPrivateQuota: plan.weeklyPrivateQuota,
+            subscriptionId: subscription.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+        : getInactiveSubscriptionPatch(subscription.status);
 
-    await db.collection('users').doc(userId).update({
-        subscriptionStatus: subscription.status,
-        subscriptionTier: tier,
-        weeklyPrivateQuota: weeklyQuota,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    await db.collection('users').doc(userId).update(update);
 
-    console.log(`✅ User ${userId} updated → tier: ${tier}, quota: ${weeklyQuota}, status: ${subscription.status}`);
+    console.log(`✅ User ${userId} subscription status: ${subscription.status}, plan: ${plan?.planId || 'free'}`);
 }
 
 async function handleSubscriptionCanceled(subscription) {
     console.log('❌ Subscription canceled:', subscription.id);
 
-    const customer = subscription.customer;
-
-    const usersSnapshot = await db.collection('users')
-        .where('stripeCustomerId', '==', customer)
-        .limit(1)
-        .get();
-
-    if (usersSnapshot.empty) return;
-
-    const userId = usersSnapshot.docs[0].id;
+    const userId = await resolveSubscriptionUser(subscription);
+    if (!userId) return;
 
     await db.collection('users').doc(userId).update({
         subscriptionStatus: 'canceled',
         subscriptionTier: 'free',
+        currentPlan: 'free',
         weeklyPrivateQuota: 0,
         subscriptionEndDate: admin.firestore.FieldValue.serverTimestamp()
     });

@@ -17,8 +17,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() &&
              (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+              request.auth.token.role == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
@@ -101,6 +100,102 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function protectedUserFields() {
+      return [
+        'subscriptionTier',
+        'subscriptionStatus',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'subscriptionId',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'freeCredits',
+        'paidCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'purchasedPrivateCredits',
+        'usedPrivateCreditsThisMonth',
+        'usedPrivateCreditsThisWeek',
+        'lastPrivateResetMonth',
+        'offerCredits',
+        'offerSlotCredits',
+        'reputation',
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'banned',
+        'bannedAt'
+      ];
+    }
+
+    function protectedOwnerUserFields() {
+      return [
+        'role',
+        'accountType',
+        'subscriptionTier',
+        'subscriptionStatus',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'subscriptionId',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'freeCredits',
+        'paidCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'purchasedPrivateCredits',
+        'usedPrivateCreditsThisMonth',
+        'usedPrivateCreditsThisWeek',
+        'lastPrivateResetMonth',
+        'offerCredits',
+        'offerSlotCredits',
+        'reputation',
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'banned',
+        'bannedAt'
+      ];
+    }
+
+    function safeInitialRole() {
+      return !request.resource.data.keys().hasAny(['role']) ||
+             request.resource.data.role in ['user', 'business', 'partner', 'staff', 'support'];
+    }
+
+    function safeInitialAccountType() {
+      return !request.resource.data.keys().hasAny(['accountType']) ||
+             request.resource.data.accountType in ['user', 'business', 'partner', 'staff', 'support'];
+    }
+
+    function createsProtectedBusinessLimits() {
+      return request.resource.data.keys().hasAny(['businessInfo']) &&
+             request.resource.data.businessInfo is map &&
+             request.resource.data.businessInfo.keys().hasAny(['customLimits']);
+    }
+
+    function changesProtectedBusinessLimits() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['businessInfo']) &&
+             request.resource.data.get('businessInfo', {}) is map &&
+             resource.data.get('businessInfo', {}) is map &&
+             request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys().hasAny(['customLimits']);
+    }
+
+    function safeUserCreate() {
+      return safeInitialRole() &&
+             safeInitialAccountType() &&
+             !request.resource.data.keys().hasAny(protectedUserFields()) &&
+             !createsProtectedBusinessLimits();
+    }
+
+    function paidOfferAccess() {
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return me.get('subscriptionTier', 'free') in ['elite', 'professional', 'paid'] ||
+             me.get('offerCredits', 0) > 0;
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,27 +207,48 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && safeUserCreate();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       safeInitialAccountType() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(protectedUserFields()) &&
+                       !changesProtectedBusinessLimits();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       safeInitialAccountType() &&
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(protectedUserFields()) &&
+                       !changesProtectedBusinessLimits();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) &&
+                       isBusinessSignupCompletionFromIntent() &&
+                       safeInitialAccountType() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(protectedUserFields()) &&
+                       !changesProtectedBusinessLimits();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) &&
+                       isUpgradingStubToBusinessProfile() &&
+                       safeInitialAccountType() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(protectedUserFields()) &&
+                       !changesProtectedBusinessLimits();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
-      allow update: if isAdmin();
+                         .hasAny(protectedOwnerUserFields()) &&
+                       !changesProtectedBusinessLimits();
+      allow update: if isAdmin() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['role', 'accountType', 'adminGrantedAt', 'adminGrantedBy']);
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
@@ -278,19 +394,26 @@ service cloud.firestore {
                            request.auth.uid in resource.data.invitedFriends
                          );
 
-      // Any signed-in user can create (author must be self)
+      // Clients may only create drafts. Publishing charges credits in publishPrivateInvitationDraft.
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                        request.resource.data.author.id == request.auth.uid) &&
+                       (!request.resource.data.keys().hasAny(['status']) ||
+                        request.resource.data.status == 'draft') &&
+                       !request.resource.data.keys().hasAny(['publishedAt']);
 
-      // Host can update freely; invited friends can update only their RSVP
+      // Host can update draft details; invited friends can update only their RSVP.
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
-                        (request.auth.uid in resource.data.invitedFriends &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
-                         request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
+                       (
+                         ((resource.data.authorId == request.auth.uid ||
+                           (resource.data.author != null &&
+                            resource.data.author.id == request.auth.uid)) &&
+                          !request.resource.data.diff(resource.data).affectedKeys()
+                            .hasAny(['status', 'publishedAt'])) ||
+                         (request.auth.uid in resource.data.invitedFriends &&
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
+                          request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid]))
+                       );
 
       // Only host or admin can delete
       allow delete: if isSignedIn() &&
@@ -541,7 +664,8 @@ service cloud.firestore {
       allow read: if true;
       
       // Create: Must be partner, and partnerId must match their UID
-      allow create: if isPartner() && 
+      allow create: if isPartner() &&
+                       paidOfferAccess() &&
                        request.resource.data.partnerId == request.auth.uid;
       
       // Update: Must be partner, own the offer, and cannot modify protected fields
@@ -556,17 +680,32 @@ service cloud.firestore {
 
     match /active_offers/{offerId} {
       allow read: if true;
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
-      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+      allow create: if isPartner() &&
+                       paidOfferAccess() &&
+                       request.resource.data.partnerId == request.auth.uid;
+      allow update: if isPartner() &&
+                       (resource.data.partnerId == request.auth.uid ||
+                        resource.data.restaurantId == request.auth.uid);
+      allow delete: if (isPartner() &&
+                        (resource.data.partnerId == request.auth.uid ||
+                         resource.data.restaurantId == request.auth.uid)) ||
+                       isAdmin();
     }
 
     match /special_offers/{offerId} {
       allow read: if true;
       // Security: bind created special offer to authenticated partner owner
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
-      allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
+      allow create: if isPartner() &&
+                       paidOfferAccess() &&
+                       (request.resource.data.partnerId == request.auth.uid ||
+                        request.resource.data.restaurantId == request.auth.uid);
+      allow update: if isPartner() &&
+                       (resource.data.partnerId == request.auth.uid ||
+                        resource.data.restaurantId == request.auth.uid);
+      allow delete: if (isPartner() &&
+                        (resource.data.partnerId == request.auth.uid ||
+                         resource.data.restaurantId == request.auth.uid)) ||
+                       isAdmin();
     }
     
     // ============================================
