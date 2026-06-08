@@ -36,7 +36,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
         lng: null,
         userLat: null,
         userLng: null,
-        subscriptionTier: 'free'
     });
 
     // Optional: GPS + reverse-geocode on mount — off by default (ENABLE_BACKGROUND_AREA_DETECT).
@@ -173,12 +172,11 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
 
             const user = userCredential.user;
 
-            // Create Firestore document — business plan tier on users.subscriptionTier only
+            // Create Firestore document. Billing/subscription fields are backend-owned.
             await setDoc(doc(db, 'users', user.uid), {
                 email: formData.email,
                 display_name: formData.businessName,
                 role: 'business',
-                subscriptionTier: formData.subscriptionTier,
                 created_at: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 location: formData.lat && formData.lng ? {

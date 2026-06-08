@@ -13,25 +13,203 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+
+    function protectedUserKeys() {
+      return [
+        'admin',
+        'isAdmin',
+        'superOwner',
+        'customClaims',
+        'banned',
+        'banReason',
+        'bannedAt',
+        'shadowBanned',
+        'disabled',
+        'reputation',
+        'subscriptionTier',
+        'subscriptionStatus',
+        'subscriptionId',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'currentPlan',
+        'weeklyPrivateQuota',
+        'monthlyPrivateQuota',
+        'usedPrivateCreditsThisWeek',
+        'usedPrivateCreditsThisMonth',
+        'lastPrivateResetMonth',
+        'purchasedPrivateCredits',
+        'offerCredits',
+        'offerSlotCredits',
+        'freeCredits',
+        'paidCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'lastCreditGrantedAt',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'joinedCommunities',
+        'communityMembers',
+        'ownedCommunities'
+      ];
+    }
+
+    function clientWritableUserKeys() {
+      return [
+        'uid',
+        'display_name',
+        'displayName',
+        'name',
+        'nickname',
+        'email',
+        'authEmail',
+        'emailVerified',
+        'photo_url',
+        'photoURL',
+        'avatar',
+        'bio',
+        'shortDescription',
+        'availableForDating',
+        'age',
+        'ageCategory',
+        'gender',
+        'isGuest',
+        'isProfileComplete',
+        'authProvider',
+        'created_at',
+        'created_time',
+        'updatedAt',
+        'lastSeen',
+        'last_active_time',
+        'lastLocationUpdate',
+        'lastCancellationDate',
+        'isOnline',
+        'location',
+        'city',
+        'country',
+        'countryCode',
+        'coordinates',
+        'locationSource',
+        'privacySettings',
+        'fcmTokens',
+        'blockedUserIds',
+        'mutedUserIds',
+        'cancellationHistory',
+        'cancellationCount',
+        'invitationRestriction',
+        'following',
+        'followersCount',
+        'favoritePlaces',
+        'communityLastRead',
+        'pendingBusinessRegistration',
+        'businessProfileSetupPending',
+        'businessInfo'
+      ];
+    }
+
+    function selfCreatableUserKeys() {
+      return [
+        'uid',
+        'display_name',
+        'displayName',
+        'name',
+        'nickname',
+        'email',
+        'authEmail',
+        'emailVerified',
+        'photo_url',
+        'photoURL',
+        'avatar',
+        'bio',
+        'shortDescription',
+        'availableForDating',
+        'age',
+        'ageCategory',
+        'gender',
+        'isGuest',
+        'isProfileComplete',
+        'authProvider',
+        'created_at',
+        'created_time',
+        'updatedAt',
+        'lastSeen',
+        'last_active_time',
+        'lastLocationUpdate',
+        'lastCancellationDate',
+        'isOnline',
+        'location',
+        'city',
+        'country',
+        'countryCode',
+        'coordinates',
+        'locationSource',
+        'privacySettings',
+        'fcmTokens',
+        'blockedUserIds',
+        'mutedUserIds',
+        'cancellationHistory',
+        'cancellationCount',
+        'invitationRestriction',
+        'following',
+        'followersCount',
+        'favoritePlaces',
+        'communityLastRead',
+        'pendingBusinessRegistration',
+        'businessProfileSetupPending',
+        'businessInfo',
+        'role',
+        'accountType'
+      ];
+    }
+
+    function hasValidSelfCreateRole() {
+      return (!request.resource.data.keys().hasAny(['role']) ||
+              request.resource.data.role in ['user', 'business', 'partner']) &&
+             (!request.resource.data.keys().hasAny(['accountType']) ||
+              request.resource.data.accountType == 'business');
+    }
+
+    function hasProtectedBusinessInfoOnCreate() {
+      return request.resource.data.keys().hasAny(['businessInfo']) &&
+             request.resource.data.businessInfo is map &&
+             request.resource.data.businessInfo.keys()
+               .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes']);
+    }
+
+    function hasProtectedBusinessInfoChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['businessInfo']) &&
+             request.resource.data.get('businessInfo', {}) is map &&
+             resource.data.get('businessInfo', {}) is map &&
+             request.resource.data.get('businessInfo', {})
+               .diff(resource.data.get('businessInfo', {}))
+               .affectedKeys()
+               .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes']);
+    }
+
+    function hasNoProtectedUserFieldChange() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedUserKeys()) &&
+             !hasProtectedBusinessInfoChange();
+    }
     
     function isAdmin() {
       return isSignedIn() &&
-             (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+             (request.auth.token.get('admin', false) == true ||
+              request.auth.token.get('role', '') == 'admin' ||
+              request.auth.token.get('superOwner', false) == true);
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
     // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
     function isSuperOwner() {
-      return isSignedIn() && request.auth.token.superOwner == true;
+      return isSignedIn() && request.auth.token.get('superOwner', false) == true;
     }
 
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
     function isPartner() {
       return isSignedIn() &&
-             (request.auth.token.partner == true ||
-              request.auth.token.role == 'business' ||
+             (request.auth.token.get('partner', false) == true ||
+              request.auth.token.get('role', '') == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
@@ -112,26 +290,37 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isOwner(userId) &&
+                       request.resource.data.keys().hasOnly(selfCreatableUserKeys()) &&
+                       hasValidSelfCreateRole() &&
+                       !request.resource.data.keys().hasAny(protectedUserKeys()) &&
+                       !hasProtectedBusinessInfoOnCreate();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       hasNoProtectedUserFieldChange();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       hasNoProtectedUserFieldChange();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) &&
+                       isBusinessSignupCompletionFromIntent() &&
+                       hasNoProtectedUserFieldChange();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
-      allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+      allow update: if isOwner(userId) &&
+                       isUpgradingStubToBusinessProfile() &&
+                       hasNoProtectedUserFieldChange();
+      allow update: if isOwner(userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(clientWritableUserKeys()) &&
+                       hasNoProtectedUserFieldChange();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
