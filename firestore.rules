@@ -194,22 +194,22 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() &&
-             (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              request.auth.token.superOwner == true);
+             (request.auth.token.get('admin', false) == true ||
+              request.auth.token.get('role', '') == 'admin' ||
+              request.auth.token.get('superOwner', false) == true);
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
     // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
     function isSuperOwner() {
-      return isSignedIn() && request.auth.token.superOwner == true;
+      return isSignedIn() && request.auth.token.get('superOwner', false) == true;
     }
 
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
     function isPartner() {
       return isSignedIn() &&
-             (request.auth.token.partner == true ||
-              request.auth.token.role == 'business' ||
+             (request.auth.token.get('partner', false) == true ||
+              request.auth.token.get('role', '') == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
