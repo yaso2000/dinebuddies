@@ -685,10 +685,6 @@ export const AuthProvider = ({ children }) => {
                 display_name: finalDisplayName,
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
-                reputation: 100,
-                purchasedPrivateCredits: grantedCredits,
-                usedPrivateCreditsThisMonth: 0,
-                lastPrivateResetMonth: '',
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
@@ -707,8 +703,8 @@ export const AuthProvider = ({ children }) => {
                     await adminSecurityService.createNotification({
                         userId,
                         type: 'system_announcement',
-                        title: '🎁 Welcome Gift!',
-                        message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
+                        title: 'Welcome to DineBuddies!',
+                        message: 'Your profile is ready. Start exploring invitations and communities nearby.',
                         style: 'success'
                     });
                 } catch (notifErr) {
