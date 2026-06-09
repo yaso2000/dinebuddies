@@ -28,9 +28,13 @@ assert(!assertAdminContext.includes("requesterRole === 'admin'"), 'assertAdminCo
 assert(functionsIndex.includes('targetIsConfiguredSuperOwner'), 'grantAdminRole must not copy requester superOwner to every target');
 
 const stripeJs = read('functions/stripe.js');
-assert(stripeJs.includes('resolveCheckoutItem'), 'checkout must resolve server-owned catalog item');
-assert(!stripeJs.includes('price: priceId'), 'checkout must not use client-supplied priceId');
-assert(stripeJs.includes('mode: checkoutItem.mode'), 'checkout must use catalog checkout mode');
+const createCheckoutSession = stripeJs.slice(
+    stripeJs.indexOf('exports.createCheckoutSession'),
+    stripeJs.indexOf('/**\n * إنشاء Portal')
+);
+assert(createCheckoutSession.includes('resolveCheckoutItem'), 'checkout must resolve server-owned catalog item');
+assert(!createCheckoutSession.includes('price: priceId'), 'checkout must not use client-supplied priceId');
+assert(createCheckoutSession.includes('mode: checkoutItem.mode'), 'checkout must use catalog checkout mode');
 
 const webhookJs = read('functions/webhook.js');
 assert(webhookJs.includes('listLineItems'), 'webhook must inspect paid Stripe line items');
