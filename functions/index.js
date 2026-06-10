@@ -256,12 +256,10 @@ async function assertAdminContext(context) {
     }
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
-    const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
+    const isSuperOwner = context.auth.token.superOwner === true ||
+        SUPER_OWNER_UIDS.includes(requesterUid) ||
+        SUPER_OWNER_EMAILS.includes(requesterEmail);
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
-
-    const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
@@ -1189,9 +1187,18 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const currentClaims = targetUser.customClaims || {};
+    const targetEmail = (targetUser.email || '').toLowerCase();
+    const targetIsConfiguredSuperOwner =
+        currentClaims.superOwner === true ||
+        SUPER_OWNER_UIDS.includes(targetUid) ||
+        SUPER_OWNER_EMAILS.includes(targetEmail);
+    await admin.auth().setCustomUserClaims(targetUid, {
+        ...currentClaims,
+        admin: true,
+        superOwner: targetIsConfiguredSuperOwner
+    });
 
     return { success: true, targetUid };
 });
