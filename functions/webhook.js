@@ -1,39 +1,17 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { grantPaidCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
+const { grantPaidCreditsInTransaction, isBusinessUserDoc, priceIdToCreditPackage } = require('./creditsCore');
+const { assertCheckoutPriceMatches, getCheckoutPlan, getCheckoutPlanByPriceId } = require('./paymentPlans');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-// Map planId → weeklyPrivateQuota  (-1 = unlimited)
-const PLAN_QUOTA_MAP = {
-    // User plans
-    'pro': 2,
-    'premium': -1,
-    // Partner plans (no private invites — they are business accounts)
-    'professional': 0,
-    'elite': 0,
-};
-
-function getQuotaForPlan(planId) {
-    if (!planId) return 0;
-    const id = planId.toLowerCase();
-    if (id in PLAN_QUOTA_MAP) return PLAN_QUOTA_MAP[id];
-    // Fallback by keyword
-    if (id.includes('premium')) return -1;
-    if (id.includes('pro')) return 2;
-    return 0;
-}
-
-function getTierForPlan(planId) {
-    if (!planId) return 'free';
-    const id = planId.toLowerCase();
-    if (id.includes('elite')) return 'elite';
-    if (id.includes('professional')) return 'professional';
-    if (id.includes('premium')) return 'premium';
-    if (id.includes('pro')) return 'pro';
-    return 'free';
+async function getCheckoutLinePriceIds(sessionId) {
+    const lineItems = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 10 });
+    return (lineItems.data || [])
+        .map((item) => item?.price?.id)
+        .filter(Boolean);
 }
 
 /**
@@ -88,10 +66,10 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
 // ===== Event Handlers =====
 
-async function handleDineCreditsPurchase(session) {
+async function handleDineCreditsPurchase(session, packageDef) {
     const userId = session.metadata?.userId;
-    const credits = Math.floor(Number(session.metadata?.credits));
-    const packageId = String(session.metadata?.packageId || '');
+    const credits = Math.floor(Number(packageDef?.credits));
+    const packageId = String(packageDef?.packageId || session.metadata?.packageId || '');
 
     if (!userId || !Number.isFinite(credits) || credits <= 0) {
         console.error('Invalid dine credits checkout metadata', session.metadata);
@@ -135,8 +113,7 @@ async function handleCheckoutComplete(session) {
     console.log('💳 Checkout completed:', session.id);
 
     const userId = session.metadata?.userId;
-    const planId = session.metadata?.planId;
-    const subscriptionId = session.subscription;
+    const linePriceIds = await getCheckoutLinePriceIds(session.id);
 
     if (!userId) {
         console.error('No userId in session metadata');
@@ -144,57 +121,112 @@ async function handleCheckoutComplete(session) {
     }
 
     if (session.mode === 'payment' && session.metadata?.purchaseType === 'dine_credits') {
-        await handleDineCreditsPurchase(session);
+        if (session.payment_status !== 'paid') {
+            throw new Error(`Dine credit checkout ${session.id} completed without paid status`);
+        }
+        const priceMap = priceIdToCreditPackage();
+        const matchedPriceId = linePriceIds.find((priceId) => priceMap[priceId]);
+        const packageDef = matchedPriceId ? priceMap[matchedPriceId] : null;
+        if (!packageDef || (session.metadata?.packageId && session.metadata.packageId !== packageDef.packageId)) {
+            throw new Error(`Dine credit checkout ${session.id} has unrecognized or mismatched price`);
+        }
+        await handleDineCreditsPurchase(session, packageDef);
         return;
     }
 
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
-    const isOfferSlot = planId === 'o1'; // 50-hour offer slot credit pack
+    const plan = getCheckoutPlan(session.metadata?.planId);
+    if (!assertCheckoutPriceMatches(plan, linePriceIds)) {
+        throw new Error(`Checkout ${session.id} has unrecognized or mismatched price`);
+    }
+
+    const subscriptionId = session.subscription;
 
     try {
-        if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
-            await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        if (plan.type === 'private_pack' || plan.type === 'offer_pack') {
+            if (session.payment_status !== 'paid') {
+                throw new Error(`One-time checkout ${session.id} completed without paid status`);
+            }
+            const fulfillRef = db.collection('stripe_pack_fulfillments').doc(session.id);
+            const userRef = db.collection('users').doc(userId);
+            await db.runTransaction(async (tx) => {
+                const fulfilled = await tx.get(fulfillRef);
+                if (fulfilled.exists) return;
+                const field = plan.type === 'offer_pack' ? 'offerCredits' : 'purchasedPrivateCredits';
+                tx.update(userRef, {
+                    [field]: admin.firestore.FieldValue.increment(plan.credits),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                tx.set(fulfillRef, {
+                    userId,
+                    planId: plan.id,
+                    type: plan.type,
+                    credits: plan.credits,
+                    sessionId: session.id,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
             });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
+            console.log(`✅ User ${userId} received ${plan.credits} ${plan.type} credit(s)`);
         } else {
-            // Subscription plan
             await db.collection('users').doc(userId).update({
                 subscriptionStatus: 'active',
                 subscriptionId: subscriptionId,
-                subscriptionTier: tier,
-                currentPlan: planId,
-                weeklyPrivateQuota: weeklyQuota,
+                subscriptionTier: plan.tier,
+                currentPlan: plan.id,
+                weeklyPrivateQuota: plan.weeklyPrivateQuota,
                 usedPrivateCreditsThisWeek: 0,
                 subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
                 stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
             });
 
-            console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
+            console.log(`✅ User ${userId} → plan: ${plan.id}, tier: ${plan.tier}, quota: ${plan.weeklyPrivateQuota}`);
         }
 
-        // Save subscription record
-        await db.collection('user_subscriptions').add({
-            userId,
-            planId,
-            subscriptionId,
-            status: 'active',
-            startDate: admin.firestore.FieldValue.serverTimestamp(),
-            sessionId: session.id
-        });
+        if (plan.type === 'subscription') {
+            await db.collection('user_subscriptions').add({
+                userId,
+                planId: plan.id,
+                subscriptionId,
+                status: 'active',
+                startDate: admin.firestore.FieldValue.serverTimestamp(),
+                sessionId: session.id
+            });
+        }
 
     } catch (error) {
-        console.error('Error updating user subscription:', error);
+        console.error('Error updating checkout fulfillment:', error);
+        throw error;
     }
+}
+
+async function downgradeCustomerSubscription(customer, reason) {
+    const usersSnapshot = await db.collection('users')
+        .where('stripeCustomerId', '==', customer)
+        .limit(1)
+        .get();
+
+    if (usersSnapshot.empty) return;
+
+    const userId = usersSnapshot.docs[0].id;
+    await db.collection('users').doc(userId).update({
+        subscriptionStatus: reason || 'inactive',
+        subscriptionTier: 'free',
+        currentPlan: 'free',
+        weeklyPrivateQuota: 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
 }
 
 async function handleSubscriptionUpdate(subscription) {
     console.log('🔄 Subscription updated:', subscription.id);
 
     const customer = subscription.customer;
+    const priceId = subscription.items?.data?.[0]?.price?.id;
+    const plan = getCheckoutPlanByPriceId(priceId);
+
+    if (!plan || plan.type !== 'subscription') {
+        console.error('Unknown subscription price:', priceId);
+        return;
+    }
 
     const usersSnapshot = await db.collection('users')
         .where('stripeCustomerId', '==', customer)
@@ -207,18 +239,18 @@ async function handleSubscriptionUpdate(subscription) {
     }
 
     const userId = usersSnapshot.docs[0].id;
-    const planId = subscription.metadata?.planId || usersSnapshot.docs[0].data().currentPlan;
-    const weeklyQuota = getQuotaForPlan(planId);
-    const tier = getTierForPlan(planId);
+    const activeStatuses = new Set(['active', 'trialing']);
+    const isActive = activeStatuses.has(subscription.status);
 
     await db.collection('users').doc(userId).update({
         subscriptionStatus: subscription.status,
-        subscriptionTier: tier,
-        weeklyPrivateQuota: weeklyQuota,
+        subscriptionTier: isActive ? plan.tier : 'free',
+        currentPlan: isActive ? plan.id : 'free',
+        weeklyPrivateQuota: isActive ? plan.weeklyPrivateQuota : 0,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`✅ User ${userId} updated → tier: ${tier}, quota: ${weeklyQuota}, status: ${subscription.status}`);
+    console.log(`✅ User ${userId} updated → tier: ${isActive ? plan.tier : 'free'}, quota: ${isActive ? plan.weeklyPrivateQuota : 0}, status: ${subscription.status}`);
 }
 
 async function handleSubscriptionCanceled(subscription) {
@@ -238,6 +270,7 @@ async function handleSubscriptionCanceled(subscription) {
     await db.collection('users').doc(userId).update({
         subscriptionStatus: 'canceled',
         subscriptionTier: 'free',
+        currentPlan: 'free',
         weeklyPrivateQuota: 0,
         subscriptionEndDate: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -251,4 +284,11 @@ async function handlePaymentSucceeded(invoice) {
 
 async function handlePaymentFailed(invoice) {
     console.log('⚠️ Payment failed:', invoice.id);
+    if (invoice.customer) {
+        await downgradeCustomerSubscription(invoice.customer, 'past_due');
+    }
 }
+
+module.exports.__testing = {
+    getCheckoutLinePriceIds,
+};

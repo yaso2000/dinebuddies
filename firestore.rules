@@ -17,14 +17,89 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() &&
              (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+              request.auth.token.role == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
     // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
     function isSuperOwner() {
       return isSignedIn() && request.auth.token.superOwner == true;
+    }
+
+    function protectedUserFields() {
+      return [
+        'freeCredits',
+        'paidCredits',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'purchasedPrivateCredits',
+        'usedPrivateCreditsThisWeek',
+        'usedPrivateCreditsThisMonth',
+        'weeklyPrivateQuota',
+        'monthlyPrivateQuota',
+        'lastPrivateResetMonth',
+        'lastQuotaResetDate',
+        'lastCreditGrantedAt',
+        'subscriptionStatus',
+        'subscriptionId',
+        'stripeSubscriptionId',
+        'subscriptionTier',
+        'currentPlan',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'subscription',
+        'stripeCustomerId',
+        'offerCredits',
+        'offerSlotCredits',
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'banned',
+        'bannedAt',
+        'superOwner',
+        'isAdmin',
+        'admin',
+        'reputation',
+        'communityMembers',
+        'joinedCommunities'
+      ];
+    }
+
+    function requestHasProtectedUserFields() {
+      return request.resource.data.keys().hasAny(protectedUserFields()) ||
+             request.resource.data.get('businessInfo', {}).keys().hasAny([
+               'customLimits',
+               'customLimitsExpiry',
+               'adminNotes',
+               'lastAdminUpdate'
+             ]);
+    }
+
+    function changesProtectedUserFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedUserFields()) ||
+             (
+               request.resource.data.diff(resource.data).affectedKeys().hasAny(['businessInfo']) &&
+               request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys().hasAny([
+                 'customLimits',
+                 'customLimitsExpiry',
+                 'adminNotes',
+                 'lastAdminUpdate'
+               ])
+             );
+    }
+
+    function hasAllowedSelfCreateRole() {
+      return !request.resource.data.keys().hasAny(['role']) ||
+             request.resource.data.role == 'user' ||
+             request.resource.data.role == 'business' ||
+             request.resource.data.role == 'partner';
+    }
+
+    function hasServerPaidOfferEntitlement() {
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let tier = me.get('subscriptionTier', 'free');
+      return tier == 'elite' ||
+             tier == 'professional' ||
+             me.get('offerCredits', 0) > 0;
     }
 
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
@@ -112,26 +187,33 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() &&
+                    request.auth.uid == userId &&
+                    hasAllowedSelfCreateRole() &&
+                    !request.resource.data.keys().hasAny(['accountType']) &&
+                    !requestHasProtectedUserFields();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       !changesProtectedUserFields();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       !changesProtectedUserFields();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent() && !changesProtectedUserFields();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile() && !changesProtectedUserFields();
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                         .hasAny(['role', 'accountType']) &&
+                       !changesProtectedUserFields();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
@@ -281,13 +363,15 @@ service cloud.firestore {
       // Any signed-in user can create (author must be self)
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                        request.resource.data.author.id == request.auth.uid) &&
+                       request.resource.data.get('status', 'draft') == 'draft';
 
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
+                       (((resource.data.authorId == request.auth.uid ||
+                          (resource.data.author != null &&
+                           resource.data.author.id == request.auth.uid)) &&
+                         !(resource.data.get('status', 'draft') != 'published' && request.resource.data.get('status', 'draft') == 'published')) ||
                         (request.auth.uid in resource.data.invitedFriends &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
                          request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
@@ -541,8 +625,9 @@ service cloud.firestore {
       allow read: if true;
       
       // Create: Must be partner, and partnerId must match their UID
-      allow create: if isPartner() && 
-                       request.resource.data.partnerId == request.auth.uid;
+      allow create: if isPartner() &&
+                       request.resource.data.partnerId == request.auth.uid &&
+                       hasServerPaidOfferEntitlement();
       
       // Update: Must be partner, own the offer, and cannot modify protected fields
       allow update: if isPartner() && 
@@ -556,7 +641,9 @@ service cloud.firestore {
 
     match /active_offers/{offerId} {
       allow read: if true;
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
+      allow create: if isPartner() &&
+                       request.resource.data.partnerId == request.auth.uid &&
+                       hasServerPaidOfferEntitlement();
       allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
@@ -564,7 +651,9 @@ service cloud.firestore {
     match /special_offers/{offerId} {
       allow read: if true;
       // Security: bind created special offer to authenticated partner owner
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
+      allow create: if isPartner() &&
+                       request.resource.data.partnerId == request.auth.uid &&
+                       hasServerPaidOfferEntitlement();
       allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
@@ -618,7 +707,8 @@ service cloud.firestore {
 
       // Only the owning partner can create/update/delete their own posts
       allow create: if isSignedIn() &&
-                       request.resource.data.partnerId == request.auth.uid;
+                       request.resource.data.partnerId == request.auth.uid &&
+                       hasServerPaidOfferEntitlement();
       allow update, delete: if isSignedIn() &&
                                (resource.data.partnerId == request.auth.uid || isAdmin());
 
@@ -636,7 +726,9 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
       
       // Anyone (even public visitors) can submit feedback/complaints
-      allow create: if true;
+      allow create: if isSignedIn() &&
+                      request.resource.data.businessId is string &&
+                      request.resource.data.businessId.size() > 0;
       
       // Only the business owner (to mark as resolved) or Admin can update
       allow update: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
