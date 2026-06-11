@@ -14,6 +14,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
+    "test:critical-security": "npx -y firebase-tools@latest emulators:exec --project demo-dinebuddies-critical --only firestore \"node scripts/test-critical-firestore-rules.mjs\"",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
     "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute"
   },
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
