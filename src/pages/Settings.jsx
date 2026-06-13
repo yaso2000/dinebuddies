@@ -12,6 +12,7 @@ import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier, getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import { BASE_SUBSCRIPTION_PLANS } from '../config/planDefaults';
+import { languageDisplayLabel } from '../utils/appLanguages';
 
 const BUSINESS_PAID_MONTHLY_USD =
     BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite')?.price ?? 29;
@@ -131,7 +132,7 @@ const Settings = () => {
                 {
                     icon: <FaGlobe />,
                     label: t('language', 'Language'),
-                    value: i18n.language === 'ar' ? 'العربية' : 'English',
+                    value: languageDisplayLabel(i18n.language),
                     onClick: () => navigate('/settings/language'),
                     color: '#10b981'
                 },
@@ -405,7 +406,7 @@ const Settings = () => {
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '700', marginBottom: '2px' }}>{t('welcome_language', 'Language')}</div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('english', 'English')}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{languageDisplayLabel(i18n.language)}</div>
                                 </div>
                                 <FaChevronRight className="settings-row-chevron" />
                             </div>

@@ -1,3 +1,5 @@
+import { normalizeAppLanguage } from './appLanguages.js';
+
 /**
  * Detect Google / Firebase AI (Gemini, Imagen) billing & quota errors from SDK messages.
  * @param {unknown} text
@@ -13,17 +15,18 @@ export function isGeminiProviderBillingExhausted(text) {
 
 export const GEMINI_PROVIDER_BILLING_CODE = 'GEMINI_PROVIDER_BILLING_EXHAUSTED';
 
-/** @param {'ar' | 'en'} [locale] */
+/** @param {string} [locale] */
 export function geminiProviderBillingUserMessage(locale = 'ar') {
-    if (locale === 'en') {
+    const code = normalizeAppLanguage(locale);
+    if (code === 'ar') {
         return (
-            'Dine Credits in the app are separate from Google AI Prepay. ' +
-            'Google returned “prepayment credits depleted” for Firebase project dinebuddies — top up Prepay in AI Studio (ai.studio/projects → dinebuddies → Billing), not the in-app wallet.'
+            'كريدت Dine في التطبيق (مثل 3000+) مختلفة عن رصيد Google AI Prepay. ' +
+            'Google رفض الطلب لأن رصيد الدفع المسبق لمشروع Firebase dinebuddies نفد — شحن Prepay من AI Studio (ai.studio/projects → dinebuddies → Billing)، وليس من محفظة الكريدت داخل التطبيق.'
         );
     }
     return (
-        'كريدت Dine في التطبيق (مثل 3000+) مختلفة عن رصيد Google AI Prepay. ' +
-        'Google رفض الطلب لأن رصيد الدفع المسبق لمشروع Firebase dinebuddies نفد — شحن Prepay من AI Studio (ai.studio/projects → dinebuddies → Billing)، وليس من محفظة الكريدت داخل التطبيق.'
+        'Dine Credits in the app are separate from Google AI Prepay. ' +
+        'Google returned “prepayment credits depleted” for Firebase project dinebuddies — top up Prepay in AI Studio (ai.studio/projects → dinebuddies → Billing), not the in-app wallet.'
     );
 }
 

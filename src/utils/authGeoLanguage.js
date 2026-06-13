@@ -1,4 +1,5 @@
 /** ISO country codes where Arabic is the default UI language on auth pages. */
+import { isRtlLanguage, normalizeAppLanguage } from './appLanguages.js';
 const ARABIC_COUNTRY_CODES = new Set([
     'SA', 'AE', 'KW', 'QA', 'BH', 'OM', 'YE', 'IQ', 'SY', 'JO', 'LB', 'PS', 'EG', 'LY', 'TN', 'DZ', 'MA',
     'SD', 'MR', 'SO', 'DJ', 'KM', 'TD', 'ER', 'EH', 'SS',
@@ -14,9 +15,9 @@ export function languageForCountryCode(countryCode) {
 }
 
 export function applyHtmlLanguage(lang) {
-    const lc = lang === 'ar' ? 'ar' : 'en';
-    document.documentElement.dir = lc === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.lang = lc;
+    const code = normalizeAppLanguage(lang);
+    document.documentElement.dir = isRtlLanguage(code) ? 'rtl' : 'ltr';
+    document.documentElement.lang = code;
 }
 
 /**

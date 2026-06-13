@@ -161,6 +161,7 @@ export default function AiDesignStudio() {
                 userPrompt: trimmed,
                 designCategory: categoryId,
                 aspectRatio: aspectRatioForDesignCategory(categoryId),
+                outputLanguage: i18n.language,
             });
 
             if (!result.success) {

@@ -1,7 +1,9 @@
 import { auth } from '../firebase/config';
+import i18n from '../i18n';
 import { unwrapAiResponseData } from '../utils/aiContentFieldMapper';
 import { buildDatingAiGenerateBody } from '../utils/datingAiRequestPayload';
 import { enforceCardStructureTextLimits, normalizeCardStructure } from '../utils/cardStructure';
+import { normalizeAiOutputLanguage } from '../utils/aiOutputLanguage';
 import {
     GEMINI_PROVIDER_BILLING_CODE,
     geminiProviderBillingUserMessage,
@@ -10,6 +12,15 @@ import {
 
 const AI_GENERATE_PATH = '/api/ai/generate';
 const AI_MULTI_GENERATE_PATH = '/api/ai/multi-generate';
+
+function resolveOutputLanguage(options = {}) {
+    return normalizeAiOutputLanguage(options.outputLanguage || i18n.language);
+}
+
+function withOutputLanguage(body, options = {}) {
+    body.outputLanguage = resolveOutputLanguage(options);
+    return body;
+}
 
 /** Obtain Bearer token; refresh only when needed or after 401 retry. */
 async function getAuthBearerToken(forceRefresh = false) {
@@ -242,6 +253,7 @@ export async function generateAIContent(userPrompt, postType, subType, options =
         }
 
         body = datingPayload.body;
+        withOutputLanguage(body, options);
     } else {
         body = { userPrompt: trimmedPrompt, postType };
 
@@ -268,6 +280,7 @@ export async function generateAIContent(userPrompt, postType, subType, options =
             if (options.aspectRatio) body.aspectRatio = options.aspectRatio;
         }
 
+        withOutputLanguage(body, options);
     }
 
     const endpoint =
@@ -322,7 +335,10 @@ export function formatAiErrorMessage(result, t) {
         result.code === GEMINI_PROVIDER_BILLING_CODE ||
         isGeminiProviderBillingExhausted(result.message || result.error)
     ) {
-        return t('ai_gemini_billing_exhausted', geminiProviderBillingUserMessage('ar'));
+        return t(
+            'ai_gemini_billing_exhausted',
+            geminiProviderBillingUserMessage(normalizeAiOutputLanguage(i18n.language))
+        );
     }
 
     if (result.code === 'MALFORMED_JSON') {
@@ -397,6 +413,7 @@ export function formatAiErrorMessage(result, t) {
  *   venueType?: string,
  *   venueName?: string,
  *   aspectRatio?: '1:1' | '9:16',
+ *   outputLanguage?: string,
  * }} params
  * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
  */
@@ -406,6 +423,7 @@ export async function generateAIMagicCover({
     venueType,
     venueName,
     aspectRatio = '1:1',
+    outputLanguage,
 }) {
     const trimmedPrompt = String(userPrompt || '').trim();
     if (!trimmedPrompt) {
@@ -441,6 +459,7 @@ export async function generateAIMagicCover({
     const venueNameStr = String(venueName || '').trim();
     if (venueTypeStr) body.venueType = venueTypeStr;
     if (venueNameStr) body.venueName = venueNameStr;
+    withOutputLanguage(body, { outputLanguage });
 
     console.log('=== CRITICAL OUTGOING AI PAYLOAD ===', { endpoint: AI_MULTI_GENERATE_PATH, body });
 
@@ -481,10 +500,11 @@ export async function generateAIMagicCover({
  *   userPrompt: string,
  *   designCategory: import('../constants/aiDesignStudioCategories.js').AiDesignStudioCategoryId,
  *   aspectRatio?: '1:1' | '9:16' | '16:9',
+ *   outputLanguage?: string,
  * }} params
  * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
  */
-export async function generateAIDesignStudioImage({ userPrompt, designCategory, aspectRatio = '1:1' }) {
+export async function generateAIDesignStudioImage({ userPrompt, designCategory, aspectRatio = '1:1', outputLanguage }) {
     const trimmedPrompt = String(userPrompt || '').trim();
     if (!trimmedPrompt) {
         return { success: false, error: 'userPrompt is required', code: 'VALIDATION_ERROR' };
@@ -514,6 +534,7 @@ export async function generateAIDesignStudioImage({ userPrompt, designCategory, 
         designCategory,
         aspectRatio,
     };
+    withOutputLanguage(body, { outputLanguage });
 
     let response;
     try {

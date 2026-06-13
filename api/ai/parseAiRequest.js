@@ -2,6 +2,8 @@
  * Shared request parsing for /api/ai/generate and /api/ai/multi-generate.
  */
 
+import { normalizeAppLanguage } from '../../src/utils/appLanguages.js';
+
 const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
 const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio']);
 const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
@@ -47,6 +49,7 @@ export function parseAiGenerateBody(body) {
         venueDetails,
         cardStructure,
         designCategory,
+        outputLanguage: outputLanguageRaw,
     } = record;
 
     if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
@@ -54,6 +57,9 @@ export function parseAiGenerateBody(body) {
     }
 
     const trimmedPrompt = userPrompt.trim();
+    const outputLanguage = normalizeAppLanguage(
+        typeof outputLanguageRaw === 'string' ? outputLanguageRaw : 'en',
+    );
     const normalizedPackage = String(generationPackage || '').trim();
     const normalizedPostType = typeof postType === 'string' ? postType.trim() : '';
 
@@ -96,6 +102,7 @@ export function parseAiGenerateBody(body) {
                 userPrompt: trimmedPrompt,
                 aspectRatio: ratio,
                 designCategory: designCategoryRaw,
+                outputLanguage,
             };
         }
 
@@ -140,6 +147,7 @@ export function parseAiGenerateBody(body) {
                   }
                 : {}),
             ...(optionalSubType ? { subType: optionalSubType } : {}),
+            outputLanguage,
         };
     }
 
@@ -178,6 +186,7 @@ export function parseAiGenerateBody(body) {
                   }
                 : {}),
             ...(parsedSubType ? { subType: parsedSubType } : {}),
+            outputLanguage,
         };
     }
 
@@ -215,6 +224,7 @@ export function parseAiGenerateBody(body) {
                 venueType: pickOptionalString(venueType),
                 venueName: datingCtx.venueDetails.name || pickOptionalString(venueName),
                 cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
+                outputLanguage,
             };
         }
 
@@ -227,6 +237,7 @@ export function parseAiGenerateBody(body) {
             venueType: pickOptionalString(venueType),
             venueName: pickOptionalString(venueName),
             cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
+            outputLanguage,
         };
     }
 
@@ -239,6 +250,7 @@ export function parseAiGenerateBody(body) {
         generationPackage: 'text',
         postType: normalizedPostType,
         userPrompt: trimmedPrompt,
+        outputLanguage,
     };
 }
 

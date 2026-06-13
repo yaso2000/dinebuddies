@@ -44,7 +44,7 @@ export default function MagicCoverGeneratePanel({
     requireVenue = true,
     embedded = false,
 }) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [prompt, setPrompt] = useState('');
@@ -85,6 +85,7 @@ export default function MagicCoverGeneratePanel({
                 venueType,
                 venueName,
                 aspectRatio: effectiveAspectRatio,
+                outputLanguage: i18n.language,
             });
 
             if (generationId !== generationSeqRef.current) {

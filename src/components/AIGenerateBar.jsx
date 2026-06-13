@@ -65,7 +65,7 @@ export default function AIGenerateBar({
     getDatingAiContext,
     disabledHint,
 }) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [prompt, setPrompt] = useState('');
@@ -141,13 +141,14 @@ export default function AIGenerateBar({
                 isDatingInvitation ? 'invitation' : postType,
                 isDatingInvitation ? 'date' : subType,
                 isDatingInvitation
-                    ? { datingContext: liveDatingContext }
+                    ? { datingContext: liveDatingContext, outputLanguage: i18n.language }
                     : {
                           generationPackage: pkg,
                           aspectRatio:
                               pkg === 'image' || pkg === 'invitation_bundle' ? aspectRatio : undefined,
                           venueType: invitationVenue?.venueType,
                           venueName: invitationVenue?.venueName,
+                          outputLanguage: i18n.language,
                       }
             );
 
