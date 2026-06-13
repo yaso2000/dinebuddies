@@ -10,6 +10,11 @@ import {
     normalizeCardStructure,
 } from '../utils/cardStructure.js';
 import {
+    buildAiLanguageRule,
+    buildInvitationToneInstruction,
+    normalizeAiOutputLanguage,
+} from '../utils/aiOutputLanguage.js';
+import {
     buildDatingInvitationContextLines,
     buildDatingInvitationSystemInstruction,
 } from '../utils/datingInvitationAiPrompt.js';
@@ -98,6 +103,7 @@ export interface GenerateContentInput {
     businessContext?: BusinessInvitationContext;
     datingContext?: DatingInvitationContext;
     cardStructure?: CardStructure;
+    outputLanguage?: string;
 }
 
 export interface InvitationContent {
@@ -183,6 +189,7 @@ export interface MultimodalPipelineInput {
     businessContext?: BusinessInvitationContext;
     aspectRatio?: CoverAspectRatio;
     designCategory?: DesignStudioCategory;
+    outputLanguage?: string;
 }
 
 export interface MultimodalPipelineData {
@@ -339,37 +346,15 @@ function buildInvitationSystemInstruction(
     subType: InvitationSubType | undefined,
     accountType: InvitationAccountType,
     cardStructure: CardStructure = 'modern_minimal',
+    outputLanguage = 'en',
 ): string {
     const baseRule = `Return exactly: {"title":"...","description":"..."}. No other keys. Do not invent a venue address. Use venueType and venueName from context only. Both title and description are REQUIRED — never leave description empty.`;
 
-    let toneRule = '';
-
-    if (accountType === 'business') {
-        toneRule =
-            'Write a promotional business invitation in Arabic: welcoming, professional, and marketing-oriented. Speak as the venue inviting guests. Weave in businessName, tagline, profileDescription, and activeOffers from context when provided — never invent offers, discounts, or locations not in context.';
-
-        if (subType === 'public') {
-            toneRule +=
-                ' Public invitation: catchy title featuring the business; description highlights what makes the venue special and any active offer.';
-        } else if (subType === 'private') {
-            toneRule += ' Private invitation: exclusive, VIP tone while staying professional.';
-        } else if (subType === 'date') {
-            toneRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
-        }
-    } else {
-        toneRule =
-            'Write a personal social invitation in Arabic: warm, casual, and informal — like a friend inviting friends to meet up at a venue.';
-
-        if (subType === 'public') {
-            toneRule +=
-                ' Public invitation: catchy title (venue name allowed from context), friendly open invite for the venue type.';
-        } else if (subType === 'private') {
-            toneRule += ' Private invitation: warm, personal, close-friends tone.';
-        } else if (subType === 'date') {
-            return buildDatingInvitationSystemInstruction(cardStructure);
-        }
+    if (subType === 'date' && accountType === 'user') {
+        return buildDatingInvitationSystemInstruction(cardStructure, outputLanguage);
     }
 
+    const toneRule = buildInvitationToneInstruction(outputLanguage, subType, accountType);
     const structureBlock = buildCardStructurePromptBlock(normalizeCardStructure(cardStructure));
     return `${baseRule} ${toneRule}${structureBlock}`;
 }
@@ -379,13 +364,13 @@ function buildSystemInstruction(
     subType?: InvitationSubType,
     accountType: InvitationAccountType = 'user',
     cardStructure: CardStructure = 'modern_minimal',
+    outputLanguage = 'en',
 ): string {
-    const languageRule =
-        'Write only in natural, engaging Arabic. Output must match the JSON shape described in the user message.';
+    const languageRule = buildAiLanguageRule(outputLanguage);
 
     switch (postType) {
         case 'invitation':
-            return `${JSON_OUTPUT_RULE} ${languageRule} ${buildInvitationSystemInstruction(subType, accountType, cardStructure)}`;
+            return `${JSON_OUTPUT_RULE} ${languageRule} ${buildInvitationSystemInstruction(subType, accountType, cardStructure, outputLanguage)}`;
 
         case 'regular_post':
             return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"text":"..."}. Facebook-style post with fitting emoji. No title field.`;
@@ -634,7 +619,15 @@ function validateGeneratedContent(postType: TextPostType, value: unknown): strin
 }
 
 export async function generateContent(input: GenerateContentInput): Promise<GenerateContentResult> {
-    const { userPrompt, postType, subType, accountType = 'user', cardStructure = 'modern_minimal' } = input;
+    const {
+        userPrompt,
+        postType,
+        subType,
+        accountType = 'user',
+        cardStructure = 'modern_minimal',
+        outputLanguage = 'en',
+    } = input;
+    const lang = normalizeAiOutputLanguage(outputLanguage);
 
     if (!isNonEmptyString(userPrompt)) {
         return {
@@ -650,6 +643,7 @@ export async function generateContent(input: GenerateContentInput): Promise<Gene
         subType,
         accountType,
         normalizeCardStructure(cardStructure),
+        lang,
     );
 
     try {
@@ -1000,6 +994,7 @@ export async function runMultimodalPipeline(
             venueName: input.venueName,
             accountType: input.accountType,
             businessContext: input.businessContext,
+            outputLanguage: input.outputLanguage,
         });
 
         if (!textResult.success) {

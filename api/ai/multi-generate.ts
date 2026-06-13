@@ -194,6 +194,7 @@ export default async function handler(req, res) {
             businessContext: callerContext.businessContext,
             aspectRatio: request.aspectRatio,
             designCategory: request.designCategory,
+            outputLanguage: request.outputLanguage,
         });
 
         if (pipelineResult.success === false) {

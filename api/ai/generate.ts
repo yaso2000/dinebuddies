@@ -217,6 +217,7 @@ export default async function handler(req: any, res: any) {
                 accountType: callerContext.accountType,
                 businessContext: callerContext.businessContext,
                 aspectRatio: request.aspectRatio,
+                outputLanguage: request.outputLanguage,
             });
 
             if (pipelineResult.success === false) {
@@ -309,6 +310,7 @@ export default async function handler(req: any, res: any) {
             businessContext: callerContext.businessContext,
             datingContext,
             cardStructure: request.cardStructure || 'modern_minimal',
+            outputLanguage: request.outputLanguage,
         });
 
         if (result.success === false) {
