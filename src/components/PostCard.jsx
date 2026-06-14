@@ -18,6 +18,14 @@ import MotionPostBody from './MotionPostBody';
 import { isCommunityMotionPost, motionDocFromPost } from '../features/motion-post/motionPostFeedUtils';
 import { FaCalendarAlt, FaMapMarkerAlt, FaImage, FaYoutube, FaTiktok, FaInstagram, FaPlay } from 'react-icons/fa';
 import { globalMediaManager } from '../utils/mediaUtils';
+import {
+    buildYoutubeEmbedSrc,
+    isIosLikeDevice,
+    isYoutubeShortPost,
+    getYoutubeThumbnailUrl,
+    shouldMuteEmbedAutoplay,
+    YOUTUBE_EMBED_ALLOW
+} from '../utils/videoEmbedUtils';
 import './PostCard.css';
 import './comments/PostComments.css';
 import PostCommentRow from './comments/PostCommentRow';
@@ -70,6 +78,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const [detailCommentWindow, setDetailCommentWindow] = useState(5);
 
     const [isPlaying, setIsPlaying] = useState(false);
+    const [embedMuted, setEmbedMuted] = useState(false);
+    const [playbackEpoch, setPlaybackEpoch] = useState(0);
 
     // Optimistic likes — local state prevents flicker from onSnapshot two-phase firing
     const [localLikes, setLocalLikes] = useState(() => post.likes || []);
@@ -147,45 +157,74 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         setPostMenuAlignStart(overflowLeft && !overflowRight);
     }, [showMenu, i18n.language]);
 
+    const stopPostMedia = () => {
+        setIsPlaying(false);
+        setEmbedMuted(false);
+        setPlaybackEpoch((e) => e + 1);
+        if (videoRef.current) {
+            videoRef.current.pause();
+            try {
+                videoRef.current.currentTime = 0;
+            } catch (_) { /* ignore */ }
+        }
+        globalMediaManager.stop(post.id);
+    };
+
     useEffect(() => {
         if (!mediaContainerRef.current) return;
         const type = post?.mediaType;
-        if (!['video', 'youtube', 'tiktok'].includes(type)) return;
+        const embedTypes = ['video', 'youtube', 'tiktok', 'instagram'];
+        if (!embedTypes.includes(type)) return;
+
+        const MIN_VISIBLE_RATIO = 0.35;
 
         const observer = new IntersectionObserver(([entry]) => {
-            if (entry.isIntersecting) {
-                if (['youtube', 'tiktok'].includes(type)) {
+            const visibleEnough = entry.isIntersecting && entry.intersectionRatio >= MIN_VISIBLE_RATIO;
+
+            if (visibleEnough) {
+                if (['youtube', 'tiktok', 'instagram'].includes(type)) {
+                    if (type === 'youtube' && shouldMuteEmbedAutoplay()) {
+                        setEmbedMuted(true);
+                    } else {
+                        setEmbedMuted(false);
+                    }
                     setIsPlaying(true);
                 } else if (type === 'video' && videoRef.current) {
-                    videoRef.current.play().catch(e => console.log('Autoplay blocked', e));
+                    videoRef.current.play().catch(() => {});
                     setIsPlaying(true);
                 }
                 globalMediaManager.play(post.id);
             } else {
-                if (['youtube', 'tiktok'].includes(type)) {
-                    setIsPlaying(false);
-                } else if (type === 'video' && videoRef.current) {
-                    videoRef.current.pause();
-                    setIsPlaying(false);
-                }
+                stopPostMedia();
             }
-        }, { threshold: 0.5 });
+        }, { threshold: [0, 0.2, 0.35, 0.5, 0.75, 1] });
 
         observer.observe(mediaContainerRef.current);
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            globalMediaManager.stop(post.id);
+        };
     }, [post?.mediaType, post.id]);
 
     useEffect(() => {
         return globalMediaManager.subscribe((activeId) => {
             if (activeId !== post.id) {
                 setIsPlaying(false);
-                if (videoRef.current) videoRef.current.pause();
+                setEmbedMuted(false);
+                setPlaybackEpoch((e) => e + 1);
+                if (videoRef.current) {
+                    videoRef.current.pause();
+                    try {
+                        videoRef.current.currentTime = 0;
+                    } catch (_) { /* ignore */ }
+                }
             }
         });
     }, [post.id]);
 
     const handlePlayMedia = (e) => {
         if (e) e.stopPropagation();
+        setEmbedMuted(false);
         setIsPlaying(true);
         globalMediaManager.play(post.id);
     };
@@ -345,10 +384,10 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
         try {
             await deleteFeedPostCascade(post);
-            showToast(t('post_delete_success', 'تم حذف المنشور.'), 'success');
+            showToast(t('post_delete_success'), 'success');
         } catch (error) {
             console.error('Error deleting post:', error);
-            showToast(t('post_delete_failed', 'تعذّر حذف المنشور.'), 'error');
+            showToast(t('post_delete_failed'), 'error');
         }
     };
 
@@ -546,6 +585,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const isMotionPost = isCommunityMotionPost(displayPost);
     const motionDoc = useMemo(() => motionDocFromPost(displayPost), [displayPost]);
     const isVideoPost = displayPost.mediaType === 'video';
+    const isYoutubeShort = isYoutubeShortPost(displayPost);
     // Resolve Display Post Author (Original Author)
     let displayAuthorName = displayPost.businessName || displayPost.partnerName || displayPost.author?.name || displayPost.userName || displayPost.user_name || displayPost.displayName || 'User';
     let displayAuthorId = displayPost.partnerId || displayPost.author?.id || displayPost.authorId || displayPost.userId || displayPost.uid;
@@ -587,7 +627,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
     return (
         <div
-            className={`post-card${showInChat ? ' in-chat' : ''}${isVideoPost ? ' post-card--video' : ''}`}
+            className={`post-card${showInChat ? ' in-chat' : ''}${isVideoPost ? ' post-card--video' : ''}${isYoutubeShort ? ' post-card--youtube-short' : ''}`}
             onClick={() => {
                 if (!showInChat) {
                     navigate(post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`);
@@ -811,19 +851,37 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             </div>
                         ) : (
                             !isMotionPost &&
-                            (displayPost.content || (!displayPost.overlayText && displayPost.caption)) && (
-                                <div className="post-text" style={{
-                                    whiteSpace: 'pre-wrap',
-                                    fontSize: displayPost.textStyle?.fontSize ? `${displayPost.textStyle.fontSize}px` : '0.95rem',
-                                    textAlign: displayPost.textStyle?.textAlign || 'left',
-                                    fontWeight: displayPost.textStyle?.fontWeight || 'normal',
-                                    fontStyle: displayPost.textStyle?.fontStyle || 'normal',
-                                    lineHeight: '1.5',
-                                    color: 'inherit',
-                                    padding: '0 16px',
-                                    marginBottom: '12px'
-                                }}>
-                                    {displayPost.content || displayPost.caption}
+                            (displayPost.postTitle || displayPost.content || (!displayPost.overlayText && displayPost.caption)) && (
+                                <div style={{ padding: '0 16px', marginBottom: '12px' }}>
+                                    {displayPost.postTitle ? (
+                                        <div
+                                            className="post-headline"
+                                            style={{
+                                                whiteSpace: 'pre-wrap',
+                                                fontSize: '1.2rem',
+                                                fontWeight: 800,
+                                                lineHeight: 1.35,
+                                                textAlign: displayPost.textStyle?.textAlign || 'left',
+                                                color: 'inherit',
+                                                marginBottom: displayPost.content || displayPost.caption ? '6px' : 0,
+                                            }}
+                                        >
+                                            {displayPost.postTitle}
+                                        </div>
+                                    ) : null}
+                                    {(displayPost.content || displayPost.caption) ? (
+                                        <div className="post-text" style={{
+                                            whiteSpace: 'pre-wrap',
+                                            fontSize: displayPost.textStyle?.fontSize ? `${displayPost.textStyle.fontSize}px` : '0.9rem',
+                                            textAlign: displayPost.textStyle?.textAlign || 'left',
+                                            fontWeight: displayPost.textStyle?.fontWeight || 'normal',
+                                            fontStyle: displayPost.textStyle?.fontStyle || 'normal',
+                                            lineHeight: '1.5',
+                                            color: 'inherit',
+                                        }}>
+                                            {displayPost.content || displayPost.caption}
+                                        </div>
+                                    ) : null}
                                 </div>
                             )
                         )}
@@ -831,69 +889,129 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         {/* Media Container (Video/YouTube/TikTok/Images) */}
                         {!isMotionPost &&
                         (displayPost.mediaUrl || displayPost.images?.length > 0 || displayPost.image) && (
-                            <div ref={mediaContainerRef} className="post-media-container" onClick={() => { if (!isEditing) navigate(post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`); }} style={{ position: 'relative', overflow: 'hidden', marginTop: '10px', width: '100%', background: '#000' }}>
+                            <div
+                                ref={mediaContainerRef}
+                                className={`post-media-container${isYoutubeShort ? ' post-media-container--vertical' : ''}`}
+                                onClick={() => { if (!isEditing) navigate(post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`); }}
+                            >
                                 {displayPost.mediaType === 'youtube' ? (
                                     isPlaying ? (
-                                        <iframe 
-                                            width="100%" 
-                                            height="350" 
-                                            src={`https://www.youtube.com/embed/${displayPost.mediaUrl}?autoplay=1&controls=1&modestbranding=1`} 
-                                            frameBorder="0" 
-                                            allow="autoplay; fullscreen"
-                                            allowFullScreen
-                                            style={{ display: 'block' }}
-                                        ></iframe>
+                                        <div
+                                            className={`post-embed-player${isYoutubeShort ? ' post-embed-player--vertical' : ''}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <iframe
+                                                key={`yt-${displayPost.mediaUrl}-${embedMuted ? 'm' : 'u'}-${playbackEpoch}`}
+                                                width="100%"
+                                                height="100%"
+                                                src={buildYoutubeEmbedSrc(displayPost.mediaUrl, {
+                                                    autoplay: true,
+                                                    mute: embedMuted
+                                                })}
+                                                frameBorder="0"
+                                                allow={YOUTUBE_EMBED_ALLOW}
+                                                allowFullScreen
+                                                title="YouTube"
+                                            />
+                                            {embedMuted && isIosLikeDevice() && (
+                                                <button
+                                                    type="button"
+                                                    className="post-embed-unmute-hint"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEmbedMuted(false);
+                                                    }}
+                                                >
+                                                    <FaPlay size={10} />
+                                                    {t('tap_for_sound', 'Tap for sound')}
+                                                </button>
+                                            )}
+                                        </div>
                                     ) : (
-                                        <div onClick={handlePlayMedia} style={{ width: '100%', height: '350px', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <img src={`https://img.youtube.com/vi/${displayPost.mediaUrl}/hqdefault.jpg`} alt="YouTube" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
-                                            <FaYoutube size={64} color="#ff0000" style={{ position: 'absolute' }} />
+                                        <div
+                                            className={`post-media-preview${isYoutubeShort ? ' post-media-preview--vertical post-media-preview--short' : ''}`}
+                                            onClick={(e) => { e.stopPropagation(); handlePlayMedia(e); }}
+                                        >
+                                            <img
+                                                src={getYoutubeThumbnailUrl(displayPost.mediaUrl, { isShort: isYoutubeShort })}
+                                                alt="YouTube"
+                                                className="post-media-preview__img"
+                                                onError={(e) => {
+                                                    e.currentTarget.onerror = null;
+                                                    e.currentTarget.src = `https://img.youtube.com/vi/${displayPost.mediaUrl}/hqdefault.jpg`;
+                                                }}
+                                            />
+                                            <div className="post-media-preview__play">
+                                                <span className="post-media-preview__play-icon">
+                                                    <FaYoutube size={22} color="#ff0000" />
+                                                </span>
+                                            </div>
                                         </div>
                                     )
                                 ) : displayPost.mediaType === 'tiktok' ? (
                                     isPlaying ? (
-                                        <div style={{ background: '#000', width: '100%', display: 'flex', justifyContent: 'center' }}>
-                                            <iframe 
-                                                src={`https://www.tiktok.com/embed/v2/${displayPost.mediaUrl}?autoplay=1`} 
-                                                width="100%" 
-                                                height="600" 
-                                                frameBorder="0" 
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                        <div className="post-embed-shell" onClick={(e) => e.stopPropagation()}>
+                                            <iframe
+                                                key={`tt-${displayPost.mediaUrl}-${playbackEpoch}`}
+                                                src={`https://www.tiktok.com/embed/v2/${displayPost.mediaUrl}?autoplay=1`}
+                                                width="100%"
+                                                height="600"
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                                 allowFullScreen
-                                                style={{ border: 'none', maxWidth: '400px', display: 'block' }}
+                                                title="TikTok"
                                             />
                                         </div>
                                     ) : (
-                                        <div onClick={(e) => { e.stopPropagation(); handlePlayMedia(e); }} style={{ width: '100%', height: '500px', cursor: 'pointer', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                                            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(255,255,255,0.1)', color: 'white', borderRadius: '50%', width: '60px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <FaTiktok size={30} />
+                                        <div
+                                            className="post-media-preview post-media-preview--tall"
+                                            onClick={(e) => { e.stopPropagation(); handlePlayMedia(e); }}
+                                        >
+                                            <div className="post-media-preview__play">
+                                                <span className="post-media-preview__play-icon">
+                                                    <FaTiktok size={22} />
+                                                </span>
                                             </div>
                                         </div>
                                     )
                                 ) : displayPost.mediaType === 'instagram' ? (
-                                    <iframe 
-                                        width="100%" 
-                                        height="450" 
-                                        src={`https://www.instagram.com/p/${displayPost.mediaUrl}/embed/captioned`} 
-                                        frameBorder="0" 
-                                        scrolling="no"
-                                        style={{ display: 'block' }}
-                                    ></iframe>
+                                    isPlaying ? (
+                                        <iframe
+                                            key={`ig-${displayPost.mediaUrl}-${playbackEpoch}`}
+                                            width="100%"
+                                            height="450"
+                                            src={`https://www.instagram.com/p/${displayPost.mediaUrl}/embed/captioned`}
+                                            frameBorder="0"
+                                            scrolling="no"
+                                            title="Instagram"
+                                        />
+                                    ) : (
+                                        <div
+                                            className="post-media-preview"
+                                            onClick={(e) => { e.stopPropagation(); handlePlayMedia(e); }}
+                                        >
+                                            <div className="post-media-preview__play">
+                                                <span className="post-media-preview__play-icon">
+                                                    <FaInstagram size={22} />
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )
                                 ) : displayPost.mediaType === 'video' ? (
-                                    <video 
+                                    <video
                                         ref={videoRef}
-                                        src={displayPost.mediaUrl} 
-                                        className="post-video" 
+                                        src={displayPost.mediaUrl}
+                                        className="post-video"
                                         controls={isPlaying}
                                         autoPlay={isPlaying}
-                                        onClick={(e) => { e.stopPropagation(); if(!isPlaying) handlePlayMedia(e); }}
-                                        style={{ width: '100%', maxHeight: '500px', objectFit: 'contain', background: '#000' }}
+                                        playsInline
+                                        onClick={(e) => { e.stopPropagation(); if (!isPlaying) handlePlayMedia(e); }}
                                     />
                                 ) : (
                                     <img
                                         src={displayPost.mediaUrl || displayPost.image}
                                         alt="Post media"
                                         className="post-media-content"
-                                        style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: '500px' }}
                                     />
                                 )}
 

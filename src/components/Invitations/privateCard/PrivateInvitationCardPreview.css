@@ -62,15 +62,32 @@
     height: 14.444cqw;
 }
 
+/* Canonical invitation copy scale — fixed cqw sizes @ 360px card width */
+.private-invitation-card-preview--showcase {
+    --private-card-title-size: calc(4.72cqw * var(--private-card-copy-font-scale, 1));
+    --private-card-message-size: calc(4.58cqw * var(--private-card-copy-font-scale, 1));
+    --private-card-title-weight: 700;
+    --private-card-message-weight: 500;
+    --private-card-occasion-size: 0.62em;
+    --private-card-host-size: 0.93em;
+    --private-card-copy-width: 78%;
+}
+
 .private-invitation-card-preview--showcase .private-invitation-card-preview__title {
-    margin-bottom: 0.625em;
-    font-size: 1.18em;
+    margin-bottom: 0.5em;
+    font-size: var(--private-card-title-size);
+    font-weight: var(--private-card-title-weight);
+    line-height: 1.28;
+    letter-spacing: 0.01em;
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__message {
-    max-width: 92%;
+    width: 100%;
+    max-width: 100%;
     margin-bottom: 0.875em;
-    font-size: 0.78em;
+    font-size: var(--private-card-message-size);
+    font-weight: var(--private-card-message-weight);
+    line-height: 1.58;
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__message,
@@ -101,11 +118,11 @@
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__occasion {
-    font-size: 0.7em;
+    font-size: var(--private-card-occasion-size);
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__host-name {
-    font-size: 0.78em;
+    font-size: var(--private-card-host-size);
 }
 
 .private-invitation-card-preview--showcase .private-invitation-card-preview__avatar {
@@ -165,6 +182,92 @@
     align-items: center;
     text-align: center;
     background: transparent;
+}
+
+/* Fixed host badge — top corner, outside moving copy block */
+.private-invitation-card-preview--host-chip-visible {
+    --private-host-chip-reserve: 2.85em;
+}
+
+.private-invitation-card-preview--showcase.private-invitation-card-preview--host-chip-visible
+    .private-invitation-card-preview__inner {
+    --private-host-chip-reserve: 3.25em;
+}
+
+.private-invitation-card-preview__host-chip {
+    position: absolute;
+    z-index: 4;
+    top: 10px;
+    inset-inline-start: 10px;
+    inset-inline-end: auto;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.45em;
+    max-width: calc(100% - 20px);
+    padding-block: 0.3em;
+    padding-inline: 0.3em 0.65em;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.78);
+    backdrop-filter: blur(10px) saturate(1.15);
+    -webkit-backdrop-filter: blur(10px) saturate(1.15);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 6px 18px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.private-invitation-card-preview--showcase .private-invitation-card-preview__host-chip {
+    top: 2.778cqw;
+    inset-inline-start: 2.778cqw;
+    inset-inline-end: auto;
+    max-width: calc(100% - 5.556cqw);
+    padding-block: 0.35em;
+    padding-inline: 0.35em 0.75em;
+}
+
+.private-invitation-card-preview__host-chip-avatar {
+    width: 1.75em;
+    height: 1.75em;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.45);
+}
+
+.private-invitation-card-preview--showcase .private-invitation-card-preview__host-chip-avatar {
+    width: 7.778cqw;
+    height: 7.778cqw;
+}
+
+.private-invitation-card-preview__host-chip-avatar--empty {
+    display: block;
+    background: rgba(255, 255, 255, 0.14);
+    border-style: dashed;
+}
+
+.private-invitation-card-preview__host-chip-name {
+    font-family: inherit;
+    font-size: 0.72em;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: 0.02em;
+    color: rgba(248, 250, 252, 0.96);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.private-invitation-card-preview--showcase .private-invitation-card-preview__host-chip-name {
+    font-size: 3.611cqw;
+}
+
+.private-invitation-card-preview--host-message-hidden .private-invitation-card-preview__host-chip {
+    display: none;
 }
 
 /* CSS gradient “background image” — swap for url() later without JSX changes */
@@ -239,6 +342,31 @@
     display: block;
 }
 
+.private-invitation-card-preview__bg--color {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Color/gradient fills: center copy like template art (not pinned to top) */
+.private-invitation-card-preview--color-bg.private-invitation-card-preview--showcase-compact
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__text-stack {
+    flex: 1 1 0;
+    justify-content: center;
+    padding-top: 2.25em;
+    padding-bottom: 0.5em;
+    box-sizing: border-box;
+}
+
+.private-invitation-card-preview--color-bg.private-invitation-card-preview--showcase-compact
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__main {
+    flex: 0 1 auto;
+    justify-content: center;
+    padding: 0 1.25em;
+}
+
 /* Template backgrounds: hide category icon is handled in JSX; hide decorative inner frames so art stays visible */
 .private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__inner::before,
@@ -270,21 +398,31 @@
 /* Title + message + avatar: one column, centered — on template bg fills the middle band of the artwork */
 .private-invitation-card-preview__text-stack {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 100%;
     flex: 1 1 auto;
     min-height: 0;
+    max-height: 100%;
     box-sizing: border-box;
     gap: 8px;
+    transform: translateY(var(--private-card-copy-offset-y, 0%));
+    transition: transform 0.22s ease;
+    overflow: visible;
 }
 
-/* Text panel: 50% of card (background image) width; max height 50% of card */
+.private-invitation-card-preview--text-backdrop .private-invitation-card-preview__text-stack,
+.private-invitation-card-preview--unified-copy .private-invitation-card-preview__text-stack {
+    flex-shrink: 0;
+    min-height: min-content;
+    max-height: calc(100% - var(--private-host-chip-reserve, 0px));
+}
+
+/* Text panel: width follows copy controls; height grows with wrapped copy */
 .private-invitation-card-preview--text-backdrop {
-    --private-text-backdrop-width: 50%;
-    --private-text-backdrop-max-height: 50%;
+    --private-text-backdrop-width: 78%;
 }
 
 .private-invitation-card-preview--showcase.private-invitation-card-preview--text-backdrop
@@ -293,50 +431,49 @@
     border-radius: 0.875em;
 }
 
-/* Text panel: 50% of card (background) — fixed box behind copy */
+/* Text panel — content-sized backdrop (no fixed max-height clipping) */
 .private-invitation-card-preview--text-backdrop .private-invitation-card-preview__text-panel,
 .private-invitation-card-preview--text-backdrop .private-invitation-card-preview__main.private-invitation-card-preview__text-panel {
-    width: var(--private-text-backdrop-width, 50%) !important;
-    max-width: var(--private-text-backdrop-width, 50%) !important;
-    max-height: var(--private-text-backdrop-max-height, 50%) !important;
+    width: var(--private-text-backdrop-width, 60%) !important;
+    max-width: var(--private-text-backdrop-width, 60%) !important;
+    max-height: none;
     height: auto;
-    min-height: 0;
+    min-height: min-content;
     margin-inline: auto;
     padding: 12px 16px;
     border-radius: 14px;
-    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.55));
+    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.39));
     box-sizing: border-box;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.38);
-    overflow: auto;
-    flex: 0 1 auto !important;
-    backdrop-filter: blur(10px) saturate(1.2);
-    -webkit-backdrop-filter: blur(10px) saturate(1.2);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.31);
+    overflow: visible;
+    flex: 0 0 auto !important;
+    flex-shrink: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Frosted glass tone — stronger blur */
+/* Frosted glass tone only — soft blur so the photo shows through */
 .private-invitation-card-preview--text-backdrop-frosted .private-invitation-card-preview__text-panel,
 .private-invitation-card-preview--text-backdrop-frosted .private-invitation-card-preview__main.private-invitation-card-preview__text-panel,
 .private-invitation-card-preview--text-backdrop-frosted.private-invitation-card-preview--structure-layout
-    .private-invitation-card-preview__copy-zone,
-.private-invitation-card-preview--text-backdrop-frosted.private-invitation-card-preview--structure-layout
-    .private-invitation-card-preview__signatory {
-    backdrop-filter: blur(22px) saturate(1.45);
-    -webkit-backdrop-filter: blur(22px) saturate(1.45);
-    border: 1px solid rgba(255, 255, 255, 0.34);
+    .private-invitation-card-preview__copy-zone {
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.22),
-        0 8px 28px rgba(0, 0, 0, 0.28);
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 8px 28px rgba(0, 0, 0, 0.22);
 }
 
 .private-invitation-card-preview--text-backdrop .private-invitation-card-preview__meta {
     width: fit-content;
-    max-width: var(--private-text-backdrop-width, 50%);
+    max-width: var(--private-text-backdrop-width, 60%);
     margin-inline: auto;
     margin-top: 0;
     padding: 8px 12px;
     border-radius: 12px;
-    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.55));
+    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.39));
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     border-color: transparent;
@@ -344,12 +481,17 @@
 }
 
 .private-invitation-card-preview--text-backdrop-frosted .private-invitation-card-preview__meta {
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.28);
+    backdrop-filter: blur(8px) saturate(1.15);
+    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.16),
-        0 8px 24px rgba(0, 0, 0, 0.3);
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 8px 24px rgba(0, 0, 0, 0.23);
+}
+
+/* Date/place strip removed from card face — details live on the invitation page */
+.private-invitation-card-preview__meta {
+    display: none !important;
 }
 
 .private-invitation-card-preview__main {
@@ -394,12 +536,15 @@
     .private-invitation-card-preview__inner--photo-bg
     .private-invitation-card-preview__main.private-invitation-card-preview__text-panel {
     flex: 0 0 auto !important;
-    width: var(--private-text-backdrop-width, 50%) !important;
-    max-width: var(--private-text-backdrop-width, 50%) !important;
-    max-height: var(--private-text-backdrop-max-height, 50%) !important;
+    flex-shrink: 0;
+    width: var(--private-text-backdrop-width, 60%) !important;
+    max-width: var(--private-text-backdrop-width, 60%) !important;
+    max-height: none;
     height: auto;
+    min-height: min-content;
     padding: 12px 16px;
     justify-content: flex-start;
+    overflow: visible;
 }
 
 .private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
@@ -429,7 +574,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     padding: 0;
     background: transparent;
     box-shadow: none;
@@ -483,26 +628,19 @@
 }
 
 .private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout
-    .private-invitation-card-preview__copy-zone,
-.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout
-    .private-invitation-card-preview__signatory {
-    width: var(--private-text-backdrop-width, 50%);
-    max-width: var(--private-text-backdrop-width, 50%);
-    max-height: var(--private-text-backdrop-max-height, 50%);
+    .private-invitation-card-preview__copy-zone {
+    width: var(--private-text-backdrop-width, 60%);
+    max-width: var(--private-text-backdrop-width, 60%);
+    max-height: none;
     margin-inline: auto;
     padding: 0.625em 0.875em;
     border-radius: 0.875em;
-    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.55));
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.38);
-    overflow: auto;
-}
-
-.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout.private-invitation-card-preview--showcase
-    .private-invitation-card-preview__copy-zone,
-.private-invitation-card-preview--text-backdrop.private-invitation-card-preview--structure-layout.private-invitation-card-preview--showcase
-    .private-invitation-card-preview__signatory {
-    padding: 0.625em 0.875em;
-    border-radius: 0.875em;
+    background: var(--private-text-backdrop-bg, rgba(0, 0, 0, 0.39));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.31);
+    overflow: visible;
+    height: auto;
+    min-height: min-content;
+    flex-shrink: 0;
 }
 
 /* All card copy hidden: only date/place meta; collapse empty main */
@@ -599,6 +737,37 @@
     max-width: 100%;
 }
 
+/* Showcase photo cards: one copy column width (matches text-backdrop panel) */
+.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__title,
+.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__message,
+.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__occasion,
+.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__host-name {
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+}
+
+.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__main
+    .private-invitation-card-preview__message {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+    white-space: normal;
+    text-wrap: pretty;
+}
+
 .private-invitation-card-preview--photo-bg .private-invitation-card-preview__main .private-invitation-card-preview__title {
     width: 100%;
     max-width: min(92%, 280px);
@@ -608,7 +777,6 @@
     box-sizing: border-box;
 }
 
-/* Keep body text inside the decorative frame — wrap at word boundaries (Arabic-friendly) */
 .private-invitation-card-preview--text-backdrop.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__main
     .private-invitation-card-preview__message {
@@ -630,21 +798,7 @@
     text-wrap: pretty;
 }
 
-/* Showcase + template art: slightly smaller type so text stays inside artwork safe area */
-.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
-    .private-invitation-card-preview__title {
-    font-size: 1.14em;
-    line-height: 1.22;
-}
-
-.private-invitation-card-preview--showcase.private-invitation-card-preview--photo-bg
-    .private-invitation-card-preview__message {
-    font-size: 0.76em;
-    line-height: 1.55;
-    max-width: 96%;
-}
-
-/* Dating: one centered panel (message + host) instead of split safe zones */
+/* Private & dating: one centered copy column on photo backgrounds (with or without backdrop) */
 .private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__inner--photo-bg
     .private-invitation-card-preview__text-stack {
@@ -653,38 +807,58 @@
     align-items: center;
 }
 
-.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
+    .private-invitation-card-preview__inner--photo-bg
+    .private-invitation-card-preview__main,
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__inner--photo-bg
     .private-invitation-card-preview__text-panel,
-.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__inner--photo-bg
     .private-invitation-card-preview__main.private-invitation-card-preview__text-panel {
-    flex: 0 1 auto !important;
-    width: var(--private-text-backdrop-width, 50%) !important;
-    max-width: var(--private-text-backdrop-width, 50%) !important;
-    max-height: var(--private-text-backdrop-max-height, 50%) !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0;
+    width: var(--private-text-backdrop-width, var(--private-card-copy-width, 60%)) !important;
+    max-width: var(--private-text-backdrop-width, var(--private-card-copy-width, 60%)) !important;
+    max-height: none;
+    height: auto;
+    min-height: min-content;
     margin-inline: auto;
     justify-content: center;
     align-items: center;
     gap: 0.5em;
+    padding: 0.625em 0.875em;
+    box-sizing: border-box;
+    overflow: visible;
 }
 
-.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__message {
     width: 100%;
     max-width: 100%;
     margin-bottom: 0.65em;
-    line-height: 1.55;
 }
 
-.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__occasion {
     margin-bottom: 0.45em;
 }
 
-.private-invitation-card-preview--unified-copy.private-invitation-card-preview--text-backdrop
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--photo-bg
     .private-invitation-card-preview__host {
     margin-bottom: 0;
+}
+
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--showcase
+    .private-invitation-card-preview__title {
+    font-size: var(--private-card-title-size);
+    font-weight: var(--private-card-title-weight);
+}
+
+.private-invitation-card-preview--unified-copy.private-invitation-card-preview--showcase
+    .private-invitation-card-preview__message {
+    font-size: var(--private-card-message-size);
+    font-weight: var(--private-card-message-weight);
 }
 
 .private-invitation-card-preview__inner--photo-bg .private-invitation-card-preview__host {
@@ -722,18 +896,20 @@
 
 .private-invitation-card-preview__title {
     margin: 0 0 8px;
-    font-size: 1.05rem;
-    font-weight: 800;
-    line-height: 1.25;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.28;
     font-family: inherit;
     max-width: 100%;
     word-break: break-word;
+    letter-spacing: 0.01em;
 }
 
 .private-invitation-card-preview__message {
     margin: 0 0 12px;
-    font-size: 0.78rem;
-    line-height: 1.45;
+    font-size: 0.94rem;
+    font-weight: 500;
+    line-height: 1.58;
     font-family: inherit;
     max-width: 100%;
     min-height: 2.2em;
@@ -749,6 +925,21 @@
     align-items: center;
     gap: 6px;
     margin-bottom: 12px;
+}
+
+.private-invitation-card-preview__host--name-only {
+    margin: 0.35em 0 0;
+    padding: 0;
+    width: 100%;
+    text-align: center;
+}
+
+.private-invitation-card-preview--text-backdrop .private-invitation-card-preview__message {
+    margin-bottom: 0.5em;
+}
+
+.private-invitation-card-preview--text-backdrop .private-invitation-card-preview__host--name-only {
+    margin-bottom: 0;
 }
 
 .private-invitation-card-preview__avatar {
@@ -887,8 +1078,12 @@
     animation: private-card-nudge 2s ease-in-out infinite;
 }
 
-.private-card-cat-icon--bbq {
-    animation: private-card-flame 1.4s ease-in-out infinite;
+.private-card-cat-icon--concert {
+    animation: private-card-pulse 1.8s ease-in-out infinite;
+}
+
+.private-card-cat-note {
+    animation: private-card-pulse 1.2s ease-in-out infinite;
 }
 
 .private-card-cat-icon--dating {
@@ -1030,28 +1225,8 @@
     white-space: nowrap;
 }
 
-/* --- Card content motion (title, body, host + avatar); background art stays still --- */
-@keyframes private-card-motion-sway {
-    0%,
-    100% {
-        transform: rotate(-1.2deg);
-    }
-    50% {
-        transform: rotate(1.2deg);
-    }
-}
-
-@keyframes private-card-motion-pulse {
-    0%,
-    100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.028);
-    }
-}
-
-@keyframes private-card-motion-float {
+/* --- Card content: gentle vertical bob --- */
+@keyframes private-card-motion-bob {
     0%,
     100% {
         transform: translateY(0);
@@ -1061,28 +1236,21 @@
     }
 }
 
-.private-invitation-card-preview--card-motion-sway .private-invitation-card-preview__main {
-    animation: private-card-motion-sway 3.2s ease-in-out infinite;
-    transform-origin: center 38%;
-    will-change: transform;
+.private-invitation-card-preview--showcase:not(.private-invitation-card-preview--unified-copy)
+    .private-invitation-card-preview__main {
+    width: var(--private-card-copy-width, 78%);
+    max-width: var(--private-card-copy-width, 78%);
+    margin-inline: auto;
+    box-sizing: border-box;
 }
 
-.private-invitation-card-preview--card-motion-pulse .private-invitation-card-preview__main {
-    animation: private-card-motion-pulse 2.75s ease-in-out infinite;
-    transform-origin: center center;
-    will-change: transform;
-}
-
-.private-invitation-card-preview--card-motion-float .private-invitation-card-preview__main {
-    animation: private-card-motion-float 3s ease-in-out infinite;
-    transform-origin: center center;
+.private-invitation-card-preview--card-motion-bob .private-invitation-card-preview__main {
+    animation: private-card-motion-bob 3.4s ease-in-out infinite;
     will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .private-invitation-card-preview--card-motion-sway .private-invitation-card-preview__main,
-    .private-invitation-card-preview--card-motion-pulse .private-invitation-card-preview__main,
-    .private-invitation-card-preview--card-motion-float .private-invitation-card-preview__main {
+    .private-invitation-card-preview--card-motion-bob .private-invitation-card-preview__main {
         animation: none !important;
         transform: none !important;
         will-change: auto;
@@ -1093,6 +1261,11 @@
 @supports not (container-type: inline-size) {
     .private-invitation-card-preview--showcase .private-invitation-card-preview__inner {
         font-size: clamp(10px, 4.2vw, 16px);
+    }
+
+    .private-invitation-card-preview--showcase {
+        --private-card-title-size: clamp(15px, calc(4.72vw * var(--private-card-copy-font-scale, 1)), 22px);
+        --private-card-message-size: clamp(14.5px, calc(4.58vw * var(--private-card-copy-font-scale, 1)), 21px);
     }
 
     .private-invitation-card-preview--showcase.private-invitation-card-preview--showcase-compact

@@ -37,6 +37,7 @@ const CommunityChatRoom = () => {
     const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
     const [partner, setPartner] = useState(null);
     const [isMember, setIsMember] = useState(false);
+    const [isMutedInChat, setIsMutedInChat] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -122,6 +123,10 @@ const CommunityChatRoom = () => {
 
     // Reaction handler
     const handleReact = async (msgId, emoji) => {
+        if (isMutedInChat) {
+            showToast(t('community_chat_muted', 'You are muted in this community chat.'), 'error');
+            return;
+        }
         try {
             const msgRef = doc(db, 'communities', partnerId, 'messages', msgId);
             const message = messages.find(m => m.id === msgId);
@@ -150,33 +155,46 @@ const CommunityChatRoom = () => {
         return () => window.removeEventListener('click', handleClickOutside);
     }, [activeReactionId]);
 
-    // 1. Fetch Partner & Check Membership
+    // 1. Fetch Partner & Check Membership (+ live mute/block updates)
     useEffect(() => {
-        const checkAccess = async () => {
-            if (!partnerId || !currentUser || !userProfile) return;
-            try {
-                // If partner profile hasn't been fetched yet, get it
-                if (!partner) {
-                    const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-                    if (partnerDoc.exists()) {
-                        setPartner(partnerDoc.data());
-                    }
-                }
+        if (!partnerId || !currentUser || !userProfile) return;
 
-                // Check membership locally from context
-                if (currentUser.uid === partnerId) {
-                    setIsMember(true);
-                } else {
-                    const joinedCommunities = userProfile.joinedCommunities || [];
-                    setIsMember(joinedCommunities.includes(partnerId));
-                }
-            } catch (error) {
-                console.error("Error verifying access:", error);
-            } finally {
-                setLoading(false);
+        const applyPartnerModeration = (partnerData) => {
+            if (!partnerData) return;
+            setPartner(partnerData);
+            const mutedIds = Array.isArray(partnerData.communityMutedUserIds)
+                ? partnerData.communityMutedUserIds
+                : [];
+            const blockedIds = Array.isArray(partnerData.communityBlockedUserIds)
+                ? partnerData.communityBlockedUserIds
+                : [];
+            if (currentUser.uid !== partnerId && blockedIds.includes(currentUser.uid)) {
+                setIsMember(false);
+                setIsMutedInChat(false);
+                return;
+            }
+            setIsMutedInChat(
+                currentUser.uid !== partnerId && mutedIds.includes(currentUser.uid)
+            );
+            if (currentUser.uid === partnerId) {
+                setIsMember(true);
+            } else {
+                const joinedCommunities = userProfile.joinedCommunities || [];
+                setIsMember(joinedCommunities.includes(partnerId));
             }
         };
-        checkAccess();
+
+        const unsubPartner = onSnapshot(doc(db, 'users', partnerId), (partnerDoc) => {
+            if (partnerDoc.exists()) {
+                applyPartnerModeration(partnerDoc.data());
+            }
+            setLoading(false);
+        }, (error) => {
+            console.error('Error verifying access:', error);
+            setLoading(false);
+        });
+
+        return () => unsubPartner();
     }, [partnerId, currentUser, userProfile]);
 
     // 2. Subscribe to Messages
@@ -247,6 +265,10 @@ const CommunityChatRoom = () => {
     const handleSendMessage = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (!newMessage.trim()) return;
+        if (isMutedInChat) {
+            showToast(t('community_chat_muted', 'You are muted in this community chat.'), 'error');
+            return;
+        }
 
         try {
             const messagesRef = collection(db, 'communities', partnerId, 'messages');
@@ -293,6 +315,10 @@ const CommunityChatRoom = () => {
 
     const handleCameraCapture = async (file) => {
         if (!file) return;
+        if (isMutedInChat) {
+            showToast(t('community_chat_muted', 'You are muted in this community chat.'), 'error');
+            return;
+        }
 
         setShowCamera(false);
         setIsUploadingImage(true);
@@ -648,6 +674,21 @@ const CommunityChatRoom = () => {
 
 
             <div className="chat-footer-stack">
+            {isMutedInChat && (
+                <div
+                    role="status"
+                    style={{
+                        padding: '10px 14px',
+                        textAlign: 'center',
+                        fontSize: '0.9rem',
+                        color: '#f59e0b',
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        borderTop: '1px solid rgba(245, 158, 11, 0.25)',
+                    }}
+                >
+                    {t('community_chat_muted_notice', 'You are muted in this chat and cannot send messages.')}
+                </div>
+            )}
             {isUploadingImage && (
                 <div
                     role="status"
@@ -668,9 +709,9 @@ const CommunityChatRoom = () => {
                 width: '100%',
                 boxSizing: 'border-box',
                 background: 'var(--bg-darker)',
-                borderTop: '1px solid var(--border-color)',
+                borderTop: isMutedInChat ? 'none' : '1px solid var(--border-color)',
                 padding: '8px',
-                display: 'flex',
+                display: isMutedInChat ? 'none' : 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 paddingBottom: 'max(8px, env(safe-area-inset-bottom))',

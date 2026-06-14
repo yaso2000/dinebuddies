@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, limit, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { attachRankingScores, rankBusinesses } from '../services/businessRankingService';
+import { loadBusinessRankingStatsMap } from '../services/businessRankingStats';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { normalizeBusinessTier } from '../utils/businessSubscription';
@@ -81,57 +82,7 @@ export default function BusinessRankings() {
                 if (cancelled) return;
 
                 const ids = list.map(b => b.id);
-                const statsById = {};
-
-                const BATCH = 10;
-                if (auth.currentUser) {
-                    for (let i = 0; i < ids.length; i += BATCH) {
-                        const chunk = ids.slice(i, i + BATCH);
-                        const userSnaps = await Promise.all(chunk.map(id => getDoc(doc(db, 'users', id)).catch(() => null)));
-                        userSnaps.forEach((s, idx) => {
-                            const id = chunk[idx];
-                            if (!s || !s.exists()) return;
-                            const d = s.data();
-                            const biz = d.businessInfo || {};
-                            const members = Array.isArray(d.communityMembers) ? d.communityMembers.length : (biz.memberCount ?? 0);
-                            const tier = (d.subscriptionTier || 'free').toString().toLowerCase();
-                            statsById[id] = {
-                                profileViews: Number(biz.profileViews) || 0,
-                                profileLikes: Number(biz.profileLikes) || 0,
-                                profileShares: Number(biz.profileShares) || 0,
-                                memberCount: Number(members) || 0,
-                                totalInvitations: Number(biz.totalInvitations) || 0,
-                                rating: 0,
-                                reviewCount: 0,
-                                subscriptionTier: tier
-                            };
-                        });
-                    }
-                }
-
-                const reviewsRef = collection(db, 'reviews');
-                for (let i = 0; i < ids.length; i += BATCH) {
-                    const chunk = ids.slice(i, i + BATCH);
-                    const [sp, sf, sr] = await Promise.all([
-                        getDocs(query(reviewsRef, where('partnerId', 'in', chunk), limit(100))).catch(() => ({ docs: [] })),
-                        getDocs(query(reviewsRef, where('profileId', 'in', chunk), limit(100))).catch(() => ({ docs: [] })),
-                        getDocs(query(reviewsRef, where('restaurantId', 'in', chunk), limit(100))).catch(() => ({ docs: [] }))
-                    ]);
-                    const allReviews = [...sp.docs, ...sf.docs, ...sr.docs].map(d => d.data());
-                    chunk.forEach(id => {
-                        const reviews = allReviews.filter(
-                            r => r.partnerId === id || r.profileId === id || r.restaurantId === id
-                        );
-                        const count = reviews.length;
-                        const total = reviews.reduce((s, r) => s + (r.rating || 0), 0);
-                        if (!statsById[id]) statsById[id] = { profileViews: 0, profileLikes: 0, profileShares: 0, memberCount: 0, totalInvitations: 0, rating: 0, reviewCount: 0 };
-                        statsById[id].rating = count > 0 ? total / count : 0;
-                        statsById[id].reviewCount = count;
-                    });
-                }
-
-                // totalInvitations: use stored counter only (never decremented when invitations are deleted/completed)
-                // so businesses do not lose ranking points. Counter is incremented on create in InvitationContext.
+                const statsById = await loadBusinessRankingStatsMap(ids);
 
                 if (cancelled) return;
 

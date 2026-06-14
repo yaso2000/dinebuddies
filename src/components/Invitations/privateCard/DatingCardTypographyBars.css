@@ -12,6 +12,25 @@
     gap: 4px;
 }
 
+.dating-card-typography-bars--always {
+    max-width: none;
+    width: 100%;
+}
+
+.dating-card-typography-bars--always .dating-card-typography-bars__panels {
+    width: 100%;
+}
+
+.private-card-preview-with-bg .dating-card-typography-bars--below {
+    max-width: none !important;
+}
+
+.private-card-preview-with-bg .dating-card-typography-bars--always .dating-card-typography-bars__panels,
+.private-card-preview-with-bg .dating-card-typography-bars--always .dating-card-typography-bars__scroll {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .dating-card-typography-bars__toggle {
     align-self: flex-start;
     width: 28px;

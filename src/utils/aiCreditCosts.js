@@ -8,8 +8,8 @@ export const CREDITS_WALLET_PATH = '/settings/credits';
 /** @typedef {'text' | 'image' | 'invitation_bundle'} AIGenerationPackage */
 
 /**
- * @param {'text' | 'image' | 'invitation_bundle'} [generationPackage]
  * @param {'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'magic_cover'} postType
+ * @param {AIGenerationPackage} [generationPackage]
  */
 export function aiCreditCostForPostType(postType, generationPackage) {
     if (generationPackage === 'invitation_bundle') {
@@ -19,13 +19,4 @@ export function aiCreditCostForPostType(postType, generationPackage) {
         return AI_IMAGE_GENERATION_CREDITS;
     }
     return AI_TEXT_GENERATION_CREDITS;
-}
-
-/**
- * @param {'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'magic_cover'} postType
- * @param {AIGenerationPackage} [generationPackage]
- */
-export function aiCreditCostLabelAr(postType, generationPackage) {
-    const cost = aiCreditCostForPostType(postType, generationPackage);
-    return `✨ يستهلك ${cost} كريدت`;
 }

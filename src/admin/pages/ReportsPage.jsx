@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 
 const SECTIONS = [
-    { id: 'accounts', types: new Set(['user', 'partner']), label: 'حسابات' },
-    { id: 'invitations', types: new Set(['invitation', 'message']), label: 'دعوات' },
-    { id: 'posts', types: new Set(['post']), label: 'منشورات' },
+    { id: 'accounts', types: new Set(['user', 'partner']), labelKey: 'admin_reports_accounts' },
+    { id: 'invitations', types: new Set(['invitation', 'message']), labelKey: 'admin_reports_invitations' },
+    { id: 'posts', types: new Set(['post']), labelKey: 'admin_reports_posts' },
 ];
 
 export default function ReportsPage() {
+    const { t } = useTranslation();
     const [section, setSection] = useState('accounts');
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -19,12 +21,12 @@ export default function ReportsPage() {
             const res = await adminApi.listReports({ status: 'pending', pageSize: 50 });
             setItems(res.items || []);
         } catch (e) {
-            alert(e.message || 'فشل');
+            alert(e.message || t('admin_failed'));
             setItems([]);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         load();
@@ -34,13 +36,21 @@ export default function ReportsPage() {
     const filtered = items.filter((r) => cfg.types.has(r.type));
 
     const resolve = async (id, status) => {
-        if (!window.confirm(status === 'resolved' ? 'قبول البلاغ؟' : 'رفض البلاغ؟')) return;
+        if (
+            !window.confirm(
+                status === 'resolved'
+                    ? t('admin_report_accept_confirm')
+                    : t('admin_report_dismiss_confirm'),
+            )
+        ) {
+            return;
+        }
         setActing(id);
         try {
             await adminApi.setReportStatus(id, status);
             setItems((prev) => prev.filter((r) => r.id !== id));
         } catch (e) {
-            alert(e.message || 'فشل');
+            alert(e.message || t('admin_failed'));
         } finally {
             setActing(null);
         }
@@ -48,8 +58,8 @@ export default function ReportsPage() {
 
     return (
         <>
-            <h1 className="db-h1">البلاغات</h1>
-            <p className="db-lead">قبول (resolved) أو رفض (dismissed).</p>
+            <h1 className="db-h1">{t('admin_reports_title')}</h1>
+            <p className="db-lead">{t('admin_reports_lead')}</p>
 
             <div className="db-tabs">
                 {SECTIONS.map((s) => (
@@ -59,7 +69,7 @@ export default function ReportsPage() {
                         className={`db-tab${section === s.id ? ' active' : ''}`}
                         onClick={() => setSection(s.id)}
                     >
-                        {s.label}
+                        {t(s.labelKey)}
                     </button>
                 ))}
             </div>
@@ -68,14 +78,14 @@ export default function ReportsPage() {
                 {loading ? (
                     <div className="db-spin" />
                 ) : filtered.length === 0 ? (
-                    <div className="db-empty">لا توجد بلاغات معلّقة</div>
+                    <div className="db-empty">{t('admin_empty_pending_reports')}</div>
                 ) : (
                     <table className="db-table">
                         <thead>
                             <tr>
-                                <th>الهدف</th>
-                                <th>السبب</th>
-                                <th>المبلّغ</th>
+                                <th>{t('admin_reports_target')}</th>
+                                <th>{t('admin_reports_reason')}</th>
+                                <th>{t('admin_reports_reporter')}</th>
                                 <th />
                             </tr>
                         </thead>
@@ -96,7 +106,7 @@ export default function ReportsPage() {
                                                 disabled={acting === r.id}
                                                 onClick={() => resolve(r.id, 'resolved')}
                                             >
-                                                قبول
+                                                {t('admin_report_accept')}
                                             </button>
                                             <button
                                                 type="button"
@@ -104,7 +114,7 @@ export default function ReportsPage() {
                                                 disabled={acting === r.id}
                                                 onClick={() => resolve(r.id, 'dismissed')}
                                             >
-                                                رفض
+                                                {t('admin_report_dismiss')}
                                             </button>
                                         </div>
                                     </td>

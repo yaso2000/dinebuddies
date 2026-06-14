@@ -13,6 +13,7 @@ import { ImageUploadZone } from '../services/imageUploadZones';
  */
 export const uploadImage = async (file, userId, options = {}) => {
     const zone = options.zone ?? ImageUploadZone.PUBLIC_CHAT;
+    const { onProgress } = options;
     try {
         const compressionOptions = {
             maxSizeMB: 0.5,
@@ -25,7 +26,7 @@ export const uploadImage = async (file, userId, options = {}) => {
         const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${compressedFile.name || 'image.jpg'}`;
         const uniqueFile = new File([compressedFile], uniqueFileName, { type: compressedFile.type });
 
-        return uploadManagedImage(uniqueFile, userId, zone);
+        return uploadManagedImage(uniqueFile, userId, zone, { onProgress });
     } catch (error) {
         console.error('Error uploading image:', error);
         throw error;
@@ -158,6 +159,12 @@ class MediaManager {
     play(id) {
         this.activeId = id;
         this.listeners.forEach(fn => fn(id));
+    }
+    stop(id) {
+        if (id == null || this.activeId === id) {
+            this.activeId = null;
+            this.listeners.forEach(fn => fn(null));
+        }
     }
     subscribe(fn) {
         this.listeners.add(fn);

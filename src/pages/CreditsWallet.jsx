@@ -20,6 +20,11 @@ import {
 } from 'react-icons/fa';
 import { DINE_CREDIT_PACKS } from '../config/stripeCommerce';
 import StripeTestModeBanner from '../components/StripeTestModeBanner';
+import {
+    AI_IMAGE_GENERATION_CREDITS,
+    AI_INVITATION_BUNDLE_CREDITS,
+    AI_TEXT_GENERATION_CREDITS,
+} from '../utils/aiCreditCosts';
 import './SettingsPages.css';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -161,6 +166,36 @@ export default function CreditsWallet() {
                                 </li>
                             </ul>
                         </div>
+                    </section>
+
+                    <section className="settings-card credits-wallet__ai-pricing">
+                        <div className="credits-wallet__hints-title">
+                            <FaMagic aria-hidden />
+                            {t('credits_ai_pricing_title', 'AI credit costs')}
+                        </div>
+                        <p className="credits-wallet__buy-lead" style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+                            {t('credits_ai_pricing_lead', 'Each AI action deducts credits from your Dine balance.')}
+                        </p>
+                        <ul className="credits-wallet__hints-list">
+                            <li>
+                                <FaBolt className="credits-wallet__hint-ico" aria-hidden />
+                                {t('credits_ai_text_generation', 'Text generation — {{cost}} credits', {
+                                    cost: AI_TEXT_GENERATION_CREDITS,
+                                })}
+                            </li>
+                            <li>
+                                <FaMagic className="credits-wallet__hint-ico" aria-hidden />
+                                {t('credits_ai_image_generation', 'Image generation — {{cost}} credits', {
+                                    cost: AI_IMAGE_GENERATION_CREDITS,
+                                })}
+                            </li>
+                            <li>
+                                <FaHeart className="credits-wallet__hint-ico" aria-hidden />
+                                {t('credits_ai_invitation_bundle', 'Invitation text + image — {{cost}} credits', {
+                                    cost: AI_INVITATION_BUNDLE_CREDITS,
+                                })}
+                            </li>
+                        </ul>
                     </section>
 
                     <section className="credits-wallet__buy-section">

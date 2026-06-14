@@ -6,7 +6,7 @@ import { searchNominatimCities } from '../utils/osmPhotonSearch';
 /**
  * City autocomplete via OpenStreetMap Nominatim (no Google Places).
  */
-const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
+const CityAutocomplete = ({ value, onSelect, countryCode, stateOrRegion, placeholder, disabled }) => {
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -56,7 +56,7 @@ const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
             const stale = () => gen !== generationRef.current;
 
             if (stale()) return;
-            searchNominatimCities(val, countryCode)
+            searchNominatimCities(val, countryCode, stateOrRegion)
                 .then((rows) => {
                     if (stale()) return;
                     setLoading(false);
@@ -96,6 +96,7 @@ const CityAutocomplete = ({ value, onSelect, countryCode, placeholder }) => {
                     onChange={handleInput}
                     onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                     placeholder={placeholder || 'Search city…'}
+                    disabled={disabled}
                     autoComplete="off"
                     style={{
                         width: '100%',

@@ -26,6 +26,19 @@ export function isValidE164(e164) {
     return /^\+[1-9]\d{7,14}$/.test(String(e164 || '').trim());
 }
 
+/**
+ * Google `internationalPhoneNumber` → compact E.164 when already global (+1, +44, +61, …).
+ * Does not infer or override country codes.
+ * @param {string} raw
+ * @returns {string} compact E.164 or '' if not parseable
+ */
+export function compactE164FromGoogleInternational(raw) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    const compact = trimmed.replace(/[\s\-().]/g, '');
+    return isValidE164(compact) ? compact : '';
+}
+
 export function e164ToDocKey(e164) {
     return String(e164 || '').replace(/\D/g, '');
 }

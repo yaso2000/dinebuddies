@@ -2,6 +2,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { verifyUserAtLocation, LOCATION_VERIFICATION_CONFIG } from './locationVerification';
 import { sendNotification } from './notificationHelpers';
+import { maybeAwardBusinessHostingPoints } from '../services/businessLikeService';
 
 /**
  * Complete an invitation (mark as completed)
@@ -61,6 +62,10 @@ export const completeInvitation = async (invitationId, invitation, currentUser) 
                 timestamp: new Date().toISOString()
             }
         });
+
+        if (invitation.restaurantId) {
+            await maybeAwardBusinessHostingPoints(invitationId, 'invitations');
+        }
 
         // 5. Send notifications to all participants
         const participants = invitation.joined || [];

@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaTimes } from 'react-icons/fa';
+import { useVerticalDragScrollRail } from '../../../hooks/useVerticalDragScrollRail';
 import { getCardBackgroundOptions, resolveCardBackgroundUrlCandidates } from './privateCardBackgrounds';
 import {
     getDatingCardBackgroundOptions,
@@ -15,7 +16,28 @@ import {
 import '../datingCard/DatingPreviewRightRail.css';
 import './PrivateInvitationCoverRightRail.css';
 
-function TemplateThumb({ resolveCandidates, optionId, selected, onClick, title }) {
+function pickNearestRailOption(scrollEl) {
+    const buttons = scrollEl.querySelectorAll('[data-rail-option-id]');
+    if (!buttons.length) return null;
+
+    const rect = scrollEl.getBoundingClientRect();
+    const centerY = rect.top + rect.height / 2;
+    let bestId = null;
+    let bestDist = Infinity;
+
+    buttons.forEach((btn) => {
+        const br = btn.getBoundingClientRect();
+        const dist = Math.abs(br.top + br.height / 2 - centerY);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestId = btn.dataset.railOptionId;
+        }
+    });
+
+    return bestId;
+}
+
+function TemplateThumb({ resolveCandidates, optionId, selected, onClick, title, wasDragged }) {
     const candidates = useMemo(() => resolveCandidates(optionId), [resolveCandidates, optionId]);
     const [idx, setIdx] = useState(0);
     const url = candidates[idx];
@@ -29,8 +51,12 @@ function TemplateThumb({ resolveCandidates, optionId, selected, onClick, title }
             type="button"
             role="radio"
             aria-checked={selected}
+            data-rail-option-id={optionId}
             className={`dating-preview-rail__thumb${selected ? ' dating-preview-rail__thumb--selected' : ''}`}
-            onClick={onClick}
+            onClick={() => {
+                if (wasDragged?.()) return;
+                onClick?.();
+            }}
             title={title}
         >
             {url ? (
@@ -188,9 +214,68 @@ export default function PrivateInvitationCoverRightRail({
                 : cameraLabel;
 
     const scrollRole = mode === 'template' ? 'radiogroup' : 'group';
+    const isScrollColumnMode = mode === 'template';
     const isMediaMode = mode === 'upload' || mode === 'camera' || mode === 'ai';
     const mediaItems =
         mode === 'upload' ? uploadItems : mode === 'ai' ? aiItems : mode === 'camera' ? cameraItems : [];
+
+    const selectingFromScrollRef = useRef(false);
+
+    const handleScrollSettle = useCallback(
+        (scrollEl) => {
+            if (!isScrollColumnMode) return;
+            const nearestId = pickNearestRailOption(scrollEl);
+            if (!nearestId) return;
+
+            if (mode === 'template') {
+                const same =
+                    cardBackgroundId === nearestId ||
+                    (nearestId === 'birthday-candlecake' && cardBackgroundId === 'birthday-candlake');
+                if (!same) {
+                    selectingFromScrollRef.current = true;
+                    onCardBackgroundIdChange?.(nearestId);
+                }
+            }
+        },
+        [isScrollColumnMode, mode, cardBackgroundId, onCardBackgroundIdChange]
+    );
+
+    const {
+        railRef,
+        isDragging,
+        onPointerDown,
+        onPointerMove,
+        onPointerUp,
+        onPointerCancel,
+        onWheel,
+        wasDragged,
+    } = useVerticalDragScrollRail({
+        enabled: isScrollColumnMode,
+        onScrollSettle: handleScrollSettle,
+    });
+
+    useEffect(() => {
+        if (!isScrollColumnMode) return;
+        if (selectingFromScrollRef.current) {
+            selectingFromScrollRef.current = false;
+            return;
+        }
+
+        const el = railRef.current;
+        if (!el) return;
+
+        const selectedId =
+            mode === 'template'
+                ? cardBackgroundId === 'birthday-candlake'
+                    ? 'birthday-candlecake'
+                    : cardBackgroundId
+                : null;
+
+        if (!selectedId) return;
+
+        const btn = el.querySelector(`[data-rail-option-id="${selectedId}"]`);
+        btn?.scrollIntoView({ block: 'center', behavior: 'auto' });
+    }, [cardBackgroundId, mode, isScrollColumnMode, railRef, occasionOptions.length]);
 
     return (
         <div
@@ -201,16 +286,31 @@ export default function PrivateInvitationCoverRightRail({
                 'private-card-bg-picker--beside',
                 'dating-preview-rail--template-column',
                 mode === 'template' ? 'private-invite-cover-rail--template-mode' : '',
+                isScrollColumnMode ? 'private-invite-cover-rail--snap-column' : '',
                 isMediaMode ? 'private-invite-cover-rail--media-mode' : ''
             ]
                 .filter(Boolean)
                 .join(' ')}
         >
-            <p className="private-card-bg-picker__label private-card-bg-picker__label--beside">{sectionLabel}</p>
+            {mode !== 'template' ? (
+                <p className="private-card-bg-picker__label private-card-bg-picker__label--beside">{sectionLabel}</p>
+            ) : null}
             <div
-                className="private-card-bg-picker__scroll dating-preview-rail__scroll"
+                ref={isScrollColumnMode ? railRef : undefined}
+                className={[
+                    'private-card-bg-picker__scroll',
+                    'dating-preview-rail__scroll',
+                    isScrollColumnMode && isDragging ? 'is-dragging' : '',
+                ]
+                    .filter(Boolean)
+                    .join(' ')}
                 role={scrollRole}
                 aria-label={sectionLabel}
+                onPointerDown={isScrollColumnMode ? onPointerDown : undefined}
+                onPointerMove={isScrollColumnMode ? onPointerMove : undefined}
+                onPointerUp={isScrollColumnMode ? onPointerUp : undefined}
+                onPointerCancel={isScrollColumnMode ? onPointerCancel : undefined}
+                onWheel={isScrollColumnMode ? onWheel : undefined}
             >
                 {mode === 'template' &&
                     (occasionOptions.length === 0 ? (
@@ -233,6 +333,7 @@ export default function PrivateInvitationCoverRightRail({
                                     selected={selected}
                                     onClick={() => onCardBackgroundIdChange(opt.id)}
                                     title={t(`card_bg_${opt.id.replace(/-/g, '_')}`, { defaultValue: opt.id })}
+                                    wasDragged={wasDragged}
                                 />
                             );
                         })
@@ -249,7 +350,7 @@ export default function PrivateInvitationCoverRightRail({
                             : mode === 'ai'
                               ? t('private_cover_ai_rail_empty', {
                                     defaultValue:
-                                        'Use “Generate with AI” above to create covers (up to {{max}}).',
+                                        'Use “Generate with AI” to create covers (up to {{max}}).',
                                     max: PRIVATE_COVER_STASH_MAX_AI_IMAGES
                                 })
                               : t('private_cover_video_rail_empty', {

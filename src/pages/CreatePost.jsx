@@ -14,6 +14,7 @@ import { FaArrowLeft, FaImage, FaVideo, FaSmile, FaTimes, FaFont, FaPalette, FaC
 import UnifiedCamera from '../components/UnifiedCamera';
 import AIFloatingLauncher from '../components/AIFloatingLauncher';
 import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { buildRegularPostAiUserPrompt } from '../utils/aiPromptLocale';
 import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../utils/postPublishGeo';
 import './CreatePost.css';
@@ -114,17 +115,20 @@ const CreatePost = () => {
         setShowOverlayInput(true);
     }, [location.state?.aiStudioImage]);
 
-    const buildRegularPostAiPrompt = useCallback(() => {
-        if (text.trim()) return text.trim();
-        if (attachedInvitation?.title) {
-            return `منشور مرتبط بدعوة: ${attachedInvitation.title}`;
-        }
-        return 'منشور مجتمعي قصير وودّي';
-    }, [text, attachedInvitation]);
+    const buildRegularPostAiPrompt = useCallback(
+        () => buildRegularPostAiUserPrompt({ text, attachedInvitation }),
+        [text, attachedInvitation],
+    );
 
     const handleRegularPostAiContent = useCallback((data) => {
         const fields = extractAIContentFields('regular_post', data);
-        if (fields.text) setText(fields.text.slice(0, 300));
+        if (fields.title && fields.text) {
+            setText(`${fields.title}\n\n${fields.text}`.slice(0, 300));
+        } else if (fields.text) {
+            setText(fields.text.slice(0, 300));
+        } else if (fields.title) {
+            setText(fields.title.slice(0, 300));
+        }
     }, []);
 
     const startCamera = () => {
@@ -217,7 +221,10 @@ const CreatePost = () => {
             };
 
             await addDoc(collection(db, 'communityPosts'), postData);
-            navigate(attachedInvitation ? '/posts-feed' : '/');
+            if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+            }
+            navigate('/posts-feed', { replace: true });
         } catch (error) {
             console.error("Error creating post:", error);
             notifyImageUploadError(showToast, error, t, 'failed_to_post');

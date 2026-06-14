@@ -2,11 +2,11 @@
 
 /** Strong entrance presets for Smart Post Studio (also used on publish). */
 export const STUDIO_TEXT_ANIMATIONS = [
-    { id: 'fade', labelKey: 'studio_anim_fade', label: 'ظهور' },
-    { id: 'slide', labelKey: 'studio_anim_slide', label: 'انزلاق' },
-    { id: 'pop', labelKey: 'studio_anim_pop', label: 'قفزة' },
-    { id: 'stagger', labelKey: 'studio_anim_stagger', label: 'متتابع' },
-    { id: 'zoom', labelKey: 'studio_anim_zoom', label: 'تكبير' },
+    { id: 'fade', labelKey: 'studio_anim_fade', label: 'Fade' },
+    { id: 'slide', labelKey: 'studio_anim_slide', label: 'Slide' },
+    { id: 'pop', labelKey: 'studio_anim_pop', label: 'Pop' },
+    { id: 'stagger', labelKey: 'studio_anim_stagger', label: 'Stagger' },
+    { id: 'zoom', labelKey: 'studio_anim_zoom', label: 'Zoom' },
 ];
 
 export const STUDIO_ANIM_DURATION_MS = 1500;

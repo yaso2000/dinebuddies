@@ -24,13 +24,7 @@
     flex-shrink: 0;
 }
 
-.post-avatar {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-}
-
-.post-avatar .user-avatar__img {
+.post-avatar.user-avatar > .user-avatar__img {
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -132,20 +126,188 @@
 
 /* Media */
 .post-media-container {
-    margin-top: 8px;
-    margin-bottom: 0px;
-    border-radius: 0;
+    position: relative;
+    margin: 10px 16px 0;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    border-radius: 12px;
     overflow: hidden;
-    border: none;
-    border-top: 1px solid var(--border-color);
-    border-bottom: 1px solid var(--border-color);
+    border: 1px solid var(--border-color);
+    background: var(--bg-darker, #0d0d12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.post-card.in-chat .post-media-container {
+    margin-inline: 0;
+    width: 100%;
+}
+
+.post-media-preview {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 420px;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     background: #000;
+}
+
+.post-media-preview--tall {
+    aspect-ratio: 9 / 16;
+    max-height: 480px;
+}
+
+/* YouTube Shorts — full-width native 9:16 (no downscaling) */
+.post-card--youtube-short {
+    overflow: visible;
+}
+
+.post-media-container--vertical {
+    margin: 10px 0 0;
+    width: 100%;
+    border-radius: 0;
+    border-inline: none;
+}
+
+.post-media-preview--vertical,
+.post-media-preview--short {
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    max-height: none;
+    height: auto;
+}
+
+.post-media-preview--short .post-media-preview__img {
+    object-fit: contain;
+    opacity: 1;
+}
+
+.post-embed-player--vertical {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+}
+
+.post-embed-player--vertical iframe,
+.post-media-container--vertical .post-embed-player iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    aspect-ratio: unset;
+}
+
+.post-media-preview__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.88;
+}
+
+.post-media-preview__brand {
+    position: absolute;
+    pointer-events: none;
+}
+
+.post-media-preview__play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.post-media-preview__play-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    backdrop-filter: blur(6px);
+}
+
+.post-embed-player,
+.post-embed-shell {
+    position: relative;
+    width: 100%;
+    line-height: 0;
+    background: #000;
+}
+
+.post-embed-player iframe,
+.post-embed-shell iframe,
+.post-media-container > iframe {
+    display: block;
+    width: 100%;
+    border: none;
+}
+
+.post-embed-player iframe {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 200px;
+    max-height: 420px;
+}
+
+.post-embed-shell {
+    display: flex;
+    justify-content: center;
+}
+
+.post-embed-shell iframe {
+    max-width: 400px;
+    min-height: 360px;
+    max-height: 520px;
+}
+
+.post-video {
+    width: 100%;
+    max-height: 480px;
+    object-fit: contain;
+    display: block;
+    background: #000;
+}
+
+.post-embed-unmute-hint {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+[dir="rtl"] .post-embed-unmute-hint {
+    right: auto;
+    left: 8px;
 }
 
 .post-media-content {
     width: 100%;
     max-height: 80vh;
-    object-fit: contain;
+    object-fit: cover;
     display: block;
 }
 

@@ -17,6 +17,22 @@ function isLikelyStateOrRegion(name) {
     return STATE_NAMES.has(n) || n.includes('region') || n.includes('state') || n.length > 20;
 }
 
+/** Best city label from reverse-geocode payload — never use state/province as city. */
+export function pickCityFromReverseGeocode(d) {
+    if (!d || typeof d !== 'object') return '';
+    const candidates = [
+        d.city,
+        d.locality,
+        d.localityInfo?.localityName,
+        d.localityInfo?.adminName,
+    ].filter(Boolean);
+    for (const raw of candidates) {
+        const label = String(raw).trim();
+        if (label && !isLikelyStateOrRegion(label)) return label;
+    }
+    return '';
+}
+
 export const fetchIpLocation = async () => {
     // List of free services to try in order
     const services = [
@@ -84,8 +100,93 @@ export const fetchIpLocation = async () => {
     return { success: false };
 };
 
+/** Approximate bounding box around a coordinate (km). Used for local place search bias. */
+export function bboxFromCoords(lat, lng, radiusKm = 35) {
+    const la = Number(lat);
+    const ln = Number(lng);
+    const r = Number(radiusKm);
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || !Number.isFinite(r) || r <= 0) return null;
+    const latDelta = r / 111;
+    const lngDelta = r / (111 * Math.max(0.2, Math.cos((la * Math.PI) / 180)));
+    return {
+        minLat: la - latDelta,
+        maxLat: la + latDelta,
+        minLon: ln - lngDelta,
+        maxLon: ln + lngDelta,
+    };
+}
+
+function readCurrentPosition(options) {
+    return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+}
+
 /**
- * Unified city discovery for all account types/pages.
+ * Live device GPS only — no profile, IP, or cached coordinates.
+ * Used for public invitation geofencing (source of truth for creator position).
+ */
+export async function detectLiveUserGps() {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        return { success: false, code: 'unsupported' };
+    }
+
+    try {
+        let pos;
+        try {
+            pos = await readCurrentPosition({
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0,
+            });
+        } catch {
+            pos = await readCurrentPosition({
+                enableHighAccuracy: false,
+                timeout: 15000,
+                maximumAge: 120000,
+            });
+        }
+
+        const latitude = pos.coords.latitude;
+        const longitude = pos.coords.longitude;
+
+        let city = '';
+        let country = '';
+        let countryCode = '';
+
+        try {
+            const res = await fetch(
+                `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+            );
+            if (res.ok) {
+                const d = await res.json();
+                city = pickCityFromReverseGeocode(d);
+                country = d.countryName || '';
+                countryCode = d.countryCode || '';
+            }
+        } catch {
+            /* GPS coords are sufficient; city label is optional */
+        }
+
+        return {
+            success: true,
+            source: 'gps',
+            latitude,
+            longitude,
+            accuracy: pos.coords.accuracy,
+            city,
+            country,
+            countryCode,
+        };
+    } catch (err) {
+        const code =
+            err?.code === 1 ? 'denied' : err?.code === 3 ? 'timeout' : 'unavailable';
+        return { success: false, code };
+    }
+}
+
+/**
+ * Unified city discovery for general UI (non-invitation flows).
  * Order: live GPS + reverse geocode -> profile fallback -> IP fallback.
  */
 export const detectUserLocationContext = async (userProfile = null) => {
@@ -103,7 +204,7 @@ export const detectUserLocationContext = async (userProfile = null) => {
             );
             if (res.ok) {
                 const d = await res.json();
-                const city = d.city || d.locality || d.principalSubdivision || '';
+                const city = pickCityFromReverseGeocode(d);
                 if (city) {
                     return {
                         success: true,
@@ -121,7 +222,7 @@ export const detectUserLocationContext = async (userProfile = null) => {
         }
     }
 
-    if (userProfile?.city) {
+    if (userProfile?.city && !isLikelyStateOrRegion(userProfile.city)) {
         return {
             success: true,
             source: 'profile',
@@ -316,3 +417,15 @@ export const reverseGeocode = async (lat, lng) => {
         return { success: false, error: error.message };
     }
 };
+
+/** Pull a city-like token from a comma-separated address when `city` field is missing. */
+export function extractCityTokenFromAddress(address) {
+    const raw = String(address ?? '').trim();
+    if (!raw) return '';
+    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+        const candidate = parts[parts.length - 2] || parts[parts.length - 1] || '';
+        return candidate.replace(/\b[A-Z]{2,3}\s*\d{4,5}\b/gi, '').replace(/\b\d{4,5}\b/g, '').trim();
+    }
+    return parts[0] || '';
+}

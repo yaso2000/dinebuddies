@@ -13,6 +13,9 @@ import {
     CREDITS_WALLET_PATH,
 } from '../../utils/aiCreditCosts';
 import { extractAIImageUrl } from '../../utils/aiContentFieldMapper';
+import { AI_USER_PROMPT_MAX_CHARS } from '../../constants/aiPromptLimits';
+import { getAiUserPromptFallback } from '../../utils/aiPromptLocale';
+import { resolveAiUserPrompt } from '../../utils/resolveAiUserPrompt';
 import '../AIGenerateBar.css';
 
 /**
@@ -23,7 +26,7 @@ import '../AIGenerateBar.css';
  *   subType?: 'public' | 'private' | 'date',
  *   venueType?: string,
  *   venueName?: string,
- *   aspectRatio?: '1:1' | '9:16',
+ *   aspectRatio?: '1:1' | '4:5' | '9:16',
  *   buildBrief?: () => string,
  *   onImageGenerated: (url: string) => void,
  *   disabled?: boolean,
@@ -36,7 +39,7 @@ export default function MagicCoverGeneratePanel({
     subType = 'public',
     venueType = '',
     venueName = '',
-    aspectRatio: defaultAspectRatio = '1:1',
+    aspectRatio: defaultAspectRatio = '4:5',
     buildBrief,
     onImageGenerated,
     disabled = false,
@@ -59,22 +62,24 @@ export default function MagicCoverGeneratePanel({
         setAspectRatio(defaultAspectRatio);
     }, [defaultAspectRatio]);
 
-    const lockAspectRatio = subType === 'private' || subType === 'date';
-    const effectiveAspectRatio = lockAspectRatio ? '9:16' : aspectRatio;
+    const lockAspectRatio = subType === 'private' || subType === 'date' || subType === 'public';
+    const effectiveAspectRatio =
+        subType === 'private' || subType === 'date'
+            ? '9:16'
+            : subType === 'public'
+              ? defaultAspectRatio || '4:5'
+              : aspectRatio;
 
     const needsVenue = requireVenue && !String(venueName || '').trim();
 
     const handleGenerate = async () => {
         if (isBusy || disabled || needsVenue) return;
 
-        const userPrompt = (prompt.trim() || buildBrief?.() || '').trim();
-        if (!userPrompt) {
-            showToast(
-                t('ai_prompt_required', 'أدخل وصفاً قصيراً لما تريد توليده بالذكاء الاصطناعي.'),
-                'error'
-            );
-            return;
-        }
+        const userPrompt = resolveAiUserPrompt({
+            manualPrompt: prompt,
+            buildContextPrompt: buildBrief,
+            fallback: getAiUserPromptFallback('invitation', subType, t),
+        });
 
         const generationId = ++generationSeqRef.current;
         setLoading(true);
@@ -95,10 +100,7 @@ export default function MagicCoverGeneratePanel({
                 if (isInsufficientCreditsError(result)) {
                     setInsufficientCreditsMessage(
                         result.message ||
-                            t(
-                                'ai_insufficient_credits_default',
-                                'رصيدك غير كافٍ. تحتاج إلى المزيد من الكريدت لإتمام هذه العملية.'
-                            )
+                            t('ai_insufficient_credits_default')
                     );
                     return;
                 }
@@ -120,12 +122,15 @@ export default function MagicCoverGeneratePanel({
                 }
 
                 showToast(formatAiErrorMessage(result, t), 'error');
+                if (result.detail) {
+                    console.error('[MagicCoverGeneratePanel] API detail:', result.detail);
+                }
                 return;
             }
 
             const imageUrl = extractAIImageUrl(result.data);
             if (!imageUrl) {
-                showToast(t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.'), 'error');
+                showToast(t('ai_generate_failed'), 'error');
                 return;
             }
 
@@ -143,7 +148,7 @@ export default function MagicCoverGeneratePanel({
         } catch (err) {
             console.error('[MagicCoverGeneratePanel]', err);
             showToast(
-                t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.'),
+                t('ai_generate_failed'),
                 'error'
             );
         } finally {
@@ -213,10 +218,16 @@ export default function MagicCoverGeneratePanel({
                     className="ai-generate-bar__input"
                     rows={2}
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(e) => setPrompt(e.target.value.slice(0, AI_USER_PROMPT_MAX_CHARS))}
                     placeholder={t('magic_cover_empty_brief_fallback')}
+                    maxLength={AI_USER_PROMPT_MAX_CHARS}
                     disabled={isBusy || disabled}
                 />
+                <p className="ai-generate-bar__prompt-meta" aria-live="polite">
+                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                        {prompt.length} / {AI_USER_PROMPT_MAX_CHARS}
+                    </span>
+                </p>
 
                 <div className="ai-generate-bar__actions">
                     <button
@@ -229,7 +240,7 @@ export default function MagicCoverGeneratePanel({
                         {loading ? (
                             <>
                                 <span className="ai-generate-bar__spinner" aria-hidden />
-                                {t('ai_generate_loading', 'جاري التوليد بالذكاء الاصطناعي...')}
+                                {t('ai_generate_loading')}
                             </>
                         ) : (
                             <>
@@ -262,7 +273,7 @@ export default function MagicCoverGeneratePanel({
                             <FaWallet />
                         </div>
                         <h3 id="magic-cover-credits-modal-title" className="ai-credits-modal__title">
-                            {t('ai_insufficient_credits_title', 'رصيد غير كافٍ')}
+                            {t('ai_insufficient_credits_title')}
                         </h3>
                         <p id="magic-cover-credits-modal-desc" className="ai-credits-modal__message">
                             {insufficientCreditsMessage}
@@ -273,14 +284,14 @@ export default function MagicCoverGeneratePanel({
                                 className="ai-credits-modal__btn ai-credits-modal__btn--primary ios-tap-target"
                                 onClick={goToTopUp}
                             >
-                                {t('ai_top_up_now', 'شحن الرصيد الآن')}
+                                {t('ai_top_up_now')}
                             </button>
                             <button
                                 type="button"
                                 className="ai-credits-modal__btn ai-credits-modal__btn--ghost ios-tap-target"
                                 onClick={closeInsufficientModal}
                             >
-                                {t('close', 'إغلاق')}
+                                {t('close')}
                             </button>
                         </div>
                     </div>

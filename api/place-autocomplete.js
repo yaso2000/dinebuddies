@@ -1,11 +1,9 @@
 /**
  * Place Autocomplete proxy (server-side, Places API New).
- * Minimal response fields and city bounds restriction for better cost control.
- *
- * GET /api/place-autocomplete?input=...&sessionToken=...&countryCode=sa&minLat=...&minLon=...&maxLat=...&maxLon=...
+ * GET /api/place-autocomplete?input=...&sessionToken=...&countryCode=au&minLat=...&businessOnly=1
  */
-const AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 import { takeRateLimit } from './_rateLimit.js';
+import { fetchPlaceAutocompleteWithFallback } from './_googlePlacesAutocompleteCore.js';
 
 export default async function handler(req, res) {
     const rl = takeRateLimit(req, {
@@ -29,74 +27,46 @@ export default async function handler(req, res) {
         res.setHeader('Allow', 'GET');
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon } = req.query;
-    const key =
-        process.env.GOOGLE_PLACES_API_KEY ||
-        process.env.GOOGLE_MAPS_SERVER_KEY ||
-        process.env.VITE_GOOGLE_MAPS_API_KEY ||
-        process.env.GOOGLE_MAPS_API_KEY;
-    if (!input || typeof input !== 'string' || input.trim().length < 2 || !key || !sessionToken) {
-        return res.status(400).json({ error: 'Missing input/sessionToken/API key' });
+
+    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon, lat, lng, radiusKm, businessOnly } =
+        req.query;
+
+    if (!input || typeof input !== 'string' || input.trim().length < 2 || !sessionToken) {
+        return res.status(400).json({ error: 'Missing input (min 2 chars) or sessionToken' });
     }
+
     try {
-        const payload = {
+        const result = await fetchPlaceAutocompleteWithFallback({
             input: input.trim(),
-            sessionToken: String(sessionToken).slice(0, 36),
-            languageCode: typeof languageCode === 'string' && languageCode.trim() ? languageCode.trim() : 'ar',
-            includeQueryPredictions: false,
-        };
-        if (countryCode && typeof countryCode === 'string') {
-            payload.includedRegionCodes = [countryCode.toLowerCase().slice(0, 2)];
-        }
-        const loLat = Number(minLat);
-        const loLon = Number(minLon);
-        const hiLat = Number(maxLat);
-        const hiLon = Number(maxLon);
-        if (
-            Number.isFinite(loLat) &&
-            Number.isFinite(loLon) &&
-            Number.isFinite(hiLat) &&
-            Number.isFinite(hiLon)
-        ) {
-            payload.locationRestriction = {
-                rectangle: {
-                    low: { latitude: loLat, longitude: loLon },
-                    high: { latitude: hiLat, longitude: hiLon },
-                },
-            };
-        }
-        const response = await fetch(AUTOCOMPLETE_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': key,
-                'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text',
-            },
-            body: JSON.stringify(payload),
+            sessionToken: String(sessionToken),
+            languageCode: typeof languageCode === 'string' ? languageCode : 'en',
+            countryCode: typeof countryCode === 'string' ? countryCode : '',
+            minLat,
+            minLon,
+            maxLat,
+            maxLon,
+            centerLat: lat,
+            centerLng: lng,
+            radiusMeters: radiusKm != null ? Number(radiusKm) * 1000 : undefined,
+            businessOnly: businessOnly === '1' || businessOnly === 'true',
         });
-        const data = await response.json();
+
         res.setHeader('Access-Control-Allow-Origin', '*');
-        const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
-        if (response.ok) {
-            return res.status(200).json({
-                status: 'OK',
-                predictions: suggestions
-                    .map((s) => s?.placePrediction)
-                    .filter(Boolean)
-                    .map((p) => ({
-                        place_id: p.placeId,
-                        description: p.text?.text || '',
-                        structured_formatting: {
-                            main_text: p.text?.text || '',
-                            secondary_text: '',
-                        },
-                    })),
+
+        if (!result.ok) {
+            return res.status(result.status === 503 ? 503 : 502).json({
+                status: 'ERROR',
+                predictions: [],
+                error: result.errorMessage || 'Autocomplete upstream error',
             });
         }
-        return res.status(502).json({
-            status: 'ERROR',
-            predictions: [],
-            error: data?.error?.message || data?.error || 'Autocomplete upstream error',
+
+        return res.status(200).json({
+            status: result.predictions.length ? 'OK' : 'ZERO_RESULTS',
+            predictions: result.predictions,
+            ...(result.errorMessage && !result.predictions.length
+                ? { hint: result.errorMessage }
+                : {}),
         });
     } catch (err) {
         console.error('Place autocomplete error:', err);

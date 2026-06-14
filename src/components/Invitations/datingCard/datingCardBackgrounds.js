@@ -15,6 +15,11 @@ export const DATING_DARK_TEMPLATE_BACKGROUND_IDS = new Set([
     'dating-candle-room',
     'dating-candlelight-table',
     'dating-restaurant-chemistry',
+    'dating-midnight-city-lights',
+    'dating-neon-coffee-date',
+    'dating-neon-hearts-date',
+    'dating-golden-love-night',
+    'dating-velvet-lounge-evening',
 ]);
 
 export const DATING_CARD_BACKGROUNDS = [
@@ -28,6 +33,19 @@ export const DATING_CARD_BACKGROUNDS = [
     { id: 'dating-heart-roses', labelKey: 'dating_tpl_heart_roses' },
     { id: 'dating-candlelight-table', labelKey: 'dating_tpl_candlelight_table' },
     { id: 'dating-candle-room', labelKey: 'dating_tpl_candle_room' },
+    { id: 'dating-golden-love-night', labelKey: 'dating_tpl_golden_love_night' },
+    { id: 'dating-love-in-bloom', labelKey: 'dating_tpl_love_in_bloom' },
+    { id: 'dating-midnight-city-lights', labelKey: 'dating_tpl_midnight_city_lights' },
+    { id: 'dating-neon-coffee-date', labelKey: 'dating_tpl_neon_coffee_date' },
+    { id: 'dating-neon-hearts-date', labelKey: 'dating_tpl_neon_hearts_date' },
+    { id: 'dating-romantic-coffee-escape', labelKey: 'dating_tpl_romantic_coffee_escape' },
+    { id: 'dating-roses-candlelight', labelKey: 'dating_tpl_roses_candlelight' },
+    { id: 'dating-secret-garden-date', labelKey: 'dating_tpl_secret_garden_date' },
+    { id: 'dating-sunset-romance', labelKey: 'dating_tpl_sunset_romance' },
+    { id: 'dating-sunset-walk-together', labelKey: 'dating_tpl_sunset_walk_together' },
+    { id: 'dating-sweetheart-rooftop', labelKey: 'dating_tpl_sweetheart_rooftop' },
+    { id: 'dating-valentines-evening', labelKey: 'dating_tpl_valentines_evening' },
+    { id: 'dating-velvet-lounge-evening', labelKey: 'dating_tpl_velvet_lounge_evening' },
     /** Legacy SVG placeholders — kept for old invitations, hidden from picker */
     { id: 'dating-rose', legacyOnly: true },
     { id: 'dating-city', legacyOnly: true },

@@ -1,13 +1,14 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ensureFirebaseAdmin } from './_firebaseAdmin.js';
 import { e164ToDocKey } from './_phoneUtils.js';
+import { restaurantDocIsUnclaimed } from './_restaurantClaim.js';
 
 const PENDING_COLLECTION = 'business_phone_pending';
 const PENDING_TTL_MS = 30 * 60 * 1000;
 
 /**
  * @typedef {'new' | 'claim' | 'claimed'} PhoneLookupFlow
- * @typedef {{ flow: PhoneLookupFlow, businessId?: string, businessName?: string }} PhoneLookupResult
+ * @typedef {{ flow: PhoneLookupFlow, businessId?: string, businessName?: string, source?: 'restaurants' | 'users' }} PhoneLookupResult
  */
 
 /**
@@ -16,12 +17,15 @@ const PENDING_TTL_MS = 30 * 60 * 1000;
  */
 export function isUnclaimedBusinessProfile(data) {
     if (!data || typeof data !== 'object') return false;
+    if (data.isClaimed === false) return true;
+    if (data.isVirtual === true && data.claimed === false) return true;
     const bi = data.businessInfo;
     if (bi && typeof bi === 'object' && bi.isClaimed === false) return true;
     if (data.pendingBusinessRegistration === true) return true;
     if (bi && typeof bi === 'object') {
         if (bi.unclaimed === true) return true;
-        if (bi.createdBy === 'scraped' || bi.createdBy === 'ai' || bi.createdBy === 'import') return true;
+        if (bi.createdBy === 'scraped' || bi.createdBy === 'ai' || bi.createdBy === 'admin' || bi.createdBy === 'import')
+            return true;
         if (bi.phone_claimed === false) return true;
     }
     const role = String(data.role || '').toLowerCase();
@@ -36,6 +40,9 @@ export function isUnclaimedBusinessProfile(data) {
  */
 export function isClaimedBusinessProfile(data) {
     if (!data || typeof data !== 'object') return false;
+    if (data.isClaimed === true) return true;
+    if (data.claimed === true) return true;
+    if (data.isVirtual === true && data.claimed === false) return false;
     const bi = data.businessInfo;
     if (bi && typeof bi === 'object') {
         if (bi.isClaimed === true) return true;
@@ -53,6 +60,50 @@ export function isClaimedBusinessProfile(data) {
         return true;
     }
     return false;
+}
+
+/**
+ * @param {string} standardizedE164
+ * @returns {Promise<PhoneLookupResult>}
+ */
+export async function lookupBusinessPhoneInRestaurants(standardizedE164) {
+    ensureFirebaseAdmin();
+    const db = getFirestore();
+
+    const byTop = await db
+        .collection('restaurants')
+        .where('standardized_phone', '==', standardizedE164)
+        .limit(5)
+        .get();
+
+    let snap = byTop;
+    if (snap.empty) {
+        snap = await db
+            .collection('restaurants')
+            .where('businessInfo.standardized_phone', '==', standardizedE164)
+            .limit(5)
+            .get();
+    }
+
+    if (snap.empty) {
+        return null;
+    }
+
+    for (const doc of snap.docs) {
+        if (isClaimedBusinessProfile(doc.data())) {
+            return { flow: 'claimed' };
+        }
+    }
+
+    const first = snap.docs[0];
+    const data = first.data();
+    const bi = data.businessInfo || {};
+    return {
+        flow: 'claim',
+        businessId: first.id,
+        businessName: bi.businessName || data.display_name || data.name || '',
+        source: 'restaurants',
+    };
 }
 
 /**
@@ -86,7 +137,32 @@ export async function lookupBusinessPhoneInUsers(standardizedE164) {
         flow: 'claim',
         businessId: first.id,
         businessName: bi.businessName || data.display_name || '',
+        source: 'users',
     };
+}
+
+/**
+ * Restaurants collection first (admin imports), then legacy users profiles.
+ * @param {string} standardizedE164
+ * @returns {Promise<PhoneLookupResult>}
+ */
+export async function lookupBusinessPhone(standardizedE164) {
+    const restaurantHit = await lookupBusinessPhoneInRestaurants(standardizedE164);
+    if (restaurantHit) {
+        if (restaurantHit.flow === 'claimed') return restaurantHit;
+        if (restaurantHit.flow === 'claim') return restaurantHit;
+    }
+
+    const usersHit = await lookupBusinessPhoneInUsers(standardizedE164);
+    if (usersHit.flow === 'claimed' || usersHit.flow === 'claim') {
+        return usersHit;
+    }
+
+    if (restaurantHit?.flow === 'claim') {
+        return restaurantHit;
+    }
+
+    return { flow: 'new' };
 }
 
 /**
@@ -161,3 +237,5 @@ export async function consumeVerifiedPendingPhone(standardizedE164, verification
     );
     return true;
 }
+
+export { restaurantDocIsUnclaimed };

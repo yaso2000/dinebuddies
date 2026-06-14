@@ -7,6 +7,9 @@ export default function InvitationTemplateSwatch({ templateKey, accentGradient =
     const k = String(templateKey || '');
     const legacyToBase = {
         classic: 'photoBottom',
+        hero_4_5: 'photoBottom',
+        hero_1_1: 'photoBottom',
+        hero_9_16: 'photoBottom',
         modern: 'photoGlass',
         elegant: 'photoChips',
         fun: 'photoBottom',
@@ -19,6 +22,9 @@ export default function InvitationTemplateSwatch({ templateKey, accentGradient =
 
     const variantByKey = {
         classic: 'twoActions',
+        hero_4_5: 'twoActions',
+        hero_1_1: 'twoActions',
+        hero_9_16: 'twoActions',
         modern: 'leftRightInfo',
         elegant: 'chips',
         fun: 'singleJoin',
@@ -31,7 +37,15 @@ export default function InvitationTemplateSwatch({ templateKey, accentGradient =
         photoChips: 'chips',
     };
     const variant = variantByKey[k] || variantByKey[base] || 'twoActions';
-    const fullBleedKeys = new Set(['photoBottom', 'photoGlass', 'photoChips', 'fullCanvas']);
+    const fullBleedKeys = new Set([
+        'hero_4_5',
+        'hero_1_1',
+        'hero_9_16',
+        'photoBottom',
+        'photoGlass',
+        'photoChips',
+        'fullCanvas',
+    ]);
     const isFullBleed = fullBleedKeys.has(k) || (k === base && fullBleedKeys.has(base));
 
     const card = {

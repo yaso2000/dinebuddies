@@ -5,6 +5,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import StoryCircle from './StoryCircle';
+import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { FaPlus, FaCamera } from 'react-icons/fa';
@@ -260,19 +261,13 @@ const StoriesBar = ({ onStoryClick }) => {
                                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0
                             }}
                         >
-                            <div style={{
-                                position: 'relative', width: '64px', height: '64px',
-                                padding: '2px', // Gap between ring and image
-                                background: 'linear-gradient(135deg, #10b981, #059669)', // Green Ring for "My Story"
-                                borderRadius: '50%'
-                            }}>
-                                <div style={{
-                                    width: '100%', height: '100%', borderRadius: '50%',
-                                    backgroundColor: 'var(--bg-input)',
-                                    backgroundImage: userPhoto ? `url("${userPhoto}")` : 'linear-gradient(135deg, #666, #333)',
-                                    backgroundSize: 'cover', backgroundPosition: 'center',
-                                    border: '2px solid var(--bg-card)' // Border inside ring
-                                }} />
+                            <div className="avatar-story-ring avatar-story-ring--own">
+                                <UserAvatar
+                                    user={userProfile || currentUser}
+                                    src={userPhoto}
+                                    alt={t('your_story', { defaultValue: 'Your Story' })}
+                                    style={{ width: 64, height: 64 }}
+                                />
                             </div>
                             <span style={{ fontSize: '0.75rem', maxWidth: '75px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', color: 'var(--text-main)' }}>
                                 {t('your_story', { defaultValue: 'Your Story' })}
@@ -287,14 +282,13 @@ const StoriesBar = ({ onStoryClick }) => {
                             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0, position: 'relative'
                         }}
                     >
-                        <div style={{ position: 'relative', width: '64px', height: '64px' }}>
-                            <div style={{
-                                width: '100%', height: '100%', borderRadius: '50%',
-                                backgroundColor: 'var(--bg-input)',
-                                backgroundImage: userPhoto ? `url("${userPhoto}")` : 'linear-gradient(135deg, #666, #333)',
-                                backgroundSize: 'cover', backgroundPosition: 'center',
-                                border: '2px solid var(--border-color)'
-                            }} />
+                        <div style={{ position: 'relative', lineHeight: 0 }}>
+                            <UserAvatar
+                                user={userProfile || currentUser}
+                                src={userPhoto}
+                                alt={t('your_story', { defaultValue: 'Your Story' })}
+                                style={{ width: 64, height: 64 }}
+                            />
                             <div style={{
                                 position: 'absolute', bottom: '0', right: '0',
                                 background: '#1d9bf0', color: 'white',

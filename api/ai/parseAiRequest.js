@@ -2,10 +2,16 @@
  * Shared request parsing for /api/ai/generate and /api/ai/multi-generate.
  */
 
+import {
+    AI_USER_PROMPT_MAX_CHARS,
+    getAiUserPromptDefaultEn,
+} from '../../src/constants/aiPromptLimits.js';
+import { pickAiOutputLanguage } from '../../src/utils/aiOutputLanguage.js';
+
 const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
 const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio']);
 const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
-const ASPECT_RATIOS = new Set(['1:1', '9:16', '16:9']);
+const ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
 const DESIGN_STUDIO_CATEGORIES = new Set([
     'square',
     'story',
@@ -47,13 +53,18 @@ export function parseAiGenerateBody(body) {
         venueDetails,
         cardStructure,
         designCategory,
+        outputLanguage,
     } = record;
 
-    if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
-        return { ok: false, error: 'userPrompt is required' };
-    }
+    const resolvedOutputLanguage = pickAiOutputLanguage(outputLanguage);
 
-    const trimmedPrompt = userPrompt.trim();
+    const manualPrompt = typeof userPrompt === 'string' ? userPrompt.trim() : '';
+    if (manualPrompt.length > AI_USER_PROMPT_MAX_CHARS) {
+        return {
+            ok: false,
+            error: `userPrompt must be at most ${AI_USER_PROMPT_MAX_CHARS} characters`,
+        };
+    }
     const normalizedPackage = String(generationPackage || '').trim();
     const normalizedPostType = typeof postType === 'string' ? postType.trim() : '';
 
@@ -91,9 +102,10 @@ export function parseAiGenerateBody(body) {
 
             return {
                 ok: true,
+                outputLanguage: resolvedOutputLanguage,
                 generationPackage: 'image',
                 postType: 'design_studio',
-                userPrompt: trimmedPrompt,
+                userPrompt: normalizeUserPrompt(manualPrompt, 'design_studio'),
                 aspectRatio: ratio,
                 designCategory: designCategoryRaw,
             };
@@ -129,9 +141,10 @@ export function parseAiGenerateBody(body) {
 
         return {
             ok: true,
+            outputLanguage: resolvedOutputLanguage,
             generationPackage: 'image',
             postType: postTypeForImage,
-            userPrompt: trimmedPrompt,
+            userPrompt: normalizeUserPrompt(manualPrompt, postTypeForImage, optionalSubType),
             aspectRatio: ratio,
             ...(postTypeForImage === 'invitation'
                 ? {
@@ -167,9 +180,10 @@ export function parseAiGenerateBody(body) {
 
         return {
             ok: true,
+            outputLanguage: resolvedOutputLanguage,
             generationPackage: 'invitation_bundle',
             postType: postTypeForBundle,
-            userPrompt: trimmedPrompt,
+            userPrompt: normalizeUserPrompt(manualPrompt, postTypeForBundle, parsedSubType),
             aspectRatio: ratio,
             ...(postTypeForBundle === 'invitation'
                 ? {
@@ -204,9 +218,10 @@ export function parseAiGenerateBody(body) {
             }
             return {
                 ok: true,
+                outputLanguage: resolvedOutputLanguage,
                 generationPackage: 'text',
                 postType: 'invitation',
-                userPrompt: trimmedPrompt,
+                userPrompt: normalizeUserPrompt(manualPrompt, 'invitation', 'date'),
                 subType,
                 inviteeId: datingCtx.inviteeId,
                 date: datingCtx.date,
@@ -220,9 +235,10 @@ export function parseAiGenerateBody(body) {
 
         return {
             ok: true,
+            outputLanguage: resolvedOutputLanguage,
             generationPackage: 'text',
             postType: 'invitation',
-            userPrompt: trimmedPrompt,
+            userPrompt: normalizeUserPrompt(manualPrompt, 'invitation', subType),
             subType,
             venueType: pickOptionalString(venueType),
             venueName: pickOptionalString(venueName),
@@ -236,10 +252,21 @@ export function parseAiGenerateBody(body) {
 
     return {
         ok: true,
+        outputLanguage: resolvedOutputLanguage,
         generationPackage: 'text',
         postType: normalizedPostType,
-        userPrompt: trimmedPrompt,
+        userPrompt: normalizeUserPrompt(manualPrompt, normalizedPostType),
     };
+}
+
+/**
+ * @param {string} manual
+ * @param {string} postType
+ * @param {string | undefined} [subType]
+ */
+function normalizeUserPrompt(manual, postType, subType) {
+    const trimmed = String(manual || '').trim().slice(0, AI_USER_PROMPT_MAX_CHARS);
+    return trimmed || getAiUserPromptDefaultEn(postType, subType);
 }
 
 /** @param {unknown} value */
@@ -272,7 +299,8 @@ function pickVenueDetails(value) {
 }
 
 /**
- * Dating text generation requires invitee, schedule, and venue before Gemini runs.
+ * Dating text generation requires schedule and venue before Gemini runs.
+ * Invitee is optional during create — chosen later on the preview/send step.
  * @param {Record<string, unknown>} record
  */
 function parseDatingTextContext(record) {
@@ -294,7 +322,6 @@ function parseDatingTextContext(record) {
 
     /** @type {string[]} */
     const missing = [];
-    if (!inviteeId) missing.push('inviteeId');
     if (!date) missing.push('date');
     if (!time) missing.push('time');
     if (!venueDetails) missing.push('venueDetails');

@@ -25,6 +25,7 @@ import {
     isGeminiProviderBillingExhausted,
     normalizeGeminiProviderBillingError,
 } from '../../src/utils/geminiProviderErrors.js';
+import { normalizeAiOutputLanguage } from '../../src/utils/aiOutputLanguage.js';
 
 type AuthDenied = {
     ok: false;
@@ -54,12 +55,15 @@ function statusForServiceError(result: Extract<GenerateContentResult, { success:
     return 500;
 }
 
-function enrichServiceErrorResponse(result: Extract<GenerateContentResult, { success: false }>) {
+function enrichServiceErrorResponse(
+    result: Extract<GenerateContentResult, { success: false }>,
+    outputLanguage: string = 'en',
+) {
     if (
         result.code === GEMINI_PROVIDER_BILLING_CODE ||
         isGeminiProviderBillingExhausted(result.error)
     ) {
-        const msg = geminiProviderBillingUserMessage('ar');
+        const msg = geminiProviderBillingUserMessage(outputLanguage);
         return { ...result, code: GEMINI_PROVIDER_BILLING_CODE, error: msg, message: msg };
     }
     return result;
@@ -206,6 +210,7 @@ export default async function handler(req: any, res: any) {
             request.generationPackage === 'invitation_bundle';
 
         if (usesPipeline) {
+            const outputLanguage = normalizeAiOutputLanguage(request.outputLanguage);
             const { runMultimodalPipeline } = await import('../../src/services/GeminiService.js');
             const pipelineResult = await runMultimodalPipeline({
                 generationPackage: request.generationPackage,
@@ -217,6 +222,7 @@ export default async function handler(req: any, res: any) {
                 accountType: callerContext.accountType,
                 businessContext: callerContext.businessContext,
                 aspectRatio: request.aspectRatio,
+                outputLanguage,
             });
 
             if (pipelineResult.success === false) {
@@ -264,6 +270,8 @@ export default async function handler(req: any, res: any) {
                 }
                 responseData.image = {
                     url: uploaded.url,
+                    path: uploaded.path,
+                    bucket: uploaded.bucket,
                     mimeType: uploaded.mimeType,
                     mediaLibraryItem: uploaded.mediaLibraryItem,
                     moderation: pipelineResult.pendingImage.moderation,
@@ -299,6 +307,8 @@ export default async function handler(req: any, res: any) {
             );
         }
 
+        const outputLanguage = normalizeAiOutputLanguage(request.outputLanguage);
+
         const result = await generateContent({
             userPrompt: request.userPrompt,
             postType: request.postType,
@@ -309,11 +319,14 @@ export default async function handler(req: any, res: any) {
             businessContext: callerContext.businessContext,
             datingContext,
             cardStructure: request.cardStructure || 'modern_minimal',
+            outputLanguage,
         });
 
         if (result.success === false) {
             await refundAiCredits(db, userRef, charged);
-            return res.status(statusForServiceError(result)).json(enrichServiceErrorResponse(result));
+            return res
+                .status(statusForServiceError(result))
+                .json(enrichServiceErrorResponse(result, outputLanguage));
         }
 
         return res.status(200).json({

@@ -60,7 +60,7 @@ export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true }) =>
             }
 
             onUpdate?.(downloadURL);
-            showToast(t('cover_photo_updated', 'تم تحديث صورة الغلاف'), 'success');
+            showToast(t('cover_photo_updated'), 'success');
         } catch (error) {
             console.error('Error uploading cover:', error);
             notifyImageUploadError(showToast, error, t, 'failed_upload_image');

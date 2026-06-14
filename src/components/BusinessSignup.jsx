@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } fro
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
 import { HiBuildingStorefront } from 'react-icons/hi2';
-import { signInWithEmailAndPassword, EmailAuthProvider, linkWithCredential } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { sendVerificationEmailResend, verificationEmailErrorMessage } from '../services/verificationEmailService';
 import { useToast } from '../context/ToastContext';
@@ -58,7 +58,6 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
     const [phoneVerified, setPhoneVerified] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [errorMessage, setErrorMessage] = useState('');
-    const [flowType, setFlowType] = useState('new_register_flow');
     const [sending, setSending] = useState(false);
     const [verifying, setVerifying] = useState(false);
     const [standardizedPhone, setStandardizedPhone] = useState('');
@@ -94,37 +93,37 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
 
         const standardized = formatToE164(countryCode, rawPhone);
         if (!standardized || cleanedPhoneLength(rawPhone) < 7 || !isValidE164(standardized)) {
-            setErrorMessage(t('business_phone_invalid', 'يرجى إدخال رقم هاتف صحيح'));
+            setErrorMessage(t('business_phone_invalid'));
             return;
         }
 
         setCountdown(SEND_COOLDOWN_SEC);
         setSending(true);
-        showToast(t('business_phone_sending', 'جاري إرسال رمز التحقق…'), 'info');
+        showToast(t('business_phone_sending'), 'info');
 
         try {
             const lookup = await lookupBusinessPhone(standardized);
             if (!lookup.ok) {
                 setErrorMessage(
                     lookup.data?.message ||
-                        t('business_phone_send_failed', 'فشل إرسال الكود')
+                        t('business_phone_send_failed')
                 );
                 setCountdown(0);
                 return;
             }
 
             const status = lookup.data.status || 'new_register_flow';
-            if (status === 'claim_flow') {
-                setClaimMeta({
-                    businessId: lookup.data.businessId,
-                    businessName: lookup.data.businessName,
-                });
-                setFlowType('claim_flow');
-            } else {
+            if (status !== 'claim_flow') {
                 setClaimMeta(null);
-                setFlowType('new_register_flow');
+                setErrorMessage(t('business_phone_not_claimable'));
+                setCountdown(0);
+                return;
             }
 
+            setClaimMeta({
+                businessId: lookup.data.businessId,
+                businessName: lookup.data.businessName,
+            });
             confirmationRef.current = await sendFirebaseBusinessPhoneOtp(standardized);
             setStandardizedPhone(lookup.data.standardizedPhone || standardized);
             setIsOtpSent(true);
@@ -141,7 +140,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
     const handleVerifyOtp = useCallback(async () => {
         const code = otpCode.replace(/\D/g, '');
         if (code.length < OTP_LENGTH || !standardizedPhone) {
-            setErrorMessage(t('business_phone_code_invalid', 'رمز التحقق غير صحيح'));
+            setErrorMessage(t('business_phone_code_invalid'));
             return;
         }
         setErrorMessage('');
@@ -153,22 +152,21 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
             }
             const confirmed = await confirmFirebaseBusinessPhoneOtp(confirmationRef.current, code);
             setPhoneVerified(true);
-            const flow = flowType === 'claim_flow' ? 'claim' : 'new';
             onVerified({
                 standardizedPhone: confirmed.phoneNumber || standardizedPhone,
                 firebaseUid: confirmed.uid,
                 idToken: confirmed.idToken,
-                flow,
+                flow: 'claim',
                 businessId: claimMeta?.businessId,
                 businessName: claimMeta?.businessName,
             });
-            showToast(t('business_phone_verified', 'تم التحقق من الهاتف'), 'success');
+            showToast(t('business_phone_verified'), 'success');
         } catch (err) {
             setErrorMessage(firebasePhoneAuthErrorMessage(err));
         } finally {
             setVerifying(false);
         }
-    }, [otpCode, standardizedPhone, flowType, claimMeta, onVerified, showToast, t]);
+    }, [otpCode, standardizedPhone, claimMeta, onVerified, showToast, t]);
 
     const sendBtnDisabled =
         disabled || sending || countdown > 0 || (lockFieldsAfterSend && isOtpSent) || phoneVerified;
@@ -177,7 +175,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
         <div className="biz-phone-verify signup-phone-block" dir={isRtl ? 'rtl' : 'ltr'}>
             <div className="biz-phone-verify__row">
                 <label className="biz-phone-verify__label">
-                    {t('business_phone_label', 'رقم الهاتف التجاري')}
+                    {t('business_phone_label')}
                 </label>
                 <div className="biz-phone-verify__inputs">
                     <select
@@ -185,7 +183,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
                         value={countryCode}
                         onChange={(e) => setCountryCode(e.target.value)}
                         disabled={fieldsLocked}
-                        aria-label={t('business_phone_country_code', 'رمز الدولة')}
+                        aria-label={t('business_phone_country_code')}
                     >
                         {PHONE_COUNTRY_OPTIONS.map((c) => (
                             <option key={c.iso} value={`+${c.dial}`}>
@@ -223,35 +221,33 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
                 onClick={handleSendOTP}
             >
                 {sending
-                    ? t('sending', 'جاري الإرسال…')
+                    ? t('sending')
                     : countdown > 0
-                      ? t('business_phone_resend_in', 'إعادة الإرسال خلال ({{sec}}ث)', {
-                            sec: countdown,
-                        })
-                      : t('send_code', 'إرسال كود التحقق عبر SMS')}
+                      ? t('business_phone_resend_in', { sec: countdown })
+                      : t('send_code')}
             </button>
 
             {phoneVerified && (
                 <p className="biz-phone-verify__verified">
-                    {t('business_phone_verified', 'تم التحقق')} ({standardizedPhone})
+                    {t('business_phone_verified')} ({standardizedPhone})
                 </p>
             )}
 
             {isOtpSent && !phoneVerified && (
                 <div className="biz-phone-verify__otp-block">
                     <h3 className="biz-phone-verify__otp-title">
-                        {t('business_phone_otp_hint', 'أدخل كود التحقق المستلم')}
+                        {t('business_phone_otp_hint')}
                     </h3>
+                    {claimMeta?.businessName && (
+                        <p className="biz-phone-verify__otp-flow-msg">
+                            {t('business_phone_claim_banner', {
+                                name: claimMeta.businessName,
+                                defaultValue: 'We found an existing profile for this number: {{name}}. Verify to claim it.',
+                            })}
+                        </p>
+                    )}
                     <p className="biz-phone-verify__otp-flow-msg">
-                        {flowType === 'claim_flow'
-                            ? t(
-                                  'business_phone_claim_otp_hint',
-                                  '⚠️ هذا النشاط موجود مسبقاً، أدخل الكود لنقله لملكيتك.'
-                              )
-                            : t(
-                                  'business_phone_new_otp_hint',
-                                  'يرجى تأكيد الحساب الجديد.'
-                              )}
+                        {t('business_phone_claim_otp_hint')}
                     </p>
                     <input
                         type="text"
@@ -271,8 +267,8 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
                         onClick={handleVerifyOtp}
                     >
                         {verifying
-                            ? t('verifying', 'جاري التحقق…')
-                            : t('business_phone_confirm_otp', 'تأكيد الكود ومتابعة التسجيل')}
+                            ? t('verifying')
+                            : t('business_phone_confirm_claim')}
                     </button>
                 </div>
             )}
@@ -332,7 +328,6 @@ const BusinessSignup = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [phoneVerification, setPhoneVerification] = useState(null);
 
     // Step 2: Business name (always required) + address from Google Places only
     const [areaDetecting, setAreaDetecting] = useState(() => ENABLE_BACKGROUND_AREA_DETECT);
@@ -388,13 +383,7 @@ const BusinessSignup = () => {
         return () => { mounted = false; };
     }, []);
 
-    const defaultDialCode = defaultDialCodeForCountryIso(businessData.countryCode || 'AU');
-
     const validateAuth = () => {
-        if (!phoneVerification?.standardizedPhone || !phoneVerification?.firebaseUid) {
-            showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
-            return false;
-        }
         if (!email?.trim() || !password || !confirmPassword) {
             showToast(t('business_signup_err_fill_all', 'Please fill in all required fields'), 'error');
             return false;
@@ -414,19 +403,30 @@ const BusinessSignup = () => {
         e.preventDefault();
         if (!validateAuth()) return;
 
+        setLoading(true);
         try {
-            const credential = EmailAuthProvider.credential(email.trim(), password);
-            await linkWithCredential(auth.currentUser, credential);
+            const normalizedEmail = email.trim().toLowerCase();
+            if (
+                auth.currentUser?.email?.toLowerCase() !== normalizedEmail ||
+                !auth.currentUser?.email
+            ) {
+                if (auth.currentUser) {
+                    await signOut(auth);
+                }
+                await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+            }
             setStep(STEPS.DETAILS);
         } catch (err) {
             const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
-            if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') {
+            if (code === 'auth/email-already-in-use') {
                 showToast(t('auth_email_in_use', 'This email is already registered'), 'error');
             } else if (code === 'auth/weak-password') {
                 showToast(t('error_password_length', 'Password must be at least 6 characters'), 'error');
             } else {
-                showToast(err?.message || t('business_signup_err_create', 'Failed to link email'), 'error');
+                showToast(err?.message || t('business_signup_err_create', 'Failed to create account'), 'error');
             }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -494,28 +494,22 @@ const BusinessSignup = () => {
             showToast(t('business_signup_err_details', 'Please search and select your business first.'), 'error');
             return;
         }
-        if (!phoneVerification?.standardizedPhone || !phoneVerification?.firebaseUid) {
-            showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
-            return;
-        }
-
         setLoading(true);
 
         try {
             const idToken = await auth.currentUser?.getIdToken(true);
             if (!idToken) {
-                showToast(t('business_phone_verify_required', 'Verify your business phone number first'), 'error');
+                showToast(t('business_signup_err_create', 'Failed to create account.'), 'error');
                 return;
             }
 
             const businessInfo = {
                 businessName: businessData.businessName.trim(),
                 businessType: businessData.businessType,
-                phone: businessData.phone || phoneVerification.standardizedPhone,
-                standardized_phone: phoneVerification.standardizedPhone,
+                phone: businessData.phone || '',
                 isClaimed: true,
-                phone_verified: true,
-                phone_claimed: true,
+                phone_verified: false,
+                phone_claimed: false,
                 city: businessData.city,
                 country: businessData.country,
                 description: businessData.editorialSummary || '',
@@ -538,11 +532,8 @@ const BusinessSignup = () => {
             const pendingReferral = peekPendingReferralCode();
             const { ok, data } = await finalizeBusinessSignup(
                 {
-                    standardizedPhone: phoneVerification.standardizedPhone,
                     email: email.trim(),
                     businessInfo,
-                    claimBusinessId:
-                        phoneVerification.flow === 'claim' ? phoneVerification.businessId || null : null,
                     referredBy: pendingReferral || null,
                 },
                 idToken
@@ -552,9 +543,6 @@ const BusinessSignup = () => {
                 const msg = data?.message || t('business_signup_err_create', 'Failed to create account.');
                 if (data?.code === 'auth/email-already-in-use') {
                     showToast(t('auth_email_in_use', 'This email is already registered'), 'error');
-                    setStep(STEPS.AUTH);
-                } else if (data?.code === 'phone-already-in-use') {
-                    showToast(t('business_phone_in_use', 'This phone is already registered to a business'), 'error');
                     setStep(STEPS.AUTH);
                 } else {
                     showToast(msg, 'error');
@@ -612,36 +600,32 @@ const BusinessSignup = () => {
                         </h1>
                     </div>
 
-                    <BusinessPhoneFields
-                        defaultDialCode={defaultDialCode || '61'}
-                        onVerified={(payload) => setPhoneVerification(payload)}
-                    />
-
                     <form onSubmit={handleNext}>
-                        <div style={{ marginBottom: '1.25rem', opacity: phoneVerification ? 1 : 0.55 }}>
+                        <div style={{ marginBottom: '1.25rem' }}>
                             <label style={labelStyle}>{t('email', 'Business Email')}</label>
                             <div style={{ position: 'relative' }}>
                                 <FaEnvelope style={fieldIconStyle} />
-                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={!phoneVerification} style={inputStyleWithIcon} />
+                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyleWithIcon} />
                             </div>
                         </div>
                         <div style={{ marginBottom: '1.25rem' }}>
                             <label style={labelStyle}>{t('password', 'Password')}</label>
                             <div style={{ position: 'relative' }}>
                                 <FaLock style={fieldIconStyle} />
-                                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={!phoneVerification} style={inputStyleWithIcon} />
+                                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} style={inputStyleWithIcon} />
                             </div>
                         </div>
                         <div style={{ marginBottom: '2rem' }}>
                             <label style={labelStyle}>{t('confirm_password', 'Confirm Password')}</label>
                             <div style={{ position: 'relative' }}>
                                 <FaLock style={fieldIconStyle} />
-                                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} disabled={!phoneVerification} style={inputStyleWithIcon} />
+                                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} style={inputStyleWithIcon} />
                             </div>
                         </div>
 
-                        <button type="submit" style={btnStyle} disabled={!phoneVerification}>
-                            {t('next', 'Next Step')} <FaChevronRight size={14} />
+                        <button type="submit" style={btnStyle} disabled={loading}>
+                            {loading ? t('creating_profile', 'Creating profile…') : t('next', 'Next Step')}{' '}
+                            {!loading ? <FaChevronRight size={14} /> : null}
                         </button>
                     </form>
                 </div>

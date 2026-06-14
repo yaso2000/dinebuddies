@@ -302,7 +302,8 @@
     cursor: pointer;
     transition: all 0.2s;
     width: 100%;
-    text-align: left;
+    text-align: start;
+    color: var(--text-main);
 }
 
 .language-option:hover {
@@ -317,17 +318,12 @@
 
 .language-flag {
     font-size: 2rem;
-}
-
-/* Language settings: white labels and flag area on all rows */
-.language-option .language-flag,
-.language-option .language-info h3,
-.language-option .language-info p {
-    color: #fff;
+    line-height: 1;
 }
 
 .language-info {
     flex: 1;
+    min-width: 0;
 }
 
 .language-info h3 {

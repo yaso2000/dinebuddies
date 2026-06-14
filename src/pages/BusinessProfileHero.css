@@ -1,0 +1,197 @@
+/* Business profile cover hero — logical properties for LTR + RTL */
+.business-hero-cover {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    flex-shrink: 0;
+    height: 300px;
+    min-height: 300px;
+    max-height: 300px;
+    border-bottom-left-radius: 32px;
+    border-bottom-right-radius: 32px;
+    box-shadow: 0 10px 40px color-mix(in srgb, var(--brand-primary) 30%, transparent);
+    isolation: isolate;
+}
+
+.business-hero-top {
+    position: absolute;
+    top: 1.2rem;
+    inset-inline: 1.2rem;
+    z-index: 12;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.business-hero-top > * {
+    pointer-events: auto;
+}
+
+.business-hero-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.business-hero-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    min-width: 0;
+    flex: 1;
+    max-width: min(72%, 360px);
+}
+
+.business-hero-start-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.business-hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.business-hero-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.business-hero-social {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+.business-hero-action-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.business-hero-identity {
+    position: absolute;
+    bottom: 1rem;
+    inset-inline-start: 1.2rem;
+    inset-inline-end: 6rem;
+    z-index: 5;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.business-hero-identity > * {
+    pointer-events: auto;
+}
+
+.business-hero-logo-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.business-hero-logo {
+    width: 84px;
+    height: 84px;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 4px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--brand-primary) 40%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+    background: var(--brand-primary);
+}
+
+.business-hero-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.business-hero-name {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0 0 6px;
+    color: white;
+    font-weight: 900;
+    font-size: 1.1rem;
+    line-height: 1.3;
+    text-align: start;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+    letter-spacing: 0.02em;
+    word-break: break-word;
+}
+
+.business-hero-plan-badge {
+    position: absolute;
+    top: -6px;
+    inset-inline-start: -6px;
+}
+
+.business-hero-edit-cover {
+    position: absolute;
+    bottom: 1.2rem;
+    inset-inline-end: 1.2rem;
+    z-index: 10;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 7px 14px;
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 380px) {
+    .business-hero-logo {
+        width: 72px;
+        height: 72px;
+        border-radius: 16px;
+    }
+
+    .business-hero-name {
+        font-size: 1rem;
+    }
+
+    .business-hero-actions {
+        align-items: stretch;
+    }
+
+    .business-hero-actions > button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .business-hero-start-row {
+        gap: 8px;
+    }
+
+    .business-hero-status {
+        max-width: 100%;
+    }
+
+    .business-hero-identity {
+        inset-inline-end: 1.2rem;
+    }
+}

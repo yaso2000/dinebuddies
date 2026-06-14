@@ -6,6 +6,10 @@ import en from './locales/en.json';
 import ar from './locales/ar.json';
 import fr from './locales/fr.json';
 import es from './locales/es.json';
+import it from './locales/it.json';
+import de from './locales/de.json';
+import pt from './locales/pt.json';
+import tr from './locales/tr.json';
 import ur from './locales/ur.json';
 import hi from './locales/hi.json';
 import { applyHtmlLanguage } from './utils/authGeoLanguage';
@@ -19,10 +23,14 @@ i18n
             ar: { translation: ar },
             fr: { translation: fr },
             es: { translation: es },
+            it: { translation: it },
+            de: { translation: de },
+            pt: { translation: pt },
+            tr: { translation: tr },
             ur: { translation: ur },
             hi: { translation: hi }
         },
-        supportedLngs: ['en', 'ar', 'fr', 'es', 'ur', 'hi'],
+        supportedLngs: ['en', 'ar', 'fr', 'es', 'it', 'de', 'pt', 'tr', 'ur', 'hi'],
         fallbackLng: 'en',
         detection: {
             order: ['localStorage', 'navigator', 'htmlTag', 'path', 'subdomain'],

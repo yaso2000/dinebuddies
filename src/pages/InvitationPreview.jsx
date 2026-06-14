@@ -2,18 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUsers, FaMoneyBillWave, FaLock, FaGlobe, FaUserFriends } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, getDocFromServer, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { formatAgeGroupsSmart } from '../utils/invitationDisplayUtils';
 import { FaVenusMars, FaBirthdayCake } from 'react-icons/fa';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { useInvitations } from '../context/InvitationContext';
 
 const InvitationPreview = () => {
     const { t, i18n } = useTranslation();
     const { showToast } = useToast();
     const { isBusiness } = useAuth();
+    const { publishPublicInvitationDraft } = useInvitations();
     const isBusinessRef = useRef(isBusiness);
     isBusinessRef.current = isBusiness;
     const navigate = useNavigate();
@@ -113,32 +115,16 @@ const InvitationPreview = () => {
         setIsPublishing(true);
 
         try {
-            const invitationRef = doc(db, 'invitations', draftId);
-
-            console.log('📝 Removing draft status and marking as published...');
-
-            // Import deleteField
-            const { deleteField } = await import('firebase/firestore');
-
-            // Remove draft status and add published timestamp
-            await updateDoc(invitationRef, {
-                status: deleteField(), // Remove draft status
-                publishedAt: new Date().toISOString()
-            });
+            const result = await publishPublicInvitationDraft(draftId);
+            if (!result?.success) {
+                return;
+            }
 
             console.log('✅ Invitation published successfully!');
-            console.log('🔄 Navigating to invitation page...');
-
-            // Navigate to published invitation
             navigate(`/invitation/${draftId}`);
         } catch (error) {
             console.error('❌ Error publishing invitation:', error);
-            const code = error?.code || '';
-            const msg =
-                code === 'permission-denied'
-                    ? (t('publish_permission_denied') || 'Publishing failed: account does not have permission to update this invitation.')
-                    : (t('failed_publish_invitation') || 'Failed to publish invitation');
-            showToast(msg, 'error');
+            showToast(t('failed_publish_invitation') || 'Failed to publish invitation', 'error');
         } finally {
             setIsPublishing(false);
         }

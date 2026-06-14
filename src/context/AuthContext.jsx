@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastContext';
 import { getAuthErrorMessage } from '../utils/errorMessages';
-import { isBusinessUser, isAffiliateAgent } from '../utils/accountRole';
+import { isBusinessUser, isAffiliateAgent, cannotCreateInvitations } from '../utils/accountRole';
 import {
     mergeConsumerProfiles,
     canConsumerEnterApp,
@@ -27,13 +27,13 @@ import { isEmailRegisteredAsAffiliate, isEmailRegisteredAsBusiness } from '../ut
 import { assertProfileMatchesPortal, AUTH_PORTAL } from '../utils/authPortalGate';
 import { resolveAppleDisplayName } from '../utils/appleAuth';
 import {
-    clearOAuthRedirectPending,
+    isLocalDevHost,
     markOAuthRedirectComplete,
-    markOAuthRedirectPending,
     preferOAuthRedirectOnThisDevice,
     stashOAuthRedirectError,
     stripFirebaseAuthParamsFromUrl,
 } from '../utils/localDevAuth';
+import { firebaseOAuthPopupOrRedirect } from '../utils/firebaseOAuthSignIn';
 import { getFirebaseRedirectResultOnce } from '../firebase/authBootstrap';
 import { PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
@@ -42,9 +42,7 @@ import {
     db
 } from '../firebase/config';
 import {
-    signInWithPopup,
     signInWithCredential,
-    signInWithRedirect,
     GoogleAuthProvider,
     OAuthProvider,
     signOut as firebaseSignOut,
@@ -537,7 +535,8 @@ export const AuthProvider = ({ children }) => {
                     if (!response.ok) throw new Error('BigDataCloud failed');
                     const d = await response.json();
 
-                    const city = d.city || d.locality || d.principalSubdivision || '';
+                    const { pickCityFromReverseGeocode } = await import('../utils/locationUtils');
+                    const city = pickCityFromReverseGeocode(d);
                     const country = d.countryName || '';
                     const countryCode = d.countryCode || '';
                     const fullLocation = [city, d.principalSubdivision, country].filter(Boolean).join(', ');
@@ -743,6 +742,36 @@ export const AuthProvider = ({ children }) => {
         await sendPasswordResetViaResend(em);
     };
 
+    const finishFacebookOAuthResult = async (result) => {
+        const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+        let isNewUser = false;
+
+        if (!userDoc.exists()) {
+            isNewUser = true;
+            await createUserProfile(result.user.uid, {
+                display_name: result.user.displayName,
+                email: result.user.email,
+                photo_url: result.user.photoURL,
+                authProvider: 'facebook',
+            });
+        } else {
+            assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
+        }
+        if (userDoc.exists() && result.user.photoURL) {
+            const data = userDoc.data();
+            const currentPhoto = data.photoURL || data.photo_url;
+            if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
+                await updateDoc(doc(db, 'users', result.user.uid), {
+                    photoURL: result.user.photoURL,
+                    photo_url: result.user.photoURL,
+                    updatedAt: serverTimestamp(),
+                });
+            }
+        }
+
+        return { user: result.user, isNewUser };
+    };
+
     // Google Sign In
     const signInWithGoogle = async () => {
         try {
@@ -751,39 +780,14 @@ export const AuthProvider = ({ children }) => {
             // Forcing client_id on http://localhost breaks sign-in if that Web client omits localhost in
             // Google Cloud Console "Authorized JavaScript origins". Leaving unset uses Firebase's default.
             const explicitClientId = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
-            const host = typeof window !== 'undefined' ? window.location.hostname : '';
-            const isLocalDev = host === 'localhost' || host === '127.0.0.1';
-            if (explicitClientId && !isLocalDev) {
+            if (explicitClientId && !isLocalDevHost()) {
                 provider.setCustomParameters({ client_id: explicitClientId });
             }
             provider.addScope('email');
             provider.addScope('profile');
-            if (preferOAuthRedirectOnThisDevice()) {
-                markOAuthRedirectPending();
-                try {
-                    await signInWithRedirect(auth, provider);
-                } catch (redirectErr) {
-                    clearOAuthRedirectPending();
-                    throw redirectErr;
-                }
-                return { __oauthRedirect: true };
-            }
-            let result;
-            try {
-                result = await signInWithPopup(auth, provider);
-            } catch (popupErr) {
-                if (popupErr?.code === 'auth/popup-blocked' || popupErr?.code === 'auth/cancelled-popup-request') {
-                    markOAuthRedirectPending();
-                    try {
-                        await signInWithRedirect(auth, provider);
-                    } catch (redirectErr) {
-                        clearOAuthRedirectPending();
-                        throw redirectErr;
-                    }
-                    return { __oauthRedirect: true };
-                }
-                throw popupErr;
-            }
+            const oauth = await firebaseOAuthPopupOrRedirect(provider);
+            if (oauth.__oauthRedirect) return { __oauthRedirect: true };
+            const result = oauth.result;
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -863,19 +867,14 @@ export const AuthProvider = ({ children }) => {
             return null;
         }
         // ─────────────────────────────────────────────────────────────────
-        if (preferFacebookRedirectAuth()) {
+        // Localhost: Meta JS SDK often fails (http / domain). Use Firebase OAuth like Google.
+        if (isLocalDevHost() || preferFacebookRedirectAuth()) {
             const provider = new FacebookAuthProvider();
             provider.addScope('email');
             provider.addScope('public_profile');
-            // Do not await — navigation may unload the page before the promise settles.
-            markOAuthRedirectPending();
-            try {
-                await signInWithRedirect(auth, provider);
-            } catch (redirectErr) {
-                clearOAuthRedirectPending();
-                throw redirectErr;
-            }
-            return { __oauthRedirect: true };
+            const oauth = await firebaseOAuthPopupOrRedirect(provider);
+            if (oauth.__oauthRedirect) return { __oauthRedirect: true };
+            return finishFacebookOAuthResult(oauth.result);
         }
         try {
             // Step 1: Load the Facebook JS SDK and get access token
@@ -898,35 +897,7 @@ export const AuthProvider = ({ children }) => {
             // Step 2: Exchange Facebook token for Firebase credential
             const credential = FacebookAuthProvider.credential(fbAuthResponse.accessToken);
             const result = await signInWithCredential(auth, credential);
-
-            // Step 3: Create or update Firestore profile
-            const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-            let isNewUser = false;
-
-            if (!userDoc.exists()) {
-                isNewUser = true;
-                await createUserProfile(result.user.uid, {
-                    display_name: result.user.displayName,
-                    email: result.user.email,
-                    photo_url: result.user.photoURL,
-                    authProvider: 'facebook'
-                });
-            } else {
-                assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
-            }
-            if (userDoc.exists() && result.user.photoURL) {
-                const data = userDoc.data();
-                const currentPhoto = data.photoURL || data.photo_url;
-                if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
-                    await updateDoc(doc(db, 'users', result.user.uid), {
-                        photoURL: result.user.photoURL,
-                        photo_url: result.user.photoURL,
-                        updatedAt: serverTimestamp()
-                    });
-                }
-            }
-
-            return { user: result.user, isNewUser };
+            return finishFacebookOAuthResult(result);
         } catch (error) {
             if (
                 error?.code === 'auth/affiliate-portal-only' ||
@@ -981,18 +952,10 @@ export const AuthProvider = ({ children }) => {
         const provider = new OAuthProvider('apple.com');
         provider.addScope('email');
         provider.addScope('name');
-        if (preferOAuthRedirectOnThisDevice()) {
-            markOAuthRedirectPending();
-            try {
-                await signInWithRedirect(auth, provider);
-            } catch (redirectErr) {
-                clearOAuthRedirectPending();
-                throw redirectErr;
-            }
-            return { __oauthRedirect: true };
-        }
+        const oauth = await firebaseOAuthPopupOrRedirect(provider);
+        if (oauth.__oauthRedirect) return { __oauthRedirect: true };
         try {
-            const result = await signInWithPopup(auth, provider);
+            const result = oauth.result;
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -1439,6 +1402,7 @@ export const AuthProvider = ({ children }) => {
         // Derive from normalised profile so there is ONE source of truth
         isGuest: isGuest || userProfile?.isGuest || false,
         isBusiness: isBusinessUser(userProfile),
+        cannotCreateInvitations: cannotCreateInvitations(userProfile),
         isAdmin: userProfile?.role === 'admin',
         isStaff: userProfile?.role === 'staff' || userProfile?.role === 'support' || userProfile?.role === 'admin',
         signInWithEmail,

@@ -14,9 +14,11 @@ import {
     AI_INVITATION_BUNDLE_CREDITS,
     AI_TEXT_GENERATION_CREDITS,
     aiCreditCostForPostType,
-    aiCreditCostLabelAr,
     CREDITS_WALLET_PATH,
 } from '../utils/aiCreditCosts';
+import { AI_USER_PROMPT_MAX_CHARS } from '../constants/aiPromptLimits';
+import { getAiUserPromptFallback } from '../utils/aiPromptLocale';
+import { resolveAiUserPrompt } from '../utils/resolveAiUserPrompt';
 import './AIGenerateBar.css';
 
 /** @typedef {'text' | 'image' | 'invitation_bundle'} GenerationPackage */
@@ -87,22 +89,19 @@ export default function AIGenerateBar({
 
     const generateDisabled = disabled || loading || (isDatingInvitation && !datingContextReady);
 
-    const datingPrerequisiteMessage = t(
-        'dating_ai_all_fields_required',
-        'يرجى ملء جميع الحقول أولاً لتخصيص الدعوة.'
-    );
+    const datingPrerequisiteMessage = t('dating_ai_schedule_venue_required', {
+        defaultValue: 'Set the date, time, and location first — then AI can draft your message.',
+    });
 
     const showMultimodalPackages = multimodalMode && postType !== 'invitation';
 
-    const costLabel = useMemo(
-        () =>
-            t(
-                'ai_generate_cost',
-                aiCreditCostLabelAr(postType, showMultimodalPackages ? generationPackage : undefined),
-                { postType }
-            ),
-        [postType, generationPackage, showMultimodalPackages, t]
-    );
+    const costLabel = useMemo(() => {
+        const cost = aiCreditCostForPostType(
+            postType,
+            showMultimodalPackages ? generationPackage : undefined,
+        );
+        return t('ai_generate_cost', { cost });
+    }, [postType, generationPackage, showMultimodalPackages, t]);
 
     const handleGenerate = async () => {
         if (generateDisabled) return;
@@ -123,14 +122,15 @@ export default function AIGenerateBar({
             }
         }
 
-        const userPrompt = (prompt.trim() || buildContextPrompt?.() || '').trim();
-        if (!userPrompt) {
-            showToast(
-                t('ai_prompt_required', 'أدخل وصفاً قصيراً لما تريد توليده بالذكاء الاصطناعي.'),
-                'error'
-            );
-            return;
-        }
+        const userPrompt = resolveAiUserPrompt({
+            manualPrompt: prompt,
+            buildContextPrompt,
+            fallback: getAiUserPromptFallback(
+                isDatingInvitation ? 'invitation' : postType,
+                isDatingInvitation ? 'date' : subType,
+                t
+            ),
+        });
 
         setLoading(true);
         try {
@@ -155,10 +155,7 @@ export default function AIGenerateBar({
                 if (isInsufficientCreditsError(result)) {
                     setInsufficientCreditsMessage(
                         result.message ||
-                            t(
-                                'ai_insufficient_credits_default',
-                                'رصيدك غير كافٍ. تحتاج إلى المزيد من الكريدت لإتمام هذه العملية.'
-                            )
+                            t('ai_insufficient_credits_default')
                     );
                     return;
                 }
@@ -187,10 +184,7 @@ export default function AIGenerateBar({
                 if (!applied.hasContent) {
                     console.warn('[AIGenerateBar] invitation AI response had no mappable fields', result.data);
                     showToast(
-                        t(
-                            'dating_ai_fields_empty',
-                            'تم التوليد لكن لم نتمكن من قراءة العنوان أو الرسالة. حاول مرة أخرى.'
-                        ),
+                        t('dating_ai_fields_empty'),
                         'error'
                     );
                     return;
@@ -207,10 +201,7 @@ export default function AIGenerateBar({
 
                 if (applied.hasTitle && !applied.hasDescription) {
                     showToast(
-                        t(
-                            'dating_ai_description_missing',
-                            'تم ملء العنوان فقط — أعد التوليد أو اكتب الرسالة يدوياً.'
-                        ),
+                        t('dating_ai_description_missing'),
                         'info'
                     );
                 }
@@ -230,19 +221,16 @@ export default function AIGenerateBar({
                 }
             } else if (postType === 'invitation') {
                 showToast(
-                    t(
-                        'dating_ai_fields_applied',
-                        'تم ملء العنوان والرسالة في الحقول أدناه — يمكنك تعديلهما قبل المعاينة.'
-                    ),
+                    t('dating_ai_fields_applied'),
                     'success'
                 );
             } else {
-                showToast(t('ai_generate_success', 'تم توليد المحتوى بنجاح.'), 'success');
+                showToast(t('ai_generate_success'), 'success');
             }
         } catch (err) {
             console.error('[AIGenerateBar]', err);
             showToast(
-                t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.'),
+                t('ai_generate_failed'),
                 'error'
             );
         } finally {
@@ -266,14 +254,14 @@ export default function AIGenerateBar({
                 {!embedded ? (
                     <label className="ai-generate-bar__label" htmlFor={`ai-prompt-${postType}`}>
                         <FaMagic aria-hidden />
-                        {t('ai_generate_label', 'توليد بالذكاء الاصطناعي')}
+                        {t('ai_generate_label')}
                     </label>
                 ) : null}
 
                 {showMultimodalPackages ? (
                     <fieldset className="ai-generate-bar__packages" disabled={loading || disabled}>
                         <legend className="ai-generate-bar__packages-legend">
-                            {t('ai_generate_package_label', 'نوع التوليد')}
+                            {t('ai_generate_package_label')}
                         </legend>
                         {PACKAGE_OPTIONS.map((option) => (
                             <label
@@ -335,7 +323,7 @@ export default function AIGenerateBar({
                 {postType === 'invitation' && invitationPreview ? (
                     <div className="ai-generate-bar__invitation-preview" role="status">
                         <p className="ai-generate-bar__invitation-preview-label">
-                            {t('dating_ai_preview_label', 'معاينة النص المُولَّد')}
+                            {t('dating_ai_preview_label')}
                         </p>
                         {invitationPreview.title ? (
                             <p className="ai-generate-bar__invitation-preview-title">
@@ -355,13 +343,21 @@ export default function AIGenerateBar({
                     className="ai-generate-bar__input"
                     rows={compact ? 2 : 3}
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={t(
-                        'ai_prompt_placeholder',
-                        'صف ما تريد (مثال: عرض غداء نهاية الأسبوع في مطعم إيطالي…) — أو اتركه فارغاً لاستخدام تفاصيل النموذج.'
-                    )}
+                    onChange={(e) => setPrompt(e.target.value.slice(0, AI_USER_PROMPT_MAX_CHARS))}
+                    placeholder={t('ai_prompt_placeholder')}
+                    maxLength={AI_USER_PROMPT_MAX_CHARS}
                     disabled={generateDisabled}
                 />
+                <p className="ai-generate-bar__prompt-meta" aria-live="polite">
+                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                        {prompt.length} / {AI_USER_PROMPT_MAX_CHARS}
+                    </span>
+                    <span className="ai-generate-bar__prompt-meta-hint">
+                        {t('ai_prompt_optional_hint', {
+                            defaultValue: 'Optional — leave blank to use form details.',
+                        })}
+                    </span>
+                </p>
 
                 <div className="ai-generate-bar__actions">
                     <button
@@ -375,12 +371,12 @@ export default function AIGenerateBar({
                         {loading ? (
                             <>
                                 <span className="ai-generate-bar__spinner" aria-hidden />
-                                {t('ai_generate_loading', 'جاري التوليد بالذكاء الاصطناعي...')}
+                                {t('ai_generate_loading')}
                             </>
                         ) : (
                             <>
                                 <FaMagic aria-hidden />
-                                {t('ai_generate_btn', 'توليد المحتوى')}
+                                {t('ai_generate_btn')}
                             </>
                         )}
                     </button>
@@ -408,7 +404,7 @@ export default function AIGenerateBar({
                             <FaWallet />
                         </div>
                         <h3 id="ai-credits-modal-title" className="ai-credits-modal__title">
-                            {t('ai_insufficient_credits_title', 'رصيد غير كافٍ')}
+                            {t('ai_insufficient_credits_title')}
                         </h3>
                         <p id="ai-credits-modal-desc" className="ai-credits-modal__message">
                             {insufficientCreditsMessage}
@@ -419,14 +415,14 @@ export default function AIGenerateBar({
                                 className="ai-credits-modal__btn ai-credits-modal__btn--primary ios-tap-target"
                                 onClick={goToTopUp}
                             >
-                                {t('ai_top_up_now', 'شحن الرصيد الآن')}
+                                {t('ai_top_up_now')}
                             </button>
                             <button
                                 type="button"
                                 className="ai-credits-modal__btn ai-credits-modal__btn--ghost ios-tap-target"
                                 onClick={closeInsufficientModal}
                             >
-                                {t('close', 'إغلاق')}
+                                {t('close')}
                             </button>
                         </div>
                     </div>

@@ -20,6 +20,21 @@ export function isChunkLoadError(error) {
 
 import { getPrivateDraftRecoveryCreatePath } from './privateInvitationDraft';
 
+const INVITE_FATAL_RELOAD_KEY = 'dineb_invite_fatal_reload';
+
+/** Invitation flows must never fall back to the social feed after recovery retries. */
+function isInvitationFlowPath(pathname = '') {
+    const p = String(pathname || '');
+    return (
+        p.startsWith('/invitation/private/') ||
+        p.startsWith('/invite/p/') ||
+        p === '/create-dating' ||
+        p === '/create-private' ||
+        p === '/create' ||
+        p.startsWith('/create/')
+    );
+}
+
 /** Safe route for the current area of the app (full path, no origin). */
 export function getFatalUiRecoveryTarget(pathname = '') {
     const p = String(pathname || (typeof window !== 'undefined' ? window.location.pathname : '') || '');
@@ -28,8 +43,11 @@ export function getFatalUiRecoveryTarget(pathname = '') {
     if (p.startsWith('/business')) return '/business-dashboard';
     if (p === '/login' || p.startsWith('/login')) return '/login';
     if (p.startsWith('/invitation/private/preview/')) return getPrivateDraftRecoveryCreatePath();
+    if (p.startsWith('/invitation/private/')) return p.split('?')[0] || '/invitation/private';
+    if (p.startsWith('/invite/p/')) return p.split('?')[0] || '/invite/p';
     if (p.startsWith('/create-dating')) return '/create-dating';
     if (p.startsWith('/create-private')) return '/create-private';
+    if (p === '/invitations' || p.startsWith('/invitations/')) return '/invitations';
     if (p === '/create-featured-post') return '/create-featured-post';
     if (p === '/create-post') return '/create-post';
     return '/posts-feed';
@@ -71,6 +89,16 @@ export function recoverFromFatalUiError(error, options = {}) {
         return true;
     }
     sessionStorage.removeItem(STUCK_RELOAD_KEY);
+
+    if (isInvitationFlowPath(window.location.pathname)) {
+        if (!sessionStorage.getItem(INVITE_FATAL_RELOAD_KEY)) {
+            sessionStorage.setItem(INVITE_FATAL_RELOAD_KEY, 'true');
+            window.location.reload();
+            return true;
+        }
+        sessionStorage.removeItem(INVITE_FATAL_RELOAD_KEY);
+        return false;
+    }
 
     if (here !== '/posts-feed') {
         window.location.replace('/posts-feed');

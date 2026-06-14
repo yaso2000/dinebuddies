@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../../firebase/config';
 import { browseUsersPage, searchUsers } from '../../utils/adminUserQueries';
 import { adminApi } from '../api';
@@ -6,26 +7,26 @@ import { adminApi } from '../api';
 const USER_TABS = [
     {
         id: 'regular',
-        label: 'مستخدم عادي',
+        labelKey: 'admin_users_tab_regular',
+        hintKey: 'admin_users_tab_regular_hint',
         roleFilter: 'user',
-        hint: 'صلاحيات: بوستات، دعوات، شات.',
         freezeDays: 7,
-        freezeLabel: 'تجميد 7 أيام',
+        freezeLabelKey: 'admin_freeze_7_days',
     },
     {
         id: 'business',
-        label: 'أعمال',
+        labelKey: 'admin_users_tab_business',
+        hintKey: 'admin_users_tab_business_hint',
         roleFilter: 'business',
-        hint: 'صلاحيات: بوستات وعروض، دعوات رسمية، شات.',
         freezeDays: null,
-        freezeLabel: 'تجميد الحساب',
+        freezeLabelKey: 'admin_freeze_account',
         verifyPlaceholder: true,
     },
     {
         id: 'agents',
-        label: 'وكلاء',
+        labelKey: 'admin_users_tab_agents',
+        hintKey: 'admin_users_tab_agents_hint',
         roleFilter: 'affiliate_agent',
-        hint: 'لوحة خارجية فقط — قراءة العدادات من وثيقة الوكيل (total_referred_users، pending_commissions، total_earned).',
         agents: true,
     },
 ];
@@ -42,7 +43,7 @@ function agentStats(u) {
             : Math.max(
                   0,
                   Math.floor(Number(u.successful_referrals_count) || 0) +
-                      Math.floor(Number(u.pending_referrals_count) || 0)
+                      Math.floor(Number(u.pending_referrals_count) || 0),
               );
     const pending =
         typeof u.pending_commissions === 'number'
@@ -53,10 +54,10 @@ function agentStats(u) {
     return { referred, pending, earned };
 }
 
-function StatusBadge({ u }) {
-    if (u.banned) return <span className="db-badge db-badge--ban">محظور</span>;
-    if (u.frozen) return <span className="db-badge db-badge--warn">مجمّد</span>;
-    return <span className="db-badge db-badge--ok">نشط</span>;
+function StatusBadge({ u, t }) {
+    if (u.banned) return <span className="db-badge db-badge--ban">{t('admin_status_banned')}</span>;
+    if (u.frozen) return <span className="db-badge db-badge--warn">{t('admin_status_frozen')}</span>;
+    return <span className="db-badge db-badge--ok">{t('admin_status_active')}</span>;
 }
 
 function nameForTab(tab, u) {
@@ -67,8 +68,9 @@ function nameForTab(tab, u) {
 }
 
 export default function UsersPage() {
+    const { t } = useTranslation();
     const [tab, setTab] = useState('regular');
-    const cfg = USER_TABS.find((t) => t.id === tab) || USER_TABS[0];
+    const cfg = USER_TABS.find((row) => row.id === tab) || USER_TABS[0];
 
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -92,12 +94,12 @@ export default function UsersPage() {
                 setHasNext(res.hasNext);
                 setCursor(res.lastId);
             } catch (e) {
-                setError(e.message || 'فشل التحميل');
+                setError(e.message || t('admin_load_failed'));
             } finally {
                 setLoading(false);
             }
         },
-        [cfg.roleFilter]
+        [cfg.roleFilter, t],
     );
 
     const runSearch = useCallback(async () => {
@@ -121,11 +123,11 @@ export default function UsersPage() {
             setRows(list.slice(0, 50));
             setHasNext(false);
         } catch (e) {
-            setError(e.message || 'فشل البحث');
+            setError(e.message || t('admin_search_failed'));
         } finally {
             setLoading(false);
         }
-    }, [search, load, cfg.roleFilter]);
+    }, [search, load, cfg.roleFilter, t]);
 
     useEffect(() => {
         setSearch('');
@@ -133,14 +135,14 @@ export default function UsersPage() {
     }, [tab, load]);
 
     const act = async (uid, fn) => {
-        if (!window.confirm('تأكيد الإجراء؟')) return;
+        if (!window.confirm(t('admin_action_confirm'))) return;
         setActing(uid);
         try {
             await fn();
             if (search.trim().length >= 2) await runSearch();
             else await load();
         } catch (e) {
-            alert(e.message || 'فشل');
+            alert(e.message || t('admin_failed'));
         } finally {
             setActing(null);
         }
@@ -160,7 +162,7 @@ export default function UsersPage() {
                                     act(u.id, () => adminApi.setUserFreezeStatus(u.id, true, null))
                                 }
                             >
-                                تجميد لوحة الوكيل
+                                {t('admin_freeze_agent_dashboard')}
                             </button>
                             <button
                                 type="button"
@@ -168,10 +170,10 @@ export default function UsersPage() {
                                 disabled={acting === u.id}
                                 onClick={() => act(u.id, () => adminApi.setUserBanStatus(u.id, true))}
                             >
-                                حظر نهائي
+                                {t('admin_ban_permanent')}
                             </button>
-                            <button type="button" className="db-btn" disabled title="قريباً">
-                                تحويل مالي
+                            <button type="button" className="db-btn" disabled title={t('admin_coming_soon')}>
+                                {t('admin_payout_transfer')}
                             </button>
                         </>
                     )}
@@ -182,7 +184,7 @@ export default function UsersPage() {
                             disabled={acting === u.id}
                             onClick={() => act(u.id, () => adminApi.setUserFreezeStatus(u.id, false))}
                         >
-                            إلغاء التجميد
+                            {t('admin_unfreeze')}
                         </button>
                     )}
                     {u.banned && (
@@ -192,7 +194,7 @@ export default function UsersPage() {
                             disabled={acting === u.id}
                             onClick={() => act(u.id, () => adminApi.setUserBanStatus(u.id, false))}
                         >
-                            إلغاء الحظر
+                            {t('admin_unban')}
                         </button>
                     )}
                 </div>
@@ -209,11 +211,11 @@ export default function UsersPage() {
                             disabled={acting === u.id}
                             onClick={() =>
                                 act(u.id, () =>
-                                    adminApi.setUserFreezeStatus(u.id, true, cfg.freezeDays ?? 7)
+                                    adminApi.setUserFreezeStatus(u.id, true, cfg.freezeDays ?? 7),
                                 )
                             }
                         >
-                            {cfg.freezeLabel}
+                            {t(cfg.freezeLabelKey)}
                         </button>
                         <button
                             type="button"
@@ -221,11 +223,11 @@ export default function UsersPage() {
                             disabled={acting === u.id}
                             onClick={() => act(u.id, () => adminApi.setUserBanStatus(u.id, true))}
                         >
-                            حظر نهائي
+                            {t('admin_ban_permanent')}
                         </button>
                         {cfg.verifyPlaceholder && (
-                            <button type="button" className="db-btn" disabled title="قريباً">
-                                توثيق
+                            <button type="button" className="db-btn" disabled title={t('admin_coming_soon')}>
+                                {t('admin_verify')}
                             </button>
                         )}
                     </>
@@ -237,7 +239,7 @@ export default function UsersPage() {
                         disabled={acting === u.id}
                         onClick={() => act(u.id, () => adminApi.setUserFreezeStatus(u.id, false))}
                     >
-                        إلغاء التجميد
+                        {t('admin_unfreeze')}
                     </button>
                 )}
                 {u.banned && (
@@ -247,7 +249,7 @@ export default function UsersPage() {
                         disabled={acting === u.id}
                         onClick={() => act(u.id, () => adminApi.setUserBanStatus(u.id, false))}
                     >
-                        إلغاء الحظر
+                        {t('admin_unban')}
                     </button>
                 )}
             </div>
@@ -256,37 +258,37 @@ export default function UsersPage() {
 
     return (
         <>
-            <h1 className="db-h1">إدارة المستخدمين</h1>
-            <p className="db-lead">فصل الأدوار — إجراءات مباشرة، قراءة paginated فقط.</p>
+            <h1 className="db-h1">{t('admin_users_title')}</h1>
+            <p className="db-lead">{t('admin_users_lead')}</p>
 
             <div className="db-tabs">
-                {USER_TABS.map((t) => (
+                {USER_TABS.map((row) => (
                     <button
-                        key={t.id}
+                        key={row.id}
                         type="button"
-                        className={`db-tab${tab === t.id ? ' active' : ''}`}
-                        onClick={() => setTab(t.id)}
+                        className={`db-tab${tab === row.id ? ' active' : ''}`}
+                        onClick={() => setTab(row.id)}
                     >
-                        {t.label}
+                        {t(row.labelKey)}
                     </button>
                 ))}
             </div>
 
             <p className="db-hint">
-                <strong>{cfg.label}:</strong> {cfg.hint}
+                <strong>{t(cfg.labelKey)}:</strong> {t(cfg.hintKey)}
             </p>
 
             <div className="db-toolbar">
                 <input
                     className="db-input"
                     style={{ flex: 1, minWidth: 200 }}
-                    placeholder="بحث UID / بريد / اسم"
+                    placeholder={t('admin_search_uid_email')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                 />
                 <button type="button" className="db-btn db-btn--lime" onClick={runSearch}>
-                    بحث
+                    {t('admin_search')}
                 </button>
                 <button
                     type="button"
@@ -296,7 +298,7 @@ export default function UsersPage() {
                         load();
                     }}
                 >
-                    الكل
+                    {t('admin_all')}
                 </button>
             </div>
 
@@ -306,16 +308,16 @@ export default function UsersPage() {
                 {loading ? (
                     <div className="db-spin" />
                 ) : rows.length === 0 ? (
-                    <div className="db-empty">لا توجد حسابات</div>
+                    <div className="db-empty">{t('admin_empty_accounts')}</div>
                 ) : cfg.agents ? (
                     <table className="db-table">
                         <thead>
                             <tr>
-                                <th>الوكيل</th>
-                                <th>منضمون</th>
-                                <th>مالي</th>
-                                <th>الحالة</th>
-                                <th>إجراءات</th>
+                                <th>{t('admin_users_agent')}</th>
+                                <th>{t('admin_users_joined')}</th>
+                                <th>{t('admin_users_financial')}</th>
+                                <th>{t('admin_users_status')}</th>
+                                <th>{t('admin_users_actions')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -337,7 +339,7 @@ export default function UsersPage() {
                                             <span className="total">{fmtMoney(s.earned)}</span>
                                         </td>
                                         <td>
-                                            <StatusBadge u={u} />
+                                            <StatusBadge u={u} t={t} />
                                         </td>
                                         <td>{renderActions(u)}</td>
                                     </tr>
@@ -349,9 +351,9 @@ export default function UsersPage() {
                     <table className="db-table">
                         <thead>
                             <tr>
-                                <th>{tab === 'business' ? 'المنشأة' : 'المستخدم'}</th>
-                                <th>الحالة</th>
-                                <th>إجراءات</th>
+                                <th>{tab === 'business' ? t('admin_users_business_col') : t('admin_users_user_col')}</th>
+                                <th>{t('admin_users_status')}</th>
+                                <th>{t('admin_users_actions')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -362,7 +364,7 @@ export default function UsersPage() {
                                         <div className="db-id">{u.id}</div>
                                     </td>
                                     <td>
-                                        <StatusBadge u={u} />
+                                        <StatusBadge u={u} t={t} />
                                     </td>
                                     <td>{renderActions(u)}</td>
                                 </tr>
@@ -375,7 +377,7 @@ export default function UsersPage() {
             {!loading && hasNext && !search.trim() && (
                 <div style={{ marginTop: '1rem' }}>
                     <button type="button" className="db-btn db-btn--ghost" onClick={() => load(cursor)}>
-                        المزيد
+                        {t('admin_more')}
                     </button>
                 </div>
             )}

@@ -1,14 +1,21 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { FaGlobe } from 'react-icons/fa';
 import { applyHtmlLanguage } from '../../utils/authGeoLanguage';
+import {
+    LANGUAGE_OPTIONS,
+    resolveLanguageCode,
+    getLanguageNativeLabel,
+} from '../../constants/languageOptions';
 
-/** Compact EN / AR switch for auth shells (persists user override). */
+/** Language picker for auth shells — compact dropdown (all supported locales). */
 export default function AuthShellLanguageToggle({ className = '' }) {
     const { i18n, t } = useTranslation();
-    const current = i18n.language?.startsWith('ar') ? 'ar' : 'en';
+    const current = resolveLanguageCode(i18n.language);
 
-    const setLang = async (code) => {
-        if (current === code) return;
+    const onChange = async (event) => {
+        const code = event.target.value;
+        if (!code || code === current) return;
         try {
             localStorage.setItem('language', code);
         } catch {
@@ -19,27 +26,20 @@ export default function AuthShellLanguageToggle({ className = '' }) {
     };
 
     return (
-        <div
-            className={`auth-shell-lang-toggle ${className}`.trim()}
-            role="group"
-            aria-label={t('auth_language_toggle_a11y', 'Language')}
-        >
-            <button
-                type="button"
-                className={`auth-shell-lang-toggle__btn${current === 'en' ? ' auth-shell-lang-toggle__btn--active' : ''}`}
-                onClick={() => setLang('en')}
-                aria-pressed={current === 'en'}
+        <label className={`auth-shell-lang-select ${className}`.trim()}>
+            <FaGlobe className="auth-shell-lang-select__icon" aria-hidden />
+            <select
+                className="auth-shell-lang-select__field"
+                value={current}
+                onChange={onChange}
+                aria-label={t('auth_language_toggle_a11y', 'Language')}
             >
-                EN
-            </button>
-            <button
-                type="button"
-                className={`auth-shell-lang-toggle__btn${current === 'ar' ? ' auth-shell-lang-toggle__btn--active' : ''}`}
-                onClick={() => setLang('ar')}
-                aria-pressed={current === 'ar'}
-            >
-                عربي
-            </button>
-        </div>
+                {LANGUAGE_OPTIONS.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                        {`${lang.flag} ${getLanguageNativeLabel(lang.code, t)}`}
+                    </option>
+                ))}
+            </select>
+        </label>
     );
 }

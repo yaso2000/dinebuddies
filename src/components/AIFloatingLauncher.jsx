@@ -19,6 +19,7 @@ import './AIFloatingLauncher.css';
  *   defaultAspectRatio?: '1:1' | '9:16',
  *   disabled?: boolean,
  *   compact?: boolean,
+ *   iconOnly?: boolean,
  *   className?: string,
  *   invitationVenue?: { venueType?: string, venueName?: string },
  *   datingAiContext?: import('../utils/datingAiRequestPayload.js').DatingAiContext,
@@ -35,6 +36,7 @@ export default function AIFloatingLauncher({
     defaultAspectRatio = '1:1',
     disabled = false,
     compact = false,
+    iconOnly = false,
     className = '',
     invitationVenue,
     datingAiContext,
@@ -82,13 +84,13 @@ export default function AIFloatingLauncher({
                 <header className="ai-floating-sheet__header">
                     <h2 id="ai-floating-sheet-title" className="ai-floating-sheet__title">
                         <FaMagic aria-hidden />
-                        {t('ai_floating_sheet_title', 'مساعد الذكاء الاصطناعي')}
+                        {t('ai_floating_sheet_title')}
                     </h2>
                     <button
                         type="button"
                         className="ai-floating-sheet__close ios-tap-target"
                         onClick={close}
-                        aria-label={t('close', 'إغلاق')}
+                        aria-label={t('close')}
                     >
                         <FaTimes aria-hidden />
                     </button>
@@ -121,7 +123,7 @@ export default function AIFloatingLauncher({
 
     return (
         <div
-            className={`ai-floating-launcher${compact ? ' ai-floating-launcher--compact' : ''}${className ? ` ${className}` : ''}`}
+            className={`ai-floating-launcher${compact ? ' ai-floating-launcher--compact' : ''}${iconOnly ? ' ai-floating-launcher--icon' : ''}${className ? ` ${className}` : ''}`}
         >
             <button
                 type="button"
@@ -130,9 +132,11 @@ export default function AIFloatingLauncher({
                 disabled={disabled}
                 aria-haspopup="dialog"
                 aria-expanded={open}
+                aria-label={t('ai_floating_open_btn')}
+                title={t('ai_floating_open_btn')}
             >
                 <FaMagic className="ai-floating-launcher__trigger-icon" aria-hidden />
-                {t('ai_floating_open_btn', 'توليد بالذكاء الاصطناعي')}
+                {!iconOnly ? t('ai_floating_open_btn') : null}
             </button>
             {disabledHint ? (
                 <p className="ai-floating-launcher__hint" role="status">

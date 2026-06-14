@@ -440,7 +440,7 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], isOwner, isPaid = t
                                 Your menu items were saved, but they <strong>won't appear on your public profile</strong> until you upgrade your plan.
                             </p>
                             <a
-                                href="/pricing"
+                                href="/settings/subscription"
                                 style={{
                                     display: 'inline-flex', alignItems: 'center', gap: '6px',
                                     padding: '6px 14px', borderRadius: '8px',

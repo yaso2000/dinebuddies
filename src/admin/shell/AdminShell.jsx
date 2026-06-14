@@ -1,9 +1,12 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ADMIN_NAV } from '../constants';
 import '../styles/shell.css';
 
 export default function AdminShell() {
+    const { t } = useTranslation();
+
     return (
         <div className="db-shell">
             <aside className="db-side">
@@ -15,7 +18,7 @@ export default function AdminShell() {
                             to={item.path}
                             className={({ isActive }) => (isActive ? 'active' : undefined)}
                         >
-                            {item.label}
+                            {t(item.labelKey)}
                         </NavLink>
                     ))}
                 </nav>

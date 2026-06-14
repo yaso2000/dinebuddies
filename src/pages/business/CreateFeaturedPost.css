@@ -633,6 +633,83 @@ html.keyboard-overlay-page .app-main--fullscreen > .fp-page {
     cursor: not-allowed;
 }
 
+/* ── Close confirm dialog ── */
+.fp-close-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.fp-close-dialog__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(3px);
+}
+
+.fp-close-dialog__card {
+    position: relative;
+    z-index: 1;
+    width: min(360px, 100%);
+    border-radius: 18px;
+    border: 1px solid var(--fp-panel-border, var(--border-color));
+    background: var(--bg-card);
+    box-shadow: var(--shadow-card-hover, 0 12px 32px rgba(0, 0, 0, 0.35));
+    padding: 18px 16px 14px;
+    color: var(--text-main);
+}
+
+.fp-close-dialog__title {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.fp-close-dialog__text {
+    margin: 0 0 14px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.fp-close-dialog__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fp-close-dialog__btn {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input, var(--bg-secondary));
+    color: var(--text-main);
+    font-size: 0.85rem;
+    font-weight: 800;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.fp-close-dialog__btn--save {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    color: var(--primary);
+}
+
+.fp-close-dialog__btn--discard {
+    border-color: color-mix(in srgb, #ef4444 45%, var(--border-color));
+    color: #ef4444;
+}
+
+.fp-close-dialog__btn--cancel {
+    color: var(--text-muted);
+}
+
 /* Desktop: drag + wheel scroll; subtle scrollbar hint */
 @media (pointer: fine) {
     .fp-hscroll {

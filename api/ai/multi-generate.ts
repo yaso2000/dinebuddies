@@ -20,6 +20,7 @@ import {
     isGeminiProviderBillingExhausted,
     normalizeGeminiProviderBillingError,
 } from '../../src/utils/geminiProviderErrors.js';
+import { normalizeAiOutputLanguage } from '../../src/utils/aiOutputLanguage.js';
 
 function statusForPipelineError(result) {
     if (result.code === 'VALIDATION_ERROR' || result.code === 'MALFORMED_JSON') {
@@ -48,12 +49,12 @@ function statusForPipelineError(result) {
     return 500;
 }
 
-function userMessageForPipelineError(result) {
+function userMessageForPipelineError(result, outputLanguage = 'en') {
     if (
         result.code === GEMINI_PROVIDER_BILLING_CODE ||
         isGeminiProviderBillingExhausted(result.error)
     ) {
-        return geminiProviderBillingUserMessage('ar');
+        return geminiProviderBillingUserMessage(outputLanguage);
     }
     if (result.code === 'MODERATION_FAILED') {
         return 'لم تجتز الصورة المُولَّدة فحص الاعتدال. تُسترد الكريدتات عند فشل الطلب على الخادم.';
@@ -183,6 +184,8 @@ export default async function handler(req, res) {
 
         const { runMultimodalPipeline } = await import('../../src/services/GeminiService.js');
 
+        const outputLanguage = normalizeAiOutputLanguage(request.outputLanguage);
+
         const pipelineResult = await runMultimodalPipeline({
             generationPackage: request.generationPackage,
             userPrompt: request.userPrompt,
@@ -194,6 +197,7 @@ export default async function handler(req, res) {
             businessContext: callerContext.businessContext,
             aspectRatio: request.aspectRatio,
             designCategory: request.designCategory,
+            outputLanguage,
         });
 
         if (pipelineResult.success === false) {
@@ -201,7 +205,7 @@ export default async function handler(req, res) {
             const status = statusForPipelineError(pipelineResult);
             return res.status(status).json({
                 ...pipelineResult,
-                message: userMessageForPipelineError(pipelineResult),
+                message: userMessageForPipelineError(pipelineResult, outputLanguage),
             });
         }
 
@@ -246,6 +250,8 @@ export default async function handler(req, res) {
 
             responseData.image = {
                 url: uploaded.url,
+                path: uploaded.path,
+                bucket: uploaded.bucket,
                 mimeType: uploaded.mimeType,
                 mediaLibraryItem: uploaded.mediaLibraryItem,
                 moderation: pipelineResult.pendingImage.moderation,

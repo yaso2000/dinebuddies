@@ -16,14 +16,8 @@ const StoryCircle = ({ partner, hasNewStory, onClick }) => {
             }}
         >
             <div
-                style={{
-                    padding: '3px',
-                    background: hasNewStory
-                        ? 'linear-gradient(135deg, #8b5cf6, #ec4899, #f97316)'
-                        : 'var(--border-color)',
-                    borderRadius: '50%',
-                    transition: 'transform 0.2s',
-                }}
+                className={`avatar-story-ring${hasNewStory ? ' avatar-story-ring--active' : ' avatar-story-ring--viewed'}`}
+                style={{ transition: 'transform 0.2s' }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'scale(1.05)';
                 }}
@@ -43,7 +37,6 @@ const StoryCircle = ({ partner, hasNewStory, onClick }) => {
                     style={{
                         width: 64,
                         height: 64,
-                        boxShadow: '0 0 0 3px var(--bg-body)',
                     }}
                 />
             </div>

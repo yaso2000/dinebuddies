@@ -18,6 +18,9 @@ import {
     consumeOAuthRedirectError,
     hasFirebaseAuthReturnInUrl,
     isEmbeddedPreviewBrowser,
+    isFirebaseAuthorizedDevHost,
+    isLocalDevHost,
+    getLocalDevOAuthLoginUrl,
     openLoginInExternalBrowser,
     peekOAuthRedirectComplete,
 } from '../../utils/localDevAuth';
@@ -241,6 +244,32 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         setError('');
         let startedRedirect = false;
         try {
+            if (import.meta.env.DEV && !isFirebaseAuthorizedDevHost()) {
+                setError(
+                    t(
+                        'auth_unauthorized_domain_lan',
+                        `This address is not allowed for sign-in. Open ${getLocalDevOAuthLoginUrl()} instead of the network IP.`
+                    )
+                );
+                return;
+            }
+            if (isLocalDevHost() && isEmbeddedPreviewBrowser()) {
+                const opened = await openLoginInExternalBrowser();
+                setError(
+                    opened.ok
+                        ? t(
+                              'auth_open_chrome_for_oauth',
+                              opened.mode === 'clipboard'
+                                  ? 'Login link copied. Open Chrome/Safari and paste the URL to sign in.'
+                                  : 'Login opened in a new browser tab — complete sign-in there.'
+                          )
+                        : t(
+                              'auth_open_chrome_for_oauth',
+                              `Open this URL in Chrome: ${window.location.origin}/login`
+                          )
+                );
+                return;
+            }
             if (provider === 'google') {
                 const googleRes = await signInWithGoogle();
                 if (googleRes?.__oauthRedirect) {

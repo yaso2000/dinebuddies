@@ -1,12 +1,12 @@
 import { requireAuth } from './_auth.js';
 import { downloadStorageObjectBuffer } from './_aiStorage.js';
 
-const AI_INVITATION_PATH =
-    /^invitations\/([A-Za-z0-9_-]+)\/ai_\d+_[a-f0-9-]+\.(png|jpe?g|webp)$/i;
+const AI_STORAGE_PATH =
+    /^(invitations|ai-design-studio|community-posts|featured_posts|business-motion)\/([A-Za-z0-9_-]+)\/ai_\d+_[a-f0-9-]+\.(png|jpe?g|webp)$/i;
 
 /**
  * Authenticated fallback when Firebase token download URLs 404 in the browser.
- * GET /api/storage-image?path=invitations/{uid}/ai_....png
+ * GET /api/storage-image?path=invitations/{uid}/ai_....png&bucket=dinebuddies.firebasestorage.app
  */
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -30,18 +30,22 @@ export default async function handler(req, res) {
     }
 
     const objectPath = String(req.query?.path || '').trim();
-    const match = AI_INVITATION_PATH.exec(objectPath);
+    const match = AI_STORAGE_PATH.exec(objectPath);
     if (!match) {
         return res.status(400).json({ error: 'invalid_path' });
     }
 
-    const ownerUid = match[1];
+    const ownerUid = match[2];
     if (ownerUid !== authResult.uid) {
         return res.status(403).json({ error: 'forbidden' });
     }
 
+    const preferredBucket = String(req.query?.bucket || '').trim();
+
     try {
-        const { buffer, contentType } = await downloadStorageObjectBuffer(objectPath);
+        const { buffer, contentType } = await downloadStorageObjectBuffer(objectPath, {
+            preferredBucket: preferredBucket || undefined,
+        });
         res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'private, max-age=120');
         res.setHeader('Access-Control-Allow-Origin', '*');

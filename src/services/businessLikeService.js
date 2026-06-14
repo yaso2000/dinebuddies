@@ -39,19 +39,42 @@ export async function incrementBusinessShareCount(businessId) {
 }
 
 /**
- * Increment business total invitations count (cumulative). Never decremented when invitations are deleted/completed.
- * Call when a new invitation is created that is linked to this business (restaurantId / hostId / partnerId).
- * So the business does not lose ranking points when invitations are removed after completion.
+ * Increment business completed hosting count (ranking points). Idempotent per invitation.
+ * Call only when the invitation is completed and was hosted at this business (restaurantId).
  */
+export function isCompletedInvitation(inv) {
+    return inv?.status === 'completed' || inv?.meetingStatus === 'completed';
+}
+
+export async function maybeAwardBusinessHostingPoints(invitationId, collectionName = 'invitations') {
+    if (!invitationId) return;
+    const invRef = doc(db, collectionName, invitationId);
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const invSnap = await transaction.get(invRef);
+            if (!invSnap.exists()) return;
+
+            const inv = invSnap.data();
+            const businessId = inv.restaurantId;
+            if (!businessId || inv.businessHostingPointsAwarded || !isCompletedInvitation(inv)) return;
+
+            const businessRef = getBusinessRef(businessId);
+            const businessSnap = await transaction.get(businessRef);
+            if (!businessSnap.exists()) return;
+
+            transaction.update(invRef, { businessHostingPointsAwarded: true });
+            transaction.update(businessRef, { 'businessInfo.completedHostedInvitations': increment(1) });
+        });
+    } catch (err) {
+        console.warn('[ranking] completed hosting points award failed', { invitationId, collectionName, err });
+    }
+}
+
+/** @deprecated Use maybeAwardBusinessHostingPoints on invitation completion instead. */
 export async function incrementBusinessInvitationCount(businessId) {
     if (!businessId) return;
-    const businessRef = getBusinessRef(businessId);
-    try {
-        const snap = await getDoc(businessRef);
-        if (snap.exists()) await updateDoc(businessRef, { 'businessInfo.totalInvitations': increment(1) });
-    } catch (err) {
-        console.warn('[invitations] totalInvitations increment failed', { businessId, err });
-    }
+    console.warn('[ranking] incrementBusinessInvitationCount is deprecated; award on completion only');
 }
 
 /**

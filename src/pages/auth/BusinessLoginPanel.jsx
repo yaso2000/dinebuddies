@@ -125,7 +125,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
             if (reset.genericOnly || !reset.email) {
                 showToast(
                     reset.message ||
-                        t('auth_reset_generic_success', 'إذا كان الحساب موجوداً، فقد أرسلنا رابط الاستعادة.'),
+                        t('auth_reset_generic_success'),
                     'success'
                 );
                 return;
@@ -316,7 +316,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                         fontSize: 'inherit',
                                     }}
                                 >
-                                    {t('business_claim_account_cta', 'استعادة الحساب وتوثيقه')}
+                                    {t('business_claim_account_cta')}
                                 </button>
                             </p>
                         )}
@@ -334,7 +334,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                 color: 'var(--text-secondary)',
                             }}
                         >
-                            {t('business_login_credentials_label', 'بيانات الدخول')}
+                            {t('business_login_credentials_label')}
                         </label>
                         <div style={{ position: 'relative' }}>
                             <FaUser
@@ -350,10 +350,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                             <input
                                 type="text"
                                 autoComplete="username"
-                                placeholder={t(
-                                    'business_login_identifier',
-                                    'البريد الإلكتروني أو رقم الجوال التجاري'
-                                )}
+                                placeholder={t('business_login_identifier')}
                                 value={loginId}
                                 onChange={(e) => setLoginId(e.target.value)}
                                 required
@@ -378,7 +375,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                         marginBottom: '0.25rem',
                                     }}
                                 >
-                                    {t('business_login_country_code_label', 'رمز دولة الهاتف التجاري')}
+                                    {t('business_login_country_code_label')}
                                 </label>
                                 <select
                                     value={countryCode}
@@ -392,12 +389,12 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                         fontSize: '0.95rem',
                                         color: 'var(--text-primary)',
                                     }}
-                                    aria-label={t('business_login_country_code_label', 'رمز دولة الهاتف التجاري')}
+                                    aria-label={t('business_login_country_code_label')}
                                 >
-                                    <option value="+20">{t('phone_country_eg', 'مصر')} (+20)</option>
-                                    <option value="+966">{t('phone_country_sa', 'السعودية')} (+966)</option>
-                                    <option value="+971">{t('phone_country_ae', 'الإمارات')} (+971)</option>
-                                    <option value="+962">{t('phone_country_jo', 'الأردن')} (+962)</option>
+                                    <option value="+20">{t('phone_country_eg')} (+20)</option>
+                                    <option value="+966">{t('phone_country_sa')} (+966)</option>
+                                    <option value="+971">{t('phone_country_ae')} (+971)</option>
+                                    <option value="+962">{t('phone_country_jo')} (+962)</option>
                                 </select>
                             </div>
                         )}
@@ -412,7 +409,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                                 color: 'var(--text-secondary)',
                             }}
                         >
-                            {t('password', 'كلمة المرور')}
+                            {t('password')}
                         </label>
                         <div style={{ position: 'relative' }}>
                             <FaLock
@@ -485,7 +482,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                         {t('forgot_password', 'Forgot password?')}
                     </button>
                     <button type="submit" disabled={loading} style={primaryBtn}>
-                        {loading ? t('business_login_verifying', 'جاري التحقق...') : t('sign_in', 'تسجيل الدخول')}
+                        {loading ? t('business_login_verifying') : t('sign_in')}
                         {!loading && <FaArrowRight />}
                     </button>
                 </form>

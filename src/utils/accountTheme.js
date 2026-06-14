@@ -7,7 +7,7 @@ const AFFILIATE_PREFIX = '/affiliate';
 const BUSINESS_APP_PREFIXES = [
     '/business-dashboard',
     '/business/onboarding',
-    '/business/pricing',
+    '/settings/subscription',
     '/signup/business',
     '/business/signup',
     '/business-signup',

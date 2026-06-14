@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaComments, FaLock, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -9,11 +9,16 @@ import { useInvitations } from '../context/InvitationContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
-import HostPrivateInvitationCardExport from '../components/Invitations/privateCard/HostPrivateInvitationCardExport';
+import PrivateInvitationExternalShare from '../components/Invitations/privateCard/PrivateInvitationExternalShare';
+import '../components/Invitations/privateCard/PrivateInvitationExternalShare.css';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
 import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
-import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
+import {
+    DEFAULT_CARD_COPY_OFFSET_Y,
+    DEFAULT_CARD_COPY_WIDTH_PCT,
+    DEFAULT_CARD_COPY_FONT_SCALE,
+} from '../components/Invitations/privateCard/privateCardCopyLayout';
 import {
     getDatingInvitationHeroCoverFromInvitation,
     getPrivateInvitationHeroCoverFromInvitation
@@ -24,7 +29,7 @@ import './PrivateInvitation.css';
 import Lottie from 'lottie-react';
 import { OCCASION_PRESETS } from '../utils/invitationTemplates';
 import { asUidArray } from '../utils/userSocialLists';
-import { goToLogin } from '../utils/goToLogin';
+import { goToLogin, getCurrentReturnPath } from '../utils/goToLogin';
 import { isPrivateInvitationDraft } from '../utils/privateInvitationDraft';
 
 /** Stable string uid for Firestore comparisons (rules use request.auth.uid as string). */
@@ -44,8 +49,11 @@ const PrivateInvitationDetails = () => {
     const { currentUser, userProfile, loading: authLoading } = useAuth();
     const { respondToPrivateInvitation, deleteInvitation } = useInvitations();
 
+    const cardCaptureRef = useRef(null);
+
     const [invitation, setInvitation] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [accessError, setAccessError] = useState(null);
     const [invitedUsers, setInvitedUsers] = useState([]);
     const [isResponding, setIsResponding] = useState(false);
     const [animationData, setAnimationData] = useState(null);
@@ -53,35 +61,33 @@ const PrivateInvitationDetails = () => {
     useEffect(() => {
         if (!id) return;
 
-        // Wait for Firebase auth to settle — otherwise viewerId is undefined and we wrongly redirect.
         if (authLoading) {
             setLoading(true);
             return undefined;
         }
 
-        // Use Firebase session uid only — NOT `isGuest` from context (that ORs userProfile?.isGuest
-        // and can false-positive while the real account is signed in).
-        const sessionUid = normUid(currentUser?.uid || currentUser?.id);
-        if (!sessionUid || sessionUid === 'guest') {
-            setLoading(false);
-            goToLogin({ replace: true });
-            return undefined;
-        }
-
         let cancelled = false;
         let unsubscribe = () => {};
+        setAccessError(null);
+        setLoading(true);
 
         auth.authStateReady().then(() => {
             if (cancelled) return;
+
+            // Prefer Firebase session uid — AuthContext can lag on mobile cold start.
+            const sessionUid = normUid(auth.currentUser?.uid || currentUser?.uid || currentUser?.id);
+            if (!sessionUid || sessionUid === 'guest') {
+                setLoading(false);
+                goToLogin({ replace: true, returnPath: getCurrentReturnPath() });
+                return;
+            }
+
             unsubscribe = onSnapshot(
                 doc(db, 'private_invitations', id),
                 async (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.id ? { id: docSnap.id, ...docSnap.data() } : docSnap.data();
 
-                    // Access control is enforced by Firestore rules (host, invitee, or admin/staff).
-                    // Do NOT duplicate "host || invitee" here — subtle mismatches (legacy fields, shapes)
-                    // caused false redirects to home while reads were actually allowed.
                     const authorIdRaw = data.authorId ?? data.author?.id;
                     const isHost =
                         sessionUid === normUid(data.authorId) || sessionUid === normUid(data.author?.id);
@@ -93,24 +99,22 @@ const PrivateInvitationDetails = () => {
                         authorBlockedKey &&
                         (myBlocked.includes(authorBlockedKey) || myMuted.includes(authorBlockedKey))
                     ) {
-                        navigate('/', { replace: true });
+                        setInvitation(null);
+                        setAccessError('blocked');
+                        setLoading(false);
                         return;
                     }
 
                     const hostCheck =
                         sessionUid === normUid(data.authorId) || sessionUid === normUid(data.author?.id);
                     if (!hostCheck && isPrivateInvitationDraft(data)) {
-                        navigate('/', {
-                            replace: true,
-                            state: {
-                                message: t('private_invitation_not_published', {
-                                    defaultValue: 'This invitation has not been sent yet.'
-                                })
-                            }
-                        });
+                        setInvitation(null);
+                        setAccessError('draft');
+                        setLoading(false);
                         return;
                     }
 
+                    setAccessError(null);
                     setInvitation(data);
 
                     // Fetch basic info for invited friends
@@ -137,15 +141,19 @@ const PrivateInvitationDetails = () => {
                         setInvitedUsers(users);
                     }
                 } else {
-                    navigate('/', { replace: true, state: { message: t('invitation_ended') } });
+                    setInvitation(null);
+                    setAccessError('not_found');
                 }
                 setLoading(false);
             },
             (err) => {
                 console.error('private_invitations listener:', err);
+                setInvitation(null);
                 setLoading(false);
                 if (err?.code === 'permission-denied') {
-                    navigate('/', { replace: true, state: { message: t('invitation_ended') } });
+                    setAccessError('permission');
+                } else {
+                    setAccessError('unknown');
                 }
             }
             );
@@ -200,7 +208,41 @@ const PrivateInvitationDetails = () => {
     };
 
     if (loading) return <div className="loading-container">{t('loading')}</div>;
-    if (!invitation) return null;
+
+    if (accessError && !invitation) {
+        const message =
+            accessError === 'permission'
+                ? t('private_invitation_access_denied', {
+                      defaultValue: 'You do not have access to this invitation.'
+                  })
+                : accessError === 'draft'
+                  ? t('private_invitation_not_published', {
+                        defaultValue: 'This invitation has not been sent yet.'
+                    })
+                  : accessError === 'blocked'
+                    ? t('private_invitation_blocked_host', {
+                          defaultValue: 'You cannot view invitations from this person.'
+                      })
+                    : t('invitation_ended');
+        return (
+            <div className="page-container" style={{ padding: '2rem 1rem', maxWidth: 480, margin: '0 auto' }}>
+                <p style={{ color: 'var(--text-main)', fontWeight: 700, marginBottom: 16 }}>{message}</p>
+                <button
+                    type="button"
+                    className="ui-btn ui-btn--primary"
+                    onClick={() => navigate('/profile', { replace: true })}
+                >
+                    {t('back_to_profile', { defaultValue: 'Back to profile' })}
+                </button>
+            </div>
+        );
+    }
+
+    if (!invitation) {
+        return (
+            <div className="loading-container">{t('loading')}</div>
+        );
+    }
 
     const viewerId = normUid(currentUser?.uid || currentUser?.id);
     const isHost =
@@ -277,7 +319,7 @@ const PrivateInvitationDetails = () => {
                         {!isDraft && (
                 <section className="private-details-card-hero reveal-text reveal-delay-1" aria-label={invitation.title}>
                     <div className="private-details-card-hero__glow" aria-hidden />
-                    <div className="private-details-card-hero__card">
+                    <div className="private-details-card-hero__card" ref={cardCaptureRef}>
                         <PrivateInvitationCardPreview
                             className="private-invitation-card-preview--showcase private-invitation-card-preview--details-hero"
                             freezeMotion
@@ -289,9 +331,12 @@ const PrivateInvitationDetails = () => {
                                     : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
                             }
                             cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
-                            cardMotionId={invitation.cardMotionId ?? DEFAULT_MOTION_ID}
+                            copyOffsetY={invitation.cardCopyOffsetY ?? DEFAULT_CARD_COPY_OFFSET_Y}
+                            copyWidthPct={invitation.cardCopyWidthPct ?? DEFAULT_CARD_COPY_WIDTH_PCT}
+                            copyFontScale={invitation.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE}
                             occasionType={invitation.occasionType}
                             cardBackgroundId={invitation.cardBackgroundId || null}
+                            cardGradientId={invitation.cardGradientId || null}
                             heroCoverSrc={cardHeroCover?.src ?? null}
                             heroCoverMediaType={cardHeroCover?.mediaType ?? null}
                             heroCoverPoster={cardHeroCover?.poster ?? null}
@@ -354,7 +399,22 @@ const PrivateInvitationDetails = () => {
                     </p>
                 )}
 
-                {isHost && !isDraft && <HostPrivateInvitationCardExport invitation={invitation} />}
+                {isHost && !isDraft && (
+                    <PrivateInvitationExternalShare
+                        invitationId={invitation.id}
+                        invitation={{
+                            ...invitation,
+                            inviterName:
+                                userProfile?.display_name ||
+                                userProfile?.displayName ||
+                                invitation.author?.displayName ||
+                                '',
+                        }}
+                        shareToken={invitation.shareToken || null}
+                        cardCaptureRef={cardCaptureRef}
+                        className="private-external-share--details"
+                    />
+                )}
 
                 {/* Description - Glassy card (dating: hidden when host chose title-only card) */}
                 {invitation.description &&

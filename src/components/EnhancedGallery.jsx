@@ -23,6 +23,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { getBusinessPlanLimits, normalizeBusinessTier } from '../utils/businessSubscription';
 import './EnhancedGallery.css';
 import { shouldBlockDirectImageLoad } from '../utils/avatarUtils';
 
@@ -302,9 +303,8 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
         };
     }, [moveMenuForIndex]);
 
-    // Tier-based limits
-    const tier = business?.subscriptionTier || 'free';
-    const MAX_IMAGES = tier === 'elite' ? 20 : tier === 'professional' ? 6 : 20;
+    const tier = normalizeBusinessTier(business?.subscriptionTier);
+    const MAX_IMAGES = getBusinessPlanLimits(tier).galleryMaxImages;
 
     const handleImageUpload = async (e, category) => {
         const file = e.target.files[0];

@@ -22,6 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
 import { asUidArray } from '../utils/userSocialLists';
+import { isVisibleInPublicFeed } from '../utils/invitationRules';
 
 
 
@@ -177,21 +178,29 @@ const Home = () => {
                 }
             }
 
-            // 3. HOME SPECIFIC: SOCIAL PRIVACY
-            if (inv.privacy === 'private' || (inv.invitedFriends && inv.invitedFriends.length > 0)) {
-                return false; // Hide all private (or legacy private) invitations from all feeds
-            } else if (inv.privacy === 'followers' || inv.isFollowersOnly) {
+            // 3. PUBLIC FEED VISIBILITY — local public invites only; exclude private/dating
+            const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
+            if (!isVisibleInPublicFeed(inv, userLocation, {
+                isStaff,
+                isOwn,
+                viewerCountryCode: userProfile?.countryCode,
+            })) {
+                return false;
+            }
+
+            // 4. FOLLOWERS-ONLY public invitations
+            if (inv.privacy === 'followers' || inv.isFollowersOnly) {
                 const isFollowing = currentUser?.following?.includes(inv.author.id);
                 if (!isOwn && !isFollowing) return false;
             }
 
-            // 4. SEARCH FILTER
+            // 5. SEARCH FILTER
             const matchesSearch = !searchQuery ||
                 (inv.title?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (inv.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (inv.description?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-            // 5. CATEGORY FILTER
+            // 6. CATEGORY FILTER
             const matchesCategory = activeFilter === 'All' || inv.type === activeFilter;
 
             return matchesSearch && matchesCategory;

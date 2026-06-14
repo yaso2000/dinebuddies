@@ -6,15 +6,19 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaGlobe, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet, FaBullhorn } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet, FaBullhorn } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier, getBusinessSubscriptionAccess } from '../utils/businessSubscription';
-import { BASE_SUBSCRIPTION_PLANS } from '../config/planDefaults';
+import { BUSINESS_PAID_PLAN_DISPLAY } from '../config/stripeCommerce';
+import {
+    getLanguageFlag,
+    getLanguageNativeLabel,
+    resolveLanguageCode,
+} from '../constants/languageOptions';
 
-const BUSINESS_PAID_MONTHLY_USD =
-    BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite')?.price ?? 29;
+const BUSINESS_PAID_MONTHLY_USD = Number(String(BUSINESS_PAID_PLAN_DISPLAY.priceLabel).replace(/[^\d.]/g, '')) || 29;
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -23,6 +27,9 @@ const Settings = () => {
     const { showToast } = useToast();
     const { t, i18n } = useTranslation();
     const { isDark, toggleTheme } = useTheme();
+    const currentLanguageCode = resolveLanguageCode(i18n.language);
+    const currentLanguageFlag = getLanguageFlag(currentLanguageCode);
+    const currentLanguageLabel = getLanguageNativeLabel(currentLanguageCode, t);
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -129,9 +136,9 @@ const Settings = () => {
                     color: '#f59e0b'
                 },
                 {
-                    icon: <FaGlobe />,
+                    flag: currentLanguageFlag,
                     label: t('language', 'Language'),
-                    value: i18n.language === 'ar' ? 'العربية' : 'English',
+                    value: currentLanguageLabel,
                     onClick: () => navigate('/settings/language'),
                     color: '#10b981'
                 },
@@ -242,7 +249,9 @@ const Settings = () => {
         const normalizedBiz = normalizeBusinessTier(userProfile?.subscriptionTier);
         const isPaidBiz = normalizedBiz === 'paid';
         const planValue = isPaidBiz
-            ? t('settings_business_plan_value_paid', `Paid ($${BUSINESS_PAID_MONTHLY_USD}/mo)`)
+            ? t('settings_business_plan_value_paid', 'Paid (${{amount}}/mo)', {
+                  amount: BUSINESS_PAID_MONTHLY_USD,
+              })
             : t('settings_business_plan_value_free', 'Free');
 
         settingsSections.unshift({
@@ -390,22 +399,14 @@ const Settings = () => {
                                     cursor: 'pointer'
                                 }}
                             >
-                                <div style={{
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '10px',
-                                    background: 'rgba(16, 185, 129, 0.15)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.1rem',
-                                    color: '#10b981'
-                                }}>
-                                    <FaGlobe />
+                                <div className="settings-row-icon settings-row-icon--flag">
+                                    <span className="settings-row-flag" aria-hidden>
+                                        {currentLanguageFlag}
+                                    </span>
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '700', marginBottom: '2px' }}>{t('welcome_language', 'Language')}</div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('english', 'English')}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{currentLanguageLabel}</div>
                                 </div>
                                 <FaChevronRight className="settings-row-chevron" />
                             </div>
@@ -469,12 +470,12 @@ const Settings = () => {
                             </div>
                         )}
                         {isBusiness && normalizeBusinessTier(userProfile?.subscriptionTier) === 'paid' && (
-                            <div className="settings-badge-pill settings-badge-pill--tier-elite">
+                            <div className="settings-badge-pill settings-badge-pill--tier-paid">
                                 {t('biz_plan_paid_name', 'Paid Business')}
                             </div>
                         )}
                         {isBusiness && normalizeBusinessTier(userProfile?.subscriptionTier) === 'free' && (
-                            <div className="settings-badge-pill settings-badge-pill--tier-pro">
+                            <div className="settings-badge-pill settings-badge-pill--tier-free">
                                 {t('biz_plan_free_name', 'Free Business')}
                             </div>
                         )}
@@ -494,18 +495,26 @@ const Settings = () => {
                                 onClick={item.onClick}
                                 className="settings-row"
                             >
-                                <div style={{
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '10px',
-                                    background: `${item.color}15`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.1rem',
-                                    color: item.color
-                                }}>
-                                    {item.icon}
+                                <div
+                                    className={`settings-row-icon${
+                                        item.flag ? ' settings-row-icon--flag' : ''
+                                    }`}
+                                    style={
+                                        item.flag
+                                            ? undefined
+                                            : {
+                                                  background: `${item.color}15`,
+                                                  color: item.color,
+                                              }
+                                    }
+                                >
+                                    {item.flag ? (
+                                        <span className="settings-row-flag" aria-hidden>
+                                            {item.flag}
+                                        </span>
+                                    ) : (
+                                        item.icon
+                                    )}
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{

@@ -10,6 +10,7 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount } from '../services/businessLikeService';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { DEFAULT_BUSINESS_COVER, handleBusinessCoverImageError, resolveBusinessCoverImageUrl } from '../utils/businessCoverImage';
 import UserAvatar from '../components/UserAvatar';
 import { getContrastText } from '../utils/colorUtils';
 import L from 'leaflet';
@@ -20,6 +21,12 @@ import {
     detachLeafletMap,
     ensureLeafletMapDetachedIfOrphan,
 } from '../utils/leafletMapLifecycle';
+import { detectUserLocationContext } from '../utils/locationUtils';
+import {
+    buildViewerGeoContext,
+    canApplyBusinessLocationFilter,
+    matchesBusinessLocationFilter,
+} from '../utils/businessDirectoryGeoFilter';
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
     if (!members) return null;
@@ -356,7 +363,6 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
     const handleCreateInvite = (e) => {
         e.stopPropagation();
-        // Corrected route to /create and state structure to match CreateInvitation.jsx
         navigate('/create/manual', { state: { restaurantData: res } });
     };
 
@@ -375,16 +381,19 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                width: '100%',
+                aspectRatio: '4 / 6',
             }}
         >
             {/* Top Section: Full Image Background with Overlay Content */}
-            <div style={{ position: 'relative', minHeight: '320px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
 
                 {/* Background Image */}
                 <img
-                    src={pickSafeDisplayImageUrl(res.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name)}&background=random`}
+                    src={resolveBusinessCoverImageUrl(res) || pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) || DEFAULT_BUSINESS_COVER}
                     alt={res.name}
+                    onError={(e) => handleBusinessCoverImageError(e, res)}
                     style={{
                         position: 'absolute',
                         top: 0,
@@ -595,11 +604,12 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
             {/* Bottom Section: Footer (Community) */}
             <div style={{
-                padding: '14px 20px',
+                padding: '12px 16px',
                 background: tc?.footerBg || 'var(--premium-orange)',
                 borderTop: 'none',
                 position: 'relative',
-                zIndex: 20
+                zIndex: 20,
+                flexShrink: 0,
             }}>
                 <div style={{
                     display: 'flex',
@@ -738,6 +748,7 @@ const BusinessesDirectory = () => {
     const [viewMode, setViewMode] = useState('list');
     const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
     const [userLocation, setUserLocation] = useState(null);
+    const [detectedLocationContext, setDetectedLocationContext] = useState(null);
     const [selectedCommunityId, setSelectedCommunityId] = useState(null);
     const [selectedCommunityMembers, setSelectedCommunityMembers] = useState([]);
     const [membersLoading, setMembersLoading] = useState(false);
@@ -774,22 +785,55 @@ const BusinessesDirectory = () => {
         }
     }, [searchParams]);
 
-    // Get user's location
+    // GPS coordinates for map centering and distance-based filters
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setUserLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    });
-                },
-                (error) => {
-                    console.log('Location access denied:', error);
-                }
-            );
-        }
+        if (!navigator.geolocation) return undefined;
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserLocation({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                });
+            },
+            (error) => {
+                console.log('Location access denied:', error);
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 },
+        );
+
+        return undefined;
     }, []);
+
+    // City/country context: GPS reverse-geocode, then profile, then IP
+    useEffect(() => {
+        let cancelled = false;
+
+        detectUserLocationContext(userProfile).then((ctx) => {
+            if (!cancelled && ctx?.success) {
+                setDetectedLocationContext(ctx);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        userProfile?.city,
+        userProfile?.country,
+        userProfile?.countryCode,
+        userProfile?.coordinates?.lat,
+        userProfile?.coordinates?.lng,
+    ]);
+
+    const viewerGeoContext = useMemo(
+        () => buildViewerGeoContext({
+            userLocation,
+            userProfile,
+            detectedContext: detectedLocationContext,
+        }),
+        [userLocation, userProfile, detectedLocationContext],
+    );
 
 
 
@@ -826,39 +870,32 @@ const BusinessesDirectory = () => {
             return matchesSearch && matchesCategory;
         });
 
-        // Apply location filter
-        const userRole = userProfile?.role;
-        const isStaff = ['admin', 'moderator', 'support'].includes(userRole);
+        const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
 
-        if (locationFilter !== 'All' && userLocation && !isStaff) {
-            filtered = filtered.filter(res => {
-                if (!res.lat || !res.lng) return false;
-
-                const distance = calculateDistance(
-                    userLocation.lat,
-                    userLocation.lng,
-                    res.lat,
-                    res.lng
+        if (locationFilter !== 'All' && !isStaff) {
+            if (canApplyBusinessLocationFilter(locationFilter, viewerGeoContext, isStaff)) {
+                filtered = filtered.filter((res) =>
+                    matchesBusinessLocationFilter(
+                        locationFilter,
+                        res,
+                        viewerGeoContext,
+                        calculateDistance,
+                    ),
                 );
-
-                switch (locationFilter) {
-                    case 'nearby':
-                        return distance < 10; // Within 10km
-                    case 'city':
-                        return distance < 50; // Within 50km (approximate city range)
-                    case 'country':
-                        return distance < 500; // Within 500km (approximate country range)
-                    default:
-                        return true;
-                }
-            });
+            } else {
+                filtered = [];
+            }
         }
 
         return filtered;
-    }, [restaurants, searchQuery, locationFilter, activeFilter, userLocation]);
+    }, [restaurants, searchQuery, locationFilter, activeFilter, viewerGeoContext, userProfile?.role]);
 
     const restaurantsWithCoords = useMemo(() => {
-        return filteredRestaurants.filter(res => res.lat && res.lng);
+        return filteredRestaurants.filter((res) => {
+            const lat = Number(res.lat);
+            const lng = Number(res.lng);
+            return Number.isFinite(lat) && Number.isFinite(lng);
+        });
     }, [filteredRestaurants]);
 
     // Map control functions

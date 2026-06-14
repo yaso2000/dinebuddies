@@ -24,11 +24,12 @@
 
 .composer-field--post {
     position: relative;
+    width: 100%;
+    box-sizing: border-box;
     border: 1.5px solid var(--composer-post-border);
     border-radius: 12px;
     background: color-mix(in srgb, var(--bg-main) 40%, var(--composer-post-bg));
-    padding: 10px 12px;
-    padding-inline-end: 46px;
+    padding: 10px 12px 8px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -37,18 +38,195 @@
     box-shadow: 0 0 0 3px var(--composer-post-focus-ring);
 }
 
+.composer-field--post .composer-field__title {
+    width: 100%;
+    padding: 0;
+    margin: 0 0 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 1.2rem;
+    font-weight: 800;
+    line-height: 1.35;
+    outline: none;
+    font-family: inherit;
+    cursor: text;
+}
+
+.composer-field--post .composer-field__title::placeholder {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 .composer-field--post .composer-field__input {
     width: 100%;
-    min-height: 60px;
+    min-height: 72px;
     padding: 0;
     border: none;
     background: transparent;
     color: var(--text-main);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
     resize: none;
     outline: none;
     font-family: inherit;
     cursor: text;
+}
+
+.composer-field--post .composer-field__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid color-mix(in srgb, var(--composer-post-border) 55%, transparent);
+}
+
+.composer-field--post .composer-field__post-btn {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.composer-field--post .composer-field__post-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.composer-field--post .composer-field__post-btn:not(:disabled):active {
+    transform: scale(0.96);
+}
+
+[dir='rtl'] .composer-field--post .composer-field__post-btn svg {
+    transform: scaleX(-1);
+}
+
+/* ── Feed inline post editor layout ── */
+.inline-post-editor__compose {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+.inline-post-editor__upload-status {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
+.inline-post-editor__char-count-label {
+    margin-inline-end: 0.35rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.inline-post-editor__char-count {
+    text-align: start;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-inline-start: 4px;
+}
+
+.inline-post-editor__char-count--max {
+    color: var(--secondary);
+}
+
+.inline-post-editor__media-preview {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 300px;
+    border: 1px solid var(--border-color);
+}
+
+.inline-post-editor__media-preview img {
+    width: 100%;
+    display: block;
+    max-height: 300px;
+    object-fit: cover;
+}
+
+.inline-post-editor__embed-preview {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+    border: 1px solid var(--border-color);
+    background: var(--bg-darker, #0d0d12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.inline-post-editor__embed-preview--vertical {
+    aspect-ratio: 9 / 16;
+    max-height: none;
+    width: 100%;
+    border-radius: 12px;
+}
+
+.inline-post-editor__embed-vertical {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    height: auto;
+    line-height: 0;
+    background: #000;
+}
+
+.inline-post-editor__embed-vertical iframe {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.inline-post-editor__media-remove {
+    position: absolute;
+    top: 6px;
+    inset-inline-end: 6px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.inline-post-editor__toolbar-divider {
+    border-top: 1px solid var(--border-color);
+    margin: 0 -16px;
+}
+
+.inline-post-editor__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.inline-post-editor__toolbar-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .composer-field--post .composer-field__input::placeholder {

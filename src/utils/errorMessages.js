@@ -61,6 +61,20 @@ export function getAuthErrorMessage(error) {
             'Apple sign-in is not enabled yet. Enable it in Firebase Console → Authentication.'
         );
     }
+    if (error?.code === 'auth/unauthorized-domain') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        const port = typeof window !== 'undefined' ? window.location.port || '5176' : '5176';
+        if (host && host !== 'localhost' && host !== '127.0.0.1') {
+            return tAuth(
+                'auth_unauthorized_domain_lan',
+                `This address (${host}) is not allowed for sign-in. Open http://localhost:${port}/login instead of the network IP.`
+            );
+        }
+        return tAuth(
+            'auth_unauthorized_domain',
+            `Add "${host || 'localhost'}" in Firebase Console → Authentication → Settings → Authorized domains.`
+        );
+    }
     if (!error?.code) {
         return tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
     }

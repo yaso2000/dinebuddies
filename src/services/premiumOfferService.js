@@ -4,17 +4,14 @@ import { collection, query, where, getDocs, addDoc, setDoc, updateDoc, deleteDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { uploadManagedImage } from './managedImageUpload';
 import { ImageUploadZone } from './imageUploadZones';
-import { consumeOfferCredit } from './adminSecurityService';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 
 /**
- * PremiumOfferService 
- * Handles the "One-Slot Policy" constraints and binds partnerId safely.
+ * PremiumOfferService
+ * Paid Business accounts only. One active carousel slot at a time.
  */
 export const premiumOfferService = {
 
-    /**
-     * Fetch all offers for a specific partner.
-     */
     getPartnerOffers: async (partnerId) => {
         if (!partnerId) throw new Error("Unauthorized");
 
@@ -31,20 +28,14 @@ export const premiumOfferService = {
         }
     },
 
-    /**
-     * Enforces the "One-Slot Policy". Checks if the partner already has
-     * an active offer in the database.
-     */
     checkOneSlotPolicy: async (partnerId) => {
         try {
-            // First check the active_offers collection
             const q = query(
                 collection(db, 'active_offers'),
                 where('partnerId', '==', partnerId)
             );
             const snapshot = await getDocs(q);
 
-            // If length is > 0, they already have an active offer slot used.
             if (!snapshot.empty) {
                 return { allowed: false, reason: 'You already have an active Premium Offer in the carousel. Please Freeze or Delete it to publish a new one.' };
             }
@@ -55,43 +46,23 @@ export const premiumOfferService = {
         }
     },
 
-    /**
-     * Create a new premium offer.
-     * Automatically injects `partnerId` and `timestamp`.
-     */
     createOffer: async (offerData, file) => {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error("Unauthorized");
 
-        // 0. Verify partner subscription tier
         const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
         const userData = userSnap.data() || {};
-        const tier = (userData.subscriptionTier || 'free').toLowerCase();
-        const isElite = tier === 'elite';
-        const isProfessional = tier === 'professional';
+        const { isPaid } = getBusinessSubscriptionAccess(userData.subscriptionTier);
 
-        // Elite → unlimited offers, no credits needed
-        // Professional → needs offerCredits (future Stripe credit product)
-        // Others → not allowed
-        if (!isElite && !isProfessional) {
-            throw new Error('Publishing premium offers requires an Elite or Professional Business subscription.');
-        }
-        if (!isElite && isProfessional) {
-            const credits = userData.offerCredits || 0;
-            if (credits <= 0) {
-                throw new Error('No offer credits remaining. Please purchase more credits to publish an offer.');
-            }
+        if (!isPaid) {
+            throw new Error('Publishing premium offers requires a Paid Business subscription.');
         }
 
-        // 1. One-Slot Policy — Elite is exempt (unlimited), Professional must respect the slot
-        if (!isElite) {
-            const validation = await premiumOfferService.checkOneSlotPolicy(currentUser.uid);
-            if (!validation.allowed) {
-                throw new Error(validation.reason);
-            }
+        const validation = await premiumOfferService.checkOneSlotPolicy(currentUser.uid);
+        if (!validation.allowed) {
+            throw new Error(validation.reason);
         }
 
-        // Upload image
         let finalMediaUrl = offerData.imageUrl || '';
         if (file) {
             if (file.type?.startsWith('image/')) {
@@ -103,37 +74,22 @@ export const premiumOfferService = {
             }
         }
 
-        // 2. Strip restricted fields and non-serializable objects (like 'file')
         const { platform_commission, global_status, file: _ignoreFile, ...safeOfferData } = offerData;
 
-        // 3. Compute expiry: Elite = permanent (null), Professional = 50 hours from now
-        const PROFESSIONAL_HOURS = 50;
-        const expiresAt = isElite
-            ? null
-            : new Date(Date.now() + PROFESSIONAL_HOURS * 60 * 60 * 1000);
-
-        // 4. Inject automatic fields
         const finalPayload = {
             ...safeOfferData,
             imageUrl: finalMediaUrl,
             partnerId: currentUser.uid,
             createdAt: serverTimestamp(),
             status: 'active',
-            tier: isElite ? 'elite' : 'professional',
-            perpetual: isElite,
-            expiresAt,           // null = permanent, Date = auto-expires
+            tier: 'paid',
+            perpetual: true,
+            expiresAt: null,
         };
 
-        // 5. Save to `offers` (master history) AND `active_offers` (carousel pool)
         try {
             const offerRef = await addDoc(collection(db, 'offers'), finalPayload);
             await setDoc(doc(db, 'active_offers', offerRef.id), finalPayload);
-
-            // Deduct 1 credit for Professional after successful publish
-            if (!isElite) {
-                await consumeOfferCredit();
-            }
-
             return offerRef.id;
         } catch (error) {
             console.error("Error creating premium offer:", error);
@@ -141,9 +97,6 @@ export const premiumOfferService = {
         }
     },
 
-    /**
-     * Update existing offer
-     */
     updateOffer: async (offerId, updateData, file) => {
         if (!offerId) throw new Error("Offer ID required");
 
@@ -160,34 +113,26 @@ export const premiumOfferService = {
             updateData.imageUrl = finalMediaUrl;
         }
 
-        // Strip restricted fields and non-serializable objects (like 'file')
         const { platform_commission, global_status, partnerId, file: _ignoreFile, ...safeUpdates } = updateData;
         safeUpdates.updatedAt = serverTimestamp();
 
         try {
             await updateDoc(doc(db, 'offers', offerId), safeUpdates);
-            // Sync to active_offers if it exists there
             try {
                 await updateDoc(doc(db, 'active_offers', offerId), safeUpdates);
-            } catch (ignore) { /* Document might not be active, which is fine */ }
+            } catch (ignore) { /* not active */ }
         } catch (error) {
             console.error("Error updating offer:", error);
             throw error;
         }
     },
 
-    /**
-     * Freeze (Pause) Offer
-     * Changes status to inactive and removes it from `active_offers` public carousel.
-     */
     freezeOffer: async (offerId) => {
         try {
-            // Update status in master history
             await updateDoc(doc(db, 'offers', offerId), {
                 status: 'inactive',
                 updatedAt: serverTimestamp()
             });
-            // Remove from public carousel pool
             await deleteDoc(doc(db, 'active_offers', offerId));
         } catch (error) {
             console.error("Error freezing offer:", error);
@@ -195,9 +140,6 @@ export const premiumOfferService = {
         }
     },
 
-    /**
-     * Re-publish Offer
-     */
     republishOffer: async (offerId, partnerId, offerData) => {
         const validation = await premiumOfferService.checkOneSlotPolicy(partnerId);
         if (!validation.allowed) {
@@ -209,7 +151,6 @@ export const premiumOfferService = {
                 status: 'active',
                 updatedAt: serverTimestamp()
             });
-            // Re-add to active carousel
             await setDoc(doc(db, 'active_offers', offerId), {
                 ...offerData,
                 status: 'active',
@@ -221,23 +162,16 @@ export const premiumOfferService = {
         }
     },
 
-    /**
-     * Delete Offer entirely
-     * Performs a hard delete across all possible collections: active_offers, offers, and special_offers
-     */
     deleteOffer: async (offerId) => {
         try {
-            // Remove from active_offers
             try {
                 await deleteDoc(doc(db, 'active_offers', offerId));
             } catch (e) { }
 
-            // Remove from special_offers
             try {
                 await deleteDoc(doc(db, 'special_offers', offerId));
             } catch (e) { }
 
-            // Hard delete from the main offers table
             await deleteDoc(doc(db, 'offers', offerId));
         } catch (error) {
             console.error("Error permanently deleting offer:", error);

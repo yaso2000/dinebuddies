@@ -1,5 +1,5 @@
 import { isValidE164 } from './_phoneUtils.js';
-import { lookupBusinessPhoneInUsers } from './_businessPhoneRegistry.js';
+import { lookupBusinessPhone } from './_businessPhoneRegistry.js';
 import { applyApiCors, handleCorsPreflight } from './_cors.js';
 
 function readJsonBody(req) {
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const lookup = await lookupBusinessPhoneInUsers(standardizedPhone);
+        const lookup = await lookupBusinessPhone(standardizedPhone);
 
         if (lookup.flow === 'claimed') {
             return res.status(400).json({
@@ -44,6 +44,7 @@ export default async function handler(req, res) {
                 standardizedPhone,
                 businessId: lookup.businessId,
                 businessName: lookup.businessName || '',
+                source: lookup.source || 'users',
             });
         }
 

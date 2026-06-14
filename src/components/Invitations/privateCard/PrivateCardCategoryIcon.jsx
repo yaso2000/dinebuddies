@@ -100,12 +100,22 @@ export default function PrivateCardCategoryIcon({ categoryId = 'social' }) {
                     <path d="M10 24h28M24 10c4 8 4 20 0 28" stroke="currentColor" strokeWidth="1.5" opacity="0.7" />
                 </SvgWrap>
             );
+        case 'concert':
+        case 'singing':
         case 'bbq':
             return (
-                <SvgWrap categoryId={id}>
-                    <ellipse cx="24" cy="36" rx="14" ry="3" fill="currentColor" opacity="0.25" />
-                    <path d="M14 22h20v8a6 6 0 01-6 6h-8a6 6 0 01-6-6v-8z" stroke="currentColor" strokeWidth="2" fill="none" />
-                    <path d="M18 18l4-6 4 6M26 18l4-6 4 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="private-card-cat-flame" />
+                <SvgWrap categoryId="concert">
+                    <rect x="20" y="10" width="8" height="12" rx="4" stroke="currentColor" strokeWidth="2" fill="none" />
+                    <path d="M24 22v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M18 27h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M24 27v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path
+                        d="M14 16c0 5.5 4.5 10 10 10s10-4.5 10-10"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        fill="none"
+                        className="private-card-cat-note"
+                    />
                 </SvgWrap>
             );
         case 'dating':

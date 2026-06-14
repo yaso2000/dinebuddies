@@ -1,0 +1,49 @@
+.dating-invite-profile-badge {
+    position: absolute;
+    z-index: 3;
+    bottom: 2px;
+    inset-inline-end: -2px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.92);
+    box-shadow:
+        0 0 0 2px rgba(255, 255, 255, 0.92),
+        0 4px 12px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dating-invite-profile-badge:hover {
+    transform: scale(1.06);
+    box-shadow:
+        0 0 0 2px var(--luxury-gold, #d4af37),
+        0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.dating-invite-profile-badge:active {
+    transform: scale(0.98);
+}
+
+.dating-invite-profile-badge__logo {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.profile-avatar-over-cover--lg .dating-invite-profile-badge {
+    width: 38px;
+    height: 38px;
+}
+
+.profile-avatar-over-cover--lg .dating-invite-profile-badge__logo {
+    width: 24px;
+    height: 24px;
+}

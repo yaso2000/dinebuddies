@@ -16,6 +16,8 @@ import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage'
 import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
 import { useToast } from '../context/ToastContext';
 import { CoverPhoto } from '../components/ProfileEnhancements';
+import DatingInviteProfileBadge from '../components/DatingInviteProfileBadge';
+import { isUserAvailableForDating } from '../utils/datingInviteAvailability';
 
 /** ~5 invitation rows visible in scroll area (see .user-profile-invitation-list-scroll max-height). */
 const INVITATION_HISTORY_SCROLL_HINT_THRESHOLD = 5;
@@ -356,6 +358,9 @@ const UserProfile = () => {
                                 }}
                             />
                             {user.isOnline && <div className="host-status-online"></div>}
+                            {!theyBlockedMe && !iBlockedThem && isUserAvailableForDating(user) ? (
+                                <DatingInviteProfileBadge user={user} currentUser={currentUser} />
+                            ) : null}
                         </div>
 
                     </div>
@@ -413,6 +418,7 @@ const UserProfile = () => {
                         }}
                     >
                         <div
+                            className="user-profile-action-rows__primary"
                             style={{
                                 display: 'flex',
                                 gap: '10px',
@@ -520,6 +526,7 @@ const UserProfile = () => {
                         </div>
 
                         <div
+                            className="user-profile-action-rows__secondary"
                             style={{
                                 display: 'flex',
                                 gap: '8px',

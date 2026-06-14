@@ -29,6 +29,7 @@ const mapNetworkUser = (user) => ({
     display_name: user?.displayName || user?.display_name || 'User',
     avatar_url: user?.avatarUrl || user?.avatar_url || '',
     photo_url: user?.avatarUrl || user?.avatar_url || '',
+    profileType: user?.profileType || 'user',
     bio: '',
     city: user?.city || '',
     country: user?.country || '',

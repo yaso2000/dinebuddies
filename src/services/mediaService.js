@@ -5,6 +5,12 @@ import { compressImage } from '../utils/imageUpload';
 import { uploadImageWithModeration } from './moderatedImageUpload';
 import { folderToImageZone } from './imageUploadZones';
 import {
+    beginImageUploadSession,
+    finishImageUploadSession,
+    updateImageUploadSession,
+} from './imageUploadProgressStore';
+import {
+    decodeFirebaseStorageBucketName,
     decodeFirebaseStorageObjectPath,
     isRestrictedFirebaseStorageUrl,
     isServerPersistedAiCoverUrl,
@@ -42,7 +48,13 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
 
         if (type === 'image' || type === 'thumbnail') {
             const purpose = folderToImageZone(folder, type);
-            return uploadImageWithModeration(fileToUpload, userId, purpose);
+            beginImageUploadSession('preparing');
+            try {
+                updateImageUploadSession(8, 'preparing');
+                return await uploadImageWithModeration(fileToUpload, userId, purpose);
+            } finally {
+                finishImageUploadSession();
+            }
         }
 
         // Determin extension
@@ -244,6 +256,19 @@ export async function fetchRemoteImageBlob(url, { attempts = 3 } = {}) {
             }
             break;
         }
+
+        const objectPath = decodeFirebaseStorageObjectPath(url);
+        if (lastStatus === 404 && objectPath && auth.currentUser) {
+            try {
+                return await fetchServerAiCoverBlobViaApi(
+                    objectPath,
+                    decodeFirebaseStorageBucketName(url),
+                );
+            } catch {
+                /* fall through */
+            }
+        }
+
         throw new Error(`Storage fetch failed with status: ${lastStatus || 'unknown'}`);
     }
 
@@ -287,23 +312,96 @@ export async function verifyPublicStorageImageUrl(url, { attempts = 6, delayMs =
     return false;
 }
 
-async function fetchServerAiCoverBlobViaApi(objectPath) {
+/**
+ * Resolve a browser-displayable preview for a freshly generated AI cover URL.
+ * Polls Storage propagation, then falls back to authenticated API / fetch → blob URL.
+ *
+ * @param {string} remoteUrl
+ * @returns {Promise<{ displayUrl: string, remoteUrl: string, revokeDisplay?: () => void }>}
+ */
+export async function resolveAiGeneratedCoverPreview(remoteUrl) {
+    if (!remoteUrl || typeof remoteUrl !== 'string') {
+        throw new Error('No AI image URL');
+    }
+
+    const trimmed = remoteUrl.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+        throw new Error('Invalid AI image URL');
+    }
+
+    const ready = await verifyPublicStorageImageUrl(trimmed, { attempts: 10, delayMs: 550 });
+    if (ready) {
+        return { displayUrl: trimmed, remoteUrl: trimmed };
+    }
+
+    /** @type {Blob | null} */
+    let blob = null;
+
+    if (isServerPersistedAiCoverUrl(trimmed)) {
+        const objectPath = decodeFirebaseStorageObjectPath(trimmed);
+        const bucket = decodeFirebaseStorageBucketName(trimmed);
+        if (objectPath) {
+            try {
+                blob = await fetchServerAiCoverBlobViaApi(objectPath, bucket);
+            } catch (apiErr) {
+                console.warn('[resolveAiGeneratedCoverPreview] storage-image API failed:', apiErr);
+            }
+        }
+    }
+
+    if (!blob) {
+        blob = await fetchRemoteImageBlob(trimmed, { attempts: 5 });
+    }
+
+    const displayUrl = URL.createObjectURL(blob);
+    return {
+        displayUrl,
+        remoteUrl: trimmed,
+        revokeDisplay: () => {
+            try {
+                URL.revokeObjectURL(displayUrl);
+            } catch {
+                /* ignore */
+            }
+        },
+    };
+}
+
+async function fetchServerAiCoverBlobViaApi(objectPath, bucket = '') {
     const user = auth.currentUser;
     if (!user) {
         throw new Error('not_signed_in');
     }
     const idToken = await user.getIdToken();
-    const response = await fetch(`/api/storage-image?path=${encodeURIComponent(objectPath)}`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-    });
-    if (!response.ok) {
-        throw new Error(`storage_image_api_${response.status}`);
+
+    const attempt = async (params) => {
+        const response = await fetch(`/api/storage-image?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!response.ok) {
+            throw new Error(`storage_image_api_${response.status}`);
+        }
+        const blob = await response.blob();
+        if (blob.size < 500) {
+            throw new Error('storage_image_too_small');
+        }
+        return blob;
+    };
+
+    const withBucket = new URLSearchParams({ path: objectPath });
+    if (bucket) {
+        withBucket.set('bucket', bucket);
     }
-    const blob = await response.blob();
-    if (blob.size < 500) {
-        throw new Error('storage_image_too_small');
+
+    try {
+        return await attempt(withBucket);
+    } catch (firstErr) {
+        if (!bucket) {
+            throw firstErr;
+        }
+        const anyBucket = new URLSearchParams({ path: objectPath });
+        return attempt(anyBucket);
     }
-    return blob;
 }
 
 async function publishAiCoverBlob(blob, userId, remoteUrl) {
@@ -372,9 +470,10 @@ export async function prepareAiCoverMediaFromRemoteUrl(remoteUrl, userId) {
         }
 
         const objectPath = decodeFirebaseStorageObjectPath(remoteUrl);
+        const bucket = decodeFirebaseStorageBucketName(remoteUrl);
         if (objectPath) {
             try {
-                const blob = await fetchServerAiCoverBlobViaApi(objectPath);
+                const blob = await fetchServerAiCoverBlobViaApi(objectPath, bucket);
                 return publishAiCoverBlob(blob, userId, remoteUrl);
             } catch (apiErr) {
                 console.warn('[prepareAiCoverMediaFromRemoteUrl] storage-image API fallback failed:', apiErr);

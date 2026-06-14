@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FaPlus } from 'react-icons/fa';
 import {
     layoutToPreviewAspect,
     STUDIO_PROMO_STICKERS,
     studioOverlayFill,
+    studioPromoStickerLabel,
 } from './studioConstants';
 import {
     STUDIO_ANIM_BODY_DELAY_MS,
@@ -14,8 +16,8 @@ import StudioTextBlock from './StudioTextBlock';
 import StudioTextAnimWrap from './StudioTextAnimWrap';
 import './StudioLivePreview.css';
 
-/** @param {{ stickers: { id: string; stickerId: string; slot?: string }[]; onRemoveSticker?: (id: string) => void; zone?: 'cover' | 'overlay' }} props */
-function PromoStickersLayer({ stickers, onRemoveSticker, zone = 'overlay' }) {
+/** @param {{ stickers: { id: string; stickerId: string; slot?: string }[]; onRemoveSticker?: (id: string) => void; zone?: 'cover' | 'overlay'; t: (key: string, fallback?: string) => string }} props */
+function PromoStickersLayer({ stickers, onRemoveSticker, zone = 'overlay', t }) {
     if (!stickers?.length) return null;
 
     const zoneClass = zone === 'overlay' ? 'sps-preview__promos--overlay' : 'sps-preview__promos--cover';
@@ -35,7 +37,7 @@ function PromoStickersLayer({ stickers, onRemoveSticker, zone = 'overlay' }) {
                             color: def.color || undefined,
                         }}
                     >
-                        <span className="sps-preview__promo-text">{def.display}</span>
+                        <span className="sps-preview__promo-text">{studioPromoStickerLabel(def, t)}</span>
                         {onRemoveSticker ? (
                             <button
                                 type="button"
@@ -64,26 +66,42 @@ function ImagePickZone({
     changeLabel,
     readOnly = false,
     colorOnly = false,
+    /** Banner header: dedicated cover strip above the text panel */
+    variant = 'default',
 }) {
+    const isBannerCover = variant === 'banner-cover';
+
     return (
         <div
             className={`sps-preview__image-zone${!hasImage ? ' sps-preview__image-zone--empty' : ''}${
                 colorOnly ? ' sps-preview__image-zone--color-only' : ''
-            }`}
+            }${isBannerCover ? ' sps-preview__image-zone--banner-cover' : ''}`}
         >
             {hasImage ? <img src={imageUrl} alt="" className="sps-preview__media" /> : null}
-            {!readOnly ? (
+            {!readOnly && isBannerCover && !hasImage ? (
+                <button
+                    type="button"
+                    className="sps-preview__banner-cover-pick"
+                    onClick={onPick}
+                    aria-label={addLabel}
+                    title={addLabel}
+                >
+                    <FaPlus size={18} aria-hidden />
+                    <span>{addLabel}</span>
+                </button>
+            ) : null}
+            {!readOnly && (!isBannerCover || hasImage) ? (
                 <button
                     type="button"
                     className={`sps-preview__image-add-btn${
-                        hasImage ? '' : ' sps-preview__image-add-btn--corner'
+                        hasImage || isBannerCover ? '' : ' sps-preview__image-add-btn--corner'
                     }`}
                     onClick={onPick}
                     aria-label={hasImage ? changeLabel : addLabel}
                     title={hasImage ? changeLabel : addLabel}
                 >
                     <FaPlus size={14} aria-hidden />
-                    {hasImage ? <span>{changeLabel}</span> : null}
+                    {hasImage || isBannerCover ? <span>{hasImage ? changeLabel : addLabel}</span> : null}
                 </button>
             ) : null}
         </div>
@@ -105,11 +123,13 @@ export default function StudioLivePreview({
     onFocusField,
     onBlurField,
     typingMode = false,
+    /** Mobile: tap opens plain composer; preview shows formatted text only. */
+    handoffComposer = false,
     readOnly = false,
     onImagePick,
     scrollContainerRef,
-    imagePickLabel = 'إضافة صورة',
-    imageChangeLabel = 'تغيير الصورة',
+    imagePickLabel,
+    imageChangeLabel,
     promoStickers = [],
     onRemovePromoSticker,
     textAnimation = 'slide',
@@ -117,6 +137,12 @@ export default function StudioLivePreview({
     /** When true (feed), text stays at pre-animation state until animPlayKey > 0. */
     freezeUntilPlayed = false,
 }) {
+    const { t } = useTranslation();
+    const resolvedImagePickLabel = imagePickLabel ?? t('studio_tap_image', 'Tap to add image');
+    const resolvedImageChangeLabel = imageChangeLabel ?? t('studio_tap_change_image', 'Tap to change image');
+    const titlePh = t('studio_title_placeholder', 'Write title here');
+    const bodyPh = t('studio_body_placeholder', 'Write message here');
+
     const entranceAnim = normalizeStudioTextAnimation(textAnimation);
     const aspectClass =
         layoutModel === 'story'
@@ -154,14 +180,21 @@ export default function StudioLivePreview({
             : null;
     /** Custom canvas color only; default empty canvas uses --sps-preview-bg from theme CSS. */
     const canvasBg = userBackdrop || null;
-    const useHeaderSplit = layoutModel === 'header_card' && hasImage;
+    /** Published feed (readOnly) keeps the original behavior: split only when there is an image. */
+    const useHeaderSplit = layoutModel === 'header_card' && (hasImage || !readOnly);
+    /** Zone divider/labels are editor chrome only — never shown on the published post. */
+    const showZoneChrome = useHeaderSplit && !readOnly;
+    const imageZoneLabel = t('studio_banner_image_zone', 'Image area');
+    const textZoneLabel = t('studio_banner_text_zone', 'Text area');
 
     const headerPanelBg =
         useHeaderSplit && userBackdrop
             ? userBackdrop
-            : useHeaderSplit
+            : useHeaderSplit && readOnly
               ? 'var(--sps-panel-bg, #161920)'
-              : 'transparent';
+              : useHeaderSplit
+                ? 'var(--sps-preview-text-panel-bg, #0f1115)'
+                : 'transparent';
 
     const overlayTint = style.overlayTintColor ?? '#000000';
     const overlayAlpha = Math.min(1, Math.max(0, Number(style.overlayOpacity ?? 35) / 100));
@@ -186,9 +219,6 @@ export default function StudioLivePreview({
         [style.textStackGap, style.textPaddingTop, style.textPaddingBottom]
     );
 
-    const titlePh = 'اكتب العنوان هنا';
-    const bodyPh = 'اكتب الرسالة هنا';
-
     const shouldAnimate = !freezeUntilPlayed || animPlayKey > 0;
     const titleAnimStyle = useMemo(
         () => (shouldAnimate ? studioTextAnimStyle(entranceAnim, 0) : {}),
@@ -199,45 +229,78 @@ export default function StudioLivePreview({
         [entranceAnim, animPlayKey, shouldAnimate]
     );
 
+    const editableClass = handoffComposer || readOnly ? '' : ' sps-preview__editable sps-preview__editable--entrance';
+    const blockReadOnly = readOnly || handoffComposer;
+
+    const wrapComposerHit = (field, node) => {
+        if (!handoffComposer || readOnly) return node;
+        return (
+            <div
+                role="button"
+                tabIndex={0}
+                className={`sps-preview__composer-hit${activeField === field ? ' is-active' : ''}`}
+                onPointerDown={(e) => {
+                    if (e.pointerType === 'mouse' && e.button !== 0) return;
+                    onFocusField?.(field);
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onFocusField?.(field);
+                    }
+                }}
+                aria-label={field === 'title' ? titlePh : bodyPh}
+            >
+                {node}
+            </div>
+        );
+    };
+
     const textBlock = (
         <div key={animPlayKey} className="sps-preview__text-stack" style={textStackStyle}>
             <StudioTextAnimWrap animStyle={titleAnimStyle}>
-                <StudioTextBlock
-                    tag="h2"
-                    layer="title"
-                    studioStyle={style}
-                    className={`sps-preview__title${readOnly ? '' : ' sps-preview__editable sps-preview__editable--entrance'}`}
-                    value={title}
-                    placeholder={titlePh}
-                    style={textStyle}
-                    maxLength={60}
-                    onChange={onTitleChange}
-                    onFocus={() => onFocusField?.('title')}
-                    onBlurField={onBlurField}
-                    typingMode={typingMode}
-                    isActive={activeField === 'title'}
-                    scrollContainerRef={scrollContainerRef}
-                    readOnly={readOnly}
-                />
+                {wrapComposerHit(
+                    'title',
+                    <StudioTextBlock
+                        tag="h2"
+                        layer="title"
+                        studioStyle={style}
+                        className={`sps-preview__title${editableClass}`}
+                        value={title}
+                        placeholder={titlePh}
+                        style={textStyle}
+                        maxLength={60}
+                        onChange={onTitleChange}
+                        onFocus={() => !handoffComposer && onFocusField?.('title')}
+                        onBlurField={onBlurField}
+                        typingMode={typingMode}
+                        isActive={activeField === 'title'}
+                        scrollContainerRef={scrollContainerRef}
+                        readOnly={blockReadOnly}
+                    />
+                )}
             </StudioTextAnimWrap>
             <StudioTextAnimWrap animStyle={bodyAnimStyle}>
-                <StudioTextBlock
-                    tag="p"
-                    layer="body"
-                    studioStyle={style}
-                    className={`sps-preview__body${readOnly ? '' : ' sps-preview__editable sps-preview__editable--entrance'}`}
-                    value={body}
-                    placeholder={bodyPh}
-                    style={bodyStyle}
-                    maxLength={180}
-                    onChange={onBodyChange}
-                    onFocus={() => onFocusField?.('body')}
-                    onBlurField={onBlurField}
-                    typingMode={typingMode}
-                    isActive={activeField === 'body'}
-                    scrollContainerRef={scrollContainerRef}
-                    readOnly={readOnly}
-                />
+                {wrapComposerHit(
+                    'body',
+                    <StudioTextBlock
+                        tag="p"
+                        layer="body"
+                        studioStyle={style}
+                        className={`sps-preview__body${editableClass}`}
+                        value={body}
+                        placeholder={bodyPh}
+                        style={bodyStyle}
+                        maxLength={180}
+                        onChange={onBodyChange}
+                        onFocus={() => !handoffComposer && onFocusField?.('body')}
+                        onBlurField={onBlurField}
+                        typingMode={typingMode}
+                        isActive={activeField === 'body'}
+                        scrollContainerRef={scrollContainerRef}
+                        readOnly={blockReadOnly}
+                    />
+                )}
             </StudioTextAnimWrap>
         </div>
     );
@@ -255,8 +318,8 @@ export default function StudioLivePreview({
                 hasImage={hasImage}
                 imageUrl={imageUrl}
                 onPick={onImagePick}
-                addLabel={imagePickLabel}
-                changeLabel={imageChangeLabel}
+                addLabel={resolvedImagePickLabel}
+                changeLabel={resolvedImageChangeLabel}
                 readOnly={readOnly}
                 colorOnly={!hasImage}
             />
@@ -272,6 +335,7 @@ export default function StudioLivePreview({
                 stickers={promoStickers}
                 onRemoveSticker={readOnly ? undefined : onRemovePromoSticker}
                 zone="overlay"
+                t={t}
             />
             <div
                 className={`sps-preview__overlay-text sps-preview__text-zone ${vAlignClass}${
@@ -287,15 +351,23 @@ export default function StudioLivePreview({
     return (
         <div
             className={`sps-preview ${aspectClass}${freezeUntilPlayed && !shouldAnimate ? ' sps-preview--hold-anim' : ''}${
-                !hasImage ? ' sps-preview--no-image' : ''
-            }`}
+                !hasImage && !useHeaderSplit ? ' sps-preview--no-image' : ''
+            }${showZoneChrome ? ' sps-preview--header-split' : ''}`}
             style={canvasBg ? { background: canvasBg } : undefined}
             data-aspect={layoutToPreviewAspect(layoutModel)}
             aria-label="Live preview"
         >
             {useHeaderSplit ? (
                 <>
-                    <div className="sps-preview__cover">
+                    <div
+                        className={`sps-preview__cover${hasImage ? '' : ' sps-preview__cover--empty'}`}
+                        aria-label={imageZoneLabel}
+                    >
+                        {showZoneChrome ? (
+                            <span className="sps-preview__zone-tag sps-preview__zone-tag--cover">
+                                {imageZoneLabel}
+                            </span>
+                        ) : null}
                         {userBackdrop ? (
                             <div
                                 className="sps-preview__backdrop"
@@ -307,9 +379,10 @@ export default function StudioLivePreview({
                             hasImage={hasImage}
                             imageUrl={imageUrl}
                             onPick={onImagePick}
-                            addLabel={imagePickLabel}
-                            changeLabel={imageChangeLabel}
+                            addLabel={resolvedImagePickLabel}
+                            changeLabel={resolvedImageChangeLabel}
                             readOnly={readOnly}
+                            variant="banner-cover"
                         />
                         {showPhotoOverlay ? (
                             <div
@@ -322,12 +395,22 @@ export default function StudioLivePreview({
                             stickers={promoStickers}
                             onRemoveSticker={readOnly ? undefined : onRemovePromoSticker}
                             zone="cover"
+                            t={t}
                         />
                     </div>
+                    {showZoneChrome ? (
+                        <div className="sps-preview__header-divider" aria-hidden />
+                    ) : null}
                     <div
                         className={`sps-preview__panel sps-preview__text-zone ${vAlignClass}`}
                         style={{ background: headerPanelBg }}
+                        aria-label={textZoneLabel}
                     >
+                        {showZoneChrome ? (
+                            <span className="sps-preview__zone-tag sps-preview__zone-tag--text">
+                                {textZoneLabel}
+                            </span>
+                        ) : null}
                         {textBlock}
                     </div>
                 </>

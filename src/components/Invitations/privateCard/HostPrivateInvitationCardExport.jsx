@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
+import { captureElementAsPngBlob } from '../../../utils/privateInvitationCardCapture';
 import { useTranslation } from 'react-i18next';
 import { FaDownload, FaShareAlt } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
@@ -8,7 +8,11 @@ import { getSafeAvatar } from '../../../utils/avatarUtils';
 import PrivateInvitationCardPreview from './PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from './privateCardFrameColors';
 import { DEFAULT_FONT_ID } from './privateCardFonts';
-import { DEFAULT_MOTION_ID } from './privateCardMotions';
+import {
+    DEFAULT_CARD_COPY_OFFSET_Y,
+    DEFAULT_CARD_COPY_WIDTH_PCT,
+    DEFAULT_CARD_COPY_FONT_SCALE,
+} from './privateCardCopyLayout';
 import { getInvitationCardTextBackdropFromInvitation } from './privateCardTextBackdrop';
 import {
     getDatingInvitationHeroCoverFromInvitation,
@@ -53,30 +57,7 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
         [invitation]
     );
 
-    const capturePngBlob = async () => {
-        const el = captureRef.current;
-        if (!el) return null;
-        if (typeof document !== 'undefined' && document.fonts?.ready) {
-            try {
-                await document.fonts.ready;
-            } catch {
-                /* ignore */
-            }
-        }
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        const canvas = await html2canvas(el, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: false,
-            backgroundColor: null,
-            logging: false
-        });
-
-        return await new Promise((resolve) => {
-            canvas.toBlob((blob) => resolve(blob), 'image/png', 1);
-        });
-    };
+    const capturePngBlob = async () => captureElementAsPngBlob(captureRef.current);
 
     const handleDownload = async () => {
         setBusy(true);
@@ -174,10 +155,13 @@ export default function HostPrivateInvitationCardExport({ invitation }) {
                                 : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
                         }
                         cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
-                        cardMotionId={invitation.cardMotionId ?? DEFAULT_MOTION_ID}
+                        copyOffsetY={invitation.cardCopyOffsetY ?? DEFAULT_CARD_COPY_OFFSET_Y}
+                        copyWidthPct={invitation.cardCopyWidthPct ?? DEFAULT_CARD_COPY_WIDTH_PCT}
+                        copyFontScale={invitation.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE}
                         freezeMotion
                         occasionType={invitation.occasionType}
                         cardBackgroundId={invitation.cardBackgroundId || null}
+                        cardGradientId={invitation.cardGradientId || null}
                         heroCoverSrc={cardHeroCover?.src ?? null}
                         heroCoverMediaType={cardHeroCover?.mediaType ?? null}
                         heroCoverPoster={cardHeroCover?.poster ?? null}

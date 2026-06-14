@@ -1,7 +1,12 @@
-import { ref, uploadBytes } from 'firebase/storage';
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app, { storage } from '../firebase/config';
 import { ImageUploadZone } from './imageUploadZones';
+import {
+    startCheckingPulse,
+    stopCheckingPulse,
+    updateImageUploadSession,
+} from './imageUploadProgressStore';
 
 const FUNCTIONS_REGION = 'us-central1';
 
@@ -82,27 +87,36 @@ export async function uploadImageWithModeration(file, userId, purpose, opts = {}
         throw new Error(`Invalid moderation purpose: ${purpose}`);
     }
 
+    const report = (pct, phase) => {
+        updateImageUploadSession(pct, phase);
+        if (onProgress) onProgress(pct);
+    };
+
     const timestamp = Date.now();
     const quarantinePath = `quarantine/${userId}/${timestamp}_${normalized}.jpg`;
     const storageRef = ref(storage, quarantinePath);
 
     const contentType = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg';
-    if (onProgress) onProgress(10);
+    report(12, 'uploading');
     await uploadBytes(storageRef, file, { contentType });
-    if (onProgress) onProgress(40);
+    report(38, 'uploading');
 
     const functions = getFunctions(app, FUNCTIONS_REGION);
     const moderateImage = httpsCallable(functions, 'moderateImage');
 
+    const stopPulse = startCheckingPulse((pct) => report(pct, 'checking'));
+
     try {
         const { data } = await moderateImage({ quarantinePath, purpose: normalized });
-        if (onProgress) onProgress(100);
+        stopPulse();
+        report(100, 'done');
         const url = data?.url;
         if (!url || typeof url !== 'string') {
             throw new Error('Moderation did not return an image URL');
         }
         return url;
     } catch (error) {
+        stopCheckingPulse();
         if (isImageModerationRejected(error)) {
             const err = new Error('image-rejected');
             err.code = IMAGE_MODERATION_REJECTED;

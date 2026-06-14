@@ -37,7 +37,7 @@ export default function LoginHub() {
         if (!notice) return;
         const text = notice.i18nKey
             ? t(notice.i18nKey, notice.message || '')
-            : notice.message || t('auth_affiliate_web_only', 'حسابات الوكلاء تدار عبر موقع الويب فقط.');
+            : notice.message || t('auth_affiliate_web_only');
         showToast(text, notice.variant === 'info' ? 'info' : 'error');
     }, [showToast, t]);
 

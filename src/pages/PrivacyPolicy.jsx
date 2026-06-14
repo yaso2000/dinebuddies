@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 const PrivacyPolicy = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const isAr = i18n.language === 'ar';
+    const isAr = i18n.language?.startsWith('ar');
 
     return (
         <div

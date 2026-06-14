@@ -1,18 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaTimes, FaGlobe, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
+import { blockPublicInviteFromBusinessVenue } from '../utils/publicInviteVenueGate';
 import './CreateInvitationSelector.css';
 
 const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { showToast } = useToast();
-    const { isBusiness } = useAuth();
+    const { cannotCreateInvitations } = useAuth();
     const { canCreatePrivateInvitation } = useInvitations();
+    const [publicGateChecking, setPublicGateChecking] = useState(false);
 
     if (!isOpen) return null;
 
@@ -23,23 +25,37 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
         onClose();
     };
 
-    const goCreate = (kind) => {
-        if (isBusiness) {
+    const goCreate = async (kind) => {
+        if (cannotCreateInvitations) {
             showToast(
-                t('business_cannot_create_invitation', 'Business accounts cannot create or publish invitations.'),
+                t('business_cannot_create_invitation'),
                 'error'
             );
             handleClose();
             return;
         }
         if (kind === 'public') {
+            if (publicGateChecking) return;
+            if (baseState.restaurantData) {
+                setPublicGateChecking(true);
+                try {
+                    const blocked = await blockPublicInviteFromBusinessVenue({
+                        restaurantData: baseState.restaurantData,
+                        showToast,
+                        t,
+                    });
+                    if (blocked) return;
+                } finally {
+                    setPublicGateChecking(false);
+                }
+            }
             navigate('/create', { state: baseState });
             handleClose();
             return;
         }
         if (kind === 'private') {
             const quotaInfo = canCreatePrivateInvitation('private');
-            if (!quotaInfo.canCreate) {
+            if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
                 showToast(
                     t(
                         'insufficient_dine_credits_wallet',
@@ -57,7 +73,7 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
         }
         if (kind === 'dating') {
             const quotaInfo = canCreatePrivateInvitation('dating');
-            if (!quotaInfo.canCreate) {
+            if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
                 showToast(
                     t(
                         'insufficient_dine_credits_wallet',
@@ -95,6 +111,8 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
                         onClick={() => goCreate('public')}
                         role="button"
                         tabIndex={0}
+                        aria-busy={publicGateChecking}
+                        style={publicGateChecking ? { opacity: 0.65, pointerEvents: 'none' } : undefined}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
@@ -106,7 +124,11 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
                             <FaGlobe />
                         </div>
                         <div className="option-info">
-                            <h4>{t('invite_create_public_title', 'Public invitation')}</h4>
+                            <h4>
+                                {publicGateChecking
+                                    ? t('detecting_location', 'Detecting location…')
+                                    : t('invite_create_public_title', 'Public invitation')}
+                            </h4>
                             <p>
                                 {t(
                                     'invite_create_public_desc',

@@ -20,6 +20,11 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (currentUser?.uid && businessId && currentUser.uid === businessId) {
+            showToast(t('feedback_owner_blocked', 'Business owners cannot send feedback to their own profile.'), 'error');
+            return;
+        }
         
         if (!content.trim()) {
             showToast(t('feedback_req_message', 'Please write your message details'), 'error');

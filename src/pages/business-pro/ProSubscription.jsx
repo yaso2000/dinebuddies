@@ -5,31 +5,14 @@ import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../firebase/config';
 import { FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
-import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
 import { BUSINESS_PAID_PLAN_DISPLAY } from '../../config/stripeCommerce';
-import { normalizeBusinessTier } from '../../utils/businessSubscription';
+import {
+    BUSINESS_FREE_PLAN_FEATURE_KEYS,
+    BUSINESS_PAID_PLAN_FEATURE_KEYS,
+    normalizeBusinessTier,
+} from '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
 import StripeTestModeBanner from '../../components/StripeTestModeBanner';
-
-/** Legacy fallback when STRIPE_PRICE_BUSINESS_MONTHLY is not set on the server. */
-const PAID_STRIPE_PLAN = BASE_SUBSCRIPTION_PLANS.find((p) => p.type === 'business' && p.tier === 'elite');
-
-const FREE_FEATURES = [
-    ['biz_plan_free_feat_profile', 'Business profile & basic photos'],
-    ['biz_plan_free_feat_community', 'Community access'],
-    ['biz_plan_free_feat_motion_5', '5 manual motion posts / month'],
-    ['biz_plan_free_feat_ai_credits', 'AI requires Dine Credits'],
-];
-
-const PAID_FEATURES = [
-    ['biz_plan_paid_feat_motion_unlimited', 'Unlimited manual motion posts'],
-    ['biz_plan_paid_feat_priority', 'Priority visibility'],
-    ['biz_plan_paid_feat_community_tools', 'Community management tools'],
-    ['biz_plan_paid_feat_analytics', 'Advanced analytics'],
-    ['biz_plan_paid_feat_member_notifs', 'Member notifications'],
-    ['biz_plan_paid_feat_profile_tools', 'Enhanced profile tools'],
-    ['biz_plan_paid_feat_ai_credits_note', 'AI still uses Dine Credits — not unlimited'],
-];
 
 const ProSubscription = () => {
     const { t } = useTranslation();
@@ -51,40 +34,18 @@ const ProSubscription = () => {
         try {
             const functions = getFunctions(app, 'us-central1');
             const createBusinessCheckout = httpsCallable(functions, 'createBusinessSubscriptionCheckout');
-            try {
-                const result = await createBusinessCheckout({
-                    planName: t('biz_plan_paid_name', BUSINESS_PAID_PLAN_DISPLAY.name),
-                    successUrl: `${window.location.origin}/payment-success`,
-                    cancelUrl: billingReturnUrl,
-                });
-                if (result.data?.url) window.location.href = result.data.url;
-                return;
-            } catch (bizErr) {
-                const code = bizErr?.code || '';
-                if (code !== 'functions/failed-precondition') throw bizErr;
-            }
-
-            const plan = PAID_STRIPE_PLAN;
-            if (!plan?.stripePriceId) {
-                showToast(
-                    t('biz_plan_checkout_missing', 'Paid plan is not configured. Set STRIPE_PRICE_BUSINESS_MONTHLY in functions/.env.'),
-                    'warning'
-                );
-                return;
-            }
-            const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
-            const result = await createCheckoutSession({
-                priceId: plan.stripePriceId,
-                planId: 'elite',
-                planName: t('biz_plan_paid_name', 'Paid Business'),
-                subscriptionKind: 'business',
+            const result = await createBusinessCheckout({
+                planName: t('biz_plan_paid_name', BUSINESS_PAID_PLAN_DISPLAY.name),
                 successUrl: `${window.location.origin}/payment-success`,
                 cancelUrl: billingReturnUrl,
             });
             if (result.data?.url) window.location.href = result.data.url;
         } catch (e) {
             console.error('Checkout error:', e);
-            showToast(t('biz_plan_checkout_error', 'Could not start checkout: ') + (e.message || String(e)), 'error');
+            showToast(
+                t('biz_plan_checkout_error', 'Could not start checkout: ') + (e.message || String(e)),
+                'error'
+            );
         } finally {
             setLoading(null);
         }
@@ -275,14 +236,14 @@ const ProSubscription = () => {
                     titleKey: 'biz_plan_free_name',
                     titleDefault: 'Free Business',
                     priceLabel: '$0',
-                    features: FREE_FEATURES,
+                    features: BUSINESS_FREE_PLAN_FEATURE_KEYS,
                     tierKey: 'free',
                 })}
                 {planCard('paid', {
                     titleKey: 'biz_plan_paid_name',
                     titleDefault: 'Paid Business',
                     priceLabel: paidPriceLabel,
-                    features: PAID_FEATURES,
+                    features: BUSINESS_PAID_PLAN_FEATURE_KEYS,
                     tierKey: 'paid',
                 })}
             </div>

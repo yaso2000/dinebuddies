@@ -108,7 +108,7 @@ const MediaUpload = ({
                 if (onMediaSelect && awaitMediaSelect) {
                     setUploading(true);
                     setModerationStatus('checking');
-                    setProgress(20);
+                    setProgress(5);
                     try {
                         await Promise.resolve(onMediaSelect(file, previewUrl, 'image'));
                         setProgress(100);

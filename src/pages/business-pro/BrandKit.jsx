@@ -8,7 +8,7 @@ import { BUSINESS_THEMES } from '../../utils/businessThemes';
 import PremiumBadge from '../../components/PremiumBadge';
 import PremiumPaywallModal from '../../components/PremiumPaywallModal';
 import DraftSavedModal from '../../components/DraftSavedModal';
-import './BrandKit.css';
+import { getBusinessSubscriptionAccess } from '../../utils/businessSubscription';
 // ─── 12 Curated Brand Templates ─────────────────────────────────────────────
 // textColor = color used for headings/badges on dark card backgrounds
 const BRAND_TEMPLATES = [
@@ -186,10 +186,7 @@ const BrandKit = ({ onBack, inAppColumn = true }) => {
     const defaultPrimary = currentTheme?.colors?.accent || '#a78bfa';
     const brandKit = userProfile?.businessInfo?.brandKit || {};
 
-    const isPaid = (() => {
-        const t = (userProfile?.subscriptionTier || 'free').toLowerCase();
-        return t === 'professional' || t === 'elite';
-    })();
+    const isPaid = getBusinessSubscriptionAccess(userProfile?.subscriptionTier).isPaid;
     const [primaryColor, setPrimaryColor] = useState(brandKit.primaryColor || defaultPrimary);
     const [secondaryColor, setSecondaryColor] = useState(brandKit.secondaryColor || '#f97316');
     const [textColor, setTextColor] = useState(brandKit.textColor || '#e2e8f0');

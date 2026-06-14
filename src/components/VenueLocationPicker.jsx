@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import LocationAutocomplete from './LocationAutocomplete';
 import { sortDineBuddiesVenues } from '../utils/invitationVenueSearch';
+import { extractCityTokenFromAddress } from '../utils/locationUtils';
 import './venue-search.css';
 
 /**
@@ -108,7 +109,7 @@ const VenueLocationPicker = ({
                 }
             });
 
-            const ranked = sortDineBuddiesVenues(results, city, undefined);
+            const ranked = sortDineBuddiesVenues(results, city, invitationType, userLat, userLng);
             setDbResults(ranked.slice(0, 10));
         } catch (err) {
             console.error('DineBuddies venue search error:', err);
@@ -142,6 +143,7 @@ const VenueLocationPicker = ({
             fullAddress: venue.address,
             lat: venue.lat,
             lng: venue.lng,
+            city: venue.city || extractCityTokenFromAddress(venue.address) || '',
             restaurantId: venue.id,
             restaurantName: venue.name,
             image: venue.image,
@@ -182,7 +184,7 @@ const VenueLocationPicker = ({
                         <FaStore aria-hidden />
                     </span>
                     <span className="venue-search-segment__label">
-                        {t('dinbuddies_venues_short', 'DB')}
+                        {t('dinbuddies_venues_short', 'db places')}
                     </span>
                 </button>
 
@@ -197,18 +199,13 @@ const VenueLocationPicker = ({
                         <FaGlobe aria-hidden />
                     </span>
                     <span className="venue-search-segment__label">
-                        {t('google_places_short', 'Google')}
+                        {t('google_places_short', 'Google places')}
                     </span>
                 </button>
             </div>
 
             {source === 'google' && !compact && (
-                <p style={{
-                    fontSize: '0.72rem',
-                    color: 'var(--text-muted)',
-                    margin: '0 0 8px 0',
-                    lineHeight: 1.35,
-                }}>
+                <p className="venue-search-hint">
                     {t('venue_google_search_hint', 'Search by Google Places within your detected city.')}
                 </p>
             )}
@@ -246,15 +243,15 @@ const VenueLocationPicker = ({
                     {showDbDropdown && (
                         <div className="venue-search-dropdown venue-search-dropdown--tight">
                             {dbLoading && (
-                                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                <div className="venue-search-dropdown__message">
                                     {t('searching', 'Searching...')}
                                 </div>
                             )}
 
                             {!dbLoading && dbResults.length === 0 && dbQuery.length >= 2 && (
-                                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                <div className="venue-search-dropdown__message">
                                     <div style={{ marginBottom: 6 }}>😕 {t('no_venues_found', 'No registered venues found')}</div>
-                                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                                    <div className="venue-search-dropdown__message-sub">
                                         {t('try_osm_places_hint', 'Search all places (OpenStreetMap) for unregistered venues')}
                                     </div>
                                 </div>
@@ -278,23 +275,14 @@ const VenueLocationPicker = ({
                                         }
                                     </div>
 
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {venue.name}
-                                        </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <div className="venue-search-row__body">
+                                        <div className="venue-search-row__title">{venue.name}</div>
+                                        <div className="venue-search-row__subtitle">
                                             {venue.address || venue.city}
                                         </div>
                                     </div>
 
-                                    {/* DineBuddies badge */}
-                                    <div style={{
-                                        fontSize: '0.6rem', background: 'var(--primary)', color: 'white',
-                                        padding: '3px 7px', borderRadius: 4, fontWeight: 800,
-                                        flexShrink: 0, whiteSpace: 'nowrap'
-                                    }}>
-                                        DB ✓
-                                    </div>
+                                    <div className="venue-search-badge">DB ✓</div>
                                 </div>
                             ))}
 
@@ -306,10 +294,10 @@ const VenueLocationPicker = ({
                                 >
                                     <FaGlobe style={{ color: 'var(--text-muted)', fontSize: '1rem' }} />
                                     <div>
-                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                                        <div className="venue-search-footer-hint__title">
                                             {t('switch_to_google', 'Search Google Places instead')}
                                         </div>
-                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                        <div className="venue-search-footer-hint__subtitle">
                                             {t('for_unregistered_venues', 'For venues not yet on DineBuddies')}
                                         </div>
                                     </div>

@@ -6,6 +6,10 @@
 const CARD_W = 1080;
 const CARD_H = 1080;
 const HERO_H = 640;
+/** Business share cards — portrait 4∶6 (720×1080). */
+const BUSINESS_CARD_W = 720;
+const BUSINESS_CARD_H = 1080;
+const BUSINESS_HERO_H = 640;
 /** Hero height for selfie-video split layout (~top half) */
 const VIDEO_SPLIT_HERO_H = 520;
 const PADDING = 48;
@@ -271,43 +275,46 @@ export async function generateBusinessShareCard({
     averageRating,
     reviewCount,
 } = {}) {
+    const W = BUSINESS_CARD_W;
+    const H = BUSINESS_CARD_H;
+    const heroH = BUSINESS_HERO_H;
+
     const canvas = document.createElement('canvas');
-    canvas.width = CARD_W;
-    canvas.height = CARD_H;
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, 0, CARD_W, CARD_H);
+    ctx.fillRect(0, 0, W, H);
 
     const heroImg = await loadImg(image);
 
     if (heroImg) {
-        const scale = Math.max(CARD_W / heroImg.naturalWidth, HERO_H / heroImg.naturalHeight);
-        const sw = CARD_W / scale;
-        const sh = HERO_H / scale;
+        const scale = Math.max(W / heroImg.naturalWidth, heroH / heroImg.naturalHeight);
+        const sw = W / scale;
+        const sh = heroH / scale;
         const sx = (heroImg.naturalWidth - sw) / 2;
         const sy = (heroImg.naturalHeight - sh) / 2;
-        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, CARD_W, HERO_H);
+        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, W, heroH);
     } else {
-        const grad = ctx.createLinearGradient(0, 0, CARD_W, HERO_H);
+        const grad = ctx.createLinearGradient(0, 0, W, heroH);
         grad.addColorStop(0, '#78350f');
         grad.addColorStop(1, '#b45309');
         ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, CARD_W, HERO_H);
+        ctx.fillRect(0, 0, W, heroH);
     }
 
-    // Subtle fade from image into content (not a "button" — just readability)
-    const botOv = ctx.createLinearGradient(0, HERO_H - 120, 0, HERO_H);
+    const botOv = ctx.createLinearGradient(0, heroH - 120, 0, heroH);
     botOv.addColorStop(0, 'rgba(13,17,23,0)');
     botOv.addColorStop(1, 'rgba(13,17,23,1)');
     ctx.fillStyle = botOv;
-    ctx.fillRect(0, HERO_H - 120, CARD_W, 120);
+    ctx.fillRect(0, heroH - 120, W, 120);
 
     ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, HERO_H, CARD_W, CARD_H - HERO_H);
+    ctx.fillRect(0, heroH, W, H - heroH);
 
-    const maxW = CARD_W - PADDING * 2;
-    let curY = HERO_H + 44;
+    const maxW = W - PADDING * 2;
+    let curY = heroH + 44;
     const titleSize = title.length > 28 ? 52 : 60;
     const titleLH = title.length > 28 ? 62 : 72;
     curY = drawWrappedTitle(ctx, title, PADDING, curY, maxW, titleSize, titleLH, 2);
@@ -330,7 +337,25 @@ export async function generateBusinessShareCard({
         curY = drawMetaLine(ctx, ratingText, PADDING, curY, maxW, 24, 'rgba(253,224,71,0.9)');
     }
 
-    drawBottomBrandAndLink(ctx, shareUrl, title);
+    const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (title && String(title).trim());
+    const LINK_BAR_H = 48;
+    const linkY = H - LINK_BAR_H;
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.fillRect(0, linkY, W, LINK_BAR_H);
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.font = '19px "Arial", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(linkBarLabel, W / 2, linkY + LINK_BAR_H / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    const brandY = linkY - 28;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '16px "Arial", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DineBuddies', W / 2, brandY);
+    ctx.textAlign = 'left';
 
     return canvas;
 }

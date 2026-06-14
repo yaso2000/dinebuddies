@@ -1,6 +1,6 @@
 import { isValidE164 } from '../_phoneUtils.js';
 import { requireAuth } from '../_auth.js';
-import { completeBusinessPhoneSignup } from '../_businessPhoneAccount.js';
+import { completeBusinessPhoneSignup, completeBusinessEmailSignup } from '../_businessPhoneAccount.js';
 import { applyApiCors, handleCorsPreflight } from '../_cors.js';
 
 function readJsonBody(req) {
@@ -29,14 +29,7 @@ export default async function handler(req, res) {
     const body = readJsonBody(req);
     const standardizedPhone = String(body.standardizedPhone || '').trim();
     const email = String(body.email || authResult.claims.email || '').trim().toLowerCase();
-
-    if (!isValidE164(standardizedPhone)) {
-        return res.status(400).json({
-            status: 'error',
-            code: 'invalid-request',
-            message: 'Invalid phone number',
-        });
-    }
+    const claimBusinessId = body.claimBusinessId || body.businessId || null;
 
     if (!email) {
         return res.status(400).json({
@@ -46,22 +39,38 @@ export default async function handler(req, res) {
         });
     }
 
-    try {
-        const result = await completeBusinessPhoneSignup({
-            firebaseUid: authResult.uid,
-            standardizedPhone,
-            email,
-            businessInfo: body.businessInfo || {},
-            claimBusinessId: body.claimBusinessId || body.businessId || null,
-            referredBy: body.referredBy || null,
+    const requiresPhone = Boolean(claimBusinessId || standardizedPhone);
+    if (requiresPhone && !isValidE164(standardizedPhone)) {
+        return res.status(400).json({
+            status: 'error',
+            code: 'invalid-request',
+            message: 'Invalid phone number',
         });
+    }
+
+    try {
+        const result = requiresPhone
+            ? await completeBusinessPhoneSignup({
+                  firebaseUid: authResult.uid,
+                  standardizedPhone,
+                  email,
+                  businessInfo: body.businessInfo || {},
+                  claimBusinessId,
+                  referredBy: body.referredBy || null,
+              })
+            : await completeBusinessEmailSignup({
+                  firebaseUid: authResult.uid,
+                  email,
+                  businessInfo: body.businessInfo || {},
+                  referredBy: body.referredBy || null,
+              });
 
         return res.status(200).json({
             status: 'ok',
             uid: result.uid,
             email: result.email,
             flow: result.flow,
-            standardizedPhone,
+            standardizedPhone: requiresPhone ? standardizedPhone : null,
             claimedFromBusinessId: result.claimedFromBusinessId,
         });
     } catch (err) {

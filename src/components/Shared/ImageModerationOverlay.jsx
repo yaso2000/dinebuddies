@@ -1,20 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaExclamationTriangle } from 'react-icons/fa';
+import { subscribeImageUploadProgress } from '../../services/imageUploadProgressStore';
 
 /**
  * Overlay for image preview during moderation or after rejection.
  * @param {'checking'|'rejected'|null} status
  * @param {string} [message] — override rejection text
+ * @param {number|null} [progress] — optional 0-100; when null during checking, reads global upload progress
  */
-export default function ImageModerationOverlay({ status, message, children, style = {} }) {
+export default function ImageModerationOverlay({ status, message, progress = null, children, style = {} }) {
     const { t } = useTranslation();
+    const [globalProgress, setGlobalProgress] = useState(0);
+
+    useEffect(() => {
+        if (status !== 'checking') return undefined;
+        return subscribeImageUploadProgress((s) => {
+            if (s.active) setGlobalProgress(s.progress);
+        });
+    }, [status]);
 
     if (!status) {
         return children ?? null;
     }
 
     const rejectionText = message || t('image_rejected_policy');
+    const displayProgress = progress ?? globalProgress;
 
     return (
         <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', ...style }}>
@@ -55,6 +66,31 @@ export default function ImageModerationOverlay({ status, message, children, styl
                         <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>
                             {t('image_upload_checking')}
                         </span>
+                        {displayProgress > 0 && (
+                            <>
+                                <div
+                                    style={{
+                                        width: 'min(200px, 80%)',
+                                        height: 6,
+                                        borderRadius: 999,
+                                        overflow: 'hidden',
+                                        background: 'rgba(255,255,255,0.2)',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            height: '100%',
+                                            width: `${displayProgress}%`,
+                                            background: '#fff',
+                                            transition: 'width 0.25s ease',
+                                        }}
+                                    />
+                                </div>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 700, opacity: 0.95 }}>
+                                    {displayProgress}%
+                                </span>
+                            </>
+                        )}
                     </>
                 ) : (
                     <>

@@ -18,6 +18,20 @@ import {
     isGeminiProviderBillingExhausted,
     normalizeGeminiProviderBillingError,
 } from '../utils/geminiProviderErrors.js';
+import { normalizeAiOutputLanguage, getAiOutputLanguageLabel } from '../utils/aiOutputLanguage.js';
+import { AI_USER_PROMPT_MAX_CHARS, getAiUserPromptDefaultEn } from '../constants/aiPromptLimits.js';
+
+export type AiOutputLanguage =
+    | 'ar'
+    | 'en'
+    | 'fr'
+    | 'es'
+    | 'it'
+    | 'de'
+    | 'pt'
+    | 'tr'
+    | 'ur'
+    | 'hi';
 
 export type TextPostType = 'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'design_studio';
 export type PostType = TextPostType | 'magic_cover';
@@ -26,7 +40,7 @@ export type CardStructure = 'arch_luxury' | 'vintage_ticket' | 'modern_minimal';
 export type AnimationType = 'slide-up' | 'fade-in' | 'zoom-in';
 export type InvitationAccountType = 'user' | 'business';
 export type GenerationPackage = 'text' | 'image' | 'invitation_bundle';
-export type CoverAspectRatio = '1:1' | '9:16' | '16:9';
+export type CoverAspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
 export type DesignStudioCategory =
     | 'square'
     | 'story'
@@ -98,6 +112,7 @@ export interface GenerateContentInput {
     businessContext?: BusinessInvitationContext;
     datingContext?: DatingInvitationContext;
     cardStructure?: CardStructure;
+    outputLanguage?: AiOutputLanguage | string;
 }
 
 export interface InvitationContent {
@@ -183,6 +198,7 @@ export interface MultimodalPipelineInput {
     businessContext?: BusinessInvitationContext;
     aspectRatio?: CoverAspectRatio;
     designCategory?: DesignStudioCategory;
+    outputLanguage?: AiOutputLanguage | string;
 }
 
 export interface MultimodalPipelineData {
@@ -335,18 +351,28 @@ function isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
+function buildLanguageRule(outputLanguage: AiOutputLanguage): string {
+    const langCode = normalizeAiOutputLanguage(outputLanguage) as AiOutputLanguage;
+    const langLabel = getAiOutputLanguageLabel(langCode);
+    if (langCode === 'ar') {
+        return `Write only in natural, engaging Arabic (warm Modern Standard / spoken-standard fusion). Output must match the JSON shape described in the user message.`;
+    }
+    return `Write only in natural, engaging ${langLabel}. Output must match the JSON shape described in the user message.`;
+}
+
 function buildInvitationSystemInstruction(
     subType: InvitationSubType | undefined,
     accountType: InvitationAccountType,
     cardStructure: CardStructure = 'modern_minimal',
+    outputLanguage: AiOutputLanguage = 'en',
 ): string {
     const baseRule = `Return exactly: {"title":"...","description":"..."}. No other keys. Do not invent a venue address. Use venueType and venueName from context only. Both title and description are REQUIRED — never leave description empty.`;
+    const langLabel = getAiOutputLanguageLabel(outputLanguage);
 
     let toneRule = '';
 
     if (accountType === 'business') {
-        toneRule =
-            'Write a promotional business invitation in Arabic: welcoming, professional, and marketing-oriented. Speak as the venue inviting guests. Weave in businessName, tagline, profileDescription, and activeOffers from context when provided — never invent offers, discounts, or locations not in context.';
+        toneRule = `Write a promotional business invitation in ${langLabel}: welcoming, professional, and marketing-oriented. Speak as the venue inviting guests. Weave in businessName, tagline, profileDescription, and activeOffers from context when provided — never invent offers, discounts, or locations not in context.`;
 
         if (subType === 'public') {
             toneRule +=
@@ -357,8 +383,7 @@ function buildInvitationSystemInstruction(
             toneRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
         }
     } else {
-        toneRule =
-            'Write a personal social invitation in Arabic: warm, casual, and informal — like a friend inviting friends to meet up at a venue.';
+        toneRule = `Write a personal social invitation in ${langLabel}: warm, casual, and informal — like a friend inviting friends to meet up at a venue.`;
 
         if (subType === 'public') {
             toneRule +=
@@ -366,7 +391,7 @@ function buildInvitationSystemInstruction(
         } else if (subType === 'private') {
             toneRule += ' Private invitation: warm, personal, close-friends tone.';
         } else if (subType === 'date') {
-            return buildDatingInvitationSystemInstruction(cardStructure);
+            return buildDatingInvitationSystemInstruction(cardStructure, outputLanguage);
         }
     }
 
@@ -379,16 +404,16 @@ function buildSystemInstruction(
     subType?: InvitationSubType,
     accountType: InvitationAccountType = 'user',
     cardStructure: CardStructure = 'modern_minimal',
+    outputLanguage: AiOutputLanguage = 'en',
 ): string {
-    const languageRule =
-        'Write only in natural, engaging Arabic. Output must match the JSON shape described in the user message.';
+    const languageRule = buildLanguageRule(outputLanguage);
 
     switch (postType) {
         case 'invitation':
-            return `${JSON_OUTPUT_RULE} ${languageRule} ${buildInvitationSystemInstruction(subType, accountType, cardStructure)}`;
+            return `${JSON_OUTPUT_RULE} ${languageRule} ${buildInvitationSystemInstruction(subType, accountType, cardStructure, outputLanguage)}`;
 
         case 'regular_post':
-            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"text":"..."}. Facebook-style post with fitting emoji. No title field.`;
+            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"title":"...","text":"..."}. "title" is a short catchy headline. "text" is the post body with fitting emoji.`;
 
         case 'featured_post':
             return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"title":"...","description":"..."}.`;
@@ -607,8 +632,10 @@ function validateGeneratedContent(postType: TextPostType, value: unknown): strin
         }
 
         case 'regular_post': {
+            if (!isNonEmptyString(record.title)) return 'Missing or empty "title"';
             if (!isNonEmptyString(record.text)) return 'Missing or empty "text"';
-            if ('title' in record) return 'regular_post must not include "title"';
+            if (record.title.length > 100) return '"title" must be at most 100 characters';
+            if (record.text.length > 300) return '"text" must be at most 300 characters';
             return null;
         }
 
@@ -634,9 +661,23 @@ function validateGeneratedContent(postType: TextPostType, value: unknown): strin
 }
 
 export async function generateContent(input: GenerateContentInput): Promise<GenerateContentResult> {
-    const { userPrompt, postType, subType, accountType = 'user', cardStructure = 'modern_minimal' } = input;
+    const {
+        userPrompt,
+        postType,
+        subType,
+        accountType = 'user',
+        cardStructure = 'modern_minimal',
+        outputLanguage: outputLanguageRaw,
+    } = input;
+    const outputLanguage = normalizeAiOutputLanguage(outputLanguageRaw);
 
-    if (!isNonEmptyString(userPrompt)) {
+    const effectiveUserPrompt = (
+        isNonEmptyString(userPrompt)
+            ? userPrompt.trim()
+            : getAiUserPromptDefaultEn(postType, subType)
+    ).slice(0, AI_USER_PROMPT_MAX_CHARS);
+
+    if (!effectiveUserPrompt) {
         return {
             success: false,
             error: 'userPrompt is required',
@@ -644,12 +685,13 @@ export async function generateContent(input: GenerateContentInput): Promise<Gene
         };
     }
 
-    const prompt = buildUserPrompt(input);
+    const prompt = buildUserPrompt({ ...input, userPrompt: effectiveUserPrompt });
     const systemInstruction = buildSystemInstruction(
         postType,
         subType,
         accountType,
         normalizeCardStructure(cardStructure),
+        outputLanguage,
     );
 
     try {
@@ -715,7 +757,11 @@ function buildImagePromptSystemInstruction(
     accountType: InvitationAccountType,
     postType?: TextPostType,
     designCategory?: DesignStudioCategory,
+    outputLanguage: AiOutputLanguage = 'en',
 ): string {
+    const briefLang = getAiOutputLanguageLabel(outputLanguage);
+    const interpretBrief = `The user's creative brief may be written in ${briefLang}. Interpret it fully and faithfully when crafting the English Imagen prompt.`;
+
     if (postType === 'design_studio' && designCategory) {
         const categoryRules: Record<DesignStudioCategory, string> = {
             square:
@@ -734,11 +780,11 @@ function buildImagePromptSystemInstruction(
 
         const rule = categoryRules[designCategory] || categoryRules.square;
 
-        return `${JSON_OUTPUT_RULE} You are the DineBuddies AI Design Studio prompt engine (Mode 2). Return exactly one JSON object with keys: status ("success"), category (the design category id), aspect_ratio (e.g. 1:1, 9:16, 16:9), optimized_prompt (highly detailed English Imagen prompt), allow_download (true), and imagePrompt (same English text as optimized_prompt). No markdown, no extra text. Category rule: ${rule} Never embed readable text, watermarks, or logos in the image unless the user explicitly requests text for a logo wordmark.`;
+        return `${JSON_OUTPUT_RULE} You are the DineBuddies AI Design Studio prompt engine (Mode 2). ${interpretBrief} Return exactly one JSON object with keys: status ("success"), category (the design category id), aspect_ratio (e.g. 1:1, 9:16, 16:9), optimized_prompt (highly detailed English Imagen prompt), allow_download (true), and imagePrompt (same English text as optimized_prompt). No markdown, no extra text. Category rule: ${rule} Never embed readable text, watermarks, or logos in the image unless the user explicitly requests text for a logo wordmark.`;
     }
 
     const shape =
-        'Return exactly: {"imagePrompt":"...","styleHints":"..."}. imagePrompt must be English, detailed, photorealistic, no text/watermarks/logos in the image. styleHints is optional.';
+        `Return exactly: {"imagePrompt":"...","styleHints":"..."}. ${interpretBrief} imagePrompt must be English, detailed, photorealistic, no text/watermarks/logos in the image. styleHints is optional.`;
 
     if (accountType === 'business') {
         return `${JSON_OUTPUT_RULE} ${shape} Create a professional promotional cover prompt for Imagen: highlight signature dishes, elegant interior, or brand ambiance using businessName, businessType, tagline, profileDescription, and activeOffers from context. High-end hospitality marketing look.`;
@@ -767,6 +813,7 @@ function buildImagePromptUserContext(input: MultimodalPipelineInput, invitationT
 
     appendContextLine(lines, 'venueType', input.venueType);
     appendContextLine(lines, 'venueName', input.venueName);
+    appendContextLine(lines, 'subType', input.subType);
     appendContextLine(lines, 'aspectRatio', input.aspectRatio || '1:1');
     appendContextLine(lines, 'designCategory', input.designCategory);
     appendContextLine(lines, 'postType', input.postType || 'invitation');
@@ -790,6 +837,7 @@ export async function generateImagePrompt(
     input: MultimodalPipelineInput,
     invitationText?: InvitationContent,
 ): Promise<{ success: true; data: ImagePromptContent } | GenerateContentError> {
+    const outputLanguage = normalizeAiOutputLanguage(input.outputLanguage) as AiOutputLanguage;
     try {
         const rawText = await invokeGeminiJsonModel(
             buildImagePromptUserContext(input, invitationText),
@@ -797,6 +845,7 @@ export async function generateImagePrompt(
                 input.accountType,
                 input.postType,
                 input.designCategory,
+                outputLanguage,
             ),
             2048,
         );
@@ -986,6 +1035,7 @@ export async function runMultimodalPipeline(
     const includeImage =
         input.generationPackage === 'image' || input.generationPackage === 'invitation_bundle';
 
+    const outputLanguage = normalizeAiOutputLanguage(input.outputLanguage) as AiOutputLanguage;
     const output: MultimodalPipelineData = {};
 
     let invitationText: InvitationContent | undefined;
@@ -1000,6 +1050,7 @@ export async function runMultimodalPipeline(
             venueName: input.venueName,
             accountType: input.accountType,
             businessContext: input.businessContext,
+            outputLanguage,
         });
 
         if (!textResult.success) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { loadRankedEliteBusinesses } from '../services/rankingDataLoader';
+import { loadRankedPaidBusinesses } from '../services/rankingDataLoader';
 
 const MAX_LIST = 200;
 
@@ -22,7 +22,7 @@ export function useBusinessRank(profileId) {
         }
         let cancelled = false;
         setLoading(true);
-        loadRankedEliteBusinesses({ limit: MAX_LIST })
+        loadRankedPaidBusinesses({ limit: MAX_LIST })
             .then(list => {
                 if (cancelled) return;
                 setTotalElite(list.length);

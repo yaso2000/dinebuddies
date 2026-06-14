@@ -1,6 +1,12 @@
 import { storage } from '../firebase/config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase/config';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
+import {
+    beginImageUploadSession,
+    finishImageUploadSession,
+    updateImageUploadSession,
+} from './imageUploadProgressStore';
 
 /**
  * Uploads an image file to Firebase Storage and returns the download URL.
@@ -11,24 +17,39 @@ import { v4 as uuidv4 } from 'uuid';
 export const uploadImage = async (file, path = 'uploads') => {
     if (!file) return null;
 
+    beginImageUploadSession('uploading');
     try {
-        // Create a unique filename to prevent overwrites
         const fileExtension = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExtension}`;
         const finalPath = `${path}/${fileName}`;
-
         const storageRef = ref(storage, finalPath);
 
-        // Upload the file
-        const snapshot = await uploadBytes(storageRef, file);
-
-        // Get the download URL
-        const downloadURL = await getDownloadURL(snapshot.ref);
-
-        console.log(`Image uploaded successfully to ${finalPath}`);
-        return downloadURL;
+        return await new Promise((resolve, reject) => {
+            const uploadTask = uploadBytesResumable(storageRef, file);
+            uploadTask.on(
+                'state_changed',
+                (snapshot) => {
+                    const raw = snapshot.totalBytes
+                        ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                        : 0;
+                    updateImageUploadSession(10 + raw * 0.9, 'uploading');
+                },
+                reject,
+                async () => {
+                    try {
+                        updateImageUploadSession(100, 'done');
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        resolve(downloadURL);
+                    } catch (err) {
+                        reject(err);
+                    }
+                }
+            );
+        });
     } catch (error) {
-        console.error("Error uploading image:", error);
+        console.error('Error uploading image:', error);
         throw error;
+    } finally {
+        finishImageUploadSession();
     }
 };

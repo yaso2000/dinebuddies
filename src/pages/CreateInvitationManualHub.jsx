@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaChevronLeft, FaGlobe, FaLock, FaHeart } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { blockPublicInviteFromBusinessVenue } from '../utils/publicInviteVenueGate';
 import '../components/CreateInvitationSelector.css';
 
 /**
@@ -16,25 +17,40 @@ const CreateInvitationManualHub = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { showToast } = useToast();
-    const { isBusiness } = useAuth();
+    const { cannotCreateInvitations } = useAuth();
     const { canCreatePrivateInvitation } = useInvitations();
+    const [publicGateChecking, setPublicGateChecking] = useState(false);
 
     const passthrough =
         location.state && typeof location.state === 'object' ? { ...location.state } : {};
 
     useEffect(() => {
-        if (isBusiness) {
+        if (cannotCreateInvitations) {
             showToast(
-                t('business_cannot_create_invitation', 'Business accounts cannot create or publish invitations.'),
+                t('business_cannot_create_invitation'),
                 'error'
             );
             navigate('/', { replace: true });
         }
-    }, [isBusiness, navigate, showToast, t]);
+    }, [cannotCreateInvitations, navigate, showToast, t]);
 
-    const goCreate = (kind) => {
-        if (isBusiness || !kind) return;
+    const goCreate = async (kind) => {
+        if (cannotCreateInvitations || !kind) return;
         if (kind === 'public') {
+            if (publicGateChecking) return;
+            if (passthrough.restaurantData) {
+                setPublicGateChecking(true);
+                try {
+                    const blocked = await blockPublicInviteFromBusinessVenue({
+                        restaurantData: passthrough.restaurantData,
+                        showToast,
+                        t,
+                    });
+                    if (blocked) return;
+                } finally {
+                    setPublicGateChecking(false);
+                }
+            }
             navigate('/create', { state: passthrough });
             return;
         }
@@ -102,6 +118,8 @@ const CreateInvitationManualHub = () => {
                     onClick={() => goCreate('public')}
                     role="button"
                     tabIndex={0}
+                    aria-busy={publicGateChecking}
+                    style={publicGateChecking ? { opacity: 0.65, pointerEvents: 'none' } : undefined}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
@@ -113,7 +131,11 @@ const CreateInvitationManualHub = () => {
                         <FaGlobe />
                     </div>
                     <div className="option-info">
-                        <h4>{t('invite_create_public_title', 'Public invitation')}</h4>
+                        <h4>
+                            {publicGateChecking
+                                ? t('detecting_location', 'Detecting location…')
+                                : t('invite_create_public_title', 'Public invitation')}
+                        </h4>
                         <p>
                             {t(
                                 'invite_create_public_desc',

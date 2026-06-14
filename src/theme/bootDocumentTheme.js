@@ -5,7 +5,7 @@ export const THEME_STORAGE_KEY = 'theme';
 const BUSINESS_BOOT_PREFIXES = [
     '/business-dashboard',
     '/business/onboarding',
-    '/business/pricing',
+    '/settings/subscription',
     '/signup/business',
     '/business/signup',
     '/business-signup',

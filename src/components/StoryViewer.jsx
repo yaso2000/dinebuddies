@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useTranslation } from 'react-i18next';
-import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane, FaRegCommentDots, FaSmileBeam } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane, FaRegCommentDots } from 'react-icons/fa';
+import StoryCommentStream from './StoryCommentStream';
+import './StoryViewer.css';
+
+const QUICK_EMOJIS = ['🔥', '❤️', '😂', '😮', '👏'];
 
 const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     const { currentUser, userProfile } = useAuth();
@@ -38,9 +42,10 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     // Double-tap heart animation position
     const [heartPos, setHeartPos] = useState(null);
 
-    // Sequential reactions feed (owner-only)
-    const [visibleReactions, setVisibleReactions] = useState([]);
-    const reactionTimersRef = useRef([]);
+    // Live comment stream (owner-only)
+    const [streamItems, setStreamItems] = useState([]);
+    const seenReactionIdsRef = useRef(new Set());
+    const [keyboardLift, setKeyboardLift] = useState(0);
 
     // Input Text State
     const [replyText, setReplyText] = useState('');
@@ -96,39 +101,59 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
         elapsedRef.current = 0;
         setProgress(0);
         setRealTimeStory(null);
-        setVisibleReactions([]);
+        setStreamItems([]);
         setShowCommentsPanel(false);
-        setShowEmojiTray(false);
-        // Clear any pending reaction timers
-        reactionTimersRef.current.forEach(t => clearTimeout(t));
-        reactionTimersRef.current = [];
+        seenReactionIdsRef.current = new Set();
     }, [currentUserGroupIndex, currentStoryIndex]);
 
-    // Effect 3: Sequential reactions feed — fires once per story, oldest → newest
+    // Seed seen reaction ids when story loads (only stream *incoming* after open)
     useEffect(() => {
-        if (!isOwnStory) return;
-        const reactions = currentStory?.reactions;
-        if (!reactions || reactions.length === 0) return;
+        seenReactionIdsRef.current = new Set(
+            (currentStory?.reactions || [])
+                .map((r) => r.id || `${r.userId}_${r.createdAt}`)
+                .filter(Boolean)
+        );
+        setStreamItems([]);
+    }, [currentStory?.id]);
 
-        // Sort by createdAt ascending (oldest first)
-        const sorted = [...reactions].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    // Live comment stream — owner sees new reactions as they arrive
+    useEffect(() => {
+        if (!isOwnStory || !currentStory?.reactions?.length) return;
 
-        const INTERVAL = 1800; // ms between each reaction appearing
-        const timers = [];
+        const newcomers = [];
+        for (const reaction of currentStory.reactions) {
+            const id = reaction.id || `${reaction.userId}_${reaction.createdAt}`;
+            if (!id || seenReactionIdsRef.current.has(id)) continue;
+            seenReactionIdsRef.current.add(id);
+            newcomers.push({ key: id, reaction });
+        }
+        if (newcomers.length) {
+            setStreamItems((prev) => [...prev, ...newcomers]);
+        }
+    }, [currentStory?.reactions, isOwnStory]);
 
-        sorted.forEach((reaction, idx) => {
-            const t = setTimeout(() => {
-                setVisibleReactions(prev => [...prev, reaction]);
-            }, idx * INTERVAL);
-            timers.push(t);
-        });
+    const expireStreamItem = useCallback((key) => {
+        setStreamItems((prev) => prev.filter((item) => item.key !== key));
+    }, []);
 
-        reactionTimersRef.current = timers;
-
-        return () => {
-            timers.forEach(t => clearTimeout(t));
+    // Lift footer above virtual keyboard while typing
+    useEffect(() => {
+        if (!isInputFocused || typeof window === 'undefined' || !window.visualViewport) {
+            setKeyboardLift(0);
+            return undefined;
+        }
+        const vv = window.visualViewport;
+        const update = () => {
+            setKeyboardLift(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
         };
-    }, [currentStory?.id, isOwnStory]);
+        update();
+        vv.addEventListener('resize', update);
+        vv.addEventListener('scroll', update);
+        return () => {
+            vv.removeEventListener('resize', update);
+            vv.removeEventListener('scroll', update);
+        };
+    }, [isInputFocused]);
 
 
     const startTimer = () => {
@@ -299,11 +324,13 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
         const timeSinceLastTap = now - lastTapRef.current;
 
         if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-            // Double-tap detected — cancel pending single-tap nav, just show heart
             clearTimeout(singleTapTimerRef.current);
-            handleLike();
+            const alreadyLiked = currentStory.likes?.includes(currentUser?.uid);
+            if (!alreadyLiked) {
+                handleLike();
+            }
             setHeartPos({ x: e.clientX, y: e.clientY });
-            setTimeout(() => setHeartPos(null), 900);
+            setTimeout(() => setHeartPos(null), 600);
             lastTapRef.current = 0;
             return;
         }
@@ -324,7 +351,17 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
     const [sendingFeedback, setSendingFeedback] = useState(null);
     const [showCommentsPanel, setShowCommentsPanel] = useState(false);
-    const [showEmojiTray, setShowEmojiTray] = useState(false);
+
+    const handleQuickEmoji = (emoji, e) => {
+        e?.stopPropagation?.();
+        e?.preventDefault?.();
+        if (isOwnStory) return;
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+        setIsInputFocused(false);
+        handleSendReply(emoji);
+    };
 
     const handleSendReply = async (content = null) => {
         const textToSend = content || replyText;
@@ -547,71 +584,9 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                     </div>
                                 )}
 
-                                {/* 4. Sequential Reactions Feed — owner view, bottom-left stack */}
-                                {groupIndex === currentUserGroupIndex && isOwnStory && visibleReactions.length > 0 && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '64px',
-                                        left: '12px',
-                                        right: '12px',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '8px',
-                                        pointerEvents: 'none',
-                                        zIndex: 15,
-                                        maxHeight: '45%',
-                                        overflow: 'hidden',
-                                        justifyContent: 'flex-end',
-                                    }}>
-                                        {visibleReactions.slice(-6).map((reaction, idx) => {
-                                            // Pick a random bubble animation variant per reaction
-                                            const bubbleVariants = ['bubbleRise1', 'bubbleRise2', 'bubbleRise3'];
-                                            const variant = bubbleVariants[(reaction.id?.charCodeAt(0) || idx) % 3];
-                                            const duration = 0.8 + ((reaction.id?.charCodeAt(1) || idx * 3) % 4) * 0.1; // 0.8–1.1s
-                                            return (
-                                                <div
-                                                    key={reaction.id}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        animation: `${variant} ${duration}s cubic-bezier(0.22, 1, 0.36, 1) forwards`,
-                                                        opacity: 0,
-                                                        animationFillMode: 'forwards',
-                                                    }}
-                                                >
-                                                    {/* Avatar */}
-                                                    <div style={{
-                                                        width: '28px', height: '28px', borderRadius: '50%',
-                                                        background: '#555', overflow: 'hidden', flexShrink: 0,
-                                                        border: '1.5px solid rgba(255,255,255,0.4)'
-                                                    }}>
-                                                        {reaction.userPhoto ? (
-                                                            <img src={reaction.userPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                        ) : null}
-                                                    </div>
-                                                    {/* Bubble */}
-                                                    <div style={{
-                                                        background: 'rgba(0,0,0,0.55)',
-                                                        backdropFilter: 'blur(8px)',
-                                                        borderRadius: '18px',
-                                                        padding: '5px 12px',
-                                                        maxWidth: '75%',
-                                                    }}>
-                                                        <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', fontWeight: '600', marginRight: '5px' }}>
-                                                            {reaction.userName}
-                                                        </span>
-                                                        <span style={{ color: 'white', fontSize: reaction.type === 'emoji' ? '1.2rem' : '0.85rem' }}>
-                                                            {reaction.content}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                {groupIndex === currentUserGroupIndex && isOwnStory && (
+                                    <StoryCommentStream items={streamItems} onExpire={expireStreamItem} />
                                 )}
-
-
 
 
                                 {/* 3. Stacked Interactors Overview — only for active group owner */}
@@ -695,7 +670,6 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setShowCommentsPanel((prev) => !prev);
-                                                setShowEmojiTray(false);
                                             }}
                                             style={{
                                                 width: '42px',
@@ -719,68 +693,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                             {t('comments_label', 'Comments')}
                                         </span>
 
-                                        {!isOwnStory && (
-                                            <>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setShowEmojiTray((prev) => !prev);
-                                                        setShowCommentsPanel(false);
-                                                    }}
-                                                    style={{
-                                                        width: '42px',
-                                                        height: '42px',
-                                                        borderRadius: '50%',
-                                                        border: 'none',
-                                                        background: 'rgba(0,0,0,0.45)',
-                                                        color: 'white',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    <FaSmileBeam size={20} />
-                                                </button>
-                                                <span style={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.67rem', fontWeight: 600 }}>
-                                                    {t('emoji_label', 'Emoji')}
-                                                </span>
-                                            </>
-                                        )}
                                     </div>
-
-                                    {!isOwnStory && showEmojiTray && (
-                                        <div
-                                            onClick={(e) => e.stopPropagation()}
-                                            style={{
-                                                position: 'absolute',
-                                                right: '64px',
-                                                bottom: '146px',
-                                                zIndex: 34,
-                                                display: 'flex',
-                                                gap: '8px',
-                                                background: 'rgba(0,0,0,0.62)',
-                                                border: '1px solid rgba(255,255,255,0.14)',
-                                                borderRadius: '16px',
-                                                padding: '8px 10px',
-                                                backdropFilter: 'blur(10px)'
-                                            }}
-                                        >
-                                            {['😍', '🥰', '😂', '🔥'].map((emoji) => (
-                                                <button
-                                                    key={emoji}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleSendReply(emoji);
-                                                        setShowEmojiTray(false);
-                                                    }}
-                                                    style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer', padding: 0 }}
-                                                >
-                                                    {emoji}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
 
                                     {showCommentsPanel && (
                                         <div
@@ -839,84 +752,54 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                                     )}
 
                                     {!isOwnStory ? (
-                                        <div style={{
-                                            padding: '14px 12px 20px',
-                                            background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            zIndex: 30
-                                        }}>
-                                            <div style={{
-                                                position: 'absolute',
-                                                left: '14px',
-                                                bottom: '68px',
-                                                color: 'rgba(255,255,255,0.78)',
-                                                fontSize: '0.72rem',
-                                                zIndex: 31,
-                                                pointerEvents: 'none'
-                                            }}>
+                                        <div
+                                            className={`story-footer${isInputFocused ? ' story-footer--keyboard' : ''}`}
+                                            style={keyboardLift > 0 ? { transform: `translateY(-${keyboardLift}px)` } : undefined}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <span className="story-footer__hint">
                                                 {t('story_interaction_hint_private', 'Your reply is private between you and the story owner')}
+                                            </span>
+                                            <div className="story-footer__quick-emojis" role="toolbar" aria-label={t('quick_emojis', 'Quick reactions')}>
+                                                {QUICK_EMOJIS.map((emoji) => (
+                                                    <button
+                                                        key={emoji}
+                                                        type="button"
+                                                        className="story-footer__quick-emoji"
+                                                        onMouseDown={(e) => e.preventDefault()}
+                                                        onClick={(e) => handleQuickEmoji(emoji, e)}
+                                                        aria-label={emoji}
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
                                             </div>
-                                            <div
-                                                style={{
-                                                    flex: 1,
-                                                    position: 'relative',
-                                                    height: '42px',
-                                                    borderRadius: '20px',
-                                                    border: '1px solid rgba(255,255,255,0.28)',
-                                                    background: 'rgba(0,0,0,0.38)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    padding: '0 46px 0 14px'
-                                                }}
-                                                onClick={e => e.stopPropagation()}
-                                            >
+                                            <div className="story-footer__input-wrap">
                                                 <input
-                                                    className="story-reply-input"
+                                                    className="story-footer__input"
                                                     type="text"
+                                                    inputMode="text"
                                                     placeholder={t('private_reply_placeholder', 'Send a private reply...')}
                                                     value={replyText}
                                                     onChange={(e) => setReplyText(e.target.value)}
                                                     onFocus={() => { setIsInputFocused(true); setIsPaused(true); }}
                                                     onBlur={() => { if (!sendingFeedback) { setIsInputFocused(false); setIsPaused(false); } }}
                                                     onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleSendReply(); } }}
-                                                    style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', fontSize: '0.9rem', outline: 'none' }}
                                                 />
-                                                {replyText.trim() && (
+                                                {replyText.trim() ? (
                                                     <button
+                                                        type="button"
+                                                        className="story-footer__send"
                                                         onClick={(e) => { e.stopPropagation(); handleSendReply(); }}
-                                                        style={{
-                                                            position: 'absolute',
-                                                            right: '4px',
-                                                            top: '50%',
-                                                            transform: 'translateY(-50%)',
-                                                            background: '#3b82f6',
-                                                            border: 'none',
-                                                            borderRadius: '50%',
-                                                            width: '34px',
-                                                            height: '34px',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            color: 'white',
-                                                            cursor: 'pointer'
-                                                        }}
+                                                        aria-label={t('send', 'Send')}
                                                     >
                                                         <FaPaperPlane size={13} style={{ transform: 'translateX(-1px) translateY(1px)' }} />
                                                     </button>
-                                                )}
+                                                ) : null}
                                             </div>
                                         </div>
                                     ) : (
-                                        <div style={{
-                                            padding: '14px 12px 20px',
-                                            background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
-                                            color: 'rgba(255,255,255,0.78)',
-                                            fontSize: '0.8rem',
-                                            textAlign: 'center',
-                                            zIndex: 30
-                                        }}>
+                                        <div className="story-owner-footer-note">
                                             {t('story_owner_hint', 'This is your story. Open comments to see audience reactions.')}
                                         </div>
                                     )}
@@ -929,75 +812,19 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
             {/* Feedback Animation Layer */}
             {sendingFeedback && (
-                <div style={{
-                    position: 'absolute', inset: 0, zIndex: 100,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    pointerEvents: 'none'
-                }}>
-                    <div style={{
-                        fontSize: '4rem',
-                        animation: 'floatUpFade 1.5s ease-out forwards',
-                        textShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                    }}>
-                        {sendingFeedback.emoji}
-                    </div>
+                <div className="story-feedback-burst">
+                    <div className="story-feedback-burst__emoji">{sendingFeedback.emoji}</div>
                 </div>
             )}
 
-            {/* Double-tap Heart Burst at tap position */}
             {heartPos && (
-                <div style={{
-                    position: 'fixed',
-                    left: heartPos.x,
-                    top: heartPos.y,
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 200,
-                    pointerEvents: 'none',
-                    fontSize: '5rem',
-                    animation: 'heartBurst 0.9s ease-out forwards',
-                    filter: 'drop-shadow(0 0 12px rgba(239,68,68,0.8))'
-                }}>
+                <div
+                    className="story-double-tap-heart"
+                    style={{ left: heartPos.x, top: heartPos.y }}
+                >
                     ❤️
                 </div>
             )}
-
-            <style>{`
-                @keyframes floatUpFade {
-                    0% { transform: translateY(20px) scale(0.5); opacity: 0; }
-                    20% { transform: translateY(0) scale(1.2); opacity: 1; }
-                    80% { transform: translateY(-50px) scale(1); opacity: 1; }
-                    100% { transform: translateY(-100px) scale(0.8); opacity: 0; }
-                }
-                @keyframes heartBurst {
-                    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
-                    40%  { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
-                    70%  { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
-                    100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; }
-                }
-                .story-reply-input::placeholder { color: rgba(255,255,255,0.5); }
-                @keyframes bubbleRise1 {
-                    0%   { opacity: 0; transform: translateY(40px) translateX(0px) scale(0.85); }
-                    20%  { opacity: 1; transform: translateY(28px) translateX(-6px) scale(1.02); }
-                    45%  { transform: translateY(12px) translateX(5px) scale(1); }
-                    70%  { transform: translateY(-5px) translateX(-3px) scale(1.01); }
-                    100% { opacity: 1; transform: translateY(0) translateX(0) scale(1); }
-                }
-                @keyframes bubbleRise2 {
-                    0%   { opacity: 0; transform: translateY(40px) translateX(0px) scale(0.85); }
-                    20%  { opacity: 1; transform: translateY(28px) translateX(7px) scale(1.02); }
-                    45%  { transform: translateY(12px) translateX(-4px) scale(1); }
-                    70%  { transform: translateY(-4px) translateX(4px) scale(1.01); }
-                    100% { opacity: 1; transform: translateY(0) translateX(0) scale(1); }
-                }
-                @keyframes bubbleRise3 {
-                    0%   { opacity: 0; transform: translateY(40px) translateX(0px) scale(0.8); }
-                    15%  { opacity: 1; transform: translateY(30px) translateX(-9px) scale(1.03); }
-                    40%  { transform: translateY(14px) translateX(7px) scale(0.98); }
-                    65%  { transform: translateY(-6px) translateX(-4px) scale(1.02); }
-                    85%  { transform: translateY(2px) translateX(2px) scale(1); }
-                    100% { opacity: 1; transform: translateY(0) translateX(0) scale(1); }
-                }
-            `}</style>
         </div>,
         document.body
     );

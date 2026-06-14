@@ -1,100 +1,115 @@
-import { buildCardStructurePromptBlock, normalizeCardStructure } from './cardStructure.js';
-
-/**
- * System instruction for 1-on-1 romantic dating invitation copy (subType: date, accountType: user).
- * Output remains JSON { title, description } for the app pipeline.
- */
-export function buildDatingInvitationSystemInstruction(cardStructure = 'modern_minimal') {
-    const structureBlock = buildCardStructurePromptBlock(normalizeCardStructure(cardStructure));
-
-    return [
-        'Respond with one valid JSON object only: {"title":"...","description":"..."}. No markdown, no extra keys.',
-        'You are an expert copywriter inside DineBuddies generating a personalized, modern, one-to-one romantic dining invitation from one user to another.',
-        'The description must feel individually written, emotionally intelligent, and free of generic or automated phrasing.',
-        '',
-        'Use ONLY facts present in the user message context (sender, recipient, shared interests, shared food, date, time, venue). Never invent names, cuisines, venues, or traits.',
-        '',
-        'Tone: calm, emotionally mature, slightly affectionate, socially attractive. Respectful, warm, naturally romantic.',
-        'Confident and genuine with ZERO pressure or entitlement. Create emotional safety and gentle intrigue for a first date.',
-        'Smoothly pivot from the platform social/dining vibe into a private, comfortable 1-on-1 date.',
-        '',
-        'Language: Arabic (warm Modern Standard / spoken-standard fusion). Match inviteeGender for correct Arabic pronouns and agreement.',
-        '',
-        'title: one short romantic headline for the card (few words, not the full message).',
-        'description: the invitation message — 3 to 4 sentences, 50–80 Arabic words max.',
-        '  • Greeting: start naturally with recipient first name only (e.g. "مرحباً [الاسم]،" or "أهلاً [الاسم]،").',
-        '  • Culinary/profile hook: weave shared food preferences or profile cues subtly — never "I saw on your profile that…".',
-        '  • 1-on-1 pivot: gently establish this is a private invitation for just the two of them; intimate but relaxed.',
-        '  • Optionally reference date/time/venue from context when natural.',
-        '',
-        'Strict restrictions:',
-        '  • NO collective language (everyone, people, group, gathering, crowd).',
-        '  • NO love-bombing, intense romance, generic flattery, or appearance comments.',
-        '  • NO copy-paste vibe — message must not work unchanged for another recipient.',
-        '  • NO pressure, manipulation, desperation, or entitlement.',
-        '',
-        'Both title and description are REQUIRED. Do not invent venue addresses.',
-        structureBlock,
-    ].join('\n');
-}
-
-/**
- * @param {import('../services/GeminiService.js').DatingInvitationContext | undefined} dating
- * @returns {string[]}
- */
-export function buildDatingInvitationContextLines(dating) {
-    if (!dating) return [];
-
-    /** @type {string[]} */
-    const lines = ['--- Dating personalization context ---'];
-
-    const push = (label, value) => {
-        const s = value == null ? '' : String(value).trim();
-        if (s) lines.push(`${label}: ${s}`);
-    };
-
-    push('senderFirstName', dating.senderFirstName);
-    push('senderGender', dating.senderGender);
-    push('senderAgeGroup', dating.senderAgeGroup);
-    push('senderPersonalityVibe', dating.senderPersonalityVibe);
-    push('recipientFirstName', dating.inviteeName);
-    push('recipientGender', dating.inviteeGender);
-    push('recipientAgeGroup', dating.inviteeAgeGroup);
-    push('recipientPersonalityVibe', dating.inviteePersonalityVibe);
-    push('ageGap', dating.ageGap);
-
-    if (dating.sharedInterests?.length) {
-        lines.push(`sharedInterests: ${dating.sharedInterests.join(', ')}`);
-    }
-    if (dating.sharedFoodPreferences?.length) {
-        lines.push(`sharedFoodPreferences: ${dating.sharedFoodPreferences.join(', ')}`);
-    } else if (dating.inviteeFavoriteFoods?.length) {
-        lines.push(`recipientFavoriteFoods: ${dating.inviteeFavoriteFoods.join(', ')}`);
-    }
-    if (dating.senderFavoriteFoods?.length) {
-        lines.push(`senderFavoriteFoods: ${dating.senderFavoriteFoods.join(', ')}`);
-    }
-
-    push('date', dating.date);
-    push('time', dating.time);
-
-    const vd = dating.venueDetails;
-    if (vd) {
-        push('venueName', vd.name);
-        push('venueAddress', vd.address);
-        push('venueCity', vd.city);
-        push('venueCountry', vd.country);
-    } else {
-        push('venueName', dating.venueName);
-    }
-
-    if (dating.sharedCommunities?.length) {
-        lines.push('sharedCommunities:');
-        for (const c of dating.sharedCommunities) {
-            lines.push(`- ${c.name} (${c.type})`);
-        }
-    }
-
-    lines.push('--- End context ---');
-    return lines;
-}
+import { buildCardStructurePromptBlock, normalizeCardStructure } from './cardStructure.js';
+import {
+    getAiDatingGreetingExample,
+    getAiOutputLanguageLabel,
+    normalizeAiOutputLanguage,
+} from './aiOutputLanguage.js';
+
+/**
+ * System instruction for 1-on-1 romantic dating invitation copy (subType: date, accountType: user).
+ * Output remains JSON { title, description } for the app pipeline.
+ * @param {import('../services/GeminiService.js').CardStructure | string} [cardStructure]
+ * @param {string} [outputLanguage]
+ */
+export function buildDatingInvitationSystemInstruction(cardStructure = 'modern_minimal', outputLanguage = 'en') {
+    const structureBlock = buildCardStructurePromptBlock(normalizeCardStructure(cardStructure));
+    const langCode = normalizeAiOutputLanguage(outputLanguage);
+    const langLabel = getAiOutputLanguageLabel(langCode);
+    const greetingExample = getAiDatingGreetingExample(langCode);
+
+    const languageLine =
+        langCode === 'ar'
+            ? 'Language: Arabic (warm Modern Standard / spoken-standard fusion). Match inviteeGender for correct Arabic pronouns and agreement.'
+            : `Language: ${langLabel}. Match inviteeGender for correct pronouns when relevant.`;
+
+    return [
+        'Respond with one valid JSON object only: {"title":"...","description":"..."}. No markdown, no extra keys.',
+        'You are an expert copywriter inside DineBuddies generating a personalized, modern, one-to-one romantic dining invitation from one user to another.',
+        'The description must feel individually written, emotionally intelligent, and free of generic or automated phrasing.',
+        '',
+        'Use ONLY facts present in the user message context (sender, recipient, shared interests, shared food, date, time, venue). Never invent names, cuisines, venues, or traits.',
+        '',
+        'Tone: calm, emotionally mature, slightly affectionate, socially attractive. Respectful, warm, naturally romantic.',
+        'Confident and genuine with ZERO pressure or entitlement. Create emotional safety and gentle intrigue for a first date.',
+        'Smoothly pivot from the platform social/dining vibe into a private, comfortable 1-on-1 date.',
+        '',
+        languageLine,
+        '',
+        'title: one short romantic headline for the card (few words, not the full message).',
+        `description: the invitation message — 3 to 4 sentences, 50–80 words max in ${langLabel}.`,
+        `  • Greeting: start naturally with recipient first name only (e.g. "${greetingExample}").`,
+        '  • Culinary/profile hook: weave shared food preferences or profile cues subtly — never "I saw on your profile that…".',
+        '  • 1-on-1 pivot: gently establish this is a private invitation for just the two of them; intimate but relaxed.',
+        '  • Optionally reference date/time/venue from context when natural.',
+        '',
+        'Strict restrictions:',
+        '  • NO collective language (everyone, people, group, gathering, crowd).',
+        '  • NO love-bombing, intense romance, generic flattery, or appearance comments.',
+        '  • NO copy-paste vibe — message must not work unchanged for another recipient.',
+        '  • NO pressure, manipulation, desperation, or entitlement.',
+        '',
+        'Both title and description are REQUIRED. Do not invent venue addresses.',
+        structureBlock,
+    ].join('\n');
+}
+
+/**
+ * @param {import('../services/GeminiService.js').DatingInvitationContext | undefined} dating
+ * @returns {string[]}
+ */
+export function buildDatingInvitationContextLines(dating) {
+    if (!dating) return [];
+
+    /** @type {string[]} */
+    const lines = ['--- Dating personalization context ---'];
+
+    const push = (label, value) => {
+        const s = value == null ? '' : String(value).trim();
+        if (s) lines.push(`${label}: ${s}`);
+    };
+
+    push('senderFirstName', dating.senderFirstName);
+    push('senderGender', dating.senderGender);
+    push('senderAgeGroup', dating.senderAgeGroup);
+    push('senderPersonalityVibe', dating.senderPersonalityVibe);
+    push('recipientFirstName', dating.inviteeName);
+    push('recipientGender', dating.inviteeGender);
+    push('recipientAgeGroup', dating.inviteeAgeGroup);
+    push('recipientPersonalityVibe', dating.inviteePersonalityVibe);
+    push('ageGap', dating.ageGap);
+
+    if (dating.sharedInterests?.length) {
+        lines.push(`sharedInterests: ${dating.sharedInterests.join(', ')}`);
+    }
+    if (dating.sharedFoodPreferences?.length) {
+        lines.push(`sharedFoodPreferences: ${dating.sharedFoodPreferences.join(', ')}`);
+    } else if (dating.inviteeFavoriteFoods?.length) {
+        lines.push(`recipientFavoriteFoods: ${dating.inviteeFavoriteFoods.join(', ')}`);
+    }
+    if (dating.senderFavoriteFoods?.length) {
+        lines.push(`senderFavoriteFoods: ${dating.senderFavoriteFoods.join(', ')}`);
+    }
+
+    push('date', dating.date);
+    push('time', dating.time);
+
+    const vd = dating.venueDetails;
+    if (vd) {
+        push('venueName', vd.name);
+        push('venueAddress', vd.address);
+        push('venueCity', vd.city);
+        push('venueCountry', vd.country);
+    } else {
+        push('venueName', dating.venueName);
+    }
+
+    if (dating.sharedCommunities?.length) {
+        lines.push('sharedCommunities:');
+        for (const c of dating.sharedCommunities) {
+            lines.push(`- ${c.name} (${c.type})`);
+        }
+    }
+
+    lines.push('--- End context ---');
+    return lines;
+}

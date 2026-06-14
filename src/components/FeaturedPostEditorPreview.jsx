@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getBackgroundStyle } from './FeaturedPostSlideCard';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 
@@ -66,11 +67,14 @@ export default function FeaturedPostEditorPreview({
     onFocusField,
     onTextFocus,
     onTextBlur,
-    titlePlaceholder = 'اكتب العنوان هنا',
-    descPlaceholder = 'اكتب الوصف هنا (اختياري)',
+    titlePlaceholder,
+    descPlaceholder,
     /** Extra vertical padding for top camera + bottom gradient rails */
     withOverlayChrome = false,
 }) {
+    const { t } = useTranslation();
+    const resolvedTitlePlaceholder = titlePlaceholder || t('featured_editor_title_placeholder');
+    const resolvedDescPlaceholder = descPlaceholder || t('featured_editor_desc_placeholder');
     const bgStyle = getBackgroundStyle(background);
 
     const titleCss = {
@@ -117,7 +121,7 @@ export default function FeaturedPostEditorPreview({
                     tag="h2"
                     className="fp-editor-preview__title"
                     value={title}
-                    placeholder={titlePlaceholder}
+                    placeholder={resolvedTitlePlaceholder}
                     style={titleCss}
                     maxLength={120}
                     onChange={onTitleChange}
@@ -132,7 +136,7 @@ export default function FeaturedPostEditorPreview({
                     tag="p"
                     className="fp-editor-preview__desc"
                     value={description}
-                    placeholder={descPlaceholder}
+                    placeholder={resolvedDescPlaceholder}
                     style={descCss}
                     maxLength={400}
                     onChange={onDescriptionChange}

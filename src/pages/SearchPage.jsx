@@ -54,7 +54,7 @@ export default function SearchPage() {
                 if (id !== requestId.current) return;
                 setBusinesses([]);
                 setUsers([]);
-                setError(t('search_error', { defaultValue: 'تعذّر البحث. حاول مرة أخرى.' }));
+                setError(t('search_error', {  /* defaultValue removed */ }));
             } finally {
                 if (id === requestId.current) setLoading(false);
             }
@@ -90,7 +90,7 @@ export default function SearchPage() {
                         enterKeyHint="search"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder={t('search_placeholder', 'ابحث عن محل أو مستخدم…')}
+                        placeholder={t('search_placeholder')}
                         autoComplete="off"
                         autoCorrect="off"
                         spellCheck={false}
@@ -125,12 +125,12 @@ export default function SearchPage() {
             <main className="search-main">
                 {term.length < MIN_CHARS && (
                     <p className="search-message search-message--muted">
-                        {t('search_prompt', 'اكتب حرفين على الأقل')}
+                        {t('search_prompt')}
                     </p>
                 )}
 
                 {term.length >= MIN_CHARS && loading && (
-                    <p className="search-message">{t('searching', 'جاري البحث…')}</p>
+                    <p className="search-message">{t('searching')}</p>
                 )}
 
                 {term.length >= MIN_CHARS && !loading && error && (
@@ -138,13 +138,13 @@ export default function SearchPage() {
                 )}
 
                 {term.length >= MIN_CHARS && !loading && !error && !hasResults && (
-                    <p className="search-message">{t('no_results', 'لا توجد نتائج')}</p>
+                    <p className="search-message">{t('no_results')}</p>
                 )}
 
                 {!loading && !error && visibleBiz.length > 0 && (
                     <section className="search-section">
                         <h2>
-                            {t('search_cat_businesses', 'أعمال')} <span>{visibleBiz.length}</span>
+                            {t('search_cat_businesses')} <span>{visibleBiz.length}</span>
                         </h2>
                         {visibleBiz.map((item) => (
                             <button
@@ -171,7 +171,7 @@ export default function SearchPage() {
                 {!loading && !error && visibleUsers.length > 0 && (
                     <section className="search-section">
                         <h2>
-                            {t('search_cat_users', 'مستخدمين')} <span>{visibleUsers.length}</span>
+                            {t('search_cat_users')} <span>{visibleUsers.length}</span>
                         </h2>
                         {visibleUsers.map((item) => (
                             <button

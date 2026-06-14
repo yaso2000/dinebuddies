@@ -125,7 +125,14 @@ export default function StudioTextBlock({
     };
 
     if (readOnly) {
-        if (!value?.trim()) return null;
+        if (!value?.trim()) {
+            if (!placeholder) return null;
+            return (
+                <Tag className={`${className} is-empty`} style={{ ...baseStyle, opacity: 0.42 }}>
+                    {placeholder}
+                </Tag>
+            );
+        }
         if (!isRainbow) {
             return (
                 <Tag className={className} style={baseStyle}>

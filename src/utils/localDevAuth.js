@@ -5,6 +5,20 @@ export function isLocalDevHost() {
     return host === 'localhost' || host === '127.0.0.1';
 }
 
+/** Firebase Auth allows localhost/127.0.0.1 by default — not LAN IPs like 192.168.x.x */
+export function isFirebaseAuthorizedDevHost() {
+    if (typeof window === 'undefined') return true;
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1';
+}
+
+/** Login URL that works with Firebase OAuth on the current dev port. */
+export function getLocalDevOAuthLoginUrl() {
+    if (typeof window === 'undefined') return 'http://localhost:5176/login';
+    const port = window.location.port || '5176';
+    return `http://localhost:${port}/login`;
+}
+
 /**
  * Cursor Simple Browser / Glass preview, VS Code webview, etc.
  * Popups may be blocked; fallback to redirect when needed.

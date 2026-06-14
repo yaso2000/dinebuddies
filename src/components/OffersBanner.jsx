@@ -2,7 +2,7 @@
  * OffersBanner.jsx
  * Cinematic offers slideshow — 7s per card (1s in / 5s hold / 1s out)
  * Beautiful inter-slide transitions cycling through 4 effects.
- * Loops infinitely. Expired offers (professional plan) are auto-filtered.
+ * Loops infinitely. Legacy time-limited offers are auto-filtered when expired.
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -41,9 +41,9 @@ const OffersBanner = ({ onHasOffers } = {}) => {
             const active = snap.docs
                 .map(d => ({ id: d.id, ...d.data() }))
                 .filter(offer => {
-                    // Elite offers are perpetual (expiresAt === null)
+                    // Paid offers are perpetual (expiresAt === null)
                     if (!offer.expiresAt) return true;
-                    // Professional offers expire after 50h
+                    // Legacy timed offers
                     const expiry = offer.expiresAt?.toDate?.() || new Date(offer.expiresAt);
                     return expiry.getTime() > now;
                 });

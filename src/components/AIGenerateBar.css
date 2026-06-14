@@ -160,6 +160,22 @@
     opacity: 0.65;
 }
 
+.ai-generate-bar__prompt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem 0.75rem;
+    margin: 0.35rem 0 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.ai-generate-bar__prompt-meta-hint {
+    flex: 1 1 12rem;
+    line-height: 1.35;
+}
+
 .ai-generate-bar__btn {
     display: inline-flex;
     align-items: center;

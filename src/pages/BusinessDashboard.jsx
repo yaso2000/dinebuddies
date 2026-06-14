@@ -10,6 +10,7 @@ import CommunityManagement from '../components/CommunityManagement';
 import BusinessMemberNotificationsPanel from '../components/business/BusinessMemberNotificationsPanel';
 import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -162,6 +163,11 @@ const BusinessDashboard = () => {
             return;
         }
 
+        if (!tierAccess.canAccessDashboard) {
+            setLoading(false);
+            return;
+        }
+
         fetchDashboardData();
     }, [currentUser, userProfile, authLoading, navigate, isBusiness]);
 
@@ -204,6 +210,17 @@ const BusinessDashboard = () => {
             return <Navigate to="/business/login" replace />;
         }
         return <Navigate to="/posts-feed" replace />;
+    }
+
+    if (!tierAccess.canAccessDashboard) {
+        return (
+            <BusinessPaidFeatureGate
+                titleKey="biz_plan_dashboard_paid_only"
+                titleDefault="Business dashboard requires Paid Business"
+                hintKey="biz_plan_dashboard_paid_hint"
+                hintDefault="Upgrade to access your dashboard, stats, and business tools."
+            />
+        );
     }
 
 

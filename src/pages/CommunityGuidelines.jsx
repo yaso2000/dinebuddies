@@ -8,7 +8,7 @@ const listStyle = (isAr) => ({ paddingLeft: isAr ? '0' : '1.5rem', paddingRight:
 const CommunityGuidelines = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const isAr = i18n.language === 'ar';
+    const isAr = i18n.language?.startsWith('ar');
 
     return (
         <div

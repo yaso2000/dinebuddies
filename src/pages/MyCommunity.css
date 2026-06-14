@@ -1,32 +1,20 @@
-/* My Community page: responsive on desktop (same layout as mobile, centered) */
+/* Business dashboard (My Community): fixed header + inner scroll on mobile */
 
 .my-community-page {
-    padding-bottom: 100px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding: 0 !important;
+    overflow: hidden;
+    touch-action: pan-y;
 }
 
 .my-community-inner {
     width: 100%;
     max-width: 100%;
     margin: 0 auto;
-}
-
-@media (min-width: 768px) {
-    .my-community-page {
-        padding-bottom: 2rem;
-    }
-    .my-community-inner {
-        max-width: 100%;
-        margin-left: auto;
-        margin-right: auto;
-        padding: 0 24px;
-    }
-}
-
-@media (min-width: 1024px) {
-    .my-community-inner {
-        max-width: 100%;
-        padding: 0 32px;
-    }
+    padding: 0 12px;
+    box-sizing: border-box;
 }
 
 .my-community-subheader {
@@ -34,34 +22,77 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    position: sticky;
-    top: 0;
+    flex-shrink: 0;
     z-index: 10;
-    margin: 0 0 0.5rem;
-    padding: 0.25rem 0;
+    margin: 0;
+    padding: 0.35rem 12px;
+    position: relative;
+    top: auto;
 }
 
-.my-community-header {
+.my-community-subheader__title {
+    flex: 1;
+    text-align: center;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.my-community-subheader__title h3 {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.my-community-subheader__icon {
+    color: var(--primary);
+    font-size: 0.95rem;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+
+.my-community-subheader__spacer {
+    width: 40px;
+    flex-shrink: 0;
+}
+
+.my-community-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
 .my-community-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    padding: 1.5rem 0;
+    padding: 1rem 0 1.25rem;
 }
 
 .my-community-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     padding: 0 0 1rem;
 }
 
+.my-community-actions .my-community-btn {
+    flex: 1 1 calc(33.333% - 7px);
+    min-width: calc(50% - 5px);
+}
+
 .my-community-section {
-    padding: 0;
+    padding: 0 0 1rem;
 }
 
 .my-community-section h3 {
@@ -79,7 +110,6 @@
 }
 
 .my-community-stat-card {
-    /* ui-card provides base surface */
     text-align: center;
 }
 
@@ -137,10 +167,63 @@
 }
 
 @media (min-width: 768px) {
+    .my-community-page {
+        padding-bottom: 2rem !important;
+        overflow: visible;
+        display: block;
+    }
+
+    .my-community-scroll {
+        overflow: visible;
+        padding-bottom: 0;
+    }
+
+    .my-community-inner {
+        max-width: 100%;
+        padding: 0 24px;
+    }
+
+    .my-community-subheader {
+        padding: 0.25rem 24px;
+    }
+
     .my-community-stats {
         padding: 1.75rem 0;
     }
+
     .my-community-stat-card h4 {
         font-size: 1.75rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .my-community-inner {
+        padding: 0 32px;
+    }
+
+    .my-community-subheader {
+        padding-inline: 32px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .my-community-page {
+        height: 100%;
+        max-height: 100%;
+        overscroll-behavior-y: contain;
+    }
+
+    .app-main--dashboard {
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    .app-main--dashboard > .my-community-page {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
     }
 }

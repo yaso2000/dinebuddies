@@ -2,6 +2,10 @@
  * Build and validate POST /api/ai/generate payloads for dating (subType: date) invitations.
  */
 import {
+    AI_USER_PROMPT_MAX_CHARS,
+    getAiUserPromptDefaultEn,
+} from '../constants/aiPromptLimits.js';
+import {
     normalizeCardStructure,
     resolveCardStructureFromBackgroundId,
 } from './cardStructure.js';
@@ -166,7 +170,6 @@ export function validateDatingAiContext(context) {
 
     /** @type {string[]} */
     const missing = [];
-    if (!inviteeId) missing.push('inviteeId');
     if (!date) missing.push('date');
     if (!time) missing.push('time');
     if (!venueDetails) missing.push('venueDetails');
@@ -220,10 +223,9 @@ export function mergeDatingAiContext(base, overrides = {}) {
  * @param {DatingAiContext | null | undefined} context
  */
 export function buildDatingAiGenerateBody(userPrompt, context) {
-    const trimmedPrompt = pickDatingString(userPrompt);
-    if (!trimmedPrompt) {
-        return { ok: false, code: 'VALIDATION_ERROR', error: 'userPrompt is required' };
-    }
+    const trimmedPrompt =
+        pickDatingString(userPrompt).slice(0, AI_USER_PROMPT_MAX_CHARS) ||
+        getAiUserPromptDefaultEn('invitation', 'date');
 
     const validated = validateDatingAiContext(context);
     if (!validated.ok) {

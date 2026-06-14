@@ -42,10 +42,11 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
                     type: info.businessType,
                     location: `${info.address || ''} ${info.city || ''}`.trim(),
                     image: info.coverImage,
-                    lat: info.coordinates?.lat,
-                    lng: info.coordinates?.lng
-                }
-            }
+                    lat: info.coordinates?.lat ?? info.lat,
+                    lng: info.coordinates?.lng ?? info.lng,
+                    countryCode: info.countryCode,
+                },
+            },
         });
     };
 
@@ -124,7 +125,8 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
                 position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
-                height: '100%',
+                width: '100%',
+                aspectRatio: '4 / 6',
                 boxShadow: 'var(--brand-primary)' || (accent ? `0 4px 20px ${accent}22` : '0 4px 20px rgba(0,0,0,0.05)')
             }}
             onMouseEnter={(e) => {
@@ -232,7 +234,8 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
             {/* Image Section */}
             <div style={{
                 position: 'relative',
-                height: '200px',
+                flex: '1 1 42%',
+                minHeight: 0,
                 overflow: 'hidden',
                 background: 'var(--bg-body)'
             }}>
@@ -252,11 +255,13 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
 
             {/* Details Section */}
             <div style={{
-                padding: '1.25rem',
+                padding: '1rem 1.25rem',
                 display: 'flex',
                 flexDirection: 'column',
-                flex: 1,
-                gap: '12px'
+                flex: '1 1 58%',
+                minHeight: 0,
+                gap: '10px',
+                overflow: 'hidden'
             }}>
                 {/* Title & Type Header */}
                 <div style={{ marginBottom: '2px' }}>

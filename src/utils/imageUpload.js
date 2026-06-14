@@ -3,6 +3,11 @@ import { storage } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
 import { uploadManagedImage } from '../services/managedImageUpload';
 import { ImageUploadZone } from '../services/imageUploadZones';
+import {
+    beginImageUploadSession,
+    finishImageUploadSession,
+    updateImageUploadSession,
+} from '../services/imageUploadProgressStore';
 
 /**
  * Compress and resize image before upload
@@ -61,15 +66,22 @@ export const uploadImage = (file, path, onProgress = null, compressionOptions = 
 };
 
 const uploadImageToStoragePath = (file, path, onProgress = null, compressionOptions = {}) => {
+    beginImageUploadSession('preparing');
     return new Promise(async (resolve, reject) => {
         let uploadTimedOut = false;
         let uploadTimeoutId = null;
+        const report = (pct, phase) => {
+            updateImageUploadSession(pct, phase);
+            if (onProgress) onProgress(pct);
+        };
         try {
             const sizeMB = file.size / (1024 * 1024);
             if (sizeMB > MAX_IMAGE_MB) {
+                finishImageUploadSession();
                 reject(new Error(`Image must be under ${MAX_IMAGE_MB}MB (current: ${sizeMB.toFixed(1)}MB)`));
                 return;
             }
+            report(5, 'preparing');
             // Compress image before upload
             let uploadFile = file;
             if (file.type.startsWith('image/') && file.size > COMPRESSION_SKIP_THRESHOLD_BYTES) {
@@ -84,6 +96,7 @@ const uploadImageToStoragePath = (file, path, onProgress = null, compressionOpti
                     uploadFile = file;
                 }
             }
+            report(12, 'uploading');
 
             const storageRef = ref(storage, path);
             const contentType = (uploadFile.type && uploadFile.type.startsWith('image/')) ? uploadFile.type : 'image/jpeg';
@@ -95,6 +108,7 @@ const uploadImageToStoragePath = (file, path, onProgress = null, compressionOpti
                 } catch {
                     // ignore cancel errors
                 }
+                finishImageUploadSession();
                 reject(new Error('Upload timeout. Please try a smaller image or check your connection.'));
             }, UPLOAD_TIMEOUT_MS);
 
@@ -102,29 +116,34 @@ const uploadImageToStoragePath = (file, path, onProgress = null, compressionOpti
                 'state_changed',
                 (snapshot) => {
                     if (uploadTimedOut) return;
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    if (onProgress) {
-                        onProgress(progress);
-                    }
+                    const raw = snapshot.totalBytes
+                        ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                        : 0;
+                    report(12 + raw * 0.88, 'uploading');
                 },
                 (error) => {
                     if (uploadTimeoutId) clearTimeout(uploadTimeoutId);
                     if (uploadTimedOut) return;
                     console.error('Upload error:', error);
+                    finishImageUploadSession();
                     reject(error);
                 },
                 async () => {
                     if (uploadTimeoutId) clearTimeout(uploadTimeoutId);
                     if (uploadTimedOut) return;
                     try {
+                        report(100, 'done');
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        finishImageUploadSession();
                         resolve(downloadURL);
                     } catch (error) {
+                        finishImageUploadSession();
                         reject(error);
                     }
                 }
             );
         } catch (error) {
+            finishImageUploadSession();
             reject(error);
         }
     });

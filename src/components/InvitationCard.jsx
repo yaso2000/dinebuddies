@@ -227,7 +227,7 @@ const InvitationCard = ({ invitation }) => {
     const handleShareToFeed = (e) => {
         e.stopPropagation();
         if (!currentUser?.id) {
-            goToLogin(navigate, { from: { pathname: '/posts-feed' } });
+            goToLogin({ returnPath: '/posts-feed' });
             return;
         }
         if (userProfile?.role === 'guest' || userProfile?.isGuest) {
@@ -263,7 +263,7 @@ const InvitationCard = ({ invitation }) => {
     const isPhotoChips = cardVariant === 'photoChips';
     const isHeaderBodyLayout = templateKey === 'classic';
 
-    const CARD_HERO_ASPECT_CSS = { hero_1_1: '1 / 1', hero_9_16: '9 / 16' };
+    const CARD_HERO_ASPECT_CSS = { hero_4_5: '4 / 5', hero_1_1: '4 / 5', hero_9_16: '4 / 5' };
     const cardHeroAspect = CARD_HERO_ASPECT_CSS[templateKey] || null;
     const accentColor = templateStyles.layout?.accentColor || '#f59e0b';
     const accentGlow = `${accentColor}55`;

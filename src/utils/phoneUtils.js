@@ -63,3 +63,53 @@ export function defaultDialCodeForCountryIso(iso2) {
     };
     return map[cc] || '20';
 }
+
+/** Compact E.164 for tel: links (digits only with leading +). */
+export function phoneToTelHref(phone) {
+    const compact = String(phone || '')
+        .trim()
+        .replace(/[\s\-().]/g, '');
+    if (!compact) return '';
+    return compact.startsWith('+') ? compact : `+${compact.replace(/\D/g, '')}`;
+}
+
+/**
+ * Normalize display spacing while preserving international digit order.
+ * @param {string} phone
+ */
+export function formatPhoneForDisplay(phone) {
+    const raw = String(phone || '').trim();
+    if (!raw) return '';
+
+    if (/[\s\-()]/.test(raw)) {
+        return raw.replace(/\s+/g, ' ').trim();
+    }
+
+    const compact = raw.replace(/[\s\-().]/g, '');
+    const m = /^(\+\d{1,3})(\d+)$/.exec(compact);
+    if (!m) return raw;
+
+    const cc = m[1];
+    const rest = m[2];
+    if (cc === '+971' && rest.length >= 8) {
+        return `${cc} ${rest[0]} ${rest.slice(1, 4)} ${rest.slice(4)}`.trim();
+    }
+    if (cc === '+966' && rest.length >= 9) {
+        return `${cc} ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5)}`.trim();
+    }
+    if (cc === '+20' && rest.length >= 10) {
+        return `${cc} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6)}`.trim();
+    }
+
+    const groups = rest.match(/.{1,3}/g) || [rest];
+    return `${cc} ${groups.join(' ')}`.trim();
+}
+
+/** Inline style — keeps phone LTR in Arabic/RTL layouts. */
+export function phoneNumberLtrStyle() {
+    return {
+        direction: 'ltr',
+        unicodeBidi: 'isolate',
+        textAlign: 'left',
+    };
+}

@@ -2,39 +2,27 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaArrowLeft, FaGlobe, FaCheck } from 'react-icons/fa';
+import { applyHtmlLanguage } from '../utils/authGeoLanguage';
+import { LANGUAGE_OPTIONS } from '../constants/languageOptions';
 import './SettingsPages.css';
 
 const LanguageSettings = () => {
     const navigate = useNavigate();
-    const { i18n } = useTranslation();
-    const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+    const { i18n, t } = useTranslation();
+    const baseLang = i18n.language?.split('-')[0] || 'en';
+    const [selectedLanguage, setSelectedLanguage] = useState(baseLang);
     const [success, setSuccess] = useState(false);
-
-    const languages = [
-        {
-            code: 'en',
-            name: 'English',
-            nativeName: 'English',
-            flag: '🇬🇧'
-        },
-        {
-            code: 'ar',
-            name: 'Arabic',
-            nativeName: 'العربية',
-            flag: '🇸🇦'
-        }
-    ];
 
     const handleLanguageChange = async (langCode) => {
         setSelectedLanguage(langCode);
         await i18n.changeLanguage(langCode);
+        applyHtmlLanguage(langCode);
 
-        // Update HTML dir attribute for RTL support
-        document.documentElement.dir = langCode === 'ar' ? 'rtl' : 'ltr';
-        document.documentElement.lang = langCode;
-
-        // Save to localStorage
-        localStorage.setItem('language', langCode);
+        try {
+            localStorage.setItem('language', langCode);
+        } catch {
+            /* ignore */
+        }
 
         setSuccess(true);
         setTimeout(() => {
@@ -45,38 +33,37 @@ const LanguageSettings = () => {
 
     return (
         <div className="settings-page">
-            {/* Header */}
             <div className="settings-header">
                 <button onClick={() => navigate('/settings')} className="back-btn">
                     <FaArrowLeft />
                 </button>
-                <h1>Language</h1>
+                <h1>{t('language_settings_title', 'Language')}</h1>
                 <div style={{ width: '40px' }}></div>
             </div>
 
-            {/* Content */}
             <div className="settings-content">
                 <div className="settings-card">
                     <div className="settings-icon-wrapper" style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
                         <FaGlobe style={{ color: '#10b981', fontSize: '1.5rem' }} />
                     </div>
 
-                    <h2>Choose Language</h2>
+                    <h2>{t('choose_language', 'Choose Language')}</h2>
                     <p className="settings-description">
-                        Select your preferred language for the app
+                        {t('language_settings_description', 'Select your preferred language for the app')}
                     </p>
 
                     <div className="language-options">
-                        {languages.map(lang => (
+                        {LANGUAGE_OPTIONS.map((lang) => (
                             <button
                                 key={lang.code}
+                                type="button"
                                 className={`language-option ${selectedLanguage === lang.code ? 'active' : ''}`}
                                 onClick={() => handleLanguageChange(lang.code)}
                             >
                                 <div className="language-flag">{lang.flag}</div>
                                 <div className="language-info">
-                                    <h3>{lang.name}</h3>
-                                    <p>{lang.nativeName}</p>
+                                    <h3>{t(lang.nameKey, lang.code)}</h3>
+                                    <p>{t(lang.nativeKey, lang.code)}</p>
                                 </div>
                                 {selectedLanguage === lang.code && (
                                     <FaCheck className="check-icon" />
@@ -87,12 +74,13 @@ const LanguageSettings = () => {
 
                     {success && (
                         <div className="success-message">
-                            Language changed successfully!
+                            {t('language_changed_success', 'Language changed successfully!')}
                         </div>
                     )}
 
                     <div className="settings-note">
-                        <strong>Note:</strong> The app will restart to apply the language change.
+                        <strong>{t('note_label', 'Note:')}</strong>{' '}
+                        {t('language_settings_restart_note', 'The app will restart to apply the language change.')}
                     </div>
                 </div>
             </div>

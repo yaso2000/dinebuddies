@@ -94,11 +94,11 @@ const InternalShareModal = ({ isOpen, onClose, shareData }) => {
             if (snap.exists()) {
                 const data = snap.data();
                 if (data.count >= 3) {
-                    showToast(t('share_limit_total', 'لقد وصلت للحد الأقصى (3 مرات) لمشاركة هذا العنصر اليوم.'), 'error');
+                    showToast(t('share_limit_total'), 'error');
                     return false;
                 }
                 if (data.sharedWith && data.sharedWith.includes(recipientId)) {
-                    showToast(t('share_limit_recipient', 'لقد قمت بمشاركة هذا العنصر مع نفس الجهة مسبقاً اليوم.'), 'error');
+                    showToast(t('share_limit_recipient'), 'error');
                     return false;
                 }
             }

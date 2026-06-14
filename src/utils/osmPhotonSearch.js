@@ -21,16 +21,18 @@ const cityBboxCache = new Map();
 /**
  * @returns {Promise<{ minLon: number, minLat: number, maxLon: number, maxLat: number } | null>}
  */
-export async function fetchCityBoundingBox(city, countryCode) {
+export async function fetchCityBoundingBox(city, countryCode, stateOrRegion) {
     const c = String(city || '').trim();
     const cc = String(countryCode || '').trim().toUpperCase().slice(0, 2);
+    const region = String(stateOrRegion || '').trim();
     if (c.length < 2 || cc.length !== 2) return null;
 
-    const key = `${c.toLowerCase()}\u001f${cc}`;
+    const key = `${c.toLowerCase()}\u001f${cc}\u001f${region.toLowerCase()}`;
     if (cityBboxCache.has(key)) return cityBboxCache.get(key);
 
     try {
-        const url = `${NOMINATIM}/search?format=json&city=${encodeURIComponent(c)}&countrycodes=${cc.toLowerCase()}&limit=1&addressdetails=0`;
+        const queryParts = [c, region].filter(Boolean).join(', ');
+        const url = `${NOMINATIM}/search?format=json&q=${encodeURIComponent(queryParts)}&countrycodes=${cc.toLowerCase()}&limit=1&addressdetails=0`;
         const res = await fetch(url, { headers: nominatimHeaders() });
         if (!res.ok) return null;
         const data = await res.json();
@@ -192,14 +194,15 @@ export function filterPhotonByCityName(features, cityName) {
  * @param {string} query
  * @param {string} [countryCode] ISO2
  */
-export async function searchNominatimCities(query, countryCode) {
+export async function searchNominatimCities(query, countryCode, stateOrRegion) {
     const q = String(query || '').trim();
     if (q.length < 2) return [];
 
     const cc = countryCode ? String(countryCode).toUpperCase().slice(0, 2).toLowerCase() : '';
+    const region = String(stateOrRegion || '').trim();
     const url = new URL(`${NOMINATIM}/search`);
     url.searchParams.set('format', 'json');
-    url.searchParams.set('q', q);
+    url.searchParams.set('q', region ? `${q}, ${region}` : q);
     url.searchParams.set('limit', '10');
     url.searchParams.set('addressdetails', '1');
     if (cc) url.searchParams.set('countrycodes', cc);

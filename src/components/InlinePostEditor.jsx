@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -7,11 +7,24 @@ import { useTranslation } from 'react-i18next';
 import { uploadPostMedia } from '../utils/imageUpload';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import UserAvatar from './UserAvatar';
 import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../utils/postPublishGeo';
+import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { buildRegularPostAiUserPrompt } from '../utils/aiPromptLocale';
+import AIFloatingLauncher from './AIFloatingLauncher';
 import { FaImage, FaTimes, FaSmile, FaPaperPlane } from 'react-icons/fa';
 import TikTokEmbed from './TikTokEmbed';
+import { buildYoutubeEmbedSrc, parseYoutubeLink, YOUTUBE_EMBED_ALLOW } from '../utils/videoEmbedUtils';
+import { useEditorSessionAutosave } from '../hooks/useEditorSessionAutosave';
+import {
+    inlinePostDraftKey,
+    isInlinePostDraftEmpty,
+    restoreEditorMedia,
+    serializeEditorMedia,
+} from '../utils/editorSessionDraft';
+
+const POST_TITLE_MAX = 100;
+const POST_BODY_MAX = 300;
 
 const CUSTOM_EMOJIS = [
     '😀', '😂', '🤣', '😍', '🥰', '😘', '😋', '😎', '🥳', '🤩', '😡', '😭', '😱', '🤔', '😴',
@@ -24,16 +37,17 @@ const extractAndRemoveLink = (inputText) => {
     let newText = inputText;
     let embed = null;
 
-    const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})[^\s]*/i;
-    const ttRegex = /(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@[a-zA-Z0-9_.]+\/video\/([0-9]+)[^\s]*/i;
-    const igRegex = /(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel)\/([a-zA-Z0-9_-]+)[^\s]*/i;
-
-    const ytMatch = newText.match(ytRegex);
-    if (ytMatch && ytMatch[1]) {
-        embed = { type: 'youtube', id: ytMatch[1] };
-        newText = newText.replace(ytMatch[0], '').trim();
+    const ytParsed = parseYoutubeLink(newText);
+    if (ytParsed?.id) {
+        const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})[^\s]*/i;
+        const ytMatch = newText.match(ytRegex);
+        embed = { type: 'youtube', id: ytParsed.id, isShort: ytParsed.isShort };
+        if (ytMatch?.[0]) newText = newText.replace(ytMatch[0], '').trim();
         return { text: newText, embed };
     }
+
+    const ttRegex = /(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@[a-zA-Z0-9_.]+\/video\/([0-9]+)[^\s]*/i;
+    const igRegex = /(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel)\/([a-zA-Z0-9_-]+)[^\s]*/i;
 
     const ttMatch = newText.match(ttRegex);
     if (ttMatch && ttMatch[1]) {
@@ -63,6 +77,7 @@ const InlinePostEditor = ({
     const { currentUser, userProfile } = useAuth();
     const { showToast } = useToast();
 
+    const [title, setTitle] = useState('');
     const [text, setText] = useState('');
     const [media, setMedia] = useState(null);
     const [embedData, setEmbedData] = useState(null);
@@ -144,7 +159,54 @@ const InlinePostEditor = ({
         e.target.value = null;
     };
 
-    const canPost = Boolean(text.trim() || media || embedData || attachedInvitation);
+    const buildRegularPostAiPrompt = useCallback(
+        () => buildRegularPostAiUserPrompt({ title, text, attachedInvitation }),
+        [title, text, attachedInvitation],
+    );
+
+    const handleRegularPostAiContent = useCallback((data) => {
+        const fields = extractAIContentFields('regular_post', data);
+        if (fields.title) setTitle(fields.title.slice(0, POST_TITLE_MAX));
+        if (fields.text) setText(fields.text.slice(0, POST_BODY_MAX));
+    }, []);
+
+    const draftStorageKey = useMemo(
+        () => (currentUser?.uid ? inlinePostDraftKey(currentUser.uid) : null),
+        [currentUser?.uid]
+    );
+
+    const buildSessionDraftPayload = useCallback(
+        async () => ({
+            title,
+            text,
+            media: await serializeEditorMedia(media),
+            embedData: embedData || null,
+        }),
+        [embedData, media, text, title]
+    );
+
+    const applySessionDraftPayload = useCallback(async (draft) => {
+        if (typeof draft.title === 'string') setTitle(draft.title);
+        if (typeof draft.text === 'string') setText(draft.text);
+        if (draft.embedData) setEmbedData(draft.embedData);
+        const restoredMedia = await restoreEditorMedia(draft.media);
+        if (restoredMedia) setMedia(restoredMedia);
+    }, []);
+
+    const { clearDraft: clearSessionDraft } = useEditorSessionAutosave({
+        enabled: Boolean(currentUser?.uid),
+        storageKey: draftStorageKey,
+        ready: true,
+        skipRestore: Boolean(attachedInvitationProp || initialAiStudioImage),
+        buildPayload: buildSessionDraftPayload,
+        applyPayload: applySessionDraftPayload,
+        isEmpty: isInlinePostDraftEmpty,
+        onRestored: () =>
+            showToast(t('post_draft_restored', 'Your unsaved post was restored.'), 'info'),
+        deps: [title, text, media, embedData],
+    });
+
+    const canPost = Boolean(title.trim() || text.trim() || media || embedData || attachedInvitation);
 
     const handleSubmit = async () => {
         if (!canPost || loading) return;
@@ -184,9 +246,13 @@ const InlinePostEditor = ({
                     avatar: authorInfo.avatar
                 },
                 authorId: currentUser.uid,
+                postTitle: title.trim() || null,
                 content: text.trim(),
                 mediaUrl: mediaUrl,
                 mediaType: mediaType,
+                ...(embedData?.type === 'youtube' && embedData.isShort
+                    ? { youtubeShort: true, mediaAspect: '9:16' }
+                    : {}),
                 textStyle: {
                     fontSize: 16,
                     textAlign: isRtl ? 'right' : 'left',
@@ -212,16 +278,22 @@ const InlinePostEditor = ({
             };
 
             await addDoc(collection(db, 'communityPosts'), postData);
+            clearSessionDraft();
 
             // Revert state after success
+            setTitle('');
             setText('');
             setMedia(null);
             setEmbedData(null);
             setAttachedInvitation(null);
+            setShowEmojiPicker(false);
             onClearAttachedInvitation?.();
             onClearInitialAiStudioImage?.();
             setUploadProgress(0);
-            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+            if (textareaRef.current) {
+                textareaRef.current.style.height = 'auto';
+                textareaRef.current.blur();
+            }
             showToast(t('post_created', 'Post created successfully!'), 'success');
 
         } catch (error) {
@@ -283,117 +355,129 @@ const InlinePostEditor = ({
                     </button>
                 </div>
             ) : null}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                <UserAvatar
-                    user={userProfile || currentUser}
-                    alt="User avatar"
-                    style={{ width: 40, height: 40, flexShrink: 0 }}
-                />
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
-                    <div
-                        className="composer-field composer-field--post"
-                        style={{ textAlign: isRtl ? 'right' : 'left', direction: isRtl ? 'rtl' : 'ltr' }}
-                    >
-                        <textarea
-                            ref={textareaRef}
-                            className="composer-field__input"
-                            placeholder={t('whats_on_your_mind', "What's on your mind?")}
-                            value={text}
-                            onChange={handleTextChange}
-                            maxLength={300}
+            <div className="inline-post-editor__compose">
+                <div
+                    className="composer-field composer-field--post"
+                    style={{ textAlign: isRtl ? 'right' : 'left', direction: isRtl ? 'rtl' : 'ltr' }}
+                >
+                    <input
+                        type="text"
+                        className="composer-field__title"
+                        placeholder={t('post_headline_placeholder')}
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value.slice(0, POST_TITLE_MAX))}
+                        maxLength={POST_TITLE_MAX}
+                    />
+                    <textarea
+                        ref={textareaRef}
+                        className="composer-field__input"
+                        placeholder={t('whats_on_your_mind', "What's on your mind?")}
+                        value={text}
+                        onChange={handleTextChange}
+                        maxLength={POST_BODY_MAX}
+                    />
+                    <div className="composer-field__footer">
+                        <AIFloatingLauncher
+                            postType="regular_post"
+                            onTextSuccess={handleRegularPostAiContent}
+                            buildContextPrompt={buildRegularPostAiPrompt}
+                            disabled={loading}
+                            iconOnly
+                            className="ai-floating-launcher--feed-inline"
                         />
                         <button
                             type="button"
+                            className="composer-field__post-btn"
                             onClick={handleSubmit}
                             disabled={!canPost || loading}
                             aria-label={t('post', 'Post')}
-                            style={{
-                                position: 'absolute',
-                                insetInlineEnd: 10,
-                                bottom: 10,
-                                width: 34,
-                                height: 34,
-                                borderRadius: '50%',
-                                border: 'none',
-                                background: 'var(--primary)',
-                                color: 'white',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: !canPost || loading ? 'not-allowed' : 'pointer',
-                                opacity: !canPost || loading ? 0.5 : 1,
-                                transform: isRtl ? 'scaleX(-1)' : 'none',
-                            }}
                         >
                             <FaPaperPlane size={13} />
                         </button>
                     </div>
-
-                    {loading && media?.file && (
-                        <div role="status" style={{ marginTop: '2px', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            {isCheckingImage
-                                ? t('image_upload_checking')
-                                : t('uploading_image_progress', 'Uploading image... {{progress}}%', { progress: uploadProgress })}
-                            {isCheckingImage && uploadProgress > 0 && uploadProgress < 100 ? ` (${uploadProgress}%)` : ''}
-                        </div>
-                    )}
-
-                    <div style={{ textAlign: 'start', fontSize: '0.75rem', color: text.length >= 300 ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '-8px', marginInlineStart: '4px' }}>
-                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{text.length} / 300</span>
-                    </div>
-
-                    {media && !embedData && (
-                        <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', width: '100%', maxWidth: '300px', alignSelf: 'flex-start', border: '1px solid var(--border-color)' }}>
-                            <button
-                                type="button"
-                                onClick={() => setMedia(null)}
-                                style={{
-                                    position: 'absolute', top: '6px', insetInlineEnd: '6px', zIndex: 10,
-                                    background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
-                                    borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <FaTimes size={12} />
-                            </button>
-                            <img src={media.preview} alt="Preview" style={{ width: '100%', display: 'block', maxHeight: '300px', objectFit: 'cover' }} />
-                        </div>
-                    )}
-
-                    {embedData && (
-                        <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', width: '100%', alignSelf: 'flex-start', border: '1px solid var(--border-color)', background: '#000' }}>
-                            <button
-                                type="button"
-                                onClick={() => setEmbedData(null)}
-                                style={{
-                                    position: 'absolute', top: '6px', insetInlineEnd: '6px', zIndex: 10,
-                                    background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
-                                    borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <FaTimes size={12} />
-                            </button>
-                            {embedData.type === 'youtube' && (
-                                <iframe width="100%" height="250" src={`https://www.youtube.com/embed/${embedData.id}?autoplay=0&controls=1&modestbranding=1`} frameBorder="0" allowFullScreen></iframe>
-                            )}
-                            {embedData.type === 'tiktok' && (
-                                <TikTokEmbed videoId={embedData.id} />
-                            )}
-                            {embedData.type === 'instagram' && (
-                                <iframe width="100%" height="300" src={`https://www.instagram.com/p/${embedData.id}/embed/captioned`} frameBorder="0" scrolling="no"></iframe>
-                            )}
-                        </div>
-                    )}
                 </div>
+
+                {loading && media?.file && (
+                    <div role="status" className="inline-post-editor__upload-status">
+                        {isCheckingImage
+                            ? t('image_upload_checking')
+                            : t('uploading_image_progress', 'Uploading image... {{progress}}%', { progress: uploadProgress })}
+                        {isCheckingImage && uploadProgress > 0 && uploadProgress < 100 ? ` (${uploadProgress}%)` : ''}
+                    </div>
+                )}
+
+                <div
+                    className={`inline-post-editor__char-count${
+                        text.length >= POST_BODY_MAX ? ' inline-post-editor__char-count--max' : ''
+                    }`}
+                    title={t('post_body_char_limit', {
+                        defaultValue: 'Post text (not the AI prompt)',
+                        max: POST_BODY_MAX,
+                    })}
+                >
+                    <span className="inline-post-editor__char-count-label">
+                        {t('post_body_label', { defaultValue: 'Post' })}
+                    </span>
+                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                        {text.length} / {POST_BODY_MAX}
+                    </span>
+                </div>
+
+                {media && !embedData && (
+                    <div className="inline-post-editor__media-preview">
+                        <button
+                            type="button"
+                            onClick={() => setMedia(null)}
+                            className="inline-post-editor__media-remove"
+                            aria-label={t('remove', 'Remove')}
+                        >
+                            <FaTimes size={12} />
+                        </button>
+                        <img src={media.preview} alt="Preview" />
+                    </div>
+                )}
+
+                {embedData && (
+                    <div className={`inline-post-editor__embed-preview${embedData.type === 'youtube' && embedData.isShort ? ' inline-post-editor__embed-preview--vertical' : ''}`}>
+                        <button
+                            type="button"
+                            onClick={() => setEmbedData(null)}
+                            className="inline-post-editor__media-remove"
+                            aria-label={t('remove', 'Remove')}
+                        >
+                            <FaTimes size={12} />
+                        </button>
+                        {embedData.type === 'youtube' && (
+                            embedData.isShort ? (
+                                <div className="inline-post-editor__embed-vertical">
+                                    <iframe
+                                        width="100%"
+                                        height="100%"
+                                        src={buildYoutubeEmbedSrc(embedData.id, { autoplay: false })}
+                                        frameBorder="0"
+                                        allow={YOUTUBE_EMBED_ALLOW}
+                                        allowFullScreen
+                                        title="YouTube Short"
+                                    />
+                                </div>
+                            ) : (
+                                <iframe width="100%" height="250" src={buildYoutubeEmbedSrc(embedData.id, { autoplay: false })} frameBorder="0" allow={YOUTUBE_EMBED_ALLOW} allowFullScreen title="YouTube" />
+                            )
+                        )}
+                        {embedData.type === 'tiktok' && (
+                            <TikTokEmbed videoId={embedData.id} />
+                        )}
+                        {embedData.type === 'instagram' && (
+                            <iframe width="100%" height="300" src={`https://www.instagram.com/p/${embedData.id}/embed/captioned`} frameBorder="0" scrolling="no" title="Instagram" />
+                        )}
+                    </div>
+                )}
             </div>
 
-            <div style={{ borderTop: '1px solid var(--border-color)', margin: '0 -16px' }} />
+            <div className="inline-post-editor__toolbar-divider" />
 
-            <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
-            >
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="inline-post-editor__toolbar">
+                <div className="inline-post-editor__toolbar-actions">
                     <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
@@ -454,7 +538,6 @@ const InlinePostEditor = ({
                         )}
                     </div>
                 </div>
-
             </div>
 
             <input

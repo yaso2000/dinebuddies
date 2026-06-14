@@ -8,9 +8,12 @@ export const PRIVATE_TEXT_BACKDROP_TONE_IDS = ['dark', 'light', 'glass', 'none']
 /** Icon rail on create/edit preview (light → dark → glass → none). */
 export const PRIVATE_TEXT_BACKDROP_ICON_ORDER = ['light', 'dark', 'glass', 'none'];
 
+/** Message panel width on photo backgrounds (matches showcase preview proportions). Height follows copy. */
+export const PRIVATE_TEXT_BACKDROP_PANEL_WIDTH = '78%';
+
 export const PRIVATE_TEXT_BACKDROP_TONES = {
-    dark: { color: '#000000', opacity: 0.52 },
-    light: { color: '#ffffff', opacity: 0.52 },
+    dark: { color: '#000000', opacity: 0.38 },
+    light: { color: '#ffffff', opacity: 0.38 },
     glass: { color: '#f8fafc', opacity: 0.22 }
 };
 

@@ -16,8 +16,7 @@
     }
 
     /* 3. Card Styling - Edge to Edge */
-    .smart-invitation-card,
-    .business-ad-card {
+    .smart-invitation-card {
         height: auto !important;
         min-height: 450px !important;
 
@@ -29,6 +28,23 @@
         border-radius: 16px !important;
         box-shadow: none !important;
         /* Simplify */
+
+        display: flex !important;
+        flex-direction: column !important;
+        position: relative !important;
+    }
+
+    .business-ad-card {
+        height: auto !important;
+        min-height: 0 !important;
+        aspect-ratio: 4 / 6;
+
+        margin: 0 2px 12px 2px !important;
+        width: auto !important;
+        max-width: 100% !important;
+
+        border-radius: 16px !important;
+        box-shadow: none !important;
 
         display: flex !important;
         flex-direction: column !important;

@@ -205,6 +205,7 @@ const RestaurantDetails = () => {
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     {!isBusinessAccount && (
                         <button
+                            type="button"
                             onClick={() => {
                                 if (isGuest || !currentUser?.id) {
                                     goToLogin();

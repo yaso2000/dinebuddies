@@ -1,4 +1,4 @@
-/* Same height as compact card preview (9:16 from --private-preview-w); overflow scrolls inside. */
+/* Fallback when not inside .private-card-preview-with-bg grid */
 .private-invite-cover-rail.private-card-bg-picker--beside {
     height: calc(var(--private-preview-w, 248px) * 16 / 9);
     max-height: calc(var(--private-preview-w, 248px) * 16 / 9);
@@ -7,18 +7,67 @@
     margin-top: 0;
 }
 
-/* Template tab: show ~4 thumbs; rest only via vertical scroll (matches .dating-preview-rail__thumb 86px + 10px gap). */
-.private-invite-cover-rail--template-mode.private-card-bg-picker--beside {
-    height: auto;
+.private-card-preview-with-bg__preview-wrap > .private-invite-cover-rail.private-card-bg-picker--beside {
+    align-self: auto;
+    margin-top: 0;
+    top: 0;
+    bottom: 0;
+    height: auto !important;
+    max-height: none !important;
+    flex: 1 1 auto;
 }
 
-.private-invite-cover-rail--template-mode .private-card-bg-picker__scroll {
+/* Snap + drag column: full height beside card + typography, select by scrolling */
+.private-invite-cover-rail--snap-column .private-card-bg-picker__scroll {
+    scroll-snap-type: y mandatory;
+    scroll-padding-block: min(42%, 96px);
+    cursor: grab;
+    touch-action: pan-y;
+}
+
+.private-invite-cover-rail--snap-column .private-card-bg-picker__scroll.is-dragging {
+    cursor: grabbing;
+    scroll-snap-type: none;
+}
+
+.private-invite-cover-rail--snap-column .dating-preview-rail__thumb {
+    scroll-snap-align: center;
+    flex-shrink: 0;
+}
+
+.private-invite-cover-rail--template-mode .private-card-bg-picker__scroll,
+.private-invite-cover-rail--gradient-mode .private-card-bg-picker__scroll {
     flex: 0 1 auto;
-    max-height: calc(
-        4 * 86px + 3 * 10px + 12px
-    ); /* 4 thumbs + gaps + vertical padding (4px+8px) on .private-card-bg-picker__scroll */
+    max-height: calc(4 * 86px + 3 * 10px + 12px);
     min-height: 0;
     overflow-y: auto;
+    cursor: grab;
+    touch-action: pan-y;
+}
+
+.private-card-preview-with-bg__preview-wrap
+    > .private-invite-cover-rail--template-mode
+    .private-card-bg-picker__scroll,
+.private-card-preview-with-bg__preview-wrap
+    > .private-invite-cover-rail--gradient-mode
+    .private-card-bg-picker__scroll {
+    max-height: none;
+}
+
+.private-card-preview-with-bg__preview-wrap
+    > .private-invite-cover-rail--template-mode
+    .private-card-bg-picker__scroll,
+.private-card-preview-with-bg__preview-wrap
+    > .private-invite-cover-rail--gradient-mode
+    .private-card-bg-picker__scroll {
+    max-height: 100%;
+    flex: 1 1 0;
+}
+
+.private-invite-cover-rail--template-mode .private-card-bg-picker__scroll.is-dragging,
+.private-invite-cover-rail--gradient-mode .private-card-bg-picker__scroll.is-dragging {
+    cursor: grabbing;
+    user-select: none;
 }
 
 .private-invite-cover-rail {
@@ -69,77 +118,19 @@
     box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.35);
 }
 
-/* Desktop: template thumbs in a grid beside the card preview (not a single column). */
+/* Desktop: slightly wider rail; same two-column layout. */
 @media (min-width: 1024px) {
-    .private-card-preview-with-bg:has(.private-invite-cover-rail--template-mode) {
-        flex-direction: row;
-        align-items: flex-start;
-        gap: 16px;
+    .private-card-preview-with-bg {
+        --private-rail-w: clamp(88px, 12vw, 108px);
+        column-gap: 12px;
     }
+}
 
-    .private-invite-cover-rail--template-mode.private-card-bg-picker--beside {
-        flex: 1 1 0;
-        min-width: 0;
-        width: auto;
-        max-width: none;
-        height: calc(var(--private-preview-w, 248px) * 16 / 9);
-        max-height: calc(var(--private-preview-w, 248px) * 16 / 9);
-        align-self: flex-start;
-    }
+.dating-preview-rail__thumb--gradient {
+    background-size: cover;
+    background-position: center;
+}
 
-    .private-invite-cover-rail--template-mode .private-card-bg-picker__label--beside {
-        max-width: none;
-        width: 100%;
-        text-align: start;
-        font-size: 0.75rem;
-        margin-bottom: 8px;
-    }
-
-    .private-invite-cover-rail--template-mode .private-card-bg-picker__scroll {
-        flex: 1 1 0;
-        min-height: 0;
-    }
-
-    .private-invite-cover-rail--template-mode.dating-preview-rail--template-column
-        .private-card-bg-picker__scroll {
-        display: grid !important;
-        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-        gap: 10px;
-        flex-direction: unset !important;
-        flex-wrap: unset !important;
-        align-items: stretch;
-        align-content: start;
-        justify-items: stretch;
-        max-height: 100%;
-        overflow-x: hidden;
-        overflow-y: auto;
-        width: 100%;
-        padding: 2px 4px 8px 0;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .private-invite-cover-rail--template-mode .dating-preview-rail__thumb {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 3 / 4;
-        max-width: none;
-    }
-
-    .private-invite-cover-rail--template-mode .dating-preview-rail__thumb-wrap {
-        width: 100%;
-        max-width: none;
-    }
-
-    .private-invite-cover-rail--template-mode .dating-preview-rail__thumb-wrap .dating-preview-rail__thumb {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 3 / 4;
-    }
-
-    .private-invite-cover-rail--template-mode .private-invite-cover-rail__empty {
-        max-width: none;
-        grid-column: 1 / -1;
-        text-align: start;
-        padding: 8px 4px;
-    }
+.dating-preview-rail__thumb--gradient.dating-preview-rail__thumb--light {
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
 }

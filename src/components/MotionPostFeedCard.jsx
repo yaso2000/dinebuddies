@@ -54,7 +54,7 @@ export default function MotionPostFeedCard({ post, communityPostId = null }) {
         e.stopPropagation();
         if (
             !window.confirm(
-                t('post_delete_confirm', 'هل أنت متأكد من حذف هذا المنشور؟ لا يمكن التراجع.')
+                t('post_delete_confirm')
             )
         ) {
             return;
@@ -64,10 +64,10 @@ export default function MotionPostFeedCard({ post, communityPostId = null }) {
                 id: motionDocId ? `motion_${motionDocId}` : post.id,
                 motionPostId: motionDocId,
             });
-            showToast(t('post_delete_success', 'تم حذف المنشور.'), 'success');
+            showToast(t('post_delete_success'), 'success');
         } catch (err) {
             console.error('[MotionPostFeedCard] delete', err);
-            showToast(t('post_delete_failed', 'تعذّر حذف المنشور.'), 'error');
+            showToast(t('post_delete_failed'), 'error');
         }
     };
 

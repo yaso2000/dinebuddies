@@ -15,7 +15,9 @@ export const OCCASION_TYPE_TO_CATEGORY_ID = {
     Celebration: 'celebration',
     Cinema: 'cinema',
     Sports: 'sports',
-    BBQ: 'bbq'
+    'Singing Party': 'concert',
+    Concert: 'concert',
+    BBQ: 'concert'
 };
 
 export function resolveOccasionCategoryId(occasionType) {

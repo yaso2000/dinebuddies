@@ -11,16 +11,11 @@ import {
     cityFromBigDataCloudReverseClient,
     countryCodeFromBigDataCloudReverseClient,
 } from '../utils/bigDataCloudGeocode';
-import { BusinessPhoneFields } from './BusinessSignup';
-import { defaultDialCodeForCountryIso } from '../utils/phoneUtils';
-
 const CreateBusinessAccount = ({ onClose, onSuccess }) => {
     const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [step, setStep] = useState(1); // 1: Account Info, 2: Business Info
-    const [phoneVerification, setPhoneVerification] = useState(null);
-
     const [formData, setFormData] = useState({
         // Account Info
         email: '',
@@ -118,13 +113,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
         }));
     };
 
-    const defaultDialCode = defaultDialCodeForCountryIso(formData.countryCode || 'EG');
-
     const validateStep1 = () => {
-        if (!phoneVerification?.standardizedPhone) {
-            setError('Verify the business phone number first');
-            return false;
-        }
         if (!formData.email || !formData.password || !formData.confirmPassword) {
             setError('Please fill in all fields');
             return false;
@@ -144,8 +133,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
     };
 
     const validateStep2 = () => {
-        const phone = phoneVerification?.standardizedPhone || formData.phone;
-        if (!formData.businessName || !phone || !formData.location) {
+        if (!formData.businessName || !formData.location) {
             setError('Please fill in all required fields');
             return false;
         }
@@ -201,10 +189,10 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                 businessInfo: {
                     businessName: formData.businessName,
                     businessType: formData.businessType,
-                    phone: phoneVerification?.standardizedPhone || formData.phone,
-                    standardized_phone: phoneVerification?.standardizedPhone || null,
-                    phone_verified: !!phoneVerification?.standardizedPhone,
-                    phone_claimed: !!phoneVerification?.standardizedPhone,
+                    phone: formData.phone || '',
+                    phone_verified: false,
+                    phone_claimed: false,
+                    isClaimed: true,
                     city: formData.city,
                     country: formData.country,
                     address: formData.location,
@@ -213,7 +201,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                     createdBy: 'admin',
                     createdAt: serverTimestamp()
                 },
-                businessPhoneVerifiedUid: phoneVerification?.firebaseUid || null,
             });
 
             // Sign out the newly created user (admin stays logged in)
@@ -320,7 +307,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                 )}
 
                 {/* Form */}
-                <div style={{ padding: '1.5rem' }}>
+                <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
                     {step === 1 && (
                         <>
                             <h3 style={{
@@ -332,23 +319,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                 Account Information
                             </h3>
 
-                            <BusinessPhoneFields
-                                defaultDialCode={defaultDialCode || '61'}
-                                onVerified={(payload) => {
-                                    setPhoneVerification(payload);
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        phone: payload.standardizedPhone,
-                                    }));
-                                }}
-                            />
-                        </>
-                    )}
-                </div>
-                <form onSubmit={handleSubmit} style={{ padding: '0 1.5rem 1.5rem' }}>
-                    {step === 1 && (
-                        <>
-                            <div style={{ marginBottom: '1rem', opacity: phoneVerification ? 1 : 0.55 }}>
+                            <div style={{ marginBottom: '1rem' }}>
                                 <label style={{
                                     display: 'block',
                                     fontSize: '0.9rem',
@@ -365,7 +336,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     value={formData.email}
                                     onChange={handleChange}
                                     required
-                                    disabled={!phoneVerification}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
@@ -396,7 +366,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     onChange={handleChange}
                                     required
                                     minLength={6}
-                                    disabled={!phoneVerification}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
@@ -427,7 +396,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     onChange={handleChange}
                                     required
                                     minLength={6}
-                                    disabled={!phoneVerification}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
@@ -525,23 +493,21 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     marginBottom: '0.5rem'
                                 }}>
                                     <FaPhone style={{ marginRight: '0.5rem' }} />
-                                    Phone Number *
+                                    Phone Number (optional)
                                 </label>
                                 <input
                                     type="tel"
                                     name="phone"
-                                    value={phoneVerification?.standardizedPhone || formData.phone}
-                                    readOnly
-                                    required
+                                    value={formData.phone}
+                                    onChange={handleChange}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
-                                        background: 'rgba(34, 197, 94, 0.08)',
-                                        border: '1px solid rgba(34, 197, 94, 0.35)',
+                                        background: 'var(--bg-body)',
+                                        border: '1px solid var(--border-color)',
                                         borderRadius: '10px',
                                         color: 'var(--text-primary)',
                                         fontSize: '0.95rem',
-                                        cursor: 'default',
                                     }}
                                 />
                             </div>
@@ -633,8 +599,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     }}
                                 >
                                     <option value="free">Free</option>
-                                    <option value="professional">Professional</option>
-                                    <option value="elite">Elite</option>
+                                    <option value="paid">Paid</option>
                                 </select>
                             </div>
                         </>
@@ -676,7 +641,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                         <button
                             onClick={handleNext}
                             type="button"
-                            disabled={!phoneVerification}
                             style={{
                                 flex: 1,
                                 padding: '0.75rem',
@@ -686,8 +650,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                 color: 'white',
                                 fontSize: '1rem',
                                 fontWeight: '700',
-                                cursor: phoneVerification ? 'pointer' : 'not-allowed',
-                                opacity: phoneVerification ? 1 : 0.55,
+                                cursor: 'pointer',
                             }}
                         >
                             Next

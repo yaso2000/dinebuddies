@@ -18,6 +18,36 @@ const PUBLIC_FIREBASE_PREFIXES = [
 ];
 
 /**
+ * Decode the GCS bucket id from a Firebase Storage download URL.
+ * @param {string} url
+ * @returns {string}
+ */
+export function decodeFirebaseStorageBucketName(url) {
+    if (typeof url !== 'string') return '';
+
+    const match = url.match(/\/v0\/b\/([^/]+)\/o\//);
+    if (!match?.[1]) return '';
+
+    try {
+        return decodeURIComponent(match[1]);
+    } catch {
+        return match[1];
+    }
+}
+
+/** Folders where server-side AI uploads land (see resolveAiStorageFolder). */
+const SERVER_AI_STORAGE_PREFIXES = [
+    'invitations/',
+    'ai-design-studio/',
+    'community-posts/',
+    'featured_posts/',
+    'business-motion/',
+];
+
+const SERVER_AI_OBJECT_PATH =
+    /^(invitations|ai-design-studio|community-posts|featured_posts|business-motion)\/[^/]+\/ai_\d+_[a-f0-9-]+\.(png|jpe?g|webp)$/i;
+
+/**
  * Decode the object path from a Firebase Storage download URL.
  * @param {string} url
  * @returns {string}
@@ -58,7 +88,7 @@ export function isRestrictedFirebaseStorageUrl(url) {
 }
 
 /**
- * True when URL is a server-uploaded AI cover in a public Storage folder (invitations/…/ai_*).
+ * True when URL is a server-uploaded AI image in a public Storage folder.
  * @param {string} url
  */
 export function isServerPersistedAiCoverUrl(url) {
@@ -70,7 +100,10 @@ export function isServerPersistedAiCoverUrl(url) {
     }
     const objectPath = decodeFirebaseStorageObjectPath(url);
     if (!objectPath) return false;
-    return /^invitations\/[^/]+\/ai_\d+_[a-f0-9-]+\.(png|jpe?g|webp)$/i.test(objectPath);
+    if (!SERVER_AI_STORAGE_PREFIXES.some((prefix) => objectPath.startsWith(prefix))) {
+        return false;
+    }
+    return SERVER_AI_OBJECT_PATH.test(objectPath);
 }
 
 /**

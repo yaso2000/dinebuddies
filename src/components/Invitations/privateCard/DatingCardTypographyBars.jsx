@@ -18,7 +18,8 @@ export default function DatingCardTypographyBars({
     variant = 'default',
     open: controlledOpen,
     onOpenChange,
-    hideToggle = false
+    hideToggle = false,
+    alwaysVisible = false,
 }) {
     const { t } = useTranslation();
     const [internalOpen, setInternalOpen] = useState(false);
@@ -32,8 +33,9 @@ export default function DatingCardTypographyBars({
         }
     };
     const isBelow = variant === 'below';
+    const showPanels = alwaysVisible || open;
 
-    if (hideToggle && !open) {
+    if (!alwaysVisible && hideToggle && !open) {
         return null;
     }
 
@@ -41,7 +43,9 @@ export default function DatingCardTypographyBars({
         <div
             className={`dating-card-typography-bars${
                 isBelow ? ' dating-card-typography-bars--below' : ''
-            }${open ? ' dating-card-typography-bars--open' : ''}`}
+            }${showPanels ? ' dating-card-typography-bars--open' : ''}${
+                alwaysVisible ? ' dating-card-typography-bars--always' : ''
+            }`}
         >
             {!hideToggle ? (
                 <button
@@ -56,7 +60,7 @@ export default function DatingCardTypographyBars({
                 </button>
             ) : null}
 
-            {open ? (
+            {showPanels ? (
                 <div className="dating-card-typography-bars__panels">
                     <div
                         className="dating-card-typography-bars__scroll"

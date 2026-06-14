@@ -8,7 +8,11 @@ import { db } from '../../firebase/config';
 import PrivateInvitationCardPreview from './privateCard/PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from './privateCard/privateCardFrameColors';
 import { DEFAULT_FONT_ID } from './privateCard/privateCardFonts';
-import { DEFAULT_MOTION_ID } from './privateCard/privateCardMotions';
+import {
+    DEFAULT_CARD_COPY_OFFSET_Y,
+    DEFAULT_CARD_COPY_WIDTH_PCT,
+    DEFAULT_CARD_COPY_FONT_SCALE,
+} from './privateCard/privateCardCopyLayout';
 import { getInvitationCardTextBackdropFromInvitation } from './privateCard/privateCardTextBackdrop';
 import {
     getDatingInvitationHeroCoverFromInvitation,
@@ -268,9 +272,12 @@ export default function InvitationInboxOverlay({
                         frameColorId={current.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
                         cardThemeColor={themeColor ?? null}
                         cardFontId={current.cardFontId ?? DEFAULT_FONT_ID}
-                        cardMotionId={current.cardMotionId ?? DEFAULT_MOTION_ID}
+                        copyOffsetY={current.cardCopyOffsetY ?? DEFAULT_CARD_COPY_OFFSET_Y}
+                        copyWidthPct={current.cardCopyWidthPct ?? DEFAULT_CARD_COPY_WIDTH_PCT}
+                        copyFontScale={current.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE}
                         occasionType={current.occasionType}
                         cardBackgroundId={current.cardBackgroundId || null}
+                        cardGradientId={current.cardGradientId || null}
                         heroCoverSrc={hero?.src ?? null}
                         heroCoverMediaType={hero?.mediaType ?? null}
                         heroCoverPoster={hero?.poster ?? null}

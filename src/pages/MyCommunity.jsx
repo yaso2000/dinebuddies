@@ -4,8 +4,10 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
-import { FaArrowLeft, FaUsers, FaEdit, FaComments, FaHeart, FaPlus, FaEnvelope, FaStore, FaBell, FaBullhorn } from 'react-icons/fa';
+import { FaUsers, FaComments, FaHeart, FaEnvelope, FaStore, FaBullhorn, FaThLarge, FaInbox, FaArchive, FaChartLine } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import BusinessDashboardShell from '../components/BusinessDashboardShell';
+import CommunityManagement from '../components/CommunityManagement';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import './MyCommunity.css';
 
@@ -20,11 +22,11 @@ const MyCommunity = () => {
         invitations: 0,
         engagement: 0
     });
-    const [topMembers, setTopMembers] = useState([]);
+
+    const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
 
     // Check if user is a business account (unified flag)
     const isBusinessAccount = userProfile?.isBusiness || false;
-    const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
 
     useEffect(() => {
         if (!isBusinessAccount || !currentUser?.uid) {
@@ -42,21 +44,6 @@ const MyCommunity = () => {
             if (unsubEngagement) unsubEngagement();
         };
     }, [currentUser?.uid, isBusinessAccount]);
-
-    useEffect(() => {
-        if (!isBusinessAccount || !currentUser?.uid) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const result = await getCommunityMembers(currentUser.uid, { includeMembers: true, limit: 10 });
-                const list = result?.members || [];
-                if (!cancelled) setTopMembers(list.slice(0, 3));
-            } catch (e) {
-                if (!cancelled) setTopMembers([]);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [currentUser?.uid, isBusinessAccount, getCommunityMembers]);
 
     const subscribeToMembers = () => {
         try {
@@ -155,43 +142,43 @@ const MyCommunity = () => {
 
     if (loading) {
         return (
-            <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
-                <div style={{
-                    width: '50px',
-                    height: '50px',
-                    border: '4px solid var(--border-color)',
-                    borderTop: '4px solid var(--primary)',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '0 auto 1rem'
-                }} />
-                <p style={{ color: 'var(--text-muted)' }}>Loading your community...</p>
-            </div>
+            <BusinessDashboardShell
+                title={t('business_dashboard', 'Dashboard')}
+                icon={<FaThLarge />}
+                onBack={() => navigate('/')}
+            >
+                <div style={{ padding: '2rem', textAlign: 'center' }}>
+                    <div style={{
+                        width: '50px',
+                        height: '50px',
+                        border: '4px solid var(--border-color)',
+                        borderTop: '4px solid var(--primary)',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        margin: '0 auto 1rem'
+                    }} />
+                    <p style={{ color: 'var(--text-muted)' }}>{t('loading', 'Loading…')}</p>
+                </div>
+            </BusinessDashboardShell>
         );
     }
 
     return (
-        <div className="page-container my-community-page">
-            <div className="my-community-inner">
-            {/* Header */}
-            <header className="my-community-subheader sticky-header-glass">
-                <button className="back-btn" onClick={() => navigate('/')}>
-                    <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                </button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
-                        {t('business_hub', 'Business Hub')}
-                    </h3>
-                </div>
+        <BusinessDashboardShell
+            title={t('business_dashboard', 'Dashboard')}
+            icon={<FaThLarge />}
+            onBack={() => navigate('/')}
+            rightSlot={(
                 <button
+                    type="button"
                     className="back-btn"
                     onClick={() => navigate(`/business/${currentUser.uid}`)}
                     aria-label={t('business_profile', 'Business profile')}
                 >
                     <FaStore />
                 </button>
-            </header>
-
+            )}
+        >
             {/* Stats Cards */}
             <div className="my-community-stats">
                 <div className="my-community-stat-card ui-card">
@@ -215,38 +202,12 @@ const MyCommunity = () => {
             {/* Action Buttons */}
             <div className="my-community-actions">
                 <button
-                    onClick={() => navigate('/create-story')}
-                    className="my-community-btn my-community-btn--story"
-                >
-                    <FaPlus style={{ fontSize: '0.8rem' }} />
-                    Story
-                </button>
-                <button
-                    onClick={() => navigate('/posts-feed', { state: { scrollToComposer: true } })}
-                    className="my-community-btn my-community-btn--post"
-                >
-                    <FaEdit style={{ fontSize: '0.8rem' }} />
-                    Post
-                </button>
-                <button
+                    type="button"
                     onClick={() => navigate(`/community/${currentUser.uid}`)}
                     className="my-community-btn my-community-btn--chat"
                 >
                     <FaComments style={{ fontSize: '0.8rem' }} />
-                    Chat
-                </button>
-            </div>
-
-            {/* Hub shortcuts */}
-            <div className="my-community-actions">
-                <button
-                    type="button"
-                    className="my-community-btn my-community-btn--story ios-tap-target"
-                    onClick={() => navigate('/settings/notifications')}
-                    title={t('notification_settings', 'Notification Settings')}
-                >
-                    <FaBell style={{ fontSize: '0.75rem' }} />
-                    {t('notification_settings', 'Notification Settings')}
+                    {t('chat', 'Chat')}
                 </button>
                 <button
                     type="button"
@@ -257,94 +218,44 @@ const MyCommunity = () => {
                     <FaBullhorn style={{ fontSize: '0.75rem' }} />
                     {t('business_member_notifications', 'Member alerts')}
                 </button>
-            </div>
-            <div className="my-community-actions">
-                {tierAccess.isPaid ? (
-                    <button
-                        type="button"
-                        onClick={() => navigate('/rankings')}
-                        className="my-community-btn my-community-btn--post"
-                    >
-                        {t('analytics', 'Analytics')}
-                    </button>
-                ) : null}
-                {tierAccess.isPaid ? (
-                    <button
-                        type="button"
-                        onClick={() => navigate('/notifications')}
-                        className="my-community-btn my-community-btn--story"
-                    >
-                        {t('inbox', 'Inbox')}
-                    </button>
-                ) : null}
                 <button
                     type="button"
-                    onClick={() => navigate('/invitations')}
+                    onClick={() => navigate('/my-community/analytics')}
+                    className="my-community-btn my-community-btn--post"
+                >
+                    <FaChartLine style={{ fontSize: '0.75rem' }} />
+                    {t('analytics', 'Analytics')}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => navigate('/my-community/inbox')}
+                    className="my-community-btn my-community-btn--story"
+                >
+                    <FaInbox style={{ fontSize: '0.75rem' }} />
+                    {t('inbox', 'Inbox')}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => navigate('/my-community/archive')}
                     className="my-community-btn my-community-btn--chat"
                 >
+                    <FaArchive style={{ fontSize: '0.75rem' }} />
                     {t('archive', 'Archive')}
                 </button>
             </div>
 
-            {/* Top members */}
+            {/* Members & group messaging */}
             <div className="my-community-section">
-                <h3>{t('top_members', 'Top members')}</h3>
-                <div className="my-community-card">
-                    {topMembers.length === 0 ? (
-                        <div className="my-community-empty ui-prompt__desc">
-                            {t('no_members_yet', 'No members yet. Share your community to grow.')}
-                        </div>
-                    ) : (
-                        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                            {topMembers.map((member, index) => (
-                                <li key={member.id || index} className="my-community-member-item">
-                                    <div style={{
-                                        width: '40px',
-                                        height: '40px',
-                                        borderRadius: '50%',
-                                        background: 'var(--hover-overlay)',
-                                        overflow: 'hidden',
-                                        flexShrink: 0
-                                    }}>
-                                        {member.avatarUrl ? (
-                                            <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        ) : (
-                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontSize: '1rem', fontWeight: '700' }}>
-                                                {(member.displayName || member.name || '?')[0].toUpperCase()}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                                            {member.displayName || member.name || t('member', 'Member')}
-                                        </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                            {t('community_member', 'Community member')}
-                                        </div>
-                                    </div>
-                                    <span style={{
-                                        width: '28px',
-                                        height: '28px',
-                                        borderRadius: '50%',
-                                        background: 'var(--primary)',
-                                        color: 'white',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '0.8rem',
-                                        fontWeight: '800'
-                                    }}>
-                                        {index + 1}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                <div className="my-community-card" style={{ padding: '1rem' }}>
+                    <CommunityManagement
+                        businessId={currentUser.uid}
+                        businessName={userProfile?.display_name || userProfile?.businessInfo?.name}
+                        canUseMemberNotifications={tierAccess.canUseMemberNotifications}
+                        compact
+                    />
                 </div>
             </div>
-
-            </div>
-        </div>
+        </BusinessDashboardShell>
     );
 };
 

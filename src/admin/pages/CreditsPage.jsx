@@ -1,9 +1,11 @@
 import React, { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../../firebase/config';
 import { searchUsers } from '../../utils/adminUserQueries';
 import { adminApi } from '../api';
 
 export default function CreditsPage() {
+    const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const [results, setResults] = useState([]);
     const [selected, setSelected] = useState(null);
@@ -25,27 +27,27 @@ export default function CreditsPage() {
             const rows = await searchUsers(db, term);
             setResults(rows.slice(0, 12));
         } catch (e) {
-            setMsg(e.message || 'فشل البحث');
+            setMsg(e.message || t('admin_search_failed'));
         } finally {
             setLoading(false);
         }
-    }, [search]);
+    }, [search, t]);
 
     const grant = async () => {
         if (!selected?.id) return;
         const n = Math.floor(Number(amount));
         if (!Number.isFinite(n) || n <= 0) {
-            setMsg('أدخل كمية صحيحة');
+            setMsg(t('admin_invalid_amount'));
             return;
         }
-        if (!window.confirm(`منح ${n} رصيد مجاني فقط؟`)) return;
+        if (!window.confirm(t('admin_grant_free_confirm', { count: n }))) return;
         setGranting(true);
         try {
             const res = await adminApi.grantFreeCredits(selected.id, n, note);
             setSelected((p) => (p ? { ...p, freeCredits: res.freeCredits } : p));
-            setMsg(`تم المنح. free_credit = ${res.freeCredits}`);
+            setMsg(t('admin_grant_success', { count: res.freeCredits }));
         } catch (e) {
-            setMsg(e.message || 'فشل');
+            setMsg(e.message || t('admin_failed'));
         } finally {
             setGranting(false);
         }
@@ -53,23 +55,20 @@ export default function CreditsPage() {
 
     return (
         <>
-            <h1 className="db-h1">نظام الرصيد</h1>
-            <p className="db-lead">
-                فصل <strong>paid_credit</strong> و <strong>free_credit</strong>. الأدمن يمنح المجاني فقط — لا تعديل على
-                المدفوع.
-            </p>
+            <h1 className="db-h1">{t('admin_credits_title')}</h1>
+            <p className="db-lead">{t('admin_credits_lead')}</p>
 
             <div className="db-toolbar">
                 <input
                     className="db-input"
                     style={{ flex: 1 }}
-                    placeholder="بحث مستخدم"
+                    placeholder={t('admin_search_user')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                 />
                 <button type="button" className="db-btn db-btn--lime" onClick={runSearch} disabled={loading}>
-                    بحث
+                    {t('admin_search')}
                 </button>
             </div>
 
@@ -83,8 +82,11 @@ export default function CreditsPage() {
                             style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 4 }}
                             onClick={() => setSelected(u)}
                         >
-                            {u.display_name || u.email || u.id} — مجاني: {u.freeCredits ?? 0} | مدفوع:{' '}
-                            {u.paidCredits ?? 0}
+                            {t('admin_credits_user_summary', {
+                                name: u.display_name || u.email || u.id,
+                                free: u.freeCredits ?? 0,
+                                paid: u.paidCredits ?? 0,
+                            })}
                         </button>
                     ))}
                 </div>
@@ -103,7 +105,7 @@ export default function CreditsPage() {
                         <div className="db-credit-box db-credit-box--paid">
                             <label>paid_credit</label>
                             <div className="val">{paid}</div>
-                            <small style={{ color: 'var(--db-muted)' }}>قراءة فقط</small>
+                            <small style={{ color: 'var(--db-muted)' }}>{t('admin_read_only')}</small>
                         </div>
                         <div className="db-credit-box db-credit-box--free">
                             <label>free_credit</label>
@@ -122,19 +124,24 @@ export default function CreditsPage() {
                         <input
                             className="db-input"
                             style={{ flex: 1 }}
-                            placeholder="ملاحظة"
+                            placeholder={t('admin_note_placeholder')}
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                         />
                         <button type="button" className="db-btn db-btn--lime" onClick={grant} disabled={granting}>
-                            منح free_credit
+                            {t('admin_credits_grant_btn')}
                         </button>
                         <button type="button" className="db-btn db-btn--ghost" onClick={() => setSelected(null)}>
-                            إلغاء
+                            {t('admin_cancel')}
                         </button>
                     </div>
                     {msg && (
-                        <p style={{ marginTop: '0.75rem', color: msg.startsWith('تم') ? 'var(--db-lime)' : 'var(--db-danger)' }}>
+                        <p
+                            style={{
+                                marginTop: '0.75rem',
+                                color: msg.includes('free_credit =') ? 'var(--db-lime)' : 'var(--db-danger)',
+                            }}
+                        >
                             {msg}
                         </p>
                     )}

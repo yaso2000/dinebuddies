@@ -121,8 +121,8 @@ const generateDemoBusiness = (index) => {
     const bizData = REAL_RESTAURANTS[index % REAL_RESTAURANTS.length];
     const location = generateRandomLocation();
 
-    const isPremium = Math.random() < 0.6; // High elite rate for demos
-    const tier = isPremium ? 'elite' : 'free';
+    const isPremium = Math.random() < 0.6;
+    const tier = isPremium ? 'paid' : 'free';
 
     return {
         uid: `demo_biz_${faker.string.uuid()}`,
@@ -134,8 +134,8 @@ const generateDemoBusiness = (index) => {
         isDemo: true,
         password: '123',
         subscriptionTier: tier,
-        isVerified: tier === 'elite',
-        reputation: tier === 'elite' ? faker.number.int({ min: 300, max: 1000 }) : faker.number.int({ min: 50, max: 200 }),
+        isVerified: tier === 'paid',
+        reputation: tier === 'paid' ? faker.number.int({ min: 300, max: 1000 }) : faker.number.int({ min: 50, max: 200 }),
 
         businessInfo: {
             businessType: bizData.type,
@@ -152,13 +152,13 @@ const generateDemoBusiness = (index) => {
             coverImage: bizData.image,
             menu: bizData.menu,
             gallery: bizData.gallery,
-            rating: tier === 'elite' ? (4.5 + Math.random() * 0.5).toFixed(1) : (3.5 + Math.random()).toFixed(1),
-            website: tier === 'elite' ? `www.${bizData.name.replace(/\s+/g, '').toLowerCase()}.com.au` : '',
-            features: tier === 'elite' ? ['Outdoor Seating', 'Live Music', 'WiFi', 'Parking'] : ['Outdoor Seating']
+            rating: tier === 'paid' ? (4.5 + Math.random() * 0.5).toFixed(1) : (3.5 + Math.random()).toFixed(1),
+            website: tier === 'paid' ? `www.${bizData.name.replace(/\s+/g, '').toLowerCase()}.com.au` : '',
+            features: tier === 'paid' ? ['Outdoor Seating', 'Live Music', 'WiFi', 'Parking'] : ['Outdoor Seating']
         },
         created_at: serverTimestamp(),
         last_active_time: serverTimestamp(),
-        followersCount: tier === 'elite' ? faker.number.int({ min: 100, max: 500 }) : faker.number.int({ min: 5, max: 50 }),
+        followersCount: tier === 'paid' ? faker.number.int({ min: 100, max: 500 }) : faker.number.int({ min: 5, max: 50 }),
         ownedCommunities: []
     };
 };

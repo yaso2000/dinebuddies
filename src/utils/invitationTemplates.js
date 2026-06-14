@@ -257,22 +257,32 @@ const HEADER_BODY_LEGACY = new Set(['modern', 'elegant', 'fun', 'minimal', 'prem
 
 /**
  * Canonical public card layout keys stored on invitations.
- * (Wide 16:9 hero removed — old `hero_16_9` / `photoBottom` map to square hero for readable content.)
  * @param {string | undefined | null} raw
- * @returns {'classic' | 'hero_1_1' | 'hero_9_16'}
+ * @returns {'classic' | 'hero_4_5'}
  */
 export function normalizePublicCardTemplateKey(raw) {
     const s = String(raw || '').trim();
-    if (s === 'hero_16_9' || s === 'fullCanvas' || s === 'photoBottom') return 'hero_1_1';
-    if (s === 'classic' || s === 'hero_1_1' || s === 'hero_9_16') return s;
+    if (s === 'classic') return 'classic';
+    if (s === 'hero_4_5') return 'hero_4_5';
     if (HEADER_BODY_LEGACY.has(s)) return 'classic';
-    if (s === 'photoGlass') return 'hero_1_1';
-    if (s === 'photoChips') return 'hero_9_16';
-    return 'hero_1_1';
+    // Legacy hero / full-bleed layouts → 4:5 portrait hero
+    if (
+        s === 'hero_16_9' ||
+        s === 'fullCanvas' ||
+        s === 'photoBottom' ||
+        s === 'hero_1_1' ||
+        s === 'hero_9_16' ||
+        s === 'photoGlass' ||
+        s === 'photoChips'
+    ) {
+        return 'hero_4_5';
+    }
+    return 'hero_4_5';
 }
 
 export const LEGACY_PUBLIC_TEMPLATE_MAP = {
     classic: 'photoBottom',
+    hero_4_5: 'photoBottom',
     hero_1_1: 'photoBottom',
     hero_9_16: 'photoBottom',
     modern: 'photoGlass',
@@ -288,32 +298,33 @@ export const LEGACY_PUBLIC_TEMPLATE_MAP = {
 };
 
 /**
- * Public create flow: classic split + two full-bleed hero ratios (square + vertical).
+ * Public create flow: 4:5 hero + header (classic split).
  */
-export const TEMPLATE_PICKER_KEYS = ['classic', 'hero_1_1', 'hero_9_16'];
+export const TEMPLATE_PICKER_KEYS = ['hero_4_5', 'classic'];
 
-/** Public magic-cover bitmap aspects (match remaining hero layouts; wide 16:9 removed). */
-export const MAGIC_COVER_ASPECT_RATIOS = ['1:1', '9:16'];
+/** Public magic-cover bitmap aspects (matches hero_4_5 layout). */
+export const MAGIC_COVER_ASPECT_RATIOS = ['4:5'];
 
 /**
  * @param {string | undefined | null} templateType
- * @returns {'1:1'|'9:16'}
+ * @returns {'4:5'|'1:1'}
  */
 export function templateTypeToMagicCoverAspect(templateType) {
     const k = normalizePublicCardTemplateKey(templateType);
-    if (k === 'hero_9_16') return '9:16';
-    return '1:1';
+    if (k === 'classic') return '1:1';
+    return '4:5';
 }
 
 /**
  * @param {unknown} raw
- * @returns {'1:1'|'9:16'}
+ * @returns {'4:5'|'1:1'|'9:16'}
  */
 export function normalizeMagicCoverAspectRatio(raw) {
     const s = String(raw ?? '').trim();
-    if (s === '16:9') return '1:1';
-    if (s === '1:1' || s === '9:16') return s;
-    return '1:1';
+    if (s === '16:9' || s === '9:16') return '4:5';
+    if (s === '1:1') return '1:1';
+    if (s === '4:5') return '4:5';
+    return '4:5';
 }
 
 export const OCCASION_PRESETS = {

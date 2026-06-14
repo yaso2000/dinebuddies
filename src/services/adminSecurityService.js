@@ -22,9 +22,6 @@ export const adminSecurityService = {
     cancelUserSubscription: (targetUid) =>
         call('adminCancelUserSubscription', { targetUid }),
 
-    updateBusinessLimits: (targetUid, customLimits, customLimitsExpiry, adminNotes) =>
-        call('adminUpdateBusinessLimits', { targetUid, customLimits, customLimitsExpiry, adminNotes }),
-
     deleteUser: (targetUid) =>
         call('adminDeleteUser', { targetUid }),
 
@@ -40,7 +37,6 @@ export const adminSecurityService = {
     createNotification: (payload) =>
         call('createNotification', payload),
 
-    /** Resend email campaign — audience filters match adminEmailCampaign.js */
     previewEmailCampaign: (filters) =>
         call('adminPreviewEmailCampaign', filters),
 
@@ -52,5 +48,3 @@ export const adminSecurityService = {
     setReportStatus: (reportId, status) =>
         call('adminSetReportStatus', { reportId, status }),
 };
-
-export const consumeOfferCredit = () => call('consumeOfferCredit', {});

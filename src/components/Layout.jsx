@@ -23,6 +23,7 @@ import {
     FaPhotoVideo,
     FaGlobe,
     FaChevronRight,
+    FaThLarge,
 } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
@@ -44,7 +45,7 @@ import PushSessionManager from './PushSessionManager';
 import InvitationInboxOverlay from './Invitations/InvitationInboxOverlay';
 import { isBusinessUser } from '../utils/accountRole';
 import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
-import { goToLogin } from '../utils/goToLogin';
+import { buildLoginPath, goToLogin } from '../utils/goToLogin';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { useToast } from '../context/ToastContext';
 import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
@@ -92,7 +93,7 @@ const Layout = ({ children }) => {
         }
         if (kind === 'private') {
             const q = canCreatePrivateInvitation?.('private');
-            if (q && !q.canCreate) {
+            if (q && !q.profileLoading && !q.canCreate) {
                 showToast(
                     t(
                         'insufficient_dine_credits_wallet',
@@ -110,7 +111,7 @@ const Layout = ({ children }) => {
         }
         if (kind === 'dating') {
             const q = canCreatePrivateInvitation?.('dating');
-            if (q && !q.canCreate) {
+            if (q && !q.profileLoading && !q.canCreate) {
                 showToast(
                     t(
                         'insufficient_dine_credits_wallet',
@@ -256,9 +257,13 @@ const Layout = ({ children }) => {
         location.pathname === '/create-private' ||
         location.pathname === '/create' ||
         location.pathname.startsWith('/create/');
+    const isPrivateInvitationDeepLink =
+        location.pathname.startsWith('/invitation/private/') ||
+        location.pathname.startsWith('/invite/p/');
     const keepOutletMountedWhileLoading =
         isAuthRoutePath(location.pathname) ||
-        ((isAdminPath || isCreateInvitationPath) && Boolean(currentUser?.uid));
+        ((isAdminPath || isCreateInvitationPath || isPrivateInvitationDeepLink) &&
+            Boolean(currentUser?.uid));
 
     if (loading && !keepOutletMountedWhileLoading) {
         return <AppShellLoading variant="session" />;
@@ -269,6 +274,7 @@ const Layout = ({ children }) => {
     const isAdminAccount = isAdminIdentity(currentUser, userProfile);
     const privateInvitationPath =
         location.pathname.startsWith('/invitation/private/') ||
+        location.pathname.startsWith('/invite/p/') ||
         location.pathname === '/create-dating' ||
         location.pathname === '/create-private' ||
         location.pathname === '/create' ||
@@ -307,6 +313,7 @@ const Layout = ({ children }) => {
     const isMessagesIndex = location.pathname === '/messages';
     const showConversationSidebar = isChatRoute && !isMessagesIndex;
     const isCommunityRoute = location.pathname.startsWith('/community/');
+    const isDashboardRoute = location.pathname.startsWith('/my-community');
     const isStoryRoute = location.pathname === '/create-story';
     const isAiDesignRoute = location.pathname === '/ai-design-studio';
     const isStudioRoute =
@@ -702,18 +709,27 @@ const Layout = ({ children }) => {
                                 {isBusinessAccount && currentUser && (
                                     <Link
                                         to="/my-community"
-                                        className={`ds-nav-item ${isActive('/my-community') ? 'active' : ''}`}
+                                        className={`ds-nav-item ${location.pathname.startsWith('/my-community') ? 'active' : ''}`}
                                     >
-                                        <FaUsers /><span>{t('my_community', 'My Community')}</span>
+                                        <FaThLarge /><span>{t('business_dashboard', 'Dashboard')}</span>
                                     </Link>
                                 )}
                             </>
                         )}
                         {/* Settings: hidden for business accounts (available in dashboard) */}
                         {!isBusinessAccount && (
-                            <Link to="/settings" className={`ds-nav-item ${isActive('/settings') ? 'active' : ''}`}>
-                                <FaCog /><span>{t('settings', 'Settings')}</span>
-                            </Link>
+                            isGuest ? (
+                                <Link
+                                    to={buildLoginPath({ returnPath: '/settings' })}
+                                    className={`ds-nav-item ${isActive('/login') ? 'active' : ''}`}
+                                >
+                                    <FaCog /><span>{t('settings', 'Settings')}</span>
+                                </Link>
+                            ) : (
+                                <Link to="/settings" className={`ds-nav-item ${isActive('/settings') ? 'active' : ''}`}>
+                                    <FaCog /><span>{t('settings', 'Settings')}</span>
+                                </Link>
+                            )
                         )}
                         {isAdminAccount && (
                             <Link to="/admin/users" className={`ds-nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
@@ -725,7 +741,7 @@ const Layout = ({ children }) => {
                 ))}
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}`}>
+                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute ? ' app-main--fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}`}>
                     {!isSearchRoute && <EmailVerificationBusinessBanner />}
                     {!isSearchRoute && <UnpublishedBusinessReminder />}
                     {children}
@@ -789,9 +805,9 @@ const Layout = ({ children }) => {
                         </Link>
                     )}
                     {isBusinessAccount && (
-                        <Link to="/my-community" className={`nav-item ${isActive('/my-community') ? 'active' : ''}`}>
-                            <div className="friend-nav-icon-container"><FaUsers className="nav-icon" /></div>
-                            <span>{t('my_community')}</span>
+                        <Link to="/my-community" className={`nav-item ${location.pathname.startsWith('/my-community') ? 'active' : ''}`}>
+                            <div className="friend-nav-icon-container"><FaThLarge className="nav-icon" /></div>
+                            <span>{t('business_dashboard', 'Dashboard')}</span>
                         </Link>
                     )}
                     {isAdminAccount && (

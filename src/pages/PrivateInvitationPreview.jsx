@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaLock, FaArrowLeft } from 'react-icons/fa';
+import { FaEdit, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import {
     isPrivateInvitationDraft,
@@ -11,25 +11,27 @@ import {
     getPrivateDraftRecoveryCreatePath,
     rememberPrivateDraftCreateKind,
 } from '../utils/privateInvitationDraft';
-import { getTemplateStyle } from '../utils/invitationTemplates';
-import PrivateInvitationInfoGrid from '../components/Invitation/PrivateInvitationInfoGrid';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import './PrivateInvitation.css';
-
-import Lottie from 'lottie-react';
-import { OCCASION_PRESETS } from '../utils/invitationTemplates';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import PrivateInvitationCardPreview from '../components/Invitations/privateCard/PrivateInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/privateCardFrameColors';
 import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
-import { DEFAULT_MOTION_ID } from '../components/Invitations/privateCard/privateCardMotions';
+import {
+    DEFAULT_CARD_COPY_OFFSET_Y,
+    DEFAULT_CARD_COPY_WIDTH_PCT,
+    DEFAULT_CARD_COPY_FONT_SCALE,
+} from '../components/Invitations/privateCard/privateCardCopyLayout';
 import {
     getDatingInvitationHeroCoverFromInvitation,
-    getPrivateInvitationHeroCoverFromInvitation
+    getPrivateInvitationHeroCoverFromInvitation,
 } from '../components/Invitations/datingCard/datingCardBackgrounds';
 import { getInvitationCardTextBackdropFromInvitation } from '../components/Invitations/privateCard/privateCardTextBackdrop';
-import { pickPrivateInvitationCoverImageUrl } from '../utils/privateInvitationCoverImage';
+import PrivateInvitationExternalShare from '../components/Invitations/privateCard/PrivateInvitationExternalShare';
+import PrivateInvitationSmsShareButton from '../components/Invitations/privateCard/PrivateInvitationSmsShareButton';
+import PrivateInvitationInviteePanel from '../components/Invitations/privateCard/PrivateInvitationInviteePanel';
+import '../components/Invitations/privateCard/PrivateInvitationExternalShare.css';
 
 const PrivateInvitationPreview = () => {
     const { t } = useTranslation();
@@ -38,11 +40,15 @@ const PrivateInvitationPreview = () => {
     const { id: draftId } = useParams();
     const { publishPrivateInvitationDraft } = useInvitations();
 
+    const cardCaptureRef = useRef(null);
+
     const [invitation, setInvitation] = useState(null);
     const [loadError, setLoadError] = useState(null);
     const [isPublishing, setIsPublishing] = useState(false);
+    const [externalShareUsed, setExternalShareUsed] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [animationData, setAnimationData] = useState(null);
+    const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+    const [isLeaving, setIsLeaving] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -75,10 +81,12 @@ const PrivateInvitationPreview = () => {
                 }
 
                 const data = invitationDoc.data();
+
                 if (isPrivateInvitationPublished(data)) {
                     navigate(`/invitation/private/${draftId}`, { replace: true });
                     return;
                 }
+
                 if (!isPrivateInvitationDraft(data)) {
                     setLoadError('invalid_status');
                     showToast(
@@ -88,7 +96,11 @@ const PrivateInvitationPreview = () => {
                     return;
                 }
 
-                setInvitation({ id: draftId, ...data });
+                setInvitation({
+                    id: draftId,
+                    ...data,
+                });
+                setExternalShareUsed(Boolean(data.externalShareUsed));
                 rememberPrivateDraftCreateKind(data);
             } catch (error) {
                 console.error('Error fetching private draft:', error);
@@ -97,7 +109,7 @@ const PrivateInvitationPreview = () => {
                 showToast(
                     code === 'permission-denied'
                         ? t('private_draft_permission_denied', {
-                              defaultValue: 'Could not open the draft. Sign in again and retry.'
+                              defaultValue: 'Could not open the draft. Sign in again and retry.',
                           })
                         : t('error_loading_draft') || 'Error loading draft',
                     'error'
@@ -113,31 +125,6 @@ const PrivateInvitationPreview = () => {
         };
     }, [draftId, navigate, showToast, t]);
 
-    useEffect(() => {
-        const lottieUrl = invitation
-            ? OCCASION_PRESETS[
-                  (invitation.occasionType || '').charAt(0).toUpperCase() +
-                      (invitation.occasionType || '').slice(1).toLowerCase()
-              ]?.lottieUrl
-            : null;
-        if (!lottieUrl) return;
-        let cancelled = false;
-        fetch(lottieUrl, { mode: 'cors' })
-            .then((res) => {
-                if (!res.ok) return null;
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.includes('json')) return null;
-                return res.json();
-            })
-            .then((data) => {
-                if (!cancelled && data) setAnimationData(data);
-            })
-            .catch(() => {});
-        return () => {
-            cancelled = true;
-        };
-    }, [invitation]);
-
     const cardHeroCover = useMemo(() => {
         if (!invitation) return null;
         if (invitation.type === 'Dating') return getDatingInvitationHeroCoverFromInvitation(invitation);
@@ -149,26 +136,97 @@ const PrivateInvitationPreview = () => {
         [invitation]
     );
 
-    const templateStyles = useMemo(() => {
-        if (!invitation) return null;
-        return getTemplateStyle(
-            invitation.templateType || 'classic',
-            invitation.colorScheme || 'oceanBlue',
-            invitation.occasionType,
-            { cardFontFamily: invitation.cardFontFamily }
-        );
-    }, [invitation]);
+    const inviteMode = invitation?.type === 'Dating' ? 'dating' : 'private';
 
-    const privateHeroImageSrc = useMemo(
-        () => (invitation ? pickPrivateInvitationCoverImageUrl(invitation) : null),
-        [invitation]
-    );
+    const handleInvitedFriendsChange = (nextIds) => {
+        setInvitation((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      invitedFriends: nextIds,
+                      rsvps: Object.fromEntries(nextIds.map((id) => [id, 'pending'])),
+                  }
+                : prev
+        );
+    };
+
+    const markExternalShareUsed = async () => {
+        setExternalShareUsed(true);
+        setInvitation((prev) => (prev ? { ...prev, externalShareUsed: true } : prev));
+        try {
+            await updateDoc(doc(db, 'private_invitations', draftId), {
+                externalShareUsed: true,
+                updatedAt: serverTimestamp(),
+            });
+        } catch (e) {
+            console.warn('Could not persist external share flag:', e);
+        }
+    };
+
+    const persistPreviewDraft = async () => {
+        if (!draftId || !invitation) return;
+        await updateDoc(doc(db, 'private_invitations', draftId), {
+            invitedFriends: invitation.invitedFriends || [],
+            rsvps: invitation.rsvps || {},
+            externalShareUsed: Boolean(externalShareUsed || invitation.externalShareUsed),
+            updatedAt: serverTimestamp(),
+        });
+    };
+
+    const handleBackClick = () => {
+        setShowLeaveDialog(true);
+    };
+
+    const handleLeaveSave = async () => {
+        setIsLeaving(true);
+        try {
+            await persistPreviewDraft();
+            setShowLeaveDialog(false);
+            showToast(
+                t('private_preview_draft_saved', {
+                    defaultValue: 'Invitation draft saved.',
+                }),
+                'success'
+            );
+            navigate('/', { replace: true });
+        } catch (error) {
+            console.error('Error saving preview draft:', error);
+            showToast(t('failed_save_draft', { defaultValue: 'Could not save draft.' }), 'error');
+        } finally {
+            setIsLeaving(false);
+        }
+    };
+
+    const handleLeaveDiscard = () => {
+        setShowLeaveDialog(false);
+        navigate('/', { replace: true });
+    };
 
     const handlePublish = async () => {
+        const inviteeCount = (invitation?.invitedFriends || []).filter(Boolean).length;
+        const sharedExternally = externalShareUsed || invitation?.externalShareUsed;
+        if (inviteeCount < 1 && !sharedExternally) {
+            showToast(
+                t('private_send_requires_invitee_or_share', {
+                    defaultValue:
+                        'Select at least one person in the app, or share the invitation once via messaging.',
+                }),
+                'error'
+            );
+            return;
+        }
+
         setIsPublishing(true);
         try {
             const publishResult = await publishPrivateInvitationDraft(draftId);
             if (!publishResult?.success) return;
+
+            showToast(
+                t('private_invite_published_share', {
+                    defaultValue: 'Invitation sent! Share the link with anyone not on the app.',
+                }),
+                'success'
+            );
             navigate(`/invitation/private/${draftId}`, { replace: true });
         } catch (error) {
             console.error('Error publishing private invitation:', error);
@@ -188,7 +246,7 @@ const PrivateInvitationPreview = () => {
                 <p style={{ marginBottom: 16, color: 'var(--text-muted)' }}>
                     {loadError === 'permission'
                         ? t('private_draft_permission_denied', {
-                              defaultValue: 'Could not open the draft. Sign in again and retry.'
+                              defaultValue: 'Could not open the draft. Sign in again and retry.',
                           })
                         : t('error_loading_draft', { defaultValue: 'Could not load the invitation draft.' })}
                 </p>
@@ -206,211 +264,188 @@ const PrivateInvitationPreview = () => {
     return (
         <div
             className={`private-preview-container page-container theme-${(invitation.occasionType || 'social').toLowerCase()}`}
-            style={{ paddingBottom: '40px', position: 'relative' }}
+            style={{ paddingBottom: '40px' }}
         >
-            {animationData && (
-                <div
-                    className="lottie-bg-container"
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        zIndex: -1,
-                        opacity: 0.2,
-                        pointerEvents: 'none'
-                    }}
-                >
-                    <Lottie
-                        animationData={animationData}
-                        loop
-                        autoPlay
-                        style={{ width: '100%', height: '100%' }}
-                        rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
-                    />
-                </div>
-            )}
-
             <div className="preview-sticky-header invitation-preview-chrome__header">
                 <button
                     type="button"
                     className="invitation-preview-chrome__back-btn"
-                    onClick={() => navigate(-1)}
+                    onClick={handleBackClick}
+                    disabled={isLeaving}
                 >
                     <FaArrowLeft /> {t('back')}
                 </button>
                 <div className="invitation-preview-chrome__mode-label">
                     ✨ {t('preview_mode')}
                 </div>
-            </div>
-
-            <div className="premium-banner-warning invitation-preview-chrome__warning">
-                <FaExclamationTriangle color="var(--luxury-gold)" size={20} aria-hidden />
-                <span className="invitation-preview-chrome__warning-text">
-                    {t('preview_warning_private')}
-                </span>
-            </div>
-
-            <div style={{ padding: '0 15px 20px', display: 'flex', justifyContent: 'center' }}>
-                <PrivateInvitationCardPreview
-                    className="private-invitation-card-preview--showcase"
-                    freezeMotion
-                    cardTemplateSet={invitation.type === 'Dating' ? 'dating' : 'private'}
-                    frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
-                    cardThemeColor={
-                        invitation.type === 'Private'
-                            ? invitation.privateCardThemeColor ?? null
-                            : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
-                    }
-                    cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
-                    cardMotionId={invitation.cardMotionId ?? DEFAULT_MOTION_ID}
-                    occasionType={invitation.occasionType}
-                    cardBackgroundId={invitation.cardBackgroundId || null}
-                    heroCoverSrc={cardHeroCover?.src ?? null}
-                    heroCoverMediaType={cardHeroCover?.mediaType ?? null}
-                    heroCoverPoster={cardHeroCover?.poster ?? null}
-                    title={invitation.title}
-                    description={invitation.description}
-                    date={invitation.date}
-                    time={invitation.time}
-                    location={invitation.location}
-                    inviterName={invitation.author?.name || ''}
-                    inviterAvatarUrl={getSafeAvatar(invitation.author || {})}
-                    showHostAndMessage={
-                        invitation.type === 'Dating'
-                            ? invitation.datingCardShowHostAndMessage !== false
-                            : invitation.type === 'Private'
-                              ? invitation.privateCardShowHostAndMessage !== false
-                              : true
-                    }
-                    textBackdropTone={
-                        invitation.type === 'Private' || invitation.type === 'Dating'
-                            ? textBackdrop?.tone
-                            : undefined
-                    }
-                />
-            </div>
-
-            <div className="private-mock-details" style={{ padding: '0 15px' }}>
-                <div
-                    className="private-hero-section"
-                    style={{
-                        position: 'relative',
-                        width: '100%',
-                        height: '240px',
-                        overflow: 'hidden',
-                        borderRadius: '30px',
-                        marginBottom: '25px',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
-                    }}
-                >
-                    {privateHeroImageSrc ? (
-                        <img
-                            src={privateHeroImageSrc}
-                            alt=""
-                            className="private-hero-img-animated"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                    ) : (
-                        <div
-                            style={{
-                                width: '100%',
-                                height: '100%',
-                                background: 'linear-gradient(45deg, #1e1b4b, #312e81)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                        >
-                            <FaLock size={40} className="invitation-preview-chrome__hero-placeholder-icon" aria-hidden />
-                        </div>
-                    )}
-                    <div
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: 'linear-gradient(to bottom, transparent 40%, #0a0a0f 100%)'
-                        }}
-                    />
-                </div>
-
-                <div className="reveal-text private-title-heavy reveal-delay-1 invitation-preview-chrome__title-block">
-                    <h1
-                        className="invitation-preview-chrome__title"
-                        style={{
-                            fontFamily: templateStyles?.layout?.fontFamily || 'inherit'
-                        }}
-                    >
-                        {invitation.title}
-                    </h1>
-
-                    {invitation.venueName && (
-                        <div
-                            className="invitation-preview-chrome__venue-chip"
-                            style={{
-                                color: templateStyles?.layout?.accentColor || 'var(--luxury-gold)'
-                            }}
-                        >
-                            @ {invitation.venueName}
-                        </div>
-                    )}
-                </div>
-
-                <div className="reveal-text reveal-delay-2">
-                    <PrivateInvitationInfoGrid invitation={invitation} t={t} />
-                </div>
-
-                {invitation.description && (
-                    <div
-                        className="reveal-text premium-glass-card reveal-delay-3"
-                        style={{ marginBottom: '2rem', padding: '1.5rem', borderRadius: '24px' }}
-                    >
-                        <p className="invitation-preview-chrome__description">
-                            {invitation.description}
-                        </p>
-                    </div>
-                )}
-            </div>
-
-            <div
-                className="preview-action-bar premium-glass-card"
-                style={{
-                    margin: '30px 15px 20px',
-                    maxWidth: '640px',
-                    marginInline: 'auto',
-                    padding: '20px',
-                    display: 'flex',
-                    gap: '12px',
-                    borderRadius: '24px'
-                }}
-            >
                 <button
                     type="button"
-                    className="vip-btn ui-btn ui-btn--secondary"
+                    className="invitation-preview-chrome__edit-btn"
                     onClick={() =>
                         navigate(getPrivateInvitationCreatePath(invitation), {
                             state: { editInvitation: invitation },
                         })
                     }
-                    style={{ flex: 1, height: '50px', borderRadius: 15 }}
                     disabled={isPublishing}
+                    aria-label={t('edit')}
                 >
-                    <FaEdit /> {t('edit')}
-                </button>
-                <button
-                    type="button"
-                    className="vip-btn vip-btn-primary ui-btn ui-btn--primary"
-                    onClick={handlePublish}
-                    style={{ flex: 2, height: '50px', borderRadius: 15 }}
-                    disabled={isPublishing}
-                >
-                    {isPublishing ? (
-                        t('publishing')
-                    ) : (
-                        <>
-                            <FaCheckCircle /> {t('send_invitations')}
-                        </>
-                    )}
+                    <FaEdit />
                 </button>
             </div>
+
+            <div className="private-preview-stack">
+                <div className="private-preview-stack__card-wrap" ref={cardCaptureRef}>
+                    <PrivateInvitationCardPreview
+                        className="private-invitation-card-preview--showcase"
+                        freezeMotion
+                        cardTemplateSet={invitation.type === 'Dating' ? 'dating' : 'private'}
+                        frameColorId={invitation.cardFrameColorId ?? DEFAULT_FRAME_COLOR_ID}
+                        cardThemeColor={
+                            invitation.type === 'Private'
+                                ? invitation.privateCardThemeColor ?? null
+                                : invitation.datingCardThemeColor ?? invitation.datingCardTextColor ?? null
+                        }
+                        cardFontId={invitation.cardFontId ?? DEFAULT_FONT_ID}
+                        copyOffsetY={invitation.cardCopyOffsetY ?? DEFAULT_CARD_COPY_OFFSET_Y}
+                        copyWidthPct={invitation.cardCopyWidthPct ?? DEFAULT_CARD_COPY_WIDTH_PCT}
+                        copyFontScale={invitation.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE}
+                        occasionType={invitation.occasionType}
+                        cardBackgroundId={invitation.cardBackgroundId || null}
+                        cardGradientId={invitation.cardGradientId || null}
+                        heroCoverSrc={cardHeroCover?.src ?? null}
+                        heroCoverMediaType={cardHeroCover?.mediaType ?? null}
+                        heroCoverPoster={cardHeroCover?.poster ?? null}
+                        title={invitation.title}
+                        description={invitation.description}
+                        date={invitation.date}
+                        time={invitation.time}
+                        location={invitation.location}
+                        inviterName={invitation.author?.name || ''}
+                        inviterAvatarUrl={getSafeAvatar(invitation.author || {})}
+                        showHostAndMessage={
+                            invitation.type === 'Dating'
+                                ? invitation.datingCardShowHostAndMessage !== false
+                                : invitation.type === 'Private'
+                                  ? invitation.privateCardShowHostAndMessage !== false
+                                  : true
+                        }
+                        textBackdropTone={
+                            invitation.type === 'Private' || invitation.type === 'Dating'
+                                ? textBackdrop?.tone
+                                : undefined
+                        }
+                    />
+                </div>
+
+                <PrivateInvitationInviteePanel
+                    invitationId={draftId}
+                    mode={inviteMode}
+                    step="preview"
+                    invitedFriendIds={invitation.invitedFriends || []}
+                    onInvitedFriendsChange={handleInvitedFriendsChange}
+                />
+
+                <p className="private-preview-stack__send-hint">
+                    {inviteMode === 'dating'
+                        ? (invitation.invitedFriends?.length
+                              ? t('dating_send_with_selected_or_share', {
+                                    defaultValue:
+                                        'Your date is selected below. Send in the app, or share via messaging.',
+                                })
+                              : t('dating_send_requires_one_or_share', {
+                                    defaultValue:
+                                        'Pick one person on the app (max 1), or share once via messaging before sending.',
+                                }))
+                        : t('private_send_requires_invitee_or_share', {
+                              defaultValue:
+                                  'Select at least one person in the app, or share the invitation once via messaging.',
+                          })}
+                </p>
+                <div className="private-preview-stack__action-row">
+                    <button
+                        type="button"
+                        className="private-preview-stack__send-btn vip-btn vip-btn-primary ui-btn ui-btn--primary"
+                        onClick={handlePublish}
+                        disabled={isPublishing}
+                    >
+                        {isPublishing ? (
+                            t('publishing')
+                        ) : (
+                            <>
+                                <FaCheckCircle aria-hidden />
+                                {t('send_to_app_members', { defaultValue: 'Send to app members' })}
+                            </>
+                        )}
+                    </button>
+                    <PrivateInvitationExternalShare
+                        invitationId={draftId}
+                        invitation={invitation}
+                        cardCaptureRef={cardCaptureRef}
+                        allowImageOnly
+                        onShareSuccess={markExternalShareUsed}
+                    />
+                    <PrivateInvitationSmsShareButton
+                        invitationId={draftId}
+                        invitation={invitation}
+                        cardCaptureRef={cardCaptureRef}
+                        allowImageOnly
+                        onShareSuccess={markExternalShareUsed}
+                    />
+                </div>
+            </div>
+
+            {showLeaveDialog ? (
+                <div
+                    className="invitation-preview-leave-dialog"
+                    role="alertdialog"
+                    aria-modal="true"
+                    aria-label={t('studio_close_title', 'Save your work?')}
+                >
+                    <div
+                        className="invitation-preview-leave-dialog__backdrop"
+                        onClick={() => !isLeaving && setShowLeaveDialog(false)}
+                    />
+                    <div className="invitation-preview-leave-dialog__card">
+                        <h3 className="invitation-preview-leave-dialog__title">
+                            {t('studio_close_title', 'Save your work?')}
+                        </h3>
+                        <p className="invitation-preview-leave-dialog__text">
+                            {t(
+                                'private_preview_leave_question',
+                                'Save your invitation draft before leaving preview?'
+                            )}
+                        </p>
+                        <div className="invitation-preview-leave-dialog__actions">
+                            <button
+                                type="button"
+                                className="invitation-preview-leave-dialog__btn invitation-preview-leave-dialog__btn--save"
+                                onClick={handleLeaveSave}
+                                disabled={isLeaving}
+                            >
+                                {isLeaving
+                                    ? t('saving', 'Saving…')
+                                    : t('studio_save_draft', 'Save draft')}
+                            </button>
+                            <button
+                                type="button"
+                                className="invitation-preview-leave-dialog__btn invitation-preview-leave-dialog__btn--discard"
+                                onClick={handleLeaveDiscard}
+                                disabled={isLeaving}
+                            >
+                                {t('studio_close_discard', 'Discard')}
+                            </button>
+                            <button
+                                type="button"
+                                className="invitation-preview-leave-dialog__btn invitation-preview-leave-dialog__btn--cancel"
+                                onClick={() => setShowLeaveDialog(false)}
+                                disabled={isLeaving}
+                            >
+                                {t('studio_close_keep_editing', 'Keep editing')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 };

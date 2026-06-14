@@ -62,7 +62,7 @@
 .dating-card-preview-stage__side-rail {
     position: absolute;
     z-index: 4;
-    right: 2px;
+    inset-inline-end: 2px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
@@ -72,11 +72,13 @@
     pointer-events: auto;
 }
 
-.dating-card-preview-stage__side-rail .private-card-motion-picker--rail {
+.dating-card-preview-stage__side-rail--font {
+    inset-inline-end: auto;
+    inset-inline-start: 2px;
+}
+
+.dating-card-preview-stage__side-rail .private-card-copy-layout-rail {
     position: static;
-    top: auto;
-    right: auto;
-    transform: none;
     margin: 0;
 }
 

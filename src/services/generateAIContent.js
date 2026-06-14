@@ -1,15 +1,24 @@
 import { auth } from '../firebase/config';
+import i18n from '../i18n';
+import { normalizeAiOutputLanguage } from '../utils/aiOutputLanguage';
 import { unwrapAiResponseData } from '../utils/aiContentFieldMapper';
 import { buildDatingAiGenerateBody } from '../utils/datingAiRequestPayload';
 import { enforceCardStructureTextLimits, normalizeCardStructure } from '../utils/cardStructure';
 import {
     GEMINI_PROVIDER_BILLING_CODE,
-    geminiProviderBillingUserMessage,
     isGeminiProviderBillingExhausted,
 } from '../utils/geminiProviderErrors.js';
+import { AI_USER_PROMPT_MAX_CHARS, getAiUserPromptDefaultEn } from '../constants/aiPromptLimits';
 
 const AI_GENERATE_PATH = '/api/ai/generate';
 const AI_MULTI_GENERATE_PATH = '/api/ai/multi-generate';
+
+function attachOutputLanguage(body) {
+    return {
+        ...body,
+        outputLanguage: normalizeAiOutputLanguage(i18n.language),
+    };
+}
 
 /** Obtain Bearer token; refresh only when needed or after 401 retry. */
 async function getAuthBearerToken(forceRefresh = false) {
@@ -81,13 +90,13 @@ async function parseAiApiResponse(response) {
         const snippet = responseText.replace(/\s+/g, ' ').trim().slice(0, 120);
         const hint =
             response.status === 404 || snippet.startsWith('<!DOCTYPE') || snippet.startsWith('<html')
-                ? 'تأكد أنك تستخدم الدومين المنشور مع /api (أعد النشر إن لزم).'
+                ? i18n.t('ai_deploy_api_hint')
                 : `HTTP ${response.status}`;
         return {
             success: false,
             error: 'Invalid server response',
             code: 'GEMINI_API_ERROR',
-            message: `استجابة غير صالحة من السيرفر (${hint}).`,
+            message: i18n.t('ai_invalid_server_response', { hint }),
             status: response.status,
         };
     }
@@ -132,7 +141,7 @@ async function parseAiApiResponse(response) {
             code: 'INSUFFICIENT_CREDITS',
             message:
                 payload.message ||
-                'رصيدك غير كافٍ. تحتاج إلى المزيد من الكريدت لإتمام هذه العملية.',
+                i18n.t('ai_insufficient_credits_default'),
             status: 403,
         };
     }
@@ -144,7 +153,7 @@ async function parseAiApiResponse(response) {
             code: payload?.code || 'UNAUTHORIZED',
             message:
                 payload?.message ||
-                'انتهت جلسة تسجيل الدخول أو التوكن غير صالح. سجّل الخروج ثم الدخول مرة أخرى.',
+                i18n.t('ai_session_expired'),
             status: 401,
         };
     }
@@ -156,7 +165,7 @@ async function parseAiApiResponse(response) {
             code: payload?.code || 'SERVICE_UNAVAILABLE',
             message:
                 payload?.message ||
-                'خدمة الذكاء الاصطناعي غير متاحة حالياً على الخادم. حاول لاحقاً أو راجع إعدادات Vercel.',
+                i18n.t('ai_service_unavailable'),
             status: 503,
             detail: typeof payload?.detail === 'string' ? payload.detail : undefined,
         };
@@ -191,10 +200,12 @@ async function parseAiApiResponse(response) {
  * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
  */
 export async function generateAIContent(userPrompt, postType, subType, options = {}) {
-    const trimmedPrompt = String(userPrompt || '').trim();
-    if (!trimmedPrompt) {
-        return { success: false, error: 'userPrompt is required', code: 'VALIDATION_ERROR' };
-    }
+    const resolvedPostType = postType === 'invitation' ? 'invitation' : postType;
+    const trimmedPrompt =
+        String(userPrompt || '')
+            .trim()
+            .slice(0, AI_USER_PROMPT_MAX_CHARS) ||
+        getAiUserPromptDefaultEn(resolvedPostType, subType);
 
     if (!auth.currentUser) {
         return { success: false, error: 'Sign in required', code: 'UNAUTHORIZED', status: 401 };
@@ -241,9 +252,9 @@ export async function generateAIContent(userPrompt, postType, subType, options =
             };
         }
 
-        body = datingPayload.body;
+        body = attachOutputLanguage(datingPayload.body);
     } else {
-        body = { userPrompt: trimmedPrompt, postType };
+        body = attachOutputLanguage({ userPrompt: trimmedPrompt, postType });
 
         if (postType === 'invitation') {
             if (!subType) {
@@ -315,21 +326,18 @@ export function isInsufficientCreditsError(result) {
  */
 export function formatAiErrorMessage(result, t) {
     if (!result || result.success !== false) {
-        return t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.');
+        return t('ai_generate_failed');
     }
 
     if (
         result.code === GEMINI_PROVIDER_BILLING_CODE ||
         isGeminiProviderBillingExhausted(result.message || result.error)
     ) {
-        return t('ai_gemini_billing_exhausted', geminiProviderBillingUserMessage('ar'));
+        return t('ai_gemini_billing_exhausted');
     }
 
     if (result.code === 'MALFORMED_JSON') {
-        return t(
-            'ai_malformed_response',
-            'تعذّر قراءة استجابة الذكاء الاصطناعي. حاول مرة أخرى بملاحظات أقصر.'
-        );
+        return t('ai_malformed_response');
     }
 
     if (result.code === 'VALIDATION_ERROR') {
@@ -337,10 +345,7 @@ export function formatAiErrorMessage(result, t) {
             result.error === 'dating_context_incomplete' ||
             (Array.isArray(result.missing) && result.missing.length > 0)
         ) {
-            return t(
-                'dating_ai_all_fields_required',
-                'يرجى ملء جميع الحقول أولاً لتخصيص الدعوة.'
-            );
+            return t('dating_ai_all_fields_required');
         }
         const validationMsg = [result.message, result.error]
             .filter((v) => typeof v === 'string' && v.trim())
@@ -350,20 +355,14 @@ export function formatAiErrorMessage(result, t) {
 
     const raw = String(result.message || result.error || '').trim();
     if (raw === 'undefined' || raw === 'null') {
-        return t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.');
+        return t('ai_generate_failed');
     }
     if (/unterminated string|malformed json|unexpected token|not valid json/i.test(raw)) {
-        return t(
-            'ai_malformed_response',
-            'تعذّر قراءة استجابة الذكاء الاصطناعي. حاول مرة أخرى بملاحظات أقصر.'
-        );
+        return t('ai_malformed_response');
     }
 
     if (result.code === 'IMAGE_GENERATION_FAILED' || /imagen|image generation|no image/i.test(raw)) {
-        return t(
-            'ai_image_generation_failed',
-            'تعذّر توليد الصورة. جرّب وصفاً مختلفاً أو تحقق من إعدادات Imagen على الخادم.'
-        );
+        return t('ai_image_generation_failed');
     }
 
     if (
@@ -374,16 +373,13 @@ export function formatAiErrorMessage(result, t) {
     ) {
         return (
             result.message ||
-            t(
-                'ai_service_unavailable',
-                'خدمة توليد الصور غير متاحة حالياً. راجع إعدادات Firebase AI وStorage على Vercel.'
-            )
+            t('ai_service_unavailable')
         );
     }
 
     return (
         raw ||
-        t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.')
+        t('ai_generate_failed')
     );
 }
 
@@ -407,10 +403,11 @@ export async function generateAIMagicCover({
     venueName,
     aspectRatio = '1:1',
 }) {
-    const trimmedPrompt = String(userPrompt || '').trim();
-    if (!trimmedPrompt) {
-        return { success: false, error: 'userPrompt is required', code: 'VALIDATION_ERROR' };
-    }
+    const trimmedPrompt =
+        String(userPrompt || '')
+            .trim()
+            .slice(0, AI_USER_PROMPT_MAX_CHARS) ||
+        getAiUserPromptDefaultEn('invitation', subType || 'public');
 
     if (!subType) {
         return {
@@ -429,13 +426,13 @@ export async function generateAIMagicCover({
         return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
     }
 
-    const body = {
-        userPrompt: trimmedPrompt.slice(0, 2000),
+    const body = attachOutputLanguage({
+        userPrompt: trimmedPrompt,
         postType: 'invitation',
         subType,
         generationPackage: 'image',
         aspectRatio,
-    };
+    });
 
     const venueTypeStr = String(venueType || '').trim();
     const venueNameStr = String(venueName || '').trim();
@@ -460,7 +457,7 @@ export async function generateAIMagicCover({
                 error: 'request_timeout',
                 code: 'AI_REQUEST_TIMEOUT',
                 message:
-                    'انتهت مهلة انتظار توليد الصورة. قد يكون التوليد ما زال جارياً على الخادم — انتظر ثم حاول مرة أخرى.',
+                    i18n.t('ai_request_timeout'),
                 status: 408,
             };
         }
@@ -485,10 +482,11 @@ export async function generateAIMagicCover({
  * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
  */
 export async function generateAIDesignStudioImage({ userPrompt, designCategory, aspectRatio = '1:1' }) {
-    const trimmedPrompt = String(userPrompt || '').trim();
-    if (!trimmedPrompt) {
-        return { success: false, error: 'userPrompt is required', code: 'VALIDATION_ERROR' };
-    }
+    const trimmedPrompt =
+        String(userPrompt || '')
+            .trim()
+            .slice(0, AI_USER_PROMPT_MAX_CHARS) ||
+        getAiUserPromptDefaultEn('design_studio');
 
     if (!designCategory) {
         return {
@@ -507,13 +505,13 @@ export async function generateAIDesignStudioImage({ userPrompt, designCategory, 
         return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
     }
 
-    const body = {
-        userPrompt: trimmedPrompt.slice(0, 2000),
+    const body = attachOutputLanguage({
+        userPrompt: trimmedPrompt,
         postType: 'design_studio',
         generationPackage: 'image',
         designCategory,
         aspectRatio,
-    };
+    });
 
     let response;
     try {
@@ -531,7 +529,7 @@ export async function generateAIDesignStudioImage({ userPrompt, designCategory, 
                 error: 'request_timeout',
                 code: 'AI_REQUEST_TIMEOUT',
                 message:
-                    'انتهت مهلة انتظار توليد الصورة. قد يكون التوليد ما زال جارياً على الخادم — انتظر ثم حاول مرة أخرى.',
+                    i18n.t('ai_request_timeout'),
                 status: 408,
             };
         }

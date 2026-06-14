@@ -31,6 +31,17 @@ export function isBusinessUser(profile) {
     return profileDocumentIsBusiness(profile);
 }
 
+/** Virtual / placeholder accounts cannot create consumer invitations. */
+export function isVirtualUser(profile) {
+    if (!profile || typeof profile !== 'object') return false;
+    return profile.isVirtual === true;
+}
+
+/** Business or virtual accounts are blocked from creating any invitation type. */
+export function cannotCreateInvitations(profile) {
+    return isBusinessUser(profile) || isVirtualUser(profile);
+}
+
 /** Affiliate agent accounts in the **normalized** app profile (`role` only) — safe for Layout/HomeRouter. */
 export function isAffiliateAgent(profile) {
     if (!profile || typeof profile !== 'object') return false;

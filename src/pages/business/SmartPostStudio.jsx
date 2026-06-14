@@ -1,21 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import {
     FaFont,
     FaEye,
-    FaMagic,
+    FaHighlighter,
     FaPalette,
     FaSlidersH,
     FaTextHeight,
     FaTags,
-    FaAdjust,
-    FaArrowUp,
-    FaExpandAlt,
-    FaLayerGroup,
-    FaSearchPlus,
     FaSave,
     FaPaperPlane,
 } from 'react-icons/fa';
@@ -30,13 +25,10 @@ import {
 function studioPostErrorMessage(err, t) {
     const code = String(err?.code || '');
     if (code === 'permission-denied' || code.includes('permission')) {
-        return t(
-            'studio_post_permission_denied',
-            'لا توجد صلاحية لحفظ المنشور. تأكد أن حسابك تجاري وانشر قواعد Firestore.'
-        );
+        return t('studio_post_permission_denied');
     }
     if (code === 'unauthenticated') {
-        return t('studio_post_sign_in', 'سجّل الدخول ثم أعد المحاولة.');
+        return t('studio_post_sign_in');
     }
     return getImageUploadErrorMessage(err, t, 'post_failed');
 }
@@ -66,7 +58,6 @@ import {
     updateMotionPostDraft,
 } from '../../features/motion-post/motionPostDraftService';
 import { syncPublishedMotionPostToCommunityFeed } from '../../features/motion-post/motionPostFeedPublish';
-import { useStudioTypingViewport } from '../../features/motion-post/studio/useStudioTypingViewport';
 import {
     STUDIO_ANIM_DURATION_MS,
     STUDIO_TEXT_ANIMATIONS,
@@ -74,10 +65,26 @@ import {
 } from '../../features/motion-post/studio/studioTextAnimation';
 import AIFloatingLauncher from '../../components/AIFloatingLauncher';
 import { extractAIContentFields, mapAiAnimationToStudio } from '../../utils/aiContentFieldMapper';
+import { buildAnimatedPostAiUserPrompt } from '../../utils/aiPromptLocale';
 import { parseAiStudioImageFromState } from '../../utils/aiStudioImagePayload';
 import { pickAiRemoteImageUrl } from '../../utils/aiGeneratedMediaUrl';
 import { ensurePublicImageUrl } from '../../services/mediaService';
+import StudioTextComposerOverlay from '../../features/motion-post/studio/StudioTextComposerOverlay';
+import { useEditorSessionAutosave } from '../../hooks/useEditorSessionAutosave';
+import {
+    isMotionStudioDraftEmpty,
+    motionStudioDraftKey,
+    restoreEditorMedia,
+    serializeEditorMedia,
+} from '../../utils/editorSessionDraft';
 import './SmartPostStudio.css';
+
+const MOBILE_COMPOSER_MQ = '(max-width: 1023px)';
+
+function readMobileComposerEnabled() {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia(MOBILE_COMPOSER_MQ).matches;
+}
 
 const DEFAULT_STYLE = {
     ...STUDIO_STYLE_PRESETS.modern,
@@ -86,25 +93,23 @@ const DEFAULT_STYLE = {
     animation: 'slide',
 };
 
-const STUDIO_ANIM_ICONS = {
-    fade: FaAdjust,
-    slide: FaArrowUp,
-    pop: FaExpandAlt,
-    stagger: FaLayerGroup,
-    zoom: FaSearchPlus,
-};
-
-function StudioToolRail({ tools, activeTool, onToggle, t, showLabels = false }) {
+function StudioToolRail({ tools, activeTool, onToggle, t, showLabels = false, aiSlot = null }) {
     return (
         <nav
             className="sps-tool-rail"
             role="toolbar"
-            aria-label={t('studio_edit_tools', 'أدوات التحرير')}
+            aria-label={t('studio_edit_tools')}
         >
+            {aiSlot ? (
+                <>
+                    <div className="sps-tool-rail__ai">{aiSlot}</div>
+                    <div className="sps-tool-rail__sep" aria-hidden />
+                </>
+            ) : null}
             {tools.map((tool) => {
                 const Icon = tool.icon;
                 const isActive = activeTool === tool.id;
-                const label = t(tool.labelKey, tool.label);
+                const label = t(tool.labelKey);
                 return (
                     <button
                         key={tool.id}
@@ -124,29 +129,27 @@ function StudioToolRail({ tools, activeTool, onToggle, t, showLabels = false }) 
     );
 }
 
-function StudioAnimRail({ animations, activeAnim, onSelect, t, showLabels = false }) {
+function StudioAnimStrip({ animations, activeAnim, onSelect, t }) {
     return (
         <nav
-            className="sps-anim-rail"
+            className="sps-anim-strip"
             role="toolbar"
-            aria-label={t('studio_text_entrance', 'حركة دخول النص')}
+            aria-label={t('studio_text_entrance')}
         >
             {animations.map((anim) => {
-                const Icon = STUDIO_ANIM_ICONS[anim.id] || FaMagic;
                 const isActive = activeAnim === anim.id;
                 const label = t(anim.labelKey, anim.label);
                 return (
                     <button
                         key={anim.id}
                         type="button"
-                        className={`sps-anim-rail__btn${isActive ? ' active' : ''}`}
+                        className={`sps-anim-strip__btn${isActive ? ' active' : ''}`}
                         onClick={() => onSelect(anim.id)}
                         aria-label={label}
                         aria-pressed={isActive}
                         title={label}
                     >
-                        <Icon size={16} aria-hidden />
-                        {showLabels ? <span className="sps-anim-rail__label">{label}</span> : null}
+                        <span className="sps-anim-strip__label">{label}</span>
                     </button>
                 );
             })}
@@ -157,7 +160,7 @@ function StudioAnimRail({ animations, activeAnim, onSelect, t, showLabels = fals
 function StudioQuickStyles({ styles, onApply, t, layout = 'horizontal' }) {
     return (
         <div className={`sps-quick-styles sps-quick-styles--${layout}`}>
-            <span className="sps-quick-styles__label">{t('studio_quick_styles', 'أنماط سريعة')}</span>
+            <span className="sps-quick-styles__label">{t('studio_quick_styles')}</span>
             <div className="sps-quick-styles__track">
                 {styles.map((qs) => (
                     <button
@@ -168,7 +171,7 @@ function StudioQuickStyles({ styles, onApply, t, layout = 'horizontal' }) {
                         onClick={() => onApply(qs.patch)}
                     >
                         <span className="sps-quick-chip__dot" aria-hidden />
-                        <span className="sps-quick-chip__label">{qs.label}</span>
+                        <span className="sps-quick-chip__label">{t(qs.labelKey, qs.label)}</span>
                     </button>
                 ))}
             </div>
@@ -182,6 +185,7 @@ function StudioPublishActions({
     savingDraft,
     publishing,
     onSaveDraft,
+    onClose,
     onPublish,
     t,
 }) {
@@ -195,18 +199,26 @@ function StudioPublishActions({
             >
                 <FaSave aria-hidden />
                 {savingDraft
-                    ? t('studio_saving_draft', 'جاري الحفظ…')
-                    : t('studio_save_draft', 'حفظ مسودة')}
+                    ? t('studio_saving_draft')
+                    : t('studio_save_draft')}
+            </button>
+            <button
+                type="button"
+                className="sps-actions__close"
+                disabled={isBusy}
+                onClick={onClose}
+            >
+                {t('studio_close', 'Close')}
             </button>
             <button
                 type="button"
                 className="sps-actions__export"
                 disabled={!canPublish || isBusy}
                 onClick={onPublish}
-                title={t('studio_publish_hint', 'نشر المنشور على الفيد والصفحة الرئيسية')}
+                title={t('studio_publish_hint')}
             >
                 <FaPaperPlane aria-hidden />
-                {publishing ? t('posting', 'جاري النشر…') : t('studio_publish', 'نشر')}
+                {publishing ? t('posting') : t('studio_publish')}
             </button>
         </div>
     );
@@ -215,18 +227,19 @@ function StudioPublishActions({
 /** @typedef {string} StudioToolId */
 
 const EDITOR_TOOLS = [
-    { id: 'align', icon: FaSlidersH, labelKey: 'studio_tool_align', label: 'المحاذاة' },
-    { id: 'size', icon: FaTextHeight, labelKey: 'studio_tool_size', label: 'الحجم' },
-    { id: 'font', icon: FaFont, labelKey: 'studio_tool_font', label: 'الخط' },
-    { id: 'transparency', icon: FaEye, labelKey: 'studio_tool_transparency', label: 'الشفافية' },
-    { id: 'colors', icon: FaPalette, labelKey: 'studio_tool_colors', label: 'الألوان' },
-    { id: 'effects', icon: FaMagic, labelKey: 'studio_tool_effects', label: 'التأثيرات' },
-    { id: 'promo', icon: FaTags, labelKey: 'studio_tool_promo', label: 'عروض' },
+    { id: 'align', icon: FaSlidersH, labelKey: 'studio_tool_align' },
+    { id: 'size', icon: FaTextHeight, labelKey: 'studio_tool_size' },
+    { id: 'font', icon: FaFont, labelKey: 'studio_tool_font' },
+    { id: 'transparency', icon: FaEye, labelKey: 'studio_tool_transparency' },
+    { id: 'colors', icon: FaPalette, labelKey: 'studio_tool_colors' },
+    { id: 'effects', icon: FaHighlighter, labelKey: 'studio_tool_effects' },
+    { id: 'promo', icon: FaTags, labelKey: 'studio_tool_promo' },
 ];
 
 export default function SmartPostStudio() {
     const { t, i18n } = useTranslation();
     const location = useLocation();
+    const navigate = useNavigate();
     const editMotionPostId = location.state?.editMotionPostId
         ? String(location.state.editMotionPostId)
         : null;
@@ -238,8 +251,6 @@ export default function SmartPostStudio() {
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [media, setMedia] = useState(null);
-    /** Hide cover in preview while a solid backdrop is selected; file stays in memory */
-    const [coverHidden, setCoverHidden] = useState(false);
     const [studioStyle, setStudioStyle] = useState(DEFAULT_STYLE);
     const [activeField, setActiveField] = useState('title');
     const [activeTool, setActiveTool] = useState(null);
@@ -253,15 +264,19 @@ export default function SmartPostStudio() {
     const [loadingEdit, setLoadingEdit] = useState(Boolean(editMotionPostId));
     const fileInputRef = useRef(null);
     const previewZoneRef = useRef(null);
-    const {
-        pageRef,
-        cardRef,
-        isTyping,
-        previewSize,
-        onTextFocus,
-        onTextBlur,
-        resetPreviewLock,
-    } = useStudioTypingViewport();
+    const cardRef = useRef(null);
+    const mobileComposerRef = useRef(null);
+    const [isTyping, setIsTyping] = useState(false);
+    const [useMobileComposer, setUseMobileComposer] = useState(readMobileComposerEnabled);
+    const [showCloseDialog, setShowCloseDialog] = useState(false);
+
+    useEffect(() => {
+        const mq = window.matchMedia(MOBILE_COMPOSER_MQ);
+        const sync = () => setUseMobileComposer(mq.matches);
+        sync();
+        mq.addEventListener('change', sync);
+        return () => mq.removeEventListener('change', sync);
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -275,7 +290,6 @@ export default function SmartPostStudio() {
         const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
         if (!studio) return;
         setMedia({ preview: studio.publishedUrl, url: studio.publishedUrl });
-        setCoverHidden(false);
     }, [location.state?.aiStudioImage]);
 
     useEffect(() => {
@@ -307,7 +321,6 @@ export default function SmartPostStudio() {
                 ).trim();
                 if (imageUrl) {
                     setMedia({ preview: imageUrl });
-                    setCoverHidden(false);
                 }
                 const se =
                     data.studioEditor && typeof data.studioEditor === 'object'
@@ -339,15 +352,6 @@ export default function SmartPostStudio() {
             cancelled = true;
         };
     }, [editMotionPostId, currentUser?.uid, showToast, t]);
-
-    useEffect(() => {
-        if (!media?.preview) {
-            setCoverHidden(false);
-            return;
-        }
-        const bg = studioStyle.backgroundColor;
-        setCoverHidden(Boolean(bg && bg !== 'transparent'));
-    }, [studioStyle.backgroundColor, media?.preview]);
 
     const previewStyle = useMemo(
         () => ({
@@ -420,7 +424,6 @@ export default function SmartPostStudio() {
 
     const selectLayout = (id) => {
         setLayoutModel(id);
-        resetPreviewLock();
         setAnimPlayKey((k) => k + 1);
     };
 
@@ -430,13 +433,10 @@ export default function SmartPostStudio() {
         setAnimPlayKey((k) => k + 1);
     }, []);
 
-    const buildAnimatedAiPrompt = useCallback(() => {
-        const parts = [
-            title.trim() && `عنوان حالي: ${title.trim()}`,
-            body.trim() && `وصف حالي: ${body.trim()}`,
-        ].filter(Boolean);
-        return parts.join('\n') || 'منشور متحرك ترويجي للمجتمع';
-    }, [title, body]);
+    const buildAnimatedAiPrompt = useCallback(
+        () => buildAnimatedPostAiUserPrompt({ title, body }),
+        [title, body],
+    );
 
     const handleAnimatedAiContent = useCallback(
         (data) => {
@@ -451,11 +451,6 @@ export default function SmartPostStudio() {
     );
 
     const openImagePicker = () => {
-        if (coverHidden && media?.preview) {
-            setStudioStyle((s) => ({ ...s, backgroundColor: 'transparent' }));
-            setCoverHidden(false);
-            return;
-        }
         fileInputRef.current?.click();
     };
 
@@ -467,18 +462,101 @@ export default function SmartPostStudio() {
         }
         if (media?.preview) URL.revokeObjectURL(media.preview);
         setMedia({ file, preview: URL.createObjectURL(file) });
-        setCoverHidden(false);
         e.target.value = '';
     };
 
-    const handleFieldFocus = useCallback(
-        (field) => {
-            setActiveField(field);
-            setActiveTool(null);
-            onTextFocus();
-        },
-        [onTextFocus]
+    const handleFieldFocus = useCallback((field) => {
+        setActiveField(field);
+        setActiveTool(null);
+        if (useMobileComposer) {
+            mobileComposerRef.current?.focusField(field);
+            setIsTyping(true);
+        }
+    }, [useMobileComposer]);
+
+    const closeMobileComposer = useCallback(() => {
+        setIsTyping(false);
+    }, []);
+
+    const dismissStudioEditors = useCallback(() => {
+        setIsTyping(false);
+        setActiveTool(null);
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+    }, []);
+
+    const handleFieldBlur = useCallback(() => {
+        if (!useMobileComposer) return;
+        window.setTimeout(() => {
+            const active = document.activeElement;
+            if (active?.closest?.('.sps-text-composer')) return;
+            if (active?.closest?.('.sps-preview__editable')) return;
+            setIsTyping(false);
+        }, 150);
+    }, [useMobileComposer]);
+
+    const draftEditId = editMotionPostId || editingMotionId || null;
+    const draftStorageKey = useMemo(() => {
+        if (!currentUser?.uid) return null;
+        return motionStudioDraftKey(currentUser.uid, draftEditId);
+    }, [currentUser?.uid, draftEditId]);
+
+    const buildSessionDraftPayload = useCallback(
+        async () => ({
+            editMotionPostId: draftEditId,
+            layoutModel,
+            title,
+            body,
+            studioStyle,
+            promoStickers,
+            media: await serializeEditorMedia(media, pickAiRemoteImageUrl),
+        }),
+        [
+            body,
+            draftEditId,
+            layoutModel,
+            media,
+            promoStickers,
+            studioStyle,
+            title,
+        ]
     );
+
+    const applySessionDraftPayload = useCallback(
+        async (draft) => {
+            if (
+                draftEditId &&
+                draft.editMotionPostId &&
+                String(draft.editMotionPostId) !== String(draftEditId)
+            ) {
+                return;
+            }
+            if (draft.layoutModel) setLayoutModel(draft.layoutModel);
+            if (typeof draft.title === 'string') setTitle(draft.title);
+            if (typeof draft.body === 'string') setBody(draft.body);
+            if (draft.studioStyle && typeof draft.studioStyle === 'object') {
+                setStudioStyle((s) => ({ ...s, ...draft.studioStyle }));
+            }
+            if (Array.isArray(draft.promoStickers)) setPromoStickers(draft.promoStickers);
+            const restoredMedia = await restoreEditorMedia(draft.media);
+            if (restoredMedia) setMedia(restoredMedia);
+        },
+        [draftEditId]
+    );
+
+    const { clearDraft: clearSessionDraft, flushSave: flushSessionDraft } = useEditorSessionAutosave({
+        enabled: Boolean(currentUser?.uid),
+        storageKey: draftStorageKey,
+        ready: !loadingEdit,
+        skipRestore: Boolean(location.state?.aiStudioImage),
+        buildPayload: buildSessionDraftPayload,
+        applyPayload: applySessionDraftPayload,
+        isEmpty: isMotionStudioDraftEmpty,
+        onRestored: () =>
+            showToast(t('studio_draft_restored', 'Your unsaved work was restored.'), 'info'),
+        deps: [layoutModel, title, body, studioStyle, promoStickers, media],
+    });
 
     const hasText = Boolean(title.trim() || body.trim());
     const canPublish = hasText;
@@ -560,7 +638,7 @@ export default function SmartPostStudio() {
         try {
             const input = await buildDraftInput();
             await createMotionPostDraft(input);
-            showToast(t('studio_draft_saved', 'تم حفظ المسودة على البروفايل'), 'success');
+            showToast(t('studio_draft_saved'), 'success');
         } catch (err) {
             console.error('[SmartPostStudio] save draft', err);
             showToast(studioPostErrorMessage(err, t), 'error');
@@ -569,8 +647,67 @@ export default function SmartPostStudio() {
         }
     }, [buildDraftInput, canPublish, isBusy, showToast, t]);
 
+    const hasAnyWork = Boolean(
+        title.trim() || body.trim() || media?.preview || promoStickers.length > 0
+    );
+
+    const exitStudio = useCallback(() => {
+        dismissStudioEditors();
+        navigate('/posts-feed', { replace: true });
+    }, [dismissStudioEditors, navigate]);
+
+    const handleCloseRequest = useCallback(() => {
+        if (!hasAnyWork) {
+            clearSessionDraft();
+            exitStudio();
+            return;
+        }
+        setShowCloseDialog(true);
+    }, [clearSessionDraft, exitStudio, hasAnyWork]);
+
+    const handleCloseSaveDraft = useCallback(async () => {
+        setShowCloseDialog(false);
+        if (editingMotionId || !hasText) {
+            // Editing an existing post (or image-only work): keep the session
+            // draft so the work is restored next time the editor opens.
+            await flushSessionDraft();
+            showToast(t('studio_close_kept_session', 'Your work will be restored when you return.'), 'info');
+            exitStudio();
+            return;
+        }
+        setSavingDraft(true);
+        try {
+            const input = await buildDraftInput();
+            await createMotionPostDraft(input);
+            clearSessionDraft();
+            showToast(t('studio_draft_saved'), 'success');
+            exitStudio();
+        } catch (err) {
+            console.error('[SmartPostStudio] close save draft', err);
+            showToast(studioPostErrorMessage(err, t), 'error');
+        } finally {
+            setSavingDraft(false);
+        }
+    }, [
+        buildDraftInput,
+        clearSessionDraft,
+        editingMotionId,
+        exitStudio,
+        flushSessionDraft,
+        hasText,
+        showToast,
+        t,
+    ]);
+
+    const handleCloseDiscard = useCallback(() => {
+        setShowCloseDialog(false);
+        clearSessionDraft();
+        exitStudio();
+    }, [clearSessionDraft, exitStudio]);
+
     const handlePublish = useCallback(async () => {
         if (!canPublish || isBusy) return;
+        dismissStudioEditors();
         setPublishing(true);
         try {
             const input = await buildDraftInput();
@@ -581,19 +718,31 @@ export default function SmartPostStudio() {
                     input.ownerId,
                     input.businessId
                 );
-                showToast(t('studio_post_updated', 'تم تحديث المنشور'), 'success');
+                showToast(t('studio_post_updated'), 'success');
             } else {
                 const postId = await createMotionPostDraft(input);
                 await publishMotionPost(postId, input.ownerId, input.businessId);
-                showToast(t('studio_published_feed', 'تم النشر على الفيد والصفحة الرئيسية'), 'success');
+                showToast(t('studio_published_feed'), 'success');
             }
+            clearSessionDraft();
+            navigate('/posts-feed', { replace: true });
         } catch (err) {
             console.error('[SmartPostStudio] publish', err);
             showToast(studioPostErrorMessage(err, t), 'error');
         } finally {
             setPublishing(false);
         }
-    }, [buildDraftInput, canPublish, editingMotionId, isBusy, showToast, t]);
+    }, [
+        buildDraftInput,
+        canPublish,
+        dismissStudioEditors,
+        editingMotionId,
+        isBusy,
+        clearSessionDraft,
+        navigate,
+        showToast,
+        t,
+    ]);
 
     const insertPromoSticker = useCallback((stickerId) => {
         if (!STUDIO_PROMO_STICKERS.some((s) => s.id === stickerId)) return;
@@ -634,7 +783,7 @@ export default function SmartPostStudio() {
                 return (
                     <div className="sps-glass-panel sps-glass-panel--compact sps-panel--size-dual">
                         <StudioStepperRow
-                            label={t('studio_title_font_size', 'حجم العنوان')}
+                            label={t('studio_title_font_size')}
                             value={studioStyle.titleFontSize ?? studioStyle.fontSize ?? 26}
                             min={16}
                             max={56}
@@ -648,7 +797,7 @@ export default function SmartPostStudio() {
                             suffix="px"
                         />
                         <StudioStepperRow
-                            label={t('studio_body_font_size', 'حجم النص')}
+                            label={t('studio_body_font_size')}
                             value={
                                 studioStyle.bodyFontSize ??
                                 Math.max(14, (studioStyle.titleFontSize ?? studioStyle.fontSize ?? 26) - 4)
@@ -689,41 +838,29 @@ export default function SmartPostStudio() {
         }
     };
 
-    const cardLockStyle =
-        isTyping && previewSize
-            ? {
-                  '--sps-lock-w': `${previewSize.w}px`,
-                  '--sps-lock-h': `${previewSize.h}px`,
-              }
-            : undefined;
-
     const previewBlock = (
         <>
-            <div
-                ref={cardRef}
-                className={`sps-canvas-stage__card${isTyping && previewSize ? ' sps-canvas-stage__card--locked' : ''}`}
-                style={cardLockStyle}
-            >
+            <div ref={cardRef} className="sps-canvas-stage__card">
                 <StudioLivePreview
                     layoutModel={layoutModel}
                     title={title}
                     body={body}
-                    imageUrl={coverHidden ? '' : media?.preview || ''}
+                    imageUrl={media?.preview || ''}
                     style={previewStyle}
                     activeField={activeField}
                     onTitleChange={setTitle}
                     onBodyChange={setBody}
                     onFocusField={handleFieldFocus}
-                    onBlurField={onTextBlur}
-                    typingMode={isTyping}
+                    onBlurField={handleFieldBlur}
                     onImagePick={openImagePicker}
                     scrollContainerRef={previewZoneRef}
-                    imagePickLabel={t('studio_tap_image', 'اضغط لإضافة صورة')}
-                    imageChangeLabel={t('studio_tap_change_image', 'اضغط لتغيير الصورة')}
+                    imagePickLabel={t('studio_tap_image')}
+                    imageChangeLabel={t('studio_tap_change_image')}
                     promoStickers={promoStickers}
                     onRemovePromoSticker={removePromoSticker}
                     textAnimation={studioStyle.animation}
                     animPlayKey={animPlayKey}
+                    handoffComposer={useMobileComposer}
                 />
             </div>
             {media?.preview && (
@@ -733,7 +870,6 @@ export default function SmartPostStudio() {
                     onClick={() => {
                         if (media.preview) URL.revokeObjectURL(media.preview);
                         setMedia(null);
-                        setCoverHidden(false);
                     }}
                     aria-label={t('remove', 'Remove')}
                 >
@@ -755,14 +891,13 @@ export default function SmartPostStudio() {
 
     return (
         <div
-            ref={pageRef}
             className={`sps-page sps-page--premium${activeTool ? ' sps-page--panel-open' : ''}${isTyping ? ' sps-page--typing' : ''}`}
             dir={isRtl ? 'rtl' : 'ltr'}
         >
             <nav
                 className="sps-layout-strip sps-layout-strip--top"
                 role="tablist"
-                aria-label={t('studio_layout_tabs', 'قياس المنشور')}
+                aria-label={t('studio_layout_tabs')}
             >
                 {STUDIO_LAYOUTS.map((item) => (
                     <button
@@ -785,29 +920,44 @@ export default function SmartPostStudio() {
                         activeTool={activeTool}
                         onToggle={toggleTool}
                         t={t}
+                        aiSlot={
+                            <AIFloatingLauncher
+                                postType="animated_post"
+                                onTextSuccess={handleAnimatedAiContent}
+                                buildContextPrompt={buildAnimatedAiPrompt}
+                                disabled={isBusy}
+                                iconOnly
+                                className="ai-floating-launcher--studio-rail"
+                            />
+                        }
                     />
-                    <div className="sps-canvas-stage__viewport">{previewBlock}</div>
-                    <StudioAnimRail
-                        animations={STUDIO_TEXT_ANIMATIONS}
-                        activeAnim={activeAnim}
-                        onSelect={selectTextAnimation}
-                        t={t}
-                    />
+                    <div className="sps-canvas-stage__viewport">
+                        <StudioAnimStrip
+                            animations={STUDIO_TEXT_ANIMATIONS}
+                            activeAnim={activeAnim}
+                            onSelect={selectTextAnimation}
+                            t={t}
+                        />
+                        <div className="sps-canvas-stage__preview-shell">{previewBlock}</div>
+                    </div>
                 </div>
             </main>
 
+            <StudioTextComposerOverlay
+                ref={mobileComposerRef}
+                enabled={useMobileComposer}
+                open={isTyping}
+                activeField={activeField}
+                title={title}
+                body={body}
+                onTitleChange={setTitle}
+                onBodyChange={setBody}
+                onClose={closeMobileComposer}
+                dir={isRtl ? 'rtl' : 'ltr'}
+            />
+
             <section className="sps-editor-dock">
                 {activeTool && <div className="sps-editor-panels">{renderToolPanel()}</div>}
-
-                <div className="sps-editor-dock__ai">
-                    <AIFloatingLauncher
-                        postType="animated_post"
-                        onTextSuccess={handleAnimatedAiContent}
-                        buildContextPrompt={buildAnimatedAiPrompt}
-                        disabled={isBusy}
-                        compact
-                    />
-                </div>
 
                 <div className="sps-editor-dock__footer">
                     <StudioQuickStyles
@@ -822,6 +972,7 @@ export default function SmartPostStudio() {
                         savingDraft={savingDraft}
                         publishing={publishing}
                         onSaveDraft={handleSaveDraft}
+                        onClose={handleCloseRequest}
                         onPublish={handlePublish}
                         t={t}
                     />
@@ -829,6 +980,53 @@ export default function SmartPostStudio() {
             </section>
 
             <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFile} />
+
+            {showCloseDialog ? (
+                <div
+                    className="sps-close-dialog"
+                    role="alertdialog"
+                    aria-modal="true"
+                    aria-label={t('studio_close_title', 'Save your work?')}
+                >
+                    <div className="sps-close-dialog__backdrop" onClick={() => setShowCloseDialog(false)} />
+                    <div className="sps-close-dialog__card">
+                        <h3 className="sps-close-dialog__title">
+                            {t('studio_close_title', 'Save your work?')}
+                        </h3>
+                        <p className="sps-close-dialog__text">
+                            {t(
+                                'studio_close_question',
+                                'Do you want to save this post as a draft before closing?'
+                            )}
+                        </p>
+                        <div className="sps-close-dialog__actions">
+                            <button
+                                type="button"
+                                className="sps-close-dialog__btn sps-close-dialog__btn--save"
+                                onClick={handleCloseSaveDraft}
+                                disabled={isBusy}
+                            >
+                                {t('studio_save_draft', 'Save draft')}
+                            </button>
+                            <button
+                                type="button"
+                                className="sps-close-dialog__btn sps-close-dialog__btn--discard"
+                                onClick={handleCloseDiscard}
+                                disabled={isBusy}
+                            >
+                                {t('studio_close_discard', 'Discard')}
+                            </button>
+                            <button
+                                type="button"
+                                className="sps-close-dialog__btn sps-close-dialog__btn--cancel"
+                                onClick={() => setShowCloseDialog(false)}
+                            >
+                                {t('studio_close_keep_editing', 'Keep editing')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

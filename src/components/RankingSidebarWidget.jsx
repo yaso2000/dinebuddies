@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { FaCrown } from 'react-icons/fa';
-import { useTopRankedElite } from '../hooks/useTopRankedElite';
+import { useTopRankedPaid } from '../hooks/useTopRankedPaid';
 
 const TOP_N = 3;
 
 export default function RankingSidebarWidget() {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { loading, top } = useTopRankedElite(TOP_N);
+    const { loading, top } = useTopRankedPaid(TOP_N);
 
     if (loading || !top.length) return null;
 
@@ -18,7 +18,7 @@ export default function RankingSidebarWidget() {
         <div className="ds-widget-card">
             <div className="ds-widget-header">
                 <FaCrown size={14} style={{ color: 'var(--luxury-gold)' }} />
-                <span>{t('rankings_top_elite', 'Top Elite Ranking')}</span>
+                <span>{t('rankings_top_paid', 'Top Paid Ranking')}</span>
                 <Link to="/rankings" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
             </div>
             {top.map((b, i) => (

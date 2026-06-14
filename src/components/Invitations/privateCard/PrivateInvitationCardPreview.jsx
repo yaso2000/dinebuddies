@@ -14,7 +14,16 @@ import {
     DATING_DARK_TEMPLATE_BACKGROUND_IDS
 } from '../datingCard/datingCardBackgrounds';
 import { getPrivateCardFontById, DEFAULT_FONT_ID } from './privateCardFonts';
-import { DEFAULT_MOTION_ID, isPrivateCardMotionId } from './privateCardMotions';
+import {
+    DEFAULT_CARD_COPY_OFFSET_Y,
+    DEFAULT_CARD_COPY_WIDTH_PCT,
+    DEFAULT_CARD_COPY_FONT_SCALE,
+    clampCardCopyFontScale,
+    clampCardCopyWidthPct,
+    clampCardCopyOffsetY,
+    cardCopyOffsetToCssPercent,
+    cardCopyFontScaleToMultiplier,
+} from './privateCardCopyLayout';
 import {
     adjustFrameTextForDarkTemplate,
     DARK_TEMPLATE_TEXT_SHADOW,
@@ -22,8 +31,10 @@ import {
 } from './privateCardFrameTextContrast';
 import {
     DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
+    PRIVATE_TEXT_BACKDROP_PANEL_WIDTH,
     privateTextBackdropToneToRgba
 } from './privateCardTextBackdrop';
+import { resolvePrivateCardColorBackgroundCss } from './privateCardGradientBackgrounds';
 import { INVITATION_CARD_MESSAGE_MAX } from '../../../constants/invitationCardLimits';
 import {
     getCardPreviewStructureClass,
@@ -32,30 +43,6 @@ import {
 } from '../../../utils/cardStructure';
 import { prepareBidiDisplayText } from '../../../utils/bidiText';
 import './PrivateInvitationCardPreview.css';
-
-function formatPreviewDate(dateStr, locale) {
-    if (!dateStr || typeof dateStr !== 'string') return '';
-    const d = new Date(dateStr + 'T12:00:00');
-    if (Number.isNaN(d.getTime())) return dateStr;
-    try {
-        return d.toLocaleDateString(locale || undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    } catch {
-        return dateStr;
-    }
-}
-
-function formatPreviewTime(timeStr, locale) {
-    if (!timeStr || typeof timeStr !== 'string') return '';
-    const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
-    if (Number.isNaN(h)) return timeStr;
-    const d = new Date();
-    d.setHours(h, Number.isNaN(m) ? 0 : m, 0, 0);
-    try {
-        return d.toLocaleTimeString(locale || undefined, { hour: 'numeric', minute: '2-digit' });
-    } catch {
-        return timeStr;
-    }
-}
 
 function hexToRgbaString(hex, alpha) {
     if (!hex || typeof hex !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return `rgba(0,0,0,${alpha})`;
@@ -88,6 +75,8 @@ export default function PrivateInvitationCardPreview({
     occasionType,
     occasionCategoryId: occasionCategoryIdProp,
     cardBackgroundId = null,
+    /** Preset gradient or solid fill id (see privateCardGradientBackgrounds). */
+    cardGradientId = null,
     title = '',
     description = '',
     date = '',
@@ -96,7 +85,10 @@ export default function PrivateInvitationCardPreview({
     inviterName = '',
     inviterAvatarUrl = '',
     className = '',
-    cardMotionId = DEFAULT_MOTION_ID,
+    copyOffsetY = DEFAULT_CARD_COPY_OFFSET_Y,
+    copyWidthPct = DEFAULT_CARD_COPY_WIDTH_PCT,
+    copyFontScale = DEFAULT_CARD_COPY_FONT_SCALE,
+    /** When true, card export / details — no sway animation */
     freezeMotion = false,
     /** @type {'private' | 'dating'} */
     cardTemplateSet = 'private',
@@ -105,7 +97,7 @@ export default function PrivateInvitationCardPreview({
     /** @type {'image' | 'video' | null} */
     heroCoverMediaType = null,
     heroCoverPoster = null,
-    /** When false, hide occasion headline, custom title, message, and host; only date/place meta stay. */
+    /** When false, hide occasion headline, custom title, message, and host corner badge. */
     showHostAndMessage = true,
     /** `dark` | `light` | `none` — panel behind copy when `showHostAndMessage` on photo backgrounds. */
     textBackdropTone = DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
@@ -113,7 +105,7 @@ export default function PrivateInvitationCardPreview({
     cardStructure: cardStructureProp = null,
     heroCoverPending = false,
 }) {
-    const { t, i18n } = useTranslation();
+    const { i18n } = useTranslation();
     const frame = useMemo(() => getFrameColorById(frameColorId), [frameColorId]);
     const font = useMemo(() => getPrivateCardFontById(cardFontId), [cardFontId]);
 
@@ -147,7 +139,14 @@ export default function PrivateInvitationCardPreview({
         return resolveCanonicalBackgroundId(categoryId, cardBackgroundId);
     }, [cardTemplateSet, categoryId, cardBackgroundId]);
     const hasHeroCover = Boolean(heroCoverSrc && heroCoverMediaType);
+    const colorBackgroundCss = useMemo(
+        () => resolvePrivateCardColorBackgroundCss(cardGradientId),
+        [cardGradientId]
+    );
+    const colorBackgroundActive = Boolean(colorBackgroundCss) && !hasHeroCover;
     const hasPhotoBackground = templateArtActive || hasHeroCover;
+    /** Color/gradient fills use the same centered copy layout as template art. */
+    const fullBleedBackground = hasPhotoBackground || colorBackgroundActive;
 
     const resolvedCardStructure = useMemo(() => {
         if (cardStructureProp) return normalizeCardStructure(cardStructureProp);
@@ -162,9 +161,8 @@ export default function PrivateInvitationCardPreview({
         return privateTextBackdropToneToRgba(textBackdropTone);
     }, [showHostAndMessage, hasPhotoBackground, textBackdropTone]);
 
-    const preferUnifiedCopyPanel =
-        cardTemplateSet === 'dating' &&
-        (Boolean(textBackdropRgba) || String(className).includes('dating-editor-meta'));
+    /** One centered copy column on photo/template backgrounds — private & dating, with or without backdrop. */
+    const preferUnifiedCopyPanel = showHostAndMessage && hasPhotoBackground;
 
     const useStructureLayout =
         showHostAndMessage &&
@@ -252,6 +250,15 @@ export default function PrivateInvitationCardPreview({
             };
         }
 
+        if (colorBackgroundActive) {
+            return {
+                occasion: { color: frame.textMeta, textShadow: 'none' },
+                title: { color: frame.textTitle, textShadow: 'none' },
+                message: { color: frame.textMessage, textShadow: 'none' },
+                host: { color: frame.textHost, textShadow: 'none' },
+            };
+        }
+
         if (hasHeroCover) {
             if (lightBackdropOnPhoto) {
                 const flat = (color) => ({ color, textShadow: 'none' });
@@ -291,33 +298,17 @@ export default function PrivateInvitationCardPreview({
         templateArtActive,
         darkTemplateArt,
         resolvedThemeHex,
+        colorBackgroundActive,
         hasPhotoBackground,
         hasHeroCover,
         textBackdropTone,
         textBackdropRgba,
-        frostedGlassBackdrop
+        frostedGlassBackdrop,
+        lightBackdropOnPhoto
     ]);
-
-    const metaLineStyle = resolvedThemeHex
-        ? { color: resolvedThemeHex, textShadow: 'none' }
-        : lightBackdropOnPhoto
-          ? { color: frame.textMeta, textShadow: 'none' }
-          : frostedGlassBackdrop
-            ? { color: 'rgba(248, 250, 252, 0.96)', textShadow: '0 1px 2px rgba(0, 0, 0, 0.45)' }
-            : undefined;
-
-    const locale = typeof navigator !== 'undefined' ? navigator.language : 'en';
-
-    const dateLine = useMemo(() => {
-        const a = formatPreviewDate(date, locale);
-        const b = formatPreviewTime(time, locale);
-        if (a && b) return `${a} · ${b}`;
-        return a || b || '';
-    }, [date, time, locale]);
 
     const titleTrimmed = normalizeInvitationFlowText(title);
     const hasCardTitle = Boolean(titleTrimmed);
-    const locText = (location || '').trim();
     const descRaw = normalizeInvitationFlowText(description);
     const descClipped =
         descRaw.length > INVITATION_CARD_MESSAGE_MAX
@@ -332,63 +323,46 @@ export default function PrivateInvitationCardPreview({
         () => prepareBidiDisplayText(descClipped, i18n.language),
         [descClipped, i18n.language]
     );
-    const occasionBidi = useMemo(
-        () =>
-            prepareBidiDisplayText(
-                t('private_card_occasion_line', {
-                    occasion: t(`occasion_${categoryId}`, occasionType || ''),
-                    defaultValue: '{{occasion}} invitation'
-                }),
-                i18n.language
-            ),
-        [t, categoryId, occasionType, i18n.language]
-    );
     const hostBidi = useMemo(
         () => prepareBidiDisplayText(inviterName || '—', i18n.language),
         [inviterName, i18n.language]
     );
-    const dateBidi = useMemo(
-        () => prepareBidiDisplayText(dateLine, i18n.language),
-        [dateLine, i18n.language]
-    );
-    const locBidi = useMemo(
-        () => prepareBidiDisplayText(locText, i18n.language),
-        [locText, i18n.language]
-    );
-
     const handleBgImageError = () => {
         setBgSrcIndex((prev) => prev + 1);
     };
 
-    const motionClass =
-        !freezeMotion &&
-        cardMotionId &&
-        cardMotionId !== DEFAULT_MOTION_ID &&
-        isPrivateCardMotionId(cardMotionId)
-            ? ` private-invitation-card-preview--card-motion-${cardMotionId}`
-            : '';
+    const resolvedCopyOffsetY = clampCardCopyOffsetY(copyOffsetY);
+    const resolvedCopyWidthPct = clampCardCopyWidthPct(copyWidthPct);
+    const resolvedCopyFontScale = clampCardCopyFontScale(copyFontScale);
+
+    const copyLayoutVars = useMemo(
+        () => ({
+            '--private-card-copy-width': `${resolvedCopyWidthPct}%`,
+            '--private-text-backdrop-width': `${resolvedCopyWidthPct}%`,
+            '--private-card-copy-offset-y': cardCopyOffsetToCssPercent(resolvedCopyOffsetY),
+            '--private-card-copy-font-scale': String(cardCopyFontScaleToMultiplier(resolvedCopyFontScale)),
+        }),
+        [resolvedCopyOffsetY, resolvedCopyWidthPct, resolvedCopyFontScale]
+    );
+
+    const motionClass = !freezeMotion ? ' private-invitation-card-preview--card-motion-bob' : '';
 
     const minimalBodyClass = showHostAndMessage ? '' : ' private-invitation-card-preview--host-message-hidden';
+    const hostChipVisibleClass =
+        showHostAndMessage && Boolean(hostBidi.text && hostBidi.text !== '—')
+            ? ' private-invitation-card-preview--host-chip-visible'
+            : '';
     const textBackdropClass = textBackdropRgba ? ' private-invitation-card-preview--text-backdrop' : '';
     const textBackdropLightClass =
         lightBackdropOnPhoto ? ' private-invitation-card-preview--text-backdrop-light' : '';
     const textBackdropFrostedClass =
         frostedGlassBackdrop ? ' private-invitation-card-preview--text-backdrop-frosted' : '';
     const unifiedCopyClass = preferUnifiedCopyPanel ? ' private-invitation-card-preview--unified-copy' : '';
-
-    const occasionEl = (
-        <p
-            className="private-invitation-card-preview__occasion private-invitation-card-preview__bidi"
-            style={textStyles.occasion}
-            dir={occasionBidi.dir}
-            lang={occasionBidi.lang}
-        >
-            {occasionBidi.text}
-        </p>
-    );
+    const colorBgClass = colorBackgroundActive ? ' private-invitation-card-preview--color-bg' : '';
+    const photoBgClass = fullBleedBackground ? ' private-invitation-card-preview--photo-bg' : '';
 
     const iconEl =
-        !templateArtActive ? (
+        !templateArtActive && !colorBackgroundActive ? (
             <div className="private-invitation-card-preview__icon-wrap">
                 <PrivateCardCategoryIcon categoryId={categoryId} />
             </div>
@@ -424,33 +398,58 @@ export default function PrivateInvitationCardPreview({
         </p>
     ) : null;
 
-    const hostEl = (
-        <div className="private-invitation-card-preview__host">
-            {inviterAvatarUrl ? (
-                <img src={inviterAvatarUrl} alt="" className="private-invitation-card-preview__avatar" />
-            ) : (
-                <div className="private-invitation-card-preview__avatar private-invitation-card-preview__avatar--empty" />
-            )}
-            <span
-                className="private-invitation-card-preview__host-name private-invitation-card-preview__bidi"
-                style={textStyles.host}
-                dir={hostBidi.dir}
-                lang={hostBidi.lang}
-            >
-                {hostBidi.text}
-            </span>
-        </div>
+    const hostChipEl =
+        showHostAndMessage && hostBidi.text && hostBidi.text !== '—' ? (
+            <div className="private-invitation-card-preview__host-chip" dir={hostBidi.dir} aria-hidden>
+                {inviterAvatarUrl ? (
+                    <img
+                        className="private-invitation-card-preview__host-chip-avatar"
+                        src={inviterAvatarUrl}
+                        alt=""
+                        decoding="async"
+                        draggable={false}
+                    />
+                ) : (
+                    <span
+                        className="private-invitation-card-preview__host-chip-avatar private-invitation-card-preview__host-chip-avatar--empty"
+                        aria-hidden
+                    />
+                )}
+                <span
+                    className="private-invitation-card-preview__host-chip-name private-invitation-card-preview__bidi"
+                    dir={hostBidi.dir}
+                    lang={hostBidi.lang}
+                >
+                    {hostBidi.text}
+                </span>
+            </div>
+        ) : null;
+
+    const copyContent = (
+        <>
+            {iconEl}
+            {titleEl}
+            {messageEl}
+        </>
     );
+
+    const cardDir = i18n.dir?.() || (i18n.language?.startsWith('ar') ? 'rtl' : 'ltr');
 
     return (
         <div
-            className={`private-invitation-card-preview ${className}${templateArtActive ? ' private-invitation-card-preview--photo-bg' : ''}${darkTemplateArt ? ' private-invitation-card-preview--dark-template-bg' : ''}${textBackdropClass}${textBackdropLightClass}${textBackdropFrostedClass}${unifiedCopyClass}${structureLayoutClass}${motionClass}${minimalBodyClass}`.trim()}
+            className={`private-invitation-card-preview ${className}${photoBgClass}${colorBgClass}${darkTemplateArt ? ' private-invitation-card-preview--dark-template-bg' : ''}${textBackdropClass}${textBackdropLightClass}${textBackdropFrostedClass}${unifiedCopyClass}${structureLayoutClass}${motionClass}${minimalBodyClass}${hostChipVisibleClass}`.trim()}
+            dir={cardDir}
+            style={copyLayoutVars}
         >
             <div
-                className={`private-invitation-card-preview__inner${templateArtActive ? ' private-invitation-card-preview__inner--photo-bg' : ''}`}
-                style={innerChromeStyle}
+                className={`private-invitation-card-preview__inner${fullBleedBackground ? ' private-invitation-card-preview__inner--photo-bg' : ''}`}
+                dir={cardDir}
+                style={{
+                    ...innerChromeStyle,
+                    ...(textBackdropRgba ? { '--private-text-backdrop-bg': textBackdropRgba } : null),
+                }}
             >
-                {templateArtActive && hasHeroCover && heroCoverMediaType === 'video' ? (
+                {hasHeroCover && heroCoverMediaType === 'video' ? (
                     <video
                         key={heroCoverSrc}
                         className="private-invitation-card-preview__bg private-invitation-card-preview__bg--video"
@@ -463,13 +462,18 @@ export default function PrivateInvitationCardPreview({
                         preload="metadata"
                         aria-hidden
                     />
-                ) : templateArtActive && hasHeroCover && heroCoverMediaType === 'image' ? (
+                ) : hasHeroCover && heroCoverMediaType === 'image' ? (
                     <img
                         className="private-invitation-card-preview__bg private-invitation-card-preview__bg--image"
                         src={heroCoverSrc}
                         alt=""
                         decoding="async"
                         draggable={false}
+                    />
+                ) : colorBackgroundActive ? (
+                    <div
+                        className="private-invitation-card-preview__bg private-invitation-card-preview__bg--color"
+                        style={{ background: colorBackgroundCss }}
                     />
                 ) : templateArtActive && bgSrc ? (
                     <img
@@ -493,71 +497,23 @@ export default function PrivateInvitationCardPreview({
                     </div>
                 ) : null}
 
-                <div
-                    className="private-invitation-card-preview__text-stack"
-                    style={
-                        textBackdropRgba
-                            ? {
-                                  '--private-text-backdrop-bg': textBackdropRgba,
-                                  '--private-text-backdrop-width': '50%',
-                                  '--private-text-backdrop-max-height': '50%',
-                              }
-                            : undefined
-                    }
-                >
-                <div
-                    className={`private-invitation-card-preview__main${
-                        textBackdropRgba ? ' private-invitation-card-preview__text-panel' : ''
-                    }`}
-                    style={{ fontFamily: font.cssFamily }}
-                >
-                    {showHostAndMessage ? (
-                        useStructureLayout ? (
-                            <>
-                                <div className="private-invitation-card-preview__copy-zone">
-                                    {iconEl}
-                                    {titleEl}
-                                    {messageEl}
-                                </div>
-                                <div className="private-invitation-card-preview__signatory">
-                                    {occasionEl}
-                                    {hostEl}
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                {occasionEl}
-                                {iconEl}
-                                {titleEl}
-                                {messageEl}
-                                {hostEl}
-                            </>
-                        )
-                    ) : null}
-                </div>
+                {hostChipEl}
 
-                <div className="private-invitation-card-preview__meta">
-                    {dateBidi.text && (
-                        <span
-                            className="private-invitation-card-preview__meta-line private-invitation-card-preview__meta-line--datetime private-invitation-card-preview__bidi"
-                            style={metaLineStyle}
-                            dir={dateBidi.dir}
-                            lang={dateBidi.lang}
-                        >
-                            {dateBidi.text}
-                        </span>
-                    )}
-                    {locBidi.text && (
-                        <span
-                            className="private-invitation-card-preview__meta-line private-invitation-card-preview__meta-line--location private-invitation-card-preview__bidi"
-                            style={metaLineStyle}
-                            dir={locBidi.dir}
-                            lang={locBidi.lang}
-                        >
-                            {locBidi.text}
-                        </span>
-                    )}
-                </div>
+                <div className="private-invitation-card-preview__text-stack">
+                    <div
+                        className={`private-invitation-card-preview__main${
+                            textBackdropRgba ? ' private-invitation-card-preview__text-panel' : ''
+                        }`}
+                        style={{ fontFamily: font.cssFamily }}
+                    >
+                        {showHostAndMessage ? (
+                            useStructureLayout ? (
+                                <div className="private-invitation-card-preview__copy-zone">{copyContent}</div>
+                            ) : (
+                                copyContent
+                            )
+                        ) : null}
+                    </div>
                 </div>
             </div>
         </div>

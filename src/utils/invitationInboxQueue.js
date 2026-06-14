@@ -72,6 +72,7 @@ export function shouldSuppressInvitationInbox(pathname = '') {
     if (/^\/invitation\/private\/[^/]+\/preview/.test(path)) return true;
     if (/^\/invitation\/private\/preview\//.test(path)) return true;
     if (/^\/invitation\/private\/[^/]+$/.test(path)) return true;
+    if (/^\/invite\/p\//.test(path)) return true;
 
     return false;
 }

@@ -14,19 +14,31 @@ const UserAvatar = ({
     ringWidth = 2,
     ringColorOverride,
     noGenderRing = false,
+    innerGapWidth,
     ...props
 }) => {
     const avatarSrc = src || getSafeAvatar(user);
     const altText = alt || user?.name || user?.display_name || user?.displayName || 'User Avatar';
 
     const ringStyle = noGenderRing
-        ? { display: 'inline-block', lineHeight: 0 }
+        ? {
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 0,
+              borderRadius: '50%',
+              boxSizing: 'border-box',
+          }
         : getGenderAvatarRingStyle(user, { ringWidth, ringColorOverride });
+
+    const gap = noGenderRing ? 0 : (innerGapWidth ?? Math.max(2, ringWidth));
 
     const imgStyle = {
         display: 'block',
         borderRadius: style.borderRadius ?? '50%',
         objectFit: 'cover',
+        boxSizing: 'border-box',
+        ...(gap > 0 ? { border: `${gap}px solid var(--avatar-inner-gap, var(--bg-body))` } : {}),
         ...style,
     };
 

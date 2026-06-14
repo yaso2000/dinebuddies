@@ -54,6 +54,7 @@
 .search-tabs {
     display: flex;
     gap: 8px;
+    margin-top: 12px;
     padding: 0 14px 12px;
     overflow-x: auto;
 }

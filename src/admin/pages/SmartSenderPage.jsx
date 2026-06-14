@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 
 const AUDIENCE_OPTIONS = [
-    { id: 'all', label: 'الكل' },
-    { id: 'user', label: 'مستخدمون عاديون' },
-    { id: 'business', label: 'أعمال' },
-    { id: 'affiliate_agent', label: 'وكلاء' },
-    { id: 'id', label: 'بحث بالمعرّف (UID)' },
+    { id: 'all', labelKey: 'admin_sender_audience_all' },
+    { id: 'user', labelKey: 'admin_sender_audience_users' },
+    { id: 'business', labelKey: 'admin_sender_audience_business' },
+    { id: 'affiliate_agent', labelKey: 'admin_sender_audience_agents' },
+    { id: 'id', labelKey: 'admin_sender_audience_by_uid' },
 ];
 
 export default function SmartSenderPage() {
+    const { t } = useTranslation();
     const [audience, setAudience] = useState('all');
     const [targetUid, setTargetUid] = useState('');
     const [message, setMessage] = useState('');
@@ -18,17 +20,25 @@ export default function SmartSenderPage() {
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
 
+    const audienceLabel = useCallback(
+        (id) => {
+            const opt = AUDIENCE_OPTIONS.find((o) => o.id === id);
+            return opt ? t(opt.labelKey) : id;
+        },
+        [t],
+    );
+
     const loadHistory = useCallback(async () => {
         setLoadingHistory(true);
         try {
             const res = await adminApi.listAnnouncements({ pageSize: 15 });
             setHistory(res.items || []);
         } catch (e) {
-            setStatus(e.message || 'تعذّر تحميل السجل');
+            setStatus(e.message || t('admin_sender_history_load_failed'));
         } finally {
             setLoadingHistory(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         loadHistory();
@@ -37,17 +47,18 @@ export default function SmartSenderPage() {
     const send = async () => {
         const text = message.trim();
         if (!text) {
-            setStatus('اكتب نص الرسالة أولاً');
+            setStatus(t('admin_sender_enter_message'));
             return;
         }
         if (audience === 'id' && !targetUid.trim()) {
-            setStatus('أدخل معرّف المستخدم');
+            setStatus(t('admin_sender_enter_uid'));
             return;
         }
-        const label = AUDIENCE_OPTIONS.find((o) => o.id === audience)?.label || audience;
+        const label = audienceLabel(audience);
+        const uidSuffix = audience === 'id' ? ` (${targetUid.trim()})` : '';
         if (
             !window.confirm(
-                `إرسال رسالة جماعية إلى: ${label}${audience === 'id' ? ` (${targetUid.trim()})` : ''}؟`
+                t('admin_sender_confirm_mass', { label, uidSuffix }),
             )
         ) {
             return;
@@ -61,31 +72,34 @@ export default function SmartSenderPage() {
                 targetUid: audience === 'id' ? targetUid.trim() : undefined,
                 message: text,
             });
+            const failedSuffix = res.failedCount
+                ? ` — ${t('admin_sender_failed_count', { count: res.failedCount })}`
+                : '';
             setStatus(
-                `تم الإرسال: ${res.sentCount}/${res.targetCount} مستلم` +
-                    (res.failedCount ? ` — فشل ${res.failedCount}` : '')
+                t('admin_sender_sent_result', {
+                    sent: res.sentCount,
+                    total: res.targetCount,
+                    failedSuffix,
+                }),
             );
             setMessage('');
             await loadHistory();
         } catch (e) {
-            setStatus(e.message || 'فشل الإرسال');
+            setStatus(e.message || t('admin_failed'));
         } finally {
             setSending(false);
         }
     };
 
     const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
-    const audienceLabel = (id) => AUDIENCE_OPTIONS.find((o) => o.id === id)?.label || id;
 
     return (
         <>
-            <h1 className="db-h1">المرسل الذكي</h1>
-            <p className="db-lead">
-                رسائل نظامية في الدردشة باسم DineBuddies مع إشعار FCM — وسجل الحملات في admin_announcements.
-            </p>
+            <h1 className="db-h1">{t('admin_sender_title')}</h1>
+            <p className="db-lead">{t('admin_sender_lead')}</p>
 
             <div className="db-panel" style={{ marginBottom: '1rem' }}>
-                <div className="db-field-label">الجمهور</div>
+                <div className="db-field-label">{t('admin_sender_audience')}</div>
                 <div className="db-tabs" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
                     {AUDIENCE_OPTIONS.map((opt) => (
                         <button
@@ -94,7 +108,7 @@ export default function SmartSenderPage() {
                             className={`db-tab${audience === opt.id ? ' active' : ''}`}
                             onClick={() => setAudience(opt.id)}
                         >
-                            {opt.label}
+                            {t(opt.labelKey)}
                         </button>
                     ))}
                 </div>
@@ -103,18 +117,18 @@ export default function SmartSenderPage() {
                     <input
                         className="db-input"
                         style={{ width: '100%', marginBottom: '1rem' }}
-                        placeholder="UID المستخدم"
+                        placeholder={t('admin_sender_uid_placeholder')}
                         value={targetUid}
                         onChange={(e) => setTargetUid(e.target.value)}
                     />
                 )}
 
-                <div className="db-field-label">نص الرسالة</div>
+                <div className="db-field-label">{t('admin_sender_message_body')}</div>
                 <textarea
                     className="db-input"
                     rows={6}
                     style={{ width: '100%', resize: 'vertical', marginBottom: '1rem' }}
-                    placeholder="رسالة من DineBuddies Support…"
+                    placeholder={t('admin_sender_message_placeholder')}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     maxLength={4000}
@@ -127,7 +141,7 @@ export default function SmartSenderPage() {
                         onClick={send}
                         disabled={sending}
                     >
-                        {sending ? 'جاري الإرسال…' : 'إرسال'}
+                        {sending ? t('admin_sender_sending') : t('admin_sender_send')}
                     </button>
                     <span className="db-muted">{message.length}/4000</span>
                 </div>
@@ -135,21 +149,21 @@ export default function SmartSenderPage() {
                 {status && <p className="db-status-msg">{status}</p>}
             </div>
 
-            <h2 className="db-h2">سجل الحملات</h2>
+            <h2 className="db-h2">{t('admin_sender_campaign_history')}</h2>
             <div className="db-panel">
                 {loadingHistory ? (
                     <div className="db-spin" />
                 ) : history.length === 0 ? (
-                    <div className="db-empty">لا توجد حملات بعد</div>
+                    <div className="db-empty">{t('admin_sender_empty_history')}</div>
                 ) : (
                     <table className="db-table">
                         <thead>
                             <tr>
-                                <th>التاريخ</th>
-                                <th>الجمهور</th>
-                                <th>المستهدفون</th>
-                                <th>المرسلة</th>
-                                <th>النص</th>
+                                <th>{t('admin_sender_date')}</th>
+                                <th>{t('admin_sender_audience')}</th>
+                                <th>{t('admin_sender_recipients')}</th>
+                                <th>{t('admin_sender_sent_col')}</th>
+                                <th>{t('admin_sender_text_col')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -162,7 +176,7 @@ export default function SmartSenderPage() {
                                         {row.sentCount}
                                         {row.failedCount > 0 && (
                                             <span className="db-badge db-badge--warn" style={{ marginInlineStart: 6 }}>
-                                                فشل {row.failedCount}
+                                                {t('admin_sender_failed_count', { count: row.failedCount })}
                                             </span>
                                         )}
                                     </td>

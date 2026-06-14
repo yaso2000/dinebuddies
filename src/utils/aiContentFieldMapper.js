@@ -234,6 +234,7 @@ export function extractAIContentFields(postType, data) {
         case 'regular_post': {
             const record = /** @type {Record<string, unknown>} */ (unwrapAiResponseData(data) || {});
             return {
+                title: typeof record.title === 'string' ? record.title.trim() : '',
                 text: typeof record.text === 'string' ? record.text.trim() : '',
             };
         }

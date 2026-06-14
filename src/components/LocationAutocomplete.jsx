@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from
 import { createPortal } from 'react-dom';
 import { FaMapMarkerAlt, FaSearch, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { geocode } from '../utils/locationUtils';
+import { geocode, bboxFromCoords } from '../utils/locationUtils';
 import { resolveCountryIso2 } from '../utils/countryIso';
 import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
+import { sortAutocompletePredictionsForInvitation } from '../utils/invitationVenueSearch';
 import {
     fetchCityBoundingBox,
     searchPhoton,
@@ -12,6 +13,7 @@ import {
     photonFeatureToVenuePayload,
 } from '../utils/osmPhotonSearch';
 import './venue-search.css';
+import { resolveApiUrl } from '../utils/resolveApiUrl';
 
 const PHOTON_CACHE_MAX = 64;
 const photonCache = new Map();
@@ -54,18 +56,26 @@ const LocationAutocomplete = ({
     onSelect,
     city,
     countryCode,
+    /** State / province / region name — tightens Google autocomplete bbox with city. */
+    region,
     userLat,
     userLng,
+    invitationType,
     className = '',
     style = {},
     inputStyle = {},
     placeholder: placeholderProp,
     'aria-label': ariaLabelProp,
     useGooglePlacesMinimal = false,
+    /** When true with Google minimal mode, bias autocomplete toward food/retail establishments (admin import). */
+    googleBusinessSearch = false,
+    required: inputRequired = true,
+    disabled = false,
 }) => {
     const { t, i18n } = useTranslation();
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [searchError, setSearchError] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [dropdownFixed, setDropdownFixed] = useState(null);
     const wrapperRef = useRef(null);
@@ -83,21 +93,31 @@ const LocationAutocomplete = ({
     useEffect(() => {
         let cancelled = false;
         cityBboxRef.current = null;
+
+        const lat = userLat != null ? Number(userLat) : NaN;
+        const lng = userLng != null ? Number(userLng) : NaN;
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            cityBboxRef.current = bboxFromCoords(lat, lng, 40);
+        }
+
         const c = String(city || '').trim();
         const iso = countryIsoResolved;
-        if (c.length < 2 || !iso) return undefined;
+        if (c.length < 2 || !iso) return () => {
+            cancelled = true;
+        };
 
         (async () => {
-            const bbox = await fetchCityBoundingBox(c, iso);
-            if (!cancelled) cityBboxRef.current = bbox;
+            const bbox = await fetchCityBoundingBox(c, iso, region);
+            if (!cancelled && bbox) cityBboxRef.current = bbox;
         })();
         return () => {
             cancelled = true;
         };
-    }, [city, countryIsoResolved]);
+    }, [city, countryIsoResolved, region, userLat, userLng]);
 
     const updateDropdownPosition = useCallback(() => {
-        const open = showSuggestions && String(value || '').trim().length >= 3;
+        const openMin = useGooglePlacesMinimal ? 2 : 3;
+        const open = showSuggestions && String(value || '').trim().length >= openMin;
         if (!open) {
             setDropdownFixed(null);
             return;
@@ -111,14 +131,15 @@ const LocationAutocomplete = ({
             left: r.left,
             width: Math.max(r.width, 200),
         });
-    }, [showSuggestions, value]);
+    }, [showSuggestions, value, useGooglePlacesMinimal]);
 
     useLayoutEffect(() => {
         updateDropdownPosition();
     }, [updateDropdownPosition, suggestions, loading]);
 
     useEffect(() => {
-        const open = showSuggestions && String(value || '').trim().length >= 3;
+        const openMin = useGooglePlacesMinimal ? 2 : 3;
+        const open = showSuggestions && String(value || '').trim().length >= openMin;
         if (!open) {
             setDropdownFixed(null);
             return undefined;
@@ -160,19 +181,42 @@ const LocationAutocomplete = ({
                 languageCode: lang,
             });
             if (countryIsoResolved) params.set('countryCode', countryIsoResolved);
+            if (googleBusinessSearch) params.set('businessOnly', '1');
+            const latNum = userLat != null ? Number(userLat) : NaN;
+            const lngNum = userLng != null ? Number(userLng) : NaN;
+            if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+                params.set('lat', String(latNum));
+                params.set('lng', String(lngNum));
+                params.set('radiusKm', '30');
+            }
             if (bbox?.minLat != null && bbox?.minLon != null && bbox?.maxLat != null && bbox?.maxLon != null) {
                 params.set('minLat', String(bbox.minLat));
                 params.set('minLon', String(bbox.minLon));
                 params.set('maxLat', String(bbox.maxLat));
                 params.set('maxLon', String(bbox.maxLon));
             }
-            const response = await fetch(`/api/place-autocomplete?${params.toString()}`);
-            const data = await response.json();
+            const response = await fetch(`${resolveApiUrl('/api/place-autocomplete')}?${params.toString()}`);
+            const data = await response.json().catch(() => ({}));
             if (isStale()) return;
             if (!response.ok) {
-                throw new Error(data?.error || 'Google autocomplete request failed');
+                const msg = data?.error || data?.hint || t('location_search_failed', 'Search failed');
+                setSearchError(msg);
+                setSuggestions([]);
+                setLoading(false);
+                return;
             }
-            const predictions = Array.isArray(data?.predictions) ? data.predictions : [];
+            let predictions = Array.isArray(data?.predictions) ? data.predictions : [];
+            predictions = sortAutocompletePredictionsForInvitation(predictions, city, invitationType);
+            if (!predictions.length) {
+                setSearchError(
+                    data?.hint ||
+                        t('location_no_results', 'No matching places. Try a different name or widen the area.')
+                );
+                setSuggestions([]);
+                setLoading(false);
+                return;
+            }
+            setSearchError('');
             setSuggestions(
                 predictions.map((p) => ({
                     source: 'google',
@@ -180,30 +224,34 @@ const LocationAutocomplete = ({
                     name: p.structured_formatting?.main_text || p.description || '',
                     address: p.structured_formatting?.secondary_text || p.description || '',
                     full_description: p.description || '',
-                    types: [],
+                    types: p.types || [],
                 }))
             );
             setLoading(false);
         },
-        [countryIsoResolved, lang]
+        [countryIsoResolved, lang, googleBusinessSearch, t, userLat, userLng, city, invitationType]
     );
 
     const handleInput = (e) => {
+        if (disabled) return;
         const val = e.target.value;
         onChange(e);
 
         if (placesInputDebounceRef.current) clearTimeout(placesInputDebounceRef.current);
 
-        if (val.length < 3) {
+        const minLen = useGooglePlacesMinimal ? 2 : 3;
+        if (val.length < minLen) {
             placesGenerationRef.current += 1;
             placesSearchRunIdRef.current += 1;
             setSuggestions([]);
             setShowSuggestions(false);
             setLoading(false);
+            setSearchError('');
             if (useGooglePlacesMinimal && val.length === 0) rotateSessionToken();
             return;
         }
 
+        setSearchError('');
         setLoading(true);
         setShowSuggestions(true);
         placesGenerationRef.current += 1;
@@ -217,7 +265,10 @@ const LocationAutocomplete = ({
                 searchRunId !== placesSearchRunIdRef.current || generation !== placesGenerationRef.current;
 
             const trimmedInput = String(val).trim();
-            const bbox = cityBboxRef.current;
+            let bbox = cityBboxRef.current;
+            if (!bbox && userLat != null && userLng != null) {
+                bbox = bboxFromCoords(userLat, userLng, 40);
+            }
             const cacheKey = makePhotonCacheKey(
                 trimmedInput,
                 countryIsoResolved,
@@ -295,8 +346,13 @@ const LocationAutocomplete = ({
             };
 
             runPhoton().catch((err) => {
-                console.error('[LocationAutocomplete] OSM search failed:', err);
+                console.error('[LocationAutocomplete] search failed:', err);
                 if (!isStale()) {
+                    setSearchError(
+                        err instanceof Error
+                            ? err.message
+                            : t('location_search_failed', 'Search failed')
+                    );
                     setSuggestions([]);
                     setLoading(false);
                 }
@@ -314,7 +370,7 @@ const LocationAutocomplete = ({
                     languageCode: lang,
                 });
                 if (countryIsoResolved) params.set('regionCode', countryIsoResolved);
-                const response = await fetch(`/api/place-details?${params.toString()}`);
+                const response = await fetch(`${resolveApiUrl('/api/place-details')}?${params.toString()}`);
                 const data = await response.json();
                 if (!response.ok) throw new Error(data?.error || 'Google details request failed');
                 onSelect({
@@ -382,7 +438,7 @@ const LocationAutocomplete = ({
         border: '1px solid var(--border-color)',
         borderRadius: '12px',
         color: 'var(--text-main)',
-        fontSize: '1rem',
+        fontSize: 'calc(1rem + 2px)',
         outline: 'none',
         boxSizing: 'border-box',
     };
@@ -416,7 +472,8 @@ const LocationAutocomplete = ({
                 aria-label={ariaLabelProp || undefined}
                 value={value}
                 onChange={handleInput}
-                required
+                disabled={disabled}
+                required={inputRequired}
                 style={{
                     ...defaultInputStyle,
                     ...inputStyle,
@@ -429,8 +486,20 @@ const LocationAutocomplete = ({
                     <FaSearch className="spin-animation" style={{ fontSize: '0.9rem' }} />
                 </div>
             )}
+            {searchError && !loading && (
+                <p
+                    role="alert"
+                    style={{
+                        marginTop: 6,
+                        fontSize: 'calc(0.8rem + 2px)',
+                        color: 'var(--danger, #ef4444)',
+                    }}
+                >
+                    {searchError}
+                </p>
+            )}
             {showSuggestions &&
-                value.trim().length >= 3 &&
+                value.trim().length >= (useGooglePlacesMinimal ? 2 : 3) &&
                 typeof document !== 'undefined' &&
                 document.body &&
                 dropdownFixed
@@ -447,13 +516,18 @@ const LocationAutocomplete = ({
                           aria-label={t('search_places_placeholder', 'Search places')}
                       >
                           {loading && suggestions.length === 0 && (
-                              <div style={{ padding: '14px 16px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                              <div className="venue-search-dropdown__message venue-search-dropdown__message--left">
                                   {t('searching')}
                               </div>
                           )}
                           {!loading && suggestions.length === 0 && (
-                              <div style={{ padding: '14px 16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                  {t('location_no_results')}
+                              <div
+                                  className="venue-search-dropdown__message venue-search-dropdown__message--left"
+                                  style={{
+                                      color: searchError ? 'var(--danger, #ef4444)' : undefined,
+                                  }}
+                              >
+                                  {searchError || t('location_no_results')}
                               </div>
                           )}
                           {suggestions.map((place, index) => (
@@ -464,24 +538,11 @@ const LocationAutocomplete = ({
                                   className="venue-search-row"
                               >
                                   <div className="venue-search-icon">{getIconForTypes(place.types)}</div>
-                                  <div style={{ flex: 1 }}>
-                                      <div
-                                          style={{
-                                              fontWeight: '700',
-                                              fontSize: '0.95rem',
-                                              color: 'var(--text-main)',
-                                              marginBottom: '3px',
-                                          }}
-                                      >
+                                  <div className="venue-search-row__body">
+                                      <div className="venue-search-row__title venue-search-row__title--google">
                                           {place.name}
                                       </div>
-                                      <div
-                                          style={{
-                                              fontSize: '0.8rem',
-                                              color: 'var(--text-secondary)',
-                                              lineHeight: '1.3',
-                                          }}
-                                      >
+                                      <div className="venue-search-row__subtitle venue-search-row__subtitle--google">
                                           {place.address || place.full_description}
                                       </div>
                                   </div>

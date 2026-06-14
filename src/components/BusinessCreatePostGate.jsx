@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useMemo } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isBusinessUser } from '../utils/accountRole';
+import BusinessPaidFeatureGate from './business/BusinessPaidFeatureGate';
 import AppRouteLoading from './AppRouteLoading';
 
 const SmartPostStudio = lazy(() => import('../pages/business/SmartPostStudio'));
@@ -43,8 +44,15 @@ export default function BusinessCreatePostGate() {
     }
 
     return (
-        <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
-            <SmartPostStudio />
-        </Suspense>
+        <BusinessPaidFeatureGate
+            titleKey="biz_plan_motion_paid_only"
+            titleDefault="Smart Post (motion) requires Paid Business"
+            hintKey="biz_plan_motion_paid_hint"
+            hintDefault="Upgrade to create and publish motion posts."
+        >
+            <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
+                <SmartPostStudio />
+            </Suspense>
+        </BusinessPaidFeatureGate>
     );
 }

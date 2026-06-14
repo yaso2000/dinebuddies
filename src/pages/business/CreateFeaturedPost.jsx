@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getBusinessSubscriptionAccess } from '../../utils/businessSubscription';
+import BusinessPaidFeatureGate from '../../components/business/BusinessPaidFeatureGate';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 import FeaturedPostEditorPreview from '../../components/FeaturedPostEditorPreview';
 import {
@@ -30,14 +31,21 @@ import {
     updateFeaturedSlide,
 } from '../../services/featuredPostService';
 import { uploadImageWithModeration } from '../../services/moderatedImageUpload';
-import { ensurePublicImageUrl } from '../../services/mediaService';
 import { ImageUploadZone } from '../../services/imageUploadZones';
+import { withImageUploadProgress } from '../../services/imageUploadProgressStore';
+import { ensurePublicImageUrl } from '../../services/mediaService';
 import { notifyImageUploadError } from '../../utils/imageModerationErrors';
 import { useDragScrollRail } from '../../hooks/useDragScrollRail';
 import { useKeyboardOverlayViewport } from '../../hooks/useKeyboardOverlayViewport';
 import AIFloatingLauncher from '../../components/AIFloatingLauncher';
 import { extractAIContentFields } from '../../utils/aiContentFieldMapper';
+import { buildFeaturedPostAiUserPrompt } from '../../utils/aiPromptLocale';
 import { parseAiStudioImageFromState } from '../../utils/aiStudioImagePayload';
+import { useEditorSessionAutosave } from '../../hooks/useEditorSessionAutosave';
+import {
+    featuredPostDraftKey,
+    isFeaturedPostDraftEmpty,
+} from '../../utils/editorSessionDraft';
 import './CreateFeaturedPost.css';
 
 export default function CreateFeaturedPost() {
@@ -162,14 +170,10 @@ export default function CreateFeaturedPost() {
         return { type: 'gradient', value: preset.value };
     }, [backgroundMode, bgImageUrl, gradientId]);
 
-    const buildFeaturedAiPrompt = useCallback(() => {
-        const parts = [
-            businessName && `اسم المنشأة: ${businessName}`,
-            title.trim() && `عنوان حالي: ${title.trim()}`,
-            description.trim() && `وصف حالي: ${description.trim()}`,
-        ].filter(Boolean);
-        return parts.join('\n') || `منشور مميز لـ ${businessName}`;
-    }, [businessName, title, description]);
+    const buildFeaturedAiPrompt = useCallback(
+        () => buildFeaturedPostAiUserPrompt({ businessName, title, description }),
+        [businessName, title, description],
+    );
 
     const handleFeaturedAiContent = useCallback((data) => {
         const fields = extractAIContentFields('featured_post', data);
@@ -251,12 +255,113 @@ export default function CreateFeaturedPost() {
         };
     }, [editFeaturedPostId, currentUser?.uid, navigate, showToast, t]);
 
+    const draftEditId = editFeaturedPostId || editingFeaturedId || null;
+    const draftStorageKey = useMemo(() => {
+        if (!currentUser?.uid) return null;
+        return featuredPostDraftKey(currentUser.uid, draftEditId);
+    }, [currentUser?.uid, draftEditId]);
+
+    const buildSessionDraftPayload = useCallback(
+        () => ({
+            editFeaturedPostId: draftEditId,
+            title,
+            description,
+            textColor,
+            textAlign,
+            fontId,
+            gradientId,
+            bgImageUrl,
+            backgroundMode,
+        }),
+        [
+            backgroundMode,
+            bgImageUrl,
+            description,
+            draftEditId,
+            fontId,
+            gradientId,
+            textAlign,
+            textColor,
+            title,
+        ]
+    );
+
+    const applySessionDraftPayload = useCallback(
+        (draft) => {
+            if (
+                draftEditId &&
+                draft.editFeaturedPostId &&
+                String(draft.editFeaturedPostId) !== String(draftEditId)
+            ) {
+                return;
+            }
+            if (typeof draft.title === 'string') setTitle(draft.title);
+            if (typeof draft.description === 'string') setDescription(draft.description);
+            if (typeof draft.textColor === 'string') setTextColor(draft.textColor);
+            if (draft.textAlign) setTextAlign(draft.textAlign);
+            if (draft.fontId) setFontId(draft.fontId);
+            if (draft.gradientId) setGradientId(draft.gradientId);
+            if (typeof draft.bgImageUrl === 'string') setBgImageUrl(draft.bgImageUrl);
+            if (draft.backgroundMode) setBackgroundMode(draft.backgroundMode);
+        },
+        [draftEditId]
+    );
+
+    const { clearDraft: clearSessionDraft, flushSave: flushSessionDraft } = useEditorSessionAutosave({
+        enabled: Boolean(currentUser?.uid),
+        storageKey: draftStorageKey,
+        ready: !loadingEdit,
+        skipRestore: Boolean(location.state?.aiStudioImage),
+        buildPayload: buildSessionDraftPayload,
+        applyPayload: applySessionDraftPayload,
+        isEmpty: isFeaturedPostDraftEmpty,
+        onRestored: () =>
+            showToast(t('featured_draft_restored', 'Your unsaved work was restored.'), 'info'),
+        deps: [
+            title,
+            description,
+            textColor,
+            textAlign,
+            fontId,
+            gradientId,
+            bgImageUrl,
+            backgroundMode,
+        ],
+    });
+
+    const [showCloseDialog, setShowCloseDialog] = useState(false);
+    const hasAnyWork = Boolean(title.trim() || description.trim() || bgImageUrl);
+
+    const handleCloseRequest = useCallback(() => {
+        if (!hasAnyWork) {
+            clearSessionDraft();
+            navigate(-1);
+            return;
+        }
+        setShowCloseDialog(true);
+    }, [clearSessionDraft, hasAnyWork, navigate]);
+
+    const handleCloseSaveDraft = useCallback(async () => {
+        setShowCloseDialog(false);
+        await flushSessionDraft();
+        showToast(t('studio_close_kept_session', 'Your work will be restored when you return.'), 'info');
+        navigate(-1);
+    }, [flushSessionDraft, navigate, showToast, t]);
+
+    const handleCloseDiscard = useCallback(() => {
+        setShowCloseDialog(false);
+        clearSessionDraft();
+        navigate(-1);
+    }, [clearSessionDraft, navigate]);
+
     const onBgFile = async (e) => {
         const file = e.target.files?.[0];
         if (!file || !currentUser?.uid) return;
         setUploadingBg(true);
         try {
-            const url = await uploadImageWithModeration(file, currentUser.uid, ImageUploadZone.FEATURED);
+            const url = await withImageUploadProgress(async () =>
+                uploadImageWithModeration(file, currentUser.uid, ImageUploadZone.FEATURED)
+            );
             setBgImageUrl(url);
             setBackgroundMode('image');
         } catch (err) {
@@ -274,6 +379,9 @@ export default function CreateFeaturedPost() {
             return;
         }
         if (!currentUser?.uid) return;
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
         setPublishing(true);
         try {
             let publishBackground = background;
@@ -323,7 +431,8 @@ export default function CreateFeaturedPost() {
                     showToast(t('featured_post_published', 'Featured post published to the home feed!'), 'success');
                 }
             }
-            navigate('/posts-feed');
+            clearSessionDraft();
+            navigate('/posts-feed', { replace: true });
         } catch (err) {
             if (err?.message === 'featured_title_required') {
                 showToast(t('featured_title_required', 'Add a headline for your featured post.'), 'error');
@@ -344,10 +453,21 @@ export default function CreateFeaturedPost() {
         );
     }
 
+    if (!tier.canCreateFeaturedPost) {
+        return (
+            <BusinessPaidFeatureGate
+                titleKey="biz_plan_featured_paid_only"
+                titleDefault="Featured posts require Paid Business"
+                hintKey="biz_plan_featured_paid_hint"
+                hintDefault="Upgrade to create and publish featured posts."
+            />
+        );
+    }
+
     return (
         <div className="fp-page">
             <header className="app-header sticky-header-glass fp-page__header">
-                <button type="button" className="back-btn" onClick={() => navigate(-1)} aria-label={t('back', 'Back')}>
+                <button type="button" className="back-btn" onClick={handleCloseRequest} aria-label={t('back', 'Back')}>
                     <FaArrowLeft />
                 </button>
                 <h3 className="fp-page__title">
@@ -373,7 +493,7 @@ export default function CreateFeaturedPost() {
 
             <section className="fp-studio" aria-label={t('featured_editor_workspace', 'Featured post editor')}>
                 <div className="fp-studio__preview-zone">
-                    <p className="fp-studio__zone-label">{t('featured_preview_label', 'المعاينة')}</p>
+                    <p className="fp-studio__zone-label">{t('featured_preview_label')}</p>
                     <div
                         className={`fp-preview-card${showMobilePreviewChrome ? ' fp-preview-card--mobile-chrome' : ''}`}
                     >
@@ -388,8 +508,8 @@ export default function CreateFeaturedPost() {
                             activeField={activeField}
                             onFocusField={setActiveField}
                             withOverlayChrome={showMobilePreviewChrome}
-                            titlePlaceholder={t('featured_title_placeholder', 'اكتب العنوان هنا…')}
-                            descPlaceholder={t('featured_desc_placeholder', 'وصف قصير (اختياري)…')}
+                            titlePlaceholder={t('featured_title_placeholder')}
+                            descPlaceholder={t('featured_desc_placeholder')}
                         />
 
                         {showMobilePreviewChrome ? (
@@ -417,12 +537,12 @@ export default function CreateFeaturedPost() {
                                     </span>
                                     <span className="fp-preview-camera-glass__text">
                                         {uploadingBg
-                                            ? t('uploading', 'جاري الرفع…')
+                                            ? t('uploading')
                                             : bgImageUrl
                                               ? backgroundMode === 'gradient'
-                                                  ? t('featured_bg_use_saved_photo', 'استخدام الصورة المحفوظة')
-                                                  : t('featured_bg_change_photo', 'تغيير صورة الخلفية')
-                                              : t('featured_bg_add_photo', 'إضافة صورة خلفية')}
+                                                  ? t('featured_bg_use_saved_photo')
+                                                  : t('featured_bg_change_photo')
+                                              : t('featured_bg_add_photo')}
                                     </span>
                                 </label>
 
@@ -431,7 +551,7 @@ export default function CreateFeaturedPost() {
                                         type="button"
                                         className="fp-preview-clear-photo"
                                         onClick={() => setBackgroundMode('gradient')}
-                                        aria-label={t('featured_bg_remove_photo', 'إزالة الصورة')}
+                                        aria-label={t('featured_bg_remove_photo')}
                                     >
                                         <FaTimes size={12} aria-hidden />
                                     </button>
@@ -444,10 +564,10 @@ export default function CreateFeaturedPost() {
                 <div
                     className="fp-controls"
                     role="region"
-                    aria-label={t('featured_controls_panel', 'لوحة التحكم')}
+                    aria-label={t('featured_controls_panel')}
                 >
                         <div className="fp-controls__row fp-controls__row--format">
-                            <div className="fp-align-group" role="group" aria-label={t('studio_align_h', 'المحاذاة')}>
+                            <div className="fp-align-group" role="group" aria-label={t('studio_align_h')}>
                                 {[
                                     { id: 'left', Icon: FaAlignLeft },
                                     { id: 'center', Icon: FaAlignCenter },
@@ -469,7 +589,7 @@ export default function CreateFeaturedPost() {
                                 ref={fontRailRef}
                                 className={`fp-hscroll fp-font-rail${fontDragging ? ' is-dragging' : ''}`}
                                 role="listbox"
-                                aria-label={t('featured_font_style', 'نوع الخط')}
+                                aria-label={t('featured_font_style')}
                                 onPointerDown={onFontRailDown}
                                 onPointerMove={onFontRailMove}
                                 onPointerUp={onFontRailUp}
@@ -499,12 +619,12 @@ export default function CreateFeaturedPost() {
                         </div>
 
                         <div className="fp-controls__row fp-controls__row--labeled">
-                            <span className="fp-controls__label">{t('featured_text_color', 'لون الخط')}</span>
+                            <span className="fp-controls__label">{t('featured_text_color')}</span>
                             <div
                                 ref={colorRailRef}
                                 className={`fp-hscroll fp-color-rail${colorDragging ? ' is-dragging' : ''}`}
                                 role="group"
-                                aria-label={t('featured_text_color', 'لون الخط')}
+                                aria-label={t('featured_text_color')}
                                 onPointerDown={onColorRailDown}
                                 onPointerMove={onColorRailMove}
                                 onPointerUp={onColorRailUp}
@@ -532,13 +652,13 @@ export default function CreateFeaturedPost() {
 
                         <div className="fp-controls__row fp-controls__row--labeled">
                             <span className="fp-controls__label">
-                                {t('featured_pick_background', 'اختر الخلفية')}
+                                {t('featured_pick_background')}
                             </span>
                             <div
                                 ref={gradientRailRef}
                                 className={`fp-hscroll fp-bg-rail${gradientDragging ? ' is-dragging' : ''}`}
                                 role="listbox"
-                                aria-label={t('featured_pick_background', 'اختر الخلفية')}
+                                aria-label={t('featured_pick_background')}
                                 onPointerDown={onGradientRailDown}
                                 onPointerMove={onGradientRailMove}
                                 onPointerUp={onGradientRailUp}
@@ -581,10 +701,10 @@ export default function CreateFeaturedPost() {
                                 </span>
                                 <span className="fp-bg-upload-btn__text">
                                     {uploadingBg
-                                        ? t('uploading', 'جاري الرفع…')
+                                        ? t('uploading')
                                         : bgImageUrl && backgroundMode === 'image'
-                                          ? t('featured_bg_change_photo', 'تغيير صورة الخلفية')
-                                          : t('featured_bg_add_photo', 'إضافة صورة خلفية')}
+                                          ? t('featured_bg_change_photo')
+                                          : t('featured_bg_add_photo')}
                                 </span>
                             </button>
                             {bgImageUrl && backgroundMode === 'image' ? (
@@ -593,7 +713,7 @@ export default function CreateFeaturedPost() {
                                     className="fp-text-btn"
                                     onClick={() => setBackgroundMode('gradient')}
                                 >
-                                    {t('featured_bg_remove_photo', 'إزالة الصورة واستخدام تدرج')}
+                                    {t('featured_bg_remove_photo')}
                                 </button>
                             ) : null}
                         </div>
@@ -625,6 +745,51 @@ export default function CreateFeaturedPost() {
                           : t('publish_to_feed', 'Publish to home feed')}
                 </button>
             </div>
+
+            {showCloseDialog ? (
+                <div
+                    className="fp-close-dialog"
+                    role="alertdialog"
+                    aria-modal="true"
+                    aria-label={t('studio_close_title', 'Save your work?')}
+                >
+                    <div className="fp-close-dialog__backdrop" onClick={() => setShowCloseDialog(false)} />
+                    <div className="fp-close-dialog__card">
+                        <h3 className="fp-close-dialog__title">
+                            {t('studio_close_title', 'Save your work?')}
+                        </h3>
+                        <p className="fp-close-dialog__text">
+                            {t(
+                                'studio_close_question',
+                                'Do you want to save this post as a draft before closing?'
+                            )}
+                        </p>
+                        <div className="fp-close-dialog__actions">
+                            <button
+                                type="button"
+                                className="fp-close-dialog__btn fp-close-dialog__btn--save"
+                                onClick={handleCloseSaveDraft}
+                            >
+                                {t('studio_save_draft', 'Save draft')}
+                            </button>
+                            <button
+                                type="button"
+                                className="fp-close-dialog__btn fp-close-dialog__btn--discard"
+                                onClick={handleCloseDiscard}
+                            >
+                                {t('studio_close_discard', 'Discard')}
+                            </button>
+                            <button
+                                type="button"
+                                className="fp-close-dialog__btn fp-close-dialog__btn--cancel"
+                                onClick={() => setShowCloseDialog(false)}
+                            >
+                                {t('studio_close_keep_editing', 'Keep editing')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

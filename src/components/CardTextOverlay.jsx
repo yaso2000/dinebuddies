@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     DEFAULT_CARD_STRUCTURE,
     getCardTextOverlayLayoutClass,
@@ -24,6 +25,7 @@ export function CardTextOverlay({
     className = '',
     showBrandMark = true,
 }) {
+    const { t } = useTranslation();
     const structure = normalizeCardStructure(selectedTemplate);
     const layoutClass = getCardTextOverlayLayoutClass(structure);
 
@@ -33,12 +35,11 @@ export function CardTextOverlay({
             aria-label="Invitation text overlay"
         >
             <h2 className="card-text-overlay__title">
-                {title?.trim() || 'عنوان الدعوة الساحرة'}
+                {title?.trim() || t('card_overlay_title_placeholder')}
             </h2>
 
             <p className="card-text-overlay__description">
-                {description?.trim() ||
-                    'اكتب رسالة رقيقة لتظهر هنا متناسقة داخل مساحات الأمان تلقائياً وبأبهى حُلّة بصرية...'}
+                {description?.trim() || t('card_overlay_desc_placeholder')}
             </p>
 
             {showBrandMark ? (

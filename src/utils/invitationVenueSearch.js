@@ -69,14 +69,36 @@ export function sortAutocompletePredictionsForInvitation(predictions, city, invi
     return enriched.map((x) => x.p);
 }
 
-/** Sort DineBuddies directory hits: city first, then exact businessType match. */
-export function sortDineBuddiesVenues(results, city, invitationType) {
+/** Sort DineBuddies directory hits: nearest to user GPS, then city match, then business type. */
+export function sortDineBuddiesVenues(results, city, invitationType, userLat, userLng) {
     if (!results?.length) return results;
     const cityLower = city ? String(city).toLowerCase() : '';
+    const uLat = userLat != null ? Number(userLat) : NaN;
+    const uLng = userLng != null ? Number(userLng) : NaN;
+    const hasUser = Number.isFinite(uLat) && Number.isFinite(uLng);
+
+    const distKm = (v) => {
+        const lat = Number(v.lat);
+        const lng = Number(v.lng);
+        if (!hasUser || !Number.isFinite(lat) || !Number.isFinite(lng)) return Infinity;
+        const R = 6371;
+        const dLat = ((lat - uLat) * Math.PI) / 180;
+        const dLon = ((lng - uLng) * Math.PI) / 180;
+        const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((uLat * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
     return [...results].sort((a, b) => {
+        if (hasUser) {
+            const da = distKm(a);
+            const db = distKm(b);
+            if (da !== db) return da - db;
+        }
         if (cityLower) {
-            const ac = String(a.city || '').toLowerCase().includes(cityLower);
-            const bc = String(b.city || '').toLowerCase().includes(cityLower);
+            const ac = String(a.city || a.address || '').toLowerCase().includes(cityLower);
+            const bc = String(b.city || b.address || '').toLowerCase().includes(cityLower);
             if (ac !== bc) return ac ? -1 : 1;
         }
         if (invitationType) {

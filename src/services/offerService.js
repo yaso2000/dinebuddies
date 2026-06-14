@@ -1,49 +1,38 @@
 import { auth, db, storage } from '../firebase/config';
-import { collection, doc, getDoc, addDoc, updateDoc, deleteDoc, increment, serverTimestamp, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { uploadManagedImage } from './managedImageUpload';
 import { ImageUploadZone } from './imageUploadZones';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 
 /**
- * Publishes or updates a special offer.
- * 
- * @param {string} restaurantId - The ID of the restaurant/business.
- * @param {object} offerData - Data from the OfferEditor.
- * @param {File} file - Optional new media file.
- * @param {string} offerId - Optional existing offer ID for updates.
+ * Publishes or updates a special offer (Paid Business only).
  */
 export const publishOffer = async (restaurantId, offerData, file, offerId = null) => {
     try {
-        console.log("🚀 Starting offer publication for restaurant:", restaurantId);
-
-        // 1. Validate restaurant existence and credits
-        const restaurantRef = doc(db, "users", restaurantId);
+        const restaurantRef = doc(db, 'users', restaurantId);
         const restaurantSnap = await getDoc(restaurantRef);
 
         if (!restaurantSnap.exists()) {
-            throw new Error("Restaurant account not found.");
+            throw new Error('Restaurant account not found.');
         }
 
         const data = restaurantSnap.data();
         if (data.role !== 'business') {
-            throw new Error("Target account is not a business account.");
+            throw new Error('Target account is not a business account.');
         }
 
-        // Check for elite plan or available credits
-        const isElite = data.subscriptionTier === 'elite';
-        const hasEnoughCredits = (data.offerCredits > 0) || isElite;
+        const isPaid = normalizeBusinessTier(data.subscriptionTier) === 'paid';
 
-        if (!offerId && !hasEnoughCredits) {
-            throw new Error("Insufficient offer credits. Please top up your balance.");
+        if (!offerId && !isPaid) {
+            throw new Error('Premium offers require a Paid Business subscription.');
         }
 
-        // 2. Upload Media (image/video)
-        let mediaUrl = "";
+        let mediaUrl = '';
         if (file) {
-            console.log("📤 Uploading media to storage...");
             const currentUid = auth.currentUser?.uid;
             if (!currentUid || currentUid !== restaurantId) {
-                throw new Error("Unauthorized media upload path for this offer.");
+                throw new Error('Unauthorized media upload path for this offer.');
             }
             if (file.type.startsWith('image/')) {
                 mediaUrl = await uploadManagedImage(file, currentUid, ImageUploadZone.OFFER);
@@ -52,115 +41,91 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
                 await uploadBytes(storageRef, file);
                 mediaUrl = await getDownloadURL(storageRef);
             }
-            console.log("✅ Media uploaded:", mediaUrl);
         } else if (offerData.mediaUrl) {
             mediaUrl = offerData.mediaUrl;
         }
 
-        // 3. Build final offer object
         const finalOffer = {
             restaurantId,
             business: {
-                name: data.display_name || data.businessInfo?.businessName || "Restaurant",
-                logo: data.photo_url || data.businessInfo?.logoImage || ""
+                name: data.display_name || data.businessInfo?.businessName || 'Restaurant',
+                logo: data.photo_url || data.businessInfo?.logoImage || '',
             },
             content: {
                 title: offerData.title,
                 description: offerData.description,
-                mediaUrl: mediaUrl,
-                mediaType: file && file.type.startsWith('video') ? 'video' : 'image'
+                mediaUrl,
+                mediaType: file && file.type.startsWith('video') ? 'video' : 'image',
             },
             logic: {
                 expirationType: offerData.expirationType,
                 expiryDate: offerData.expirationType === 'fixed' ? new Date(offerData.endDate) : null,
-                isPerpetual: offerData.expirationType === 'perpetual'
+                isPerpetual: offerData.expirationType === 'perpetual',
             },
             visual: offerData.visual || { theme: 'midnight', isGlass: true, hasShimmer: false },
             visibility: {
                 isPinned: offerData.status === 'active' || offerData.visibility?.isPinned || true,
-                status: offerData.status || 'active', // active, draft, frozen
+                status: offerData.status || 'active',
                 identityType: offerData.identityType || 'logo',
                 badgeId: offerData.badgeId || null,
-                priorityScore: isElite ? 100 : 50,
-                location: data.businessInfo?.location || data.location
+                priorityScore: isPaid ? 100 : 50,
+                location: data.businessInfo?.location || data.location,
             },
             stats: offerData.stats || { impressions: 0, invitationsCreated: 0 },
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
         };
 
         if (!offerId) {
             finalOffer.createdAt = serverTimestamp();
         }
 
-        console.log("💾 Saving offer to Firestore...");
-
-        // 4. Update or Add offer
         if (offerId) {
-            const offerRef = doc(db, "special_offers", offerId);
+            const offerRef = doc(db, 'special_offers', offerId);
             await updateDoc(offerRef, finalOffer);
-            console.log("✅ Offer updated successfully");
             return { success: true, id: offerId };
-        } else {
-            const offerDoc = await addDoc(collection(db, "special_offers"), finalOffer);
-            if (!isElite) {
-                await updateDoc(restaurantRef, {
-                    offerCredits: increment(-1)
-                });
-            }
-            return { success: true, id: offerDoc.id };
         }
+
+        const offerDoc = await addDoc(collection(db, 'special_offers'), finalOffer);
+        return { success: true, id: offerDoc.id };
     } catch (error) {
-        console.error("❌ Error publishing offer:", error);
+        console.error('Error publishing offer:', error);
         return { success: false, message: error.message };
     }
 };
 
 export const fetchRestaurantOffers = async (restaurantId) => {
     try {
-        const q = query(
-            collection(db, "special_offers"),
-            where("restaurantId", "==", restaurantId)
-        );
+        const q = query(collection(db, 'special_offers'), where('restaurantId', '==', restaurantId));
         const snapshot = await getDocs(q);
-        const offers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // Sort in memory to avoid index requirements
+        const offers = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         return offers.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
     } catch (error) {
-        console.error("❌ Error fetching restaurant offers:", error);
+        console.error('Error fetching restaurant offers:', error);
         throw error;
     }
 };
-/**
- * Updates the status of an existing offer.
- * @param {string} offerId 
- * @param {string} status - 'active', 'draft', 'frozen'
- */
+
 export const updateOfferStatus = async (offerId, status) => {
     try {
-        const offerRef = doc(db, "special_offers", offerId);
+        const offerRef = doc(db, 'special_offers', offerId);
         await updateDoc(offerRef, {
-            "visibility.status": status,
-            "visibility.isPinned": status === 'active',
-            updatedAt: serverTimestamp()
+            'visibility.status': status,
+            'visibility.isPinned': status === 'active',
+            updatedAt: serverTimestamp(),
         });
         return { success: true };
     } catch (error) {
-        console.error("❌ Error updating offer status:", error);
+        console.error('Error updating offer status:', error);
         return { success: false, message: error.message };
     }
 };
 
-/**
- * Deletes an offer permanently.
- */
 export const deleteOffer = async (offerId) => {
     try {
-        const offerRef = doc(db, "special_offers", offerId);
-        await deleteDoc(offerRef);
+        await deleteDoc(doc(db, 'special_offers', offerId));
         return { success: true };
     } catch (error) {
-        console.error("❌ Error deleting offer:", error);
+        console.error('Error deleting offer:', error);
         return { success: false, message: error.message };
     }
 };

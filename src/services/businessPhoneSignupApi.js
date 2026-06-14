@@ -1,11 +1,4 @@
-const PRODUCTION_API_ORIGIN = 'https://www.dinebuddies.com';
-
-function resolveApiUrl(path) {
-    const custom = String(import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/$/, '');
-    if (custom) return `${custom}${path}`;
-    if (import.meta.env.DEV) return `${PRODUCTION_API_ORIGIN}${path}`;
-    return path;
-}
+import { resolveApiUrl } from '../utils/resolveApiUrl';
 
 /**
  * @param {string} standardizedPhone E.164

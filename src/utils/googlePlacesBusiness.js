@@ -1,6 +1,15 @@
 /** Convert Google Places `opening_hours.periods` to BusinessHours `hours` shape (sunday..saturday). */
 const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+const HIDDEN_CATEGORY_TYPES = new Set([
+    'point_of_interest',
+    'establishment',
+    'food',
+    'premise',
+    'geocode',
+    'political',
+]);
+
 function formatPlacesTime(t) {
     if (t == null) return '09:00';
     const s = String(t).replace(/\D/g, '').padStart(4, '0').slice(0, 4);
@@ -88,4 +97,31 @@ export function mapGoogleTypesToBusinessType(types) {
     if (lower.has('restaurant') || lower.has('meal_takeaway') || lower.has('meal_delivery')) return 'Restaurant';
     if (lower.has('liquor_store')) return 'Bar';
     return null;
+}
+
+/**
+ * Human-readable category badges from Google Places `types`.
+ * @param {string[]|undefined} types
+ */
+export function googlePlaceTypesToCategoryBadges(types) {
+    if (!Array.isArray(types)) return [];
+    return types
+        .map((t) => String(t || '').trim())
+        .filter((t) => t && !HIDDEN_CATEGORY_TYPES.has(t.toLowerCase()))
+        .map((t) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+        .slice(0, 8);
+}
+
+/**
+ * @param {Record<string, { closed?: boolean, open?: string, close?: string }>|null|undefined} hours
+ */
+export function computeOpenNowFromBusinessHours(hours) {
+    if (!hours || typeof hours !== 'object') return null;
+    const now = new Date();
+    const dayName = DAY_KEYS[now.getDay()];
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const today = hours[dayName];
+    if (!today || today.closed) return false;
+    if (!today.open || !today.close) return null;
+    return currentTime >= today.open && currentTime < today.close;
 }

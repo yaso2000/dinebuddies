@@ -22,6 +22,7 @@ import {
     CREDITS_WALLET_PATH,
 } from '../utils/aiCreditCosts';
 import { saveOrShareRemoteImage } from '../utils/saveRemoteImage';
+import { resolveAiGeneratedCoverPreview } from '../services/mediaService';
 import { isIOS } from '../services/notificationService';
 import { isBusinessUser } from '../utils/accountRole';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
@@ -110,6 +111,8 @@ export default function AiDesignStudio() {
     );
 
     const imageUrl = activeEntry?.imageUrl || '';
+    const remoteImageUrl =
+        activeEntry?.remoteUrl || (imageUrl.startsWith('http') ? imageUrl : '');
     const optimizedPrompt = activeEntry?.optimizedPrompt || '';
     const previewCategoryId = activeEntry?.categoryId || categoryId;
     const previewAspectRatio = aspectRatioForDesignCategory(previewCategoryId);
@@ -139,21 +142,11 @@ export default function AiDesignStudio() {
     );
 
     const categoryLabel = t(selectedCategory.labelKey, {
-        defaultValue: i18n.language?.startsWith('ar')
-            ? selectedCategory.defaultLabelAr
-            : selectedCategory.defaultLabel,
+        defaultValue: selectedCategory.defaultLabel,
     });
 
     const handleGenerate = async () => {
-        const trimmed = prompt.trim();
-        if (!trimmed) {
-            showToast(
-                t('ai_prompt_required', 'أدخل وصفاً قصيراً لما تريد توليده بالذكاء الاصطناعي.'),
-                'error'
-            );
-            return;
-        }
-
+        const trimmed = String(prompt || '').trim();
         setLoading(true);
 
         try {
@@ -167,10 +160,7 @@ export default function AiDesignStudio() {
                 if (isInsufficientCreditsError(result)) {
                     setInsufficientCreditsMessage(
                         result.message ||
-                            t(
-                                'ai_insufficient_credits_default',
-                                'رصيدك غير كافٍ. تحتاج إلى المزيد من الكريدت لإتمام هذه العملية.'
-                            )
+                            t('ai_insufficient_credits_default')
                     );
                     return;
                 }
@@ -186,8 +176,16 @@ export default function AiDesignStudio() {
 
             const url = extractAIImageUrl(result.data);
             if (!url) {
-                showToast(t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.'), 'error');
+                showToast(t('ai_generate_failed'), 'error');
                 return;
+            }
+
+            let previewUrl = url;
+            try {
+                const resolved = await resolveAiGeneratedCoverPreview(url);
+                previewUrl = resolved.displayUrl;
+            } catch (previewErr) {
+                console.warn('[AiDesignStudio] preview resolve failed:', previewErr);
             }
 
             const studioMeta = result.meta?.designStudio;
@@ -198,7 +196,8 @@ export default function AiDesignStudio() {
 
             const entry = {
                 id: createAiDesignStudioStashId(),
-                imageUrl: url,
+                imageUrl: previewUrl,
+                remoteUrl: url,
                 categoryId,
                 aspectRatio: aspectRatioForDesignCategory(categoryId),
                 userPrompt: trimmed,
@@ -209,17 +208,14 @@ export default function AiDesignStudio() {
             const { stash: nextStash, evictedOldest } = pushAiDesignStudioStash(stash, entry);
             if (evictedOldest) {
                 showToast(
-                    t(
-                        'ai_design_stash_replaced_oldest',
-                        'تم حفظ الصورة الجديدة واستبدال أقدم صورة في الذاكرة المؤقتة (5 كحد أقصى).'
-                    ),
+                    t('ai_design_stash_replaced_oldest'),
                     'info'
                 );
             }
             setStash(nextStash);
             setSelectedStashId(entry.id);
 
-            showToast(t('ai_design_studio_success', 'تم إنشاء الصورة — يمكنك تحميلها الآن.'), 'success');
+            showToast(t('ai_design_studio_success'), 'success');
 
             const creditsCharged = result.meta?.creditsCharged ?? AI_IMAGE_GENERATION_CREDITS;
             if (creditsCharged) {
@@ -227,20 +223,21 @@ export default function AiDesignStudio() {
             }
         } catch (err) {
             console.error('[AiDesignStudio]', err);
-            showToast(t('ai_generate_failed', 'تعذّر التوليد بالذكاء الاصطناعي. حاول مرة أخرى.'), 'error');
+            showToast(t('ai_generate_failed'), 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const handleDownload = useCallback(async () => {
-        if (!imageUrl || downloading) return;
+        const downloadUrl = imageUrl || remoteImageUrl;
+        if (!downloadUrl || downloading) return;
         setDownloading(true);
         try {
-            const ext = imageUrl.includes('.png') ? 'png' : 'jpg';
+            const ext = downloadUrl.includes('.png') ? 'png' : 'jpg';
             const safeCategory = String(previewCategoryId).replace(/[^a-z0-9_-]/gi, '_');
             const result = await saveOrShareRemoteImage(
-                imageUrl,
+                downloadUrl,
                 `dinebuddies-${safeCategory}-${Date.now()}.${ext}`
             );
 
@@ -250,35 +247,29 @@ export default function AiDesignStudio() {
 
             if (result === 'shared') {
                 showToast(
-                    t(
-                        'ai_design_save_ios_hint',
-                        'اختر «حفظ الصورة» أو «Add to Photos» من قائمة المشاركة.'
-                    ),
+                    t('ai_design_save_ios_hint'),
                     'info'
                 );
                 return;
             }
 
-            showToast(t('ai_design_download_started', 'بدء تحميل الصورة.'), 'success');
+            showToast(t('ai_design_download_started'), 'success');
         } catch (err) {
             console.error('[AiDesignStudio] download', err);
             showToast(
-                t(
-                    'ai_design_save_long_press_hint',
-                    'اضغط مطولاً على الصورة في المعاينة ثم اختر «حفظ في الصور».'
-                ),
+                t('ai_design_save_long_press_hint'),
                 'info'
             );
         } finally {
             setDownloading(false);
         }
-    }, [downloading, imageUrl, previewCategoryId, showToast, t]);
+    }, [downloading, imageUrl, remoteImageUrl, previewCategoryId, showToast, t]);
 
     const downloadButtonLabel = downloading
-        ? t('ai_design_downloading', 'جاري التحميل…')
+        ? t('ai_design_downloading')
         : isIOS()
-          ? t('ai_design_studio_save_ios', 'حفظ الصورة')
-          : t('ai_design_studio_download', 'تحميل الصورة');
+          ? t('ai_design_studio_save_ios')
+          : t('ai_design_studio_download');
 
     useEffect(() => {
         if (!useMenuOpen) return undefined;
@@ -297,7 +288,8 @@ export default function AiDesignStudio() {
 
     const handleUseDestination = useCallback(
         async (destinationId) => {
-            if (!imageUrl || applyingUseId) return;
+            const applyUrl = remoteImageUrl || imageUrl;
+            if (!applyUrl || applyingUseId) return;
             const uid = currentUser?.uid;
             if (!uid) {
                 showToast(t('please_sign_in', { defaultValue: 'Please sign in to continue.' }), 'error');
@@ -310,7 +302,7 @@ export default function AiDesignStudio() {
             try {
                 const result = await applyStudioImageUse({
                     destinationId,
-                    imageUrl,
+                    imageUrl: applyUrl,
                     userId: uid,
                     updateUserProfile: updateProfile,
                     navigate,
@@ -318,14 +310,14 @@ export default function AiDesignStudio() {
 
                 if (result.action === 'navigate') {
                     showToast(
-                        t('ai_design_use_navigate_ok', 'تم حفظ الصورة — أكمل من صفحة الإنشاء.'),
+                        t('ai_design_use_navigate_ok'),
                         'success'
                     );
                     return;
                 }
 
                 showToast(
-                    t('ai_design_use_applied_ok', 'تم حفظ الصورة وتطبيقها بنجاح.'),
+                    t('ai_design_use_applied_ok'),
                     'success'
                 );
 
@@ -343,7 +335,7 @@ export default function AiDesignStudio() {
                 setApplyingUseId(null);
             }
         },
-        [applyingUseId, currentUser?.uid, imageUrl, navigate, showToast, t, updateProfile]
+        [applyingUseId, currentUser?.uid, imageUrl, remoteImageUrl, navigate, showToast, t, updateProfile]
     );
 
     const closeInsufficientModal = () => setInsufficientCreditsMessage('');
@@ -360,29 +352,26 @@ export default function AiDesignStudio() {
                     type="button"
                     className="ai-design-studio__back ios-tap-target"
                     onClick={() => navigate(-1)}
-                    aria-label={t('back', 'رجوع')}
+                    aria-label={t('back')}
                 >
                     <FaArrowLeft aria-hidden />
                 </button>
                 <div className="ai-design-studio__title-block">
-                    <h1>{t('ai_design_studio_title', 'استوديو تصميم الصور')}</h1>
+                    <h1>{t('ai_design_studio_title')}</h1>
                     <p>
-                        {t(
-                            'ai_design_studio_subtitle',
-                            'اختر نوع الصورة والقياس، صِف ما تريد، ثم حمّل النتيجة على جهازك.'
-                        )}
+                        {t('ai_design_studio_subtitle')}
                     </p>
                 </div>
             </header>
 
             <section className="ai-design-studio__panel" aria-labelledby="ai-design-categories">
                 <h2 id="ai-design-categories" className="ai-design-studio__section-label">
-                    {t('ai_design_studio_categories', 'فئة القياس')}
+                    {t('ai_design_studio_categories')}
                 </h2>
-                <div className="ai-design-studio__categories" role="radiogroup" aria-label={t('ai_design_studio_categories', 'فئة القياس')}>
+                <div className="ai-design-studio__categories" role="radiogroup" aria-label={t('ai_design_studio_categories')}>
                     {studioCategories.map((cat) => {
                         const label = t(cat.labelKey, {
-                            defaultValue: i18n.language?.startsWith('ar') ? cat.defaultLabelAr : cat.defaultLabel,
+                            defaultValue: cat.defaultLabel,
                         });
                         const active = categoryId === cat.id;
                         return (
@@ -408,20 +397,23 @@ export default function AiDesignStudio() {
 
             <section className="ai-design-studio__panel" aria-labelledby="ai-design-prompt">
                 <h2 id="ai-design-prompt" className="ai-design-studio__section-label">
-                    {t('ai_design_studio_prompt_label', 'وصف التصميم')}
+                    {t('ai_design_studio_prompt_label')}
                 </h2>
                 <textarea
                     className="ai-design-studio__prompt"
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={t(
-                        'ai_design_studio_prompt_placeholder',
-                        'مثال: غروب دافئ على شاطئ، ألوان ترابية، بدون نصوص…'
-                    )}
+                    onChange={(e) => setPrompt(e.target.value.slice(0, 300))}
+                    placeholder={t('ai_design_studio_prompt_placeholder')}
                     disabled={loading}
-                    maxLength={2000}
+                    maxLength={300}
                     rows={4}
                 />
+                <p className="ai-design-studio__prompt-meta" aria-live="polite">
+                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                        {prompt.length} / 300
+                    </span>
+                    <span>{t('ai_prompt_optional_hint', { defaultValue: 'Optional — leave blank for a default brief.' })}</span>
+                </p>
                 <div className="ai-design-studio__actions">
                     <button
                         type="button"
@@ -433,7 +425,7 @@ export default function AiDesignStudio() {
                         {loading ? (
                             <>
                                 <span className="ai-design-studio__spinner" aria-hidden />
-                                {t('ai_generate_loading', 'جاري التوليد بالذكاء الاصطناعي...')}
+                                {t('ai_generate_loading')}
                             </>
                         ) : (
                             <>
@@ -453,16 +445,16 @@ export default function AiDesignStudio() {
 
             <section className="ai-design-studio__panel ai-design-studio__preview-panel" aria-labelledby="ai-design-preview">
                 <h2 id="ai-design-preview" className="ai-design-studio__section-label" style={{ alignSelf: 'stretch' }}>
-                    {t('ai_design_studio_preview', 'المعاينة')}
+                    {t('ai_design_studio_preview')}
                 </h2>
                 <div className={`ai-design-studio__preview-frame ${previewFrameClass(previewAspectRatio)}`}>
                     {imageUrl ? (
-                        <img src={imageUrl} alt={t('ai_design_studio_preview_alt', 'صورة مُولَّدة')} className="ai-design-studio__preview-img" />
+                        <img src={imageUrl} alt={t('ai_design_studio_preview_alt')} className="ai-design-studio__preview-img" />
                     ) : (
                         <p className="ai-design-studio__preview-empty">
                             {loading
-                                ? t('ai_generate_loading', 'جاري التوليد بالذكاء الاصطناعي...')
-                                : t('ai_design_studio_preview_empty', 'ستظهر الصورة هنا بعد التوليد.')}
+                                ? t('ai_generate_loading')
+                                : t('ai_design_studio_preview_empty')}
                         </p>
                     )}
                     {loading && imageUrl ? (
@@ -475,19 +467,16 @@ export default function AiDesignStudio() {
                     <div className="ai-design-studio__stash" aria-labelledby="ai-design-stash-label">
                         <div className="ai-design-studio__stash-head">
                             <h3 id="ai-design-stash-label" className="ai-design-studio__stash-title">
-                                {t('ai_design_stash_title', 'الصور الأخيرة')}
+                                {t('ai_design_stash_title')}
                             </h3>
                             <span className="ai-design-studio__stash-count">
                                 {stash.length}/{AI_DESIGN_STUDIO_STASH_MAX}
                             </span>
                         </div>
                         <p className="ai-design-studio__stash-hint">
-                            {t(
-                                'ai_design_stash_hint',
-                                'اضغط على مصغّر للعودة إلى صورة سابقة. تُحفظ حتى 5 صور خلال هذه الجلسة.'
-                            )}
+                            {t('ai_design_stash_hint')}
                         </p>
-                        <div className="ai-design-studio__stash-row" role="listbox" aria-label={t('ai_design_stash_title', 'الصور الأخيرة')}>
+                        <div className="ai-design-studio__stash-row" role="listbox" aria-label={t('ai_design_stash_title')}>
                             {stash.map((entry) => {
                                 const isActive = entry.id === activeEntry?.id;
                                 return (
@@ -509,7 +498,7 @@ export default function AiDesignStudio() {
                                             type="button"
                                             className="ai-design-studio__stash-remove ios-tap-target"
                                             onClick={(e) => handleRemoveStashEntry(entry.id, e)}
-                                            aria-label={t('ai_design_stash_remove', 'إزالة من الذاكرة المؤقتة')}
+                                            aria-label={t('ai_design_stash_remove')}
                                         >
                                             <FaTimes aria-hidden />
                                         </button>
@@ -538,11 +527,9 @@ export default function AiDesignStudio() {
                         >
                             <span aria-hidden>{suggestedDestination.icon}</span>
                             {applyingUseId === suggestedDestination.id
-                                ? t('ai_design_use_applying', 'جاري التطبيق…')
+                                ? t('ai_design_use_applying')
                                 : t(suggestedDestination.labelKey, {
-                                      defaultValue: i18n.language?.startsWith('ar')
-                                          ? suggestedDestination.defaultLabelAr
-                                          : suggestedDestination.defaultLabel,
+                                      defaultValue: suggestedDestination.defaultLabel,
                                   })}
                         </button>
                     ) : null}
@@ -556,20 +543,18 @@ export default function AiDesignStudio() {
                             aria-expanded={useMenuOpen}
                         >
                             {applyingUseId
-                                ? t('ai_design_use_applying', 'جاري التطبيق…')
-                                : t('ai_design_studio_use_btn', 'استخدام في التطبيق')}
+                                ? t('ai_design_use_applying')
+                                : t('ai_design_studio_use_btn')}
                             <FaChevronDown aria-hidden />
                         </button>
                         {useMenuOpen && imageUrl ? (
                             <div className="ai-design-studio__use-menu" role="menu">
                                 <p className="ai-design-studio__use-menu-title">
-                                    {t('ai_design_studio_use_menu_title', 'اختر الوجهة')}
+                                    {t('ai_design_studio_use_menu_title')}
                                 </p>
                                 {useDestinations.map((dest) => {
                                     const label = t(dest.labelKey, {
-                                        defaultValue: i18n.language?.startsWith('ar')
-                                            ? dest.defaultLabelAr
-                                            : dest.defaultLabel,
+                                        defaultValue: dest.defaultLabel,
                                     });
                                     return (
                                         <button
@@ -591,15 +576,12 @@ export default function AiDesignStudio() {
                 </div>
                 {imageUrl && isIOS() ? (
                     <p className="ai-design-studio__meta">
-                        {t(
-                            'ai_design_ios_save_footer',
-                            'على iPhone: بعد الضغط على «حفظ الصورة» اختر «حفظ الصورة» أو Add to Photos من الأسفل.'
-                        )}
+                        {t('ai_design_ios_save_footer')}
                     </p>
                 ) : null}
                 {optimizedPrompt ? (
                     <p className="ai-design-studio__meta">
-                        <strong>{t('ai_design_optimized_prompt', 'الوصف المحسّن')}:</strong> {optimizedPrompt}
+                        <strong>{t('ai_design_optimized_prompt')}:</strong> {optimizedPrompt}
                     </p>
                 ) : null}
             </section>
@@ -616,7 +598,7 @@ export default function AiDesignStudio() {
                             <FaWallet />
                         </div>
                         <h3 className="ai-credits-modal__title">
-                            {t('ai_insufficient_credits_title', 'رصيد غير كافٍ')}
+                            {t('ai_insufficient_credits_title')}
                         </h3>
                         <p className="ai-credits-modal__message">{insufficientCreditsMessage}</p>
                         <div className="ai-credits-modal__actions">
@@ -625,14 +607,14 @@ export default function AiDesignStudio() {
                                 className="ai-credits-modal__btn ai-credits-modal__btn--primary ios-tap-target"
                                 onClick={goToTopUp}
                             >
-                                {t('ai_top_up_now', 'شحن الرصيد الآن')}
+                                {t('ai_top_up_now')}
                             </button>
                             <button
                                 type="button"
                                 className="ai-credits-modal__btn ai-credits-modal__btn--ghost ios-tap-target"
                                 onClick={closeInsufficientModal}
                             >
-                                {t('close', 'إغلاق')}
+                                {t('close')}
                             </button>
                         </div>
                     </div>

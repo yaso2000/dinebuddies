@@ -1,18 +1,15 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { goToLogin } from '../utils/goToLogin';
+import { buildLoginPath } from '../utils/goToLogin';
+import { sanitizeNextPath } from '../utils/safeInternalPath';
 
 /**
- * Blocks guest users from accessing protected routes.
- * Uses the unified `isGuest` flag from AuthContext — no dual checks needed.
+ * Blocks guest users from accessing protected routes — redirects to /login with ?next=.
  */
 const GuestBlockedRoute = ({ children }) => {
     const { currentUser, isGuest, loading } = useAuth();
-
-    useEffect(() => {
-        if (loading) return;
-        if (!currentUser || isGuest) goToLogin({ replace: true });
-    }, [loading, currentUser, isGuest]);
+    const location = useLocation();
 
     if (loading) {
         return (
@@ -23,11 +20,10 @@ const GuestBlockedRoute = ({ children }) => {
     }
 
     if (!currentUser || isGuest) {
-        return (
-            <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                …
-            </div>
+        const returnPath = sanitizeNextPath(
+            `${location.pathname || ''}${location.search || ''}`
         );
+        return <Navigate to={buildLoginPath({ returnPath })} replace />;
     }
 
     return children;

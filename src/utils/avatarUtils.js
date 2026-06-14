@@ -18,10 +18,20 @@ export function isPlacePhotoProxyUrl(url) {
     return u.includes('/api/place-photo') || u.includes('/__dev/place-photo');
 }
 
+/** Ephemeral Google CDN URLs (Places photoUri, lh3.googleusercontent.com) — do not persist or render. */
+export function isEphemeralGoogleCdnUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const u = url.trim();
+    if (/^https?:\/\/lh\d+\.googleusercontent\.com\//i.test(u)) return true;
+    if (/^https?:\/\/places\.googleapis\.com\//i.test(u)) return true;
+    return false;
+}
+
 /** True for Google Place CDNs and disabled place-photo proxies — do not render or persist as media URLs. */
 export function shouldBlockDirectImageLoad(url) {
     if (!url || typeof url !== 'string') return true;
     if (isGooglePlaceImageUrl(url)) return true;
+    if (isEphemeralGoogleCdnUrl(url)) return true;
     if (isPlacePhotoProxyUrl(url)) return true;
     return false;
 }
@@ -112,6 +122,7 @@ export const getSafeAvatar = (userData) => {
         userData.logo,
         userData.logoImage,
         userData.profilePicture,
+        userData.businessInfo?.coverImage,
         userData.businessInfo?.logo,
         userData.businessInfo?.logoImage,
         userData.partnerLogo,
@@ -155,17 +166,25 @@ export const getGenderBorderColor = (user) => {
     return GENDER_AVATAR_RING.unspecified;
 };
 
+const avatarRingShellStyle = () => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 0,
+    borderRadius: '50%',
+    boxSizing: 'border-box',
+});
+
 /**
- * Inline styles for a circular profile photo ring (box-shadow, no layout shift).
+ * Inline styles for a circular profile photo ring (padding shell — participates in layout).
  */
 export const getGenderAvatarRingStyle = (user, { ringWidth = 2, ringColorOverride } = {}) => {
     const color = ringColorOverride ?? getGenderBorderColor(user);
-    if (!color || color === 'transparent') return {};
+    if (!color || color === 'transparent') return avatarRingShellStyle();
     return {
-        display: 'inline-block',
-        lineHeight: 0,
-        borderRadius: '50%',
-        boxShadow: `0 0 0 ${ringWidth}px ${color}`,
+        ...avatarRingShellStyle(),
+        padding: `${ringWidth}px`,
+        background: color,
     };
 };
 
@@ -173,10 +192,13 @@ export const getGenderAvatarRingStyle = (user, { ringWidth = 2, ringColorOverrid
  * Merge gender ring styles into an existing style object (for legacy <img> tags).
  */
 export const mergeAvatarStyleWithGenderRing = (user, style = {}, options = {}) => {
+    const { ringWidth = 2, ringColorOverride } = options;
+    const color = ringColorOverride ?? getGenderBorderColor(user);
     return {
         objectFit: 'cover',
         borderRadius: style.borderRadius ?? '50%',
-        ...getGenderAvatarRingStyle(user, options),
+        boxSizing: 'border-box',
+        ...(color && color !== 'transparent' ? { border: `${ringWidth}px solid ${color}` } : {}),
         ...style,
     };
 };

@@ -4,7 +4,7 @@ import { FaWifi, FaExclamationTriangle } from 'react-icons/fa';
 
 const OfflineNotice = () => {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
 
     useEffect(() => {
         const handleOnline = () => setIsOnline(true);
@@ -41,9 +41,7 @@ const OfflineNotice = () => {
             boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
         }}>
             <FaWifi style={{ opacity: 0.8 }} />
-            {i18n.language === 'ar'
-                ? 'لا يوجد اتصال بالإنترنت. يرجى التحقق من الشبكة.'
-                : 'No internet connection. Please check your network.'}
+            {t('offline_no_connection')}
         </div>
     );
 };

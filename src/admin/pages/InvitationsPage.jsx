@@ -1,20 +1,22 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 
 const TYPE_TABS = [
-    { id: 'all', label: 'الكل' },
-    { id: 'public', label: 'عامة' },
-    { id: 'private', label: 'خاصة' },
-    { id: 'dating', label: 'مواعدة' },
+    { id: 'all', labelKey: 'admin_invitations_type_all' },
+    { id: 'public', labelKey: 'admin_invitations_type_public' },
+    { id: 'private', labelKey: 'admin_invitations_type_private' },
+    { id: 'dating', labelKey: 'admin_invitations_type_dating' },
 ];
 
-const TYPE_LABEL = {
-    public: 'عامة',
-    private: 'خاصة',
-    dating: 'مواعدة',
+const TYPE_LABEL_KEYS = {
+    public: 'admin_invitations_type_public',
+    private: 'admin_invitations_type_private',
+    dating: 'admin_invitations_type_dating',
 };
 
 export default function InvitationsPage() {
+    const { t } = useTranslation();
     const [inviteType, setInviteType] = useState('all');
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -35,12 +37,12 @@ export default function InvitationsPage() {
                 setHasNext(!!res.hasNext);
                 setCursor(res.lastId);
             } catch (e) {
-                alert(e.message || 'فشل التحميل');
+                alert(e.message || t('admin_load_failed'));
             } finally {
                 setLoading(false);
             }
         },
-        [inviteType]
+        [inviteType, t],
     );
 
     useEffect(() => {
@@ -48,13 +50,13 @@ export default function InvitationsPage() {
     }, [load]);
 
     const moderate = async (inv, action) => {
-        if (!window.confirm(`تأكيد: ${action}؟`)) return;
+        if (!window.confirm(t('admin_invitations_confirm_action', { action }))) return;
         setActing(inv.id);
         try {
             await adminApi.moderateInvitation(inv.id, action, inv.inviteType);
             await load(null);
         } catch (e) {
-            alert(e.message || 'فشل');
+            alert(e.message || t('admin_failed'));
         } finally {
             setActing(null);
         }
@@ -64,8 +66,8 @@ export default function InvitationsPage() {
 
     return (
         <>
-            <h1 className="db-h1">الدعوات</h1>
-            <p className="db-lead">فرز حسب النوع (عام / خاص / مواعدة) — حذف، حجب، أو إعادة نشر.</p>
+            <h1 className="db-h1">{t('admin_invitations_title')}</h1>
+            <p className="db-lead">{t('admin_invitations_lead')}</p>
 
             <div className="db-tabs">
                 {TYPE_TABS.map((tab) => (
@@ -75,7 +77,7 @@ export default function InvitationsPage() {
                         className={`db-tab${inviteType === tab.id ? ' active' : ''}`}
                         onClick={() => setInviteType(tab.id)}
                     >
-                        {tab.label}
+                        {t(tab.labelKey)}
                     </button>
                 ))}
             </div>
@@ -84,16 +86,16 @@ export default function InvitationsPage() {
                 {loading ? (
                     <div className="db-spin" />
                 ) : items.length === 0 ? (
-                    <div className="db-empty">لا توجد دعوات</div>
+                    <div className="db-empty">{t('admin_empty_invitations')}</div>
                 ) : (
                     <table className="db-table">
                         <thead>
                             <tr>
-                                <th>النوع</th>
-                                <th>العنوان</th>
-                                <th>المضيف</th>
-                                <th>التاريخ</th>
-                                <th>الحالة</th>
+                                <th>{t('admin_invitations_type')}</th>
+                                <th>{t('admin_invitations_title_col')}</th>
+                                <th>{t('admin_invitations_host')}</th>
+                                <th>{t('admin_invitations_date')}</th>
+                                <th>{t('admin_invitations_status')}</th>
                                 <th />
                             </tr>
                         </thead>
@@ -102,19 +104,27 @@ export default function InvitationsPage() {
                                 <tr key={inv.id}>
                                     <td>
                                         <span className="db-badge">
-                                            {TYPE_LABEL[inv.inviteType] || inv.inviteType}
+                                            {t(TYPE_LABEL_KEYS[inv.inviteType] || inv.inviteType)}
                                         </span>
                                     </td>
                                     <td>{inv.title}</td>
                                     <td>{inv.hostName || inv.hostId}</td>
                                     <td>{fmt(inv.createdAt)}</td>
                                     <td>
-                                        {inv.adminBlocked && <span className="db-badge db-badge--ban">محجوب</span>}
+                                        {inv.adminBlocked && (
+                                            <span className="db-badge db-badge--ban">
+                                                {t('admin_status_blocked')}
+                                            </span>
+                                        )}
                                         {!inv.adminBlocked && !inv.expired && (
-                                            <span className="db-badge db-badge--ok">نشط</span>
+                                            <span className="db-badge db-badge--ok">
+                                                {t('admin_status_active')}
+                                            </span>
                                         )}
                                         {inv.expired && !inv.adminBlocked && (
-                                            <span className="db-badge db-badge--warn">منتهي</span>
+                                            <span className="db-badge db-badge--warn">
+                                                {t('admin_status_expired')}
+                                            </span>
                                         )}
                                     </td>
                                     <td>
@@ -125,7 +135,7 @@ export default function InvitationsPage() {
                                                 disabled={acting === inv.id}
                                                 onClick={() => moderate(inv, 'delete')}
                                             >
-                                                حذف
+                                                {t('admin_invitations_delete')}
                                             </button>
                                             {!inv.adminBlocked && (
                                                 <button
@@ -134,7 +144,7 @@ export default function InvitationsPage() {
                                                     disabled={acting === inv.id}
                                                     onClick={() => moderate(inv, 'block')}
                                                 >
-                                                    حجب
+                                                    {t('admin_invitations_block')}
                                                 </button>
                                             )}
                                             {(inv.adminBlocked || inv.expired) && (
@@ -144,7 +154,7 @@ export default function InvitationsPage() {
                                                     disabled={acting === inv.id}
                                                     onClick={() => moderate(inv, 'republish')}
                                                 >
-                                                    إعادة نشر
+                                                    {t('admin_invitations_republish')}
                                                 </button>
                                             )}
                                         </div>
@@ -157,7 +167,7 @@ export default function InvitationsPage() {
                 {hasNext && !loading && (
                     <div className="db-toolbar" style={{ marginTop: '1rem' }}>
                         <button type="button" className="db-btn" onClick={() => load(cursor)}>
-                            المزيد
+                            {t('admin_more')}
                         </button>
                     </div>
                 )}

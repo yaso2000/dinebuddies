@@ -10,6 +10,9 @@ export const DARK_TEMPLATE_BACKGROUND_IDS = new Set(['birthday-dark', 'birthday-
 export const DEFAULT_PRIVATE_OCCASION_LABEL = 'Birthday';
 export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'birthday-warm';
 
+/** Typographic apostrophe (U+2019) — matches Windows/macOS “smart quote” filenames on disk. */
+const CURLY_APOSTROPHE = '\u2019';
+
 export const CARD_BACKGROUNDS_BY_CATEGORY = {
     birthday: [
         { id: 'birthday-warm' },
@@ -22,6 +25,154 @@ export const CARD_BACKGROUNDS_BY_CATEGORY = {
         { id: 'birthday-kids2' },
         { id: 'birthday-gold' },
         { id: 'birthday-gold2' }
+    ],
+    cafe: [
+        { id: 'cafe-1' },
+        { id: 'cafe-2' },
+        { id: 'cafe-3' },
+        { id: 'cafe-4' },
+        { id: 'cafe-5' },
+        { id: 'cafe-6' },
+        { id: 'cafe-7' },
+        { id: 'cafe-8' },
+        { id: 'cafe-9' },
+        { id: 'cafe-10' }
+    ],
+    social: [
+        { id: 'social-1' },
+        { id: 'social-2' },
+        { id: 'social-3' },
+        { id: 'social-4' },
+        { id: 'social-5' },
+        { id: 'social-6' },
+        { id: 'social-7' },
+        { id: 'social-8' },
+        { id: 'social-9' },
+        { id: 'social-10' }
+    ],
+    work: [
+        { id: 'work-1' },
+        { id: 'work-2' },
+        { id: 'work-3' },
+        { id: 'work-4' },
+        { id: 'work-5' },
+        { id: 'work-6' },
+        { id: 'work-7' },
+        { id: 'work-8' },
+        { id: 'work-9' },
+        { id: 'work-10' }
+    ],
+    nightlife: [
+        { id: 'nightlife-1' },
+        { id: 'nightlife-2' },
+        { id: 'nightlife-3' },
+        { id: 'nightlife-4' },
+        { id: 'nightlife-5' },
+        { id: 'nightlife-6' },
+        { id: 'nightlife-7' },
+        { id: 'nightlife-8' },
+        { id: 'nightlife-9' },
+        { id: 'nightlife-10' }
+    ],
+    dining: [
+        { id: 'dining-1' },
+        { id: 'dining-2' },
+        { id: 'dining-3' },
+        { id: 'dining-4' },
+        { id: 'dining-5' },
+        { id: 'dining-6' },
+        { id: 'dining-7' },
+        { id: 'dining-8' },
+        { id: 'dining-9' },
+        { id: 'dining-10' },
+        { id: 'dining-11' }
+    ],
+    gaming: [
+        { id: 'gaming-1' },
+        { id: 'gaming-2' },
+        { id: 'gaming-3' },
+        { id: 'gaming-4' },
+        { id: 'gaming-5' },
+        { id: 'gaming-6' },
+        { id: 'gaming-7' },
+        { id: 'gaming-8' },
+        { id: 'gaming-9' },
+        { id: 'gaming-10' }
+    ],
+    family: [
+        { id: 'family-1' },
+        { id: 'family-2' },
+        { id: 'family-3' },
+        { id: 'family-4' },
+        { id: 'family-5' },
+        { id: 'family-6' },
+        { id: 'family-7' },
+        { id: 'family-8' },
+        { id: 'family-9' },
+        { id: 'family-10' },
+        { id: 'family-11' },
+        { id: 'family-12' },
+        { id: 'family-13' }
+    ],
+    /** fileStem matches on-disk filename (spaces + typographic apostrophe kept). */
+    celebration: [
+        { id: 'celebration-mothers-day', fileStem: `Mother${CURLY_APOSTROPHE}s Day` },
+        { id: 'celebration-fathers-day', fileStem: `Father${CURLY_APOSTROPHE}s Day` },
+        { id: 'celebration-christmas', fileStem: 'Christmas' },
+        { id: 'celebration-thanksgiving', fileStem: 'Thanksgiving' },
+        { id: 'celebration-halloween', fileStem: 'Halloween' },
+        { id: 'celebration-new-year-1', fileStem: 'New Year1' },
+        { id: 'celebration-new-year-2', fileStem: 'New Year2' },
+        { id: 'celebration-new-year-3', fileStem: 'New Year3' },
+        { id: 'celebration-valentines-day-1', fileStem: `Valentine${CURLY_APOSTROPHE}s Day1` },
+        { id: 'celebration-valentines-day-2', fileStem: `Valentine${CURLY_APOSTROPHE}s Day2` },
+        { id: 'celebration-valentines-day-3', fileStem: `Valentine${CURLY_APOSTROPHE}s Day3` },
+        { id: 'celebration-valentines-day-4', fileStem: `Valentine${CURLY_APOSTROPHE}s Day4` },
+        { id: 'celebration-ramadan', fileStem: 'Ramadan' },
+        { id: 'celebration-eid-al-fitr', fileStem: 'Eid al-Fitr' },
+        { id: 'celebration-wedding', fileStem: 'Wedding' },
+        { id: 'celebration-wedding-2', fileStem: 'Wedding2' },
+        { id: 'celebration-wedding-3', fileStem: 'Wedding3' },
+        { id: 'celebration-wedding-4', fileStem: 'Wedding4' },
+        { id: 'celebration-graduation', fileStem: 'Graduation' },
+        { id: 'celebration-baby-gender-reveal', fileStem: 'Baby Gender Reveal' },
+        { id: 'celebration-reunion', fileStem: 'Reunion' }
+    ],
+    cinema: [
+        { id: 'cinema-1' },
+        { id: 'cinema-2' },
+        { id: 'cinema-3' },
+        { id: 'cinema-4' },
+        { id: 'cinema-5' },
+        { id: 'cinema-6' },
+        { id: 'cinema-7' },
+        { id: 'cinema-8' },
+        { id: 'cinema-9' },
+        { id: 'cinema-10' }
+    ],
+    sports: [
+        { id: 'sports-1' },
+        { id: 'sports-2' },
+        { id: 'sports-3' },
+        { id: 'sports-4' },
+        { id: 'sports-5' },
+        { id: 'sports-6' },
+        { id: 'sports-7' },
+        { id: 'sports-8' },
+        { id: 'sports-9' },
+        { id: 'sports-10' }
+    ],
+    concert: [
+        { id: 'concert-1' },
+        { id: 'concert-2' },
+        { id: 'concert-3' },
+        { id: 'concert-4' },
+        { id: 'concert-5' },
+        { id: 'concert-6' },
+        { id: 'concert-7' },
+        { id: 'concert-8' },
+        { id: 'concert-9' },
+        { id: 'concert-10' }
     ]
 };
 
@@ -49,6 +200,24 @@ export function publicAssetUrl(pathFromPublicRoot) {
     const p = String(pathFromPublicRoot || '').replace(/^\/+/, '');
     const base = import.meta.env.BASE_URL || '/';
     return `${base.replace(/\/?$/, '/')}${p}`;
+}
+
+/** Encode each path segment so stems with spaces/apostrophes resolve on disk and CDN. */
+function publicBackgroundAssetUrl(categoryId, fileStem, ext) {
+    const encodedStem = encodeURIComponent(String(fileStem || ''));
+    return publicAssetUrl(`invitation-card-backgrounds/${categoryId}/${encodedStem}.${ext}`);
+}
+
+/** Straight vs typographic apostrophe — try both when building URL fallbacks. */
+function fileStemUrlVariants(stem) {
+    const variants = new Set([stem]);
+    if (stem.includes("'")) {
+        variants.add(stem.replace(/'/g, CURLY_APOSTROPHE));
+    }
+    if (stem.includes(CURLY_APOSTROPHE)) {
+        variants.add(stem.replace(new RegExp(CURLY_APOSTROPHE, 'g'), "'"));
+    }
+    return [...variants];
 }
 
 /** File stem (without extension) for public URL — legacy typos + optional per-option `fileStem` if filename ≠ id. */
@@ -119,10 +288,14 @@ export function resolveCardBackgroundUrlCandidates(categoryId, assetId) {
         seen.add(e);
         return true;
     });
-    const fileUrls = exts.map((ext) =>
-        publicAssetUrl(`invitation-card-backgrounds/${categoryId}/${stem}.${ext}`)
-    );
-    return [...fileUrls, CARD_BACKGROUND_IMAGE_PLACEHOLDER];
+    const fileUrls = [];
+    for (const stemVariant of fileStemUrlVariants(stem)) {
+        for (const ext of exts) {
+            fileUrls.push(publicBackgroundAssetUrl(categoryId, stemVariant, ext));
+        }
+    }
+    const uniqueFileUrls = [...new Set(fileUrls)];
+    return [...uniqueFileUrls, CARD_BACKGROUND_IMAGE_PLACEHOLDER];
 }
 
 /** @returns {string|null} first candidate URL or null if invalid */

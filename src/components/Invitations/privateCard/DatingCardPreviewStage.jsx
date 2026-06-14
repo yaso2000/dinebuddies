@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaFont } from 'react-icons/fa';
 import PrivateCardTextBackdropTonePicker from './PrivateCardTextBackdropTonePicker';
 import { PRIVATE_TEXT_BACKDROP_ICON_ORDER } from './privateCardTextBackdrop';
-import PrivateCardMotionPicker from './PrivateCardMotionPicker';
+import PrivateCardCopyLayoutRail from './PrivateCardCopyLayoutRail';
+import PrivateCardCopyFontScaleRail from './PrivateCardCopyFontScaleRail';
 import DatingCardTypographyBars from './DatingCardTypographyBars';
 import './DatingCardPreviewStage.css';
 
 
 /**
- * Preview chrome: show/hide button, backdrop icons, motion rail on card; typography below.
+ * Preview chrome: show/hide button, backdrop icons, copy layout rail on card; typography below.
  */
 export default function DatingCardPreviewStage({
     showHostAndMessage,
@@ -17,8 +17,12 @@ export default function DatingCardPreviewStage({
     editorPhotoBackgroundActive,
     textBackdropTone,
     onTextBackdropToneChange,
-    cardMotionId,
-    onCardMotionChange,
+    copyOffsetY,
+    copyWidthPct,
+    copyFontScale,
+    onCopyOffsetYChange,
+    onCopyWidthPctChange,
+    onCopyFontScaleChange,
     fontId,
     themeColorHex,
     onFontChange,
@@ -26,7 +30,6 @@ export default function DatingCardPreviewStage({
     children
 }) {
     const { t } = useTranslation();
-    const [typographyOpen, setTypographyOpen] = useState(false);
 
     return (
         <div className="dating-card-preview-bundle">
@@ -59,28 +62,30 @@ export default function DatingCardPreviewStage({
 
                 {children}
 
-                <div className="dating-card-preview-stage__side-rail">
-                    <PrivateCardMotionPicker variant="rail" value={cardMotionId} onChange={onCardMotionChange} />
-                    <button
-                        type="button"
-                        className={`dating-card-preview-stage__font-toggle${
-                            typographyOpen ? ' dating-card-preview-stage__font-toggle--open' : ''
-                        }`}
-                        onClick={() => setTypographyOpen((v) => !v)}
-                        aria-expanded={typographyOpen}
-                        aria-label={t('dating_card_style_btn', { defaultValue: 'Font & card color' })}
-                        title={t('dating_card_style_btn', { defaultValue: 'Font & card color' })}
-                    >
-                        <FaFont aria-hidden />
-                    </button>
-                </div>
+                {showHostAndMessage ? (
+                    <>
+                        <div className="dating-card-preview-stage__side-rail dating-card-preview-stage__side-rail--font">
+                            <PrivateCardCopyFontScaleRail
+                                copyFontScale={copyFontScale}
+                                onCopyFontScaleChange={onCopyFontScaleChange}
+                            />
+                        </div>
+                        <div className="dating-card-preview-stage__side-rail">
+                            <PrivateCardCopyLayoutRail
+                                copyOffsetY={copyOffsetY}
+                                copyWidthPct={copyWidthPct}
+                                onCopyOffsetYChange={onCopyOffsetYChange}
+                                onCopyWidthPctChange={onCopyWidthPctChange}
+                            />
+                        </div>
+                    </>
+                ) : null}
             </div>
 
             <DatingCardTypographyBars
                 variant="below"
-                open={typographyOpen}
-                onOpenChange={setTypographyOpen}
                 hideToggle
+                alwaysVisible
                 fontId={fontId}
                 themeColorHex={themeColorHex}
                 onFontChange={onFontChange}

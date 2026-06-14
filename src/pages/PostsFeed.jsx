@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, getDocs, limit, where, doc, upd
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import MotionPostFeedCard from '../components/MotionPostFeedCard';
 import StoriesBar from '../components/StoriesBar';
@@ -31,7 +31,7 @@ const PostsFeed = () => {
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
-    const { userProfile, currentUser } = useAuth();
+    const { userProfile, currentUser, isGuest } = useAuth();
     const menuRef = useRef({});
     const composerRef = useRef(null);
     const [composerInvitation, setComposerInvitation] = useState(null);
@@ -524,15 +524,40 @@ const PostsFeed = () => {
             {/* Unified Feed — featured + regular merged by date */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '100px', maxWidth: '100%', width: '100%', margin: 0, paddingTop: '12px' }}>
                 
-                {/* Real Inline Post Creator */}
-                <div ref={composerRef} className="inline-post-editor-anchor">
-                    <InlinePostEditor
-                        attachedInvitation={composerInvitation}
-                        onClearAttachedInvitation={() => setComposerInvitation(null)}
-                        initialAiStudioImage={composerAiImage}
-                        onClearInitialAiStudioImage={() => setComposerAiImage(null)}
-                    />
-                </div>
+                {/* Post composer — guests must sign in first */}
+                {isGuest ? (
+                    <div
+                        ref={composerRef}
+                        className="inline-post-editor-anchor"
+                        style={{
+                            padding: '16px',
+                            borderRadius: '16px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-card)',
+                            textAlign: 'center',
+                        }}
+                    >
+                        <p style={{ margin: '0 0 12px', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
+                            {t('guest_post_prompt', 'Sign in to share a post with the community.')}
+                        </p>
+                        <Link
+                            to="/login?next=%2Fposts-feed"
+                            className="ui-btn ui-btn--primary"
+                            style={{ display: 'inline-block', textDecoration: 'none' }}
+                        >
+                            {t('login_signup', 'Login / Sign Up')}
+                        </Link>
+                    </div>
+                ) : (
+                    <div ref={composerRef} className="inline-post-editor-anchor">
+                        <InlinePostEditor
+                            attachedInvitation={composerInvitation}
+                            onClearAttachedInvitation={() => setComposerInvitation(null)}
+                            initialAiStudioImage={composerAiImage}
+                            onClearInitialAiStudioImage={() => setComposerAiImage(null)}
+                        />
+                    </div>
+                )}
 
                 {!hasFeedItems ? (
                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>

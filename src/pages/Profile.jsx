@@ -17,10 +17,12 @@ import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
 import { goToLogin } from '../utils/goToLogin';
+import { normalizeBusinessTier } from '../utils/businessSubscription';
 import {
     getPrivateInvitationDetailsPath,
     isPrivateInvitationDraft
 } from '../utils/privateInvitationDraft';
+import { normInvitationUid } from '../utils/invitationInboxQueue';
 import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage';
 
 const InvitationListItem = ({ inv, navigate, t }) => {
@@ -201,13 +203,16 @@ const Profile = () => {
     ];
 
     const receivedPrivate = (privateInvitations || [])
-        .filter(
-            (inv) =>
-                Array.isArray(inv.invitedFriends) &&
-                inv.invitedFriends.includes(profileUid) &&
-                (inv.authorId || inv.author?.id) !== profileUid &&
+        .filter((inv) => {
+            const invited = Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [];
+            const isInvitee = invited.some((f) => normInvitationUid(f) === profileUid);
+            const hostId = normInvitationUid(inv.authorId || inv.author?.id);
+            return (
+                isInvitee &&
+                hostId !== profileUid &&
                 (inv.publishedAt || inv.status === 'published')
-        )
+            );
+        })
         .map((inv) => ({ ...inv, privacy: 'private' }));
 
     const myJoinedInvitations = invitations.filter((inv) => inv.joined?.includes(profileUid));
@@ -257,7 +262,7 @@ const Profile = () => {
         const trimmedName = (formData.name || '').trim();
         if (!trimmedName) {
             showToast(i18n.language === 'ar'
-                ? t('please_enter_name', { defaultValue: 'يرجى إدخال الاسم' })
+                ? t('please_enter_name', { defaultValue: 'Please enter your name' })
                 : 'Please enter your name', 'error');
             return;
         }
@@ -615,7 +620,9 @@ const Profile = () => {
                                         {userProfile?.role === 'admin'
                                             ? 'ADMIN'
                                             : userProfile?.role === 'business'
-                                                ? (userProfile?.subscriptionTier || 'free').toUpperCase()
+                                                ? (normalizeBusinessTier(userProfile?.subscriptionTier) === 'paid'
+                                                    ? t('biz_plan_paid_name', 'Paid Business')
+                                                    : t('biz_plan_free_name', 'Free Business'))
                                                 : t('profile_standard_account', 'Standard')}
                                     </div>
                                     <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
@@ -659,7 +666,7 @@ const Profile = () => {
 
                                 {userProfile?.role === 'business' &&
                                     (userProfile?.subscriptionTier || 'free') === 'free' && (
-                                        <button onClick={() => navigate('/business/pricing')} className="profile-subscription-upgrade-btn">
+                                        <button onClick={() => navigate('/settings/subscription')} className="profile-subscription-upgrade-btn">
                                             {t('upgrade_plan_btn', 'Upgrade plan')}
                                         </button>
                                     )}

@@ -18,8 +18,10 @@ import { validateInvitationCreation } from '../utils/invitationValidation';
 import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { detectUserLocationContext, geocode } from '../utils/locationUtils';
+import { detectLiveUserGps, geocode } from '../utils/locationUtils';
 import { resolveVenueCoordinates } from '../utils/invitationCoords';
+import { validatePublicInvitationCreate, invitationErrorI18nKey } from '../utils/invitationRules';
+import { extractCityTokenFromAddress } from '../utils/locationUtils';
 import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
 import {
@@ -34,6 +36,7 @@ import PublicInviteCardStyleStudio from '../components/Invitations/publicCard/Pu
 import { invitationMessageMaxLength } from '../utils/invitationSmartDescription';
 import AIFloatingLauncher from '../components/AIFloatingLauncher';
 import { extractAIContentFields } from '../utils/aiContentFieldMapper';
+import { buildPublicInvitationAiUserPrompt } from '../utils/aiPromptLocale';
 import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { useDragScrollRail } from '../hooks/useDragScrollRail';
 
@@ -46,9 +49,9 @@ const CreateInvitation = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
-    const { addInvitation, currentUser } = useInvitations();
+    const { addInvitation, currentUser, restaurants } = useInvitations();
     const { showToast } = useToast();
-    const { currentUser: authUser, userProfile } = useAuth(); // Get userProfile for guest check
+    const { currentUser: authUser, userProfile, updateUserProfile } = useAuth(); // Get userProfile for guest check
 
     // Redirect guests to login immediately
     useEffect(() => {
@@ -67,6 +70,48 @@ const CreateInvitation = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [restrictionInfo, setRestrictionInfo] = useState(null); // Cancellation restriction info
+    /** Creator GPS — isolated from venue form fields (never use formData.city for display). */
+    const [liveUserGps, setLiveUserGps] = useState({
+        status: 'pending',
+        city: '',
+        lat: null,
+        lng: null,
+        countryCode: '',
+    });
+    const gpsRunIdRef = useRef(0);
+
+    const refreshLiveUserGps = useCallback(async () => {
+        const runId = ++gpsRunIdRef.current;
+        setLiveUserGps((prev) => {
+            if (prev.status === 'ready' && prev.lat != null && prev.lng != null) {
+                return prev;
+            }
+            return { ...prev, status: 'pending' };
+        });
+
+        const detected = await detectLiveUserGps();
+        if (runId !== gpsRunIdRef.current) return detected;
+
+        if (!detected.success) {
+            setLiveUserGps((prev) => ({
+                status: detected.code === 'denied' ? 'denied' : 'unavailable',
+                city: prev.lat != null ? prev.city : '',
+                lat: prev.lat,
+                lng: prev.lng,
+                countryCode: prev.countryCode || '',
+            }));
+            return detected;
+        }
+
+        setLiveUserGps({
+            status: 'ready',
+            city: detected.city || '',
+            lat: detected.latitude,
+            lng: detected.longitude,
+            countryCode: detected.countryCode || '',
+        });
+        return detected;
+    }, []);
 
     const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
     const prefilledData = location.state?.prefilledData; // From BusinessProfile
@@ -309,7 +354,7 @@ const CreateInvitation = () => {
         inviteMood: 'social',
         colorScheme: editingInvitation?.colorScheme || prefilledData?.colorScheme || 'oceanBlue',
         templateType: normalizePublicCardTemplateKey(
-            editingInvitation?.templateType || prefilledData?.templateType || 'hero_1_1'
+            editingInvitation?.templateType || prefilledData?.templateType || 'hero_4_5'
         ),
         cardFontFamily: editingInvitation?.cardFontFamily || '',
         // Override with editingInvitation data if present
@@ -327,7 +372,7 @@ const CreateInvitation = () => {
             genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
             ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
             colorScheme: editingInvitation.colorScheme || 'oceanBlue',
-            templateType: normalizePublicCardTemplateKey(editingInvitation.templateType || 'hero_1_1'),
+            templateType: normalizePublicCardTemplateKey(editingInvitation.templateType || 'hero_4_5'),
             cardFontFamily: editingInvitation.cardFontFamily || '',
             inviteMood:
                 editingInvitation.inviteMood ||
@@ -339,8 +384,6 @@ const CreateInvitation = () => {
             lng: editingInvitation.lng,
             city: editingInvitation.city,
             country: editingInvitation.country,
-            userLat: editingInvitation.userLat,
-            userLng: editingInvitation.userLng,
         } : {})
     });
 
@@ -451,6 +494,12 @@ const CreateInvitation = () => {
         if (!formData.location.trim()) {
             console.log('❌ Location validation failed');
             showToast(t('please_enter_location'), 'error');
+            return;
+        }
+
+        const liveGps = await refreshLiveUserGps();
+        if (!liveGps.success) {
+            showToast(t('location_not_determined'), 'error');
             return;
         }
 
@@ -588,6 +637,25 @@ const CreateInvitation = () => {
             draftData = stripUndefined(draftData);
             delete draftData.coverAnimationType;
 
+            draftData.userCity = liveGps.city || '';
+            draftData.userLat = liveGps.latitude;
+            draftData.userLng = liveGps.longitude;
+            draftData.userCountryCode = liveGps.countryCode || draftData.countryCode || formData.countryCode || '';
+
+            if (draftData.restaurantId && Array.isArray(restaurants)) {
+                const venue = restaurants.find((r) => r.id === draftData.restaurantId);
+                if (venue) {
+                    if (venue.lat != null && draftData.lat == null) draftData.lat = venue.lat;
+                    if (venue.lng != null && draftData.lng == null) draftData.lng = venue.lng;
+                    draftData.restaurantCity =
+                        draftData.restaurantCity ||
+                        draftData.city ||
+                        venue.city ||
+                        extractCityTokenFromAddress(venue.address || venue.location) ||
+                        '';
+                }
+            }
+
             // Remove old image field if exists
             if (draftData.image) {
                 delete draftData.image;
@@ -600,8 +668,29 @@ const CreateInvitation = () => {
             if (editingDraft && draftId) {
                 // Update existing draft
                 console.log('🔄 Updating existing draft:', draftId);
+                const ruleBlock = validatePublicInvitationCreate({
+                    creatorProfile: userProfile,
+                    creatorCoords: {
+                        lat: liveGps.latitude,
+                        lng: liveGps.longitude,
+                    },
+                    venueCoords: { lat: draftData.lat, lng: draftData.lng },
+                    creatorCountryCode: liveGps.countryCode,
+                    venueCountryCode: draftData.countryCode,
+                });
+                if (ruleBlock) {
+                    showToast(t(invitationErrorI18nKey(ruleBlock.code), ruleBlock.message), 'error');
+                    return;
+                }
                 const invitationRef = doc(db, 'invitations', draftId);
-                await updateDoc(invitationRef, { ...draftData, coverAnimationType: deleteField() });
+                await updateDoc(invitationRef, {
+                    ...draftData,
+                    userCity: draftData.userCity || null,
+                    userLat: draftData.userLat ?? null,
+                    userLng: draftData.userLng ?? null,
+                    restaurantCity: draftData.restaurantCity || draftData.city || null,
+                    coverAnimationType: deleteField(),
+                });
                 finalDraftId = draftId;
             } else {
                 // Create new draft
@@ -610,14 +699,27 @@ const CreateInvitation = () => {
                 console.log('✅ Draft created with ID:', finalDraftId);
             }
 
-            if (finalDraftId) {
-                console.log('🚀 Navigating to preview:', `/invitation/preview/${finalDraftId}`);
-                navigate(`/invitation/preview/${finalDraftId}`);
+            const draftIdResult =
+                typeof finalDraftId === 'object' && finalDraftId?.ok === true
+                    ? finalDraftId.id
+                    : typeof finalDraftId === 'string'
+                      ? finalDraftId
+                      : null;
+
+            if (draftIdResult) {
+                console.log('🚀 Navigating to preview:', `/invitation/preview/${draftIdResult}`);
+                navigate(`/invitation/preview/${draftIdResult}`);
+            } else if (typeof finalDraftId === 'object' && finalDraftId?.ok === false) {
+                // Rule errors already toasted in InvitationContext — avoid false business-account mapping.
+                if (
+                    finalDraftId.code !== 'business-accounts-cannot-create-invitations' &&
+                    finalDraftId.code !== 'public-invite-must-be-local' &&
+                    finalDraftId.code !== 'location-not-determined'
+                ) {
+                    showToast(t('failed_save_draft', 'Could not save draft. Try again.'), 'error');
+                }
             } else {
-                showToast(
-                    t('failed_save_draft', 'Could not save draft. Try again, or sign in with a personal account (business accounts cannot create public invitations).'),
-                    'error'
-                );
+                showToast(t('failed_save_draft', 'Could not save draft. Try again.'), 'error');
             }
         } catch (error) {
             console.error('❌ Error creating draft:', error);
@@ -804,7 +906,13 @@ const CreateInvitation = () => {
             } else {
                 // This path is usually handled by handlePreview -> Draft -> Publish, but logic remains
                 console.log('📝 Creating invitation via direct submit...');
-                const newId = await addInvitation(cleanData);
+                const createResult = await addInvitation(cleanData);
+                const newId =
+                    typeof createResult === 'object' && createResult?.ok === true
+                        ? createResult.id
+                        : typeof createResult === 'string'
+                          ? createResult
+                          : null;
                 if (newId) {
                     navigate(`/invitation/${newId}`);
                 }
@@ -858,40 +966,55 @@ const CreateInvitation = () => {
             }
         }
 
-        setFormData((prev) => ({
-            ...prev,
-            location: address || name || prev.location,
-            lat: lat ?? prev.lat,
-            lng: lng ?? prev.lng,
-            city: placeData.city || prev.city,
-            country: placeData.country || prev.country,
-            countryCode: placeData.countryCode || prev.countryCode,
-            restaurantId: isDbVenue ? placeData.restaurantId || prev.restaurantId : null,
-            restaurantName: isDbVenue ? (placeData.restaurantName || name || '').trim() : '',
-            title: generateTitle(name || address || 'Venue'),
-            ...(isDbVenue && placeData.image ? { image: placeData.image } : {}),
-        }));
+        setFormData((prev) => {
+            const venueCity =
+                placeData.city ||
+                extractCityTokenFromAddress(placeData.fullAddress || address) ||
+                prev.city;
+            return {
+                ...prev,
+                location: address || name || prev.location,
+                lat: lat ?? prev.lat,
+                lng: lng ?? prev.lng,
+                city: venueCity,
+                restaurantCity: venueCity,
+                country: placeData.country || prev.country,
+                countryCode: placeData.countryCode || prev.countryCode,
+                restaurantId: isDbVenue ? placeData.restaurantId || prev.restaurantId : null,
+                restaurantName: isDbVenue ? (placeData.restaurantName || name || '').trim() : '',
+                title: generateTitle(name || address || 'Venue'),
+                ...(isDbVenue ? { isDineBuddiesVenue: true } : {}),
+                ...(isDbVenue && placeData.image ? { image: placeData.image } : {}),
+            };
+        });
     };
 
-    // Unified location discovery for all users/pages.
+    // Live GPS for creator position — single detect on mount (deduped in refreshLiveUserGps).
     useEffect(() => {
-        if (restaurantData) return; // Already have location from restaurant
+        if (restaurantData) return;
 
-        const detectLocation = async () => {
-            const detected = await detectUserLocationContext(userProfile);
-            if (!detected.success) return;
-            setFormData(prev => ({
-                ...prev,
-                city: detected.city || prev.city,
-                country: detected.country || prev.country || '',
-                countryCode: detected.countryCode || prev.countryCode || '',
-                userLat: detected.latitude ?? prev.userLat,
-                userLng: detected.longitude ?? prev.userLng,
-            }));
+        let active = true;
+
+        (async () => {
+            const detected = await refreshLiveUserGps();
+            if (!active || !detected?.success) return;
+
+            if (detected.city && authUser?.uid && userProfile?.city !== detected.city) {
+                updateUserProfile({
+                    city: detected.city,
+                    country: detected.country || userProfile?.country || '',
+                    countryCode: detected.countryCode || userProfile?.countryCode || '',
+                    coordinates: { lat: detected.latitude, lng: detected.longitude },
+                }).catch(() => {});
+            }
+        })();
+
+        return () => {
+            active = false;
         };
-
-        detectLocation();
-    }, [restaurantData, userProfile]);
+        // Intentionally once per page entry — refreshLiveUserGps dedupes concurrent calls.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restaurantData]);
 
     // Check for cancellation restrictions
     useEffect(() => {
@@ -915,16 +1038,10 @@ const CreateInvitation = () => {
         return { venueType, venueName };
     }, [formData.type, formData.restaurantName, formData.location, t]);
 
-    const buildInvitationAiPrompt = useCallback(() => {
-        const parts = [
-            formData.date && formData.time && `الموعد: ${formData.date} ${formData.time}`,
-            formData.guestsNeeded && `عدد المقاعد: ${formData.guestsNeeded}`,
-            formData.paymentType && `الدفع: ${formData.paymentType}`,
-            formData.title?.trim() && `عنوان حالي: ${formData.title.trim()}`,
-            formData.description?.trim() && `رسالة حالية: ${formData.description.trim()}`,
-        ].filter(Boolean);
-        return parts.join('\n') || 'اكتب عنوان دعوة ورسالة ترحيبية مناسبة للسياق أعلاه';
-    }, [formData]);
+    const buildInvitationAiPrompt = useCallback(
+        () => buildPublicInvitationAiUserPrompt(formData),
+        [formData],
+    );
 
     const handleInvitationAiContent = useCallback(
         (data) => {
@@ -1258,15 +1375,29 @@ const CreateInvitation = () => {
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
                                 {t('form_location_label')}
-                                {formData.city && (
+                                {liveUserGps.status === 'pending' && (
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginInlineStart: '8px' }}>
+                                        ({t('detecting_location', 'Detecting your location…')} ⏳)
+                                    </span>
+                                )}
+                                {liveUserGps.status === 'ready' && liveUserGps.city && (
                                     <span style={{
                                         color: 'var(--primary)',
                                         fontWeight: 'bold',
                                         fontSize: '0.95rem',
-                                        marginLeft: '8px',
-                                        marginRight: '8px'
+                                        marginInlineStart: '8px',
                                     }}>
-                                        ({t('in_my_city') || 'In'} {formData.city} 📍)
+                                        ({t('in_my_city') || 'In'} {liveUserGps.city} 📍)
+                                    </span>
+                                )}
+                                {liveUserGps.status === 'ready' && !liveUserGps.city && (
+                                    <span style={{ color: 'var(--primary)', fontSize: '0.85rem', marginInlineStart: '8px' }}>
+                                        ({t('gps_location_detected', 'GPS location detected')} 📍)
+                                    </span>
+                                )}
+                                {(liveUserGps.status === 'denied' || liveUserGps.status === 'unavailable') && (
+                                    <span style={{ color: '#ef4444', fontSize: '0.85rem', marginInlineStart: '8px' }}>
+                                        ({t('location_not_determined')} ⚠️)
                                     </span>
                                 )}
                             </label>
@@ -1274,10 +1405,10 @@ const CreateInvitation = () => {
                                 value={formData.location}
                                 onChange={handleChange}
                                 onSelect={handleLocationSelect}
-                                city={formData.city}
-                                countryCode={resolveVenueCountryIso(formData, userProfile)}
-                                userLat={formData.userLat ?? userProfile?.coordinates?.lat}
-                                userLng={formData.userLng ?? userProfile?.coordinates?.lng}
+                                city={liveUserGps.city || undefined}
+                                countryCode={liveUserGps.countryCode || resolveVenueCountryIso(formData, userProfile)}
+                                userLat={liveUserGps.lat}
+                                userLng={liveUserGps.lng}
                                 invitationType={formData.type}
                             />
                             <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>

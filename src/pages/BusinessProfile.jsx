@@ -16,7 +16,13 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { updateSocialMetaTags, generateBusinessMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { useTranslation } from 'react-i18next';
-import { getSafeAvatar, getSafeCoverImage, getShareableCoverImage } from '../utils/avatarUtils';
+import { getSafeAvatar, getSafeCoverImage, getShareableCoverImage, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import {
+    DEFAULT_BUSINESS_COVER,
+    handleBusinessCoverImageError,
+    mergeBusinessInfoDrafts,
+    resolveBusinessCoverImageUrl,
+} from '../utils/businessCoverImage';
 import UserAvatar from '../components/UserAvatar';
 import DeliveryLinksSection from '../components/DeliveryLinksSection';
 import BusinessLocationMap from '../components/BusinessLocationMap';
@@ -50,7 +56,6 @@ import {
 } from '../utils/businessThemes';
 import DraftSavedModal from '../components/DraftSavedModal';
 import BrandKit from './business-pro/BrandKit';
-import PlanBadge from '../components/PlanBadge';
 import FeaturedPostSlideCard from '../components/FeaturedPostSlideCard';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import PostCard from '../components/PostCard';
@@ -58,6 +63,19 @@ import { premiumOfferService } from '../services/premiumOfferService';
 import { useToast } from '../context/ToastContext';
 import { useBusinessRank } from '../hooks/useBusinessRank';
 import { goToLogin } from '../utils/goToLogin';
+import BusinessClaimPanel from '../components/BusinessClaimPanel';
+import { formatPhoneForDisplay, phoneNumberLtrStyle, phoneToTelHref } from '../utils/phoneUtils';
+import {
+    normalizeRestaurantToBusinessProfile,
+    isBusinessProfileOwner,
+    businessShowsClaimCta,
+    isVirtualGoogleImportProfile,
+} from '../utils/normalizeRestaurantBusinessProfile';
+import {
+    googlePlaceTypesToCategoryBadges,
+    computeOpenNowFromBusinessHours,
+} from '../utils/googlePlacesBusiness';
+import './BusinessProfileHero.css';
 
 const BUSINESS_TYPES = [
     'Restaurant', 'Cafe', 'Bar', 'Night Club', 'Food Truck', 'Fast Food'
@@ -71,28 +89,53 @@ async function loadBusinessFromPublicProfileProjection(profileId) {
         const p = snap.data();
         if (p.profileType !== 'business' || !p.businessPublic) return null;
         const bp = p.businessPublic;
+        const lat = typeof bp.lat === 'number' ? bp.lat : null;
+        const lng = typeof bp.lng === 'number' ? bp.lng : null;
+        const coordinates =
+            lat != null && lng != null ? { lat, lng } : { lat: null, lng: null };
+
         return {
             uid: profileId,
             display_name: p.displayName || 'Business',
+            name: p.displayName || 'Business',
             photo_url: p.avatarUrl || null,
+            phone: bp.phone || '',
+            website: bp.website || '',
+            address: bp.address || '',
+            coordinates,
+            openingHours: bp.openingHours || null,
+            openNow: typeof bp.openNow === 'boolean' ? bp.openNow : null,
             role: 'business',
+            accountType: 'business',
+            isVirtual: p.isVirtual === true,
+            isClaimed: p.isClaimed === true,
+            emailVerified: true,
             _fromPublicProfileProjection: true,
+            createdBy: p.createdBy || 'admin',
+            _sourceCollection: p.sourceCollection || 'restaurants',
+            coverImageStoragePath: bp.coverImageStoragePath || p.coverImageStoragePath || null,
             businessInfo: {
+                businessName: p.displayName || 'Business',
                 businessType: bp.businessType || 'Restaurant',
                 city: bp.city || '',
                 country: bp.country || '',
                 address: bp.address || '',
+                phone: bp.phone || '',
+                website: bp.website || '',
+                categories: Array.isArray(bp.categories) ? bp.categories : [],
                 description: bp.description || '',
-                coverImage: bp.coverImage || '',
-                lat: bp.lat ?? null,
-                lng: bp.lng ?? null,
+                coverImage: bp.coverImage || p.avatarUrl || '',
+                coverImageStoragePath: bp.coverImageStoragePath || p.coverImageStoragePath || null,
+                lat,
+                lng,
+                hours: bp.hours || null,
+                openingHours: bp.openingHours || null,
                 brandKit: bp.brandKit || null,
                 theme: bp.theme || '',
                 isPublished: bp.isPublished === true,
                 profileLikes: Number(p.profileLikes ?? 0),
                 profileShares: Number(p.profileShares ?? 0),
             },
-            emailVerified: false,
             communityMembers: [],
             averageRating: typeof p.averageRating === 'number' ? p.averageRating : undefined,
             reviewCount: typeof p.reviewCount === 'number' ? p.reviewCount : undefined,
@@ -188,8 +231,6 @@ const BusinessProfile = () => {
         [business?.subscriptionTier]
     );
     const isPaid = tierAccess.isPaid;
-    const isElite = tierAccess.isPaid;
-    const isPremium = tierAccess.isPaid;
     const [loading, setLoading] = useState(true);
     /** Visitors only: hidden until business email is verified on the account. Owner always sees/edits — not gated by email. */
     const [publicProfileHidden, setPublicProfileHidden] = useState(false);
@@ -395,8 +436,10 @@ const BusinessProfile = () => {
             return;
         }
         const sessionUid = auth.currentUser?.uid ?? currentUserRef.current?.uid ?? null;
-        const isOwnerView = sessionUid === profileId;
-        const emailVerifiedPublic = data.emailVerified === true;
+        const isOwnerView = isBusinessProfileOwner(sessionUid, profileId, data);
+        const emailVerifiedPublic =
+            data.emailVerified === true ||
+            (data._sourceCollection === 'restaurants' && data.isClaimed !== true);
         if (isOwnerView) {
             applySnapshotBusinessData(data, pending.docSnap);
             pendingBizDocRef.current = null;
@@ -412,10 +455,48 @@ const BusinessProfile = () => {
         pendingBizDocRef.current = null;
     }, [authLoading, currentUser?.uid, profileId, applySnapshotBusinessData]);
 
-    /** Firestore subscription — re-binds if currentUser changes to ensure owner permissions are correctly applied. */
+    const applyBusinessSnapshotGate = React.useCallback(
+        (data, docSnap) => {
+            if (!data || !isBusinessUser(data)) return false;
+
+            const sessionUid = auth.currentUser?.uid ?? currentUserRef.current?.uid ?? null;
+            const isOwnerView = isBusinessProfileOwner(sessionUid, profileId, data);
+            const emailVerifiedPublic =
+                data.emailVerified === true ||
+                (data._sourceCollection === 'restaurants' && data.isClaimed !== true);
+
+            if (isOwnerView) {
+                pendingBizDocRef.current = null;
+                applySnapshotBusinessData(data, docSnap);
+                return true;
+            }
+
+            if (authLoadingRef.current) {
+                pendingBizDocRef.current = { data, docSnap };
+                setLoading(true);
+                return true;
+            }
+
+            if (!emailVerifiedPublic) {
+                pendingBizDocRef.current = null;
+                setBusiness(null);
+                setLoading(false);
+                setPublicProfileHidden(true);
+                return true;
+            }
+
+            setPublicProfileHidden(false);
+            pendingBizDocRef.current = null;
+            applySnapshotBusinessData(data, docSnap);
+            return true;
+        },
+        [profileId, applySnapshotBusinessData]
+    );
+
+    /** Firestore: `restaurants/{id}` (admin imports) then `users/{id}` (registered businesses). */
     useEffect(() => {
         if (authLoading) return undefined;
-        
+
         lastBizSnapshotSigRef.current = '';
         pendingBizDocRef.current = null;
         setPublicProfileHidden(false);
@@ -427,102 +508,98 @@ const BusinessProfile = () => {
         }
 
         setLoading(true);
-        const docRef = doc(db, 'users', profileId);
+        let unsubUsers = null;
+        let usersListenerStarted = false;
 
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            const raw = docSnap.exists() ? docSnap.data() : null;
-            // Must match AuthContext: raw Firestore can miss computed isBusiness / pending flags.
-            const profileForGate = raw
-                ? normalizeUserProfile({ id: docSnap.id, uid: docSnap.id, ...raw })
-                : null;
-            if (docSnap.exists() && profileForGate && isBusinessUser(profileForGate)) {
-                const data = profileForGate;
-                const sessionUid = auth.currentUser?.uid ?? currentUserRef.current?.uid ?? null;
-                const isOwnerView = sessionUid === profileId;
-                const emailVerifiedPublic = data.emailVerified === true;
-
-                // 1. If it's the owner, they should always see the profile even if unverified.
-                if (isOwnerView) {
-                    pendingBizDocRef.current = null;
-                    applySnapshotBusinessData(data, docSnap);
-                    return;
-                }
-
-                // 2. If auth is still loading, defer the decision to avoid "flickering" or loops.
-                if (authLoadingRef.current) {
-                    pendingBizDocRef.current = { data, docSnap };
-                    // Keep loading true to avoid showing "Not Public" message prematurely.
-                    setLoading(true);
-                    return;
-                }
-
-                // 3. If visitor and email is not verified, hide it.
-                if (!emailVerifiedPublic) {
-                    pendingBizDocRef.current = null;
-                    // Never call setBusiness/setLoading inside another setState updater — breaks React 18 batching
-                    // and has been linked to blank screens after leaving the route.
-                    setBusiness(null);
-                    setLoading(false);
-                    setPublicProfileHidden(true);
-                    return;
-                }
-
-                // 4. Otherwise, it's a verified public profile.
-                setPublicProfileHidden(false);
-                pendingBizDocRef.current = null;
-                applySnapshotBusinessData(data, docSnap);
-            } else {
-                void (async () => {
+        const startUsersListener = () => {
+            if (usersListenerStarted) return;
+            usersListenerStarted = true;
+            const userRef = doc(db, 'users', profileId);
+            unsubUsers = onSnapshot(
+                userRef,
+                (docSnap) => {
+                    const raw = docSnap.exists() ? docSnap.data() : null;
+                    const profileForGate = raw
+                        ? normalizeUserProfile({ id: docSnap.id, uid: docSnap.id, ...raw })
+                        : null;
+                    if (docSnap.exists() && profileForGate && isBusinessUser(profileForGate)) {
+                        applyBusinessSnapshotGate(profileForGate, docSnap);
+                        return;
+                    }
+                    void (async () => {
+                        const fb = await loadBusinessFromPublicProfileProjection(profileId);
+                        if (fb) {
+                            setBusiness(fb);
+                            setPublicProfileHidden(false);
+                        } else {
+                            setBusiness(null);
+                            setPublicProfileHidden(false);
+                        }
+                        setLoading(false);
+                    })();
+                },
+                async (error) => {
                     const fb = await loadBusinessFromPublicProfileProjection(profileId);
                     if (fb) {
                         setBusiness(fb);
                         setPublicProfileHidden(false);
-                    } else {
-                        console.error('Business not found or not a business account');
+                        setLoading(false);
+                        return;
+                    }
+                    const sessionUid = auth.currentUser?.uid ?? currentUserRef.current?.uid ?? null;
+                    let resolved = false;
+                    if (sessionUid === profileId) {
+                        try {
+                            const snap = await getDoc(doc(db, 'users', profileId));
+                            if (snap.exists()) {
+                                const pf = normalizeUserProfile({ id: snap.id, uid: snap.id, ...snap.data() });
+                                if (isBusinessUser(pf)) {
+                                    applySnapshotBusinessData(pf, snap);
+                                    setPublicProfileHidden(false);
+                                    setLoading(false);
+                                    resolved = true;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Owner getDoc fallback failed:', e);
+                        }
+                    }
+                    if (!resolved) {
+                        console.error('Business profile listener error:', error);
                         setBusiness(null);
                         setPublicProfileHidden(false);
+                        setLoading(false);
                     }
-                    setLoading(false);
-                })();
-            }
-        }, async (error) => {
-            // Permission denied usually means the profile is not public yet or user is unverified.
-            // Try public_profiles projection first.
-            const fb = await loadBusinessFromPublicProfileProjection(profileId);
-            if (fb) {
-                setBusiness(fb);
-                setPublicProfileHidden(false);
-                setLoading(false);
-            } else {
-                const sessionUid = auth.currentUser?.uid ?? currentUserRef.current?.uid ?? null;
-                let resolved = false;
-                if (sessionUid === profileId) {
-                    try {
-                        const snap = await getDoc(doc(db, 'users', profileId));
-                        if (snap.exists()) {
-                            const pf = normalizeUserProfile({ id: snap.id, uid: snap.id, ...snap.data() });
-                            if (isBusinessUser(pf)) {
-                                applySnapshotBusinessData(pf, snap);
-                                setPublicProfileHidden(false);
-                                setLoading(false);
-                                resolved = true;
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Owner getDoc fallback failed:', e);
-                    }
-                    if (!resolved) console.error('Owner permission error on profile:', error);
                 }
-                if (!resolved) {
-                    setBusiness(null);
-                    setPublicProfileHidden(false);
-                    setLoading(false);
-                }
-            }
-        });
+            );
+        };
 
-        return () => unsubscribe();
-    }, [profileId, applySnapshotBusinessData, currentUser?.uid, authLoading]);
+        const restaurantRef = doc(db, 'restaurants', profileId);
+        const unsubRestaurant = onSnapshot(
+            restaurantRef,
+            (docSnap) => {
+                if (docSnap.exists()) {
+                    if (unsubUsers) {
+                        unsubUsers();
+                        unsubUsers = null;
+                        usersListenerStarted = false;
+                    }
+                    const data = normalizeRestaurantToBusinessProfile(docSnap.id, docSnap.data());
+                    if (data && isBusinessUser(data)) {
+                        applyBusinessSnapshotGate(data, docSnap);
+                        return;
+                    }
+                }
+                startUsersListener();
+            },
+            () => startUsersListener()
+        );
+
+        return () => {
+            unsubRestaurant();
+            if (unsubUsers) unsubUsers();
+        };
+    }, [profileId, applySnapshotBusinessData, applyBusinessSnapshotGate, currentUser?.uid, authLoading]);
 
     // Fetch Highlights (Offers, Posts, Events)
     useEffect(() => {
@@ -628,19 +705,20 @@ const BusinessProfile = () => {
     }, [servicesKey]);
 
     // Keep activeTab valid when visible tabs change (visitor: some tabs hidden when empty)
-    const isOwnerProfile = !isPreviewMode && currentUser?.uid === profileId;
+    const isOwnerProfile =
+        !isPreviewMode && isBusinessProfileOwner(currentUser?.uid, profileId, business);
     useEffect(() => {
         const info = business?.businessInfo;
         if (!info) return;
-        const hasContactInfo = !!(info.phone || info.email || info.address);
+        const hasContactInfo = !!(info.phone || info.email || info.address || info.website);
         const visibleIds = ['about'];
         if (isOwnerProfile || (info.menu?.length > 0)) visibleIds.push('menu');
-        if (isOwnerProfile || (services?.length > 0)) visibleIds.push('services');
+        // Services tab hidden until feature is re-enabled
         if (isOwnerProfile || info.hours) visibleIds.push('hours');
         if (isOwnerProfile || hasContactInfo) visibleIds.push('contact');
         // Functional update: do not list activeTab in deps — that pattern re-ran the effect on every tab change.
         setActiveTab((tab) => (!visibleIds.includes(tab) ? (visibleIds[0] || 'about') : tab));
-    }, [isOwnerProfile, business?.businessInfo?.menu?.length, business?.businessInfo?.hours, business?.businessInfo?.phone, business?.businessInfo?.email, business?.businessInfo?.address, services?.length]);
+    }, [isOwnerProfile, business?.businessInfo?.menu?.length, business?.businessInfo?.hours, business?.businessInfo?.phone, business?.businessInfo?.email, business?.businessInfo?.address, business?.businessInfo?.website]);
 
     useEffect(() => {
         const memberIds = business?.communityMembers || [];
@@ -667,13 +745,18 @@ const BusinessProfile = () => {
             if (lastView && (now - parseInt(lastView)) < 24 * 60 * 60 * 1000) return;
 
             try {
-                const businessRef = doc(db, 'users', profileId);
+                const collectionName =
+                    business._sourceCollection === 'restaurants' ? 'restaurants' : 'users';
+                const businessRef = doc(db, collectionName, profileId);
                 const currentViews = business?.businessInfo?.profileViews || 0;
                 await updateDoc(businessRef, { 'businessInfo.profileViews': currentViews + 1 });
                 localStorage.setItem(viewKey, now.toString());
                 viewTracked.current = true;
             } catch (error) {
-                console.error('❌ Error tracking profile view:', error);
+                // Projection-only / permission-denied — non-fatal for profile display
+                if (import.meta.env?.DEV) {
+                    console.warn('Profile view tracking skipped:', error);
+                }
             }
         };
 
@@ -900,7 +983,6 @@ const BusinessProfile = () => {
 
         const businessInfo = business.businessInfo || {};
 
-        // Open selector with strictly formatted restaurantData, allowing CreateInvitation to link Dashboard metrics
         setSelectorState({
             restaurantData: {
                 id: profileId,
@@ -910,9 +992,10 @@ const BusinessProfile = () => {
                 city: businessInfo.city,
                 lat: businessInfo.lat,
                 lng: businessInfo.lng,
-                type: businessInfo.businessType || 'Restaurant'
+                countryCode: businessInfo.countryCode,
+                type: businessInfo.businessType || 'Restaurant',
             },
-            fromRestaurant: true
+            fromRestaurant: true,
         });
         setIsSelectorOpen(true);
     };
@@ -1228,7 +1311,8 @@ const BusinessProfile = () => {
         } catch (err) { showToast(t('save_failed'), 'error'); } finally { setSavingInfo(false); }
         };
 
-    const isOwner = !isPreviewMode && currentUser?.uid === profileId;
+    const isOwner = !isPreviewMode && isBusinessProfileOwner(currentUser?.uid, profileId, business);
+    const showClaimCta = businessShowsClaimCta(business) && !isOwner;
 
     useEffect(() => {
         if (!isOwner || profileSetupToastRef.current) return;
@@ -1362,10 +1446,33 @@ const BusinessProfile = () => {
 
     // Merge drafts dynamically if viewing as owner
     const businessInfo = isOwner && rawBusinessInfo.drafts
-        ? { ...rawBusinessInfo, ...rawBusinessInfo.drafts }
+        ? mergeBusinessInfoDrafts(rawBusinessInfo, rawBusinessInfo.drafts)
         : rawBusinessInfo;
 
     const profileMapCoords = getUserDocLatLng(business);
+    const profileCoverUrl =
+        resolveBusinessCoverImageUrl(business) ||
+        pickSafeDisplayImageUrl(
+            businessInfo.coverImage,
+            business.photo_url,
+            business.avatarUrl
+        ) ||
+        null;
+    const heroCoverSrc = profileCoverUrl || DEFAULT_BUSINESS_COVER;
+    const profileLogoUrl = getSafeAvatar(business);
+    const isVirtualGoogleImport = isVirtualGoogleImportProfile(business);
+    const categoryBadges = googlePlaceTypesToCategoryBadges(businessInfo.categories);
+    const hasMapCoords =
+        (profileMapCoords?.lat != null && profileMapCoords?.lng != null) ||
+        (businessInfo.lat != null && businessInfo.lng != null);
+    const canClickExternalLinks = isPaid;
+    const showImportedContactExtras = isVirtualGoogleImport;
+    const showGoogleImportedExtras = showImportedContactExtras;
+    const hasSocialLinks =
+        businessInfo.instagram ||
+        businessInfo.twitter ||
+        businessInfo.facebook ||
+        businessInfo.tiktok;
 
     const hasDrafts = isOwner && rawBusinessInfo.drafts && Object.keys(rawBusinessInfo.drafts).length > 0;
 
@@ -1411,22 +1518,24 @@ const BusinessProfile = () => {
         </button>
     );
 
-    // Plan badges — توضيح أن هذه الميزة لخطة Pro وElite
-    const PlanBadges = () => (
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span title="Professional Plan" style={{
-                fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
-                borderRadius: 20, border: '1px solid #8b5cf6',
-                color: '#a78bfa', background: 'rgba(139,92,246,0.12)',
-                display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
-            }}>⚡ Pro</span>
-            <span title="Elite Plan" style={{
-                fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
-                borderRadius: 20, border: '1px solid #f59e0b',
-                color: '#fbbf24', background: 'rgba(245,158,11,0.12)',
-                display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
-            }}>👑 Elite</span>
-        </div>
+    const PaidFeatureBadge = () => (
+        <span
+            title={t('biz_plan_paid_name', 'Paid Business')}
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: '0.65rem',
+                fontWeight: 800,
+                padding: '2px 7px',
+                borderRadius: 6,
+                background: '#000',
+                color: '#f59e0b',
+                border: '1.5px solid #f59e0b',
+            }}
+        >
+            👑 {t('biz_plan_paid_name', 'Paid')}
+        </span>
     );
 
     // th() returns themed when brandKit active, fallback otherwise    // Free badge — للأقسام المجانية
@@ -1487,10 +1596,7 @@ const BusinessProfile = () => {
         "@context": "https://schema.org",
         "@type": getSchemaType(businessInfo?.businessType),
         "name": business.display_name || 'DineBuddies Business',
-        "image": [
-            getSafeCoverImage(businessInfo?.coverImage),
-            getSafeAvatar(business)
-        ].filter(Boolean),
+        "image": [profileCoverUrl, getSafeAvatar(business)].filter(Boolean),
         "url": typeof window !== "undefined" ? window.location.href : '',
         "telephone": businessInfo?.phone || '',
         "address": {
@@ -1539,7 +1645,7 @@ const BusinessProfile = () => {
                     <meta property="og:url" content={`https://www.dinebuddies.com/business/${profileId}`} />
                     <meta property="og:title" content={`${business.display_name} - DineBuddies`} />
                     <meta property="og:description" content={businessInfo?.description || businessInfo?.tagline || `Checkout ${business.display_name} on DineBuddies!`} />
-                    <meta property="og:image" content={getSafeCoverImage(businessInfo?.coverImage) || getSafeAvatar(business)} />
+                    <meta property="og:image" content={profileCoverUrl || getSafeAvatar(business)} />
                     <meta property="twitter:card" content="summary_large_image" />
                     {jsonLd && (
                         <script type="application/ld+json">
@@ -1591,174 +1697,162 @@ const BusinessProfile = () => {
             <div className="profile-header">
 
                 {/* Cover & Top Nav */}
-                <div style={{
-                    width: '100%', flexShrink: 0, height: 300, minHeight: 300, maxHeight: 300,
-                    background: (getSafeCoverImage(businessInfo.coverImage) ? `url(${getSafeCoverImage(businessInfo.coverImage)})` : null) || 'linear-gradient(135deg, #1e1e2e, #2d2b42)',
-                    backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
-                    borderBottomLeftRadius: '32px', borderBottomRightRadius: '32px',
-                    boxShadow: '0 10px 40px color-mix(in srgb, var(--brand-primary) 30%, transparent)',
-                    position: 'relative', overflow: 'hidden'
-                }}>
+                <div className="business-hero-cover" style={{ background: 'linear-gradient(135deg, #1e1e2e, #2d2b42)' }}>
+                    <img
+                        src={heroCoverSrc}
+                        alt=""
+                        aria-hidden
+                        decoding="async"
+                        onError={(e) => handleBusinessCoverImageError(e, business)}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            objectPosition: 'center',
+                        }}
+                    />
                     {/* Overlay gradient */}
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.72) 100%)', borderRadius: 'inherit' }} />
 
-                    {/* Top bar: back + status badges + actions */}
-                    <div style={{ position: 'absolute', top: '1.2rem', left: '1.2rem', right: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
-                        {/* Left Side: Status Badges and Short Rank */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
-                            {(() => {
-                                const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
-                                const isOpen = businessInfo.workingHours?.[today]?.isOpen;
-                                const badgePill = (color, dot, label) => (
-                                    <span
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: '20px',
-                                            fontSize: '0.72rem',
-                                            fontWeight: '800',
-                                            background: 'rgba(11, 10, 18, 0.92)',
-                                            border: `1px solid rgba(${color}, 0.55)`,
-                                            color: `rgb(${color})`,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '5px',
-                                            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
-                                            backdropFilter: 'blur(12px)',
-                                            WebkitBackdropFilter: 'blur(12px)',
-                                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                width: 6,
-                                                height: 6,
-                                                borderRadius: '50%',
-                                                background: `rgb(${dot})`,
-                                                boxShadow: `0 0 6px rgb(${dot})`,
-                                                display: 'inline-block',
-                                                flexShrink: 0,
-                                            }}
-                                        />
-                                        {label}
-                                    </span>
-                                );
-                                return (
-                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                        {business.isOnline && badgePill('16,185,129', '16,185,129', t('online'))}
-                                        {badgePill(isOpen ? '74,222,128' : '248,113,113', isOpen ? '74,222,128' : '248,113,113', isOpen ? t('open', 'OPEN') : t('closed', 'CLOSED'))}
+                    <div className="business-hero-top">
+                        <div className="business-hero-top-row">
+                            <div className="business-hero-status">
+                                <div className="business-hero-start-row">
+                                    <div className="business-hero-social">
+                                        <div className="business-hero-action-col">
+                                            <button type="button" aria-label={userLikedBusiness ? t('unlike', 'Unlike') : t('like', 'Like')} disabled={likeInProgress} onClick={handleToggleLike} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', color: userLikedBusiness ? '#ef4444' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: likeInProgress ? 'wait' : 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+                                                {likeInProgress ? <span style={{ fontSize: '0.9rem' }}>⋯</span> : (userLikedBusiness ? <FaHeart fontSize="1rem" /> : <FaRegHeart fontSize="1rem" />)}
+                                            </button>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '900', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>
+                                                {Math.max(0, Number(business?.businessInfo?.profileLikes ?? 0))}
+                                            </span>
+                                        </div>
+                                        <div className="business-hero-action-col">
+                                            <button type="button" onClick={handleShare} disabled={isSharing} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+                                                {isSharing ? '⏳' : <FaShare fontSize="1rem" />}
+                                            </button>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '900', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>
+                                                {Math.max(0, Number(business?.businessInfo?.profileShares ?? 0))}
+                                            </span>
+                                        </div>
                                     </div>
-                                );
-                            })()}
-
-                            {/* Ranking (among Elite) — Clickable Short Badge */}
-                            {!rankLoading && rankingPosition != null && rankingPosition >= 1 && (
-                                <button type="button" onClick={(e) => { e.stopPropagation(); navigate('/rankings'); }} style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '20px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', backdropFilter: 'blur(8px)', transition: 'transform 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
-                                    <FaCrown style={{ color: 'var(--luxury-gold)', fontSize: '0.9rem' }} />
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '900', color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
-                                        #{rankingPosition}
-                                    </span>
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Right Side: Favourite + Share with counts BELOW */}
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                <button type="button" aria-label={userLikedBusiness ? t('unlike', 'Unlike') : t('like', 'Like')} disabled={likeInProgress} onClick={handleToggleLike} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', color: userLikedBusiness ? '#ef4444' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: likeInProgress ? 'wait' : 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
-                                    {likeInProgress ? <span style={{ fontSize: '0.9rem' }}>⋯</span> : (userLikedBusiness ? <FaHeart fontSize="1rem" /> : <FaRegHeart fontSize="1rem" />)}
-                                </button>
-                                <span style={{ fontSize: '0.8rem', fontWeight: '900', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>
-                                    {Math.max(0, Number(business?.businessInfo?.profileLikes ?? 0))}
-                                </span>
+                                    <div className="business-hero-badges">
+                                        {(() => {
+                                            const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+                                            const openFromGoogle =
+                                                typeof business.openNow === 'boolean' ? business.openNow : null;
+                                            const openFromHours = computeOpenNowFromBusinessHours(businessInfo.hours);
+                                            const legacyOpen = businessInfo.workingHours?.[today]?.isOpen;
+                                            const isOpen =
+                                                openFromGoogle ??
+                                                (typeof legacyOpen === 'boolean' ? legacyOpen : openFromHours);
+                                            const badgePill = (color, dot, label) => (
+                                                <span
+                                                    style={{
+                                                        padding: '5px 10px',
+                                                        borderRadius: '20px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        background: 'rgba(11, 10, 18, 0.92)',
+                                                        border: `1px solid rgba(${color}, 0.55)`,
+                                                        color: `rgb(${color})`,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
+                                                        backdropFilter: 'blur(12px)',
+                                                        WebkitBackdropFilter: 'blur(12px)',
+                                                        textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            width: 6,
+                                                            height: 6,
+                                                            borderRadius: '50%',
+                                                            background: `rgb(${dot})`,
+                                                            boxShadow: `0 0 6px rgb(${dot})`,
+                                                            display: 'inline-block',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    />
+                                                    {label}
+                                                </span>
+                                            );
+                                            return (
+                                                <>
+                                                    {business.isOnline && badgePill('16,185,129', '16,185,129', t('online'))}
+                                                    {typeof isOpen === 'boolean' &&
+                                                        badgePill(
+                                                            isOpen ? '74,222,128' : '248,113,113',
+                                                            isOpen ? '74,222,128' : '248,113,113',
+                                                            isOpen ? t('open', 'OPEN') : t('closed', 'CLOSED'),
+                                                        )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                                {!rankLoading && rankingPosition != null && rankingPosition >= 1 && (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); navigate('/rankings'); }} style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '20px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', backdropFilter: 'blur(8px)', boxShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
+                                        <FaCrown style={{ color: 'var(--luxury-gold)', fontSize: '0.9rem' }} />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '900', color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+                                            #{rankingPosition}
+                                        </span>
+                                    </button>
+                                )}
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                <button onClick={handleShare} disabled={isSharing} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
-                                    {isSharing ? '⏳' : <FaShare fontSize="1rem" />}
-                                </button>
-                                <span style={{ fontSize: '0.8rem', fontWeight: '900', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>
-                                    {Math.max(0, Number(business?.businessInfo?.profileShares ?? 0))}
-                                </span>
+
+                            <div className="business-hero-actions">
+                                {showClaimCta && (
+                                    <BusinessClaimPanel
+                                        variant="hero"
+                                        restaurantId={profileId}
+                                        businessName={businessInfo.businessName || business.display_name}
+                                    />
+                                )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Bottom-left: Logo + Business name + Category */}
-                    <div style={{ position: 'absolute', bottom: '1.2rem', left: '1.2rem', display: 'flex', alignItems: 'flex-end', gap: '14px', zIndex: 10 }}>
-                        {/* Logo */}
-                        <div style={{ position: 'relative', flexShrink: 0 }}>
-                            <div style={{
-                                width: '90px', height: '90px', borderRadius: '22px',
-                                ...(business.photo_url
-                                    ? { backgroundColor: 'rgba(0,0,0,0.25)', backgroundImage: `url(${getSafeAvatar(business)})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
-                                    : { background: 'var(--brand-primary)' }
-                                ),
-                                overflow: 'hidden',
-                                border: `4px solid rgba(255,255,255,0.25)`,
-                                boxShadow: '0 8px 24px color-mix(in srgb, var(--brand-primary) 40%, transparent)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.4rem'
-                            }}>
-                                {!business.photo_url && '🏪'}
+                    <div className="business-hero-identity">
+                        <div className="business-hero-logo-wrap">
+                            <div
+                                className="business-hero-logo"
+                                style={{ background: profileLogoUrl ? 'rgba(0,0,0,0.25)' : undefined }}
+                            >
+                                {profileLogoUrl ? (
+                                    <img
+                                        src={profileLogoUrl}
+                                        alt=""
+                                        aria-hidden
+                                        onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                        }}
+                                    />
+                                ) : (
+                                    '🏪'
+                                )}
                             </div>
                             {isOwner && (
-                                <label style={{ position: 'absolute', inset: 0, borderRadius: '22px', background: logoUploading ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '4px solid transparent' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = logoUploading ? 1 : 0}>
+                                <label style={{ position: 'absolute', inset: 0, borderRadius: '20px', background: logoUploading ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '4px solid transparent' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = logoUploading ? 1 : 0}>
                                     <span style={{ fontSize: '1.3rem', color: 'white' }}>{logoUploading ? '⏳' : '📷'}</span>
                                     <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} disabled={logoUploading} />
                                 </label>
                             )}
-                            {/* Plan badge */}
                             {isPaid && !isOwner && (
-                                <div style={{ position: 'absolute', top: '-6px', left: '-6px', background: '#000000', border: `2px solid ${isElite ? '#f59e0b' : '#8b5cf6'}`, borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 8px ${isElite ? 'rgba(245,158,11,0.5)' : 'rgba(139,92,246,0.5)'}`, fontSize: '0.85rem' }} title={isElite ? t('elite_business', 'Elite Business') : t('professional_business', 'Professional Business')}>{isElite ? '👑' : '⚡'}</div>
+                                <div className="business-hero-plan-badge" style={{ background: '#000000', border: '2px solid #f59e0b', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 8px rgba(245,158,11,0.5)', fontSize: '0.85rem' }} title={t('biz_plan_paid_name', 'Paid Business')}>👑</div>
                             )}
                         </div>
-
-                        {/* Name + Category */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingBottom: '4px' }}>
-                            <h1 style={{ margin: 0, padding: 0, color: 'white', fontWeight: '900', fontSize: '1.15rem', textShadow: '0 2px 8px rgba(0,0,0,0.9)', letterSpacing: '0.3px', lineHeight: 1.2 }}>
-                                {business.display_name || business.displayName || t('business')}
-                            </h1>
-                            {(businessInfo.businessType || businessInfo.cuisineType) && (
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(`/restaurants?category=${encodeURIComponent(businessInfo.businessType || 'Venue')}`);
-                                    }}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        alignSelf: 'flex-start',
-                                        minHeight: '26px',
-                                        padding: '4px 12px',
-                                        fontSize: '0.82rem',
-                                        fontWeight: '600',
-                                        color: 'white',
-                                        background: 'rgba(0,0,0,0.5)',
-                                        backdropFilter: 'blur(8px)',
-                                        border: '1px solid rgba(255,255,255,0.2)',
-                                        borderRadius: '10px',
-                                        cursor: 'pointer',
-                                        textShadow: '0 1px 4px rgba(0,0,0,0.7)',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = 'rgba(139,92,246,0.6)';
-                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'rgba(0,0,0,0.5)';
-                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-                                    }}
-                                >
-                                    {businessInfo.businessType ? t(businessInfo.businessType, businessInfo.businessType) : ''}{businessInfo.cuisineType ? ` • ${t(businessInfo.cuisineType, businessInfo.cuisineType)}` : ''}
-                                </button>
-                            )}
-                        </div>
+                        <h1 className="business-hero-name" dir="auto">
+                            {business.display_name || business.displayName || t('business')}
+                        </h1>
                     </div>
 
-                    {/* Cover Update button — owner only */}
                     {isOwner && (
-                        <label style={{ position: 'absolute', bottom: '1.2rem', right: '1.2rem', zIndex: 10, cursor: 'pointer', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '12px', padding: '7px 14px', color: 'white', fontSize: '0.78rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label className="business-hero-edit-cover">
                             {coverUploading ? `⏳ ${t('uploading', 'Uploading...')}` : `📷 ${t('edit_cover', 'Edit Cover')}`}
                             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload} disabled={coverUploading} />
                         </label>
@@ -1888,8 +1982,29 @@ const BusinessProfile = () => {
                         </button>
                     )}
                     {currentUser?.uid !== profileId && !userProfile?.isBusiness && !currentUser?.isGuest && (
-                        <button onClick={handleCreateInvitation} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--bg-primary)', border: `1px solid ${'var(--border-color)'}`, color: 'var(--text-primary)', fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                            <FaUserPlus style={{ fontSize: '1.2rem' }} /> {t('create_invitation', 'Create Invitation')}
+                        <button
+                            type="button"
+                            onClick={handleCreateInvitation}
+                            style={{
+                                width: '100%',
+                                padding: '16px',
+                                borderRadius: '16px',
+                                background: 'var(--bg-primary)',
+                                border: `1px solid ${'var(--border-color)'}`,
+                                color: 'var(--text-primary)',
+                                fontWeight: '800',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '10px',
+                                transition: 'all 0.3s',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                            }}
+                        >
+                            <FaUserPlus style={{ fontSize: '1.2rem' }} />
+                            {t('create_invitation', 'Create Invitation')}
                         </button>
                     )}
                 </div>
@@ -1921,11 +2036,11 @@ const BusinessProfile = () => {
                 {/* Tabs Navigation — scrollable on mobile */}
                 {(() => {
                     const info = businessInfo || {};
-                    const hasContactInfo = !!(info.phone || info.email || info.address);
+                    const hasContactInfo = !!(info.phone || info.email || info.address || info.website);
                     const tabs = [
                         { id: 'about', label: t('tab_about'), locked: false },
                         { id: 'menu', label: t('tab_menu'), locked: false, hide: !isOwner && !(info.menu?.length > 0) },
-                        { id: 'services', label: t('tab_services'), locked: false, hide: !isOwner && !(services?.length > 0) },
+                        { id: 'services', label: t('tab_services'), locked: false, hide: true },
                         { id: 'hours', label: t('tab_hours'), locked: false, hide: !isOwner && !info.hours },
                         { id: 'contact', label: t('tab_contact'), locked: false, hide: !isOwner && !hasContactInfo },
                     ];
@@ -1952,7 +2067,7 @@ const BusinessProfile = () => {
                                     type="button"
                                     className={`ui-tab ui-tab--compact ${activeTab === id && !locked ? 'ui-tab--active' : ''}`}
                                     onClick={() => {
-                                        if (locked) { navigate('/business/pricing'); return; }
+                                        if (locked) { navigate('/settings/subscription'); return; }
                                         setActiveTab(id);
                                     }}
                                     style={{
@@ -1968,7 +2083,7 @@ const BusinessProfile = () => {
                                     }}
                                 >
                                     {label}
-                                    {locked && <PlanBadge tier="pro" />}
+                                    {locked && <PaidFeatureBadge />}
                                 </button>
                             ))}
                         </div>
@@ -2004,6 +2119,67 @@ const BusinessProfile = () => {
                                 )}
                             </div>
 
+                            {(businessInfo.businessType || businessInfo.cuisineType || categoryBadges.length > 0) && (
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: '8px',
+                                        marginBottom: '16px',
+                                    }}
+                                >
+                                    {(businessInfo.businessType || businessInfo.cuisineType) && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                navigate(
+                                                    `/restaurants?category=${encodeURIComponent(businessInfo.businessType || 'Venue')}`,
+                                                )
+                                            }
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                minHeight: '32px',
+                                                padding: '6px 14px',
+                                                fontSize: '0.82rem',
+                                                fontWeight: '700',
+                                                color: 'var(--text-main)',
+                                                background: 'var(--hover-overlay)',
+                                                border: '1px solid var(--border-color)',
+                                                borderRadius: '12px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {businessInfo.businessType
+                                                ? t(businessInfo.businessType, businessInfo.businessType)
+                                                : ''}
+                                            {businessInfo.cuisineType
+                                                ? ` • ${t(businessInfo.cuisineType, businessInfo.cuisineType)}`
+                                                : ''}
+                                        </button>
+                                    )}
+                                    {categoryBadges.map((label) => (
+                                        <span
+                                            key={label}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                minHeight: '32px',
+                                                padding: '6px 12px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '700',
+                                                color: 'var(--text-secondary)',
+                                                background: 'color-mix(in srgb, var(--brand-primary) 12%, var(--bg-card))',
+                                                border: '1px solid color-mix(in srgb, var(--brand-primary) 28%, var(--border-color))',
+                                                borderRadius: '12px',
+                                            }}
+                                        >
+                                            {label}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
                             {businessInfo.description ? (
                                 <p style={{
                                     color: 'var(--text-secondary)', lineHeight: '1.8', fontSize: '1rem', margin: 0,
@@ -2031,7 +2207,8 @@ const BusinessProfile = () => {
 
 
 
-                        {/* Enhanced Reviews Section */}
+                        {/* Feedback — visitors only; owners cannot complain to their own business */}
+                        {!isOwner && (
                         <div style={{ marginTop: 'var(--profile-stack-gap)', marginBottom: '8px', background: 'var(--bg-card)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
                             <div>
                                 <h3 style={{ margin: '0 0 4px 0', fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-main)' }}>{t('feedback_box', 'Feedback & Complaints')}</h3>
@@ -2041,6 +2218,7 @@ const BusinessProfile = () => {
                                 {t('send_feedback_btn', 'Send Feedback')}
                             </button>
                         </div>
+                        )}
                         <EnhancedReviews
                             reviews={reviews}
                             profileId={profileId}
@@ -2195,7 +2373,7 @@ const BusinessProfile = () => {
                                     <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                                         Your services were saved, but they <strong>won't appear on your public profile</strong> until you upgrade your plan.
                                     </p>
-                                    <a href="/pricing" className="ui-banner--warning__link">🚀 Upgrade Plan</a>
+                                    <a href="/settings/subscription" className="ui-banner--warning__link">🚀 Upgrade Plan</a>
                                 </div>
                                 <button type="button" className="ui-btn ui-btn--ghost" onClick={() => setShowServiceDraftBanner(false)} style={{ padding: '4px', color: 'var(--text-muted)', fontSize: '1.1rem', flexShrink: 0 }}>✕</button>
                             </div>
@@ -2208,7 +2386,7 @@ const BusinessProfile = () => {
                             </h3>
                             {isOwner && (
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <PlanBadges />
+                                    <PaidFeatureBadge />
                                     {/* ＋ Add button toggles inline form */}
                                     <button
                                         onClick={() => setShowServiceAddForm(v => !v)}
@@ -2430,7 +2608,7 @@ const BusinessProfile = () => {
                             </h3>
                             {isOwner && (
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <PlanBadges />
+                                    <PaidFeatureBadge />
                                     <EditActionBtn onClick={openContactModal} />
                                 </div>
                             )}
@@ -2438,9 +2616,9 @@ const BusinessProfile = () => {
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--profile-stack-gap)' }}>
                             {businessInfo.phone && (
-                                <div style={{ background: 'var(--bg-card)', border: `1px solid var(--border-color)`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', transition: 'transform 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'} onClick={() => window.location.href = `tel:${businessInfo.phone}`}>
+                                <div style={{ background: 'var(--bg-card)', border: `1px solid var(--border-color)`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', transition: 'transform 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'} onClick={() => { const tel = phoneToTelHref(businessInfo.phone); if (tel) window.location.href = `tel:${tel}`; }}>
                                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-primary)', fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaPhone /></div>
-                                    <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('phone', 'Phone')}</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{businessInfo.phone}</div></div>
+                                    <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('phone', 'Phone')}</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...phoneNumberLtrStyle() }} dir="ltr">{formatPhoneForDisplay(businessInfo.phone)}</div></div>
                                 </div>
                             )}
 
@@ -2451,12 +2629,55 @@ const BusinessProfile = () => {
                                 </div>
                             )}
 
-                            {/* Website — Pro only */}
-                            {isPaid && businessInfo.website && (
-                                <div onClick={() => window.open(businessInfo.website.startsWith('http') ? businessInfo.website : `https://${businessInfo.website}`, '_blank')} style={{ background: 'var(--bg-card)', border: `1px solid var(--border-color)`, borderRadius: '20px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', transition: 'all 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                            {/* Website — Paid (clickable) or Google import (display only on Free) */}
+                            {(isPaid || showGoogleImportedExtras) && businessInfo.website && (
+                                <div
+                                    onClick={
+                                        canClickExternalLinks
+                                            ? () =>
+                                                  window.open(
+                                                      businessInfo.website.startsWith('http')
+                                                          ? businessInfo.website
+                                                          : `https://${businessInfo.website}`,
+                                                      '_blank'
+                                                  )
+                                            : undefined
+                                    }
+                                    style={{
+                                        background: 'var(--bg-card)',
+                                        border: `1px solid var(--border-color)`,
+                                        borderRadius: '20px',
+                                        padding: '20px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '16px',
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                                        transition: 'all 0.2s',
+                                        cursor: canClickExternalLinks ? 'pointer' : 'default',
+                                        opacity: canClickExternalLinks ? 1 : 0.92,
+                                    }}
+                                    onMouseEnter={
+                                        canClickExternalLinks
+                                            ? (e) => {
+                                                  e.currentTarget.style.transform = 'translateY(-4px)';
+                                              }
+                                            : undefined
+                                    }
+                                    onMouseLeave={
+                                        canClickExternalLinks
+                                            ? (e) => {
+                                                  e.currentTarget.style.transform = 'translateY(0)';
+                                              }
+                                            : undefined
+                                    }
+                                >
                                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-primary)', fontSize: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1)' }}><FaGlobe /></div>
                                     <div style={{ flex: 1 }}><div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('btn_website', 'Website')}</div><div style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '1.1rem', wordBreak: 'break-all' }}>{businessInfo.website.replace(/^(https?:\/\/|\/\/)/, '')}</div></div>
-                                    <FaExternalLinkAlt style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }} />
+                                    {canClickExternalLinks ? (
+                                        <FaExternalLinkAlt style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }} />
+                                    ) : (
+                                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-muted)' }} title={t('biz_plan_links_paid_to_open', 'Upgrade to open links')}>🔒</span>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -2477,16 +2698,22 @@ const BusinessProfile = () => {
                                         city={businessInfo.city}
                                         country={businessInfo.country}
                                     />
-                                    {!isPaid && (
-                                        <div onClick={() => { setPaywallFeature("Interactive Maps"); setShowPaywall(true); }} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(30,30,46,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }} title={t('upgrade_map')}>
+                                    {!canClickExternalLinks && (
+                                        <div
+                                            onClick={() => {
+                                                setPaywallFeature('Interactive Maps');
+                                                setShowPaywall(true);
+                                            }}
+                                            style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(30,30,46,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }}
+                                            title={t('upgrade_map')}
+                                        >
                                             <div style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', padding: '12px 24px', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                                                🔒 Map Interaction Locked
+                                                🔒 {t('biz_plan_map_paid_to_open', 'Map — upgrade to interact')}
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                {/* Google Maps link — Pro only */}
-                                {isPaid && (
+                                {canClickExternalLinks && hasMapCoords && (
                                     <button onClick={() => { const addr = encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : '')); window.open(`https://www.google.com/maps/search/?api=1&query=${addr}`, '_blank'); }} style={{ width: '100%', padding: '16px', background: 'var(--brand-primary)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '20px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
                                         <FaMapMarkerAlt style={{ fontSize: '1.2rem' }} />
                                         Open in Google Maps
@@ -2496,27 +2723,30 @@ const BusinessProfile = () => {
                             </div>
                         )}
 
-                        {/* Social Media — Pro only */}
-                        {isPaid && (businessInfo.instagram || businessInfo.twitter || businessInfo.facebook) && (
+                        {/* Social — Paid (clickable) or Google import (display only on Free) */}
+                        {(isPaid || showGoogleImportedExtras) && hasSocialLinks && (
                             <div style={{ background: 'var(--bg-card)', border: `1px solid var(--border-color)`, borderRadius: '24px', padding: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)'}}>
                                 <h4 style={{ fontSize: '1.1rem', fontWeight: '900', margin: '0 0 20px 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '1.3rem' }}>🌐</span> Follow Us
+                                    <span style={{ fontSize: '1.3rem' }}>🌐</span> {t('follow_us', 'Follow Us')}
+                                    {!canClickExternalLinks && (
+                                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-muted)', marginInlineStart: 'auto' }}>🔒</span>
+                                    )}
                                 </h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '16px' }}>
                                     {businessInfo.instagram && (
-                                        <button onClick={() => window.open(`https://instagram.com/${businessInfo.instagram.replace('@', '')}`, '_blank')} style={{ padding: '16px', background: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 24px rgba(220,39,67,0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                        <button type="button" disabled={!canClickExternalLinks} onClick={canClickExternalLinks ? () => window.open(`https://instagram.com/${businessInfo.instagram.replace('@', '')}`, '_blank') : undefined} style={{ padding: '16px', background: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: canClickExternalLinks ? 'pointer' : 'default', opacity: canClickExternalLinks ? 1 : 0.75, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}>
                                             <FaInstagram style={{ fontSize: '2rem' }} />
                                             Instagram
                                         </button>
                                     )}
                                     {businessInfo.twitter && (
-                                        <button onClick={() => window.open(`https://twitter.com/${businessInfo.twitter.replace('@', '')}`, '_blank')} style={{ padding: '16px', background: 'linear-gradient(135deg, #1DA1F2, #0d8bd9)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 24px rgba(29,161,242,0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                        <button type="button" disabled={!canClickExternalLinks} onClick={canClickExternalLinks ? () => window.open(`https://twitter.com/${businessInfo.twitter.replace('@', '')}`, '_blank') : undefined} style={{ padding: '16px', background: 'linear-gradient(135deg, #1DA1F2, #0d8bd9)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: canClickExternalLinks ? 'pointer' : 'default', opacity: canClickExternalLinks ? 1 : 0.75, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}>
                                             <FaTwitter style={{ fontSize: '2rem' }} />
                                             Twitter
                                         </button>
                                     )}
                                     {businessInfo.facebook && (
-                                        <button onClick={() => window.open(businessInfo.facebook.startsWith('http') ? businessInfo.facebook : `https://facebook.com/${businessInfo.facebook}`, '_blank')} style={{ padding: '16px', background: 'linear-gradient(135deg, #1877F2, #0d65d9)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 24px rgba(24,119,242,0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                        <button type="button" disabled={!canClickExternalLinks} onClick={canClickExternalLinks ? () => window.open(businessInfo.facebook.startsWith('http') ? businessInfo.facebook : `https://facebook.com/${businessInfo.facebook}`, '_blank') : undefined} style={{ padding: '16px', background: 'linear-gradient(135deg, #1877F2, #0d65d9)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: canClickExternalLinks ? 'pointer' : 'default', opacity: canClickExternalLinks ? 1 : 0.75, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}>
                                             <FaFacebook style={{ fontSize: '2rem' }} />
                                             Facebook
                                         </button>
@@ -2944,9 +3174,8 @@ const BusinessProfile = () => {
                             ))}
                             {/* Pro Features — Website & Social Media */}
                             <div style={{ margin: '1.2rem 0 0.8rem', padding: '0.6rem 0 0.6rem', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pro Features</span>
-                                <span style={{ border: '1px solid #8b5cf6', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#a78bfa', background: 'rgba(139,92,246,0.12)' }}>⚡ Pro</span>
-                                <span style={{ border: '1px solid #f59e0b', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#fbbf24', background: 'rgba(245,158,11,0.12)' }}>👑 Elite</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('biz_plan_paid_features', 'Paid features')}</span>
+                                <span style={{ border: '1px solid #f59e0b', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#fbbf24', background: 'rgba(245,158,11,0.12)' }}>👑 {t('biz_plan_paid_name', 'Paid')}</span>
                             </div>
                             {[
                                 { icon: <FaGlobe color="#8b5cf6" />, label: t('website_label'), key: 'website', placeholder: 'https://yourbusiness.com' },
@@ -2997,7 +3226,7 @@ const BusinessProfile = () => {
                                 <button onClick={() => setProFieldsNotice(null)} style={{ flex: 1, padding: '11px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>
                                     Got it
                                 </button>
-                                <button onClick={() => { setProFieldsNotice(null); navigate('/business/pricing'); }} style={{ flex: 1, padding: '11px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem' }}>
+                                <button onClick={() => { setProFieldsNotice(null); navigate('/settings/subscription'); }} style={{ flex: 1, padding: '11px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem' }}>
                                     ⚡ Upgrade to Pro
                                 </button>
                             </div>

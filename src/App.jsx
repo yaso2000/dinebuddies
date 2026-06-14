@@ -44,8 +44,7 @@ const AdminCreditsPage = lazy(() => import('./admin/pages/CreditsPage'));
 const AdminInvitationsPage = lazy(() => import('./admin/pages/InvitationsPage'));
 const AdminSmartSenderPage = lazy(() => import('./admin/pages/SmartSenderPage'));
 const AdminReportsPage = lazy(() => import('./admin/pages/ReportsPage'));
-const AdminPlansSandboxPage = lazy(() => import('./admin/pages/PlansSandboxPage'));
-const AdminPlansProductionPage = lazy(() => import('./admin/pages/PlansProductionPage'));
+const AdminGooglePlacesImportPage = lazy(() => import('./admin/pages/GooglePlacesImportPage'));
 const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
 const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
 const Notifications = lazy(() => import('./pages/Notifications'));
@@ -60,14 +59,16 @@ const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
 const BusinessSignup = lazy(() => import('./components/BusinessSignup'));
 const BusinessOnboarding = lazy(() => import('./pages/BusinessOnboarding'));
 const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
-const PrivateInvitationDetails = lazy(() => import('./pages/PrivateInvitationDetails'));
-const PrivateInvitationPreview = lazy(() => import('./pages/PrivateInvitationPreview'));
+// Eager — lazy chunks here caused ChunkLoadError on mobile after deploy → feed redirect.
+import PrivateInvitationDetails from './pages/PrivateInvitationDetails';
+import PrivateInvitationPreview from './pages/PrivateInvitationPreview';
+import PublicPrivateInvitationJoin from './pages/PublicPrivateInvitationJoin';
 const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
 const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
-const CreatePrivateInvitation = lazy(() => import('./pages/CreatePrivateInvitation'));
-const CreateDatingInvitation = lazy(() => import('./pages/CreateDatingInvitation'));
+import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
+import CreateDatingInvitation from './pages/CreateDatingInvitation';
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateStory = lazy(() => import('./pages/CreateStory'));
@@ -88,11 +89,15 @@ const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const CommunityGuidelines = lazy(() => import('./pages/CommunityGuidelines'));
 const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest'));
 const MyCommunity = lazy(() => import('./pages/MyCommunity'));
+const BusinessCommunityInbox = lazy(() => import('./pages/BusinessCommunityInbox'));
+const BusinessHostedArchive = lazy(() => import('./pages/BusinessHostedArchive'));
+const BusinessDashboardAnalytics = lazy(() => import('./pages/BusinessDashboardAnalytics'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
 
 // Contexts
 import { ToastProvider } from './context/ToastContext';
+import GlobalImageUploadIndicator from './components/GlobalImageUploadIndicator';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { InvitationProvider } from './context/InvitationContext';
@@ -142,6 +147,7 @@ function App() {
     return (
         <ThemeProvider>
             <ToastProvider>
+                <GlobalImageUploadIndicator />
                 <Router>
                     <LoginRouterBridge />
                     <AuthProvider>
@@ -190,6 +196,7 @@ function App() {
                                                     <Route path="/post/featured/:featuredId" element={<PostDetails />} />
                                                     <Route path="/post/:postId" element={<PostDetails />} />
 
+                                                    <Route path="/invite/p/:token" element={<PublicPrivateInvitationJoin />} />
                                                     <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
                                                     <Route
                                                         path="/invitation/private/:id/chat"
@@ -201,7 +208,7 @@ function App() {
                                                     <Route path="/invitation/:id" element={<InvitationDetails />} />
 
                                                     <Route path="/business/onboarding" element={<GuestBlockedRoute><BusinessOnboarding /></GuestBlockedRoute>} />
-                                                    <Route path="/business/pricing" element={<PricingPage />} />
+                                                    <Route path="/business/pricing" element={<Navigate to="/settings/subscription" replace />} />
                                                     <Route path="/business/:businessId/invitations" element={<RedirectBusinessInvitationsToCommunity />} />
                                                     <Route path="/business/:businessId" element={<BusinessProfile />} />
 
@@ -260,6 +267,9 @@ function App() {
 
                                                     <Route path="/plans" element={<Navigate to="/pricing" replace />} />
                                                     <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community/inbox" element={<GuestBlockedRoute><BusinessCommunityInbox /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community/archive" element={<GuestBlockedRoute><BusinessHostedArchive /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community/analytics" element={<GuestBlockedRoute><BusinessDashboardAnalytics /></GuestBlockedRoute>} />
                                                     <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />
                                                     <Route path="/ai-marketing-studio" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />
 
@@ -272,14 +282,12 @@ function App() {
                                                     <Route path="/invitations" element={<HomeInvitations />} />
 
                                                     <Route path="/admin/*" element={<AdminRoute><AdminShell /></AdminRoute>}>
+                                                        <Route path="google-places" element={<AdminGooglePlacesImportPage />} />
                                                         <Route path="users" element={<AdminUsersPage />} />
                                                         <Route path="credits" element={<AdminCreditsPage />} />
                                                         <Route path="messaging" element={<AdminSmartSenderPage />} />
                                                         <Route path="invitations" element={<AdminInvitationsPage />} />
                                                         <Route path="reports" element={<AdminReportsPage />} />
-                                                        <Route path="plans/sandbox" element={<AdminPlansSandboxPage />} />
-                                                        <Route path="plans/production" element={<AdminPlansProductionPage />} />
-                                                        <Route path="plans" element={<Navigate to="/admin/plans/production" replace />} />
                                                         <Route path="dashboard" element={<Navigate to="/admin/users" replace />} />
                                                         <Route path="*" element={<Navigate to="/admin/users" replace />} />
                                                         <Route index element={<Navigate to="/admin/users" replace />} />
