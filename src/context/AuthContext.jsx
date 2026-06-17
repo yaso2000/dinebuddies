@@ -639,21 +639,16 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            let grantedCredits = 0;
-            let showWelcomeNotification = false;
-
             // Generate a unique identifier (email or phone)
             const uniqueId = userData.email?.toLowerCase() || auth.currentUser?.phoneNumber || null;
 
-            // welcome_gifts_claimed must be allowed in firestore.rules; if missing/denied, skip and still create users/{uid}.
+            // Keep the historical marker for dedupe/migrations, but balances are server-owned.
             if (uniqueId) {
                 try {
                     const giftRef = doc(db, 'welcome_gifts_claimed', uniqueId);
                     const giftSnap = await getDoc(giftRef);
 
                     if (!giftSnap.exists()) {
-                        grantedCredits = 5;
-                        showWelcomeNotification = true;
                         try {
                             await setDoc(giftRef, {
                                 claimedAt: serverTimestamp(),
@@ -665,14 +660,8 @@ export const AuthProvider = ({ children }) => {
                         }
                     }
                 } catch (giftReadErr) {
-                    console.warn('welcome gift eligibility check skipped:', giftReadErr?.message || giftReadErr);
-                    grantedCredits = 5;
-                    showWelcomeNotification = true;
+                    console.warn('welcome gift marker check skipped:', giftReadErr?.message || giftReadErr);
                 }
-            } else {
-                // Fallback if no unique identity can be verified (rare in Firebase Auth)
-                grantedCredits = 5;
-                showWelcomeNotification = true;
             }
 
             const existingSnap = await getDoc(doc(db, 'users', userId));
@@ -685,10 +674,6 @@ export const AuthProvider = ({ children }) => {
                 display_name: finalDisplayName,
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
-                reputation: 100,
-                purchasedPrivateCredits: grantedCredits,
-                usedPrivateCreditsThisMonth: 0,
-                lastPrivateResetMonth: '',
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
@@ -701,20 +686,6 @@ export const AuthProvider = ({ children }) => {
             }
 
             await setDoc(doc(db, 'users', userId), baseProfile, { merge: true });
-
-            if (showWelcomeNotification) {
-                try {
-                    await adminSecurityService.createNotification({
-                        userId,
-                        type: 'system_announcement',
-                        title: '🎁 Welcome Gift!',
-                        message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
-                        style: 'success'
-                    });
-                } catch (notifErr) {
-                    console.warn('Welcome notification skipped:', notifErr?.message || notifErr);
-                }
-            }
 
             await fetchUserProfile(userId);
         } catch (error) {
@@ -791,6 +762,7 @@ export const AuthProvider = ({ children }) => {
                 if (password) {
                     const cred = EmailAuthProvider.credential(user.email, password);
                     await reauthenticateWithCredential(user, cred);
+                    await doFirestoreDelete();
                     await doAuthDelete();
                     return true;
                 }
@@ -802,6 +774,7 @@ export const AuthProvider = ({ children }) => {
                 else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
                 if (provider) {
                     await reauthenticateWithPopup(user, provider);
+                    await doFirestoreDelete();
                     await doAuthDelete();
                     return true;
                 }

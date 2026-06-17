@@ -35,6 +35,7 @@ import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { incrementBusinessInvitationCount } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
+import { getTotalDineCredits, MIN_HOST_INVITATION_DRAFT_CREDITS } from '../utils/privateInvitationCredits';
 
 const InvitationContext = createContext(null);
 
@@ -827,7 +828,7 @@ export const InvitationProvider = ({ children }) => {
 
     // ── Private Invitation Quota System ──────────────────────────────────────
     // Quotas are derived from subscriptionTier — no extra Firestore fields needed.
-    // Priority: plan monthly quota → purchased credits → deny
+    // Priority: plan monthly quota → legacy purchased credits → Dine Credits → deny
     // ─────────────────────────────────────────────────────────────────────────
 
     const canCreatePrivateInvitation = () => {
@@ -848,6 +849,11 @@ export const InvitationProvider = ({ children }) => {
         const purchasedCredits = firebaseProfile?.purchasedPrivateCredits || 0;
         if (purchasedCredits > 0) {
             return { canCreate: true, quota: purchasedCredits, source: 'purchased' };
+        }
+
+        const dineCredits = getTotalDineCredits(firebaseProfile);
+        if (dineCredits >= MIN_HOST_INVITATION_DRAFT_CREDITS) {
+            return { canCreate: true, quota: dineCredits, source: 'dine_credits' };
         }
 
         return { canCreate: false, reason: 'no_credits' };
