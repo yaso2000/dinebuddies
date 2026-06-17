@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getPaymentPlan } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,14 +22,21 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { planId } = data;
     const userId = context.auth.uid;
+    const plan = getPaymentPlan(planId);
 
-    if (!priceId) {
+    if (!plan || !plan.priceId || plan.id === 'p1' || plan.id === 'p6') {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Invalid checkout plan'
         );
+    }
+
+    const successUrl = String(data?.successUrl || '').trim();
+    const cancelUrl = String(data?.cancelUrl || '').trim();
+    if (!successUrl || !cancelUrl) {
+        throw new functions.https.HttpsError('invalid-argument', 'successUrl and cancelUrl are required');
     }
 
     try {
@@ -54,25 +62,41 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             }, { merge: true });
         }
 
-        // إنشاء Checkout Session
-        const session = await stripe.checkout.sessions.create({
+        const metadata = {
+            userId,
+            planId: plan.id,
+            planName: plan.name,
+            purchaseType: plan.kind,
+        };
+        if (plan.privateCredits) metadata.privateCredits = String(plan.privateCredits);
+        if (plan.offerCredits) metadata.offerCredits = String(plan.offerCredits);
+
+        // إنشاء Checkout Session. Price and mode come from the server catalog only.
+        const sessionPayload = {
             customer: customerId,
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: plan.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl,
-            metadata: {
-                userId: userId,
-                planId: planId,
-                planName: planName
-            }
-        });
+            mode: plan.mode,
+            success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: cancelUrl,
+            metadata,
+        };
+
+        if (plan.mode === 'subscription') {
+            sessionPayload.subscription_data = {
+                metadata: {
+                    userId,
+                    planId: plan.id,
+                },
+            };
+        }
+
+        const session = await stripe.checkout.sessions.create(sessionPayload);
 
         console.log(`✅ Checkout session created for user ${userId}: ${session.id}`);
 
