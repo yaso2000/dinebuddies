@@ -18,7 +18,8 @@ service cloud.firestore {
       return isSignedIn() &&
              (request.auth.token.get('admin', false) == true ||
               request.auth.token.get('role', '') == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin');
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin'));
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
@@ -32,8 +33,9 @@ service cloud.firestore {
       return isSignedIn() &&
              (request.auth.token.get('partner', false) == true ||
               request.auth.token.get('role', '') == 'business' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'business' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'partner');
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+               (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'business' ||
+                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'partner')));
     }
 
     function isCommunityMember(partnerId) {
@@ -84,7 +86,7 @@ service cloud.firestore {
     // 'user' (race with profile bootstrap). Allow one completion write to role:business + businessInfo.
     function isBusinessSignupCompletionFromIntent() {
       return resource.data.get('registrationIntent', '') == 'business' &&
-             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+             (request.resource.data.get('role', '') == 'business' || request.resource.data.get('role', '') == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
 
@@ -98,7 +100,7 @@ service cloud.firestore {
 
     function isUpgradingStubToBusinessProfile() {
       return !hasMeaningfulBusinessInfo() &&
-             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+             (request.resource.data.get('role', '') == 'business' || request.resource.data.get('role', '') == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
 
@@ -201,12 +203,12 @@ service cloud.firestore {
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user' &&
+                       request.resource.data.get('role', '') == 'user' &&
                        !changesServerManagedUserFields();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+                       (request.resource.data.get('role', '') == 'business' || request.resource.data.get('role', '') == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']) &&
                        !changesServerManagedUserFields();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
