@@ -168,6 +168,17 @@ service cloud.firestore {
                .hasAny(serverManagedUserFields()) ||
              changesServerManagedBusinessInfo();
     }
+
+    function isPrivateInvitationHost() {
+      return resource.data.authorId == request.auth.uid ||
+             (resource.data.author != null &&
+              resource.data.author.id == request.auth.uid);
+    }
+
+    function isPrivateInvitationCreateByHost() {
+      return request.resource.data.authorId == request.auth.uid ||
+             request.resource.data.author.id == request.auth.uid;
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -356,16 +367,17 @@ service cloud.firestore {
                            request.auth.uid in resource.data.invitedFriends
                          );
 
-      // Any signed-in user can create (author must be self)
+      // Any signed-in user can create a draft (author must be self); publishing is trusted callable only.
       allow create: if isSignedIn() &&
-                       (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                       isPrivateInvitationCreateByHost() &&
+                       request.resource.data.get('status', 'draft') != 'published' &&
+                       !request.resource.data.keys().hasAny(['publishedAt']);
 
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
+                       ((isPrivateInvitationHost() &&
+                         !request.resource.data.diff(resource.data).affectedKeys()
+                           .hasAny(['status', 'publishedAt'])) ||
                         (request.auth.uid in resource.data.invitedFriends &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
                          request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));

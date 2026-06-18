@@ -32,6 +32,20 @@ async function seedUser(uid, data) {
   });
 }
 
+async function seedPrivateInvitation(id, data) {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc(`private_invitations/${id}`).set({
+      authorId: 'alice',
+      author: { id: 'alice', name: 'Alice' },
+      privacy: 'private',
+      title: 'Draft dinner',
+      invitedFriends: [],
+      status: 'draft',
+      ...data,
+    });
+  });
+}
+
 async function reset() {
   await testEnv.clearFirestore();
 }
@@ -139,6 +153,50 @@ const tests = [
             city: 'Sydney',
             customLimits: { aiPosts: 999 },
           },
+        }),
+      );
+    },
+  ],
+  [
+    'denies direct client create of published private invitations',
+    async () => {
+      const alice = testEnv.authenticatedContext('alice').firestore();
+
+      await assertFails(
+        alice.doc('private_invitations/published-create').set({
+          authorId: 'alice',
+          author: { id: 'alice', name: 'Alice' },
+          privacy: 'private',
+          title: 'Bypassed publish',
+          invitedFriends: [],
+          status: 'published',
+        }),
+      );
+    },
+  ],
+  [
+    'denies host direct publish update for private invitation drafts',
+    async () => {
+      await seedPrivateInvitation('draft-private');
+      const alice = testEnv.authenticatedContext('alice').firestore();
+
+      await assertFails(
+        alice.doc('private_invitations/draft-private').update({
+          status: 'published',
+          publishedAt: new Date(),
+        }),
+      );
+    },
+  ],
+  [
+    'allows host draft edits without publishing fields',
+    async () => {
+      await seedPrivateInvitation('editable-private');
+      const alice = testEnv.authenticatedContext('alice').firestore();
+
+      await assertSucceeds(
+        alice.doc('private_invitations/editable-private').update({
+          title: 'Updated draft dinner',
         }),
       );
     },
