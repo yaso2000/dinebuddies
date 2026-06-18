@@ -14,7 +14,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
-    "test:security:rules": "firebase emulators:exec --only firestore \"node scripts/test-firestore-user-rules.mjs\"",
+    "test:security:rules": "npx -y firebase-tools@latest emulators:exec --only firestore \"node scripts/test-firestore-user-rules.mjs\"",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
     "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute"
   },
