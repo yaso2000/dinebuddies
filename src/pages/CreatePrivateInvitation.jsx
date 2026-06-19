@@ -39,7 +39,7 @@ const CreatePrivateInvitation = () => {
     const { showToast } = useToast();
     const { currentUser: authUser, userProfile } = useAuth();
 
-    const quotaInfo = canCreatePrivateInvitation();
+    const quotaInfo = canCreatePrivateInvitation({ type: 'private' });
 
     // UI State
     const [mediaData, setMediaData] = useState(null);
