@@ -423,7 +423,16 @@ service cloud.firestore {
       allow create: if (isSignedIn() &&
                       request.resource.data.senderId == request.auth.uid &&
                       request.resource.data.restaurantId == request.auth.uid) ||
-                      (request.resource.data.type == 'business_feedback');
+                      (isSignedIn() &&
+                       request.resource.data.type == 'business_feedback' &&
+                       request.resource.data.senderId == request.auth.uid &&
+                       request.resource.data.restaurantId is string &&
+                       request.resource.data.read == false &&
+                       request.resource.data.actionUrl == '/business-dashboard?tab=feedback_inbox' &&
+                       request.resource.data.keys().hasOnly([
+                         'restaurantId', 'type', 'title', 'message', 'actionUrl',
+                         'read', 'createdAt', 'senderId', 'fromUserName', 'fromUserAvatar'
+                       ]));
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
