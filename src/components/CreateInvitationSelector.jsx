@@ -26,7 +26,7 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
         if (type === 'public') {
             navigate('/create', { state: navigationState });
         } else if (type === 'private') {
-            const quotaInfo = canCreatePrivateInvitation();
+            const quotaInfo = canCreatePrivateInvitation({ type: 'private' });
             if (quotaInfo.canCreate) {
                 navigate('/create-private', { state: navigationState });
             } else {
@@ -34,7 +34,7 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
                 navigate('/pricing');
             }
         } else if (type === 'dating') {
-            const quotaInfo = canCreatePrivateInvitation();
+            const quotaInfo = canCreatePrivateInvitation({ type: 'dating' });
             if (quotaInfo.canCreate) {
                 navigate('/create-dating', { state: navigationState });
             } else {

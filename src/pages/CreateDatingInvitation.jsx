@@ -29,7 +29,7 @@ const CreateDatingInvitation = () => {
     const { showToast } = useToast();
     const { currentUser: authUser, userProfile } = useAuth();
 
-    const quotaInfo = canCreatePrivateInvitation();
+    const quotaInfo = canCreatePrivateInvitation({ type: 'dating' });
 
     const [mediaData, setMediaData] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
