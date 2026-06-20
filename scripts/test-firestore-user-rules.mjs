@@ -44,6 +44,12 @@ try {
         paidCredits: 9999,
     }));
     await assertFails(updateDoc(doc(aliceDb, 'users/alice'), {
+        emailVerified: true,
+    }));
+    await assertSucceeds(updateDoc(doc(aliceDb, 'users/alice'), {
+        emailVerified: false,
+    }));
+    await assertFails(updateDoc(doc(aliceDb, 'users/alice'), {
         role: 'admin',
     }));
     await assertFails(updateDoc(doc(aliceDb, 'users/alice'), {
@@ -85,6 +91,18 @@ try {
         price: 29,
     }));
 
+    const aliceVerifiedDb = testEnv.authenticatedContext('alice', {
+        email: 'alice@example.com',
+        email_verified: true,
+    }).firestore();
+    await assertSucceeds(updateDoc(doc(aliceVerifiedDb, 'users/alice'), {
+        emailVerified: true,
+        authEmail: 'alice@example.com',
+    }));
+    await assertFails(updateDoc(doc(aliceVerifiedDb, 'users/alice'), {
+        authEmail: 'attacker@example.com',
+    }));
+
     const businessDb = testEnv.authenticatedContext('businessOwner').firestore();
     await assertSucceeds(setDoc(doc(businessDb, 'users/businessOwner'), {
         uid: 'businessOwner',
@@ -115,6 +133,24 @@ try {
         published: true,
     }));
 
+    await assertFails(setDoc(doc(aliceDb, 'partner_notifications/spoofed-feedback'), {
+        restaurantId: 'paidBiz',
+        type: 'business_feedback',
+        title: 'Spoofed',
+        message: 'Fake',
+        senderId: 'mallory',
+    }));
+    await assertSucceeds(setDoc(doc(aliceDb, 'partner_notifications/self-feedback'), {
+        restaurantId: 'paidBiz',
+        type: 'business_feedback',
+        title: 'New Suggestion',
+        message: 'From: +15555555555',
+        actionUrl: '/business-dashboard?tab=feedback_inbox',
+        read: false,
+        senderId: 'alice',
+        fromUserName: 'Alice',
+    }));
+
     const freeBizDb = testEnv.authenticatedContext('freeBiz').firestore();
     await assertFails(setDoc(doc(freeBizDb, 'offers/free-offer'), {
         partnerId: 'freeBiz',
@@ -125,6 +161,19 @@ try {
     await assertSucceeds(setDoc(doc(paidBizDb, 'offers/paid-offer'), {
         partnerId: 'paidBiz',
         title: 'Paid offer',
+    }));
+    await assertFails(updateDoc(doc(paidBizDb, 'offers/paid-offer'), {
+        partnerId: 'freeBiz',
+    }));
+    await testEnv.withSecurityRulesDisabled(async (adminContext) => {
+        const adminDb = adminContext.firestore();
+        await updateDoc(doc(adminDb, 'users/paidBiz'), {
+            offerCredits: 0,
+            subscriptionTier: 'free',
+        });
+    });
+    await assertFails(updateDoc(doc(paidBizDb, 'offers/paid-offer'), {
+        title: 'No longer paid',
     }));
 
     console.log('firestore critical security rules assertions passed');

@@ -139,14 +139,23 @@ service cloud.firestore {
              request.resource.data.get('accountType', 'user') in ['user', 'business', 'partner'];
     }
 
+    function authEmailFieldsMatchToken() {
+      return (!request.resource.data.keys().hasAny(['emailVerified']) ||
+              request.resource.data.emailVerified == request.auth.token.get('email_verified', false)) &&
+             (!request.resource.data.keys().hasAny(['authEmail']) ||
+              request.resource.data.authEmail == request.auth.token.get('email', null));
+    }
+
     function isSafeOwnerUserCreate(userId) {
       return isOwner(userId) &&
              hasSafeInitialUserRole() &&
+             authEmailFieldsMatchToken() &&
              hasNoServerManagedUserFields();
     }
 
     function isSafeOwnerUserUpdate() {
       return changesNoServerManagedUserFields() &&
+             authEmailFieldsMatchToken() &&
              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType']);
     }
 
@@ -155,6 +164,27 @@ service cloud.firestore {
       let tier = partner.get('subscriptionTier', 'free');
       return tier in ['professional', 'elite', 'paid'] ||
              partner.get('offerCredits', 0) > 0;
+    }
+
+    function isSafeFeedbackNotification() {
+      return isSignedIn() &&
+             request.resource.data.type == 'business_feedback' &&
+             request.resource.data.senderId == request.auth.uid &&
+             request.resource.data.restaurantId is string &&
+             request.resource.data.keys().hasOnly([
+               'restaurantId', 'type', 'title', 'message', 'actionUrl',
+               'read', 'createdAt', 'senderId', 'fromUserName', 'fromUserAvatar'
+             ]) &&
+             request.resource.data.title is string &&
+             request.resource.data.title.size() <= 120 &&
+             request.resource.data.message is string &&
+             request.resource.data.message.size() <= 500 &&
+             (!request.resource.data.keys().hasAny(['actionUrl']) ||
+              request.resource.data.actionUrl is string) &&
+             (!request.resource.data.keys().hasAny(['fromUserName']) ||
+              request.resource.data.fromUserName is string) &&
+             (!request.resource.data.keys().hasAny(['fromUserAvatar']) ||
+              request.resource.data.fromUserAvatar is string);
     }
     
     // ============================================
@@ -175,20 +205,24 @@ service cloud.firestore {
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        request.resource.data.role == 'user' &&
+                       authEmailFieldsMatchToken() &&
                        hasNoServerManagedUserFields();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']) &&
+                       authEmailFieldsMatchToken() &&
                        hasNoServerManagedUserFields();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
       allow update: if isOwner(userId) &&
                        isBusinessSignupCompletionFromIntent() &&
+                       authEmailFieldsMatchToken() &&
                        hasNoServerManagedUserFields();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
       allow update: if isOwner(userId) &&
                        isUpgradingStubToBusinessProfile() &&
+                       authEmailFieldsMatchToken() &&
                        hasNoServerManagedUserFields();
       allow update: if isOwner(userId) && isSafeOwnerUserUpdate();
       allow update: if isAdmin();
@@ -487,9 +521,7 @@ service cloud.firestore {
       allow create: if (isSignedIn() &&
                       request.resource.data.senderId == request.auth.uid &&
                       request.resource.data.restaurantId == request.auth.uid) ||
-                      (isSignedIn() &&
-                       request.resource.data.type == 'business_feedback' &&
-                       request.resource.data.restaurantId is string);
+                      isSafeFeedbackNotification();
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
@@ -614,6 +646,8 @@ service cloud.firestore {
       // Update: Must be partner, own the offer, and cannot modify protected fields
       allow update: if isPartner() && 
                        resource.data.partnerId == request.auth.uid &&
+                       request.resource.data.partnerId == resource.data.partnerId &&
+                       hasPaidBusinessOfferAccess(request.auth.uid) &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['platform_commission', 'global_status']);
       
@@ -626,7 +660,10 @@ service cloud.firestore {
       allow create: if isPartner() &&
                        request.resource.data.partnerId == request.auth.uid &&
                        hasPaidBusinessOfferAccess(request.auth.uid);
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
+      allow update: if isPartner() &&
+                       resource.data.partnerId == request.auth.uid &&
+                       request.resource.data.partnerId == resource.data.partnerId &&
+                       hasPaidBusinessOfferAccess(request.auth.uid);
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
 
@@ -636,7 +673,10 @@ service cloud.firestore {
       allow create: if isPartner() &&
                        request.resource.data.restaurantId == request.auth.uid &&
                        hasPaidBusinessOfferAccess(request.auth.uid);
-      allow update: if isPartner() && resource.data.restaurantId == request.auth.uid;
+      allow update: if isPartner() &&
+                       resource.data.restaurantId == request.auth.uid &&
+                       request.resource.data.restaurantId == resource.data.restaurantId &&
+                       hasPaidBusinessOfferAccess(request.auth.uid);
       allow delete: if (isPartner() && resource.data.restaurantId == request.auth.uid) || isAdmin();
     }
     
@@ -691,8 +731,13 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        request.resource.data.partnerId == request.auth.uid &&
                        hasPaidBusinessOfferAccess(request.auth.uid);
-      allow update, delete: if isSignedIn() &&
-                               (resource.data.partnerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() &&
+                      ((resource.data.partnerId == request.auth.uid &&
+                        request.resource.data.partnerId == resource.data.partnerId &&
+                        hasPaidBusinessOfferAccess(request.auth.uid)) ||
+                       isAdmin());
+      allow delete: if isSignedIn() &&
+                      (resource.data.partnerId == request.auth.uid || isAdmin());
 
       // Any signed-in user can like, comment, or repost (social interactions only)
       allow update: if isSignedIn() &&
