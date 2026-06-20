@@ -52,7 +52,8 @@ try {
         },
     }));
 
-    await testEnv.withSecurityRulesDisabled(async (adminDb) => {
+    await testEnv.withSecurityRulesDisabled(async (adminContext) => {
+        const adminDb = adminContext.firestore();
         await setDoc(doc(adminDb, 'users/mallory'), {
             uid: 'mallory',
             role: 'admin',
