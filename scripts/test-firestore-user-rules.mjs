@@ -77,6 +77,12 @@ try {
             offerCredits: 1,
             display_name: 'Paid Biz',
         });
+        await setDoc(doc(adminDb, 'users/creditedUser'), {
+            uid: 'creditedUser',
+            role: 'user',
+            offerCredits: 1,
+            display_name: 'Credited User',
+        });
     });
 
     const malloryDb = testEnv.authenticatedContext('mallory').firestore();
@@ -174,6 +180,27 @@ try {
     });
     await assertFails(updateDoc(doc(paidBizDb, 'offers/paid-offer'), {
         title: 'No longer paid',
+    }));
+
+    const creditedUserDb = testEnv.authenticatedContext('creditedUser').firestore();
+    await assertFails(setDoc(doc(creditedUserDb, 'featured_posts/user-post'), {
+        partnerId: 'creditedUser',
+        title: 'Not a business',
+    }));
+
+    await testEnv.withSecurityRulesDisabled(async (adminContext) => {
+        const adminDb = adminContext.firestore();
+        await updateDoc(doc(adminDb, 'users/paidBiz'), {
+            offerCredits: 1,
+        });
+    });
+    await assertSucceeds(setDoc(doc(paidBizDb, 'featured_posts/paid-post'), {
+        partnerId: 'paidBiz',
+        title: 'Paid featured post',
+        likes: [],
+    }));
+    await assertFails(updateDoc(doc(aliceDb, 'featured_posts/paid-post'), {
+        likes: ['alice'],
     }));
 
     console.log('firestore critical security rules assertions passed');

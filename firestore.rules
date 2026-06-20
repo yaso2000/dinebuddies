@@ -728,7 +728,7 @@ service cloud.firestore {
       allow read: if true;
 
       // Only the owning partner can create/update/delete their own posts
-      allow create: if isSignedIn() &&
+      allow create: if isPartner() &&
                        request.resource.data.partnerId == request.auth.uid &&
                        hasPaidBusinessOfferAccess(request.auth.uid);
       allow update: if isSignedIn() &&
@@ -739,10 +739,8 @@ service cloud.firestore {
       allow delete: if isSignedIn() &&
                       (resource.data.partnerId == request.auth.uid || isAdmin());
 
-      // Any signed-in user can like, comment, or repost (social interactions only)
-      allow update: if isSignedIn() &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['likes', 'reposts', 'comments']);
+      // Social counters/comments must be updated by trusted backend code; direct client overwrites
+      // can erase engagement data on public paid posts.
     }
 
     // ============================================
