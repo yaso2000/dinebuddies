@@ -550,13 +550,10 @@ service cloud.firestore {
 
     match /partner_notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
-      // Client-side create is self-only; cross-user partner notifications must use trusted backend callable, unless it's a feedback alert.
+      // Client-side create is self-only; cross-user partner notifications must use trusted backend callables.
       allow create: if isSignedIn() &&
-                      (
-                        (request.resource.data.senderId == request.auth.uid &&
-                         request.resource.data.restaurantId == request.auth.uid) ||
-                        (request.resource.data.type == 'business_feedback')
-                      );
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.restaurantId == request.auth.uid;
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
