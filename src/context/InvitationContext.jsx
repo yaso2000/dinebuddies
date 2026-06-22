@@ -19,9 +19,7 @@ import {
     startAfter,
     arrayUnion,
     arrayRemove,
-    increment,
-    setDoc,
-    writeBatch
+    setDoc
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -956,11 +954,7 @@ export const InvitationProvider = ({ children }) => {
                     const hostId = invData.hostId || invData.author?.id;
                     const attendees = invData.joined || [];
                     if (hostId && !invData.rewardsDistributed) {
-                        const batch = writeBatch(db);
-                        batch.update(doc(db, 'users', hostId), { reputation: increment(10) });
-                        attendees.forEach(a => { if (a !== hostId) batch.update(doc(db, 'users', a), { reputation: increment(5) }); });
                         updateData.rewardsDistributed = true;
-                        await batch.commit();
                     }
                 }
             }

@@ -250,7 +250,6 @@ const BusinessSignup = () => {
                 businessProfileSetupPending: false,
                 businessInfo,
                 followersCount: 0,
-                ownedCommunities: [],
             });
 
             try {
