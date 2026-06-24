@@ -4,7 +4,9 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const admin = require('firebase-admin');
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
@@ -256,12 +258,11 @@ async function assertAdminContext(context) {
     }
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
-    const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
+    const requesterEmailVerified = context.auth.token.email_verified === true;
+    const isSuperOwner =
+        SUPER_OWNER_UIDS.includes(requesterUid) ||
+        (requesterEmailVerified && SUPER_OWNER_EMAILS.includes(requesterEmail));
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
-
-    const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }

@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { resolveCheckoutItem } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,13 +22,14 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { priceId, planId } = data;
     const userId = context.auth.uid;
+    const checkoutItem = resolveCheckoutItem({ priceId, planId });
 
-    if (!priceId) {
+    if (!checkoutItem) {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Unknown checkout item'
         );
     }
 
@@ -54,25 +56,37 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             }, { merge: true });
         }
 
-        // إنشاء Checkout Session
-        const session = await stripe.checkout.sessions.create({
+        const metadata = {
+            userId,
+            planId: checkoutItem.id,
+            planName: checkoutItem.name,
+            purchaseType: checkoutItem.type,
+            tier: checkoutItem.tier || '',
+            privateCredits: String(checkoutItem.privateCredits || 0),
+            offerCredits: String(checkoutItem.offerCredits || 0),
+        };
+
+        const sessionParams = {
             customer: customerId,
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: checkoutItem.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+            mode: checkoutItem.mode,
+            success_url: `${data.successUrl}${String(data.successUrl || '').includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: data.cancelUrl,
-            metadata: {
-                userId: userId,
-                planId: planId,
-                planName: planName
-            }
-        });
+            metadata,
+        };
+
+        if (checkoutItem.mode === 'subscription') {
+            sessionParams.subscription_data = { metadata };
+        }
+
+        // إنشاء Checkout Session
+        const session = await stripe.checkout.sessions.create(sessionParams);
 
         console.log(`✅ Checkout session created for user ${userId}: ${session.id}`);
 
