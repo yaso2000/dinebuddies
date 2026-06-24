@@ -100,7 +100,6 @@ import {
     deleteDoc,
     serverTimestamp,
     onSnapshot,
-    collection,
 } from 'firebase/firestore';
 
 const AuthContext = createContext();

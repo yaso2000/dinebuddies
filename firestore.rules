@@ -16,21 +16,21 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() &&
-             (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin');
+             (request.auth.token.get('admin', false) == true ||
+              request.auth.token.get('role', '') == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
     // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
     function isSuperOwner() {
-      return isSignedIn() && request.auth.token.superOwner == true;
+      return isSignedIn() && request.auth.token.get('superOwner', false) == true;
     }
 
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
     function isPartner() {
       return isSignedIn() &&
-             (request.auth.token.partner == true ||
-              request.auth.token.role == 'business' ||
+             (request.auth.token.get('partner', false) == true ||
+              request.auth.token.get('role', '') == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
@@ -83,7 +83,7 @@ service cloud.firestore {
     // 'user' (race with profile bootstrap). Allow one completion write to role:business + businessInfo.
     function isBusinessSignupCompletionFromIntent() {
       return resource.data.get('registrationIntent', '') == 'business' &&
-             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+             (request.resource.data.get('role', '') == 'business' || request.resource.data.get('role', '') == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
 
@@ -97,7 +97,7 @@ service cloud.firestore {
 
     function isUpgradingStubToBusinessProfile() {
       return !hasMeaningfulBusinessInfo() &&
-             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+             (request.resource.data.get('role', '') == 'business' || request.resource.data.get('role', '') == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
 
@@ -150,13 +150,18 @@ service cloud.firestore {
 
     function hasProtectedUserFieldsOnCreate() {
       return request.resource.data.keys().hasAny(protectedUserFields()) ||
-             request.resource.data.get('businessInfo', {}).keys().hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes', 'lastAdminUpdate']);
+             (request.resource.data.get('businessInfo', {}) is map &&
+              request.resource.data.get('businessInfo', {}).keys().hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes', 'lastAdminUpdate']));
     }
 
     function changesProtectedUserFields() {
+      let beforeBusinessInfo = resource.data.get('businessInfo', {});
+      let afterBusinessInfo = request.resource.data.get('businessInfo', {});
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedUserFields()) ||
-             request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
-               .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes', 'lastAdminUpdate']);
+             (beforeBusinessInfo is map &&
+              afterBusinessInfo is map &&
+              afterBusinessInfo.diff(beforeBusinessInfo).affectedKeys()
+                .hasAny(['customLimits', 'customLimitsExpiry', 'adminNotes', 'lastAdminUpdate']));
     }
 
     function isSafeSelfUserCreate() {
@@ -203,12 +208,12 @@ service cloud.firestore {
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user' &&
+                       request.resource.data.get('role', '') == 'user' &&
                        !changesProtectedUserFields();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+                       (request.resource.data.get('role', '') == 'business' || request.resource.data.get('role', '') == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']) &&
                        !changesProtectedUserFields();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
@@ -224,6 +229,8 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['businessInfo']) &&
+                       request.resource.data.get('businessInfo', {}) is map &&
+                       resource.data.get('businessInfo', {}) is map &&
                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
                          .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
       
@@ -368,14 +375,13 @@ service cloud.firestore {
       // Any signed-in user can create (author must be self)
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid) &&
+                        request.resource.data.get(['author', 'id'], '') == request.auth.uid) &&
                        privateInvitationCreateStaysDraft();
 
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
                        (((resource.data.authorId == request.auth.uid ||
-                          (resource.data.author != null &&
-                           resource.data.author.id == request.auth.uid)) &&
+                          resource.data.get(['author', 'id'], '') == request.auth.uid) &&
                          privateInvitationUpdateDoesNotPublish()) ||
                         (request.auth.uid in resource.data.invitedFriends &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
