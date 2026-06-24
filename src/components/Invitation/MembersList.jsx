@@ -2,101 +2,102 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '../UserAvatar';
+import { AppText } from "../base";
 
 const MembersList = ({ joined, author, joinedMembersData, spotsLeft }) => {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
+  const { t } = useTranslation();
+  const navigate = useNavigate();
 
-    // Ensure joinedMembersData is an object to prevent errors
-    const safeMembersData = joinedMembersData || {};
+  // Ensure joinedMembersData is an object to prevent errors
+  const safeMembersData = joinedMembersData || {};
 
-    return (
-        <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
-            <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-main)', fontWeight: '800' }}>
+  return (
+    <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
+            <AppText as="h4" style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-main)', fontWeight: '800' }}>
                 {t('members_list_title', 'Who\'s Coming')} ({joined.length + 1})
-            </h4>
+            </AppText>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                 {/* Host First */}
                 <div style={{ textAlign: 'center', position: 'relative' }}>
                     <div style={{
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '50%',
-                        border: '2px solid var(--luxury-gold)',
-                        padding: '2px',
-                        position: 'relative',
-                        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
-                    }}>
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            border: '2px solid var(--luxury-gold)',
+            padding: '2px',
+            position: 'relative',
+            boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+          }}>
                         <UserAvatar
-                            user={author}
-                            alt={author?.name}
-                            title={`${author?.name} (${t('host', { defaultValue: 'Host' })})`}
-                            ringColorOverride="var(--luxury-gold, #fbbf24)"
-                            style={{ width: '100%', height: '100%' }}
-                        />
+              user={author}
+              alt={author?.name}
+              title={`${author?.name} (${t('host', { defaultValue: 'Host' })})`}
+              ringColorOverride="var(--luxury-gold, #fbbf24)"
+              style={{ width: '100%', height: '100%' }} />
+            
                         <div style={{
-                            position: 'absolute',
-                            bottom: '-6px',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            background: 'var(--luxury-gold)',
-                            color: 'black',
-                            fontSize: '0.6rem',
-                            fontWeight: '900',
-                            padding: '2px 6px',
-                            borderRadius: '6px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                        }}>{t('host_badge')}</div>
+              position: 'absolute',
+              bottom: '-6px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'var(--luxury-gold)',
+              color: 'black',
+              fontSize: '0.6rem',
+              fontWeight: '900',
+              padding: '2px 6px',
+              borderRadius: '6px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }}>{t('host_badge')}</div>
                     </div>
-                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-main)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{author?.name || t('host')}</span>
+                    <AppText as="span" style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-main)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{author?.name || t('host')}</AppText>
                 </div>
 
                 {/* Joined Members */}
-                {joined.map(userId => {
-                    const member = safeMembersData[userId] || { name: t('member'), avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
-                    return (
-                        <div key={userId} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate(`/profile/${userId}`)}>
+                {joined.map((userId) => {
+          const member = safeMembersData[userId] || { name: t('member'), avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}` };
+          return (
+            <div key={userId} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate(`/profile/${userId}`)}>
                             <div
-                                style={{ width: '56px', height: '56px', transition: 'transform 0.2s' }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                            >
+                style={{ width: '56px', height: '56px', transition: 'transform 0.2s' }}
+                onMouseEnter={(e) => {e.currentTarget.style.transform = 'scale(1.05)';}}
+                onMouseLeave={(e) => {e.currentTarget.style.transform = 'scale(1)';}}>
+                
                                 <UserAvatar
-                                    user={member}
-                                    alt={member.name}
-                                    title={member.name}
-                                    style={{ width: '100%', height: '100%' }}
-                                />
+                  user={member}
+                  alt={member.name}
+                  title={member.name}
+                  style={{ width: '100%', height: '100%' }} />
+                
                             </div>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</span>
-                        </div>
-                    );
-                })}
+                            <AppText as="span" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '8px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</AppText>
+                        </div>);
+
+        })}
 
                 {/* Empty Spots */}
-                {[...Array(Math.max(0, parseInt(spotsLeft) || 0))].map((_, i) => (
-                    <div key={i} style={{ textAlign: 'center' }}>
+                {[...Array(Math.max(0, parseInt(spotsLeft) || 0))].map((_, i) =>
+        <div key={i} style={{ textAlign: 'center' }}>
                         <div style={{
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '50%',
-                            border: '2px dashed var(--border-color)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--text-muted)',
-                            fontSize: '1.2rem',
-                            opacity: 0.3,
-                            background: 'rgba(255,255,255,0.02)'
-                        }}>
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            border: '2px dashed var(--border-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-muted)',
+            fontSize: '1.2rem',
+            opacity: 0.3,
+            background: 'rgba(255,255,255,0.02)'
+          }}>
                             +
                         </div>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '8px', opacity: 0.5 }}>{t('open')}</span>
+                        <AppText as="span" style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '8px', opacity: 0.5 }}>{t('open')}</AppText>
                     </div>
-                ))}
+        )}
             </div>
-        </div>
-    );
+        </div>);
+
 };
 
 export default MembersList;

@@ -1,0 +1,23 @@
+[
+  {
+    "origin": [
+      "https://www.dinebuddies.com",
+      "https://dinebuddies.com",
+      "https://dinebuddies.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:5176",
+      "http://localhost:3000",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5176"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Accept-Ranges",
+      "Access-Control-Allow-Origin"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

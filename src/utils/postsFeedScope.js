@@ -2,6 +2,7 @@ import { asUidArray } from './userSocialLists';
 import { authorIdFromPost } from './feedSocialGraph';
 
 const LOCAL_RADIUS_KM = 50;
+const COUNTRY_RADIUS_KM = 500;
 
 export function haversineKm(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -46,6 +47,12 @@ function cityMatches(postCityNorm, userCityNorm) {
     return postCityNorm === userCityNorm || postCityNorm.includes(userCityNorm);
 }
 
+function countryMatches(postCountryNorm, userCountryNorm, postCountryCode, userCountryCode) {
+    if (userCountryCode && postCountryCode && userCountryCode === postCountryCode) return true;
+    if (userCountryNorm && postCountryNorm && postCountryNorm === userCountryNorm) return true;
+    return false;
+}
+
 /**
  * @param {'all' | 'following'} audienceScope
  */
@@ -58,39 +65,60 @@ export function postMatchesAudienceScope(post, audienceScope, followingSet, view
 }
 
 /**
- * @param {'global' | 'local'} geoScope
+ * @param {'global' | 'country' | 'city' | 'local'} geoScope — `local` kept for legacy callers (= city)
  */
-export function postMatchesGeoScope(post, geoScope, { userLocation, userCityNorm, userCountryNorm, viewerUid }) {
-    if (geoScope !== 'local') return true;
+export function postMatchesGeoScope(post, geoScope, {
+    userLocation,
+    userCityNorm,
+    userCountryNorm,
+    userCountryCode = '',
+    viewerUid
+}) {
+    const scope = geoScope === 'local' ? 'city' : geoScope;
+    if (scope === 'global') return true;
 
     const authorId = authorIdFromPost(post);
     if (viewerUid && authorId === viewerUid) return true;
 
-    const coords = coordsFromPost(post);
-    if (userLocation && coords) {
-        const distance = haversineKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
-        if (distance < LOCAL_RADIUS_KM) return true;
-    }
-
     const postCity = normalizePlaceLabel(post?.city || post?.author?.city);
-    if (userCityNorm) {
-        if (cityMatches(postCity, userCityNorm)) return true;
-        const locationText = normalizePlaceLabel(post?.location);
-        if (locationText && (locationText === userCityNorm || locationText.includes(userCityNorm))) {
-            return true;
+    const postCountry = normalizePlaceLabel(post?.country || post?.author?.country);
+    const locationText = normalizePlaceLabel(post?.location);
+    const postCountryCode = String(post?.countryCode || post?.author?.countryCode || '')
+        .trim()
+        .toLowerCase();
+    const viewerCountryCode = String(userCountryCode || '').trim().toLowerCase();
+    const coords = coordsFromPost(post);
+
+    if (scope === 'city') {
+        if (userCityNorm) {
+            if (cityMatches(postCity, userCityNorm)) return true;
+            if (locationText && (locationText === userCityNorm || locationText.includes(userCityNorm))) {
+                return true;
+            }
+        }
+        if (userLocation && coords) {
+            const distance = haversineKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
+            if (distance < LOCAL_RADIUS_KM) return true;
         }
         return false;
     }
 
-    const postCountry = normalizePlaceLabel(post?.country || post?.author?.country);
-    if (userCountryNorm && postCountry && postCountry === userCountryNorm) return true;
+    if (scope === 'country') {
+        if (countryMatches(postCountry, userCountryNorm, postCountryCode, viewerCountryCode)) return true;
+        if (userCountryNorm && locationText && locationText.includes(userCountryNorm)) return true;
+        if (userLocation && coords) {
+            const distance = haversineKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
+            if (distance < COUNTRY_RADIUS_KM) return true;
+        }
+        return false;
+    }
 
-    return false;
+    return true;
 }
 
 /**
  * @param {object[]} posts
- * @param {{ geoScope: 'global'|'local', audienceScope: 'all'|'following', userLocation?: {lat:number,lng:number}|null, userCityNorm?: string, userCountryNorm?: string, followingSet: Set<string>, viewerUid?: string }} opts
+ * @param {{ geoScope: 'global'|'country'|'city'|'local', audienceScope: 'all'|'following', userLocation?: {lat:number,lng:number}|null, userCityNorm?: string, userCountryNorm?: string, userCountryCode?: string, followingSet: Set<string>, viewerUid?: string }} opts
  */
 export function filterPostsByFeedScope(posts, opts) {
     const {
@@ -99,6 +127,7 @@ export function filterPostsByFeedScope(posts, opts) {
         userLocation = null,
         userCityNorm = '',
         userCountryNorm = '',
+        userCountryCode = '',
         followingSet,
         viewerUid,
     } = opts;
@@ -106,6 +135,12 @@ export function filterPostsByFeedScope(posts, opts) {
     return (posts || []).filter(
         (post) =>
             postMatchesAudienceScope(post, audienceScope, followingSet, viewerUid) &&
-            postMatchesGeoScope(post, geoScope, { userLocation, userCityNorm, userCountryNorm, viewerUid })
+            postMatchesGeoScope(post, geoScope, {
+                userLocation,
+                userCityNorm,
+                userCountryNorm,
+                userCountryCode,
+                viewerUid
+            })
     );
 }

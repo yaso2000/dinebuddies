@@ -211,8 +211,8 @@ export function parseAiGenerateBody(body) {
             return { ok: false, error: 'subType is required for invitation postType' };
         }
 
-        if (subType === 'date') {
-            const datingCtx = parseDatingTextContext(record);
+        if (subType === 'private') {
+            const datingCtx = parsePrivateTextContext(record);
             if (datingCtx.ok === false) {
                 return datingCtx;
             }
@@ -303,7 +303,7 @@ function pickVenueDetails(value) {
  * Invitee is optional during create — chosen later on the preview/send step.
  * @param {Record<string, unknown>} record
  */
-function parseDatingTextContext(record) {
+function parsePrivateTextContext(record) {
     const inviteeId = pickOptionalString(record.inviteeId);
     const date = pickOptionalString(record.date);
     const time = pickOptionalString(record.time);
@@ -329,7 +329,7 @@ function parseDatingTextContext(record) {
     if (missing.length > 0) {
         return {
             ok: false,
-            error: 'dating_context_incomplete',
+            error: 'private_context_incomplete',
             missing,
             message: `Missing required dating fields: ${missing.join(', ')}`,
         };

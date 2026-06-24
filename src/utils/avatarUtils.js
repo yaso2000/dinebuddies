@@ -128,16 +128,87 @@ export const getSafeAvatar = (userData) => {
         userData.partnerLogo,
     ];
 
+    const fallbackName =
+        userData.display_name || userData.displayName || userData.nickname || userData.name || '';
+
     for (const url of candidates) {
         if (url && typeof url === 'string' && url.length > 10) {
             if (url.startsWith('http') || url.startsWith('data:image')) {
+                if (isUiAvatarsUrl(url)) {
+                    return normalizeAvatarDisplayUrl(url, fallbackName);
+                }
                 if (!isInvalidDirectImageUrl(url)) return url;
             }
         }
     }
 
-    return getDefaultAvatar(userData.display_name || userData.displayName || userData.nickname);
+    return getDefaultAvatar(fallbackName);
 };
+
+export function isUiAvatarsUrl(url) {
+    return typeof url === 'string' && url.includes('ui-avatars.com');
+}
+
+export function isGeneratedAvatarUrl(url) {
+    if (!url || typeof url !== 'string') return true;
+    if (url.startsWith('data:image/svg+xml')) return true;
+    if (isUiAvatarsUrl(url)) return true;
+    if (url.includes('dicebear')) return true;
+    return false;
+}
+
+/**
+ * Pick the best author avatar for feed cards: live profile → fetched user → post snapshot.
+ * Skips generated initials when a persisted photo exists on the post snapshot.
+ */
+export function resolveFeedAuthorAvatar(post, userData, userProfile, authorId, currentUserUid) {
+    const snapshotAvatar = getSafeAvatar(post?.author || post);
+    const liveAvatar =
+        currentUserUid && authorId && currentUserUid === authorId && userProfile
+            ? getSafeAvatar(userProfile)
+            : null;
+    const fetchedAvatar = userData ? getSafeAvatar(userData) : null;
+
+    for (const candidate of [liveAvatar, fetchedAvatar, snapshotAvatar]) {
+        if (candidate && !isGeneratedAvatarUrl(candidate)) return candidate;
+    }
+
+    const fallbackName =
+        post?.author?.name ||
+        post?.displayName ||
+        post?.userName ||
+        userData?.displayName ||
+        userData?.display_name ||
+        'User';
+
+    return snapshotAvatar || fetchedAvatar || liveAvatar || getDefaultAvatar(fallbackName);
+}
+
+/** Inline SVG avatar — no external fetch, safe for html2canvas / CORS. */
+export function buildInitialsAvatarDataUri(name = '', { size = 150, background = '7c3aed' } = {}) {
+    const label = String(name || 'U').trim();
+    const initials =
+        label
+            .split(/\s+/)
+            .map((part) => part[0])
+            .filter(Boolean)
+            .join('')
+            .toUpperCase()
+            .slice(0, 2) || 'U';
+    const bg = String(background).replace('#', '');
+    const fontSize = Math.round(size * 0.37);
+    const safeInitials = initials.replace(/[<>&"']/g, '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect fill="#${bg}" width="${size}" height="${size}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="#fff">${safeInitials}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+export function normalizeAvatarDisplayUrl(url, fallbackName = '') {
+    if (!url || typeof url !== 'string') return url;
+    if (!isUiAvatarsUrl(url)) return url;
+    const match = url.match(/[?&]name=([^&]+)/);
+    const name = match ? decodeURIComponent(match[1]) : fallbackName;
+    return buildInitialsAvatarDataUri(name);
+}
 
 /**
  * Returns a consistent default avatar (Initial-based or silhouette)
@@ -145,8 +216,7 @@ export const getSafeAvatar = (userData) => {
 export const getDefaultAvatar = (name = '') => {
     const label = name == null ? '' : String(name).trim();
     if (label && label !== 'User' && label !== 'Member') {
-        const initials = label.split(/\s+/).map((n) => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2);
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(label)}&background=7c3aed&color=fff&bold=true&size=150`;
+        return buildInitialsAvatarDataUri(label);
     }
 
     return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';

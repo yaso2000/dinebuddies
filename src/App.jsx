@@ -27,12 +27,15 @@ import AffiliateSettingsPage from './pages/affiliate/AffiliateSettingsPage';
 import NotFound from './pages/NotFound';
 import AuthActionHandler from './pages/AuthActionHandler';
 import VerifyEmail from './pages/VerifyEmail';
-import PostDetails from './pages/PostDetails';
-import SearchPage from './pages/SearchPage';
+import InviteReceivedPage from './pages/InviteReceivedPage';
+import DiscoveryPage from './pages/DiscoveryPage';
+import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
+import UsersDirectory from './pages/UsersDirectory';
 import PostsFeed from './pages/PostsFeed';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
 const Profile = lazy(() => import('./pages/Profile'));
+const PostDetails = lazy(() => import('./pages/PostDetails'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
 const BusinessRankings = lazy(() => import('./pages/BusinessRankings'));
@@ -42,15 +45,17 @@ const AdminShell = lazy(() => import('./admin/shell/AdminShell'));
 const AdminUsersPage = lazy(() => import('./admin/pages/UsersPage'));
 const AdminCreditsPage = lazy(() => import('./admin/pages/CreditsPage'));
 const AdminInvitationsPage = lazy(() => import('./admin/pages/InvitationsPage'));
+const AdminPostsPage = lazy(() => import('./admin/pages/PostsPage'));
+const AdminBusinessesPage = lazy(() => import('./admin/pages/BusinessesPage'));
 const AdminSmartSenderPage = lazy(() => import('./admin/pages/SmartSenderPage'));
 const AdminReportsPage = lazy(() => import('./admin/pages/ReportsPage'));
 const AdminGooglePlacesImportPage = lazy(() => import('./admin/pages/GooglePlacesImportPage'));
+const AdminDemoUsersPage = lazy(() => import('./admin/pages/DemoUsersPage'));
 const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
 const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const ChatList = lazy(() => import('./pages/ChatList'));
 const Chat = lazy(() => import('./pages/Chat'));
-const MyCommunities = lazy(() => import('./pages/MyCommunities'));
 const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
@@ -60,15 +65,15 @@ const BusinessSignup = lazy(() => import('./components/BusinessSignup'));
 const BusinessOnboarding = lazy(() => import('./pages/BusinessOnboarding'));
 const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
 // Eager — lazy chunks here caused ChunkLoadError on mobile after deploy → feed redirect.
-import PrivateInvitationDetails from './pages/PrivateInvitationDetails';
-import PrivateInvitationPreview from './pages/PrivateInvitationPreview';
-import PublicPrivateInvitationJoin from './pages/PublicPrivateInvitationJoin';
+import SocialInvitationDetails from './pages/SocialInvitationDetails';
+import SocialInvitationPreview from './pages/SocialInvitationPreview';
+import PublicSocialInvitationJoin from './pages/PublicSocialInvitationJoin';
 const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
 const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
+import CreateSocialInvitation from './pages/CreateSocialInvitation';
 import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
-import CreateDatingInvitation from './pages/CreateDatingInvitation';
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateStory = lazy(() => import('./pages/CreateStory'));
@@ -104,9 +109,10 @@ import { InvitationProvider } from './context/InvitationContext';
 import { StripeProvider } from './context/StripeContext';
 import { ChatProvider } from './context/ChatContext';
 import { NotificationProvider } from './context/NotificationContext';
-
 // Guards & Utils
 import GuestBlockedRoute from './components/GuestBlockedRoute';
+import AuthRoutingGate from './components/AuthRoutingGate';
+import AccountShellGate from './components/AccountShellGate';
 import AdminRoute from './components/AdminRoute';
 import AppRouteLoading from './components/AppRouteLoading';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
@@ -182,6 +188,8 @@ function App() {
                                             <Route path="/business-signup" element={<LegacyBusinessSignupRedirect />} />
                                             <Route path="/auth/action" element={<AuthActionHandler />} />
                                             <Route path="/__/auth/action" element={<AuthActionHandler />} />
+
+                                            <Route element={<AuthRoutingGate />}>
                                             <Route path="/verify-email" element={<GuestBlockedRoute><VerifyEmail /></GuestBlockedRoute>} />
                                             <Route path="/complete-profile" element={<CompleteProfile />} />
 
@@ -190,19 +198,51 @@ function App() {
 
                                             <Route path="/" element={<HomeRouter />} />
 
+                                            <Route
+                                                path="/invite/received"
+                                                element={
+                                                    <GuestBlockedRoute>
+                                                        <InviteReceivedPage />
+                                                    </GuestBlockedRoute>
+                                                }
+                                            />
+
+                                            <Route
+                                                path="/search"
+                                                element={
+                                                    <GuestBlockedRoute>
+                                                        <DiscoveryPage />
+                                                    </GuestBlockedRoute>
+                                                }
+                                            />
+                                            <Route
+                                                path="/search/inbox"
+                                                element={
+                                                    <GuestBlockedRoute>
+                                                        <DiscoveryInboxPage />
+                                                    </GuestBlockedRoute>
+                                                }
+                                            />
+                                            <Route path="/discovery" element={<Navigate to="/search" replace />} />
+                                            <Route path="/discovery/inbox" element={<Navigate to="/search/inbox" replace />} />
+
                                             <Route element={<RouteSuspenseLayout />}>
+                                                <Route element={<AccountShellGate />}>
                                                 <Route element={<Layout />}>
                                                     {/* More specific paths first */}
                                                     <Route path="/post/featured/:featuredId" element={<PostDetails />} />
                                                     <Route path="/post/:postId" element={<PostDetails />} />
 
-                                                    <Route path="/invite/p/:token" element={<PublicPrivateInvitationJoin />} />
-                                                    <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
+                                                    <Route path="/invite/p/:token" element={<PublicSocialInvitationJoin />} />
+                                                    <Route path="/invitation/social/preview/:id" element={<SocialInvitationPreview />} />
+                                                    <Route path="/invitation/private/preview/:id" element={<SocialInvitationPreview />} />
+                                                    <Route path="/invitation/social/:id" element={<SocialInvitationDetails />} />
+                                                    <Route path="/invitation/social/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
                                                     <Route
                                                         path="/invitation/private/:id/chat"
                                                         element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>}
                                                     />
-                                                    <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
+                                                    <Route path="/invitation/private/:id" element={<SocialInvitationDetails />} />
                                                     <Route path="/invitation/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
                                                     <Route path="/invitation/:id" element={<InvitationDetails />} />
@@ -214,7 +254,7 @@ function App() {
 
                                                     <Route path="/business-dashboard" element={<GuestBlockedRoute><BusinessDashboard /></GuestBlockedRoute>} />
 
-                                                    <Route path="/search" element={<SearchPage />} />
+                                                    <Route path="/search/list" element={<UsersDirectory />} />
                                                     <Route path="/restaurants" element={<BusinessesDirectory />} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />
                                                     <Route path="/restaurant/:id" element={<RestaurantDetails />} />
@@ -241,8 +281,8 @@ function App() {
                                                     />
                                                     <Route path="/ai-design-studio" element={<GuestBlockedRoute><AiDesignStudio /></GuestBlockedRoute>} />
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
+                                                    <Route path="/create-social" element={<GuestBlockedRoute><CreateSocialInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
-                                                    <Route path="/create-dating" element={<GuestBlockedRoute><CreateDatingInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
                                                     <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />
                                                     <Route path="/create-story" element={<GuestBlockedRoute><CreateStory /></GuestBlockedRoute>} />
@@ -276,14 +316,20 @@ function App() {
                                                     <Route path="/payment-success" element={<GuestBlockedRoute><PaymentSuccess /></GuestBlockedRoute>} />
 
                                                     <Route path="/pricing" element={<PricingPage />} />
-                                                    <Route path="/communities" element={<GuestBlockedRoute><MyCommunities /></GuestBlockedRoute>} />
+                                                    <Route
+                                                        path="/communities"
+                                                        element={<Navigate to="/messages?tab=communities" replace />}
+                                                    />
                                                     <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<HomeInvitations />} />
 
                                                     <Route path="/admin/*" element={<AdminRoute><AdminShell /></AdminRoute>}>
                                                         <Route path="google-places" element={<AdminGooglePlacesImportPage />} />
+                                                        <Route path="demo-users" element={<AdminDemoUsersPage />} />
                                                         <Route path="users" element={<AdminUsersPage />} />
+                                                        <Route path="businesses" element={<AdminBusinessesPage />} />
+                                                        <Route path="posts" element={<AdminPostsPage />} />
                                                         <Route path="credits" element={<AdminCreditsPage />} />
                                                         <Route path="messaging" element={<AdminSmartSenderPage />} />
                                                         <Route path="invitations" element={<AdminInvitationsPage />} />
@@ -293,6 +339,8 @@ function App() {
                                                         <Route index element={<Navigate to="/admin/users" replace />} />
                                                     </Route>
                                                 </Route>
+                                                </Route>
+                                            </Route>
                                             </Route>
 
                                             <Route path="*" element={<NotFound />} />

@@ -1,6 +1,6 @@
-import { resolveOccasionCategoryId } from '../components/Invitations/privateCard/privateCardOccasionMap';
-import { resolveCardBackgroundUrl } from '../components/Invitations/privateCard/privateCardBackgrounds';
-import { getFirstDatingBackgroundFileUrl } from '../components/Invitations/datingCard/datingCardBackgrounds';
+import { resolveOccasionCategoryId } from '../components/Invitations/socialCard/socialCardOccasionMap';
+import { resolveCardBackgroundUrl } from '../components/Invitations/socialCard/socialCardBackgrounds';
+import { getFirstPrivateBackgroundFileUrl } from '../components/Invitations/privateCard/privateCardBackgrounds';
 
 const DEFAULT_ARCHIVE_FALLBACK =
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400';
@@ -32,8 +32,11 @@ export function pickPrivateInvitationArchiveThumbUrl(invitation) {
     if (direct) return direct;
     if (!invitation || typeof invitation !== 'object') return null;
 
-    if (invitation.type === 'Dating' && invitation.cardBackgroundId) {
-        const datingTpl = getFirstDatingBackgroundFileUrl(invitation.cardBackgroundId);
+    if (invitation.type === 'Private' && invitation.cardBackgroundId) {
+        const datingTpl = getFirstPrivateBackgroundFileUrl(
+            invitation.cardBackgroundId,
+            invitation.personalInviteCategory || 'dating'
+        );
         if (datingTpl) return datingTpl;
     }
 
@@ -50,17 +53,20 @@ export function pickPrivateInvitationArchiveThumbUrl(invitation) {
 export function isPrivateCollectionInvitation(inv) {
     return (
         inv?.privacy === 'private' ||
-        inv?.type === 'Private' ||
-        inv?.type === 'Dating'
+        inv?.type === 'Social' ||
+        inv?.type === 'Private'
     );
 }
 
 /** Profile / archive list thumbnail — card cover when available. */
 export function getInvitationListThumbSrc(inv, fallback = DEFAULT_ARCHIVE_FALLBACK) {
+    if (inv?.isArchived && inv.thumbnailUrl) return inv.thumbnailUrl;
+    if (inv?.thumbnailUrl) return inv.thumbnailUrl;
     if (isPrivateCollectionInvitation(inv)) {
         return pickPrivateInvitationArchiveThumbUrl(inv) || fallback;
     }
     return (
+        inv?.listThumbnailUrl ||
         inv?.customImage ||
         inv?.restaurantImage ||
         inv?.videoThumbnail ||

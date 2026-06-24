@@ -187,11 +187,20 @@ html {
 .header-avatar {
     position: relative;
     margin-right: 12px;
-}
-
-.header-avatar img {
     width: 40px;
     height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.header-avatar img,
+.header-avatar .user-avatar__img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -292,11 +301,25 @@ html {
 .message-avatar {
     width: 36px;
     height: 36px;
+    min-width: 36px;
+    min-height: 36px;
     border-radius: 50%;
     margin-inline-end: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     object-fit: cover;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.message-avatar .user-avatar__img,
+.message-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: cover;
+    border-radius: 50%;
 }
 
 .message-avatar-spacer {

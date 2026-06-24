@@ -33,6 +33,10 @@
   padding-bottom: var(--profile-shell-padding-bottom);
   background: var(--bg-body);
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* profile-content — main content area with horizontal padding */
@@ -69,6 +73,7 @@
   flex-shrink: 0;
   border-radius: 50%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .user-avatar__img {
@@ -329,6 +334,21 @@
   background: color-mix(in srgb, var(--primary) 20%, transparent);
   color: var(--primary);
   border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.profile-invitation-item__badge--archived {
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-muted);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 28%, transparent);
+}
+
+.profile-invitation-item--archived {
+  cursor: default;
+  opacity: 0.88;
+}
+
+.profile-invitation-item--archived:hover {
+  transform: none;
 }
 
 .profile-invitation-item__date {

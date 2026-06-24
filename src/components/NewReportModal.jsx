@@ -2,216 +2,217 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaTimes, FaFlag } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
+import { AppText, AppTextInput } from "./base";
 
 const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onSubmit }) => {
-    const { t, i18n } = useTranslation();
-    const { showToast } = useToast();
-    const [selectedReason, setSelectedReason] = useState('');
-    const [details, setDetails] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const { t, i18n } = useTranslation();
+  const { showToast } = useToast();
+  const [selectedReason, setSelectedReason] = useState('');
+  const [details, setDetails] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Report reasons based on type
-    const getReasons = () => {
-        const baseReasons = {
-            invitation: [
-                { id: 'inappropriate', label: t('inappropriate_content') },
-                { id: 'fraud', label: t('fraud_scam') },
-                { id: 'spam', label: t('spam') },
-                { id: 'fake', label: t('false_information') },
-                { id: 'other', label: t('other') }
-            ],
-            user: [
-                { id: 'harassment', label: t('harassment') },
-                { id: 'impersonation', label: t('impersonation') },
-                { id: 'inappropriate', label: t('inappropriate_content') },
-                { id: 'spam', label: t('spam_account') },
-                { id: 'other', label: t('other') }
-            ],
-            restaurant: [
-                { id: 'wrong_info', label: t('wrong_information') },
-                { id: 'closed', label: t('restaurant_closed') },
-                { id: 'poor_quality', label: t('poor_quality') },
-                { id: 'other', label: t('other') }
-            ]
-        };
+  // Report reasons based on type
+  const getReasons = () => {
+    const baseReasons = {
+      invitation: [
+      { id: 'inappropriate', label: t('inappropriate_content') },
+      { id: 'fraud', label: t('fraud_scam') },
+      { id: 'spam', label: t('spam') },
+      { id: 'fake', label: t('false_information') },
+      { id: 'other', label: t('other') }],
 
-        return baseReasons[reportType] || baseReasons.invitation;
+      user: [
+      { id: 'harassment', label: t('harassment') },
+      { id: 'impersonation', label: t('impersonation') },
+      { id: 'inappropriate', label: t('inappropriate_content') },
+      { id: 'spam', label: t('spam_account') },
+      { id: 'other', label: t('other') }],
+
+      restaurant: [
+      { id: 'wrong_info', label: t('wrong_information') },
+      { id: 'closed', label: t('restaurant_closed') },
+      { id: 'poor_quality', label: t('poor_quality') },
+      { id: 'other', label: t('other') }]
+
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!selectedReason) {
-            showToast(t('please_select_reason'), 'error');
-            return;
-        }
+    return baseReasons[reportType] || baseReasons.invitation;
+  };
 
-        setIsSubmitting(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedReason) {
+      showToast(t('please_select_reason'), 'error');
+      return;
+    }
 
-        const report = {
-            id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: reportType,
-            targetId,
-            targetName,
-            reason: selectedReason,
-            details,
-            timestamp: new Date().toISOString(),
-            status: 'pending'
-        };
+    setIsSubmitting(true);
 
-        await onSubmit(report);
-
-        setIsSubmitting(false);
-        setSelectedReason('');
-        setDetails('');
-        onClose();
+    const report = {
+      id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: reportType,
+      targetId,
+      targetName,
+      reason: selectedReason,
+      details,
+      timestamp: new Date().toISOString(),
+      status: 'pending'
     };
 
-    if (!isOpen) return null;
+    await onSubmit(report);
 
-    const reasons = getReasons();
+    setIsSubmitting(false);
+    setSelectedReason('');
+    setDetails('');
+    onClose();
+  };
 
-    // Inline Styles System to ensure consistency (Base styles)
-    const styles = {
-        overlay: {
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 999999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            paddingBottom: '2rem'
-        },
-        content: {
-            background: '#0f172a', // Hardcoded dark blue/slate
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '24px',
-            width: '100%',
-            maxWidth: '380px', // Reduced to standard mobile width
-            maxHeight: '85vh',
-            overflowY: 'auto',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            color: '#f8fafc',
-            fontFamily: 'inherit',
-            position: 'relative'
-        },
-        header: {
-            padding: '1.5rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(30, 41, 59, 0.5)',
-        },
-        title: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            fontSize: '1.1rem', // Slightly smaller for mobile feel
-            fontWeight: '700',
-            margin: 0,
-            color: '#f8fafc'
-        },
-        // Buttons are handled via CSS now
-        subtitle: {
-            padding: '1rem 1.5rem 0.5rem',
-            color: '#94a3b8',
-            fontSize: '0.9rem',
-            margin: 0,
-            textAlign: i18n.language === 'ar' ? 'right' : 'left'
-        },
-        form: {
-            padding: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.25rem'
-        },
-        label: {
-            display: 'block',
-            fontSize: '0.9rem',
-            fontWeight: '700',
-            color: '#f8fafc',
-            marginBottom: '0.5rem',
-            textAlign: i18n.language === 'ar' ? 'right' : 'left'
-        },
-        reasonsGrid: {
-            display: 'grid',
-            gridTemplateColumns: '1fr',
-            gap: '0.6rem'
-        },
-        textarea: {
-            width: '100%',
-            padding: '0.85rem',
-            background: '#1e293b',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '16px',
-            color: '#f8fafc',
-            fontSize: '0.9rem',
-            fontFamily: 'inherit',
-            resize: 'vertical',
-            minHeight: '100px',
-            outline: 'none',
-            transition: 'border-color 0.2s'
-        },
-        warning: {
-            padding: '0.85rem',
-            background: 'rgba(251, 191, 36, 0.1)',
-            border: '1px solid rgba(251, 191, 36, 0.2)',
-            borderRadius: '12px',
-            color: '#fbbf24',
-            fontSize: '0.8rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            direction: i18n.language === 'ar' ? 'rtl' : 'ltr',
-            lineHeight: '1.4'
-        },
-        actions: {
-            display: 'flex',
-            gap: '0.75rem',
-            marginTop: '0.5rem'
-        }
-    };
+  if (!isOpen) return null;
 
-    return (
-        <div style={styles.overlay} onClick={onClose} className="report-modal-overlay-fade">
+  const reasons = getReasons();
+
+  // Inline Styles System to ensure consistency (Base styles)
+  const styles = {
+    overlay: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0, 0, 0, 0.7)',
+      backdropFilter: 'blur(8px)',
+      zIndex: 999999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1rem',
+      paddingBottom: '2rem'
+    },
+    content: {
+      background: '#0f172a', // Hardcoded dark blue/slate
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '24px',
+      width: '100%',
+      maxWidth: '380px', // Reduced to standard mobile width
+      maxHeight: '85vh',
+      overflowY: 'auto',
+      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+      color: '#f8fafc',
+      fontFamily: 'inherit',
+      position: 'relative'
+    },
+    header: {
+      padding: '1.5rem',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      background: 'rgba(30, 41, 59, 0.5)'
+    },
+    title: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      fontSize: '1.1rem', // Slightly smaller for mobile feel
+      fontWeight: '700',
+      margin: 0,
+      color: '#f8fafc'
+    },
+    // Buttons are handled via CSS now
+    subtitle: {
+      padding: '1rem 1.5rem 0.5rem',
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+      margin: 0,
+      textAlign: i18n.language === 'ar' ? 'right' : 'left'
+    },
+    form: {
+      padding: '1.5rem',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '1.25rem'
+    },
+    label: {
+      display: 'block',
+      fontSize: '0.9rem',
+      fontWeight: '700',
+      color: '#f8fafc',
+      marginBottom: '0.5rem',
+      textAlign: i18n.language === 'ar' ? 'right' : 'left'
+    },
+    reasonsGrid: {
+      display: 'grid',
+      gridTemplateColumns: '1fr',
+      gap: '0.6rem'
+    },
+    textarea: {
+      width: '100%',
+      padding: '0.85rem',
+      background: '#1e293b',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '16px',
+      color: '#f8fafc',
+      fontSize: '0.9rem',
+      fontFamily: 'inherit',
+      resize: 'vertical',
+      minHeight: '100px',
+      outline: 'none',
+      transition: 'border-color 0.2s'
+    },
+    warning: {
+      padding: '0.85rem',
+      background: 'rgba(251, 191, 36, 0.1)',
+      border: '1px solid rgba(251, 191, 36, 0.2)',
+      borderRadius: '12px',
+      color: '#fbbf24',
+      fontSize: '0.8rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.5rem',
+      direction: i18n.language === 'ar' ? 'rtl' : 'ltr',
+      lineHeight: '1.4'
+    },
+    actions: {
+      display: 'flex',
+      gap: '0.75rem',
+      marginTop: '0.5rem'
+    }
+  };
+
+  return (
+    <div style={styles.overlay} onClick={onClose} className="report-modal-overlay-fade">
             <div style={styles.content} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div style={styles.header}>
                     <div style={styles.title}>
                         <FaFlag style={{ color: '#f43f5e' }} />
-                        <h3>{t('report_violation')}</h3>
+                        <AppText as="h3">{t('report_violation')}</AppText>
                     </div>
                     <button
-                        onClick={onClose}
-                        className="nrm-close-btn"
-                    >
+            onClick={onClose}
+            className="nrm-close-btn">
+            
                         <FaTimes />
                     </button>
                 </div>
 
-                <p style={styles.subtitle}>{targetName}</p>
+                <AppText as="p" style={styles.subtitle}>{targetName}</AppText>
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} style={styles.form}>
                     {/* Reasons */}
                     <div>
                         <label style={styles.label}>
-                            {t('reason_for_report')} <span style={{ color: '#f43f5e' }}>*</span>
+                            {t('reason_for_report')} <AppText as="span" style={{ color: '#f43f5e' }}>*</AppText>
                         </label>
                         <div style={styles.reasonsGrid}>
-                            {reasons.map(reason => (
-                                <button
-                                    key={reason.id}
-                                    type="button"
-                                    onClick={() => setSelectedReason(reason.id)}
-                                    className={`nrm-reason-btn ${selectedReason === reason.id ? 'active' : ''}`}
-                                >
+                            {reasons.map((reason) =>
+              <button
+                key={reason.id}
+                type="button"
+                onClick={() => setSelectedReason(reason.id)}
+                className={`nrm-reason-btn ${selectedReason === reason.id ? 'active' : ''}`}>
+                
                                     {reason.label}
                                 </button>
-                            ))}
+              )}
                         </div>
                     </div>
 
@@ -220,43 +221,43 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                         <label style={styles.label}>
                             {t('additional_details_optional')}
                         </label>
-                        <textarea
-                            value={details}
-                            onChange={(e) => setDetails(e.target.value)}
-                            placeholder={i18n.language === 'ar'
-                                ? t('add_additional_info')
-                                : 'Add any additional information...'}
-                            rows={4}
-                            style={styles.textarea}
-                            className="nrm-textarea"
-                        />
+                        <AppTextInput as="textarea"
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
+            placeholder={i18n.language === 'ar' ?
+            t('add_additional_info') :
+            'Add any additional information...'}
+            rows={4}
+            style={styles.textarea}
+            className="nrm-textarea" />
+            
                     </div>
 
                     {/* Warning */}
                     <div style={styles.warning}>
-                        <span>⚠️</span>
-                        <span>{i18n.language === 'ar'
-                            ? t('false_reports_warning')
-                            : 'False reports may result in account suspension.'}</span>
+                        <AppText as="span">⚠️</AppText>
+                        <AppText as="span">{i18n.language === 'ar' ?
+              t('false_reports_warning') :
+              'False reports may result in account suspension.'}</AppText>
                     </div>
 
                     {/* Actions */}
                     <div style={styles.actions}>
                         <button
-                            type="button"
-                            onClick={onClose}
-                            className="nrm-btn nrm-btn-cancel"
-                        >
+              type="button"
+              onClick={onClose}
+              className="nrm-btn nrm-btn-cancel">
+              
                             {t('cancel')}
                         </button>
                         <button
-                            type="submit"
-                            disabled={!selectedReason || isSubmitting}
-                            className="nrm-btn nrm-btn-submit"
-                        >
-                            {isSubmitting
-                                ? t('submitting')
-                                : t('submit_report')}
+              type="submit"
+              disabled={!selectedReason || isSubmitting}
+              className="nrm-btn nrm-btn-submit">
+              
+                            {isSubmitting ?
+              t('submitting') :
+              t('submit_report')}
                         </button>
                     </div>
                 </form>
@@ -353,8 +354,8 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
                 }
             `}
             </style>
-        </div>
-    );
+        </div>);
+
 };
 
 export default NewReportModal;

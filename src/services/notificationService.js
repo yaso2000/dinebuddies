@@ -15,8 +15,7 @@ import {
     addDoc,
     serverTimestamp,
 } from 'firebase/firestore';
-import app from '../firebase/config';
-import { db } from '../firebase/config';
+import app, { auth, db } from '../firebase/config';
 import { persistPushEnabledPref } from './pushPrefs';
 import { registerFcmDeviceTokenOnServer } from './pushDeviceService';
 import {
@@ -97,6 +96,12 @@ export function isIOS() {
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     );
+}
+
+/** Android phones / tablets (Web Share requires a live user gesture — keep prep work off the tap path). */
+export function isAndroid() {
+    if (typeof navigator === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent);
 }
 
 /** @deprecated use isIOS — kept for existing imports */
@@ -959,6 +964,9 @@ export async function registerAndSaveFcmToken(uid, { label = 'registerAndSave' }
     if (!uid) {
         return { ok: false, reason: 'no_uid' };
     }
+    if (!auth.currentUser?.uid || auth.currentUser.uid !== uid) {
+        return { ok: false, reason: 'auth_not_ready' };
+    }
     if (!isIosWebPushSupportedVersion()) {
         return { ok: false, reason: 'ios_version_unsupported' };
     }
@@ -1001,6 +1009,9 @@ export async function saveFcmToken(uid, token) {
     try {
         const server = await registerFcmDeviceTokenOnServer(token);
         if (server?.ok) saved = true;
+        if (server?.reason === 'unauthenticated') {
+            return false;
+        }
     } catch (err) {
         setLastFcmError(err);
         console.warn('[FCM] registerFcmDeviceToken callable failed:', err?.message || err);
@@ -1144,6 +1155,9 @@ export async function unlinkDeviceTokenFromUser(uid) {
  */
 export async function bootstrapPushSession(uid) {
     if (!uid) return { registered: false, reason: 'no_uid' };
+    if (!auth.currentUser?.uid || auth.currentUser.uid !== uid) {
+        return { registered: false, reason: 'auth_not_ready' };
+    }
 
     if (typeof Notification === 'undefined') {
         return { registered: false, reason: 'no_notification_api' };
@@ -1171,6 +1185,10 @@ export async function bootstrapPushSession(uid) {
         return { registered: true, source: 'getToken', status };
     }
 
+    if (result.reason === 'auth_not_ready' || result.reason === 'unauthenticated') {
+        return { registered: false, reason: result.reason, status };
+    }
+
     console.error('[FCM] bootstrapPushSession failed:', result.reason, result.lastError);
     return {
         registered: status.effectivelyRegistered,
@@ -1184,6 +1202,9 @@ const _bootstrapInflight = new Map();
 /** Deduped bootstrap per uid — await before showing "Finish Push Setup". */
 export function runPushBootstrap(uid) {
     if (!uid) return Promise.resolve({ registered: false, reason: 'no_uid' });
+    if (!auth.currentUser?.uid || auth.currentUser.uid !== uid) {
+        return Promise.resolve({ registered: false, reason: 'auth_not_ready' });
+    }
     const existing = _bootstrapInflight.get(uid);
     if (existing) return existing;
 

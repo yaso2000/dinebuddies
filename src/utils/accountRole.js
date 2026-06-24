@@ -47,3 +47,13 @@ export function isAffiliateAgent(profile) {
     if (!profile || typeof profile !== 'object') return false;
     return String(profile.role || '').toLowerCase() === ROLE_AFFILIATE_AGENT;
 }
+
+/** Session hint set after a successful business-portal sign-in (survives brief profile load races). */
+export function hasBusinessSessionHint(uid) {
+    if (!uid) return false;
+    try {
+        return sessionStorage.getItem('dineb_biz_uid') === uid;
+    } catch {
+        return false;
+    }
+}

@@ -13,6 +13,9 @@ export const AUTH_PORTAL = {
  */
 export function accountKindFromProfileData(data) {
     if (!data || typeof data !== 'object') return AUTH_PORTAL.PERSONAL;
+    if (String(data.registrationIntent || '').toLowerCase() === 'business') return AUTH_PORTAL.BUSINESS;
+    if (data.pendingBusinessRegistration === true) return AUTH_PORTAL.BUSINESS;
+    if (String(data.accountType || '').toLowerCase() === 'business') return AUTH_PORTAL.BUSINESS;
     if (isAffiliateAgentProfileData(data)) return AUTH_PORTAL.AFFILIATE;
     if (profileDocumentIsBusiness(data)) return AUTH_PORTAL.BUSINESS;
     return AUTH_PORTAL.PERSONAL;

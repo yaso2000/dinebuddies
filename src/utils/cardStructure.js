@@ -6,32 +6,32 @@ export const DEFAULT_CARD_STRUCTURE = /** @type {CardStructure} */ ('modern_mini
 
 /** Dating / invitation template id → visual structure for AI + overlay safe zones */
 export const DATING_BACKGROUND_TO_CARD_STRUCTURE = {
-    'dating-luxury-floral': 'arch_luxury',
-    'dating-heart-roses': 'arch_luxury',
-    'dating-candle-room': 'arch_luxury',
-    'dating-candlelight-table': 'arch_luxury',
-    'dating-rooftop-dinner': 'arch_luxury',
-    'dating-rose-pathway': 'arch_luxury',
-    'dating-mystery-entrance': 'vintage_ticket',
-    'dating-rainy-coffee': 'vintage_ticket',
-    'dating-sunset-beach': 'vintage_ticket',
-    'dating-restaurant-chemistry': 'modern_minimal',
-    'dating-midnight-city-lights': 'modern_minimal',
-    'dating-neon-coffee-date': 'modern_minimal',
-    'dating-neon-hearts-date': 'modern_minimal',
-    'dating-golden-love-night': 'arch_luxury',
-    'dating-love-in-bloom': 'arch_luxury',
-    'dating-romantic-coffee-escape': 'vintage_ticket',
-    'dating-roses-candlelight': 'arch_luxury',
-    'dating-secret-garden-date': 'arch_luxury',
-    'dating-sunset-romance': 'vintage_ticket',
-    'dating-sunset-walk-together': 'vintage_ticket',
-    'dating-sweetheart-rooftop': 'arch_luxury',
-    'dating-valentines-evening': 'arch_luxury',
-    'dating-velvet-lounge-evening': 'arch_luxury',
-    'dating-rose': 'arch_luxury',
-    'dating-city': 'modern_minimal',
-    'dating-minimal': 'modern_minimal',
+    'private-luxury-floral': 'arch_luxury',
+    'private-heart-roses': 'arch_luxury',
+    'private-candle-room': 'arch_luxury',
+    'private-candlelight-table': 'arch_luxury',
+    'private-rooftop-dinner': 'arch_luxury',
+    'private-rose-pathway': 'arch_luxury',
+    'private-mystery-entrance': 'vintage_ticket',
+    'private-rainy-coffee': 'vintage_ticket',
+    'private-sunset-beach': 'vintage_ticket',
+    'private-restaurant-chemistry': 'modern_minimal',
+    'private-midnight-city-lights': 'modern_minimal',
+    'private-neon-coffee-date': 'modern_minimal',
+    'private-neon-hearts-date': 'modern_minimal',
+    'private-golden-love-night': 'arch_luxury',
+    'private-love-in-bloom': 'arch_luxury',
+    'private-romantic-coffee-escape': 'vintage_ticket',
+    'private-roses-candlelight': 'arch_luxury',
+    'private-secret-garden-date': 'arch_luxury',
+    'private-sunset-romance': 'vintage_ticket',
+    'private-sunset-walk-together': 'vintage_ticket',
+    'private-sweetheart-rooftop': 'arch_luxury',
+    'private-valentines-evening': 'arch_luxury',
+    'private-velvet-lounge-evening': 'arch_luxury',
+    'private-rose': 'arch_luxury',
+    'private-city': 'modern_minimal',
+    'private-minimal': 'modern_minimal',
 };
 
 /**
@@ -145,11 +145,11 @@ export function getCardTextOverlayLayoutClass(structure) {
 export function getCardPreviewStructureClass(structure) {
     switch (normalizeCardStructure(structure)) {
         case 'arch_luxury':
-            return 'private-invitation-card-preview--structure-arch-luxury';
+            return 'social-invitation-card-preview--structure-arch-luxury';
         case 'vintage_ticket':
-            return 'private-invitation-card-preview--structure-vintage-ticket';
+            return 'social-invitation-card-preview--structure-vintage-ticket';
         case 'modern_minimal':
         default:
-            return 'private-invitation-card-preview--structure-modern-minimal';
+            return 'social-invitation-card-preview--structure-modern-minimal';
     }
 }

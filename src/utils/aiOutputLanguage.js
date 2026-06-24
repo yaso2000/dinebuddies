@@ -31,7 +31,7 @@ export const AI_OUTPUT_LANGUAGE_LABELS = Object.freeze({
     hi: 'Hindi',
 });
 
-/** Example dating-card greetings per locale (for system instructions). */
+/** Example private-card greetings per locale (for system instructions). */
 export const AI_DATING_GREETING_EXAMPLES = Object.freeze({
     ar: 'مرحباً [الاسم]، or أهلاً [الاسم]،',
     ur: 'سلام [نام]،',

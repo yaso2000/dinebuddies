@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { fetchPlaceAutocompleteWithFallback } from './api/_googlePlacesAutocompleteCore.js'
+import { runDevApiHandler } from './scripts/dev-api-local.mjs'
 import fs from 'fs'
 import path from 'path'
 import dns from 'dns'
@@ -119,6 +121,24 @@ const devOperations = () => ({
                 devUrl = null
             }
 
+            if (devUrl?.pathname === '/api/business-login-resolver' && req.method === 'POST') {
+                try {
+                    const handler = await import('./api/auth/login-resolver.js')
+                    await runDevApiHandler(handler, req, res)
+                } catch (err) {
+                    console.error('Dev business-login-resolver error:', err)
+                    res.statusCode = 500
+                    res.setHeader('Content-Type', 'application/json')
+                    const hint =
+                        err instanceof Error &&
+                        /Firebase Admin credentials/i.test(err.message)
+                            ? 'Firebase Admin غير مُعد محلياً — أضف FIREBASE_SERVICE_ACCOUNT_JSON في .env'
+                            : 'حدث خطأ في خادم حل الهوية.'
+                    res.end(JSON.stringify({ message: hint }))
+                }
+                return
+            }
+
             if (req.method === 'GET') {
                 let url
                 try {
@@ -132,52 +152,50 @@ const devOperations = () => ({
 
                 if (url && url.pathname === '/api/place-autocomplete') {
                     const input = url.searchParams.get('input')
+                    const sessionToken = url.searchParams.get('sessionToken')
                     const countryCode = url.searchParams.get('countryCode')
-                    const lat = url.searchParams.get('lat')
-                    const lng = url.searchParams.get('lng')
-                    if (!input || typeof input !== 'string' || input.trim().length < 2 || !key) {
+                    const languageCode = url.searchParams.get('languageCode')
+                    const businessOnly = url.searchParams.get('businessOnly')
+                    const minLat = url.searchParams.get('minLat')
+                    const minLon = url.searchParams.get('minLon')
+                    const maxLat = url.searchParams.get('maxLat')
+                    const maxLon = url.searchParams.get('maxLon')
+                    if (!input || typeof input !== 'string' || input.trim().length < 2 || !sessionToken) {
                         res.statusCode = 400
                         res.setHeader('Content-Type', 'application/json')
-                        res.end(JSON.stringify({ error: 'Missing input (min 2 chars) or API key' }))
+                        res.end(JSON.stringify({ error: 'Missing input (min 2 chars) or sessionToken' }))
                         return
                     }
                     try {
-                        const params = new URLSearchParams({
+                        const result = await fetchPlaceAutocompleteWithFallback({
                             input: input.trim(),
-                            types: 'establishment',
-                            language: 'en',
-                            key,
+                            sessionToken: String(sessionToken),
+                            languageCode: languageCode || 'en',
+                            countryCode: countryCode || '',
+                            minLat,
+                            minLon,
+                            maxLat,
+                            maxLon,
+                            businessOnly: businessOnly === '1' || businessOnly === 'true',
                         })
-                        if (countryCode && typeof countryCode === 'string') {
-                            params.set('components', `country:${countryCode.toLowerCase().slice(0, 2)}`)
-                        }
-                        const numLat = parseFloat(lat)
-                        const numLng = parseFloat(lng)
-                        if (!isNaN(numLat) && !isNaN(numLng)) {
-                            params.set('location', `${numLat},${numLng}`)
-                            params.set('radius', '50000')
-                        }
-                        const gurl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
-                        const response = await fetch(gurl, { headers: { 'Referer': referer } })
-                        const data = await response.json()
                         res.setHeader('Content-Type', 'application/json')
                         res.setHeader('Access-Control-Allow-Origin', '*')
-                        if (data.status === 'OK' && Array.isArray(data.predictions)) {
+                        if (!result.ok) {
+                            res.statusCode = result.status === 503 ? 503 : 502
                             res.end(JSON.stringify({
-                                status: 'OK',
-                                predictions: data.predictions.map((p) => ({
-                                    place_id: p.place_id,
-                                    description: p.description,
-                                    structured_formatting: p.structured_formatting,
-                                })),
+                                status: 'ERROR',
+                                predictions: [],
+                                error: result.errorMessage || 'Autocomplete upstream error',
                             }))
                             return
                         }
-                        if (data.status === 'ZERO_RESULTS') {
-                            res.end(JSON.stringify({ status: 'ZERO_RESULTS', predictions: [] }))
-                            return
-                        }
-                        res.end(JSON.stringify({ status: data.status || 'ERROR', predictions: [] }))
+                        res.end(JSON.stringify({
+                            status: result.predictions.length ? 'OK' : 'ZERO_RESULTS',
+                            predictions: result.predictions,
+                            ...(result.errorMessage && !result.predictions.length
+                                ? { hint: result.errorMessage }
+                                : {}),
+                        }))
                         return
                     } catch (err) {
                         console.error('Dev place-autocomplete error:', err)
@@ -527,12 +545,14 @@ export default defineConfig({
     server: {
         host: '0.0.0.0',
         port: 5176,
-        strictPort: false,
+        strictPort: true,
+        open: '/login?tab=business',
         proxy: {
             '/api': {
                 target: devAuthApiProxy,
                 changeOrigin: true,
-                secure: true,
+                // Local dev: avoid 500 when Node cannot verify the production TLS chain (corporate proxy / AV).
+                secure: false,
             },
         },
     },

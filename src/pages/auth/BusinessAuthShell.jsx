@@ -18,7 +18,7 @@ export default function BusinessAuthShell({ children }) {
                 <AuthPageChrome
                     accountTab="business"
                     onSwitchToPersonal={() => navigate('/login', { replace: true })}
-                    showAffiliateLink
+                    showAffiliateLink={false}
                 />
                 <div className="login-hub-business-banner">
                     <button

@@ -7,7 +7,7 @@ const functions = getFunctions();
 const lookupBusinessByPlaceIdCallable = httpsCallable(functions, 'lookupBusinessByPlaceId');
 
 /**
- * Update invitation guest count
+ * Upprivate invite guest count
  * Cannot be less than the number of already accepted guests
  * Sends notifications if invitation becomes full
  */
@@ -104,7 +104,7 @@ export const updateGuestCount = async (invitationId, newGuestCount, currentJoine
 };
 
 /**
- * Update invitation image
+ * Upprivate invite image
  */
 export const updateInvitationImage = async (invitationId, newImageUrl) => {
     try {

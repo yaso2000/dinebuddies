@@ -10,9 +10,9 @@ import {
     normalizeCardStructure,
 } from '../utils/cardStructure.js';
 import {
-    buildDatingInvitationContextLines,
-    buildDatingInvitationSystemInstruction,
-} from '../utils/datingInvitationAiPrompt.js';
+    buildPrivateInvitationContextLines,
+    buildPrivateInvitationSystemInstruction,
+} from '../utils/privateInvitationAiPrompt.js';
 import {
     GEMINI_PROVIDER_BILLING_CODE,
     isGeminiProviderBillingExhausted,
@@ -377,9 +377,9 @@ function buildInvitationSystemInstruction(
         if (subType === 'public') {
             toneRule +=
                 ' Public invitation: catchy title featuring the business; description highlights what makes the venue special and any active offer.';
-        } else if (subType === 'private') {
+        } else if (subType === 'social') {
             toneRule += ' Private invitation: exclusive, VIP tone while staying professional.';
-        } else if (subType === 'date') {
+        } else if (subType === 'private') {
             toneRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
         }
     } else {
@@ -388,10 +388,10 @@ function buildInvitationSystemInstruction(
         if (subType === 'public') {
             toneRule +=
                 ' Public invitation: catchy title (venue name allowed from context), friendly open invite for the venue type.';
-        } else if (subType === 'private') {
+        } else if (subType === 'social') {
             toneRule += ' Private invitation: warm, personal, close-friends tone.';
-        } else if (subType === 'date') {
-            return buildDatingInvitationSystemInstruction(cardStructure, outputLanguage);
+        } else if (subType === 'private') {
+            return buildPrivateInvitationSystemInstruction(cardStructure, outputLanguage);
         }
     }
 
@@ -468,8 +468,8 @@ function buildUserPrompt(input: GenerateContentInput): string {
 
         const dating = input.datingContext;
         if (dating) {
-            if (input.subType === 'date') {
-                lines.push(...buildDatingInvitationContextLines(dating));
+            if (input.subType === 'private') {
+                lines.push(...buildPrivateInvitationContextLines(dating));
             } else {
                 appendContextLine(lines, 'inviteeName', dating.inviteeName);
                 appendContextLine(lines, 'inviteeId', dating.inviteeId);

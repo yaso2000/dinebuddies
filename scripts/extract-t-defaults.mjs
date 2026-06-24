@@ -1,40 +1,57 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+#!/usr/bin/env node
+/**
+ * Extract t() keys + defaults from src (string and defaultValue forms).
+ * Writes scripts/_extracted-t-defaults.json
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(__dirname, '..');
-const srcDir = path.join(root, 'src');
-const ar = JSON.parse(fs.readFileSync(path.join(root, 'src/locales/ar.json'), 'utf8'));
+const ROOT = path.join(__dirname, '..');
 
-const files = [];
-function walk(dir) {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, ent.name);
-        if (ent.isDirectory()) walk(p);
-        else if (/\.(jsx?|tsx?)$/.test(ent.name)) files.push(p);
-    }
+/** @type {Map<string, { en?: string, ar?: string }>} */
+const keyDefaults = new Map();
+
+function note(key, text) {
+    if (!key || !text) return;
+    if (!keyDefaults.has(key)) keyDefaults.set(key, {});
+    const slot = /[\u0600-\u06FF]/.test(text) ? 'ar' : 'en';
+    const bucket = keyDefaults.get(key);
+    if (!bucket[slot]) bucket[slot] = text;
 }
-walk(srcDir);
 
-// t('key') or t('key', 'default') or t('key', "default") — also multiline default in some cases
-const re = /\bt\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"`]([^'"`]*(?:\\.[^'"`]*)*)['"`])?/gs;
-
-const entries = new Map();
-for (const file of files) {
-    const text = fs.readFileSync(file, 'utf8');
-    let m;
-    while ((m = re.exec(text))) {
-        const key = m[1];
-        let def = m[2];
-        if (def) def = def.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"');
-        if (!ar[key]) {
-            if (!entries.has(key) && def) entries.set(key, def);
-            else if (!entries.has(key)) entries.set(key, null);
+function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name);
+        if (fs.statSync(full).isDirectory()) {
+            if (name !== 'node_modules' && name !== 'locales') walk(full);
+        } else if (/\.(jsx?|tsx?)$/.test(name)) {
+            scanFile(full);
         }
     }
 }
 
-const list = [...entries.entries()].map(([key, en]) => ({ key, en }));
-fs.writeFileSync(path.join(root, 'keys-to-translate.json'), JSON.stringify(list, null, 2));
-console.log('keys needing ar:', list.length, 'with default:', list.filter((x) => x.en).length);
+function scanFile(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+
+    const stringRe = /\bt\(\s*['"]([^'"]+)['"]\s*,\s*['"`]([^'"`]*(?:\\.[^'"`]*)*)['"`]/g;
+    let m;
+    while ((m = stringRe.exec(content))) note(m[1], m[2].replace(/\\'/g, "'").replace(/\\"/g, '"'));
+
+    const defaultValueRe =
+        /\bt\(\s*['"]([^'"]+)['"]\s*,\s*\{[^}]*defaultValue:\s*['"`]([^'"`]*(?:\\.[^'"`]*)*)['"`]/gs;
+    while ((m = defaultValueRe.exec(content))) note(m[1], m[2].replace(/\\'/g, "'").replace(/\\"/g, '"'));
+
+    const nameDefaultRe =
+        /\bt\(\s*['"]([^'"]+)['"]\s*,\s*\{[^}]*name:\s*[^,}]+[^}]*defaultValue:\s*['"`]([^'"`]*(?:\\.[^'"`]*)*)['"`]/gs;
+    while ((m = nameDefaultRe.exec(content))) note(m[1], m[2].replace(/\\'/g, "'").replace(/\\"/g, '"'));
+}
+
+walk(path.join(ROOT, 'src'));
+
+fs.writeFileSync(
+    path.join(__dirname, '_extracted-t-defaults.json'),
+    JSON.stringify(Object.fromEntries(keyDefaults), null, 2)
+);
+console.log('extracted keys with defaults:', keyDefaults.size);

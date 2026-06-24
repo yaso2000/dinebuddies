@@ -1,0 +1,6 @@
+{
+  "social_share_line_event": "📌 المناسبة: {{title}}",
+  "social_share_line_when": "📅 الموعد: {{when}}",
+  "social_share_line_where": "📍 المكان: {{location}}",
+  "invitation_inbox_counter": "{{current}} من {{total}}"
+}

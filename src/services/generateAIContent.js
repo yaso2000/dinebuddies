@@ -2,13 +2,17 @@ import { auth } from '../firebase/config';
 import i18n from '../i18n';
 import { normalizeAiOutputLanguage } from '../utils/aiOutputLanguage';
 import { unwrapAiResponseData } from '../utils/aiContentFieldMapper';
-import { buildDatingAiGenerateBody } from '../utils/datingAiRequestPayload';
+import { buildPrivateAiGenerateBody } from '../utils/privateAiRequestPayload';
 import { enforceCardStructureTextLimits, normalizeCardStructure } from '../utils/cardStructure';
 import {
     GEMINI_PROVIDER_BILLING_CODE,
     isGeminiProviderBillingExhausted,
 } from '../utils/geminiProviderErrors.js';
 import { AI_USER_PROMPT_MAX_CHARS, getAiUserPromptDefaultEn } from '../constants/aiPromptLimits';
+import {
+    apiImageNeedsClientUpload,
+    uploadInvitationMagicCoverFromApiBytes,
+} from '../utils/clientInvitationAiCoverUpload.js';
 
 const AI_GENERATE_PATH = '/api/ai/generate';
 const AI_MULTI_GENERATE_PATH = '/api/ai/multi-generate';
@@ -196,7 +200,7 @@ async function parseAiApiResponse(response) {
  * @param {string} userPrompt
  * @param {AIGeneratePostType} postType
  * @param {AIInvitationSubType} [subType]
- * @param {{ venueType?: string, venueName?: string, generationPackage?: 'text' | 'image' | 'invitation_bundle', aspectRatio?: '1:1' | '9:16', inviteeId?: string, inviteeName?: string, date?: string, time?: string, venueId?: string, address?: string, city?: string, country?: string, lat?: number, lng?: number, venueDetails?: Record<string, unknown>, datingContext?: import('../utils/datingAiRequestPayload.js').DatingAiContext, cardStructure?: string }} [options]
+ * @param {{ venueType?: string, venueName?: string, generationPackage?: 'text' | 'image' | 'invitation_bundle', aspectRatio?: '1:1' | '9:16', inviteeId?: string, inviteeName?: string, date?: string, time?: string, venueId?: string, address?: string, city?: string, country?: string, lat?: number, lng?: number, venueDetails?: Record<string, unknown>, datingContext?: import('../utils/privateAiRequestPayload.js').DatingAiContext, cardStructure?: string }} [options]
  * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
  */
 export async function generateAIContent(userPrompt, postType, subType, options = {}) {
@@ -219,7 +223,7 @@ export async function generateAIContent(userPrompt, postType, subType, options =
     /** @type {Record<string, unknown>} */
     let body;
 
-    if (postType === 'invitation' && subType === 'date') {
+    if (postType === 'invitation' && subType === 'private') {
         const datingContext = options.datingContext || {
             inviteeId: options.inviteeId,
             inviteeName: options.inviteeName,
@@ -236,7 +240,7 @@ export async function generateAIContent(userPrompt, postType, subType, options =
             venueDetails: options.venueDetails,
         };
 
-        const datingPayload = buildDatingAiGenerateBody(trimmedPrompt, datingContext);
+        const datingPayload = buildPrivateAiGenerateBody(trimmedPrompt, datingContext);
 
         if (!datingPayload.ok) {
             console.warn('[generateAIContent] dating payload incomplete', {
@@ -245,9 +249,9 @@ export async function generateAIContent(userPrompt, postType, subType, options =
             });
             return {
                 success: false,
-                error: datingPayload.error || 'dating_context_incomplete',
+                error: datingPayload.error || 'private_context_incomplete',
                 code: 'VALIDATION_ERROR',
-                message: 'dating_context_incomplete',
+                message: 'private_context_incomplete',
                 missing: datingPayload.missing,
             };
         }
@@ -342,10 +346,10 @@ export function formatAiErrorMessage(result, t) {
 
     if (result.code === 'VALIDATION_ERROR') {
         if (
-            result.error === 'dating_context_incomplete' ||
+            result.error === 'private_context_incomplete' ||
             (Array.isArray(result.missing) && result.missing.length > 0)
         ) {
-            return t('dating_ai_all_fields_required');
+            return t('private_ai_all_fields_required');
         }
         const validationMsg = [result.message, result.error]
             .filter((v) => typeof v === 'string' && v.trim())
@@ -468,7 +472,54 @@ export async function generateAIMagicCover({
         };
     }
 
-    return parseAiApiResponse(response);
+    const parsed = await parseAiApiResponse(response);
+    return finalizeMagicCoverClientUpload(parsed);
+}
+
+/**
+ * Upload invitation magic-cover bytes via the client Firebase SDK (same as camera upload).
+ * @param {AIGenerateSuccess | AIGenerateFailure} result
+ * @returns {Promise<AIGenerateSuccess | AIGenerateFailure>}
+ */
+async function finalizeMagicCoverClientUpload(result) {
+    if (!result?.success || !apiImageNeedsClientUpload(result.data?.image)) {
+        return result;
+    }
+
+    try {
+        const url = await uploadInvitationMagicCoverFromApiBytes(result.data.image);
+        const mimeType = result.data.image.mimeType || 'image/jpeg';
+        const createdAt = new Date().toISOString();
+        return {
+            ...result,
+            data: {
+                ...result.data,
+                image: {
+                    url,
+                    mimeType,
+                    mediaLibraryItem: {
+                        url,
+                        source: 'ai_generated',
+                        createdAt,
+                        mimeType,
+                    },
+                },
+            },
+        };
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.error('[generateAIMagicCover] client_upload', detail);
+        return {
+            success: false,
+            error: detail,
+            code: detail === 'not_signed_in' ? 'UNAUTHORIZED' : 'CLIENT_STORAGE_UPLOAD_FAILED',
+            message:
+                detail === 'not_signed_in'
+                    ? i18n.t('please_sign_in', { defaultValue: 'Please sign in to continue.' })
+                    : i18n.t('media_upload_failed', { defaultValue: 'Failed to upload media.' }),
+            status: detail === 'not_signed_in' ? 401 : 503,
+        };
+    }
 }
 
 /**

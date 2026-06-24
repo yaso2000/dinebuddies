@@ -3,7 +3,7 @@
  */
 export const ImageUploadZone = {
     /** 1:1 private conversation only — no Vision moderation */
-    PRIVATE_DM: 'private_dm',
+    PRIVATE_DM: 'social_dm',
     /** Community chat, invitation group chat, any public chat room */
     PUBLIC_CHAT: 'chat_public',
     INVITATION: 'invitation',

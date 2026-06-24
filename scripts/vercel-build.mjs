@@ -50,12 +50,21 @@ if (maps.status !== 0 && maps.status !== null) {
     process.exit(maps.status);
 }
 
-const datingTemplates = spawnSync(process.execPath, ['scripts/sync-dating-invitation-templates.mjs'], {
+const privateTemplates = spawnSync(process.execPath, ['scripts/sync-private-invitation-templates.mjs'], {
     stdio: 'inherit',
     cwd: process.cwd()
 });
-if (datingTemplates.status !== 0 && datingTemplates.status !== null) {
-    process.exit(datingTemplates.status);
+if (privateTemplates.status !== 0 && privateTemplates.status !== null) {
+    process.exit(privateTemplates.status);
+}
+
+const communityBannerTemplates = spawnSync(
+    process.execPath,
+    ['scripts/sync-community-banner-templates.mjs'],
+    { stdio: 'inherit', cwd: process.cwd() }
+);
+if (communityBannerTemplates.status !== 0 && communityBannerTemplates.status !== null) {
+    process.exit(communityBannerTemplates.status);
 }
 
 const vite = spawnSync('npx', ['vite', 'build'], {

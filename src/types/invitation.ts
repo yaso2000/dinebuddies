@@ -1,6 +1,6 @@
 /** Discriminator for invitation visibility / billing category. */
 
-export type InvitationCategory = 'public' | 'private' | 'dating';
+export type InvitationCategory = 'public' | 'social' | 'private';
 
 
 

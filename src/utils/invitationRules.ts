@@ -32,7 +32,7 @@ export const VENUE_LOCATION_NOT_DETERMINED_ERROR_MESSAGE =
 
 export const INVITATION_ERROR_MESSAGES: Record<InvitationCreateErrorCode, string> = {
     [INVITATION_ERROR_CODES.BUSINESS_CANNOT_CREATE]:
-        'Business accounts cannot create social or dating invitations.',
+        'Business accounts cannot create social or private invites.',
     [INVITATION_ERROR_CODES.PUBLIC_MUST_BE_LOCAL]: PUBLIC_INVITE_GEOFENCE_ERROR_MESSAGE,
     [INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED]: LOCATION_NOT_DETERMINED_ERROR_MESSAGE,
     [INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED]: 'Please sign in to create an invitation.',
@@ -231,12 +231,12 @@ export function validatePublicInvitationCreate(input: {
 export function resolveInviteCategory(doc: PublicInvitationFeedDoc): InvitationCategory | 'legacy-public' {
     const raw = String(doc.inviteCategory || '').toLowerCase();
     if (raw === 'private') return 'private';
-    if (raw === 'dating') return 'dating';
+    if (raw === 'dating') return 'private';
     if (raw === 'public') return 'public';
 
     const typeLc = String(doc.type || '').toLowerCase();
     if (typeLc === 'private') return 'private';
-    if (typeLc === 'dating') return 'dating';
+    if (typeLc === 'dating') return 'private';
 
     if (Array.isArray(doc.invitedFriends) && doc.invitedFriends.length > 0) {
         return 'private';

@@ -1,0 +1,79 @@
+{
+  "faq": {
+    "title": "Ayuda y soporte",
+    "subtitle": "Encuentra respuestas a tus preguntas y aprende a sacar el máximo partido de DineBuddies.",
+    "empty": "No hay preguntas disponibles por el momento.",
+    "user_questions": [
+      {
+        "q": "¿Qué es DineBuddies?",
+        "a": "¡La plataforma definitiva para los amantes de la gastronomía! DineBuddies es una app social innovadora que combina el descubrimiento de restaurantes, conocer gente nueva mediante invitaciones gastronómicas seleccionadas y crear comunidades auténticas alrededor de la mesa."
+      },
+      {
+        "q": "¿Cómo creo una invitación y divido la cuenta?",
+        "a": "Toca el botón (+), selecciona un restaurante y define la fecha y la hora. En la configuración, puedes elegir si la cuenta la paga el anfitrión, se divide en partes iguales o cada uno paga lo suyo."
+      },
+      {
+        "q": "¿Cuál es la diferencia entre invitaciones públicas, privadas y de citas?",
+        "a": "• Pública: visible en el mapa principal para que cualquiera pueda solicitar unirse.\n• Privada: invitación oculta enviada exclusivamente mediante un elegante enlace de invitación electrónica a personas concretas.\n• Citas: encuentros románticos especialmente seleccionados que requieren suscripción Premium, con filtros avanzados y reseñas de confianza."
+      },
+      {
+        "q": "¿Cómo acepto solicitudes para unirme a mi invitación?",
+        "a": "Cuando alguien solicita unirse, recibes una notificación al instante. Abre los detalles de la invitación, revisa su perfil y toca «Aceptar» o «Rechazar». Una vez aceptado, se desbloquea automáticamente un chat grupal privado."
+      },
+      {
+        "q": "¿Qué es el Community Chat?",
+        "a": "Cada restaurante de la app tiene su propia «Comunidad». Al unirte a la comunidad de un restaurante, entras en una sala de chat pública con el personal y otros clientes para preguntar sobre platos, compartir recomendaciones y descubrir ofertas exclusivas."
+      },
+      {
+        "q": "¿Cómo subo de nivel mi cuenta y gano puntos de reputación?",
+        "a": "¡Los puntos de reputación reflejan tu fiabilidad! Aumentan cuando asistes a los eventos a tiempo y recibes valoraciones de 5 estrellas de anfitriones o invitados. Disminuyen si no te presentas o recibes quejas."
+      },
+      {
+        "q": "¿Cómo paso a Premium (VIP)?",
+        "a": "Ve a Perfil > Configuración > Suscripciones. El nivel VIP te ofrece filtros de búsqueda excepcionales, acceso completo a invitaciones de citas, información sobre visitas a tu perfil e invitaciones privadas ilimitadas."
+      },
+      {
+        "q": "¿Cómo elimino mi cuenta de forma permanente?",
+        "a": "Ve a Perfil > Configuración > Cuenta > Eliminar cuenta. Ten en cuenta que esta acción es permanente y los datos no se pueden restaurar después de 30 días."
+      },
+      {
+        "q": "¿Cómo filtro restaurantes y cafeterías?",
+        "a": "Usa la barra de búsqueda y los filtros para ordenar por restaurantes, cafeterías, locales abiertos en ese momento, o clasificarlos por mejor valoración y distancia más cercana."
+      },
+      {
+        "q": "¿Cómo funcionan las invitaciones electrónicas directas?",
+        "a": "En lugar de esperar a usuarios de la app, crea una invitación «Privada», copia el enlace de su elegante tarjeta electrónica y compártelo por WhatsApp. Cualquiera que haga clic en el enlace será guiado para confirmar su asistencia contigo."
+      }
+    ],
+    "business_questions": [
+      {
+        "q": "¿Qué es el Business Pro Dashboard?",
+        "a": "Un centro de control profesional diseñado para los socios restaurantes de DineBuddies. Te da control total sobre tu menú, horarios de apertura, chats directos y publicación de posts de marketing en toda la plataforma."
+      },
+      {
+        "q": "¿Cómo publico un post promocional destacado?",
+        "a": "Desde el Pro Dashboard, ve a «Featured Posts», sube tu imagen promocional y escribe un pie de foto. Tu publicación aparecerá al instante para todos los usuarios en el feed principal de la app."
+      },
+      {
+        "q": "¿Cómo difundo ofertas a mi comunidad?",
+        "a": "Cada usuario que se une a tu «Comunidad» aparece en tu pestaña de Miembros. Puedes publicar grandes descuentos directamente en el «Community Chat» para atraer clientes al instante en horas valle."
+      },
+      {
+        "q": "¿Cómo gestiono mi menú digital?",
+        "a": "En «Menú y servicios» de tu panel, sube platos con fotos apetitosas y precios. El elegante menú digital se actualiza al instante para todos los visitantes de tu perfil."
+      },
+      {
+        "q": "¿Cuál es la diferencia entre los niveles Professional y Elite Partner?",
+        "a": "El nivel «Pro» configura tu escaparate y ficha en el directorio. El nivel «Elite» es nuestro paquete más potente: mejora tu posicionamiento en el algoritmo y ofrece diapositivas destacadas ilimitadas y prioritarias para máxima visibilidad."
+      },
+      {
+        "q": "¿Cómo gestiono las reseñas de clientes?",
+        "a": "La pestaña «Reseñas» ofrece análisis detallados de tus valoraciones. También puedes responder oficialmente a las reseñas con el nombre verificado de tu restaurante para fidelizar a tus clientes."
+      }
+    ]
+  },
+  "seo": {
+    "title": "DineBuddies | Red social gastronómica premium y exclusiva",
+    "description": "DineBuddies es una red social gastronómica exclusiva donde los amantes de la comida se conocen, se unen a invitaciones privadas a restaurantes y conectan disfrutando de comidas premium."
+  }
+}

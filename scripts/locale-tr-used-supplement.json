@@ -1,0 +1,21 @@
+{
+  "dinebuddy_open": "DineBuddy Açık",
+  "dinebuddy_private": "DineBuddy Özel",
+  "feed_scope_global": "Küresel",
+  "global": "Küresel",
+  "invitation_inbox_counter": "{{güncel}} / {{toplam}}",
+  "private_invites_reject": "Reddetmek",
+  "private_rail_camera_label": "Video",
+  "rankings_global": "Küresel",
+  "social_card_text_backdrop_tone_label": "Paneli",
+  "social_cover_tab_camera_open": "Video",
+  "social_share_line_event": "📌 {{başlık}}",
+  "social_share_line_when": "📅 {{ne zaman}}",
+  "social_share_line_where": "📍 {{konum}}",
+  "spam": "İstenmeyen e-posta",
+  "studio_font_family": "Yazı tipi",
+  "type_bar": "Çubuk",
+  "type_fastfood": "Fast food",
+  "use_logo": "Logo",
+  "video": "Video"
+}

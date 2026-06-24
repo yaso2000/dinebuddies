@@ -1,7 +1,5 @@
 import { sanitizeNextPath } from './safeInternalPath';
-import { isAffiliateAgent, isBusinessUser } from './accountRole';
-import { shouldLandOnAdminDashboard } from './adminAccess';
-import { canConsumerEnterApp } from './consumerProfileComplete';
+import { resolveSignedInHomePath } from './accountKind';
 
 /** Where business email sign-in should land (optional ?next= under /business*). */
 export function resolveBusinessPostLoginPath(search = '') {
@@ -16,10 +14,5 @@ export function resolveBusinessPostLoginPath(search = '') {
 /** Consumer personal login destination. */
 export function resolvePersonalPostLoginPath(search = '', profile, currentUser) {
     const next = sanitizeNextPath(new URLSearchParams(typeof search === 'string' ? search : '').get('next'));
-    if (next) return next;
-    if (shouldLandOnAdminDashboard(currentUser, profile)) return '/admin/users';
-    if (isAffiliateAgent(profile)) return '/affiliate/dashboard';
-    if (isBusinessUser(profile)) return '/business-dashboard';
-    if (profile && !canConsumerEnterApp(profile)) return '/complete-profile';
-    return '/posts-feed';
+    return resolveSignedInHomePath(currentUser, profile, { next });
 }

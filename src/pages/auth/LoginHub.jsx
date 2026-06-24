@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { consumeAuthGateNotice } from '../../utils/authGateNotice';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import PersonalAuthPanel from './PersonalAuthPanel';
 import BusinessLoginPanel from './BusinessLoginPanel';
 import AuthPageChrome from './AuthPageChrome';
+import LocalDevOAuthNotice from '../../components/LocalDevOAuthNotice';
+import { isEmbeddedPreviewBrowser, peekPostLogoutRedirect, clearPostLogoutRedirect } from '../../utils/localDevAuth';
+import { resolveSignedInHomePath } from '../../utils/accountKind';
+import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
+import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
+import { AppText } from '../../components/base';
 
 function readLoginTabFromLocation(location) {
     const q = new URLSearchParams(location.search || '');
@@ -15,7 +22,7 @@ function readLoginTabFromLocation(location) {
     return businessFromQuery || businessFromPath ? 'business' : 'personal';
 }
 
-/** Login hub — personal (default) with toolbar to switch business account or theme. */
+/** Login hub — never full-screen block; show buttons while OAuth finishes in the background. */
 export default function LoginHub() {
     const { t } = useTranslation();
     const { showToast } = useToast();
@@ -23,6 +30,25 @@ export default function LoginHub() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [tab, setTab] = useState(() => readLoginTabFromLocation(location));
+    const { currentUser, userProfile, profileServerSynced, isGuest } = useAuth();
+
+    const postLogout = peekPostLogoutRedirect();
+
+    const signedInConsumerReady =
+        Boolean(currentUser) &&
+        !isGuest &&
+        !postLogout &&
+        profileServerSynced &&
+        Boolean(userProfile) &&
+        !shouldLandOnAdminDashboard(currentUser, userProfile) &&
+        !isAffiliateAgent(userProfile) &&
+        !isBusinessUser(userProfile);
+
+    useEffect(() => {
+        if (!currentUser) {
+            clearPostLogoutRedirect();
+        }
+    }, [currentUser]);
 
     useEffect(() => {
         const next = sanitizeNextPath(searchParams.get('next'));
@@ -44,6 +70,25 @@ export default function LoginHub() {
     useEffect(() => {
         setTab(readLoginTabFromLocation(location));
     }, [location.pathname, location.search]);
+
+    if (signedInConsumerReady) {
+        return (
+            <Navigate
+                to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}
+                replace
+            />
+        );
+    }
+
+    if (
+        currentUser &&
+        !isGuest &&
+        profileServerSynced &&
+        userProfile &&
+        shouldLandOnAdminDashboard(currentUser, userProfile)
+    ) {
+        return <Navigate to="/admin/users" replace />;
+    }
 
     const panelIdPersonal = 'login-hub-panel-personal';
     const panelIdBusiness = 'business-login-section';
@@ -70,24 +115,53 @@ export default function LoginHub() {
                     accountTab={tab}
                     onSwitchToBusiness={goBusiness}
                     onSwitchToPersonal={goPersonal}
-                    showAffiliateLink
+                    showAffiliateLink={false}
                 />
+                <LocalDevOAuthNotice />
+                {import.meta.env.DEV && isEmbeddedPreviewBrowser() ? (
+                    <div
+                        className="local-dev-oauth-notice local-dev-oauth-notice--blocked"
+                        style={{
+                            marginBottom: '1rem',
+                            padding: '0.75rem 0.9rem',
+                            borderRadius: '12px',
+                            fontSize: '0.78rem',
+                            lineHeight: 1.55,
+                            color: 'var(--text-main)',
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.45)',
+                        }}
+                    >
+                        <AppText as="p" style={{ margin: 0, fontWeight: 800, color: '#fca5a5' }}>
+                            {t(
+                                'local_dev_embedded_preview_blocked',
+                                'Sign-in does not work inside Cursor / VS Code preview.'
+                            )}
+                        </AppText>
+                        <AppText as="p" style={{ margin: '0.5rem 0 0', color: 'var(--text-muted)' }}>
+                            {t(
+                                'local_dev_embedded_preview_hint',
+                                'Open Chrome or Edge at http://localhost:5176/login?tab=business (copy from the terminal after npm run dev:fresh).'
+                            )}
+                        </AppText>
+                    </div>
+                ) : null}
                 <div className={`login-hub-card login-hub-card--${tab}`}>
-                    <div
-                        id={panelIdPersonal}
-                        hidden={tab !== 'personal'}
-                        className="login-hub-tabpanel login-hub-tabpanel--solo"
-                    >
-                        <PersonalAuthPanel singleCardShell />
-                    </div>
-
-                    <div
-                        id={panelIdBusiness}
-                        hidden={tab !== 'business'}
-                        className="login-hub-tabpanel login-hub-tabpanel--solo"
-                    >
-                        <BusinessLoginPanel embedInHub embeddedInSingleCard />
-                    </div>
+                    {tab === 'personal' ? (
+                        <div
+                            id={panelIdPersonal}
+                            className="login-hub-tabpanel login-hub-tabpanel--solo"
+                        >
+                            <PersonalAuthPanel singleCardShell />
+                        </div>
+                    ) : (
+                        <div
+                            id={panelIdBusiness}
+                            className="login-hub-tabpanel login-hub-tabpanel--solo"
+                        >
+                            <BusinessLoginPanel embedInHub embeddedInSingleCard />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

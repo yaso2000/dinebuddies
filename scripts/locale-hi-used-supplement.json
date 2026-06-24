@@ -1,0 +1,5 @@
+{
+  "social_share_line_event": "📌 कार्यक्रम: {{title}}",
+  "social_share_line_when": "📅 समय: {{when}}",
+  "social_share_line_where": "📍 स्थान: {{location}}"
+}

@@ -10,499 +10,500 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import EmojiPickerPortal, { isTouchOrCoarsePointer } from './EmojiPickerPortal';
 import '../pages/CommunityChatRoom.css';
+import { AppText, AppTextInput } from "./base";
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
-    const { t, i18n } = useTranslation();
-    const { currentUser, userProfile } = useAuth();
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [showScrollBottom, setShowScrollBottom] = useState(false);
-    const [isFullScreen, setIsFullScreen] = useState(false);
+  const { t, i18n } = useTranslation();
+  const { currentUser, userProfile } = useAuth();
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // Audio Playback State
-    const [playingAudioId, setPlayingAudioId] = useState(null);
-    const audioRef = useRef(new Audio());
+  // Audio Playback State
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const audioRef = useRef(new Audio());
 
-    // Recording State
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingDuration, setRecordingDuration] = useState(0);
-    const recordingRef = useRef(null);
-    const timerRef = useRef(null);
+  // Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingRef = useRef(null);
+  const timerRef = useRef(null);
 
-    const messagesEndRef = useRef(null);
-    const inputRef = useRef(null);
-    const emojiBtnRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const emojiBtnRef = useRef(null);
 
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-    // Initial scroll state
-    const [initialScrollDone, setInitialScrollDone] = useState(false);
+  // Initial scroll state
+  const [initialScrollDone, setInitialScrollDone] = useState(false);
 
-    // Cleanup Audio on Unmount
-    useEffect(() => {
-        return () => {
-            audioRef.current.pause();
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, []);
-
-    // Subscribe to messages
-    useEffect(() => {
-        if (!collectionPath) return;
-
-        setLoading(true);
-        const q = query(collection(db, collectionPath), orderBy('createdAt', 'asc'));
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setMessages(msgs);
-            setLoading(false);
-        }, (error) => {
-            console.error('Error fetching messages:', error);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [collectionPath]);
-
-    // Auto-scroll
-    useEffect(() => {
-        if (messages.length > 0) {
-            if (!initialScrollDone || isFullScreen) {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-                setInitialScrollDone(true);
-            } else {
-                // Only smooth scroll if we are already near bottom or it's a new message
-                // strict check to avoid annoying jumps
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }
-        }
-    }, [messages, initialScrollDone, isFullScreen]);
-
-    const handleScroll = (e) => {
-        const { scrollTop, scrollHeight, clientHeight } = e.target;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-        setShowScrollBottom(!isNearBottom);
+  // Cleanup Audio on Unmount
+  useEffect(() => {
+    return () => {
+      audioRef.current.pause();
+      if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, []);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+  // Subscribe to messages
+  useEffect(() => {
+    if (!collectionPath) return;
 
-    // --- Audio Handlers ---
-    const handleStartRecording = async () => {
-        try {
-            const { stop } = await startRecording();
-            recordingRef.current = stop;
-            setIsRecording(true);
-            setRecordingDuration(0);
+    setLoading(true);
+    const q = query(collection(db, collectionPath), orderBy('createdAt', 'asc'));
 
-            timerRef.current = setInterval(() => {
-                setRecordingDuration(prev => prev + 1);
-            }, 1000);
-        } catch (error) {
-            console.error("Failed to start recording:", error);
-            showToast(t('no_mic_access'), 'error');
-        }
-    };
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMessages(msgs);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching messages:', error);
+      setLoading(false);
+    });
 
-    const handleStopRecording = async (shouldSend = true) => {
-        if (!recordingRef.current) return;
+    return () => unsubscribe();
+  }, [collectionPath]);
 
-        clearInterval(timerRef.current);
-        const audioBlob = await recordingRef.current();
-        setIsRecording(false);
-        setRecordingDuration(0);
-        recordingRef.current = null;
+  // Auto-scroll
+  useEffect(() => {
+    if (messages.length > 0) {
+      if (!initialScrollDone || isFullScreen) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+        setInitialScrollDone(true);
+      } else {
+        // Only smooth scroll if we are already near bottom or it's a new message
+        // strict check to avoid annoying jumps
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    }
+  }, [messages, initialScrollDone, isFullScreen]);
 
-        if (shouldSend && audioBlob) {
-            await sendVoiceMessage(audioBlob);
-        }
-    };
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setShowScrollBottom(!isNearBottom);
+  };
 
-    const sendVoiceMessage = async (audioBlob) => {
-        try {
-            const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
-            await addDoc(collection(db, collectionPath), {
-                text: '',
-                audioUrl: url,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'audio',
-                duration: recordingDuration
-            });
-            scrollToBottom();
-        } catch (error) {
-            console.error("Error sending voice:", error);
-            showToast(t('failed_send_voice'), 'error');
-        }
-    };
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-    const handlePlayAudio = (url, msgId) => {
-        if (playingAudioId === msgId) {
-            audioRef.current.pause();
-            setPlayingAudioId(null);
-        } else {
-            audioRef.current.src = url;
-            audioRef.current.play();
-            setPlayingAudioId(msgId);
-            audioRef.current.onended = () => setPlayingAudioId(null);
-        }
-    };
+  // --- Audio Handlers ---
+  const handleStartRecording = async () => {
+    try {
+      const { stop } = await startRecording();
+      recordingRef.current = stop;
+      setIsRecording(true);
+      setRecordingDuration(0);
 
-    const handleSendMessage = async (e) => {
-        if (e && e.preventDefault) e.preventDefault();
-        if (!newMessage.trim()) return;
+      timerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+      showToast(t('no_mic_access'), 'error');
+    }
+  };
 
-        const messageToSend = newMessage.trim();
+  const handleStopRecording = async (shouldSend = true) => {
+    if (!recordingRef.current) return;
 
-        try {
-            await addDoc(collection(db, collectionPath), {
-                text: messageToSend,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'text'
-            });
-            setNewMessage('');
-            scrollToBottom();
-        } catch (error) {
-            console.error("Error sending message:", error);
-            showToast(t('failed_send_message'), 'error');
-        } finally {
-            setTimeout(() => inputRef.current?.focus(), 10);
-        }
-    };
+    clearInterval(timerRef.current);
+    const audioBlob = await recordingRef.current();
+    setIsRecording(false);
+    setRecordingDuration(0);
+    recordingRef.current = null;
 
-    // --- Render Helpers ---
-    const formatTime = (timestamp) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
+    if (shouldSend && audioBlob) {
+      await sendVoiceMessage(audioBlob);
+    }
+  };
 
-    const renderBubbleContent = (msg) => {
-        // Detect Links
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const sendVoiceMessage = async (audioBlob) => {
+    try {
+      const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
+      await addDoc(collection(db, collectionPath), {
+        text: '',
+        audioUrl: url,
+        senderId: currentUser.uid,
+        senderName: userProfile?.display_name || currentUser.displayName || 'User',
+        senderAvatar: getSafeAvatar(userProfile || currentUser),
+        createdAt: serverTimestamp(),
+        type: 'audio',
+        duration: recordingDuration
+      });
+      scrollToBottom();
+    } catch (error) {
+      console.error("Error sending voice:", error);
+      showToast(t('failed_send_voice'), 'error');
+    }
+  };
 
-        switch (msg.type) {
-            case 'audio':
-                const isPlaying = playingAudioId === msg.id;
-                const circumference = 339.292; // Circle math for ring
+  const handlePlayAudio = (url, msgId) => {
+    if (playingAudioId === msgId) {
+      audioRef.current.pause();
+      setPlayingAudioId(null);
+    } else {
+      audioRef.current.src = url;
+      audioRef.current.play();
+      setPlayingAudioId(msgId);
+      audioRef.current.onended = () => setPlayingAudioId(null);
+    }
+  };
 
-                return (
-                    <div className="voice-widget">
+  const handleSendMessage = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const messageToSend = newMessage.trim();
+
+    try {
+      await addDoc(collection(db, collectionPath), {
+        text: messageToSend,
+        senderId: currentUser.uid,
+        senderName: userProfile?.display_name || currentUser.displayName || 'User',
+        senderAvatar: getSafeAvatar(userProfile || currentUser),
+        createdAt: serverTimestamp(),
+        type: 'text'
+      });
+      setNewMessage('');
+      scrollToBottom();
+    } catch (error) {
+      console.error("Error sending message:", error);
+      showToast(t('failed_send_message'), 'error');
+    } finally {
+      setTimeout(() => inputRef.current?.focus(), 10);
+    }
+  };
+
+  // --- Render Helpers ---
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderBubbleContent = (msg) => {
+    // Detect Links
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+    switch (msg.type) {
+      case 'audio':
+        const isPlaying = playingAudioId === msg.id;
+        const circumference = 339.292; // Circle math for ring
+
+        return (
+          <div className="voice-widget">
                         <div className="voice-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <button className="voice-play-btn" onClick={() => handlePlayAudio(msg.audioUrl, msg.id)}>
-                                {isPlaying ? (
-                                    <FaPause color="white" size={14} />
-                                ) : (
-                                    <FaPlay color="white" size={14} />
-                                )}
+                                {isPlaying ?
+                <FaPause color="white" size={14} /> :
+
+                <FaPlay color="white" size={14} />
+                }
                             </button>
                             <div className="voice-time">{formatDuration(msg.duration || 0)}</div>
                         </div>
-                    </div>
-                );
-            default:
-                // Text with Link detection
-                if (!msg.text) return null;
-                const parts = msg.text.split(urlRegex);
-                return (
-                    <span>
+                    </div>);
+
+      default:
+        // Text with Link detection
+        if (!msg.text) return null;
+        const parts = msg.text.split(urlRegex);
+        return (
+          <AppText as="span">
                         {parts.map((part, i) =>
-                            urlRegex.test(part) ? (
-                                <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>{part}</a>
-                            ) : (
-                                <span key={i}>{part}</span>
-                            )
-                        )}
-                    </span>
-                );
-        }
-    };
+            urlRegex.test(part) ?
+            <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>{part}</a> :
+
+            <AppText as="span" key={i}>{part}</AppText>
+
+            )}
+                    </AppText>);
+
+    }
+  };
 
 
-    if (!currentUser) return <div style={{ padding: '20px', textAlign: 'center' }}>{t("login_to_view_chat")}</div>;
+  if (!currentUser) return <div style={{ padding: '20px', textAlign: 'center' }}>{t("login_to_view_chat")}</div>;
 
-    // Styles for Full Screen vs Embedded
-    const containerStyle = isFullScreen ? {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
-        height: '100dvh', // Force dynamic viewport height
-        zIndex: 9999999, // Max z-index
-        background: '#0b1220', // Solid background
-        display: 'flex',
-        flexDirection: 'column',
-        margin: 0,
-        padding: 0
-    } : {
-        height: height,
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        background: 'rgba(0,0,0,0.2)',
-        borderRadius: '16px',
-        overflow: 'hidden'
-    };
+  // Styles for Full Screen vs Embedded
+  const containerStyle = isFullScreen ? {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100dvh', // Force dynamic viewport height
+    zIndex: 9999999, // Max z-index
+    background: '#0b1220', // Solid background
+    display: 'flex',
+    flexDirection: 'column',
+    margin: 0,
+    padding: 0
+  } : {
+    height: height,
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+    background: 'rgba(0,0,0,0.2)',
+    borderRadius: '16px',
+    overflow: 'hidden'
+  };
 
-    return (
-        <div className="group-chat-container" style={containerStyle}>
+  return (
+    <div className="group-chat-container" style={containerStyle}>
             {/* Header Control */}
             <div style={{
-                padding: '12px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'var(--header-bg)',
-                borderBottom: '1px solid var(--border-color)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)'
-            }}>
-                {isFullScreen ? (
-                    <>
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'var(--header-bg)',
+        borderBottom: '1px solid var(--border-color)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)'
+      }}>
+                {isFullScreen ?
+        <>
                         <button
-                            onClick={() => setIsFullScreen(false)}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'white',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                fontSize: '1rem',
-                                fontWeight: '600'
-                            }}
-                        >
+            onClick={() => setIsFullScreen(false)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '1rem',
+              fontWeight: '600'
+            }}>
+            
                             <FaArrowLeft /> Back
                         </button>
-                        <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'white' }}>{t("group_chat")}</span>
+                        <AppText as="span" style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'white' }}>{t("group_chat")}</AppText>
                         <div style={{ width: '60px' }}></div> {/* Spacer for visual centering */}
-                    </>
-                ) : (
-                    <>
-                        <span style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: '600' }}>{t("recent_messages")}</span>
+                    </> :
+
+        <>
+                        <AppText as="span" style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: '600' }}>{t("recent_messages")}</AppText>
                         <button
-                            onClick={() => setIsFullScreen(true)}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'var(--text-muted)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.8rem'
-                            }}
-                            title="Full Screen"
-                        >
+            onClick={() => setIsFullScreen(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.8rem'
+            }}
+            title="Full Screen">
+            
                             <FaExpand /> Full Screen
                         </button>
                     </>
-                )}
+        }
             </div>
 
             {/* Messages Area - Using classes from CommunityChatRoom.css */}
             <div className="message-list" onScroll={handleScroll} style={{ flex: 1, padding: '15px' }}>
-                {messages.length === 0 ? (
-                    <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
+                {messages.length === 0 ?
+        <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
                         <div style={{ fontSize: '2rem' }}>💬</div>
-                        <p>{t("start_conversation_first")}</p>
-                    </div>
-                ) : (
-                    messages.map((msg, index) => {
-                        const isMe = msg.senderId === currentUser.uid;
-                        const prevMsg = messages[index - 1];
-                        const isFirstOfGroup = !prevMsg || prevMsg.senderId !== msg.senderId;
+                        <AppText as="p">{t("start_conversation_first")}</AppText>
+                    </div> :
 
-                        return (
-                            <div
-                                key={msg.id}
-                                className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isFirstOfGroup ? 'first-of-group' : ''}`}
-                                style={{ marginTop: isFirstOfGroup ? '12px' : '2px' }}
-                            >
+        messages.map((msg, index) => {
+          const isMe = msg.senderId === currentUser.uid;
+          const prevMsg = messages[index - 1];
+          const isFirstOfGroup = !prevMsg || prevMsg.senderId !== msg.senderId;
+
+          return (
+            <div
+              key={msg.id}
+              className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isFirstOfGroup ? 'first-of-group' : ''}`}
+              style={{ marginTop: isFirstOfGroup ? '12px' : '2px' }}>
+              
                                 {/* Avatar for Incoming */}
-                                {!isMe && (
-                                    <UserAvatar
-                                        user={{ photo_url: msg.senderAvatar, display_name: msg.senderName, gender: msg.senderGender }}
-                                        className="sender-avatar"
-                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden', width: 32, height: 32 }}
-                                        alt=""
-                                    />
-                                )}
+                                {!isMe &&
+              <UserAvatar
+                user={{ photo_url: msg.senderAvatar, display_name: msg.senderName, gender: msg.senderGender }}
+                className="sender-avatar"
+                style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden', width: 32, height: 32 }}
+                alt="" />
+
+              }
 
                                 {/* Bubble */}
                                 <div className={`bubble ${msg.type === 'audio' ? 'audio-bubble' : ''}`}>
                                     {/* Sender Name for incoming (first of group) */}
-                                    {!isMe && isFirstOfGroup && (
-                                        <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginBottom: '2px', fontWeight: 'bold' }}>
+                                    {!isMe && isFirstOfGroup &&
+                <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginBottom: '2px', fontWeight: 'bold' }}>
                                             {msg.senderName}
                                         </div>
-                                    )}
+                }
 
                                     {renderBubbleContent(msg)}
 
                                     {/* Timestamp */}
-                                    <span className="timestamp">
+                                    <AppText as="span" className="timestamp">
                                         {formatTime(msg.createdAt)}
-                                    </span>
+                                    </AppText>
                                 </div>
-                            </div>
-                        );
-                    })
-                )}
+                            </div>);
+
+        })
+        }
                 <div ref={messagesEndRef} />
             </div>
 
             {/* Scroll to Bottom — OUTSIDE message-list */}
-            {showScrollBottom && (
-                <button
-                    onClick={scrollToBottom}
-                    style={{
-                        position: 'absolute',
-                        bottom: '80px',
-                        insetInlineEnd: '20px',
-                        background: 'var(--primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '40px',
-                        height: '40px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
-                        zIndex: 200,
-                    }}
-                >
+            {showScrollBottom &&
+      <button
+        onClick={scrollToBottom}
+        style={{
+          position: 'absolute',
+          bottom: '80px',
+          insetInlineEnd: '20px',
+          background: 'var(--primary)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '50%',
+          width: '40px',
+          height: '40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+          zIndex: 200
+        }}>
+        
                     <FaArrowDown />
                 </button>
-            )}
+      }
 
             {/* Input Area */}
             <div className="input-area" style={{ position: 'relative' }}>
                 {/* Emoji Picker Portal */}
                 <EmojiPickerPortal
-                    open={showEmojiPicker}
-                    onClose={() => setShowEmojiPicker(false)}
-                    anchorRef={emojiBtnRef}
-                    onEmojiClick={(emojiData) => {
-                        const input = inputRef.current;
-                        if (input) {
-                            const start = input.selectionStart ?? newMessage.length;
-                            const end = input.selectionEnd ?? newMessage.length;
-                            const updated = newMessage.slice(0, start) + emojiData.emoji + newMessage.slice(end);
-                            setNewMessage(updated);
-                            setTimeout(() => {
-                                input.focus();
-                                input.setSelectionRange(start + emojiData.emoji.length, start + emojiData.emoji.length);
-                            }, 0);
-                        } else {
-                            setNewMessage(prev => prev + emojiData.emoji);
-                        }
-                    }}
-                />
+          open={showEmojiPicker}
+          onClose={() => setShowEmojiPicker(false)}
+          anchorRef={emojiBtnRef}
+          onEmojiClick={(emojiData) => {
+            const input = inputRef.current;
+            if (input) {
+              const start = input.selectionStart ?? newMessage.length;
+              const end = input.selectionEnd ?? newMessage.length;
+              const updated = newMessage.slice(0, start) + emojiData.emoji + newMessage.slice(end);
+              setNewMessage(updated);
+              setTimeout(() => {
+                input.focus();
+                input.setSelectionRange(start + emojiData.emoji.length, start + emojiData.emoji.length);
+              }, 0);
+            } else {
+              setNewMessage((prev) => prev + emojiData.emoji);
+            }
+          }} />
+        
 
                 <div className="input-wrapper">
-                    {isRecording ? (
-                        <div className="recording-ui" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    {isRecording ?
+          <div className="recording-ui" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#ef4444' }}>
                                 <FaMicrophone className="recording-pulse" />
-                                <span>{formatDuration(recordingDuration)}</span>
+                                <AppText as="span">{formatDuration(recordingDuration)}</AppText>
                             </div>
-                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{t("recording")}</span>
+                            <AppText as="span" style={{ fontSize: '0.8rem', opacity: 0.7 }}>{t("recording")}</AppText>
                             <button
-                                onClick={() => handleStopRecording(false)}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                            >
+              onClick={() => handleStopRecording(false)}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              
                                 <FaTrash />
                             </button>
-                        </div>
-                    ) : (
-                        <>
-                            {/* Emoji Button — desktop only */}
-                            {!isTouchOrCoarsePointer() && (
-                                <button
-                                    ref={emojiBtnRef}
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(prev => !prev); }}
-                                    style={{
-                                        background: 'none', border: 'none',
-                                        fontSize: '1.3rem', cursor: 'pointer',
-                                        padding: '0 6px', lineHeight: 1,
-                                        opacity: 0.7, transition: 'opacity 0.2s',
-                                        flexShrink: 0,
-                                    }}
-                                    title="Emoji"
-                                >😊</button>
-                            )}
+                        </div> :
 
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                className="message-input"
-                                placeholder={t("type_message")}
-                                value={newMessage}
-                                onChange={(e) => setNewMessage(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                                autoComplete="off"
-                            />
+          <>
+                            {/* Emoji Button — desktop only */}
+                            {!isTouchOrCoarsePointer() &&
+            <button
+              ref={emojiBtnRef}
+              type="button"
+              onClick={(e) => {e.stopPropagation();setShowEmojiPicker((prev) => !prev);}}
+              style={{
+                background: 'none', border: 'none',
+                fontSize: '1.3rem', cursor: 'pointer',
+                padding: '0 6px', lineHeight: 1,
+                opacity: 0.7, transition: 'opacity 0.2s',
+                flexShrink: 0
+              }}
+              title="Emoji">
+              😊</button>
+            }
+
+                            <AppTextInput
+              ref={inputRef}
+              type="text"
+              className="message-input"
+              placeholder={t("type_message")}
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+              autoComplete="off" />
+            
                         </>
-                    )}
+          }
                 </div>
 
                 <button
-                    type="button"
-                    className="send-btn-circle"
-                    // KEY FIX: Use onMouseDown instead of onClick to prevent button from stealing focus
-                    // preventDefault() in onMouseDown stops the 'blur' event on the input
-                    onMouseDown={(e) => {
-                        e.preventDefault(); // This is the magic line that keeps keyboard open
-                        if (isRecording) {
-                            handleStopRecording(true);
-                        } else {
-                            handleSendMessage(e);
-                        }
-                    }}
-                    style={{
-                        width: '45px', height: '45px', borderRadius: '50%',
-                        background: isRecording ? '#ef4444' : 'var(--primary)',
-                        border: 'none', color: 'white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', marginInlineStart: '8px',
-                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-                    }}
-                >
-                    {isRecording ? (
-                        <FaPaperPlane />
-                    ) : (
-                        newMessage.trim() ? (
-                            <FaPaperPlane style={{ marginInlineStart: '-2px' }} />
-                        ) : (
-                            <FaMicrophone onMouseDown={(e) => {
-                                e.preventDefault(); // Also prevent blur on mic click
-                                e.stopPropagation();
-                                handleStartRecording();
-                            }} />
-                        )
-                    )}
+          type="button"
+          className="send-btn-circle"
+          // KEY FIX: Use onMouseDown instead of onClick to prevent button from stealing focus
+          // preventDefault() in onMouseDown stops the 'blur' event on the input
+          onMouseDown={(e) => {
+            e.preventDefault(); // This is the magic line that keeps keyboard open
+            if (isRecording) {
+              handleStopRecording(true);
+            } else {
+              handleSendMessage(e);
+            }
+          }}
+          style={{
+            width: '45px', height: '45px', borderRadius: '50%',
+            background: isRecording ? '#ef4444' : 'var(--primary)',
+            border: 'none', color: 'white',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', marginInlineStart: '8px',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+          }}>
+          
+                    {isRecording ?
+          <FaPaperPlane /> :
+
+          newMessage.trim() ?
+          <FaPaperPlane style={{ marginInlineStart: '-2px' }} /> :
+
+          <FaMicrophone onMouseDown={(e) => {
+            e.preventDefault(); // Also prevent blur on mic click
+            e.stopPropagation();
+            handleStartRecording();
+          }} />
+
+          }
                 </button>
             </div>
-        </div>
-    );
+        </div>);
+
 };
 
 export default GroupChat;

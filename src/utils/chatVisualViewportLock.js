@@ -10,12 +10,19 @@
  * Inner layout stays flex: header flex-shrink-0, body flex:1 min-height:0, footer flex-shrink-0.
  * On iOS, also handle `visualViewport` **scroll** (rubber-band / pan): reset document scroll and
  * re-apply `sync` so the shell does not “slide away” under the status bar when the user drags.
+ * On Android, pin shell height while the composer input stays focused so send taps do not bounce
+ * the keyboard open/closed.
  */
 
-function isAppleWebKitTouch() {
+export function isAppleWebKitTouch() {
     if (typeof navigator === 'undefined') return false;
     if (/iP(hone|ad|od)/.test(navigator.userAgent)) return true;
     return /\bMacintosh\b/.test(navigator.userAgent) && typeof document !== 'undefined' && 'ontouchend' in document;
+}
+
+function isAndroidTouch() {
+    if (typeof navigator === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent) && !isAppleWebKitTouch();
 }
 
 function isPhoneLikeChatShell() {
@@ -30,6 +37,30 @@ export function shouldApplyChatVisualViewportLock() {
 }
 
 const GEOMETRY_PROPS = ['left', 'top', 'right', 'bottom', 'width', 'height'];
+
+const COMPOSER_ROOT_SELECTOR =
+    '.community-composer-bar, .community-main-chat__composer, .input-area, .chat-footer-stack, .chat-input-area';
+
+const COMPOSER_FIELD_SELECTOR =
+    'input.message-input, textarea.message-input, .community-main-chat__input';
+
+function isComposerField(el) {
+    if (!el || typeof el.matches !== 'function') return false;
+    try {
+        return el.matches(COMPOSER_FIELD_SELECTOR);
+    } catch {
+        return false;
+    }
+}
+
+function isInsideComposerRoot(el) {
+    return Boolean(el?.closest?.(COMPOSER_ROOT_SELECTOR));
+}
+
+function isKeyboardOpenByViewport(vv) {
+    if (!vv) return false;
+    return window.innerHeight - vv.height > 100;
+}
 
 function lockPageScroll() {
     const prevBodyOverflow = document.body.style.overflow;
@@ -65,10 +96,13 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
 
     const getRoot = () => (typeof getContainer === 'function' ? getContainer() : getContainer);
     const vv = window.visualViewport;
+    const androidCompose = isAndroidTouch();
+    let androidPinnedShellHeight = null;
 
     const sync = () => {
         const el = getRoot();
         if (!el) return;
+        el.classList.add('chat-vv-shell');
         const innerH = window.innerHeight;
         const innerW = window.innerWidth;
 
@@ -84,23 +118,58 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
             el.style.top = '0px';
             el.style.width = '100%';
             el.style.height = `${Math.round(h)}px`;
+            el.style.maxHeight = `${Math.round(h)}px`;
             el.style.bottom = 'auto';
         } else {
             const w = Math.max(1, Math.min(vv.width, innerW - vv.offsetLeft));
             let h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
             if (override != null) h = Math.max(1, Math.min(override, innerH - vv.offsetTop));
+            if (
+                androidCompose &&
+                androidPinnedShellHeight != null &&
+                isComposerField(document.activeElement)
+            ) {
+                h = Math.max(h, androidPinnedShellHeight);
+            }
             el.style.left = `${vv.offsetLeft}px`;
             el.style.top = `${vv.offsetTop}px`;
             el.style.width = `${w}px`;
             el.style.height = `${h}px`;
+            el.style.maxHeight = `${h}px`;
             el.style.right = 'auto';
             el.style.bottom = 'auto';
         }
         if (onViewportChange) onViewportChange(vv);
     };
 
+    const onComposerFocusIn = (event) => {
+        if (!androidCompose || !isComposerField(event.target)) return;
+        if (isKeyboardOpenByViewport(vv)) {
+            androidPinnedShellHeight = Math.max(
+                androidPinnedShellHeight || 0,
+                Math.round(vv.height)
+            );
+        }
+        sync();
+    };
+
+    const onComposerFocusOut = () => {
+        if (!androidCompose) return;
+        window.setTimeout(() => {
+            const active = document.activeElement;
+            if (isComposerField(active) || isInsideComposerRoot(active)) return;
+            androidPinnedShellHeight = null;
+            sync();
+        }, 0);
+    };
+
     vv.addEventListener('resize', sync);
     sync();
+
+    if (androidCompose) {
+        document.addEventListener('focusin', onComposerFocusIn);
+        document.addEventListener('focusout', onComposerFocusOut);
+    }
 
     let onVVScroll = null;
     if (isAppleWebKitTouch()) {
@@ -126,14 +195,26 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         if (onVVScroll) {
             vv.removeEventListener('scroll', onVVScroll);
         }
+        if (androidCompose) {
+            document.removeEventListener('focusin', onComposerFocusIn);
+            document.removeEventListener('focusout', onComposerFocusOut);
+        }
+        androidPinnedShellHeight = null;
         const el = getRoot();
         if (el) {
+            el.classList.remove('chat-vv-shell');
             for (const prop of GEOMETRY_PROPS) {
                 el.style[prop] = '';
             }
+            el.style.maxHeight = '';
         }
         unlockScroll();
     }
 
     return { detach, sync };
+}
+
+/** Keep focus on the composer when tapping send/attach (prevents Android keyboard dismiss). */
+export function preventComposerControlBlur(event) {
+    event.preventDefault();
 }

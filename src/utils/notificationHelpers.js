@@ -2,7 +2,7 @@
 import { adminSecurityService } from '../services/adminSecurityService';
 
 /**
- * Create a notification for a user
+ * Create a notification for a user (awaitable).
  */
 export const createNotification = async ({
     userId,
@@ -31,16 +31,15 @@ export const createNotification = async ({
     }
 };
 
-/**
- * Alias for createNotification (for backward compatibility)
- */
+/** Fire-and-forget — never block UI on the createNotification callable. */
+export function fireNotification(payload) {
+    void createNotification(payload);
+}
+
 export const sendNotification = createNotification;
 
-/**
- * Notify user when someone follows them
- */
-export const notifyNewFollower = async (followedUserId, followerUser) => {
-    await createNotification({
+export const notifyNewFollower = (followedUserId, followerUser) => {
+    fireNotification({
         userId: followedUserId,
         type: 'follow',
         title: 'New Follower',
@@ -49,11 +48,41 @@ export const notifyNewFollower = async (followedUserId, followerUser) => {
     });
 };
 
-/**
- * Notify when invitation is accepted
- */
-export const notifyInvitationAccepted = async (hostUserId, guestUser, invitationId) => {
-    await createNotification({
+export const notifyProfileLiked = (profileOwnerId, likerUser) => {
+    fireNotification({
+        userId: profileOwnerId,
+        type: 'like',
+        title: 'Profile liked',
+        message: `${likerUser.name || 'Someone'} liked your profile`,
+        actionUrl: `/profile/${likerUser.id}`,
+        metadata: { source: 'discovery_feed', likerId: likerUser.id },
+    });
+};
+
+export const notifyMutualProfileMatch = (profileOwnerId, matchedUser) => {
+    fireNotification({
+        userId: profileOwnerId,
+        type: 'like',
+        title: "It's a match!",
+        message: `You and ${matchedUser.name || 'Someone'} liked each other!`,
+        actionUrl: `/profile/${matchedUser.id}`,
+        metadata: { source: 'discovery_feed', likerId: matchedUser.id, mutual: true },
+    });
+};
+
+export const notifyProfileGreeting = (profileOwnerId, senderUser) => {
+    fireNotification({
+        userId: profileOwnerId,
+        type: 'greeting',
+        title: 'New greeting',
+        message: `${senderUser.name || 'Someone'} waved hi 👋`,
+        actionUrl: `/profile/${senderUser.id}`,
+        metadata: { source: 'discovery_feed', senderId: senderUser.id },
+    });
+};
+
+export const notifyInvitationAccepted = (hostUserId, guestUser, invitationId) => {
+    fireNotification({
         userId: hostUserId,
         type: 'invitation_accepted',
         title: 'Invitation Accepted',
@@ -63,11 +92,8 @@ export const notifyInvitationAccepted = async (hostUserId, guestUser, invitation
     });
 };
 
-/**
- * Notify when invitation is rejected
- */
-export const notifyInvitationRejected = async (hostUserId, guestUser, invitationId) => {
-    await createNotification({
+export const notifyInvitationRejected = (hostUserId, guestUser, invitationId) => {
+    fireNotification({
         userId: hostUserId,
         type: 'invitation_rejected',
         title: 'Invitation Declined',
@@ -77,11 +103,8 @@ export const notifyInvitationRejected = async (hostUserId, guestUser, invitation
     });
 };
 
-/**
- * Notify when receiving a new message
- */
-export const notifyNewMessage = async (recipientUserId, senderUser, messagePreview) => {
-    await createNotification({
+export const notifyNewMessage = (recipientUserId, senderUser, messagePreview) => {
+    fireNotification({
         userId: recipientUserId,
         type: 'message',
         title: 'New Message',
@@ -90,11 +113,8 @@ export const notifyNewMessage = async (recipientUserId, senderUser, messagePrevi
     });
 };
 
-/**
- * Notify invitation reminder (1 day before)
- */
-export const notifyInvitationReminder = async (userId, invitation) => {
-    await createNotification({
+export const notifyInvitationReminder = (userId, invitation) => {
+    fireNotification({
         userId,
         type: 'reminder',
         title: 'Upcoming Invitation',
@@ -104,11 +124,8 @@ export const notifyInvitationReminder = async (userId, invitation) => {
     });
 };
 
-/**
- * Notify when someone likes your invitation
- */
-export const notifyInvitationLiked = async (invitationOwnerId, likerUser, invitationId) => {
-    await createNotification({
+export const notifyInvitationLiked = (invitationOwnerId, likerUser, invitationId) => {
+    fireNotification({
         userId: invitationOwnerId,
         type: 'like',
         title: 'Invitation Liked',
@@ -118,11 +135,8 @@ export const notifyInvitationLiked = async (invitationOwnerId, likerUser, invita
     });
 };
 
-/**
- * Notify when someone comments on your invitation
- */
-export const notifyNewComment = async (invitationOwnerId, commenterUser, invitationId, comment) => {
-    await createNotification({
+export const notifyNewComment = (invitationOwnerId, commenterUser, invitationId, comment) => {
+    fireNotification({
         userId: invitationOwnerId,
         type: 'comment',
         title: 'New Comment',

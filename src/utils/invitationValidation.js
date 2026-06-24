@@ -61,7 +61,7 @@ export const canEditInvitation = (invitation) => {
 };
 
 /**
- * Update invitation time/date and notify participants
+ * Upprivate invite time/date and notify participants
  */
 export const updateInvitationDateTime = async (invitationId, newDate, newTime, currentUser) => {
     try {
@@ -125,7 +125,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
             affectedUsers: joinedUsers.length
         };
     } catch (error) {
-        console.error('Error updating invitation:', error);
+        console.error('Error upprivate invite:', error);
         return {
             success: false,
             error: error.message
@@ -134,7 +134,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
 };
 
 /**
- * Validate invitation creation
+ * Valiprivate invite creation
  */
 export const validateInvitationCreation = async (userId) => {
     const dailyCheck = await checkDailyInvitationLimit(userId);

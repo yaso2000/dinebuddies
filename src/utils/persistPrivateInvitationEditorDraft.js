@@ -1,11 +1,11 @@
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { processInvitationMedia } from '../services/mediaService';
-import { rememberPrivateDraftCreateKind } from './privateInvitationDraft';
+import { rememberPrivateDraftCreateKind } from './socialInvitationDraft';
 import { resolveCardStructureFromBackgroundId } from './cardStructure';
 
 /**
- * Create or update a private/dating invitation Firestore draft from the editor.
+ * Create or update a private/private invite Firestore draft from the editor.
  * @param {object} params
  * @returns {Promise<{ ok: true, draftId: string } | { ok: false, code?: string }>}
  */
@@ -23,15 +23,15 @@ export async function persistPrivateInvitationEditorDraft({
     cardBackgroundId,
     cardGradientId,
     existingDraftId,
-    addPrivateInvitation,
+    addHostedInvitation,
     /** Private-only fields */
+    socialCardThemeColor = null,
+    socialCardShowHostAndMessage = true,
+    socialCardTextBackdropTone = null,
+    /** Dating-only fields */
     privateCardThemeColor = null,
     privateCardShowHostAndMessage = true,
     privateCardTextBackdropTone = null,
-    /** Dating-only fields */
-    datingCardThemeColor = null,
-    datingCardShowHostAndMessage = true,
-    datingCardTextBackdropTone = null,
     sanitizeDraft = null,
 }) {
     if (!authorUid) {
@@ -71,34 +71,34 @@ export async function persistPrivateInvitationEditorDraft({
         status: 'draft',
     };
 
-    if (type === 'Private') {
+    if (type === 'Social') {
+        Object.assign(baseDraft, {
+            socialCardThemeColor,
+            socialCardShowHostAndMessage,
+            socialCardTextBackdropTone,
+        });
+        rememberPrivateDraftCreateKind('social');
+    } else {
         Object.assign(baseDraft, {
             privateCardThemeColor,
             privateCardShowHostAndMessage,
             privateCardTextBackdropTone,
         });
         rememberPrivateDraftCreateKind('private');
-    } else {
-        Object.assign(baseDraft, {
-            datingCardThemeColor,
-            datingCardShowHostAndMessage,
-            datingCardTextBackdropTone,
-        });
-        rememberPrivateDraftCreateKind('dating');
     }
 
     const draftData =
         typeof sanitizeDraft === 'function' ? sanitizeDraft(baseDraft) : baseDraft;
 
     if (existingDraftId) {
-        await updateDoc(doc(db, 'private_invitations', existingDraftId), {
+        await updateDoc(doc(db, 'social_invitations', existingDraftId), {
             ...draftData,
             updatedAt: serverTimestamp(),
         });
         return { ok: true, draftId: existingDraftId };
     }
 
-    const createResult = await addPrivateInvitation({
+    const createResult = await addHostedInvitation({
         ...draftData,
         createdAt: serverTimestamp(),
     });

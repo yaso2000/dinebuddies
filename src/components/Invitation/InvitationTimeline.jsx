@@ -7,58 +7,58 @@ import { FaCheckCircle, FaWalking, FaMapMarkerAlt, FaFlagCheckered } from 'react
  * InvitationTimeline Component
  * Displays the progress of a meeting (Planning -> On Way -> Arrived -> Completed)
  * Adapts to individual user status (myStatus).
- */
+ */import { AppText } from "../base";
 const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdateStatus, onComplete, isUpdatingStatus }) => {
-    const { t } = useTranslation();
+  const { t } = useTranslation();
 
-    const templateStyles = invitation ? getTemplateStyle(
-        invitation.templateType || 'classic',
-        invitation.colorScheme || 'oceanBlue',
-        invitation.inviteMood || invitation.occasionType,
-        { cardFontFamily: invitation.cardFontFamily }
-    ) : null;
+  const templateStyles = invitation ? getTemplateStyle(
+    invitation.templateType || 'classic',
+    invitation.colorScheme || 'oceanBlue',
+    invitation.inviteMood || invitation.occasionType,
+    { cardFontFamily: invitation.cardFontFamily }
+  ) : null;
 
-    const themeColor = templateStyles?.badge?.color || 'var(--primary)';
-    const normalizedThemeColor = String(themeColor || '').trim().toLowerCase();
-    const isVeryLightThemeColor =
-        normalizedThemeColor === '#fff' ||
-        normalizedThemeColor === '#ffffff' ||
-        normalizedThemeColor === 'white' ||
-        normalizedThemeColor === 'rgb(255, 255, 255)' ||
-        normalizedThemeColor === 'rgba(255, 255, 255, 1)';
-    const activeStepBackground = isVeryLightThemeColor ? 'var(--bg-body)' : themeColor;
-    const activeStepBorder = isVeryLightThemeColor ? 'var(--text-main)' : themeColor;
-    const activeStepIconColor = isVeryLightThemeColor ? 'var(--text-main)' : 'white';
+  const themeColor = templateStyles?.badge?.color || 'var(--primary)';
+  const normalizedThemeColor = String(themeColor || '').trim().toLowerCase();
+  const isVeryLightThemeColor =
+  normalizedThemeColor === '#fff' ||
+  normalizedThemeColor === '#ffffff' ||
+  normalizedThemeColor === 'white' ||
+  normalizedThemeColor === 'rgb(255, 255, 255)' ||
+  normalizedThemeColor === 'rgba(255, 255, 255, 1)';
+  const activeStepBackground = isVeryLightThemeColor ? 'var(--bg-body)' : themeColor;
+  const activeStepBorder = isVeryLightThemeColor ? 'var(--text-main)' : themeColor;
+  const activeStepIconColor = isVeryLightThemeColor ? 'var(--text-main)' : 'white';
 
-    // Calculate progress width based on status
-    const getProgressWidth = () => {
-        switch (myStatus) {
-            case 'planning': return '0%';
-            case 'on_way': return '40%';
-            case 'arrived': return '80%';
-            case 'completed': return '100%';
-            default: return '0%';
-        }
-    };
+  // Calculate progress width based on status
+  const getProgressWidth = () => {
+    switch (myStatus) {
+      case 'planning':return '0%';
+      case 'on_way':return '40%';
+      case 'arrived':return '80%';
+      case 'completed':return '100%';
+      default:return '0%';
+    }
+  };
 
-    const steps = [
-        { id: 'planning', icon: FaCheckCircle, label: t('planning') },
-        { id: 'on_way', icon: FaWalking, label: t('on_way') },
-        { id: 'arrived', icon: FaMapMarkerAlt, label: t('arrived') },
-        { id: 'completed', icon: FaFlagCheckered, label: t('completed') }
-    ];
+  const steps = [
+  { id: 'planning', icon: FaCheckCircle, label: t('planning') },
+  { id: 'on_way', icon: FaWalking, label: t('on_way') },
+  { id: 'arrived', icon: FaMapMarkerAlt, label: t('arrived') },
+  { id: 'completed', icon: FaFlagCheckered, label: t('completed') }];
 
-    // Helper to determine if a step is active/completed
-    const isStepActive = (stepId) => {
-        if (myStatus === 'completed') return true;
-        if (myStatus === 'arrived' && stepId !== 'completed') return true;
-        if (myStatus === 'on_way' && (stepId === 'planning' || stepId === 'on_way')) return true;
-        if (myStatus === 'planning' && stepId === 'planning') return true;
-        return false;
-    };
 
-    return (
-        <div className="meeting-timeline" style={{ marginBottom: '2rem', background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+  // Helper to determine if a step is active/completed
+  const isStepActive = (stepId) => {
+    if (myStatus === 'completed') return true;
+    if (myStatus === 'arrived' && stepId !== 'completed') return true;
+    if (myStatus === 'on_way' && (stepId === 'planning' || stepId === 'on_way')) return true;
+    if (myStatus === 'planning' && stepId === 'planning') return true;
+    return false;
+  };
+
+  return (
+    <div className="meeting-timeline" style={{ marginBottom: '2rem', background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
 
 
             <div style={{ position: 'relative', padding: '0 10px' }}>
@@ -67,118 +67,118 @@ const InvitationTimeline = ({ invitation, myStatus, isAccepted, isHost, onUpdate
 
                 {/* Active Progress Bar */}
                 <div style={{
-                    position: 'absolute',
-                    top: '24px',
-                    left: '0',
-                    width: getProgressWidth(),
-                    height: '4px',
-                    background: themeColor,
-                    borderRadius: '2px',
-                    zIndex: 2,
-                    transition: 'width 0.5s ease-in-out',
-                    boxShadow: `0 0 10px ${themeColor}`
-                }}></div>
+          position: 'absolute',
+          top: '24px',
+          left: '0',
+          width: getProgressWidth(),
+          height: '4px',
+          background: themeColor,
+          borderRadius: '2px',
+          zIndex: 2,
+          transition: 'width 0.5s ease-in-out',
+          boxShadow: `0 0 10px ${themeColor}`
+        }}></div>
 
                 {/* Steps */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 3 }}>
                     {steps.map((step, index) => {
-                        const active = isStepActive(step.id);
-                        const Icon = step.icon;
-                        return (
-                            <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '60px' }}>
+            const active = isStepActive(step.id);
+            const Icon = step.icon;
+            return (
+              <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '60px' }}>
                                 <div style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '50%',
-                                    background: active ? activeStepBackground : 'var(--bg-body)',
-                                    border: `2px solid ${active ? activeStepBorder : 'var(--border-color)'}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginBottom: '8px',
-                                    transition: 'all 0.3s ease',
-                                    color: active ? activeStepIconColor : 'var(--text-muted)',
-                                    boxShadow: active ? `0 0 15px ${themeColor}66` : 'none'
-                                }}>
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: active ? activeStepBackground : 'var(--bg-body)',
+                  border: `2px solid ${active ? activeStepBorder : 'var(--border-color)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '8px',
+                  transition: 'all 0.3s ease',
+                  color: active ? activeStepIconColor : 'var(--text-muted)',
+                  boxShadow: active ? `0 0 15px ${themeColor}66` : 'none'
+                }}>
                                     <Icon size={14} />
                                 </div>
-                                <span style={{
-                                    fontSize: '0.65rem',
-                                    color: active ? 'var(--text-white)' : 'var(--text-muted)',
-                                    fontWeight: active ? '700' : '400',
-                                    textAlign: 'center'
-                                }}>
+                                <AppText as="span" style={{
+                  fontSize: '0.65rem',
+                  color: active ? 'var(--text-white)' : 'var(--text-muted)',
+                  fontWeight: active ? '700' : '400',
+                  textAlign: 'center'
+                }}>
                                     {step.label}
-                                </span>
-                            </div>
-                        );
-                    })}
+                                </AppText>
+                            </div>);
+
+          })}
                 </div>
             </div>
 
             {/* Action Buttons */}
-            {(isAccepted || isHost) && myStatus !== 'completed' && (
-                <div className="timeline-actions" style={{ marginTop: '2rem', display: 'flex', gap: '10px' }}>
-                    {myStatus === 'planning' && (
-                        <button
-                            type="button"
-                            onClick={() => onUpdateStatus('on_way')}
-                            disabled={isUpdatingStatus}
-                            className="ui-btn ui-btn--primary"
-                            style={{
-                                ...(templateStyles?.button || {}),
-                                flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', opacity: isUpdatingStatus ? 0.7 : 1,
-                                height: 'auto', border: templateStyles?.button?.border || 'none'
-                            }}
-                        >
+            {(isAccepted || isHost) && myStatus !== 'completed' &&
+      <div className="timeline-actions" style={{ marginTop: '2rem', display: 'flex', gap: '10px' }}>
+                    {myStatus === 'planning' &&
+        <button
+          type="button"
+          onClick={() => onUpdateStatus('on_way')}
+          disabled={isUpdatingStatus}
+          className="ui-btn ui-btn--primary"
+          style={{
+            ...(templateStyles?.button || {}),
+            flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem', opacity: isUpdatingStatus ? 0.7 : 1,
+            height: 'auto', border: templateStyles?.button?.border || 'none'
+          }}>
+          
                             {isUpdatingStatus ? t('updating_progress', { defaultValue: 'Updating...' }) : t('im_on_way')}
                         </button>
-                    )}
+        }
 
-                    {myStatus === 'on_way' && (
-                        <button
-                            type="button"
-                            onClick={() => onUpdateStatus('arrived')}
-                            disabled={isUpdatingStatus}
-                            className="ui-btn ui-btn--secondary"
-                            style={{
-                                flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
-                                background: 'var(--color-success)', border: 'none', color: 'white',
-                                opacity: isUpdatingStatus ? 0.7 : 1, height: 'auto'
-                            }}
-                        >
+                    {myStatus === 'on_way' &&
+        <button
+          type="button"
+          onClick={() => onUpdateStatus('arrived')}
+          disabled={isUpdatingStatus}
+          className="ui-btn ui-btn--secondary"
+          style={{
+            flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
+            background: 'var(--color-success)', border: 'none', color: 'white',
+            opacity: isUpdatingStatus ? 0.7 : 1, height: 'auto'
+          }}>
+          
                             {isUpdatingStatus ? t('updating_progress', { defaultValue: 'Updating...' }) : t('ive_arrived')}
                         </button>
-                    )}
+        }
 
-                    {myStatus === 'arrived' && isHost && (
-                        <button
-                            type="button"
-                            onClick={onComplete}
-                            disabled={isUpdatingStatus}
-                            className="ui-btn ui-btn--primary"
-                            style={{
-                                ...(templateStyles?.button || {}),
-                                flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
-                                height: 'auto', border: templateStyles?.button?.border || 'none',
-                                background: templateStyles?.button?.background || 'var(--luxury-gold)',
-                                color: templateStyles?.button?.color || 'black',
-                                fontWeight: 'bold'
-                            }}
-                        >
+                    {myStatus === 'arrived' && isHost &&
+        <button
+          type="button"
+          onClick={onComplete}
+          disabled={isUpdatingStatus}
+          className="ui-btn ui-btn--primary"
+          style={{
+            ...(templateStyles?.button || {}),
+            flex: 1, padding: '12px', borderRadius: '12px', fontSize: '0.9rem',
+            height: 'auto', border: templateStyles?.button?.border || 'none',
+            background: templateStyles?.button?.background || 'var(--luxury-gold)',
+            color: templateStyles?.button?.color || 'black',
+            fontWeight: 'bold'
+          }}>
+          
                             {t('complete_meeting')}
                         </button>
-                    )}
+        }
 
-                    {myStatus === 'arrived' && !isHost && (
-                        <div style={{ flex: 1, textAlign: 'center', padding: '10px', background: 'var(--hover-overlay)', borderRadius: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {myStatus === 'arrived' && !isHost &&
+        <div style={{ flex: 1, textAlign: 'center', padding: '10px', background: 'var(--hover-overlay)', borderRadius: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             {t('waiting_host_complete', 'Waiting for host to complete...')}
                         </div>
-                    )}
+        }
                 </div>
-            )}
-        </div>
-    );
+      }
+        </div>);
+
 };
 
 export default InvitationTimeline;

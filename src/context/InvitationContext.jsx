@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import app, { auth, db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -11,12 +11,12 @@ import {
     updateDoc,
     doc,
     serverTimestamp,
+    Timestamp,
     getDocs,
     getDoc,
     where,
     orderBy,
     limit,
-    startAfter,
     arrayUnion,
     arrayRemove,
     increment,
@@ -27,7 +27,14 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 import notificationSound from '../utils/notificationSound';
-import { resolvePrivateInviteCategory } from '../utils/inviteCategory';
+import { computeArchiveAfterFirestoreTimestamp } from '../utils/invitationExpiry';
+import {
+    buildPrivateInvitationResponseChatMessage,
+    buildPrivateInvitationResponseNotificationTitle,
+    normalizeUserGender,
+    isArabicLocale,
+} from '../utils/privateInvitationResponseMessages';
+import i18n from '../i18n';
 import { getInvitationLatLng } from '../utils/invitationCoords';
 import { followUser, unfollowUser } from '../utils/followHelpers';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
@@ -38,8 +45,8 @@ import { maybeAwardBusinessHostingPoints } from '../services/businessLikeService
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
 import {
     getTotalDineCredits,
+    SOCIAL_INVITATION_PUBLISH_CREDITS,
     PRIVATE_INVITATION_PUBLISH_CREDITS,
-    DATING_INVITATION_PUBLISH_CREDITS,
 } from '../utils/privateInvitationCredits';
 import {
     assertCreatorCanCreateInvitations,
@@ -48,14 +55,15 @@ import {
     invitationErrorI18nKey,
 } from '../utils/invitationRules';
 import { cannotCreateInvitations } from '../utils/accountRole';
-import i18n from '../i18n';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
+import { resolveInviteCategory } from '../utils/inviteCategory';
+import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
 
 const InvitationContext = createContext(null);
 
 export const useInvitations = () => useContext(InvitationContext);
 
-const INVITATIONS_PAGE_SIZE = 20;
+const INITIAL_INVITATIONS_LIMIT = 50;
 
 const INVITATION_ERROR_MESSAGES = {
     requestToJoin: 'Failed to send request. Try again.',
@@ -64,21 +72,19 @@ const INVITATION_ERROR_MESSAGES = {
     rejectUser: 'Failed to reject. Try again.',
     cancelRequest: 'Failed to cancel request. Try again.',
     addInvitation: 'Failed to create invitation. Try again.',
-    addPrivateInvitation: 'Failed to create invitation. Try again.'
+    addHostedInvitation: 'Failed to create invitation. Try again.'
 };
 
 export const InvitationProvider = ({ children }) => {
     const { currentUser, userProfile: firebaseProfile, updateUserProfile, isGuest } = useAuth();
     const { showToast } = useToast();
     const [invitations, setInvitations] = useState([]);
-    const [loadedMoreInvitations, setLoadedMoreInvitations] = useState([]);
-    const [hasMoreInvitations, setHasMoreInvitations] = useState(true);
-    const [loadingMoreInvitations, setLoadingMoreInvitations] = useState(false);
-    const lastInvitationDocRef = useRef(null);
     const [privateInvitations, setPrivateInvitations] = useState([]);
     const [restaurants, setRestaurants] = useState([]);
     const [loadingInvitations, setLoadingInvitations] = useState(true);
     const [detectedCountry, setDetectedCountry] = useState(null);
+    /** Optimistic following[] until Firestore snapshot catches up (toggleFollow must not pre-write). */
+    const [optimisticFollowing, setOptimisticFollowing] = useState(null);
     const functions = getFunctions(app, FUNCTIONS_REGION);
     const publishPrivateInvitationDraftCallable = httpsCallable(functions, 'publishPrivateInvitationDraft');
     const getPrivateInvitationSharePreviewCallable = httpsCallable(
@@ -97,34 +103,60 @@ export const InvitationProvider = ({ children }) => {
     const createNotificationCallable = httpsCallable(functions, 'createNotification');
     const createReportCallable = httpsCallable(functions, 'createReport');
 
-    // --- 1. Sync Public Invitations (first page only; use Load More for more) ---
-    useEffect(() => {
+    /**
+     * Firestore `users/{uid}` often lags Firebase Auth. Draft create must not fail with
+     * "Please sign in" while the profile snapshot is still loading.
+     */
+    const getInvitationCreatorProfile = useCallback(() => {
+        if (firebaseProfile) return firebaseProfile;
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!uid || uid === 'guest' || isGuest) return null;
+        return {
+            role: currentUser.role || 'user',
+            isBusiness: currentUser.isBusiness === true,
+            isGuest: false,
+            isVirtual: false,
+            display_name: currentUser.displayName || currentUser.display_name,
+            displayName: currentUser.displayName || currentUser.display_name,
+        };
+    }, [firebaseProfile, currentUser, isGuest]);
+
+    const fetchPublicInvitations = useCallback(async () => {
         const q = query(
             collection(db, 'invitations'),
             orderBy('createdAt', 'desc'),
-            limit(INVITATIONS_PAGE_SIZE)
+            limit(INITIAL_INVITATIONS_LIMIT)
         );
-        const timeout = setTimeout(() => {
-            setLoadingInvitations(false);
-        }, 15000);
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const staticInvites = snapshot.docs
-                .map((d) => ({ id: d.id, ...d.data() }))
-                .filter((inv) => inv.adminBlocked !== true);
-            const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-            lastInvitationDocRef.current = lastDoc;
-            setInvitations(staticInvites);
-            setLoadingInvitations(false);
-            if (snapshot.docs.length < INVITATIONS_PAGE_SIZE) setHasMoreInvitations(false);
-        }, (error) => {
-            console.error("Error syncing invitations:", error);
-            setLoadingInvitations(false);
-        });
-        return () => {
-            clearTimeout(timeout);
-            unsubscribe();
-        };
+        const snapshot = await getDocs(q);
+        return snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((inv) => inv.adminBlocked !== true);
     }, []);
+
+    // --- 1. Load public invitations once on app entry (no live sync / load-more) ---
+    useEffect(() => {
+        let cancelled = false;
+        const timeout = setTimeout(() => {
+            if (!cancelled) setLoadingInvitations(false);
+        }, 15000);
+
+        fetchPublicInvitations()
+            .then((staticInvites) => {
+                if (cancelled) return;
+                setInvitations(staticInvites);
+                setLoadingInvitations(false);
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                console.error('Error loading invitations:', error);
+                setLoadingInvitations(false);
+            });
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timeout);
+        };
+    }, [fetchPublicInvitations]);
 
     // --- 1b. Sync Private Invitations (separate collection) ---
     useEffect(() => {
@@ -141,11 +173,13 @@ export const InvitationProvider = ({ children }) => {
         auth.authStateReady().then(() => {
             if (cancelled) return;
 
-            const qHost = query(collection(db, 'private_invitations'), where('authorId', '==', userId));
+            const sessionUid = auth.currentUser?.uid || userId;
+            if (!sessionUid) return;
 
-            const qInvited = query(
-                collection(db, 'private_invitations'),
-                where('invitedFriends', 'array-contains', userId)
+            const qHost = query(collection(db, 'social_invitations'), where('authorId', '==', sessionUid));
+            const qInvitee = query(
+                collection(db, 'social_invitations'),
+                where('invitedFriends', 'array-contains', sessionUid)
             );
 
             const mergeResults = (hostDocs, invitedDocs) => {
@@ -175,8 +209,8 @@ export const InvitationProvider = ({ children }) => {
                 }
             );
 
-            unsubInvited = onSnapshot(
-                qInvited,
+            const unsubInvitee = onSnapshot(
+                qInvitee,
                 (snap) => {
                     invitedDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                     mergeResults(hostDocs, invitedDocs);
@@ -185,6 +219,8 @@ export const InvitationProvider = ({ children }) => {
                     console.error('Error syncing invited private invitations:', error);
                 }
             );
+
+            unsubInvited = unsubInvitee;
         });
 
         return () => {
@@ -503,7 +539,7 @@ export const InvitationProvider = ({ children }) => {
             return { ok: false, code: INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED, message: 'Guest not allowed' };
         }
 
-        const creatorBlock = assertCreatorCanCreateInvitations(firebaseProfile);
+        const creatorBlock = assertCreatorCanCreateInvitations(getInvitationCreatorProfile());
         if (creatorBlock) {
             showInvitationRuleToast(creatorBlock.code, creatorBlock.message);
             return creatorBlock;
@@ -552,9 +588,14 @@ export const InvitationProvider = ({ children }) => {
                     avatar: getSafeAvatar(currentUser),
                     isBusiness: isBusinessAccount
                 },
-                requests: [], joined: [], chat: [], meetingStatus: 'planning',
+                requests: [], joined: [], chat: [],                 meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
                 time: newInvite.time || '20:30',
+                archiveAfterAt: computeArchiveAfterFirestoreTimestamp(
+                    newInvite.date || new Date().toISOString(),
+                    newInvite.time || '20:30',
+                    Timestamp
+                ),
                 privacy: newInvite.privacy || 'public',
                 createdAt: serverTimestamp()
             };
@@ -597,12 +638,12 @@ export const InvitationProvider = ({ children }) => {
     };
 
     // --- Private Invitation: separate collection ---
-    const addPrivateInvitation = async (newInvite) => {
+    const addHostedInvitation = async (newInvite) => {
         if (isGuest) {
             return { ok: false, code: INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED, message: 'Guest not allowed' };
         }
 
-        const creatorBlock = assertCreatorCanCreateInvitations(firebaseProfile);
+        const creatorBlock = assertCreatorCanCreateInvitations(getInvitationCreatorProfile());
         if (creatorBlock) {
             showInvitationRuleToast(creatorBlock.code, creatorBlock.message);
             return creatorBlock;
@@ -615,7 +656,9 @@ export const InvitationProvider = ({ children }) => {
 
             // Firebase Auth User uses `uid` (not `id`). Never omit authorId or publish will reject the host.
             const creatorUid = currentUser.uid || currentUser.id;
-            if (!creatorUid || creatorUid === 'guest') return false;
+            if (!creatorUid || creatorUid === 'guest') {
+                return { ok: false, code: INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED, message: 'Not signed in' };
+            }
 
             // Remove undefined values — Firestore rejects them (e.g. lat/lng when no location selected)
             const sanitize = (obj) => {
@@ -626,22 +669,23 @@ export const InvitationProvider = ({ children }) => {
                 return clean;
             };
 
+            const creatorProfile = getInvitationCreatorProfile();
             const displayName =
                 currentUser.displayName ||
-                firebaseProfile?.display_name ||
-                firebaseProfile?.displayName ||
+                creatorProfile?.display_name ||
+                creatorProfile?.displayName ||
                 'User';
 
             let inviteData = sanitize({
                 ...newInvite,
-                inviteCategory: resolvePrivateInviteCategory(newInvite),
+                inviteCategory: resolveInviteCategory(newInvite),
                 authorId: creatorUid,
                 author: {
                     id: creatorUid,
                     name: displayName,
                     avatar: getSafeAvatar(currentUser)
                 },
-                privacy: 'private',
+                privacy: 'social',
                 createdAt: serverTimestamp()
             });
             const requestedInvitees = Array.isArray(inviteData.invitedFriends) ? inviteData.invitedFriends : [];
@@ -659,12 +703,12 @@ export const InvitationProvider = ({ children }) => {
                     return { ok: false, code: INVITATION_ERROR_CODES.FIRESTORE_ERROR, message: 'No invitees' };
                 }
             }
-            const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
+            const docRef = await addDoc(collection(db, 'social_invitations'), inviteData);
             return { ok: true, id: docRef.id };
         } catch (err) {
             console.error("Error adding private invitation:", err);
-            showToast(INVITATION_ERROR_MESSAGES.addPrivateInvitation, 'error');
-            return { ok: false, code: INVITATION_ERROR_CODES.FIRESTORE_ERROR, message: INVITATION_ERROR_MESSAGES.addPrivateInvitation };
+            showToast(INVITATION_ERROR_MESSAGES.addHostedInvitation, 'error');
+            return { ok: false, code: INVITATION_ERROR_CODES.FIRESTORE_ERROR, message: INVITATION_ERROR_MESSAGES.addHostedInvitation };
         }
     };
 
@@ -776,7 +820,7 @@ export const InvitationProvider = ({ children }) => {
                 const userDoc = await getDoc(doc(db, 'users', userId));
                 const userData = userDoc.exists() ? userDoc.data() : {};
                 const userName = userData.display_name || userData.displayName || userData.name || 'A guest';
-                const collectionName = invData.privacy === 'private' ? 'private_invitations' : 'invitations';
+                const collectionName = invData.privacy === 'social' ? 'social_invitations' : 'invitations';
                 
                 await addDoc(collection(db, collectionName, invId, 'messages'), {
                     text: `🎉 ${userName} has been approved to join the invitation!`,
@@ -837,20 +881,22 @@ export const InvitationProvider = ({ children }) => {
 
     // ── Private / dating drafts: Dine Credits (free+paid), same pool as AI; admins bypass. ──
 
-    const canCreatePrivateInvitation = (kind = 'private') => {
+    const canCreateSocialInvitation = (kind = 'social') => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
 
-        if (cannotCreateInvitations(firebaseProfile)) {
+        if (cannotCreateInvitations(getInvitationCreatorProfile())) {
             return { canCreate: false, reason: 'business' };
         }
 
+        const creatorProfile = getInvitationCreatorProfile();
         const adminLike =
-            firebaseProfile &&
-            ['admin', 'moderator', 'support', 'staff'].includes(String(firebaseProfile.role || ''));
+            creatorProfile &&
+            ['admin', 'moderator', 'support', 'staff'].includes(String(creatorProfile.role || ''));
         if (adminLike) return { canCreate: true, quota: 'unlimited' };
 
+        const billingKind = kind === 'private' || kind === 'dating' ? 'private' : 'social';
         const cost =
-            kind === 'dating' ? DATING_INVITATION_PUBLISH_CREDITS : PRIVATE_INVITATION_PUBLISH_CREDITS;
+            billingKind === 'private' ? PRIVATE_INVITATION_PUBLISH_CREDITS : SOCIAL_INVITATION_PUBLISH_CREDITS;
 
         // Critical: while `users/{uid}` is still loading, `getTotalDineCredits(null)` is 0 — the app
         // was treating everyone as broke and sending them to /settings/credits (toast + payment packs UI).
@@ -965,23 +1011,97 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const respondToPrivateInvitation = async (invId, status) => {
-        const me = currentUser?.uid || currentUser?.id;
+        const me = auth.currentUser?.uid || currentUser?.uid || currentUser?.id;
         if (!currentUser || me === 'guest') return false;
         if (currentUser?.role === 'business' || currentUser?.isBusiness) {
             showToast('Business accounts cannot respond to invitations.', 'error');
             return false;
         }
         try {
-            const invRef = doc(db, 'private_invitations', invId);
+            const invRef = doc(db, 'social_invitations', invId);
             const invDoc = await getDoc(invRef);
             if (!invDoc.exists()) return false;
 
             const invData = invDoc.data();
             const hostId = invData.authorId || invData.author?.id;
             const responderName =
-                currentUser.displayName || firebaseProfile?.display_name || firebaseProfile?.displayName || 'Guest';
+                firebaseProfile?.display_name ||
+                firebaseProfile?.displayName ||
+                currentUser.displayName ||
+                currentUser.name ||
+                'Guest';
+            const locale = i18n.language || 'en';
+            const isDating = invData.type === 'Private' || String(invData.occasionType || '').toLowerCase() === 'dating';
+            const responderGender = normalizeUserGender(firebaseProfile || currentUser);
 
-            await updateDoc(invRef, { [`rsvps.${me}`]: status });
+            let hostGender = 'neutral';
+            if (hostId) {
+                try {
+                    const hostSnap = await getDoc(doc(db, 'users', hostId));
+                    if (hostSnap.exists()) {
+                        hostGender = normalizeUserGender(hostSnap.data());
+                    }
+                } catch {
+                    /* optional host profile */
+                }
+            }
+
+            const chatText = buildPrivateInvitationResponseChatMessage({
+                status,
+                responderGender,
+                hostGender,
+                invitationTitle: invData.title,
+                isDating,
+                locale,
+            });
+            const notifyTitle = buildPrivateInvitationResponseNotificationTitle({
+                status,
+                isDating,
+                locale,
+            });
+
+            const postResponseChatMessage = async () => {
+                await addDoc(collection(db, 'social_invitations', invId, 'messages'), {
+                    text: chatText,
+                    senderId: me,
+                    senderName: responderName,
+                    senderAvatar: getSafeAvatar(firebaseProfile || currentUser),
+                    createdAt: serverTimestamp(),
+                    type: 'text',
+                    isRsvpResponse: true,
+                    rsvpStatus: status,
+                });
+            };
+
+            // Decline: chat while still invited (rules), then persist RSVP
+            if (status === 'declined') {
+                try {
+                    await postResponseChatMessage();
+                } catch (chatErr) {
+                    console.error('Failed to send decline chat message:', chatErr);
+                }
+            }
+
+            await updateDoc(invRef, {
+                [`rsvps.${me}`]: status,
+                updatedAt: serverTimestamp(),
+            });
+
+            setPrivateInvitations((prev) =>
+                prev.map((inv) =>
+                    inv.id === invId
+                        ? { ...inv, rsvps: { ...(inv.rsvps || {}), [me]: status } }
+                        : inv
+                )
+            );
+
+            if (status === 'accepted') {
+                try {
+                    await postResponseChatMessage();
+                } catch (chatErr) {
+                    console.error('Failed to send accept chat message:', chatErr);
+                }
+            }
 
             if (status === 'declined') {
                 const updatedDoc = await getDoc(invRef);
@@ -994,12 +1114,14 @@ export const InvitationProvider = ({ children }) => {
                     await addUserNotification({
                         userId: hostId,
                         type: 'system_announcement',
-                        title: '⚠️ Invitation Cancelled',
-                        message: `All invitees declined your private invitation "${data.title}"`,
+                        title: isArabicLocale(locale) ? '⚠️ تم إلغاء الدعوة' : '⚠️ Invitation Cancelled',
+                        message: isArabicLocale(locale)
+                            ? `اعتذر جميع المدعوين عن دعوتك «${invData.title || 'الدعوة'}»`
+                            : `All invitees declined your private invitation "${invData.title}"`,
                         invitationId: invId,
                         style: 'warning',
                     });
-                    setTimeout(async () => { await deleteInvitationAndStorage(invId, 'private_invitations'); }, 5000);
+                    setTimeout(async () => { await deleteInvitationAndStorage(invId, 'social_invitations'); }, 5000);
                     addNotification('Cancelled', 'Invitation rejected by all invitees.', 'warning');
                     return true;
                 }
@@ -1008,17 +1130,21 @@ export const InvitationProvider = ({ children }) => {
             if (hostId && hostId !== me) {
                 await addUserNotification({
                     userId: hostId,
-                    type: 'private_invitation_response',
-                    title: status === 'accepted' ? '✅ Invitation Accepted' : '❌ Invitation Declined',
-                    message: `${responderName} has ${status === 'accepted' ? 'accepted' : 'declined'} your private invitation "${invData.title}"`,
+                    type: 'social_invitation_response',
+                    title: notifyTitle,
+                    message: chatText,
                     invitationId: invId,
-                    actionUrl: `/invitation/private/${invId}`,
+                    actionUrl: getHostedInvitationDetailsPath({ id: invId, ...invData }),
                     status: status,
+                    fromUserId: me,
+                    fromUserName: responderName,
                 });
             }
             addNotification(
                 status === 'accepted' ? 'Accepted!' : 'Declined',
-                status === 'accepted' ? 'You have accepted the invitation successfully.' : 'Your response has been sent to the host.',
+                status === 'accepted'
+                    ? (isArabicLocale(locale) ? 'تم إرسال رسالة قبولك إلى المحادثة.' : 'Your acceptance message was sent to the chat.')
+                    : (isArabicLocale(locale) ? 'تم إرسال رسالة اعتذارك بلطف.' : 'Your polite decline was sent.'),
                 'success'
             );
             return true;
@@ -1081,40 +1207,67 @@ export const InvitationProvider = ({ children }) => {
         setInvitations(prev => prev.map(inv => inv.id === invId ? { ...inv, pendingChangeApproval: (inv.pendingChangeApproval || []).filter(id => id !== currentUser.id) } : inv));
     };
 
+    const effectiveFollowing = optimisticFollowing ?? firebaseProfile?.following ?? [];
+
+    useEffect(() => {
+        if (optimisticFollowing === null) return;
+        const serverFollowing = firebaseProfile?.following ?? [];
+        const sameLength = optimisticFollowing.length === serverFollowing.length;
+        const sameMembers =
+            sameLength && optimisticFollowing.every((id) => serverFollowing.includes(id));
+        if (sameMembers) {
+            setOptimisticFollowing(null);
+        }
+    }, [firebaseProfile?.following, optimisticFollowing]);
+
     const toggleFollow = async (userId) => {
         if (isGuest || !userId || userId === currentUser.id) return;
-        
-        // Absolute block: Business accounts cannot follow ANYONE
+
         if (currentUser?.role === 'business' || currentUser?.isBusiness || firebaseProfile?.role === 'business') {
             showToast('Business accounts cannot follow other accounts.', 'error');
             return;
         }
 
-        const isCurrentlyFollowing = (firebaseProfile?.following || []).includes(userId);
-        try {
-            const targetUserDoc = await getDoc(doc(db, 'users', userId));
-            if (!targetUserDoc.exists()) return;
-            const targetRole = targetUserDoc.data()?.role || 'user';
-            
-            // Absolute block: No one can follow a Business account (they use Communities instead)
-            if (targetRole === 'business') return; 
+        const isCurrentlyFollowing = effectiveFollowing.includes(userId);
+        const viewerUid = currentUser.uid || currentUser.id;
 
-            const currentUserRef = doc(db, 'users', currentUser.uid || currentUser.id);
+        const nextFollowing = isCurrentlyFollowing
+            ? effectiveFollowing.filter((id) => id !== userId)
+            : [...effectiveFollowing, userId];
+        setOptimisticFollowing(nextFollowing);
+
+        try {
+            if (!isCurrentlyFollowing) {
+                const targetUserDoc = await getDoc(doc(db, 'users', userId));
+                if (!targetUserDoc.exists()) {
+                    setOptimisticFollowing(null);
+                    return;
+                }
+                const targetRole = targetUserDoc.data()?.role || 'user';
+                if (targetRole === 'business') {
+                    setOptimisticFollowing(null);
+                    return;
+                }
+            }
 
             if (isCurrentlyFollowing) {
-                // Atomic remove — no race condition
-                await updateDoc(currentUserRef, { following: arrayRemove(userId) });
-                await unfollowUser(currentUser.uid || currentUser.id, userId);
+                const ok = await unfollowUser(viewerUid, userId);
+                if (!ok) setOptimisticFollowing(null);
             } else {
-                // Atomic add — no race condition
-                await updateDoc(currentUserRef, { following: arrayUnion(userId) });
-                await followUser(currentUser.uid || currentUser.id, userId, {
-                    id: currentUser.uid || currentUser.id,
-                    name: firebaseProfile?.display_name || currentUser.displayName,
-                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
-                });
+                const result = await followUser(
+                    viewerUid,
+                    userId,
+                    {
+                        id: viewerUid,
+                        name: firebaseProfile?.display_name || currentUser.displayName,
+                        avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
+                    },
+                    { skipAlreadyCheck: true }
+                );
+                if (!result.success) setOptimisticFollowing(null);
             }
         } catch (error) {
+            setOptimisticFollowing(null);
             console.error('Error in toggleFollow:', error);
         }
     };
@@ -1201,7 +1354,7 @@ export const InvitationProvider = ({ children }) => {
             const userId = currentUser.uid || currentUser.id;
             if (!userId) return false;
             await setCommunityMembershipCallable({ partnerId, action: 'join' });
-            await addUserNotification({
+            void addUserNotification({
                 userId: partnerId,
                 type: 'new_community_member',
                 title: '🎉 New Community Member!',
@@ -1282,10 +1435,10 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) { console.error("Error submitting report:", error); return null; }
     };
 
-    const deleteInvitation = async (invId, isPrivate = false) => {
+    const deleteInvitation = async (invId, isHosted = false) => {
         if (!invId || !currentUser) return false;
         try {
-            const collName = isPrivate ? 'private_invitations' : 'invitations';
+            const collName = isHosted ? 'social_invitations' : 'invitations';
             // Let Firestore rules enforce authorization; do not trust client-side admin fields.
             try {
                 const primaryDeleted = await deleteInvitationAndStorage(invId, collName);
@@ -1294,53 +1447,22 @@ export const InvitationProvider = ({ children }) => {
                 console.warn(`Primary delete failed for ${collName}/${invId}:`, error?.message || error);
             }
 
-            const altColl = isPrivate ? 'invitations' : 'private_invitations';
+            const altColl = isPrivate ? 'invitations' : 'social_invitations';
             const fallbackDeleted = await deleteInvitationAndStorage(invId, altColl);
             return !!fallbackDeleted;
         } catch (error) { console.error('Error deleting invitation:', error); return false; }
     };
 
-    const loadMoreInvitations = async () => {
-        if (loadingMoreInvitations || !hasMoreInvitations || !lastInvitationDocRef.current) return;
-        setLoadingMoreInvitations(true);
-        try {
-            const q = query(
-                collection(db, 'invitations'),
-                orderBy('createdAt', 'desc'),
-                startAfter(lastInvitationDocRef.current),
-                limit(INVITATIONS_PAGE_SIZE)
-            );
-            const snap = await getDocs(q);
-            const next = snap.docs
-                .map((d) => ({ id: d.id, ...d.data() }))
-                .filter((inv) => inv.adminBlocked !== true);
-            const lastDoc = snap.docs[snap.docs.length - 1] || null;
-            lastInvitationDocRef.current = lastDoc;
-            setLoadedMoreInvitations(prev => [...prev, ...next]);
-            setHasMoreInvitations(snap.docs.length === INVITATIONS_PAGE_SIZE);
-        } catch (error) {
-            console.error('Error loading more invitations:', error);
-        } finally {
-            setLoadingMoreInvitations(false);
-        }
-    };
-
-    const invitationsMerged = React.useMemo(() => {
-        const firstIds = new Set(invitations.map(i => i.id));
-        const extra = loadedMoreInvitations.filter(i => !firstIds.has(i.id));
-        return [...invitations, ...extra];
-    }, [invitations, loadedMoreInvitations]);
-
-    const invitationsMergedFiltered = React.useMemo(() => {
+    const invitationsFiltered = React.useMemo(() => {
         const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
-        if (blocked.size === 0) return invitationsMerged;
-        return invitationsMerged.filter((inv) => {
+        if (blocked.size === 0) return invitations;
+        return invitations.filter((inv) => {
             if (inv.adminBlocked === true) return false;
             const aid = inv.author?.id;
             if (!aid) return true;
             return !blocked.has(aid);
         });
-    }, [invitationsMerged, firebaseProfile?.blockedUserIds]);
+    }, [invitations, firebaseProfile?.blockedUserIds]);
 
     const privateInvitationsFiltered = React.useMemo(() => {
         const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
@@ -1355,17 +1477,16 @@ export const InvitationProvider = ({ children }) => {
         });
     }, [privateInvitations, firebaseProfile?.blockedUserIds, firebaseProfile?.mutedUserIds]);
 
-    const extendedCurrentUser = React.useMemo(() => {
+    const extendedCurrentUser = useMemo(() => {
         if (!currentUser) return null;
-        return { ...currentUser, ...firebaseProfile };
-    }, [currentUser, firebaseProfile]);
+        return { ...currentUser, ...firebaseProfile, following: effectiveFollowing };
+    }, [currentUser, firebaseProfile, effectiveFollowing]);
 
     return (
         <InvitationContext.Provider value={{
-            invitations: invitationsMergedFiltered, privateInvitations: privateInvitationsFiltered, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
-            loadMoreInvitations, hasMoreInvitations, loadingMoreInvitations,
-            addInvitation, addPrivateInvitation, requestToJoin, cancelRequest,
-            approveUser, rejectUser, respondToPrivateInvitation, canCreatePrivateInvitation, publishPrivateInvitationDraft, publishPublicInvitationDraft,
+            invitations: invitationsFiltered, privateInvitations: privateInvitationsFiltered, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
+            addInvitation, addHostedInvitation, requestToJoin, cancelRequest,
+            approveUser, rejectUser, respondToPrivateInvitation, canCreateSocialInvitation, publishPrivateInvitationDraft, publishPublicInvitationDraft,
             getPrivateInvitationSharePreview, claimPrivateInvitationShare, ensurePrivateInvitationShareToken,
             sendChatMessage, updateMeetingStatus,
             updateInvitationTime, approveNewTime, rejectNewTime,

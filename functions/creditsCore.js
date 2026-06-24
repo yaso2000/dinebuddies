@@ -54,10 +54,7 @@ function getBusinessMonthlyPriceId() {
  * @param {string|null|undefined} raw
  */
 function normalizeBusinessSubscriptionTier(raw) {
-    const t = String(raw || 'free').trim().toLowerCase();
-    if (t === 'paid') return 'paid';
-    if (t === 'elite' || t === 'professional' || t === 'premium' || t === 'pro') return 'paid';
-    return 'free';
+    return String(raw || 'free').trim().toLowerCase() === 'paid' ? 'paid' : 'free';
 }
 
 /**

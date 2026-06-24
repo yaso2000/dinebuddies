@@ -8,8 +8,8 @@ import i18n from '../i18n';
  */
 export function getAiUserPromptFallback(postType, subType, t = i18n.t.bind(i18n)) {
     if (postType === 'invitation') {
-        if (subType === 'date') return t('ai_prompt_dating_default');
-        if (subType === 'private') return t('ai_prompt_private_invitation_default');
+        if (subType === 'private') return t('ai_prompt_private_default');
+        if (subType === 'social') return t('ai_prompt_social_invitation_default');
         return t('ai_prompt_public_invitation_default');
     }
     if (postType === 'featured_post') {
@@ -43,10 +43,10 @@ export function buildRegularPostAiUserPrompt({ title = '', text = '', attachedIn
 }
 
 /**
- * Build localized user prompt for private invitations.
+ * Build localized user prompt for social invitations (up to 30 guests).
  * @param {{ occasionType?: string, location?: string, date?: string, time?: string, title?: string, description?: string }} formData
  */
-export function buildPrivateInvitationAiUserPrompt(formData = {}) {
+export function buildSocialInvitationAiUserPrompt(formData = {}) {
     const parts = [
         formData.occasionType &&
             i18n.t('ai_context_occasion', { value: formData.occasionType }),
@@ -61,18 +61,18 @@ export function buildPrivateInvitationAiUserPrompt(formData = {}) {
             i18n.t('ai_context_current_message', { value: formData.description.trim() }),
     ].filter(Boolean);
 
-    return parts.join('\n') || i18n.t('ai_prompt_private_invitation_default');
+    return parts.join('\n') || i18n.t('ai_prompt_social_invitation_default');
 }
 
 /**
- * Build localized user prompt for dating invitations.
+ * Build localized user prompt for private invites (1-on-1).
  * @param {{ location?: string, date?: string, time?: string, title?: string, description?: string }} formData
  * @param {{ display_name?: string } | null} selectedInvitee
  */
-export function buildDatingInvitationAiUserPrompt(formData = {}, selectedInvitee = null) {
+export function buildPrivateInvitationAiUserPrompt(formData = {}, selectedInvitee = null) {
     const parts = [
         selectedInvitee?.display_name &&
-            i18n.t('ai_prompt_dating_invitee', { name: selectedInvitee.display_name }),
+            i18n.t('ai_prompt_private_invitee', { name: selectedInvitee.display_name }),
         formData.location?.trim() &&
             i18n.t('ai_context_location', { value: formData.location.trim() }),
         formData.date &&
@@ -84,7 +84,7 @@ export function buildDatingInvitationAiUserPrompt(formData = {}, selectedInvitee
             i18n.t('ai_context_current_message', { value: formData.description.trim() }),
     ].filter(Boolean);
 
-    return parts.join('\n') || i18n.t('ai_prompt_dating_default');
+    return parts.join('\n') || i18n.t('ai_prompt_private_default');
 }
 
 /**

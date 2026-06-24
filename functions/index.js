@@ -5,12 +5,18 @@ const path = require('path');
 const admin = require('firebase-admin');
 admin.initializeApp();
 
-const { registerAdminSearchUsers } = require('./adminSearchUsers');
+const { inferInviteCategory } = require('./inviteCategory');
 const { registerAdminBrowseUsers } = require('./adminBrowseUsers');
+const { registerAdminSearchUsers } = require('./adminSearchUsers');
 const { registerAdminDashboard } = require('./adminDashboard');
 const { registerAdminMassMessaging } = require('./adminMassMessaging');
 const { registerDirectorySearch } = require('./directorySearch');
 const { registerConsumerAccountSearch } = require('./consumerAccountSearch');
+const {
+    isConsumerHiddenPublicProfile,
+    isConsumerHiddenUserDoc,
+    isConsumerHiddenUid,
+} = require('./consumerAccountVisibility');
 const { registerAffiliateReferralOnUserWrite } = require('./affiliateReferral');
 const {
     incrementReferralClicks,
@@ -26,21 +32,105 @@ const {
     isBusinessUserDoc,
     normalizeBusinessSubscriptionTier,
 } = require('./creditsCore');
+const {
+    assertCreatorCanCreateInvitations,
+    assertPublicInvitationGeofenceRule,
+    resolveRestaurantGeo,
+    throwInvitationRuleError,
+} = require('./invitationRules');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
+const crypto = require('crypto');
 const db = admin.firestore();
+
+const SOCIAL_INVITATION_MAX_GUESTS = 30;
+
+/** Resolve hosted invite doc — `social_invitations` (current) or legacy `private_invitations`. */
+async function resolveHostedInvitationRef(invitationId) {
+    const socialRef = db.collection('social_invitations').doc(invitationId);
+    const socialSnap = await socialRef.get();
+    if (socialSnap.exists) {
+        return { ref: socialRef, snap: socialSnap, collection: 'social_invitations' };
+    }
+    const legacyRef = db.collection('private_invitations').doc(invitationId);
+    const legacySnap = await legacyRef.get();
+    if (legacySnap.exists) {
+        return { ref: legacyRef, snap: legacySnap, collection: 'private_invitations' };
+    }
+    return { ref: socialRef, snap: socialSnap, collection: 'social_invitations' };
+}
+
+function generatePrivateInvitationShareToken() {
+    return crypto.randomBytes(24).toString('hex');
+}
+
+function normalizeShareToken(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    const token = raw.trim();
+    if (token.length < 16 || token.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(token)) return null;
+    return token;
+}
+
+async function findPublishedPrivateInvitationByShareToken(token) {
+    const normalized = normalizeShareToken(token);
+    if (!normalized) return null;
+    const snap = await db
+        .collection('social_invitations')
+        .where('shareToken', '==', normalized)
+        .limit(1)
+        .get();
+    if (snap.empty) return null;
+    const doc = snap.docs[0];
+    const data = doc.data() || {};
+    if (data.status !== 'published' || !data.publishedAt) return null;
+    return { id: doc.id, ...data };
+}
+
+function buildPrivateInvitationSharePreview(inv, invitationId, inviterName) {
+    return {
+        invitationId,
+        title: String(inv.title || '').trim(),
+        description: String(inv.description || '').trim(),
+        date: inv.date || '',
+        time: inv.time || '',
+        location: String(inv.location || '').trim(),
+        venueName: String(inv.venueName || inv.restaurantName || '').trim(),
+        occasionType: inv.occasionType || 'Social',
+        type: inv.type || 'Private',
+        inviterName: inviterName || '',
+        cardFontId: inv.cardFontId || null,
+        cardFrameColorId: inv.cardFrameColorId || null,
+        cardBackgroundId: inv.cardBackgroundId || null,
+        cardGradientId: inv.cardGradientId || null,
+        cardMotionId: inv.cardMotionId || null,
+        socialCardThemeColor: inv.socialCardThemeColor || null,
+        socialCardShowHostAndMessage: inv.socialCardShowHostAndMessage !== false,
+        socialCardTextBackdropTone: inv.socialCardTextBackdropTone || null,
+        customImage: inv.customImage || inv.image || inv.cardImageUrl || null,
+        videoUrl: inv.videoUrl || inv.customVideo || null,
+        videoThumbnail: inv.videoThumbnail || null,
+        mediaType: inv.mediaType || null,
+    };
+}
 const { createPushMessaging } = require('./pushMessaging');
+const {
+    resolveCommunityOwner,
+    isCommunityOwnerBusiness,
+    isCommunityOwnerPublic,
+    isCommunityOwnerRequester,
+    collectCommunityMemberIds,
+} = require('./communityOwner');
 const { sendPushToUser, registerNotificationPushTrigger } = createPushMessaging({ db, admin });
 /** @param {Record<string, unknown>} inv */
-function isDatingInvitationDocForBilling(inv) {
+function isPrivateInvitationDocForBilling(inv) {
     if (!inv || typeof inv !== 'object') return false;
     const occasionLc = String(inv.occasionType || inv.type || '')
         .trim()
         .toLowerCase();
     return (
-        inv.type === 'Dating' ||
-        occasionLc === 'dating' ||
-        (inv.datingInvitationPreference != null && inv.datingInvitationPreference !== false)
+        inv.type === 'Private' ||
+        occasionLc === 'private' ||
+        (inv.privateInvitationPreference != null && inv.privateInvitationPreference !== false)
     );
 }
 
@@ -49,8 +139,6 @@ const USER_WEEKLY_PRIVATE_QUOTAS = {
     pro: 2,
     vip: -1,
     paid: 0,
-    professional: 0,
-    elite: 0
 };
 const SUPER_OWNER_UIDS = ['xTgHC1v00LZIZ6ESA9YGjGU5zW33'];
 const SUPER_OWNER_EMAILS = ['admin@dinebuddies.com', 'y.abohamed@gmail.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au'];
@@ -58,8 +146,8 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'join_request',
     'invitation_full',
     'request_approved',
-    'private_invitation_response',
-    'private_invitation',
+    'social_invitation_response',
+    'social_invitation',
     'new_community_member',
     'community_removed',
     'community_message',
@@ -70,6 +158,7 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'message',
     'reminder',
     'like',
+    'greeting',
     'comment',
     'comment_like',
     'comment_reply',
@@ -239,15 +328,15 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
         return hostId === userId;
     }
 
-    if (type === 'private_invitation' || type === 'private_invitation_response' || type === 'system_announcement') {
+    if (type === 'social_invitation' || type === 'social_invitation_response' || type === 'system_announcement') {
         if (invitationId) {
-            const privateInvSnap = await db.collection('private_invitations').doc(invitationId).get();
+            const privateInvSnap = await db.collection('social_invitations').doc(invitationId).get();
             if (!privateInvSnap.exists) return false;
             const inv = privateInvSnap.data() || {};
             const hostId = inv.authorId || inv.author?.id;
             const invitedFriends = Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [];
-            if (type === 'private_invitation') return senderId === hostId && invitedFriends.includes(userId);
-            if (type === 'private_invitation_response') return userId === hostId && invitedFriends.includes(senderId);
+            if (type === 'social_invitation') return senderId === hostId && invitedFriends.includes(userId);
+            if (type === 'social_invitation_response') return userId === hostId && invitedFriends.includes(senderId);
             if (type === 'system_announcement') return userId === hostId && invitedFriends.includes(senderId);
             return false;
         }
@@ -272,6 +361,15 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
         if (!senderSnap.exists) return false;
         const following = senderSnap.data()?.following || [];
         return Array.isArray(following) && following.includes(userId);
+    }
+
+    if (type === 'greeting') {
+        const senderIdMeta = metadata?.senderId;
+        if (typeof senderIdMeta !== 'string' || !senderIdMeta.trim()) return false;
+        const dayKey = new Date().toISOString().slice(0, 10);
+        const greetId = `${userId}_${senderIdMeta.trim()}_${dayKey}`;
+        const greetSnap = await db.collection('discovery_greetings').doc(greetId).get();
+        return greetSnap.exists;
     }
 
     if (type === 'message' || type === 'reminder') {
@@ -322,8 +420,27 @@ function asFiniteNumber(value) {
 function detectPublicProfileType(userData) {
     const role = asTrimmedString(userData?.role);
     const accountType = asTrimmedString(userData?.accountType);
-    if (role === 'business' || role === 'partner' || accountType === 'business') return 'business';
+    const businessInfo =
+        userData?.businessInfo && typeof userData.businessInfo === 'object' ? userData.businessInfo : {};
+    const hasBizInfo = Object.keys(businessInfo).length > 0;
+    const regIntent = String(userData?.registrationIntent || '').toLowerCase() === 'business';
+    if (
+        role === 'business' ||
+        role === 'partner' ||
+        accountType === 'business' ||
+        hasBizInfo ||
+        regIntent
+    ) {
+        return 'business';
+    }
     return 'user';
+}
+
+function resolvePublicAccountRole(userData, uid) {
+    if (isConsumerHiddenUserDoc(userData, uid)) {
+        return 'admin';
+    }
+    return asTrimmedString(userData.role)?.toLowerCase() || 'user';
 }
 
 // Shared mapper for sync trigger + backfill (phase-1 schema only).
@@ -381,9 +498,9 @@ function toPublicProfile(userDocData, uid) {
             ? tierRaw.trim().toLowerCase()
             : 'free';
 
-    const accountRole = asTrimmedString(userData.role)?.toLowerCase() || 'user';
+    const accountRole = resolvePublicAccountRole(userData, safeUid);
     const teamRoles = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent']);
-    const searchable = !teamRoles.has(accountRole);
+    const searchable = profileType === 'user' && accountRole === 'user' && !teamRoles.has(accountRole);
 
     return {
         uid: safeUid,
@@ -440,7 +557,10 @@ async function getPublicProfilesByIds(ids) {
         const publicSnap = await db.collection('public_profiles')
             .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
             .get();
-        publicSnap.docs.forEach((d) => rows.push(mapPublicProfileForClient(d)));
+        publicSnap.docs.forEach((d) => {
+            if (isConsumerHiddenPublicProfile(d.data(), d.id)) return;
+            rows.push(mapPublicProfileForClient(d));
+        });
     }
     const byId = new Map(rows.map((row) => [row.id, row]));
     return ids.map((id) => byId.get(id) || {
@@ -450,7 +570,59 @@ async function getPublicProfilesByIds(ids) {
         avatarUrl: null,
         profileType: 'user',
         city: null,
-        country: null
+        country: null,
+        profileHidden: true
+    });
+}
+
+/** Members without a public_profiles doc (deleted/hidden accounts). */
+function isVisibleCommunityProfile(profile) {
+    if (!profile?.id) return false;
+    if (profile.profileHidden === true) return false;
+    if (isConsumerHiddenUid(profile.id)) return false;
+    return true;
+}
+
+/** Blocked list: always resolve a row for owner (public profile, users doc, or fallback). */
+async function resolveBlockedMemberProfiles(db, ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+
+    const profiles = await getPublicProfilesByIds(ids);
+    const pubById = new Map(profiles.map((row) => [row.id, row]));
+
+    const needsUserDoc = ids.filter((id) => {
+        const pub = pubById.get(id);
+        return !pub || pub.profileHidden === true;
+    });
+
+    const usersById = new Map();
+    for (let i = 0; i < needsUserDoc.length; i += 10) {
+        const chunk = needsUserDoc.slice(i, i + 10);
+        const snaps = await db.getAll(...chunk.map((id) => db.collection('users').doc(id)));
+        snaps.forEach((snap) => {
+            if (snap.exists) usersById.set(snap.id, snap.data() || {});
+        });
+    }
+
+    return ids.map((id) => {
+        const pub = pubById.get(id);
+        if (pub && pub.profileHidden !== true) {
+            return { ...pub, isBlocked: true };
+        }
+        const user = usersById.get(id) || {};
+        const displayName = String(
+            user.display_name || user.displayName || user.name || pub?.displayName || ''
+        ).trim();
+        return {
+            id,
+            uid: id,
+            displayName: displayName && displayName !== 'User' ? displayName : `Member ${id.slice(0, 6)}`,
+            avatarUrl: user.photo_url || user.photoURL || user.avatarUrl || pub?.avatarUrl || null,
+            profileType: 'user',
+            city: pub?.city || null,
+            country: pub?.country || null,
+            isBlocked: true
+        };
     });
 }
 
@@ -468,44 +640,135 @@ exports.stripeWebhook = webhookModule.stripeWebhook;
 const { placePhoto } = require('./placePhotoProxy');
 exports.placePhoto = placePhoto;
 
+const { createPrivateInvitationSharePageHandler } = require('./privateInvitationSharePage');
+exports.privateInvitationSharePage = createPrivateInvitationSharePageHandler({
+    db,
+    findPublishedPrivateInvitationByShareToken,
+    normalizeShareToken,
+});
+
 // ─── Sync users/{uid} -> public_profiles/{uid} (backend-owned projection) ───
+async function syncPublicProfileFromUserDoc(uid, afterData) {
+    const publicRef = db.collection('public_profiles').doc(uid);
+
+    if (isConsumerHiddenUserDoc(afterData, uid)) {
+        await publicRef.delete().catch(() => { });
+        return { deleted: true, reason: 'hidden_account' };
+    }
+    if (String(afterData.role || '').toLowerCase() === 'affiliate_agent') {
+        await publicRef.delete().catch(() => { });
+        return { deleted: true, reason: 'affiliate_agent' };
+    }
+    if (afterData.banned === true) {
+        await publicRef.delete().catch(() => { });
+        return { deleted: true, reason: 'banned' };
+    }
+
+    const mapped = toPublicProfile(afterData, uid);
+    // `searchable` gates consumer member directory only — businesses use businessPublic.isPublished.
+    if (mapped?.profileType === 'user' && mapped.searchable === false) {
+        await publicRef.delete().catch(() => { });
+        return { deleted: true, profileType: mapped?.profileType || null };
+    }
+    if (!mapped) {
+        functions.logger.warn('Skipping public profile sync: invalid uid', { uid });
+        return { skipped: true };
+    }
+
+    await publicRef.set(mapped, { merge: false });
+    return {
+        synced: true,
+        profileType: mapped.profileType,
+        businessPublic: mapped.businessPublic || null,
+    };
+}
+
 exports.syncPublicProfileOnUserWrite = functions.firestore
     .document('users/{uid}')
     .onWrite(async (change, context) => {
         const uid = context.params.uid;
-        const publicRef = db.collection('public_profiles').doc(uid);
 
         // User deleted => remove public profile projection.
         if (!change.after.exists) {
-            await publicRef.delete().catch(() => { });
+            await db.collection('public_profiles').doc(uid).delete().catch(() => { });
             return null;
         }
 
-        const afterData = change.after.data() || {};
-        // Affiliate agents are not consumer directory listings; strip any stale projection.
-        if (String(afterData.role || '').toLowerCase() === 'affiliate_agent') {
-            await publicRef.delete().catch(() => { });
-            return null;
-        }
-        // Moderation: banned accounts must not remain in directory / public projection.
-        if (afterData.banned === true) {
-            await publicRef.delete().catch(() => { });
-            return null;
-        }
-
-        const mapped = toPublicProfile(afterData, uid);
-        if (mapped && mapped.searchable === false) {
-            await publicRef.delete().catch(() => { });
-            return null;
-        }
-        if (!mapped) {
-            functions.logger.warn('Skipping public profile sync: invalid uid', { uid });
-            return null;
-        }
-
-        await publicRef.set(mapped, { merge: false });
+        await syncPublicProfileFromUserDoc(uid, change.after.data() || {});
         return null;
     });
+
+/** Business owners: force users/{uid} → public_profiles/{uid} (partners directory). */
+exports.syncMyBusinessPublicProfile = functions.https.onCall(async (_data, context) => {
+    if (!context.auth?.uid) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+    const uid = context.auth.uid;
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    let userData = userSnap.data() || {};
+    if (detectPublicProfileType(userData) !== 'business') {
+        throw new functions.https.HttpsError('failed-precondition', 'Business account required');
+    }
+
+    try {
+        const authUser = await admin.auth().getUser(uid);
+        if (authUser.emailVerified === true && userData.emailVerified !== true) {
+            await userRef.set(
+                { emailVerified: true, authEmail: authUser.email || null },
+                { merge: true }
+            );
+            userData = { ...userData, emailVerified: true };
+        }
+    } catch (authErr) {
+        functions.logger.warn('syncMyBusinessPublicProfile auth lookup failed', { uid, authErr });
+    }
+
+    return syncPublicProfileFromUserDoc(uid, userData);
+});
+
+/**
+ * After email verification in Safari (iOS often has no Auth session), mirror Auth → Firestore
+ * and re-sync business public_profiles so Partners directory can show published listings.
+ */
+exports.mirrorEmailVerifiedFromAction = functions.https.onCall(async (data) => {
+    const email = String(data?.email || '').trim().toLowerCase();
+    if (!email) {
+        throw new functions.https.HttpsError('invalid-argument', 'email is required');
+    }
+
+    let userRecord;
+    try {
+        userRecord = await admin.auth().getUserByEmail(email);
+    } catch {
+        throw new functions.https.HttpsError('not-found', 'No account for this email');
+    }
+
+    if (userRecord.emailVerified !== true) {
+        throw new functions.https.HttpsError('failed-precondition', 'Email is not verified in Auth yet');
+    }
+
+    const uid = userRecord.uid;
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'User profile not found');
+    }
+
+    let userData = userSnap.data() || {};
+    await userRef.set({ emailVerified: true, authEmail: email }, { merge: true });
+    userData = { ...userData, emailVerified: true };
+
+    if (detectPublicProfileType(userData) === 'business') {
+        await syncPublicProfileFromUserDoc(uid, userData);
+    }
+
+    return { ok: true, uid, profileType: detectPublicProfileType(userData) };
+});
 
 registerAffiliateReferralOnUserWrite(exports, { db, admin });
 exports.incrementReferralClicks = incrementReferralClicks;
@@ -532,6 +795,15 @@ exports.updateBusinessRatingOnReview = functions.firestore
         }
 
         try {
+            const [restSnap, userSnap] = await Promise.all([
+                db.collection('restaurants').doc(businessId).get(),
+                db.collection('users').doc(businessId).get(),
+            ]);
+            if (!restSnap.exists && !userSnap.exists) {
+                await db.collection('public_profiles').doc(businessId).delete().catch(() => { });
+                return null;
+            }
+
             // Aggregate from both field patterns in one parallel query
             const [byPartner, byProfile] = await Promise.all([
                 db.collection('reviews').where('partnerId', '==', businessId).get(),
@@ -604,12 +876,14 @@ async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, in
         hostData.profilePicture ||
         hostData.userPhoto ||
         null;
-    const invTitle = (invPre.title && String(invPre.title).trim()) || 'Private invitation';
+    const invTitle = (invPre.title && String(invPre.title).trim()) || 'Invitation';
     const occasion = invPre.occasionType || 'Social';
     const cardImageUrl = pickPrivateInvitationCardImageUrl(invPre);
+    const inviteCategory = inferInviteCategory(invPre, 'private');
+    const segment = inviteCategory === 'private' ? 'private' : 'social';
     const message = `${hostName} invited you: ${invTitle}`.slice(0, 500);
-    const title = 'Private invitation'.slice(0, 120);
-    const actionUrl = `/invitation/private/${invitationId}`.slice(0, 256);
+    const title = (inviteCategory === 'private' ? 'Personal invitation' : 'Social invitation').slice(0, 120);
+    const actionUrl = `/invitation/${segment}/${invitationId}`.slice(0, 256);
 
     let sent = 0;
     const chunkSize = 400;
@@ -621,7 +895,7 @@ async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, in
             const ref = db.collection('notifications').doc();
             batch.set(ref, {
                 userId: friendId,
-                type: 'private_invitation',
+                type: 'social_invitation',
                 title,
                 message,
                 actionUrl,
@@ -631,7 +905,8 @@ async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, in
                 metadata: {
                     occasionType: occasion,
                     invitationTitle: invTitle,
-                    cardImageUrl: cardImageUrl || null
+                    cardImageUrl: cardImageUrl || null,
+                    inviteCategory,
                 },
                 cardImageUrl: cardImageUrl || null,
                 invitationTitle: invTitle,
@@ -668,19 +943,8 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             invitationId,
             uid
         });
-        await enforceCallableRateLimit(uid, 'publish_private_invitation', {
-            perMinute: 8,
-            perHour: 100,
-            perDay: 300,
-            cooldownMs: 3000
-        });
 
-        const invitationRef = db.collection('private_invitations').doc(invitationId);
-        const userRef = db.collection('users').doc(uid);
-
-        // Pre-filter invitees outside the transaction (plain reads). Keeps the transaction to 2 reads + writes only,
-        // avoids Firestore transaction read/write ordering issues and large read batches inside one txn.
-        const invSnapPre = await invitationRef.get();
+        const { ref: invitationRef, snap: invSnapPre } = await resolveHostedInvitationRef(invitationId);
         if (!invSnapPre.exists) {
             throw new functions.https.HttpsError('not-found', 'Private invitation draft not found.');
         }
@@ -689,8 +953,37 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         if (hostPre !== uid) {
             throw new functions.https.HttpsError('permission-denied', 'Only the invitation host can publish this draft.');
         }
+
+        const userRef = db.collection('users').doc(uid);
+
         if (invPre.publishedAt) {
-            return { success: true, alreadyPublished: true, chargedSource: null };
+            // Idempotent path: return existing token — no rate limit, no Dine Credits charge.
+            let existingToken = invPre.shareToken || null;
+            if (!existingToken) {
+                existingToken = generatePrivateInvitationShareToken();
+                await invitationRef.update({
+                    shareToken: existingToken,
+                    externalInviteEnabled: true,
+                });
+            }
+            return { success: true, alreadyPublished: true, chargedSource: null, shareToken: existingToken };
+        }
+
+        await enforceCallableRateLimit(uid, 'publish_social_invitation', {
+            perMinute: 8,
+            perHour: 100,
+            perDay: 300,
+            cooldownMs: 1500, // P0: faster re-share without 429 (was 3000)
+        });
+
+        const hostUserSnap = await userRef.get();
+        if (!hostUserSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'User not found.');
+        }
+        const hostUser = hostUserSnap.data() || {};
+        const creatorBlock = assertCreatorCanCreateInvitations(hostUser);
+        if (creatorBlock) {
+            throwInvitationRuleError(creatorBlock);
         }
 
         const rawIds = Array.isArray(invPre.invitedFriends) ? invPre.invitedFriends : [];
@@ -755,12 +1048,14 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                 nextRsvps[fid] = normalized === 'accepted' || normalized === 'declined' ? normalized : 'pending';
             });
 
+            const shareToken = inv.shareToken || generatePrivateInvitationShareToken();
+
             const isBypassUser = user.role === 'admin';
             let chargedSource = null;
 
             if (!isBypassUser) {
-                const cost = isDatingInvitationDocForBilling(inv)
-                    ? CREDIT_COSTS.DATING_INVITATION
+                const cost = isPrivateInvitationDocForBilling(inv)
+                    ? CREDIT_COSTS.PRIVATE_INVITATION
                     : CREDIT_COSTS.PRIVATE_INVITATION;
                 const accountRole = isBusinessUserDoc(user) ? 'business' : 'user';
                 try {
@@ -768,10 +1063,10 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                         uid,
                         accountRole,
                         amount: cost,
-                        type: 'private_invitation_publish',
-                        reason: isDatingInvitationDocForBilling(inv)
-                            ? 'dating_invitation_publish'
-                            : 'private_invitation_publish',
+                        type: 'social_invitation_publish',
+                        reason: isPrivateInvitationDocForBilling(inv)
+                            ? 'private_invitation_publish'
+                            : 'social_invitation_publish',
                         relatedId: invitationId,
                     });
                     chargedSource = 'dine_credits';
@@ -786,14 +1081,19 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                 }
             }
 
+            const { computeArchiveAfterFirestoreTimestamp } = require('./invitationArchiveCore');
+
             tx.update(invitationRef, {
                 invitedFriends: filteredFriends,
                 rsvps: nextRsvps,
                 status: 'published',
-                publishedAt: admin.firestore.FieldValue.serverTimestamp()
+                publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+                archiveAfterAt: computeArchiveAfterFirestoreTimestamp(invPre.date, invPre.time),
+                shareToken,
+                externalInviteEnabled: true,
             });
 
-            return { alreadyPublished: false, chargedSource };
+            return { alreadyPublished: false, chargedSource, shareToken };
         });
         functions.logger.info('publishPrivateInvitationDraft:published', {
             invitationId,
@@ -821,7 +1121,12 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             }
         }
 
-        return { success: true, ...result, notificationsSent };
+        return {
+            success: true,
+            ...result,
+            notificationsSent,
+            shareToken: result.shareToken || null,
+        };
     } catch (err) {
         if (err instanceof functions.https.HttpsError) {
             throw err;
@@ -833,6 +1138,282 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         );
     }
 });
+
+// ─── Public share link: preview (no auth) ───
+exports.getPrivateInvitationSharePreview = functions.https.onCall(async (data) => {
+    const token = normalizeShareToken(data?.token);
+    if (!token) {
+        throw new functions.https.HttpsError('invalid-argument', 'token is required.');
+    }
+
+    const inv = await findPublishedPrivateInvitationByShareToken(token);
+    if (!inv) {
+        throw new functions.https.HttpsError('not-found', 'Invitation not found or no longer available.');
+    }
+
+    const authorId = inv.authorId || inv.author?.id;
+    let inviterName =
+        inv.author?.displayName || inv.author?.display_name || inv.author?.name || '';
+    if (!inviterName && authorId) {
+        try {
+            const authorSnap = await db.collection('users').doc(authorId).get();
+            if (authorSnap.exists) {
+                const author = authorSnap.data() || {};
+                inviterName =
+                    author.display_name || author.displayName || author.name || '';
+            }
+        } catch (authorErr) {
+            functions.logger.warn('getPrivateInvitationSharePreview:author', authorErr);
+        }
+    }
+
+    return {
+        preview: buildPrivateInvitationSharePreview(inv, inv.id, inviterName),
+        shareToken: token,
+    };
+});
+
+// ─── Public share link: claim after sign-up (auth required) ───
+exports.claimPrivateInvitationShare = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = context.auth.uid;
+    const token = normalizeShareToken(data?.token);
+    if (!token) {
+        throw new functions.https.HttpsError('invalid-argument', 'token is required.');
+    }
+
+    await enforceCallableRateLimit(uid, 'claim_social_invitation_share', {
+        perMinute: 12,
+        perHour: 120,
+        perDay: 400,
+        cooldownMs: 1500,
+    });
+
+    const inv = await findPublishedPrivateInvitationByShareToken(token);
+    if (!inv) {
+        throw new functions.https.HttpsError('not-found', 'Invitation not found or no longer available.');
+    }
+
+    const invitationId = inv.id;
+    const invitationRef = db.collection('social_invitations').doc(invitationId);
+    const hostId = inv.authorId || inv.author?.id;
+    if (hostId === uid) {
+        return { invitationId, alreadyHost: true, claimed: false };
+    }
+
+    const invitedFriends = Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [];
+    if (invitedFriends.includes(uid)) {
+        return { invitationId, alreadyInvited: true, claimed: false };
+    }
+
+    if (invitedFriends.length >= SOCIAL_INVITATION_MAX_GUESTS) {
+        throw new functions.https.HttpsError(
+            'resource-exhausted',
+            'This invitation has reached the maximum number of guests.'
+        );
+    }
+
+    const userSnap = await db.collection('users').doc(uid).get();
+    if (!userSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'User not found.');
+    }
+    const user = userSnap.data() || {};
+    const role = (user.role || '').toLowerCase();
+    if (role === 'business' || role === 'guest' || user.isBusiness === true || user.isGuest === true) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Only personal accounts can accept this invitation.'
+        );
+    }
+
+    if (hostId) {
+        const blocked = Array.isArray(user.blockedUserIds) ? user.blockedUserIds : [];
+        const muted = Array.isArray(user.mutedUserIds) ? user.mutedUserIds : [];
+        if (blocked.includes(hostId) || muted.includes(hostId)) {
+            throw new functions.https.HttpsError(
+                'permission-denied',
+                'You cannot join this invitation.'
+            );
+        }
+        const hostSnap = await db.collection('users').doc(hostId).get();
+        if (hostSnap.exists) {
+            const host = hostSnap.data() || {};
+            const hostBlocked = Array.isArray(host.blockedUserIds) ? host.blockedUserIds : [];
+            const hostMuted = Array.isArray(host.mutedUserIds) ? host.mutedUserIds : [];
+            if (hostBlocked.includes(uid) || hostMuted.includes(uid)) {
+                throw new functions.https.HttpsError(
+                    'permission-denied',
+                    'You cannot join this invitation.'
+                );
+            }
+        }
+    }
+
+    await invitationRef.update({
+        invitedFriends: admin.firestore.FieldValue.arrayUnion(uid),
+        [`rsvps.${uid}`]: 'pending',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { invitationId, claimed: true };
+});
+
+// ─── Host: ensure share token exists on published invitation ───
+exports.ensurePrivateInvitationShareToken = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const invitationId = data?.invitationId;
+    if (!invitationId || typeof invitationId !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'invitationId is required.');
+    }
+
+    const uid = context.auth.uid;
+    const invitationRef = db.collection('social_invitations').doc(invitationId);
+    const snap = await invitationRef.get();
+    if (!snap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Invitation not found.');
+    }
+
+    const inv = snap.data() || {};
+    const hostId = inv.authorId || inv.author?.id;
+    if (hostId !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Only the host can share this invitation.');
+    }
+    if (inv.status !== 'published' || !inv.publishedAt) {
+        throw new functions.https.HttpsError('failed-precondition', 'Publish the invitation before sharing.');
+    }
+
+    let shareToken = inv.shareToken || null;
+    if (!shareToken) {
+        shareToken = generatePrivateInvitationShareToken();
+        await invitationRef.update({
+            shareToken,
+            externalInviteEnabled: true,
+        });
+    }
+
+    return { shareToken };
+});
+
+// ─── Trusted callable: publish public invitation draft (business + city rules) ───
+exports.publishPublicInvitation = functions.https.onCall(async (data, context) => {
+    try {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+
+        const invitationId = data?.invitationId;
+        if (!invitationId || typeof invitationId !== 'string') {
+            throw new functions.https.HttpsError('invalid-argument', 'invitationId is required.');
+        }
+
+        const uid = context.auth.uid;
+        await enforceCallableRateLimit(uid, 'publish_public_invitation', {
+            perMinute: 8,
+            perHour: 100,
+            perDay: 300,
+            cooldownMs: 3000,
+        });
+
+        const invitationRef = db.collection('invitations').doc(invitationId);
+        const userRef = db.collection('users').doc(uid);
+
+        const [invSnap, userSnap] = await Promise.all([invitationRef.get(), userRef.get()]);
+        if (!invSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Public invitation draft not found.');
+        }
+        if (!userSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'User not found.');
+        }
+
+        const inv = invSnap.data() || {};
+        const user = userSnap.data() || {};
+        const hostId = inv.author?.id || inv.hostId || inv.authorId;
+        if (hostId !== uid) {
+            throw new functions.https.HttpsError('permission-denied', 'Only the invitation host can publish this draft.');
+        }
+
+        const creatorBlock = assertCreatorCanCreateInvitations(user);
+        if (creatorBlock) {
+            throwInvitationRuleError(creatorBlock);
+        }
+
+        if (inv.status !== 'draft' && inv.publishedAt) {
+            return { success: true, alreadyPublished: true };
+        }
+
+        const creatorLat = inv.userLat ?? user.coordinates?.lat ?? null;
+        const creatorLng = inv.userLng ?? user.coordinates?.lng ?? null;
+        let venueLat = inv.lat ?? null;
+        let venueLng = inv.lng ?? null;
+        let venueCountryCode = inv.countryCode ?? null;
+
+        if (inv.restaurantId) {
+            const restaurantGeo = await resolveRestaurantGeo(db, inv.restaurantId);
+            if (restaurantGeo.lat != null && venueLat == null) venueLat = restaurantGeo.lat;
+            if (restaurantGeo.lng != null && venueLng == null) venueLng = restaurantGeo.lng;
+            if (restaurantGeo.countryCode && !venueCountryCode) {
+                venueCountryCode = restaurantGeo.countryCode;
+            }
+        }
+
+        const geofenceBlock = assertPublicInvitationGeofenceRule({
+            creatorCoords: { lat: creatorLat, lng: creatorLng },
+            venueCoords: { lat: venueLat, lng: venueLng },
+            creatorCountryCode: user.countryCode,
+            venueCountryCode,
+        });
+        if (geofenceBlock) {
+            throwInvitationRuleError(geofenceBlock);
+        }
+
+        const { computeArchiveAfterFirestoreTimestamp } = require('./invitationArchiveCore');
+
+        await invitationRef.update({
+            status: 'active',
+            publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+            archiveAfterAt: computeArchiveAfterFirestoreTimestamp(inv.date, inv.time),
+            userCity: inv.userCity || null,
+            userLat: creatorLat,
+            userLng: creatorLng,
+            restaurantCity: inv.restaurantCity || inv.city || null,
+            lat: venueLat ?? inv.lat ?? null,
+            lng: venueLng ?? inv.lng ?? null,
+            inviteCategory: 'public',
+        });
+
+        return { success: true, alreadyPublished: false };
+    } catch (err) {
+        if (err instanceof functions.https.HttpsError) {
+            throw err;
+        }
+        console.error('publishPublicInvitation unexpected error', data?.invitationId, err);
+        throw new functions.https.HttpsError(
+            'internal',
+            err?.message || 'Publish failed unexpectedly.'
+        );
+    }
+});
+
+function areMutuallyFollowing(reqData, othData, uid, otherUserId) {
+    const reqFollowing = Array.isArray(reqData?.following) ? reqData.following : [];
+    const othFollowing = Array.isArray(othData?.following) ? othData.following : [];
+    return reqFollowing.includes(otherUserId) && othFollowing.includes(uid);
+}
+
+async function hasMutualDiscoveryMatch(uid, otherUserId) {
+    const [likeSnapA, likeSnapB] = await Promise.all([
+        db.collection('discovery_likes').doc(`${otherUserId}_${uid}`).get(),
+        db.collection('discovery_likes').doc(`${uid}_${otherUserId}`).get(),
+    ]);
+    if (!likeSnapA.exists || !likeSnapB.exists) return false;
+    return likeSnapA.data()?.mutual === true && likeSnapB.data()?.mutual === true;
+}
 
 // ─── Trusted callable: create/get conversation with anti-spam limits ────────
 exports.createOrGetConversation = functions.https.onCall(async (data, context) => {
@@ -883,6 +1464,20 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError('failed-precondition', 'Messaging is not available with this user.');
     }
 
+    const isSystemPeer = reqData.isSystemAccount === true || othData.isSystemAccount === true;
+    if (!isSystemPeer) {
+        let hasMutualConnection = areMutuallyFollowing(reqData, othData, uid, otherUserId);
+        if (!hasMutualConnection) {
+            hasMutualConnection = await hasMutualDiscoveryMatch(uid, otherUserId);
+        }
+        if (!hasMutualConnection) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'Mutual connection required to start a conversation.'
+            );
+        }
+    }
+
     await convRef.set({
         participants: [uid, otherUserId],
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -902,64 +1497,126 @@ exports.setCommunityMembership = functions.https.onCall(async (data, context) =>
 
     const uid = context.auth.uid;
     const partnerId = data?.partnerId;
-    const action = data?.action; // 'join' | 'leave' | 'removeMember'
+    const action = data?.action; // join | leave | removeMember | blockMember | unblockMember | muteMember | unmuteMember
     const memberId = data?.memberId || null;
 
     if (!partnerId || typeof partnerId !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'partnerId is required.');
     }
-    if (!['join', 'leave', 'removeMember'].includes(action)) {
-        throw new functions.https.HttpsError('invalid-argument', 'action must be join, leave, or removeMember.');
+    const allowedActions = [
+        'join', 'leave', 'removeMember',
+        'blockMember', 'unblockMember', 'muteMember', 'unmuteMember'
+    ];
+    if (!allowedActions.includes(action)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid membership action.');
     }
-    if (uid === partnerId && action !== 'removeMember') {
+    // Owner cannot join/leave their own community; moderation actions are allowed.
+    if (uid === partnerId && (action === 'join' || action === 'leave')) {
         throw new functions.https.HttpsError('invalid-argument', 'Cannot change membership for own community.');
     }
 
-    const targetUserId = action === 'removeMember' ? memberId : uid;
+    const ownerOnlyActions = ['removeMember', 'blockMember', 'unblockMember', 'muteMember', 'unmuteMember'];
+    const targetUserId = ownerOnlyActions.includes(action) ? memberId : uid;
     if (!targetUserId || typeof targetUserId !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'Valid memberId is required for removeMember action.');
+        throw new functions.https.HttpsError('invalid-argument', 'Valid memberId is required for this action.');
     }
 
     const userRef = db.collection('users').doc(targetUserId);
-    const partnerRef = db.collection('users').doc(partnerId);
+    const userPartnerRef = db.collection('users').doc(partnerId);
+    const restaurantPartnerRef = db.collection('restaurants').doc(partnerId);
 
     const membership = await db.runTransaction(async (tx) => {
-        const [userSnap, partnerSnap] = await Promise.all([tx.get(userRef), tx.get(partnerRef)]);
-        if (!userSnap.exists) {
+        const [userSnap, userPartnerSnap] = await Promise.all([
+            tx.get(userRef),
+            tx.get(userPartnerRef),
+        ]);
+
+        let partnerRef = userPartnerRef;
+        let partnerSnap = userPartnerSnap;
+        if (!partnerSnap.exists) {
+            partnerRef = restaurantPartnerRef;
+            partnerSnap = await tx.get(partnerRef);
+        }
+
+        if (!userSnap.exists && action !== 'unblockMember') {
             throw new functions.https.HttpsError('not-found', 'User profile not found.');
         }
         if (!partnerSnap.exists) {
             throw new functions.https.HttpsError('not-found', 'Community owner not found.');
         }
 
-        const partner = partnerSnap.data() || {};
-        const partnerRole = partner.role || partner.accountType;
-        if (!['business', 'partner'].includes(partnerRole)) {
+        const owner = {
+            source: partnerRef.path.includes('/restaurants/') ? 'restaurants' : 'users',
+            data: partnerSnap.data() || {},
+        };
+        if (!isCommunityOwnerBusiness(owner)) {
             throw new functions.https.HttpsError('failed-precondition', 'Target user is not a community owner.');
         }
 
-        const userData = userSnap.data() || {};
-        if (action === 'removeMember' && uid !== partnerId) {
-            throw new functions.https.HttpsError('permission-denied', 'Only the community owner can remove members.');
+        const partner = partnerSnap.data() || {};
+        if (ownerOnlyActions.includes(action) && uid !== partnerId && uid !== String(partner.ownerId || '')) {
+            throw new functions.https.HttpsError('permission-denied', 'Only the community owner can manage members.');
         }
 
+        const userData = userSnap.data() || {};
         const joined = Array.isArray(userData.joinedCommunities) ? [...userData.joinedCommunities] : [];
         const members = Array.isArray(partner.communityMembers) ? [...partner.communityMembers] : [];
+        const blocked = Array.isArray(partner.communityBlockedUserIds) ? [...partner.communityBlockedUserIds] : [];
+        const muted = Array.isArray(partner.communityMutedUserIds) ? [...partner.communityMutedUserIds] : [];
 
-        if (action === 'join') {
-            if (!joined.includes(partnerId)) joined.push(partnerId);
-            if (!members.includes(targetUserId)) members.push(targetUserId);
-        } else {
+        const removeFromMembership = () => {
             const j = joined.filter((id) => id !== partnerId);
             joined.splice(0, joined.length, ...j);
             const m = members.filter((id) => id !== targetUserId);
             members.splice(0, members.length, ...m);
+            const mu = muted.filter((id) => id !== targetUserId);
+            muted.splice(0, muted.length, ...mu);
+        };
+
+        if (action === 'join') {
+            if (blocked.includes(targetUserId)) {
+                throw new functions.https.HttpsError('permission-denied', 'You are blocked from joining this community.');
+            }
+            if (!joined.includes(partnerId)) joined.push(partnerId);
+            if (!members.includes(targetUserId)) members.push(targetUserId);
+        } else if (action === 'leave') {
+            removeFromMembership();
+        } else if (action === 'removeMember' || action === 'blockMember') {
+            removeFromMembership();
+            if (!blocked.includes(targetUserId)) blocked.push(targetUserId);
+        } else if (action === 'unblockMember') {
+            const b = blocked.filter((id) => id !== targetUserId);
+            blocked.splice(0, blocked.length, ...b);
+        } else if (action === 'muteMember') {
+            const isActiveMember = members.includes(targetUserId) || joined.includes(partnerId);
+            if (!isActiveMember) {
+                throw new functions.https.HttpsError('failed-precondition', 'User is not a community member.');
+            }
+            if (!members.includes(targetUserId)) members.push(targetUserId);
+            if (!muted.includes(targetUserId)) muted.push(targetUserId);
+        } else if (action === 'unmuteMember') {
+            const mu = muted.filter((id) => id !== targetUserId);
+            muted.splice(0, muted.length, ...mu);
         }
 
-        tx.update(userRef, { joinedCommunities: joined });
-        tx.update(partnerRef, { communityMembers: members });
+        const partnerUpdates = {
+            communityMembers: members,
+            communityBlockedUserIds: blocked,
+            communityMutedUserIds: muted
+        };
 
-        return { isMember: joined.includes(partnerId), joinedCommunities: joined, targetUserId };
+        if (action !== 'unblockMember' && action !== 'muteMember' && action !== 'unmuteMember') {
+            tx.update(userRef, { joinedCommunities: joined });
+        }
+        tx.update(partnerRef, partnerUpdates);
+
+        return {
+            isMember: joined.includes(partnerId),
+            joinedCommunities: joined,
+            targetUserId,
+            isMuted: muted.includes(targetUserId),
+            isBlocked: blocked.includes(targetUserId)
+        };
     });
 
     return { success: true, ...membership };
@@ -990,48 +1647,57 @@ exports.listCommunityMembers = functions.https.onCall(async (data, context) => {
         cooldownMs: 0
     });
 
-    const partnerSnap = await db.collection('users').doc(partnerId).get();
-    if (!partnerSnap.exists) {
+    const owner = await resolveCommunityOwner(db, partnerId);
+    if (!owner) {
         throw new functions.https.HttpsError('not-found', 'Community owner not found.');
     }
-    const partner = partnerSnap.data() || {};
-    const partnerRole = String(partner.role || partner.accountType || '').toLowerCase();
-    const isBusinessAccount = partnerRole === 'business' || partnerRole === 'partner' || partner.isBusiness === true;
-    
-    if (!isBusinessAccount) {
+    if (!isCommunityOwnerBusiness(owner)) {
         throw new functions.https.HttpsError('failed-precondition', 'Target user is not a community owner.');
     }
 
-    // ── Pre-Verification Access Logic ──
-    const isOwner = requesterUid === partnerId;
-    const isVerified = partner.emailVerified === true;
-    
-    // If not verified, ONLY the owner can list members. 
-    // (This prevents public scraping of unverified/private business data).
+    const isOwner = isCommunityOwnerRequester(owner, requesterUid);
+    const isVerified = isCommunityOwnerPublic(owner);
+
+    // If not verified, ONLY the owner can list members.
     if (!isVerified && !isOwner) {
         throw new functions.https.HttpsError('permission-denied', 'This community is not yet public.');
     }
 
-    // Fetch members from 'users' collection where 'joinedCommunities' contains partnerId.
-    const membersSnap = await db.collection('users')
-        .where('joinedCommunities', 'array-contains', partnerId)
-        .limit(500)
-        .get();
-    const memberIds = membersSnap.docs.map((d) => d.id);
-    const memberCount = memberIds.length;
+    const memberIds = await collectCommunityMemberIds(db, partnerId, owner);
+    const mutedIds = Array.isArray(owner.data?.communityMutedUserIds) ? owner.data.communityMutedUserIds : [];
+    const blockedIds = Array.isArray(owner.data?.communityBlockedUserIds) ? owner.data.communityBlockedUserIds : [];
+
+    const countSampleIds = memberIds.slice(0, Math.min(memberIds.length, 500));
+    const visibleMembers = countSampleIds.length
+        ? (await getPublicProfilesByIds(countSampleIds)).filter(isVisibleCommunityProfile)
+        : [];
+    const memberCount = visibleMembers.length;
+
+    const blockedMembers = isOwner && blockedIds.length
+        ? await resolveBlockedMemberProfiles(db, blockedIds.slice(0, limitValue))
+        : [];
 
     if (!includeMembers || memberCount === 0) {
-        return { success: true, partnerId, memberCount, members: [] };
+        return {
+            success: true,
+            partnerId,
+            memberCount,
+            members: [],
+            blockedMembers
+        };
     }
 
-    const selectedIds = memberIds.slice(0, limitValue);
-    const ordered = await getPublicProfilesByIds(selectedIds);
+    const membersWithFlags = visibleMembers.slice(0, limitValue).map((member) => ({
+        ...member,
+        isMuted: mutedIds.includes(member.id)
+    }));
 
     return {
         success: true,
         partnerId,
         memberCount,
-        members: ordered
+        members: membersWithFlags,
+        blockedMembers
     };
 });
 
@@ -1083,6 +1749,9 @@ exports.listUserNetwork = functions.https.onCall(async (data, context) => {
         includeFollowing ? getPublicProfilesByIds(followingIdsLimited) : Promise.resolve([])
     ]);
 
+    const visibleFollowers = followers.filter((p) => p?.id && !isConsumerHiddenUid(p.id) && p.profileHidden !== true);
+    const visibleFollowing = following.filter((p) => p?.id && !isConsumerHiddenUid(p.id) && p.profileHidden !== true);
+
     return {
         success: true,
         userId,
@@ -1090,8 +1759,8 @@ exports.listUserNetwork = functions.https.onCall(async (data, context) => {
         followingCount: followingIds.length,
         followerIds: followerIdsLimited,
         followingIds: followingIdsLimited,
-        followers,
-        following
+        followers: visibleFollowers,
+        following: visibleFollowing
     };
 });
 
@@ -1345,7 +2014,7 @@ exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, conte
     const subscriptionTier = data?.subscriptionTier;
     const isBusinessUser = data?.isBusinessUser === true;
     const allowedUserTiers = ['free', 'pro', 'vip'];
-    const allowedBusinessTiers = ['free', 'paid', 'professional', 'elite'];
+    const allowedBusinessTiers = ['free', 'paid'];
 
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
@@ -1382,59 +2051,6 @@ exports.adminCancelUserSubscription = functions.https.onCall(async (data, contex
     }, { merge: true });
 
     return { success: true, targetUid };
-});
-
-// ─── Trusted admin callable: business limits overrides ──────────────────────
-exports.adminUpdateBusinessLimits = functions.https.onCall(async (data, context) => {
-    await assertAdminContext(context);
-    const targetUid = data?.targetUid;
-    const customLimits = data?.customLimits || {};
-    const customLimitsExpiry = data?.customLimitsExpiry || {};
-    const adminNotes = data?.adminNotes || '';
-
-    if (!targetUid || typeof targetUid !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
-    }
-
-    await db.collection('users').doc(targetUid).set({
-        businessInfo: {
-            customLimits,
-            customLimitsExpiry,
-            adminNotes,
-            lastAdminUpdate: admin.firestore.FieldValue.serverTimestamp()
-        }
-    }, { merge: true });
-
-    return { success: true, targetUid };
-});
-
-// ─── Trusted callable: consume premium offer credit ─────────────────────────
-exports.consumeOfferCredit = functions.https.onCall(async (_data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
-    }
-    const uid = context.auth.uid;
-    const userRef = db.collection('users').doc(uid);
-
-    const result = await db.runTransaction(async (tx) => {
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists) {
-            throw new functions.https.HttpsError('not-found', 'User profile not found.');
-        }
-        const user = userSnap.data() || {};
-        const tierNorm = normalizeBusinessSubscriptionTier(user.subscriptionTier);
-
-        if (tierNorm === 'paid') return { consumed: false, remaining: null };
-
-        const credits = user.offerCredits || 0;
-        if (credits <= 0) {
-            throw new functions.https.HttpsError('failed-precondition', 'No offer credits remaining.');
-        }
-        tx.update(userRef, { offerCredits: credits - 1 });
-        return { consumed: true, remaining: credits - 1 };
-    });
-
-    return { success: true, ...result };
 });
 
 // ─── Trusted admin callable: migrate legacy partner roles ───────────────────
@@ -1820,7 +2436,7 @@ exports.adminGetDashboardStats = functions.https.onCall(async (_data, context) =
         usersCol.where('role', '==', 'business').count().get(),
         usersCol.where('role', 'in', ['admin', 'staff', 'support']).count().get(),
         db.collection('invitations').count().get(),
-        db.collection('private_invitations').count().get(),
+        db.collection('social_invitations').count().get(),
         db.collection('reports').where('status', '==', 'pending').count().get(),
     ]);
     return {
@@ -1917,7 +2533,7 @@ async function adminDeleteUserCascade(targetUid) {
     if (!userSnap.exists) return { deletedItems: 0 };
 
     let deletedItems = 0;
-    const relatedCollections = ['communityPosts', 'stories', 'invitations', 'private_invitations', 'notifications', 'partner_notifications'];
+    const relatedCollections = ['communityPosts', 'stories', 'invitations', 'social_invitations', 'notifications', 'partner_notifications'];
 
     for (const colName of relatedCollections) {
         const snap = await db.collection(colName).get();
@@ -2196,6 +2812,33 @@ exports.deleteExpiredInvitations = functions.pubsub
         return null;
     });
 
+exports.archiveExpiredSocialInvitations = functions.pubsub
+    .schedule('every 30 minutes')
+    .timeZone('UTC')
+    .onRun(async () => {
+        const { runArchiveExpiredSocialInvitations } = require('./invitationArchiveCore');
+        try {
+            await runArchiveExpiredSocialInvitations(db);
+        } catch (error) {
+            console.error('archiveExpiredSocialInvitations error:', error);
+        }
+        return null;
+    });
+
+// ─── Scheduled: Archive expired public invitations (remove live doc, keep read-only snapshot) ───
+exports.archiveExpiredPublicInvitations = functions.pubsub
+    .schedule('every 30 minutes')
+    .timeZone('UTC')
+    .onRun(async () => {
+        const { runArchiveExpiredPublicInvitations } = require('./publicInvitationArchiveCore');
+        try {
+            await runArchiveExpiredPublicInvitations(db);
+        } catch (error) {
+            console.error('archiveExpiredPublicInvitations error:', error);
+        }
+        return null;
+    });
+
 // ─── Scheduled: Archive + delete expired invitation chats (1 day post-endDate) ───
 // Runs daily at 03:00 UTC. Invitations whose endDate/date is > 1 day ago
 // get archived (stats only) then their Firestore doc + Storage files are removed.
@@ -2203,76 +2846,7 @@ exports.archiveAndDeleteExpiredInvitationChats = functions.pubsub
     .schedule('0 3 * * *')
     .timeZone('UTC')
     .onRun(async () => {
-        const bucket = admin.storage().bucket();
-        const now = new Date();
-        const cutoff = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
-        const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
-
-        function extractStoragePath(url) {
-            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
-            try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
-        }
-
-        try {
-            // Query completed invitations whose event date ended > 30 days ago
-            const expiredSnap = await db.collection('invitations')
-                .where('meetingStatus', 'in', ['completed', 'cancelled'])
-                .where('endDate', '<=', cutoffTs)
-                .get();
-
-            if (expiredSnap.empty) {
-                console.log('archiveAndDeleteExpiredInvitationChats: nothing to process.');
-                return null;
-            }
-
-            console.log(`archiveAndDeleteExpiredInvitationChats: processing ${expiredSnap.size} invitation(s).`);
-
-            for (const invDoc of expiredSnap.docs) {
-                const invId = invDoc.id;
-                const invData = invDoc.data() || {};
-
-                // 1) Fetch messages subcollection
-                const messagesSnap = await db.collection('invitations').doc(invId).collection('messages').get();
-
-                // 2) Create archive document (stats only, no PII)
-                await db.collection('invitation_archives').doc(invId).set({
-                    invitationId: invId,
-                    archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    eventDate: invData.endDate || invData.date || null,
-                    guestCount: invData.guestCount || invData.attendeeCount || messagesSnap.size || 0,
-                    restaurantId: invData.restaurantId || null,
-                    hostId: invData.author?.id || invData.authorId || null,
-                    messageCount: messagesSnap.size,
-                    title: invData.title || null
-                });
-
-                // 3) Delete Storage media
-                const mediaFields = ['customImage', 'customVideo', 'videoThumbnail', 'image', 'restaurantImage'];
-                const messageMediaFields = ['imageUrl', 'audioUrl', 'fileUrl'];
-                const urls = [];
-                mediaFields.forEach(f => { if (invData[f]) urls.push(invData[f]); });
-                messagesSnap.docs.forEach(d => {
-                    const md = d.data() || {};
-                    messageMediaFields.forEach(f => { if (md[f]) urls.push(md[f]); });
-                    if (md.attachment?.url) urls.push(md.attachment.url);
-                });
-                const paths = [...new Set(urls)].map(extractStoragePath).filter(Boolean);
-                for (const path of paths) {
-                    try { await bucket.file(path).delete(); }
-                    catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
-                }
-
-                // 4) Delete Firestore documents
-                const batch = db.batch();
-                messagesSnap.docs.forEach(d => batch.delete(d.ref));
-                batch.delete(invDoc.ref);
-                await batch.commit();
-            }
-
-            console.log(`archiveAndDeleteExpiredInvitationChats: archived and deleted ${expiredSnap.size} invitation(s).`);
-        } catch (error) {
-            console.error('archiveAndDeleteExpiredInvitationChats error:', error);
-        }
+        console.log('archiveAndDeleteExpiredInvitationChats: disabled — use invitationArchiveCore schedulers.');
         return null;
     });
 

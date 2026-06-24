@@ -1,34 +1,29 @@
-/** Session-only dismissals for pending invitation inbox (reappear on new browser session). */
+/** In-memory-only dismissals for "Later" — must NOT persist across login/logout. */
 
 const KEY_PREFIX = 'db:invitationInboxClosed:';
 
-/** @param {string} uid */
-export function readInboxClosedInvitationIds(uid) {
-    if (!uid || typeof sessionStorage === 'undefined') return new Set();
-    try {
-        const raw = sessionStorage.getItem(`${KEY_PREFIX}${uid}`);
-        if (!raw) return new Set();
-        const parsed = JSON.parse(raw);
-        return new Set(Array.isArray(parsed) ? parsed.filter(Boolean) : []);
-    } catch {
-        return new Set();
-    }
-}
-
-/** @param {string} uid @param {Set<string>} ids */
-export function writeInboxClosedInvitationIds(uid, ids) {
+/** Remove legacy sessionStorage entries (old builds persisted "Later" too long). */
+export function clearInboxClosedInvitationIds(uid) {
     if (!uid || typeof sessionStorage === 'undefined') return;
     try {
-        sessionStorage.setItem(`${KEY_PREFIX}${uid}`, JSON.stringify([...ids]));
+        sessionStorage.removeItem(`${KEY_PREFIX}${uid}`);
     } catch {
-        /* ignore quota */
+        /* ignore */
     }
 }
 
-/** @param {string} uid @param {string} invitationId @param {Set<string>} current */
-export function addInboxClosedInvitationId(uid, invitationId, current) {
+/** @deprecated Legacy — do not read on mount; kept for one-time cleanup only. */
+export function readInboxClosedInvitationIds(uid) {
+    clearInboxClosedInvitationIds(uid);
+    return new Set();
+}
+
+/** @deprecated Legacy — "Later" is in-memory only now. */
+export function writeInboxClosedInvitationIds(_uid, _ids) {}
+
+/** @deprecated Use in-component Set state instead. */
+export function addInboxClosedInvitationId(_uid, invitationId, current) {
     const next = new Set(current);
     if (invitationId) next.add(invitationId);
-    writeInboxClosedInvitationIds(uid, next);
     return next;
 }

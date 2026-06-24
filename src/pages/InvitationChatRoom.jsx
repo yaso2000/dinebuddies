@@ -7,9 +7,9 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-    FaArrowLeft, FaPaperPlane, FaMicrophone, FaTrash,
-    FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers
-} from 'react-icons/fa';
+  FaArrowLeft, FaPaperPlane, FaMicrophone, FaTrash,
+  FaPlay, FaPause, FaArrowDown, FaImage, FaPlus, FaUsers } from
+'react-icons/fa';
 import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
@@ -19,506 +19,518 @@ import './CommunityChatRoom.css';
 import { createNotification } from '../utils/notificationHelpers';
 import { goToLogin } from '../utils/goToLogin';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
+import {
+  getHostedInvitationChatPath,
+  getHostedInvitationDetailsPath } from
+'../utils/hostedInvitationRoutes';
+import { AppText, AppTextInput } from "../components/base";
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const InvitationChatRoom = () => {
-    const { t, i18n } = useTranslation();
-    const { id: invitationId } = useParams();
-    const navigate = useNavigate();
-    const { currentUser, userProfile, isGuest } = useAuth();
-    const { showToast } = useToast();
+  const { t, i18n } = useTranslation();
+  const { id: invitationId } = useParams();
+  const navigate = useNavigate();
+  const { currentUser, userProfile, isGuest } = useAuth();
+  const { showToast } = useToast();
 
-    const [loading, setLoading] = useState(true);
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [invitation, setInvitation] = useState(null);
-    // Tracks which Firestore collection this invitation lives in
-    const [collectionName, setCollectionName] = useState('invitations');
+  const [loading, setLoading] = useState(true);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [invitation, setInvitation] = useState(null);
+  // Tracks which Firestore collection this invitation lives in
+  const [collectionName, setCollectionName] = useState('invitations');
 
-    useEffect(() => {
-        if (!loading && (!currentUser || isGuest)) {
-            goToLogin();
+  useEffect(() => {
+    if (!loading && (!currentUser || isGuest)) {
+      goToLogin();
+    }
+  }, [currentUser, isGuest, loading, navigate]);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Reaction State
+  const [activeReactionId, setActiveReactionId] = useState(null);
+  const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
+
+  // Refs
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiBtnRef = useRef(null);
+  const isTouchUi = isTouchOrCoarsePointer();
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  const containerRef = useRef(null);
+  const composerRef = useRef(null);
+
+  // Audio State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingRef = useRef(null);
+  const timerRef = useRef(null);
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const audioRef = useRef(new Audio());
+
+  useEffect(() => {
+    const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
+    return detach;
+  }, []);
+
+  const handleEmojiClick = (emojiData) => {
+    const emoji = emojiData.emoji;
+    const input = inputRef.current;
+
+    setNewMessage((prevMessage) => {
+      if (input) {
+        const s = input.selectionStart ?? prevMessage.length;
+        const e = input.selectionEnd ?? prevMessage.length;
+
+        setTimeout(() => {
+          input.setSelectionRange(s + emoji.length, s + emoji.length);
+        }, 10);
+
+        return prevMessage.slice(0, s) + emoji + prevMessage.slice(e);
+      } else {
+        return prevMessage + emoji;
+      }
+    });
+  };
+
+  // --- 1. Fetch Invitation & Verify Access ---
+  useEffect(() => {
+    const fetchInvitation = async () => {
+      if (!invitationId) return;
+      // Wait for auth to be ready before trying to verify membership
+      if (!currentUser || !currentUser.uid) return;
+      try {
+        // Try public invitations first, fall back to private
+        let invSnap = await getDoc(doc(db, 'invitations', invitationId));
+        let resolvedCollection = 'invitations';
+
+        if (!invSnap.exists()) {
+          invSnap = await getDoc(doc(db, 'social_invitations', invitationId));
+          resolvedCollection = 'social_invitations';
         }
-    }, [currentUser, isGuest, loading, navigate]);
-    const [showScrollBottom, setShowScrollBottom] = useState(false);
-    const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-    // Reaction State
-    const [activeReactionId, setActiveReactionId] = useState(null);
-    const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
+        if (invSnap.exists()) {
+          const data = invSnap.data();
+          setInvitation(data);
+          setCollectionName(resolvedCollection);
 
-    // Refs
-    const messagesEndRef = useRef(null);
-    const inputRef = useRef(null);
-    const fileInputRef = useRef(null);
-    const emojiBtnRef = useRef(null);
-    const isTouchUi = isTouchOrCoarsePointer();
-    const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-    
-    const containerRef = useRef(null);
-    const composerRef = useRef(null);
+          // Robust Access Check
+          const hostId = data.authorId || data.author?.id;
+          const isHost = hostId === currentUser.uid;
 
-    // Audio State
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingDuration, setRecordingDuration] = useState(0);
-    const recordingRef = useRef(null);
-    const timerRef = useRef(null);
-    const [playingAudioId, setPlayingAudioId] = useState(null);
-    const audioRef = useRef(new Audio());
+          const members = data.joinedMembers || data.joined || [];
+          const isPrivateAccepted = resolvedCollection === 'social_invitations' &&
+          data.rsvps?.[currentUser.uid] === 'accepted';
+          const isParticipant = members.includes(currentUser.uid) || isPrivateAccepted;
 
-    useEffect(() => {
-        const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
-        return detach;
-    }, []);
-
-    const handleEmojiClick = (emojiData) => {
-        const emoji = emojiData.emoji;
-        const input = inputRef.current;
-        
-        setNewMessage(prevMessage => {
-            if (input) {
-                const s = input.selectionStart ?? prevMessage.length;
-                const e = input.selectionEnd ?? prevMessage.length;
-                
-                setTimeout(() => {
-                    input.setSelectionRange(s + emoji.length, s + emoji.length);
-                }, 10);
-                
-                return prevMessage.slice(0, s) + emoji + prevMessage.slice(e);
-            } else {
-                return prevMessage + emoji;
-            }
-        });
-    };
-
-    // --- 1. Fetch Invitation & Verify Access ---
-    useEffect(() => {
-        const fetchInvitation = async () => {
-            if (!invitationId) return;
-            // Wait for auth to be ready before trying to verify membership
-            if (!currentUser || !currentUser.uid) return;
-            try {
-                // Try public invitations first, fall back to private
-                let invSnap = await getDoc(doc(db, 'invitations', invitationId));
-                let resolvedCollection = 'invitations';
-
-                if (!invSnap.exists()) {
-                    invSnap = await getDoc(doc(db, 'private_invitations', invitationId));
-                    resolvedCollection = 'private_invitations';
-                }
-
-                if (invSnap.exists()) {
-                    const data = invSnap.data();
-                    setInvitation(data);
-                    setCollectionName(resolvedCollection);
-
-                    // Robust Access Check
-                    const hostId = data.authorId || data.author?.id;
-                    const isHost = hostId === currentUser.uid;
-
-                    const members = data.joinedMembers || data.joined || [];
-                    const isPrivateAccepted = resolvedCollection === 'private_invitations' &&
-                        data.rsvps?.[currentUser.uid] === 'accepted';
-                    const isParticipant = members.includes(currentUser.uid) || isPrivateAccepted;
-
-                    if (!isHost && !isParticipant) {
-                        showToast(t('not_group_member'), 'error');
-                        navigate(resolvedCollection === 'private_invitations' ? `/invitation/private/${invitationId}` : `/invitation/${invitationId}`);
-                    }
-                } else {
-                    navigate('/', { replace: true, state: { message: t('invitation_ended') } });
-                }
-            } catch (error) {
-                console.error("Error fetching invitation:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchInvitation();
-    }, [invitationId, currentUser?.uid, navigate]);
-
-    // Resilience: if invitation is deleted while in chat (e.g. by Cloud Function), redirect to home
-    useEffect(() => {
-        if (!invitationId || !collectionName || !invitation) return;
-        const invRef = doc(db, collectionName, invitationId);
-        const unsubscribe = onSnapshot(invRef, (snapshot) => {
-            if (!snapshot.exists()) {
-                navigate('/', { replace: true, state: { message: t('invitation_ended') } });
-            }
-        }, (err) => {
-            console.error('Invitation snapshot error:', err);
-        });
-        return () => unsubscribe();
-    }, [invitationId, collectionName, invitation, navigate]);
-
-    // Click Outside Handling
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (activeReactionId && !event.target.closest('.reaction-popup-container') && !event.target.closest('.bubble')) {
-                setActiveReactionId(null);
-            }
-            if (extendedReactionPicker && !event.target.closest('.extended-reaction-picker')) {
-                setExtendedReactionPicker(null);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [activeReactionId, extendedReactionPicker]);
-
-    // --- 2. Real-time Messages ---
-    useEffect(() => {
-        if (!invitationId || !collectionName) return;
-
-        const q = query(
-            collection(db, collectionName, invitationId, 'messages'),
-            orderBy('createdAt', 'asc')
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setMessages(msgs);
-            setTimeout(scrollToBottom, 100);
-        });
-
-        return () => unsubscribe();
-    }, [invitationId, collectionName]);
-
-    // Cleanup Audio
-    useEffect(() => {
-        return () => {
-            audioRef.current.pause();
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, []);
-
-    // --- Handlers ---
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    const handleScroll = (e) => {
-        const { scrollTop, scrollHeight, clientHeight } = e.target;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-        setShowScrollBottom(!isNearBottom);
-    };
-
-    // Image Handlers
-    const handleImageClick = () => {
-        fileInputRef.current?.click();
-    };
-
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setIsUploadingImage(true);
-        try {
-            const imageUrl = await uploadImage(file, currentUser.uid);
-            await addDoc(collection(db, collectionName, invitationId, 'messages'), {
-                text: '',
-                imageUrl: imageUrl,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'image'
-            });
-            scrollToBottom();
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            notifyImageUploadError(showToast, error, t);
-        } finally {
-            setIsUploadingImage(false);
-            e.target.value = '';
-        }
-    };
-
-    // Reaction Handlers
-    const handleReact = async (msgId, emoji) => {
-        try {
-            setActiveReactionId(null); // Close popup
-            const msgRef = doc(db, collectionName, invitationId, 'messages', msgId);
-            const message = messages.find(m => m.id === msgId);
-            const currentReactions = message.reactions || {};
-
-            // Toggle reaction: if same emoji exists for user, remove it
-            let newReactions = { ...currentReactions };
-
-            if (newReactions[currentUser.uid] === emoji) {
-                delete newReactions[currentUser.uid];
-            } else {
-                newReactions[currentUser.uid] = emoji;
-            }
-
-            await updateDoc(msgRef, {
-                reactions: newReactions
-            });
-        } catch (error) {
-            console.error("Error reacting:", error);
-        }
-    };
-
-    // Voice Handlers
-    const handleStartRecording = async () => {
-        try {
-            const start = await startRecording();
-            recordingRef.current = start.stop;
-            setIsRecording(true);
-            setRecordingDuration(0);
-
-            timerRef.current = setInterval(() => {
-                setRecordingDuration(prev => prev + 1);
-            }, 1000);
-        } catch (error) {
-            console.error("Mic Error:", error);
-            showToast(t('no_mic_access'), 'error');
-        }
-    };
-
-    const handleStopRecording = async (shouldSend = true) => {
-        if (!recordingRef.current) return;
-
-        clearInterval(timerRef.current);
-        const audioBlob = await recordingRef.current();
-        setIsRecording(false);
-        setRecordingDuration(0);
-        recordingRef.current = null;
-
-        if (shouldSend && audioBlob) {
-            await sendVoiceMessage(audioBlob);
-        }
-    };
-
-    const sendVoiceMessage = async (audioBlob) => {
-        try {
-            const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
-            await addDoc(collection(db, collectionName, invitationId, 'messages'), {
-                text: '',
-                audioUrl: url,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'audio',
-                duration: recordingDuration
-            });
-            scrollToBottom();
-        } catch (error) {
-            console.error("Error sending voice:", error);
-            showToast(t('failed_send_voice'), 'error');
-        }
-    };
-
-    const handlePlayAudio = (url, msgId) => {
-        if (playingAudioId === msgId) {
-            audioRef.current.pause();
-            setPlayingAudioId(null);
+          if (!isHost && !isParticipant) {
+            showToast(t('not_group_member'), 'error');
+            const detailsPath =
+            resolvedCollection === 'social_invitations' ?
+            getHostedInvitationDetailsPath({ id: invitationId, ...data }) :
+            `/invitation/${invitationId}`;
+            navigate(detailsPath);
+          }
         } else {
-            audioRef.current.src = url;
-            audioRef.current.play();
-            setPlayingAudioId(msgId);
-            audioRef.current.onended = () => setPlayingAudioId(null);
+          navigate('/', { replace: true, state: { message: t('invitation_ended') } });
         }
+      } catch (error) {
+        console.error("Error fetching invitation:", error);
+      } finally {
+        setLoading(false);
+      }
     };
+    fetchInvitation();
+  }, [invitationId, currentUser?.uid, navigate]);
 
-    // Text Handler
-    const handleSendMessage = async (e) => {
-        if (e && e.preventDefault) e.preventDefault();
-        if (!newMessage.trim()) return;
+  // Resilience: if invitation is deleted while in chat (e.g. by Cloud Function), redirect to home
+  useEffect(() => {
+    if (!invitationId || !collectionName || !invitation) return;
+    const invRef = doc(db, collectionName, invitationId);
+    const unsubscribe = onSnapshot(invRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        navigate('/', { replace: true, state: { message: t('invitation_ended') } });
+      }
+    }, (err) => {
+      console.error('Invitation snapshot error:', err);
+    });
+    return () => unsubscribe();
+  }, [invitationId, collectionName, invitation, navigate]);
 
-        const text = newMessage.trim();
-
-        try {
-            await addDoc(collection(db, collectionName, invitationId, 'messages'), {
-                text: text,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'text'
-            });
-            setNewMessage('');
-            scrollToBottom();
-            setTimeout(() => inputRef.current?.focus(), 10);
-
-            // Notify all participants (host + joined members) except the sender
-            const hostId = invitation?.authorId || invitation?.author?.id;
-            const members = invitation?.joinedMembers || invitation?.joined || [];
-            const recipients = [hostId, ...members].filter(id => id && id !== currentUser.uid);
-            const senderName = userProfile?.display_name || 'Someone';
-            const actionUrl = collectionName === 'private_invitations'
-                ? `/invitation/private/${invitationId}/chat`
-                : `/invitation/${invitationId}/chat`;
-            recipients.forEach(userId => {
-                createNotification({
-                    userId,
-                    type: 'message',
-                    title: senderName,
-                    message: text.slice(0, 80),
-                    actionUrl
-                }).catch(() => { });
-            });
-        } catch (error) {
-            console.error("Error sending:", error);
-            showToast(t('failed_send_message'), 'error');
-        }
+  // Click Outside Handling
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (activeReactionId && !event.target.closest('.reaction-popup-container') && !event.target.closest('.bubble')) {
+        setActiveReactionId(null);
+      }
+      if (extendedReactionPicker && !event.target.closest('.extended-reaction-picker')) {
+        setExtendedReactionPicker(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, [activeReactionId, extendedReactionPicker]);
 
-    // Group Consecutive Messages
-    const isConsecutive = (current, prev) => {
-        if (!prev) return false;
-        return current.senderId === prev.senderId;
+  // --- 2. Real-time Messages ---
+  useEffect(() => {
+    if (!invitationId || !collectionName) return;
+
+    const q = query(
+      collection(db, collectionName, invitationId, 'messages'),
+      orderBy('createdAt', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMessages(msgs);
+      setTimeout(scrollToBottom, 100);
+    });
+
+    return () => unsubscribe();
+  }, [invitationId, collectionName]);
+
+  // Cleanup Audio
+  useEffect(() => {
+    return () => {
+      audioRef.current.pause();
+      if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, []);
 
-    // Format Time Helper
-    const formatTime = (timestamp) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
+  // --- Handlers ---
 
-    if (loading) return (
-        <div dir="ltr" className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setShowScrollBottom(!isNearBottom);
+  };
+
+  // Image Handlers
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      const imageUrl = await uploadImage(file, currentUser.uid);
+      await addDoc(collection(db, collectionName, invitationId, 'messages'), {
+        text: '',
+        imageUrl: imageUrl,
+        senderId: currentUser.uid,
+        senderName: userProfile?.display_name || currentUser.displayName || 'User',
+        senderAvatar: getSafeAvatar(userProfile || currentUser),
+        createdAt: serverTimestamp(),
+        type: 'image'
+      });
+      scrollToBottom();
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      notifyImageUploadError(showToast, error, t);
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  // Reaction Handlers
+  const handleReact = async (msgId, emoji) => {
+    try {
+      setActiveReactionId(null); // Close popup
+      const msgRef = doc(db, collectionName, invitationId, 'messages', msgId);
+      const message = messages.find((m) => m.id === msgId);
+      const currentReactions = message.reactions || {};
+
+      // Toggle reaction: if same emoji exists for user, remove it
+      let newReactions = { ...currentReactions };
+
+      if (newReactions[currentUser.uid] === emoji) {
+        delete newReactions[currentUser.uid];
+      } else {
+        newReactions[currentUser.uid] = emoji;
+      }
+
+      await updateDoc(msgRef, {
+        reactions: newReactions
+      });
+    } catch (error) {
+      console.error("Error reacting:", error);
+    }
+  };
+
+  // Voice Handlers
+  const handleStartRecording = async () => {
+    try {
+      const start = await startRecording();
+      recordingRef.current = start.stop;
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error("Mic Error:", error);
+      showToast(t('no_mic_access'), 'error');
+    }
+  };
+
+  const handleStopRecording = async (shouldSend = true) => {
+    if (!recordingRef.current) return;
+
+    clearInterval(timerRef.current);
+    const audioBlob = await recordingRef.current();
+    setIsRecording(false);
+    setRecordingDuration(0);
+    recordingRef.current = null;
+
+    if (shouldSend && audioBlob) {
+      await sendVoiceMessage(audioBlob);
+    }
+  };
+
+  const sendVoiceMessage = async (audioBlob) => {
+    try {
+      const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
+      await addDoc(collection(db, collectionName, invitationId, 'messages'), {
+        text: '',
+        audioUrl: url,
+        senderId: currentUser.uid,
+        senderName: userProfile?.display_name || currentUser.displayName || 'User',
+        senderAvatar: getSafeAvatar(userProfile || currentUser),
+        createdAt: serverTimestamp(),
+        type: 'audio',
+        duration: recordingDuration
+      });
+      scrollToBottom();
+    } catch (error) {
+      console.error("Error sending voice:", error);
+      showToast(t('failed_send_voice'), 'error');
+    }
+  };
+
+  const handlePlayAudio = (url, msgId) => {
+    if (playingAudioId === msgId) {
+      audioRef.current.pause();
+      setPlayingAudioId(null);
+    } else {
+      audioRef.current.src = url;
+      audioRef.current.play();
+      setPlayingAudioId(msgId);
+      audioRef.current.onended = () => setPlayingAudioId(null);
+    }
+  };
+
+  // Text Handler
+  const handleSendMessage = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const text = newMessage.trim();
+
+    try {
+      await addDoc(collection(db, collectionName, invitationId, 'messages'), {
+        text: text,
+        senderId: currentUser.uid,
+        senderName: userProfile?.display_name || currentUser.displayName || 'User',
+        senderAvatar: getSafeAvatar(userProfile || currentUser),
+        createdAt: serverTimestamp(),
+        type: 'text'
+      });
+      setNewMessage('');
+      scrollToBottom();
+      setTimeout(() => inputRef.current?.focus(), 10);
+
+      // Notify all participants (host + joined members) except the sender
+      const hostId = invitation?.authorId || invitation?.author?.id;
+      const members = invitation?.joinedMembers || invitation?.joined || [];
+      const recipients = [hostId, ...members].filter((id) => id && id !== currentUser.uid);
+      const senderName = userProfile?.display_name || 'Someone';
+      const actionUrl =
+      collectionName === 'social_invitations' ?
+      getHostedInvitationChatPath({ id: invitationId, ...invitation }) :
+      `/invitation/${invitationId}/chat`;
+      recipients.forEach((userId) => {
+        createNotification({
+          userId,
+          type: 'message',
+          title: senderName,
+          message: text.slice(0, 80),
+          actionUrl
+        }).catch(() => {});
+      });
+    } catch (error) {
+      console.error("Error sending:", error);
+      showToast(t('failed_send_message'), 'error');
+    }
+  };
+
+  // Group Consecutive Messages
+  const isConsecutive = (current, prev) => {
+    if (!prev) return false;
+    return current.senderId === prev.senderId;
+  };
+
+  // Format Time Helper
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  if (loading) return (
+    <div dir="ltr" className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t("loading_chat")}</div>
-        </div>
-    );
+        </div>);
 
-    const invImage = pickSafeDisplayImageUrl(
-        invitation?.customImage,
-        invitation?.restaurantImage,
-        invitation?.image
-    );
 
-    return (
-        <div ref={containerRef} dir="ltr" className="chat-screen invitation-chat-root">
+  const invImage = pickSafeDisplayImageUrl(
+    invitation?.customImage,
+    invitation?.restaurantImage,
+    invitation?.image
+  );
+
+  return (
+    <div ref={containerRef} dir="ltr" className="chat-screen invitation-chat-root">
 
             {/* Subtle dot-grid overlay for depth */}
             <div style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: 'radial-gradient(circle, var(--accent-color, rgba(99,102,241,0.06)) 1px, transparent 1px)',
-                backgroundSize: '26px 26px', opacity: 0.08,
-                pointerEvents: 'none', zIndex: 0
-            }} />
+        position: 'absolute', inset: 0,
+        backgroundImage: 'radial-gradient(circle, var(--accent-color, rgba(99,102,241,0.06)) 1px, transparent 1px)',
+        backgroundSize: '26px 26px', opacity: 0.08,
+        pointerEvents: 'none', zIndex: 0
+      }} />
 
             {/* ══════════  HEADER  ══════════ */}
             <header className="chat-header" style={{
-                flexShrink: 0,
-                position: 'relative',
-                zIndex: 50,
-                overflow: 'hidden',
-                background: 'var(--header-bg)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                borderBottom: '1px solid var(--border-color, rgba(99,102,241,0.15))',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            }}>
+        flexShrink: 0,
+        position: 'relative',
+        zIndex: 50,
+        overflow: 'hidden',
+        background: 'var(--header-bg)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderBottom: '1px solid var(--border-color, rgba(99,102,241,0.15))',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+      }}>
                 {/* Invitation image ghost behind header */}
-                {invImage && (
-                    <div style={{
-                        position: 'absolute', inset: 0,
-                        backgroundImage: `url(${invImage})`,
-                        backgroundSize: 'cover', backgroundPosition: 'center',
-                        opacity: 0.07, filter: 'blur(10px)', transform: 'scale(1.15)',
-                        pointerEvents: 'none',
-                    }} />
-                )}
+                {invImage &&
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: `url(${invImage})`,
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          opacity: 0.07, filter: 'blur(10px)', transform: 'scale(1.15)',
+          pointerEvents: 'none'
+        }} />
+        }
 
                 {/* Top row: back + avatar + info + members */}
                 <div style={{
-                    position: 'relative', zIndex: 1,
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 14px',
-                    minHeight: '64px',
-                }}>
+          position: 'relative', zIndex: 1,
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '10px 14px',
+          minHeight: '64px'
+        }}>
                     {/* Back btn */}
                     <button
-                        onClick={() => navigate(
-                            collectionName === 'private_invitations'
-                                ? `/invitation/private/${invitationId}`
-                                : `/invitation/${invitationId}`,
-                            { replace: true }
-                        )}
-                        style={{
-                            background: 'rgba(108,92,231,0.15)',
-                            border: '1px solid rgba(108,92,231,0.3)',
-                            color: 'var(--text-primary)', width: '36px', height: '36px',
-                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s',
-                        }}
-                    >
+            onClick={() =>
+            navigate(
+              collectionName === 'social_invitations' ?
+              getHostedInvitationDetailsPath({ id: invitationId, ...invitation }) :
+              `/invitation/${invitationId}`,
+              { replace: true }
+            )
+            }
+            style={{
+              background: 'rgba(108,92,231,0.15)',
+              border: '1px solid rgba(108,92,231,0.3)',
+              color: 'var(--text-primary)', width: '36px', height: '36px',
+              borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s'
+            }}>
+            
                         <FaArrowLeft size={14} style={{ transform: i18n.language === 'ar' ? 'rotate(180deg)' : 'none' }} />
                     </button>
 
                     {/* Host avatar with gold ring + HOST badge */}
                     <div style={{ position: 'relative', flexShrink: 0 }}>
                         <UserAvatar
-                            src={getSafeAvatar(invitation?.author)}
-                            user={invitation?.author}
-                            alt="Host"
-                            style={{
-                                width: '44px', height: '44px', minWidth: '44px', minHeight: '44px', maxWidth: '44px', maxHeight: '44px',
-                                objectFit: 'cover',
-                                border: '2px solid #fbbf24',
-                                borderRadius: '50%',
-                                boxShadow: '0 0 14px rgba(251,191,36,0.35)',
-                            }}
-                        />
+              src={getSafeAvatar(invitation?.author)}
+              user={invitation?.author}
+              alt="Host"
+              style={{
+                width: '44px', height: '44px', minWidth: '44px', minHeight: '44px', maxWidth: '44px', maxHeight: '44px',
+                objectFit: 'cover',
+                border: '2px solid #fbbf24',
+                borderRadius: '50%',
+                boxShadow: '0 0 14px rgba(251,191,36,0.35)'
+              }} />
+            
                         <div style={{
-                            position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%)',
-                            background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                            color: '#000', fontSize: '6.5px', fontWeight: '900',
-                            padding: '1.5px 4px', borderRadius: '4px', letterSpacing: '0.5px',
-                            whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                        }}>{t("host_badge")}</div>
+              position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%)',
+              background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+              color: '#000', fontSize: '6.5px', fontWeight: '900',
+              padding: '1.5px 4px', borderRadius: '4px', letterSpacing: '0.5px',
+              whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.4)'
+            }}>{t("host_badge")}</div>
                     </div>
 
                     {/* Invitation title + location + date */}
                     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                        <h2 style={{
-                            margin: '0 0 3px', fontSize: '0.92rem', fontWeight: '800',
-                            color: 'var(--text-primary)', whiteSpace: 'nowrap',
-                            overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
-                        }}>
+                        <AppText as="h2" style={{
+              margin: '0 0 3px', fontSize: '0.92rem', fontWeight: '800',
+              color: 'var(--text-primary)', whiteSpace: 'nowrap',
+              overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2
+            }}>
                             {invitation?.title || t('group_chat')}
-                        </h2>
+                        </AppText>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
-                            {invitation?.location && (
-                                <span style={{
-                                    fontSize: '0.68rem', color: 'var(--text-muted)',
-                                    display: 'flex', alignItems: 'center', gap: '2px',
-                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px',
-                                }}>
+                            {invitation?.location &&
+              <AppText as="span" style={{
+                fontSize: '0.68rem', color: 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', gap: '2px',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px'
+              }}>
                                     📍 {invitation.location}
-                                </span>
-                            )}
-                            {invitation?.date && (
-                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                                </AppText>
+              }
+                            {invitation?.date &&
+              <AppText as="span" style={{ fontSize: '0.68rem', color: 'var(--text-muted)', flexShrink: 0 }}>
                                     📅 {new Date(invitation.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
                                     {invitation.time && ` · ${invitation.time}`}
-                                </span>
-                            )}
+                                </AppText>
+              }
                         </div>
                     </div>
 
                     {/* Members pill */}
                     <div style={{
-                        background: 'rgba(108,92,231,0.15)',
-                        border: '1px solid rgba(108,92,231,0.3)',
-                        borderRadius: '20px', padding: '5px 10px',
-                        display: 'flex', alignItems: 'center', gap: '5px',
-                        flexShrink: 0,
-                    }}>
+            background: 'rgba(108,92,231,0.15)',
+            border: '1px solid rgba(108,92,231,0.3)',
+            borderRadius: '20px', padding: '5px 10px',
+            display: 'flex', alignItems: 'center', gap: '5px',
+            flexShrink: 0
+          }}>
                         <FaUsers size={11} style={{ color: 'var(--accent-color)' }} />
-                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--accent-color)' }}>
+                        <AppText as="span" style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--accent-color)' }}>
                             {(invitation?.joinedMembers || invitation?.joined || []).length + 1}
-                        </span>
+                        </AppText>
                     </div>
                 </div>
             </header>
@@ -528,289 +540,290 @@ const InvitationChatRoom = () => {
             <div className="message-list" onScroll={handleScroll} style={{ position: 'relative', zIndex: 1, paddingBottom: '16px' }}>
 
                 {/* Empty state */}
-                {messages.length === 0 && (
-                    <div style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        justifyContent: 'center', minHeight: '250px', gap: '16px', padding: '32px 24px',
-                    }}>
-                        {invImage && (
-                            <div style={{
-                                width: '90px', height: '90px', borderRadius: '18px', overflow: 'hidden',
-                                border: '2px solid rgba(108,92,231,0.4)',
-                                boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
-                            }}>
+                {messages.length === 0 &&
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', minHeight: '250px', gap: '16px', padding: '32px 24px'
+          }}>
+                        {invImage &&
+            <div style={{
+              width: '90px', height: '90px', borderRadius: '18px', overflow: 'hidden',
+              border: '2px solid rgba(108,92,231,0.4)',
+              boxShadow: '0 8px 20px rgba(0,0,0,0.2)'
+            }}>
                                 <img src={invImage} alt="Venue" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             </div>
-                        )}
+            }
                         <div style={{ textAlign: 'center' }}>
-                            <p style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>{t("say_hello")} 👋</p>
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>{t("start_conversation_first")}</p>
+                            <AppText as="p" style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>{t("say_hello")} 👋</AppText>
+                            <AppText as="p" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>{t("start_conversation_first")}</AppText>
                         </div>
                     </div>
-                )}
+          }
 
                 {messages.map((msg, index) => {
-                    const isMe = msg.senderId === currentUser.uid;
-                    const isSequence = isConsecutive(msg, messages[index - 1]);
+            const isMe = msg.senderId === currentUser.uid;
+            const isSequence = isConsecutive(msg, messages[index - 1]);
 
-                    // Reactions Logic
-                    const reactions = msg.reactions ? Object.values(msg.reactions) : [];
-                    const distinctReactions = [...new Set(reactions)].slice(0, 3);
-                    const hasReactions = reactions.length > 0;
+            // Reactions Logic
+            const reactions = msg.reactions ? Object.values(msg.reactions) : [];
+            const distinctReactions = [...new Set(reactions)].slice(0, 3);
+            const hasReactions = reactions.length > 0;
 
-                    return (
-                        <div key={msg.id} className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isSequence ? 'sequence' : 'first-of-group'}`}>
-                            {!isMe && !isSequence && (
-                                <UserAvatar
-                                    src={msg.senderAvatar}
-                                    user={{ avatar: msg.senderAvatar }}
-                                    alt="avatar"
-                                    className="sender-avatar"
-                                />
-                            )}
+            return (
+              <div key={msg.id} className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isSequence ? 'sequence' : 'first-of-group'}`}>
+                            {!isMe && !isSequence &&
+                <UserAvatar
+                  src={msg.senderAvatar}
+                  user={{ avatar: msg.senderAvatar }}
+                  alt="avatar"
+                  className="sender-avatar"
+                  style={{ width: 36, height: 36, minWidth: 36, minHeight: 36 }} />
+
+                }
                             {/* Empty placeholder for alignment if sequence */}
                             {!isMe && isSequence && <div style={{ width: '44px' }}></div>}
 
                             <div
-                                className={`bubble ${msg.type === 'audio' ? 'bubble-audio-transparent' : ''}`}
-                                onClick={() => setActiveReactionId(activeReactionId === msg.id ? null : msg.id)}
-                                style={{ position: 'relative', cursor: 'pointer' }}
-                            >
-                                {!isMe && !isSequence && (
-                                    <div className="sender-name-small" style={{ fontSize: '0.75rem', marginBottom: '2px', color: 'var(--accent-color)', fontWeight: 'bold' }}>
+                  className={`bubble ${msg.type === 'audio' ? 'bubble-audio-transparent' : ''}`}
+                  onClick={() => setActiveReactionId(activeReactionId === msg.id ? null : msg.id)}
+                  style={{ position: 'relative', cursor: 'pointer' }}>
+                  
+                                {!isMe && !isSequence &&
+                  <div className="sender-name-small" style={{ fontSize: '0.75rem', marginBottom: '2px', color: 'var(--accent-color)', fontWeight: 'bold' }}>
                                         {msg.senderName}
                                     </div>
-                                )}
+                  }
 
-                                {msg.type === 'image' && (
-                                    <img src={msg.imageUrl} alt="attachment" className="chat-image" />
-                                )}
+                                {msg.type === 'image' &&
+                  <img src={msg.imageUrl} alt="attachment" className="chat-image" />
+                  }
 
                                 <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: '4px 12px' }}>
                                     <div style={{ flex: '1 1 auto', margin: 0, minWidth: 0, wordBreak: 'break-word', paddingTop: '2px' }}>
-                                        {msg.type === 'audio' ? (
-                                            <div className="voice-widget">
+                                        {msg.type === 'audio' ?
+                      <div className="voice-widget">
                                                 <div className="voice-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <button className="voice-play-btn" onClick={(e) => { e.stopPropagation(); handlePlayAudio(msg.audioUrl, msg.id); }}>
-                                                        {playingAudioId === msg.id ? (
-                                                            <FaPause color="#10b981" size={14} />
-                                                        ) : (
-                                                            <FaPlay color="white" size={14} />
-                                                        )}
+                                                    <button className="voice-play-btn" onClick={(e) => {e.stopPropagation();handlePlayAudio(msg.audioUrl, msg.id);}}>
+                                                        {playingAudioId === msg.id ?
+                            <FaPause color="#10b981" size={14} /> :
+
+                            <FaPlay color="white" size={14} />
+                            }
                                                     </button>
                                                     <div className="voice-time">{formatDuration(msg.duration || 0)}</div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <span dir="auto">{msg.text}</span>
-                                        )}
+                                            </div> :
+
+                      <AppText as="span" dir="auto">{msg.text}</AppText>
+                      }
                                     </div>
 
-                                    <span className="timestamp" style={{ margin: '0 0 0 auto', display: 'flex', flexShrink: 0 }}>{formatTime(msg.createdAt)}</span>
+                                    <AppText as="span" className="timestamp" style={{ margin: '0 0 0 auto', display: 'flex', flexShrink: 0 }}>{formatTime(msg.createdAt)}</AppText>
                                 </div>
 
                                 {/* Reaction Badge */}
-                                {hasReactions && (
-                                    <div className="message-reaction-badge" style={{ position: 'absolute', bottom: '-10px', insetInlineEnd: isMe ? 'auto' : '-5px', insetInlineStart: isMe ? '-5px' : 'auto', background: '#1f2937', borderRadius: '12px', padding: '2px 6px', fontSize: '0.75rem', border: '2px solid #0b1220', display: 'flex', alignItems: 'center', gap: '2px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
-                                        {distinctReactions.map((r, i) => <span key={i}>{r}</span>)}
-                                        {reactions.length > 1 && <span style={{ marginInlineStart: '2px', color: '#9CA3AF', fontSize: '0.7rem' }}>{reactions.length}</span>}
+                                {hasReactions &&
+                  <div className="message-reaction-badge" style={{ position: 'absolute', bottom: '-10px', insetInlineEnd: isMe ? 'auto' : '-5px', insetInlineStart: isMe ? '-5px' : 'auto', background: '#1f2937', borderRadius: '12px', padding: '2px 6px', fontSize: '0.75rem', border: '2px solid #0b1220', display: 'flex', alignItems: 'center', gap: '2px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
+                                        {distinctReactions.map((r, i) => <AppText as="span" key={i}>{r}</AppText>)}
+                                        {reactions.length > 1 && <AppText as="span" style={{ marginInlineStart: '2px', color: '#9CA3AF', fontSize: '0.7rem' }}>{reactions.length}</AppText>}
                                     </div>
-                                )}
+                  }
                             </div>
 
                             {/* Reaction Popup Menu */}
-                            {activeReactionId === msg.id && (
-                                <div className="reaction-popup-container" style={{ position: 'absolute', top: '-45px', insetInlineStart: isMe ? 'auto' : '50px', insetInlineEnd: isMe ? '50px' : 'auto', background: '#1f2937', padding: '5px 10px', borderRadius: '25px', display: 'flex', gap: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: 100 }} onClick={(e) => e.stopPropagation()}>
-                                    {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                                        <span
-                                            key={emoji}
-                                            className="reaction-popup-item"
-                                            style={{ cursor: 'pointer', fontSize: '1.2rem', transition: 'transform 0.2s' }}
-                                            onClick={() => handleReact(msg.id, emoji)}
-                                        >
+                            {activeReactionId === msg.id &&
+                <div className="reaction-popup-container" style={{ position: 'absolute', top: '-45px', insetInlineStart: isMe ? 'auto' : '50px', insetInlineEnd: isMe ? '50px' : 'auto', background: '#1f2937', padding: '5px 10px', borderRadius: '25px', display: 'flex', gap: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: 100 }} onClick={(e) => e.stopPropagation()}>
+                                    {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) =>
+                  <AppText as="span"
+                  key={emoji}
+                  className="reaction-popup-item"
+                  style={{ cursor: 'pointer', fontSize: '1.2rem', transition: 'transform 0.2s' }}
+                  onClick={() => handleReact(msg.id, emoji)}>
+                    
                                             {emoji}
-                                        </span>
-                                    ))}
-                                    {!isTouchUi && (
-                                        <div
-                                            className="reaction-popup-item"
-                                            style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', cursor: 'pointer' }}
-                                            onClick={() => {
-                                                setExtendedReactionPicker(msg.id);
-                                                setActiveReactionId(null);
-                                            }}
-                                        >
+                                        </AppText>
+                  )}
+                                    {!isTouchUi &&
+                  <div
+                    className="reaction-popup-item"
+                    style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', cursor: 'pointer' }}
+                    onClick={() => {
+                      setExtendedReactionPicker(msg.id);
+                      setActiveReactionId(null);
+                    }}>
+                    
                                             <FaPlus style={{ color: '#9CA3AF' }} />
                                         </div>
-                                    )}
+                  }
                                 </div>
-                            )}
+                }
 
                             {/* Extended Emoji Picker (desktop) */}
-                            {extendedReactionPicker === msg.id && !isTouchUi && (
-                                <div className="extended-reaction-picker" style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
+                            {extendedReactionPicker === msg.id && !isTouchUi &&
+                <div className="extended-reaction-picker" style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
                                     <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
                                         <LazyEmojiPicker
-                                            onEmojiClick={(emojiObject) => {
-                                                handleReact(msg.id, emojiObject.emoji);
-                                                setExtendedReactionPicker(null);
-                                            }}
-                                            width="300px"
-                                            height="350px"
-                                            theme="dark"
-                                            searchDisabled={true}
-                                            previewConfig={{ showPreview: false }}
-                                        />
+                      onEmojiClick={(emojiObject) => {
+                        handleReact(msg.id, emojiObject.emoji);
+                        setExtendedReactionPicker(null);
+                      }}
+                      width="300px"
+                      height="350px"
+                      theme="dark"
+                      searchDisabled={true}
+                      previewConfig={{ showPreview: false }} />
+                    
                                     </Suspense>
                                 </div>
-                            )}
-                        </div>
-                    );
-                })
                 }
+                        </div>);
+
+          })
+          }
                 <div ref={messagesEndRef} />
             </div>
 
 
-            {showScrollBottom && (
+            {showScrollBottom &&
 
-                <button
-                    onClick={scrollToBottom}
-                    style={{
-                        position: 'absolute',
-                        bottom: '88px',
-                        right: '20px',
-                        background: '#3b82f6',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '40px',
-                        height: '40px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
-                        zIndex: 200,
-                    }}
-                >
+        <button
+          onClick={scrollToBottom}
+          style={{
+            position: 'absolute',
+            bottom: '88px',
+            right: '20px',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+            zIndex: 200
+          }}>
+          
                     <FaArrowDown />
                 </button>
-            )}
+        }
 
             <div className="chat-footer-stack">
-            {isUploadingImage && (
-                <div
-                    role="status"
-                    style={{
-                        padding: '10px 14px',
-                        textAlign: 'center',
-                        fontSize: '0.9rem',
-                        color: 'var(--text-secondary, #94a3b8)',
-                        background: 'var(--bg-darker)',
-                        borderTop: '1px solid var(--border-color)',
-                    }}
-                >
+            {isUploadingImage &&
+          <div
+            role="status"
+            style={{
+              padding: '10px 14px',
+              textAlign: 'center',
+              fontSize: '0.9rem',
+              color: 'var(--text-secondary, #94a3b8)',
+              background: 'var(--bg-darker)',
+              borderTop: '1px solid var(--border-color)'
+            }}>
+            
                     {t('image_upload_checking')}
                 </div>
-            )}
+          }
             <div ref={composerRef} style={{
-                flexShrink: 0,
-                width: '100%',
-                boxSizing: 'border-box',
-                background: 'var(--bg-darker)',
-                borderTop: '1px solid var(--border-color)',
-                padding: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-            }}>
+            flexShrink: 0,
+            width: '100%',
+            boxSizing: 'border-box',
+            background: 'var(--bg-darker)',
+            borderTop: '1px solid var(--border-color)',
+            padding: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+          }}>
                 <div className="input-wrapper" style={{
-                    flex: 1, display: 'flex', alignItems: 'center',
-                    background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
-                    border: '1px solid var(--border-color)'
-                }}>
+              flex: 1, display: 'flex', alignItems: 'center',
+              background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
+              border: '1px solid var(--border-color)'
+            }}>
                     {/* Image Input (Hidden) */}
                     <input
-                        type="file"
-                        ref={fileInputRef}
-                        style={{ display: 'none' }}
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                    />
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="image/*"
+                onChange={handleImageUpload} />
+              
 
-                    {isRecording ? (
-                        <div className="recording-ui" style={{ flex: 1, color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px' }}>
+                    {isRecording ?
+              <div className="recording-ui" style={{ flex: 1, color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <FaMicrophone className="recording-pulse" />
-                                <span>{formatDuration(recordingDuration)}</span>
+                                <AppText as="span">{formatDuration(recordingDuration)}</AppText>
                             </div>
                             <button onClick={() => handleStopRecording(false)} style={{ background: 'none', border: 'none', color: '#94a3b8' }}>
                                 <FaTrash />
                             </button>
-                        </div>
-                    ) : (
-                        <>
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                className="message-input"
-                                placeholder={t("type_message")}
-                                value={newMessage}
-                                onChange={(e) => setNewMessage(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                                autoComplete="off"
-                            />
-                            {!isTouchUi && (
-                                <button
-                                    ref={emojiBtnRef}
-                                    type="button"
-                                    onClick={() => setEmojiPickerOpen((o) => !o)}
-                                    style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}
-                                    title="Emoji"
-                                >
+                        </div> :
+
+              <>
+                            <AppTextInput
+                  ref={inputRef}
+                  type="text"
+                  className="message-input"
+                  placeholder={t("type_message")}
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                  autoComplete="off" />
+                
+                            {!isTouchUi &&
+                <button
+                  ref={emojiBtnRef}
+                  type="button"
+                  onClick={() => setEmojiPickerOpen((o) => !o)}
+                  style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                  title="Emoji">
+                  
                                     😊
                                 </button>
-                            )}
+                }
                             <button className="composer-icon-btn" onClick={handleImageClick} style={{ background: 'none', border: 'none', color: '#9ca3af', marginRight: '8px', cursor: 'pointer', display: 'flex' }}>
                                 <FaImage size={18} />
                             </button>
                         </>
-                    )}
+              }
                 </div>
 
                 <button
-                    className="send-btn-circle"
-                    style={{
-                        background: isRecording ? '#ef4444' : 'var(--primary)',
-                        color: 'white', border: 'none', borderRadius: '50%',
-                        width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-                    }}
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        if (isRecording) handleStopRecording(true);
-                        else handleSendMessage(e);
-                    }}
-                >
-                    {isRecording ? <FaPaperPlane /> : (newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleStartRecording(); }} />)}
+              className="send-btn-circle"
+              style={{
+                background: isRecording ? '#ef4444' : 'var(--primary)',
+                color: 'white', border: 'none', borderRadius: '50%',
+                width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (isRecording) handleStopRecording(true);else
+                handleSendMessage(e);
+              }}>
+              
+                    {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone onMouseDown={(e) => {e.preventDefault();e.stopPropagation();handleStartRecording();}} />}
                 </button>
             </div>
 
-            {!isTouchUi && (
-                <EmojiPickerPortal
-                    open={emojiPickerOpen}
-                    onClose={() => setEmojiPickerOpen(false)}
-                    anchorRef={emojiBtnRef}
-                    onEmojiClick={handleEmojiClick}
-                />
-            )}
-            </div>
-            </div>
-        </div>
+            {!isTouchUi &&
+          <EmojiPickerPortal
+            open={emojiPickerOpen}
+            onClose={() => setEmojiPickerOpen(false)}
+            anchorRef={emojiBtnRef}
+            onEmojiClick={handleEmojiClick} />
 
-    );
+          }
+            </div>
+            </div>
+        </div>);
+
+
 };
 
 export default InvitationChatRoom;

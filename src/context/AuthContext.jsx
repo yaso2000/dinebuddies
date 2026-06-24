@@ -1,50 +1,76 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastContext';
 import { getAuthErrorMessage } from '../utils/errorMessages';
-import { isBusinessUser, isAffiliateAgent, cannotCreateInvitations } from '../utils/accountRole';
+import { isBusinessUser, isAffiliateAgent, cannotCreateInvitations, hasBusinessSessionHint } from '../utils/accountRole';
 import {
     mergeConsumerProfiles,
-    canConsumerEnterApp,
-    isConsumerProfileComplete
+    isConsumerProfileComplete,
 } from '../utils/consumerProfileComplete';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
+import { mergeProfilePreserveFavoritePlaces } from '../utils/favoritePlacesUtils';
+import { mergeProfileSnapshot } from '../utils/profileGallery';
 import { DEFAULT_ACCESS_PLATFORM } from '../constants/userProfileSchema';
 import { peekPendingReferralCode, clearPendingReferralCode } from '../utils/pendingReferral';
+import { clearInboxClosedInvitationIds } from '../utils/invitationInboxSession';
+import { clearInviteLandingSession } from '../utils/inviteLandingSession';
 
 /** Keeps Layout/HomeRouter treating the session as business when userProfile is briefly null (Firestore/auth race). */
 function syncBusinessNavHint(profile, uid) {
     try {
+        if (profile == null && uid == null) {
+            sessionStorage.removeItem('dineb_biz_uid');
+            return;
+        }
         if (profile && uid && isBusinessUser(profile)) {
             sessionStorage.setItem('dineb_biz_uid', uid);
-        } else {
-            sessionStorage.removeItem('dineb_biz_uid');
         }
+        // Never clear an active business-portal hint while profile is loading or markers are partial —
+        // signOut() clears explicitly via syncBusinessNavHint(null, null).
     } catch { /* ignore */ }
 }
 import { sendPasswordResetViaResend } from '../services/passwordResetEmailService';
 import { sendVerificationEmailResend } from '../services/verificationEmailService';
 import { isEmailRegisteredAsAffiliate, isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
-import { assertProfileMatchesPortal, AUTH_PORTAL } from '../utils/authPortalGate';
+import { assertProfileMatchesPortal, AUTH_PORTAL, accountKindFromProfileData } from '../utils/authPortalGate';
+import { dismissFacebookSdkOverlay } from '../utils/facebookSdkCleanup';
+import {
+    clearFacebookIosLoginPending,
+    completeFacebookIosRedirectReturn,
+    peekFacebookIosLoginPending,
+    shouldUseFacebookIosSdk,
+    startFacebookIosRedirectLogin,
+} from '../utils/facebookIosSignIn';
+import { firebaseOAuthPopupOrRedirect } from '../utils/firebaseOAuthSignIn';
 import { resolveAppleDisplayName } from '../utils/appleAuth';
 import {
-    isLocalDevHost,
+    clearGuestModeForSignIn,
+    clearOAuthRedirectPending,
+    clearPostLogoutRedirect,
+    hasFirebaseAuthReturnInUrl,
     markOAuthRedirectComplete,
-    preferOAuthRedirectOnThisDevice,
+    markPostLogoutRedirect,
+    peekOAuthRedirectPending,
+    peekOAuthRedirectProvider,
     stashOAuthRedirectError,
     stripFirebaseAuthParamsFromUrl,
 } from '../utils/localDevAuth';
-import { firebaseOAuthPopupOrRedirect } from '../utils/firebaseOAuthSignIn';
-import { getFirebaseRedirectResultOnce } from '../firebase/authBootstrap';
-import { PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
+import {
+    isKnownOAuthProviderId,
+    oauthProviderIdToAuthProvider,
+    resolveRedirectProviderId,
+} from '../utils/oauthRedirectFinish';
+import { createGoogleAuthProvider } from '../utils/googleAuthProvider';
+import { getFirebaseRedirectResultOnce, resetFirebaseRedirectBootstrap } from '../firebase/authBootstrap';
+import { needsOAuthRedirectProfileFinish, shouldRunOAuthRedirectBootstrap } from '../utils/oauthRedirectState';
+import { SOCIAL_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
     auth,
     db
 } from '../firebase/config';
 import {
-    signInWithCredential,
-    GoogleAuthProvider,
     OAuthProvider,
+    signInWithCredential,
     signOut as firebaseSignOut,
     onAuthStateChanged,
     signInWithEmailAndPassword,
@@ -72,12 +98,6 @@ const isInAppBrowser = () => {
     );
 };
 
-/**
- * Facebook JS SDK `FB.login` relies on third-party cookies; Safari / iOS WebKit often return
- * `unknown` with no token. Firebase `signInWithRedirect` uses a first-party round-trip and works.
- */
-const preferFacebookRedirectAuth = preferOAuthRedirectOnThisDevice;
-
 // Try to open the current URL in an external browser.
 // On Android: uses an intent URI to launch Chrome.
 // On iOS: returns false — caller must show instructions to the user.
@@ -94,32 +114,13 @@ const openInExternalBrowser = () => {
     return false;
 };
 
-// Facebook App ID — used for the JS SDK auth flow
-const FB_APP_ID = '1718617005774108';
-
-// Dynamically load the Facebook JS SDK (only once per session)
-const loadFacebookSDK = () => new Promise((resolve) => {
-    if (window.FB) { resolve(window.FB); return; }
-    window.fbAsyncInit = () => {
-        window.FB.init({ appId: FB_APP_ID, version: 'v19.0', cookie: true, xfbml: false });
-        resolve(window.FB);
-    };
-    if (!document.getElementById('facebook-jssdk')) {
-        const script = document.createElement('script');
-        script.id = 'facebook-jssdk';
-        script.src = 'https://connect.facebook.net/en_US/sdk.js';
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-    }
-});
-
 import { fetchIpLocation, reverseGeocode } from '../utils/locationUtils';
 import {
     unlinkDeviceTokenFromUser,
     isIosDevice,
     runPushBootstrap,
 } from '../services/notificationService';
+import { resetImageUploadProgress } from '../services/imageUploadProgressStore';
 
 import {
     doc,
@@ -185,50 +186,43 @@ export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
-    /** True after first users/{uid} snapshot from server OR listener error — avoids routing on stale local cache. */
+    /** True after users/{uid} is read from server (or cache fallback when server unreachable). */
     const [profileServerSynced, setProfileServerSynced] = useState(false);
-  /** Login gate: pending | allowed (enter app) | blocked (must use /complete-profile). */
-    const [consumerEntryStatus, setConsumerEntryStatus] = useState('pending');
     const [isGuest, setIsGuest] = useState(false);
     const nominatimFailed = useRef(false);
     const isDeletingAccountRef = useRef(false);
-    /** Cleared when Firestore profile snapshot resolves so the 5s fail-safe cannot fire after real data. */
-    const authLoadingTimeoutRef = useRef(null);
+    const oauthRedirectHandledRef = useRef(new Set());
     /** Avoid setLoading(true) on duplicate onAuthStateChanged for the same uid (unmounts Layout /admin). */
     const lastAuthUidRef = useRef(null);
     /** After a server snapshot, ignore stale persisted-cache snapshots that would re-open onboarding. */
     const profileServerSyncedRef = useRef(false);
+    const isSigningOutRef = useRef(false);
     const { showToast } = useToast();
 
-    const consumerEntryStorageKey = (uid) => `dineb_consumer_entry_ok_${uid}`;
+    const markProfileSynced = (uid) => {
+        profileServerSyncedRef.current = true;
+        setProfileServerSynced(true);
+        setLoading(false);
+        if (uid && auth.currentUser?.uid === uid) {
+            void runPushBootstrap(uid);
+        }
+    };
 
-    const grantConsumerEntry = (uid) => {
+    const resetSignedInSessionState = () => {
+        profileServerSyncedRef.current = false;
+        setProfileServerSynced(false);
+        setUserProfile(null);
+        setIsGuest(false);
+        setLoading(false);
+        syncBusinessNavHint(null, null);
+    };
+
+    const clearLegacyConsumerEntryCache = (uid) => {
         if (!uid) return;
         try {
-            sessionStorage.setItem(consumerEntryStorageKey(uid), '1');
+            sessionStorage.removeItem(`dineb_consumer_entry_ok_${uid}`);
         } catch {
             /* ignore */
-        }
-        setConsumerEntryStatus('allowed');
-    };
-
-    const revokeConsumerEntry = (uid) => {
-        if (uid) {
-            try {
-                sessionStorage.removeItem(consumerEntryStorageKey(uid));
-            } catch {
-                /* ignore */
-            }
-        }
-        setConsumerEntryStatus('blocked');
-    };
-
-    const readCachedEntryAllowed = (uid) => {
-        if (!uid) return false;
-        try {
-            return sessionStorage.getItem(consumerEntryStorageKey(uid)) === '1';
-        } catch {
-            return false;
         }
     };
 
@@ -252,6 +246,8 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
 
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (isSigningOutRef.current) return;
+
             const nextUid = user?.uid ?? null;
             const prevUid = lastAuthUidRef.current;
             lastAuthUidRef.current = nextUid;
@@ -259,6 +255,7 @@ export const AuthProvider = ({ children }) => {
             setCurrentUser(user);
 
             if (user) {
+                clearPostLogoutRedirect();
                 setIsGuest(false);
                 // Guest mode leaves a synthetic userProfile; if the user signs in, we must not route
                 // (e.g. HomeRouter) using that guest profile while Firestore is still loading.
@@ -271,7 +268,6 @@ export const AuthProvider = ({ children }) => {
                     return prev;
                 });
                 if (clearedGuestProfile) {
-                    syncBusinessNavHint(null, null);
                     try {
                         localStorage.removeItem('guestMode');
                     } catch { /* ignore */ }
@@ -282,25 +278,20 @@ export const AuthProvider = ({ children }) => {
                 const sameSignedInUser = prevUid === nextUid && nextUid != null;
                 if (!sameSignedInUser) {
                     setLoading(true);
-                    if (authLoadingTimeoutRef.current) {
-                        clearTimeout(authLoadingTimeoutRef.current);
-                        authLoadingTimeoutRef.current = null;
-                    }
-                    // Profile listener will handle setLoading(false)
-                    // Fail-safe: if profile doesn't load in 5s, release the UI
-                    authLoadingTimeoutRef.current = setTimeout(() => {
-                        setLoading(false);
-                        authLoadingTimeoutRef.current = null;
-                    }, 5000);
+                    profileServerSyncedRef.current = false;
+                    setProfileServerSynced(false);
                 }
-                // Refresh FCM token only when permission already granted (never request permission here — iOS requires a tap).
-                void runPushBootstrap(user.uid);
             } else {
-                lastAuthUidRef.current = null;
-                if (authLoadingTimeoutRef.current) {
-                    clearTimeout(authLoadingTimeoutRef.current);
-                    authLoadingTimeoutRef.current = null;
+                if (hasFirebaseAuthReturnInUrl() || shouldRunOAuthRedirectBootstrap()) {
+                    clearGuestModeForSignIn();
+                    setIsGuest(false);
+                    setUserProfile(null);
+                    setLoading(false);
+                    return;
                 }
+                lastAuthUidRef.current = null;
+                profileServerSyncedRef.current = false;
+                setProfileServerSynced(false);
                 const guestMode = localStorage.getItem('guestMode') === 'true';
                 if (guestMode) {
                     setUserProfile(guestProfile);
@@ -322,8 +313,14 @@ export const AuthProvider = ({ children }) => {
         if (!currentUser || isGuest) return;
         (async () => {
             try {
+                const userRef = doc(db, 'users', currentUser.uid);
+                const existing = await getDoc(userRef);
+                if (!existing.exists()) {
+                    // Never create a bare consumer stub — business signup writes registrationIntent first.
+                    return;
+                }
                 await setDoc(
-                    doc(db, 'users', currentUser.uid),
+                    userRef,
                     {
                         emailVerified: currentUser.emailVerified === true,
                         authEmail: currentUser.email || null,
@@ -344,14 +341,7 @@ export const AuthProvider = ({ children }) => {
         if (!uid) {
             profileServerSyncedRef.current = false;
             setProfileServerSynced(false);
-            setConsumerEntryStatus('pending');
             return;
-        }
-
-        if (readCachedEntryAllowed(uid)) {
-            setConsumerEntryStatus('allowed');
-        } else {
-            setConsumerEntryStatus('pending');
         }
 
         profileServerSyncedRef.current = false;
@@ -359,141 +349,102 @@ export const AuthProvider = ({ children }) => {
         const userRef = doc(db, 'users', uid);
         let cancelled = false;
 
-        const applyEntryDecision = (profile, { definitive }) => {
-            if (cancelled) return;
-            if (canConsumerEnterApp(profile)) {
-                grantConsumerEntry(uid);
-                profileServerSyncedRef.current = true;
-                setProfileServerSynced(true);
+        const applyProfileDoc = (snap) => {
+            if (!snap.exists()) {
+                if (!isDeletingAccountRef.current) {
+                    setUserProfile(null);
+                }
                 return;
             }
-            if (definitive) {
-                revokeConsumerEntry(uid);
-                profileServerSyncedRef.current = true;
-                setProfileServerSynced(true);
-            }
+            const normalized = normalizeProfile({
+                id: snap.id,
+                uid: snap.id,
+                ...snap.data(),
+            });
+            syncBusinessNavHint(normalized, snap.id);
+            setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
         };
+
+        const applySnapshotProfile = (normalized, docId, { fromCache = false } = {}) => {
+            syncBusinessNavHint(normalized, docId);
+            setUserProfile((prev) => {
+                const next = mergeConsumerProfiles(prev, normalized);
+                let merged = mergeProfilePreserveFavoritePlaces(prev, mergeProfileSnapshot(prev, next));
+                if (fromCache) {
+                    merged = mergeProfileSnapshot(merged, prev);
+                }
+                return merged;
+            });
+        };
+
+        const finishBootstrap = () => {
+            if (cancelled || profileServerSyncedRef.current) return;
+            markProfileSynced(uid);
+        };
+
+        const safetyTimer = setTimeout(() => {
+            if (cancelled || profileServerSyncedRef.current) return;
+            if (needsOAuthRedirectProfileFinish()) return;
+            finishBootstrap();
+        }, 25000);
 
         (async () => {
             try {
                 const snap = await getDocFromServer(userRef);
                 if (cancelled) return;
-                if (!snap.exists()) {
-                    if (!isDeletingAccountRef.current) {
-                        syncBusinessNavHint(null, null);
-                        setUserProfile(null);
-                    }
-                    applyEntryDecision(null, { definitive: true });
-                    return;
+                applyProfileDoc(snap);
+                if (snap.exists()) {
+                    finishBootstrap();
                 }
-                const normalized = normalizeProfile({
-                    id: snap.id,
-                    uid: snap.id,
-                    ...snap.data()
-                });
-                syncBusinessNavHint(normalized, snap.id);
-                setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
-                applyEntryDecision(normalized, { definitive: true });
             } catch (e) {
                 console.warn('Profile getDocFromServer:', e?.message || e);
+                if (cancelled) return;
+                try {
+                    const snap = await getDoc(userRef);
+                    if (cancelled) return;
+                    applyProfileDoc(snap);
+                    if (snap.exists()) {
+                        finishBootstrap();
+                    }
+                } catch (fallbackErr) {
+                    console.warn('Profile getDoc fallback:', fallbackErr?.message || fallbackErr);
+                    if (!needsOAuthRedirectProfileFinish()) {
+                        finishBootstrap();
+                    }
+                }
             }
         })();
 
-        const failSafe = setTimeout(async () => {
-            if (profileServerSyncedRef.current || cancelled) return;
-            try {
-                const snap = await getDoc(userRef);
-                if (cancelled) return;
-                if (snap.exists()) {
+        const unsubscribeSnapshot = onSnapshot(
+            userRef,
+            (docSnap) => {
+                const fromCache = docSnap.metadata.fromCache;
+                if (docSnap.exists()) {
                     const normalized = normalizeProfile({
-                        id: snap.id,
-                        uid: snap.id,
-                        ...snap.data()
+                        id: docSnap.id,
+                        uid: docSnap.id,
+                        ...docSnap.data(),
                     });
-                    syncBusinessNavHint(normalized, snap.id);
-                    setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
-                    applyEntryDecision(normalized, { definitive: true });
-                } else {
-                    applyEntryDecision(null, { definitive: true });
+                    applySnapshotProfile(normalized, docSnap.id, { fromCache });
+                } else if (!isDeletingAccountRef.current) {
+                    setUserProfile(null);
                 }
-            } catch (e) {
-                console.warn('Profile fail-safe getDoc:', e?.message || e);
-            } finally {
-                if (!cancelled && !profileServerSyncedRef.current) {
-                    profileServerSyncedRef.current = true;
-                    setProfileServerSynced(true);
-                }
-            }
-        }, 3000);
 
-        const applySnapshotProfile = (normalized, docId) => {
-            syncBusinessNavHint(normalized, docId);
-            setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
-        };
+                if (!fromCache && docSnap.exists()) {
+                    finishBootstrap();
+                }
+            },
+            (error) => {
+                console.error('Profile Error:', error);
+                if (!needsOAuthRedirectProfileFinish()) {
+                    finishBootstrap();
+                }
+            }
+        );
 
-        const unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
-            const fromCache = docSnap.metadata.fromCache;
-            if (docSnap.exists()) {
-                const normalized = normalizeProfile({
-                    id: docSnap.id,
-                    uid: docSnap.id,
-                    ...docSnap.data()
-                });
-                applySnapshotProfile(normalized, docSnap.id);
-                if (!fromCache) {
-                    clearTimeout(failSafe);
-                    applyEntryDecision(normalized, { definitive: true });
-                } else if (canConsumerEnterApp(normalized)) {
-                    grantConsumerEntry(uid);
-                    profileServerSyncedRef.current = true;
-                    setProfileServerSynced(true);
-                }
-            } else if (!isDeletingAccountRef.current) {
-                console.log('Profile snapshot: Document does not exist yet for UID:', uid);
-                syncBusinessNavHint(null, null);
-                setUserProfile(null);
-                if (!fromCache) {
-                    clearTimeout(failSafe);
-                    applyEntryDecision(null, { definitive: true });
-                }
-            }
-            // Cached snapshots used to block setLoading(false) for up to 8s waiting for the server —
-            // that kept Layout + HomeRouter on a full-screen spinner even though profile data was ready.
-            // Release the shell as soon as we have a doc; the listener will fire again from the server.
-            if (fromCache) {
-                if (authLoadingTimeoutRef.current) {
-                    clearTimeout(authLoadingTimeoutRef.current);
-                    authLoadingTimeoutRef.current = null;
-                }
-                if (!docSnap.exists()) {
-                    authLoadingTimeoutRef.current = setTimeout(() => {
-                        setLoading(false);
-                        authLoadingTimeoutRef.current = null;
-                    }, 2500);
-                    return;
-                }
-                setLoading(false);
-                return;
-            }
-            if (authLoadingTimeoutRef.current) {
-                clearTimeout(authLoadingTimeoutRef.current);
-                authLoadingTimeoutRef.current = null;
-            }
-            setLoading(false);
-        }, (error) => {
-            console.error("Profile Error:", error);
-            clearTimeout(failSafe);
-            profileServerSyncedRef.current = true;
-            setProfileServerSynced(true);
-            if (authLoadingTimeoutRef.current) {
-                clearTimeout(authLoadingTimeoutRef.current);
-                authLoadingTimeoutRef.current = null;
-            }
-            setLoading(false);
-        });
         return () => {
             cancelled = true;
-            clearTimeout(failSafe);
+            clearTimeout(safetyTimer);
             unsubscribeSnapshot();
         };
     }, [currentUser?.uid]);
@@ -617,15 +568,32 @@ export const AuthProvider = ({ children }) => {
     };
 
     // Fetch user profile from Firestore
-    const fetchUserProfile = async (userId) => {
+    const fetchUserProfile = async (userId, { preferServer = false } = {}) => {
         try {
             const userRef = doc(db, 'users', userId);
-            const userDoc = await getDoc(userRef);
+            let userDoc;
+            if (preferServer) {
+                try {
+                    userDoc = await getDocFromServer(userRef);
+                } catch (serverErr) {
+                    console.warn('Profile getDocFromServer (fetchUserProfile):', serverErr?.message || serverErr);
+                    userDoc = await getDoc(userRef);
+                }
+            } else {
+                userDoc = await getDoc(userRef);
+            }
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                const normalized = normalizeProfile(data);
+                const normalized = normalizeProfile({
+                    id: userId,
+                    uid: userId,
+                    ...data
+                });
                 syncBusinessNavHint(normalized, userId);
-                setUserProfile(normalized);
+                setUserProfile((prev) => {
+                    const next = mergeConsumerProfiles(prev, normalized);
+                    return mergeProfilePreserveFavoritePlaces(prev, mergeProfileSnapshot(prev, next));
+                });
             }
         } catch (error) {
             console.error('Error fetching user profile:', error);
@@ -633,11 +601,28 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    /** After popup OAuth, load profile from server and end auth bootstrap (avoids race with profile listener). */
+    const finalizePopupOAuthSession = async (uid) => {
+        if (!uid) return;
+        await fetchUserProfile(uid, { preferServer: true });
+        markProfileSynced(uid);
+    };
+
     const signInWithEmail = async (email, password, options = {}) => {
         const portal = options.portal === AUTH_PORTAL.BUSINESS ? AUTH_PORTAL.BUSINESS : null;
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
-            const userRef = doc(db, 'users', result.user.uid);
+            const uid = result.user.uid;
+
+            if (portal === AUTH_PORTAL.BUSINESS) {
+                try {
+                    sessionStorage.setItem('dineb_biz_uid', uid);
+                } catch {
+                    /* ignore */
+                }
+            }
+
+            const userRef = doc(db, 'users', uid);
             let userDoc = await getDoc(userRef);
             if (!userDoc.exists()) {
                 for (let i = 0; i < 6 && !userDoc.exists(); i += 1) {
@@ -647,21 +632,19 @@ export const AuthProvider = ({ children }) => {
             }
             if (userDoc.exists()) {
                 const raw = userDoc.data();
-                const assertPortal = portal || AUTH_PORTAL.BUSINESS;
-                try {
-                    assertProfileMatchesPortal(raw, assertPortal);
-                } catch (portalErr) {
-                    const em = String(result.user.email || raw.email || raw.authEmail || '')
-                        .trim()
-                        .toLowerCase();
-                    if (
-                        assertPortal === AUTH_PORTAL.BUSINESS &&
-                        portalErr?.code === 'auth/consumer-portal-only' &&
-                        em &&
-                        (await isEmailRegisteredAsBusiness(em))
-                    ) {
-                        // Legacy / partial Firestore markers — email is registered as business.
-                    } else {
+                if (portal === AUTH_PORTAL.BUSINESS) {
+                    if (accountKindFromProfileData(raw) === AUTH_PORTAL.AFFILIATE) {
+                        try {
+                            await firebaseSignOut(auth);
+                        } catch {
+                            /* ignore */
+                        }
+                        assertProfileMatchesPortal(raw, AUTH_PORTAL.BUSINESS);
+                    }
+                } else {
+                    try {
+                        assertProfileMatchesPortal(raw, AUTH_PORTAL.PERSONAL);
+                    } catch (portalErr) {
                         try {
                             await firebaseSignOut(auth);
                         } catch {
@@ -670,18 +653,39 @@ export const AuthProvider = ({ children }) => {
                         throw portalErr;
                     }
                 }
-            } else if (portal === AUTH_PORTAL.BUSINESS) {
-                await createUserProfile(result.user.uid, {
-                    display_name: result.user.displayName || '',
-                    email: result.user.email,
-                    photo_url: result.user.photoURL || '',
-                    authProvider: 'password',
+                const normalized = normalizeProfile({
+                    id: uid,
+                    uid,
+                    ...raw,
                 });
+                syncBusinessNavHint(normalized, uid);
+                setUserProfile((prev) => {
+                    const next = mergeConsumerProfiles(prev, normalized);
+                    return mergeProfilePreserveFavoritePlaces(prev, mergeProfileSnapshot(prev, next));
+                });
+            } else if (portal === AUTH_PORTAL.BUSINESS) {
+                try {
+                    await firebaseSignOut(auth);
+                } catch {
+                    /* ignore */
+                }
+                const err = new Error('Business profile not found. Finish signup at /signup/business.');
+                err.code = 'auth/user-not-found';
+                throw err;
             } else {
                 const err = new Error('Profile missing');
                 err.code = 'auth/user-not-found';
                 throw err;
             }
+            if (portal === AUTH_PORTAL.BUSINESS) {
+                await fetchUserProfile(uid, { preferServer: true });
+                try {
+                    sessionStorage.setItem('dineb_biz_uid', uid);
+                } catch {
+                    /* ignore */
+                }
+            }
+            markProfileSynced(uid);
             return result.user;
         } catch (error) {
             console.error('Error signing in with email:', error);
@@ -743,6 +747,11 @@ export const AuthProvider = ({ children }) => {
     };
 
     const finishFacebookOAuthResult = async (result) => {
+        if (!result?.user?.uid) {
+            const err = new Error('Facebook sign-in did not return a user');
+            err.code = 'auth/no-user';
+            throw err;
+        }
         const userDoc = await getDoc(doc(db, 'users', result.user.uid));
         let isNewUser = false;
 
@@ -769,25 +778,22 @@ export const AuthProvider = ({ children }) => {
             }
         }
 
+        await finalizePopupOAuthSession(result.user.uid);
         return { user: result.user, isNewUser };
     };
 
     // Google Sign In
     const signInWithGoogle = async () => {
         try {
-            const provider = new GoogleAuthProvider();
-            // Only override OAuth client on non-localhost when VITE_GOOGLE_WEB_CLIENT_ID is set (e.g. Vercel).
-            // Forcing client_id on http://localhost breaks sign-in if that Web client omits localhost in
-            // Google Cloud Console "Authorized JavaScript origins". Leaving unset uses Firebase's default.
-            const explicitClientId = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
-            if (explicitClientId && !isLocalDevHost()) {
-                provider.setCustomParameters({ client_id: explicitClientId });
-            }
-            provider.addScope('email');
-            provider.addScope('profile');
+            const provider = createGoogleAuthProvider();
             const oauth = await firebaseOAuthPopupOrRedirect(provider);
-            if (oauth.__oauthRedirect) return { __oauthRedirect: true };
-            const result = oauth.result;
+            if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
+            const result = oauth?.result;
+            if (!result?.user?.uid) {
+                const err = new Error('Google sign-in did not return a user');
+                err.code = 'auth/no-user';
+                throw err;
+            }
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -808,6 +814,7 @@ export const AuthProvider = ({ children }) => {
                     last_active_time: serverTimestamp()
                 });
             }
+            await finalizePopupOAuthSession(result.user.uid);
             return { user: result.user, isNewUser };
         } catch (error) {
             if (
@@ -851,12 +858,8 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Facebook Sign In — uses Facebook JS SDK + signInWithCredential.
-    // This completely bypasses Firebase's popup/redirect OAuth flow (and its sessionStorage
-    // partitioning issues on mobile). Facebook SDK handles the auth flow natively, then
-    // we pass the resulting access token to Firebase via signInWithCredential.
+    // Facebook — iOS: Meta SDK + credential. Android/desktop: Firebase popup.
     const signInWithFacebook = async () => {
-        // ── In-app browser guard ─────────────────────────────────────────────
         if (isInAppBrowser()) {
             const openedExternal = openInExternalBrowser();
             if (!openedExternal) {
@@ -866,39 +869,42 @@ export const AuthProvider = ({ children }) => {
             }
             return null;
         }
-        // ─────────────────────────────────────────────────────────────────
-        // Localhost: Meta JS SDK often fails (http / domain). Use Firebase OAuth like Google.
-        if (isLocalDevHost() || preferFacebookRedirectAuth()) {
+        try {
+            if (shouldUseFacebookIosSdk()) {
+                clearOAuthRedirectPending();
+                const returnToken = await completeFacebookIosRedirectReturn();
+                if (returnToken) {
+                    const result = await signInWithCredential(
+                        auth,
+                        FacebookAuthProvider.credential(returnToken)
+                    );
+                    return finishFacebookOAuthResult(result);
+                }
+                try {
+                    const token = await startFacebookIosRedirectLogin();
+                    const result = await signInWithCredential(
+                        auth,
+                        FacebookAuthProvider.credential(token)
+                    );
+                    return finishFacebookOAuthResult(result);
+                } catch (iosErr) {
+                    if (peekFacebookIosLoginPending()) {
+                        return { __facebookIosRedirect: true };
+                    }
+                    throw iosErr;
+                }
+            }
+
             const provider = new FacebookAuthProvider();
             provider.addScope('email');
             provider.addScope('public_profile');
             const oauth = await firebaseOAuthPopupOrRedirect(provider);
-            if (oauth.__oauthRedirect) return { __oauthRedirect: true };
+            if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
             return finishFacebookOAuthResult(oauth.result);
-        }
-        try {
-            // Step 1: Load the Facebook JS SDK and get access token
-            const FB = await loadFacebookSDK();
-
-            const fbAuthResponse = await new Promise((resolve, reject) => {
-                FB.login((response) => {
-                    if (response.status === 'connected' && response.authResponse?.accessToken) {
-                        resolve(response.authResponse);
-                    } else if (response.status === 'unknown' || !response.authResponse) {
-                        const err = new Error('Facebook login was cancelled or failed.');
-                        err.code = 'auth/popup-closed-by-user';
-                        reject(err);
-                    } else {
-                        reject(new Error(`Facebook login failed: ${response.status}`));
-                    }
-                }, { scope: 'email,public_profile' });
-            });
-
-            // Step 2: Exchange Facebook token for Firebase credential
-            const credential = FacebookAuthProvider.credential(fbAuthResponse.accessToken);
-            const result = await signInWithCredential(auth, credential);
-            return finishFacebookOAuthResult(result);
         } catch (error) {
+            clearOAuthRedirectPending();
+            clearFacebookIosLoginPending();
+            dismissFacebookSdkOverlay();
             if (
                 error?.code === 'auth/affiliate-portal-only' ||
                 error?.code === 'auth/business-portal-only'
@@ -933,7 +939,9 @@ export const AuthProvider = ({ children }) => {
                     }
                 }
             }
-            console.error('Error signing in with Facebook:', error);
+            if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+                console.error('Error signing in with Facebook:', error);
+            }
             throw error;
         }
     };
@@ -953,9 +961,14 @@ export const AuthProvider = ({ children }) => {
         provider.addScope('email');
         provider.addScope('name');
         const oauth = await firebaseOAuthPopupOrRedirect(provider);
-        if (oauth.__oauthRedirect) return { __oauthRedirect: true };
+        if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
+        const result = oauth?.result;
+        if (!result?.user?.uid) {
+            const err = new Error('Apple sign-in did not return a user');
+            err.code = 'auth/no-user';
+            throw err;
+        }
         try {
-            const result = oauth.result;
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
 
@@ -977,6 +990,7 @@ export const AuthProvider = ({ children }) => {
                     });
                 }
             }
+            await finalizePopupOAuthSession(result.user.uid);
             return { user: result.user, isNewUser };
         } catch (error) {
             if (
@@ -1088,10 +1102,17 @@ export const AuthProvider = ({ children }) => {
                 return;
             }
             const pendingBusinessFlow =
-                String(existing?.registrationIntent || '').toLowerCase() === 'business';
+                String(existing?.registrationIntent || '').toLowerCase() === 'business' ||
+                existing?.pendingBusinessRegistration === true ||
+                String(existing?.accountType || '').toLowerCase() === 'business' ||
+                String(existing?.role || '').toLowerCase() === 'partner' ||
+                String(existing?.role || '').toLowerCase() === 'business' ||
+                (existing?.businessInfo &&
+                    typeof existing.businessInfo === 'object' &&
+                    Object.keys(existing.businessInfo).length > 0);
 
             const welcomeDinePaid =
-                grantedCredits > 0 ? grantedCredits * PRIVATE_INVITATION_PUBLISH_CREDITS : 0;
+                grantedCredits > 0 ? grantedCredits * SOCIAL_INVITATION_PUBLISH_CREDITS : 0;
             const pendingRef =
                 typeof window !== 'undefined' && !pendingBusinessFlow && !existing?.referred_by
                     ? peekPendingReferralCode()
@@ -1127,7 +1148,7 @@ export const AuthProvider = ({ children }) => {
             if (welcomeDinePaid > 0) {
                 baseProfile.totalCreditsPurchased = increment(welcomeDinePaid);
             }
-            // Do not stamp role:user on top of an in-progress /business/signup stub (Firestore allows first business write only when role is absent or via registrationIntent completion rule).
+            // Do not stamp role:user on business accounts or in-progress business signup.
             if (!pendingBusinessFlow) {
                 baseProfile.role = 'user';
             }
@@ -1159,107 +1180,218 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Complete OAuth sign-in after `signInWithRedirect` (uses shared bootstrap promise from main.jsx).
+    const completeOAuthRedirectUser = async (user, result) => {
+        const uid = user?.uid;
+        if (!uid || oauthRedirectHandledRef.current.has(uid)) return false;
+
+        clearGuestModeForSignIn();
+        setIsGuest(false);
+
+        const pid = await resolveRedirectProviderId(user, result);
+        if (!isKnownOAuthProviderId(pid)) {
+            stashOAuthRedirectError({
+                code: 'auth/embedded-oauth-redirect-lost',
+                message:
+                    'Sign-in did not finish. Try again in Safari or Chrome. If Apple fails, verify Return URL https://dinebuddies.firebaseapp.com/__/auth/handler in Apple Developer.',
+            });
+            clearOAuthRedirectPending();
+            setLoading(false);
+            return false;
+        }
+
+        const authProvider = oauthProviderIdToAuthProvider(pid);
+        const userDoc = await getDoc(doc(db, 'users', uid));
+        if (!userDoc.exists()) {
+            const displayName =
+                authProvider === 'apple'
+                    ? resolveAppleDisplayName(user, result) || user.displayName
+                    : user.displayName;
+            await createUserProfile(uid, {
+                display_name: displayName,
+                email: user.email,
+                photo_url: user.photoURL,
+                authProvider,
+            });
+        } else {
+            assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
+            if (authProvider === 'google') {
+                await updateDoc(doc(db, 'users', uid), {
+                    photo_url: user.photoURL || userDoc.data().photo_url,
+                    last_active_time: serverTimestamp(),
+                });
+            } else if (user.photoURL) {
+                const data = userDoc.data();
+                const currentPhoto = data.photoURL || data.photo_url;
+                if (
+                    !currentPhoto ||
+                    String(currentPhoto).includes('data:image/svg+xml') ||
+                    String(currentPhoto).length < 10
+                ) {
+                    await updateDoc(doc(db, 'users', uid), {
+                        photoURL: user.photoURL,
+                        photo_url: user.photoURL,
+                        updatedAt: serverTimestamp(),
+                    });
+                }
+            }
+        }
+
+        oauthRedirectHandledRef.current.add(uid);
+        markOAuthRedirectComplete();
+        await fetchUserProfile(uid, { preferServer: true });
+        markProfileSynced(uid);
+        return true;
+    };
+
+    const handleOAuthRedirectError = async (error) => {
+        stashOAuthRedirectError(error);
+        clearOAuthRedirectPending();
+        setLoading(false);
+        if (
+            error?.code === 'auth/affiliate-portal-only' ||
+            error?.code === 'auth/business-portal-only'
+        ) {
+            try {
+                await firebaseSignOut(auth);
+            } catch {
+                /* ignore */
+            }
+        }
+        if (error?.code === 'auth/account-exists-with-different-credential') {
+            const email = error.customData?.email;
+            if (email) {
+                try {
+                    if (await isEmailRegisteredAsBusiness(email)) {
+                        console.warn('[Auth] OAuth redirect: business email conflict', email);
+                    }
+                } catch {
+                    /* ignore */
+                }
+            }
+        } else if (error?.code && error.code !== 'auth/no-auth-event') {
+            console.warn('[Auth] OAuth redirect:', error.code, error.message);
+        }
+    };
+
+    // iPhone: complete Meta SDK Facebook redirect when user returns to /login.
     useEffect(() => {
+        if (!shouldUseFacebookIosSdk()) return undefined;
+        if (typeof window === 'undefined' || !window.location.pathname.startsWith('/login')) {
+            return undefined;
+        }
+        if (!peekFacebookIosLoginPending()) return undefined;
+
         let cancelled = false;
         (async () => {
             try {
-                const result = await getFirebaseRedirectResultOnce();
-                stripFirebaseAuthParamsFromUrl();
-                if (cancelled || !result?.user) return;
-                markOAuthRedirectComplete();
-                const pid = result.providerId || result.user?.providerData?.[0]?.providerId;
-                if (pid !== 'facebook.com' && pid !== 'apple.com' && pid !== 'google.com') return;
+                const token = await completeFacebookIosRedirectReturn();
+                if (!token || cancelled) return;
+                if (auth.currentUser?.uid) return;
 
-                const authProvider =
-                    pid === 'apple.com' ? 'apple' : pid === 'google.com' ? 'google' : 'facebook';
-                const u = result.user;
-                const userDoc = await getDoc(doc(db, 'users', u.uid));
-                if (!userDoc.exists()) {
-                    const displayName =
-                        authProvider === 'apple'
-                            ? resolveAppleDisplayName(u, result) || u.displayName
-                            : u.displayName;
-                    await createUserProfile(u.uid, {
-                        display_name: displayName,
-                        email: u.email,
-                        photo_url: u.photoURL,
-                        authProvider,
-                    });
-                } else {
-                    assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
-                    if (authProvider === 'google') {
-                        await updateDoc(doc(db, 'users', u.uid), {
-                            photo_url: u.photoURL || userDoc.data().photo_url,
-                            last_active_time: serverTimestamp(),
-                        });
-                    } else if (u.photoURL) {
-                        const data = userDoc.data();
-                        const currentPhoto = data.photoURL || data.photo_url;
-                        if (!currentPhoto || String(currentPhoto).includes('data:image/svg+xml') || String(currentPhoto).length < 10) {
-                            await updateDoc(doc(db, 'users', u.uid), {
-                                photoURL: u.photoURL,
-                                photo_url: u.photoURL,
-                                updatedAt: serverTimestamp(),
-                            });
-                        }
-                    }
+                const result = await signInWithCredential(
+                    auth,
+                    FacebookAuthProvider.credential(token)
+                );
+                if (cancelled) return;
+                await finishFacebookOAuthResult(result);
+            } catch (error) {
+                if (cancelled) return;
+                clearFacebookIosLoginPending();
+                dismissFacebookSdkOverlay();
+                stashOAuthRedirectError(error);
+                setLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // Finish Apple/Google redirect sign-in when session appears (no UI block — LoginHub stays interactive).
+    useEffect(() => {
+        if (!shouldRunOAuthRedirectBootstrap() && !hasFirebaseAuthReturnInUrl()) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        const loginTimeout = setTimeout(() => {
+            if (cancelled) return;
+            clearOAuthRedirectPending();
+            setLoading(false);
+            stashOAuthRedirectError({
+                code: 'auth/oauth-redirect-timeout',
+                message:
+                    'Sign-in took too long. Try again. For Apple on iPhone, use Safari (not WhatsApp or Instagram).',
+            });
+        }, 20000);
+
+        (async () => {
+            try {
+                const result = await getFirebaseRedirectResultOnce();
+                if (cancelled) return;
+
+                let user = result?.user || auth.currentUser;
+                if (!user) {
+                    await auth.authStateReady();
+                    user = auth.currentUser;
+                }
+                if (!user || oauthRedirectHandledRef.current.has(user.uid)) return;
+
+                const finished = await completeOAuthRedirectUser(user, result);
+                if (finished) {
+                    stripFirebaseAuthParamsFromUrl();
                 }
             } catch (error) {
-                stashOAuthRedirectError(error);
-                if (
-                    error?.code === 'auth/affiliate-portal-only' ||
-                    error?.code === 'auth/business-portal-only'
-                ) {
-                    try {
-                        await firebaseSignOut(auth);
-                    } catch {
-                        /* ignore */
-                    }
+                if (!cancelled) {
+                    await handleOAuthRedirectError(error);
                 }
-                if (error?.code === 'auth/account-exists-with-different-credential') {
-                    const email = error.customData?.email;
-                    if (email) {
-                        try {
-                            if (await isEmailRegisteredAsBusiness(email)) {
-                                console.warn('[Auth] OAuth redirect: business email conflict', email);
-                            }
-                        } catch { /* ignore */ }
-                    }
-                } else if (error?.code && error.code !== 'auth/no-auth-event') {
-                    console.warn('[Auth] getRedirectResult:', error.code, error.message);
+            } finally {
+                if (!cancelled) {
+                    clearTimeout(loginTimeout);
                 }
             }
         })();
-        return () => { cancelled = true; };
-    }, []);
 
+        return () => {
+            cancelled = true;
+            clearTimeout(loginTimeout);
+        };
+    }, [currentUser?.uid]);
 
     // Update user profile
     const updateUserProfile = async (updates) => {
         if (!currentUser) return;
 
         try {
-            // Update Firestore
             await updateDoc(doc(db, 'users', currentUser.uid), {
                 ...updates,
                 last_active_time: serverTimestamp()
             });
 
-            // Sync with Firebase Auth if critical fields changed
+            setUserProfile((prev) =>
+                mergeProfilePreserveFavoritePlaces(
+                    prev,
+                    mergeProfileSnapshot(prev, {
+                        ...prev,
+                        ...updates,
+                        uid: currentUser.uid,
+                        id: currentUser.uid
+                    })
+                )
+            );
+
             if (updates.displayName || updates.display_name || updates.photoURL || updates.photo_url) {
-                try {
-                    await updateAuthProfile(auth.currentUser, {
-                        displayName: updates.displayName || updates.display_name || auth.currentUser.displayName,
-                        photoURL: updates.photoURL || updates.photo_url || auth.currentUser.photoURL
-                    });
-                } catch (authError) {
-                    console.warn("Auth sync failed:", authError);
-                }
+                void updateAuthProfile(auth.currentUser, {
+                    displayName: updates.displayName || updates.display_name || auth.currentUser.displayName,
+                    photoURL: updates.photoURL || updates.photo_url || auth.currentUser.photoURL
+                }).catch((authError) => {
+                    console.warn('Auth sync failed:', authError);
+                });
             }
 
-            // Refresh user profile
-            await fetchUserProfile(currentUser.uid);
+            // Reconcile with server in background — caller should not wait on this round-trip.
+            void fetchUserProfile(currentUser.uid, { preferServer: true });
         } catch (error) {
             console.error('Error updating user profile:', error);
             throw error;
@@ -1306,7 +1438,7 @@ export const AuthProvider = ({ children }) => {
                 }
                 const providerIds = (user.providerData || []).map((p) => p.providerId);
                 let provider = null;
-                if (providerIds.includes('google.com')) provider = new GoogleAuthProvider();
+                if (providerIds.includes('google.com')) provider = createGoogleAuthProvider();
                 else if (providerIds.includes('apple.com')) provider = new OAuthProvider('apple.com');
                 else if (providerIds.includes('facebook.com')) provider = new FacebookAuthProvider();
                 else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
@@ -1329,37 +1461,61 @@ export const AuthProvider = ({ children }) => {
 
     /** Full-page navigation avoids stale React state / nested routes that block SPA `navigate('/login')`. */
     const signOut = async (redirectTo = '/login') => {
+        if (isSigningOutRef.current) return;
+        isSigningOutRef.current = true;
+
         const dest =
             typeof redirectTo === 'string' && redirectTo.startsWith('/')
                 ? redirectTo.replace(/\/$/, '') || '/login'
                 : '/login';
+        const loginUrl =
+            typeof window !== 'undefined' ? `${window.location.origin}${dest}` : dest;
+        const uid = currentUser?.uid || auth.currentUser?.uid || null;
+
+        clearOAuthRedirectPending();
+        resetFirebaseRedirectBootstrap();
+        dismissFacebookSdkOverlay();
+        clearGuestModeForSignIn();
+        markPostLogoutRedirect();
+
+        if (uid) {
+            void Promise.race([
+                unlinkDeviceTokenFromUser(uid),
+                new Promise((resolve) => setTimeout(resolve, 800)),
+            ]).catch(() => {});
+            try {
+                clearLegacyConsumerEntryCache(uid);
+                clearInboxClosedInvitationIds(uid);
+                clearInviteLandingSession(uid);
+            } catch {
+                /* ignore */
+            }
+        }
+
         try {
-            // FCM cleanup hits the network (getToken/deleteToken + Firestore). Do not block logout beyond a short cap.
-            if (currentUser?.uid) {
-                const uid = currentUser.uid;
-                try {
-                    sessionStorage.removeItem(consumerEntryStorageKey(uid));
-                } catch {
-                    /* ignore */
-                }
-                await Promise.race([
-                    unlinkDeviceTokenFromUser(uid),
-                    new Promise((resolve) => setTimeout(resolve, 2000)),
-                ]).catch(() => {});
-            }
             await firebaseSignOut(auth);
-            setUserProfile(null);
-            setConsumerEntryStatus('pending');
-            syncBusinessNavHint(null, null);
-            if (typeof window !== 'undefined') {
-                const path = (window.location.pathname || '/').replace(/\/$/, '') || '/';
-                if (path !== dest) {
-                    window.location.replace(dest);
-                }
-            }
         } catch (error) {
             console.error('Error signing out:', error);
+            isSigningOutRef.current = false;
+            clearPostLogoutRedirect();
             throw error;
+        }
+
+        resetImageUploadProgress();
+        isSigningOutRef.current = false;
+        lastAuthUidRef.current = null;
+        profileServerSyncedRef.current = false;
+        setProfileServerSynced(false);
+        setCurrentUser(null);
+        setUserProfile(null);
+        setIsGuest(false);
+        setLoading(false);
+        syncBusinessNavHint(null, null);
+
+        if (typeof window !== 'undefined') {
+            const url = new URL(loginUrl);
+            url.searchParams.set('signedOut', '1');
+            window.location.replace(`${url.pathname}${url.search}`);
         }
     };
 
@@ -1397,11 +1553,11 @@ export const AuthProvider = ({ children }) => {
         userProfile,
         loading,
         profileServerSynced,
-        consumerEntryStatus,
-        grantConsumerEntry: () => grantConsumerEntry(currentUser?.uid),
         // Derive from normalised profile so there is ONE source of truth
         isGuest: isGuest || userProfile?.isGuest || false,
-        isBusiness: isBusinessUser(userProfile),
+        isBusiness:
+            isBusinessUser(userProfile) ||
+            Boolean(currentUser?.uid && hasBusinessSessionHint(currentUser.uid)),
         cannotCreateInvitations: cannotCreateInvitations(userProfile),
         isAdmin: userProfile?.role === 'admin',
         isStaff: userProfile?.role === 'staff' || userProfile?.role === 'support' || userProfile?.role === 'admin',

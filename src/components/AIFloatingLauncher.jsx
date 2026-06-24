@@ -22,128 +22,128 @@ import './AIFloatingLauncher.css';
  *   iconOnly?: boolean,
  *   className?: string,
  *   invitationVenue?: { venueType?: string, venueName?: string },
- *   datingAiContext?: import('../utils/datingAiRequestPayload.js').DatingAiContext,
- *   getDatingAiContext?: () => import('../utils/datingAiRequestPayload.js').DatingAiContext | undefined,
+ *   privateAiContext?: import('../utils/privateAiRequestPayload.js').DatingAiContext,
+ *   getPrivateAiContext?: () => import('../utils/privateAiRequestPayload.js').DatingAiContext | undefined,
  *   disabledHint?: string,
  * }} props
- */
+ */import { AppText } from "./base";
 export default function AIFloatingLauncher({
-    postType,
-    subType,
-    onTextSuccess,
-    buildContextPrompt,
-    multimodalMode = false,
-    defaultAspectRatio = '1:1',
-    disabled = false,
-    compact = false,
-    iconOnly = false,
-    className = '',
-    invitationVenue,
-    datingAiContext,
-    getDatingAiContext,
-    disabledHint,
+  postType,
+  subType,
+  onTextSuccess,
+  buildContextPrompt,
+  multimodalMode = false,
+  defaultAspectRatio = '1:1',
+  disabled = false,
+  compact = false,
+  iconOnly = false,
+  className = '',
+  invitationVenue,
+  privateAiContext,
+  getPrivateAiContext,
+  disabledHint
 }) {
-    const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
 
-    const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => setOpen(false), []);
 
-    const openSheet = useCallback(() => {
-        if (disabled) return;
-        setOpen(true);
-    }, [disabled]);
+  const openSheet = useCallback(() => {
+    if (disabled) return;
+    setOpen(true);
+  }, [disabled]);
 
-    useEffect(() => {
-        if (!open) return undefined;
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = prev;
-        };
-    }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
-    useEffect(() => {
-        if (!open) return undefined;
-        const onKey = (e) => {
-            if (e.key === 'Escape') close();
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [open, close]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, close]);
 
-    const sheet = open ? (
-        <div className="ai-floating-sheet__backdrop" role="presentation" onClick={close}>
+  const sheet = open ?
+  <div className="ai-floating-sheet__backdrop" role="presentation" onClick={close}>
             <div
-                className="ai-floating-sheet"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="ai-floating-sheet-title"
-                onClick={(e) => e.stopPropagation()}
-            >
+      className="ai-floating-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ai-floating-sheet-title"
+      onClick={(e) => e.stopPropagation()}>
+
                 <div className="ai-floating-sheet__handle" aria-hidden />
                 <header className="ai-floating-sheet__header">
-                    <h2 id="ai-floating-sheet-title" className="ai-floating-sheet__title">
+                    <AppText as="h2" id="ai-floating-sheet-title" className="ai-floating-sheet__title">
                         <FaMagic aria-hidden />
                         {t('ai_floating_sheet_title')}
-                    </h2>
+                    </AppText>
                     <button
-                        type="button"
-                        className="ai-floating-sheet__close ios-tap-target"
-                        onClick={close}
-                        aria-label={t('close')}
-                    >
+          type="button"
+          className="ai-floating-sheet__close ios-tap-target"
+          onClick={close}
+          aria-label={t('close')}>
+
                         <FaTimes aria-hidden />
                     </button>
                 </header>
 
                 <div className="ai-floating-sheet__body">
                     <AIGenerateBar
-                        postType={postType}
-                        subType={subType}
-                        onSuccess={(data, meta) => {
-                            const applied = onTextSuccess(data, meta);
-                            if (applied !== false) {
-                                window.setTimeout(() => close(), 400);
-                            }
-                        }}
-                        buildContextPrompt={buildContextPrompt}
-                        multimodalMode={multimodalMode}
-                        defaultAspectRatio={defaultAspectRatio}
-                        disabled={disabled}
-                        embedded
-                        invitationVenue={invitationVenue}
-                        datingAiContext={datingAiContext}
-                        getDatingAiContext={getDatingAiContext}
-                        disabledHint={disabledHint}
-                    />
+          postType={postType}
+          subType={subType}
+          onSuccess={(data, meta) => {
+            const applied = onTextSuccess(data, meta);
+            if (applied !== false) {
+              window.setTimeout(() => close(), 400);
+            }
+          }}
+          buildContextPrompt={buildContextPrompt}
+          multimodalMode={multimodalMode}
+          defaultAspectRatio={defaultAspectRatio}
+          disabled={disabled}
+          embedded
+          invitationVenue={invitationVenue}
+          privateAiContext={privateAiContext}
+          getPrivateAiContext={getPrivateAiContext}
+          disabledHint={disabledHint} />
+
                 </div>
             </div>
-        </div>
-    ) : null;
+        </div> :
+  null;
 
-    return (
-        <div
-            className={`ai-floating-launcher${compact ? ' ai-floating-launcher--compact' : ''}${iconOnly ? ' ai-floating-launcher--icon' : ''}${className ? ` ${className}` : ''}`}
-        >
+  return (
+    <div
+      className={`ai-floating-launcher${compact ? ' ai-floating-launcher--compact' : ''}${iconOnly ? ' ai-floating-launcher--icon' : ''}${className ? ` ${className}` : ''}`}>
+
             <button
-                type="button"
-                className="ai-floating-launcher__trigger ios-tap-target"
-                onClick={openSheet}
-                disabled={disabled}
-                aria-haspopup="dialog"
-                aria-expanded={open}
-                aria-label={t('ai_floating_open_btn')}
-                title={t('ai_floating_open_btn')}
-            >
+        type="button"
+        className="ai-floating-launcher__trigger ios-tap-target"
+        onClick={openSheet}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={t('ai_floating_open_btn')}
+        title={t('ai_floating_open_btn')}>
+
                 <FaMagic className="ai-floating-launcher__trigger-icon" aria-hidden />
                 {!iconOnly ? t('ai_floating_open_btn') : null}
             </button>
-            {disabledHint ? (
-                <p className="ai-floating-launcher__hint" role="status">
+            {disabledHint ?
+      <AppText as="p" className="ai-floating-launcher__hint" role="status">
                     {disabledHint}
-                </p>
-            ) : null}
+                </AppText> :
+      null}
             {typeof document !== 'undefined' ? createPortal(sheet, document.body) : null}
-        </div>
-    );
+        </div>);
+
 }

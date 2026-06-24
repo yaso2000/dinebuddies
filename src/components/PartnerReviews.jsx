@@ -6,214 +6,215 @@ import { useToast } from '../context/ToastContext';
 import { FaStar, FaRegStar, FaStarHalfAlt, FaUserCircle } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
+import { AppText, AppTextInput } from "./base";
 
 const PartnerReviews = ({ partnerId, partnerName }) => {
-    const { currentUser } = useAuth();
-    const { showToast } = useToast();
-    const [reviews, setReviews] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [showAddReview, setShowAddReview] = useState(false);
-    const [newReview, setNewReview] = useState({
-        rating: 5,
-        comment: ''
-    });
-    const [stats, setStats] = useState({
-        average: 0,
-        total: 0,
-        breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
-    });
-    const [submitting, setSubmitting] = useState(false);
+  const { currentUser } = useAuth();
+  const { showToast } = useToast();
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddReview, setShowAddReview] = useState(false);
+  const [newReview, setNewReview] = useState({
+    rating: 5,
+    comment: ''
+  });
+  const [stats, setStats] = useState({
+    average: 0,
+    total: 0,
+    breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+  });
+  const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        fetchReviews();
-    }, [partnerId]);
+  useEffect(() => {
+    fetchReviews();
+  }, [partnerId]);
 
-    const fetchReviews = async () => {
-        try {
-            setLoading(true);
-            const reviewsRef = collection(db, 'reviews');
-            const q = query(
-                reviewsRef,
-                where('partnerId', '==', partnerId),
-                orderBy('createdAt', 'desc'),
-                limit(50)
-            );
+  const fetchReviews = async () => {
+    try {
+      setLoading(true);
+      const reviewsRef = collection(db, 'reviews');
+      const q = query(
+        reviewsRef,
+        where('partnerId', '==', partnerId),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
 
-            const snapshot = await getDocs(q);
-            const reviewsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+      const snapshot = await getDocs(q);
+      const reviewsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-            setReviews(reviewsData);
-            calculateStats(reviewsData);
-        } catch (error) {
-            console.error('Error fetching reviews:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+      setReviews(reviewsData);
+      calculateStats(reviewsData);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const calculateStats = (reviewsData) => {
-        if (reviewsData.length === 0) {
-            setStats({ average: 0, total: 0, breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } });
-            return;
-        }
-
-        const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-        let sum = 0;
-
-        reviewsData.forEach(review => {
-            const rating = review.rating;
-            breakdown[rating]++;
-            sum += rating;
-        });
-
-        setStats({
-            average: (sum / reviewsData.length).toFixed(1),
-            total: reviewsData.length,
-            breakdown
-        });
-    };
-
-    const handleSubmitReview = async (e) => {
-        e.preventDefault();
-
-        if (!currentUser) {
-            showToast('Please login to leave a review', 'error');
-            return;
-        }
-
-        if (currentUser.uid === partnerId) {
-            showToast('You cannot review your own business', 'error');
-            return;
-        }
-
-        // Check if user has already reviewed
-        const hasUserReviewed = reviews.some(r => r.userId === currentUser.uid);
-        if (hasUserReviewed) {
-            showToast('You have already reviewed this business. You can only submit one review per business.', 'error');
-            return;
-        }
-
-        if (!newReview.comment.trim()) {
-            showToast('Please write a comment', 'error');
-            return;
-        }
-
-        try {
-            setSubmitting(true);
-
-            const reviewData = {
-                partnerId,
-                partnerName,
-                userId: currentUser.uid,
-                userName: currentUser.displayName || 'Anonymous',
-                userPhoto: currentUser.photoURL || null,
-                rating: newReview.rating,
-                comment: newReview.comment.trim(),
-                createdAt: serverTimestamp()
-            };
-
-            await addDoc(collection(db, 'reviews'), reviewData);
-
-            // Reset form
-            setNewReview({ rating: 5, comment: '' });
-            setShowAddReview(false);
-
-            // Refresh reviews
-            await fetchReviews();
-
-            showToast('Review submitted successfully!', 'success');
-        } catch (error) {
-            console.error('Error submitting review:', error);
-            showToast('Failed to submit review. Please try again.', 'error');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const renderStars = (rating, size = '1rem') => {
-        const stars = [];
-        const fullStars = Math.floor(rating);
-        const hasHalfStar = rating % 1 >= 0.5;
-
-        for (let i = 1; i <= 5; i++) {
-            if (i <= fullStars) {
-                stars.push(<FaStar key={i} style={{ color: '#fbbf24', fontSize: size }} />);
-            } else if (i === fullStars + 1 && hasHalfStar) {
-                stars.push(<FaStarHalfAlt key={i} style={{ color: '#fbbf24', fontSize: size }} />);
-            } else {
-                stars.push(<FaRegStar key={i} style={{ color: '#94a3b8', fontSize: size }} />);
-            }
-        }
-
-        return <div style={{ display: 'flex', gap: '4px' }}>{stars}</div>;
-    };
-
-    const renderRatingBar = (star, count) => {
-        const percentage = stats.total > 0 ? (count / stats.total) * 100 : 0;
-
-        return (
-            <div key={star} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                marginBottom: '8px'
-            }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', width: '60px' }}>
-                    {star} stars
-                </span>
-                <div style={{
-                    flex: 1,
-                    height: '8px',
-                    background: 'var(--bg-input)',
-                    borderRadius: '4px',
-                    overflow: 'hidden'
-                }}>
-                    <div style={{
-                        height: '100%',
-                        width: `${percentage}%`,
-                        background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                        transition: 'width 0.3s'
-                    }} />
-                </div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', width: '40px' }}>
-                    {count}
-                </span>
-            </div>
-        );
-    };
-
-    if (loading) {
-        return (
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-                <div style={{
-                    width: '40px',
-                    height: '40px',
-                    border: '4px solid var(--border-color)',
-                    borderTop: '4px solid var(--primary)',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '0 auto'
-                }} />
-            </div>
-        );
+  const calculateStats = (reviewsData) => {
+    if (reviewsData.length === 0) {
+      setStats({ average: 0, total: 0, breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } });
+      return;
     }
 
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    let sum = 0;
+
+    reviewsData.forEach((review) => {
+      const rating = review.rating;
+      breakdown[rating]++;
+      sum += rating;
+    });
+
+    setStats({
+      average: (sum / reviewsData.length).toFixed(1),
+      total: reviewsData.length,
+      breakdown
+    });
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+
+    if (!currentUser) {
+      showToast('Please login to leave a review', 'error');
+      return;
+    }
+
+    if (currentUser.uid === partnerId) {
+      showToast('You cannot review your own business', 'error');
+      return;
+    }
+
+    // Check if user has already reviewed
+    const hasUserReviewed = reviews.some((r) => r.userId === currentUser.uid);
+    if (hasUserReviewed) {
+      showToast('You have already reviewed this business. You can only submit one review per business.', 'error');
+      return;
+    }
+
+    if (!newReview.comment.trim()) {
+      showToast('Please write a comment', 'error');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const reviewData = {
+        partnerId,
+        partnerName,
+        userId: currentUser.uid,
+        userName: currentUser.displayName || 'Anonymous',
+        userPhoto: currentUser.photoURL || null,
+        rating: newReview.rating,
+        comment: newReview.comment.trim(),
+        createdAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'reviews'), reviewData);
+
+      // Reset form
+      setNewReview({ rating: 5, comment: '' });
+      setShowAddReview(false);
+
+      // Refresh reviews
+      await fetchReviews();
+
+      showToast('Review submitted successfully!', 'success');
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      showToast('Failed to submit review. Please try again.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderStars = (rating, size = '1rem') => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+
+    for (let i = 1; i <= 5; i++) {
+      if (i <= fullStars) {
+        stars.push(<FaStar key={i} style={{ color: '#fbbf24', fontSize: size }} />);
+      } else if (i === fullStars + 1 && hasHalfStar) {
+        stars.push(<FaStarHalfAlt key={i} style={{ color: '#fbbf24', fontSize: size }} />);
+      } else {
+        stars.push(<FaRegStar key={i} style={{ color: '#94a3b8', fontSize: size }} />);
+      }
+    }
+
+    return <div style={{ display: 'flex', gap: '4px' }}>{stars}</div>;
+  };
+
+  const renderRatingBar = (star, count) => {
+    const percentage = stats.total > 0 ? count / stats.total * 100 : 0;
+
     return (
-        <div style={{ marginTop: '2rem' }}>
+      <div key={star} style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '8px'
+      }}>
+                <AppText as="span" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', width: '60px' }}>
+                    {star} stars
+                </AppText>
+                <div style={{
+          flex: 1,
+          height: '8px',
+          background: 'var(--bg-input)',
+          borderRadius: '4px',
+          overflow: 'hidden'
+        }}>
+                    <div style={{
+            height: '100%',
+            width: `${percentage}%`,
+            background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+            transition: 'width 0.3s'
+          }} />
+                </div>
+                <AppText as="span" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', width: '40px' }}>
+                    {count}
+                </AppText>
+            </div>);
+
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+                <div style={{
+          width: '40px',
+          height: '40px',
+          border: '4px solid var(--border-color)',
+          borderTop: '4px solid var(--primary)',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          margin: '0 auto'
+        }} />
+            </div>);
+
+  }
+
+  return (
+    <div style={{ marginTop: '2rem' }}>
             {/* Stats Summary */}
             <div style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '16px',
-                padding: '1.5rem',
-                marginBottom: '1.5rem'
-            }}>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '16px',
+        padding: '1.5rem',
+        marginBottom: '1.5rem'
+      }}>
+                <AppText as="h3" style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>
                     Reviews & Ratings
-                </h3>
+                </AppText>
 
                 <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', marginBottom: '1.5rem' }}>
                     {/* Average Rating */}
@@ -229,43 +230,43 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
 
                     {/* Rating Breakdown */}
                     <div style={{ flex: 1 }}>
-                        {[5, 4, 3, 2, 1].map(star => renderRatingBar(star, stats.breakdown[star]))}
+                        {[5, 4, 3, 2, 1].map((star) => renderRatingBar(star, stats.breakdown[star]))}
                     </div>
                 </div>
 
                 {/* Add Review Button */}
-                {currentUser && currentUser.uid !== partnerId && !reviews.some(r => r.userId === currentUser.uid) && (
-                    <button
-                        onClick={() => setShowAddReview(!showAddReview)}
-                        style={{
-                            width: '100%',
-                            padding: '12px',
-                            background: showAddReview ? 'var(--bg-input)' : 'linear-gradient(135deg, var(--primary), #f97316)',
-                            border: showAddReview ? '1px solid var(--border-color)' : 'none',
-                            borderRadius: '12px',
-                            color: 'white',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
-                    >
+                {currentUser && currentUser.uid !== partnerId && !reviews.some((r) => r.userId === currentUser.uid) &&
+        <button
+          onClick={() => setShowAddReview(!showAddReview)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: showAddReview ? 'var(--bg-input)' : 'linear-gradient(135deg, var(--primary), #f97316)',
+            border: showAddReview ? '1px solid var(--border-color)' : 'none',
+            borderRadius: '12px',
+            color: 'white',
+            fontWeight: '700',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}>
+          
                         {showAddReview ? 'Cancel' : '✍️ Write a Review'}
                     </button>
-                )}
+        }
             </div>
 
             {/* Add Review Form */}
-            {showAddReview && (
-                <div style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    marginBottom: '1.5rem'
-                }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '1rem' }}>
+            {showAddReview &&
+      <div style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '16px',
+        padding: '1.5rem',
+        marginBottom: '1.5rem'
+      }}>
+                    <AppText as="h4" style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '1rem' }}>
                         Share Your Experience
-                    </h4>
+                    </AppText>
 
                     <form onSubmit={handleSubmitReview}>
                         {/* Star Rating Selector */}
@@ -274,29 +275,29 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
                                 Your Rating
                             </label>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                {[1, 2, 3, 4, 5].map(star => (
-                                    <button
-                                        key={star}
-                                        type="button"
-                                        onClick={() => setNewReview({ ...newReview, rating: star })}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            fontSize: '2rem',
-                                            padding: '4px',
-                                            transition: 'transform 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                    >
-                                        {star <= newReview.rating ? (
-                                            <FaStar style={{ color: '#fbbf24' }} />
-                                        ) : (
-                                            <FaRegStar style={{ color: '#94a3b8' }} />
-                                        )}
+                                {[1, 2, 3, 4, 5].map((star) =>
+              <button
+                key={star}
+                type="button"
+                onClick={() => setNewReview({ ...newReview, rating: star })}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '2rem',
+                  padding: '4px',
+                  transition: 'transform 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+                
+                                        {star <= newReview.rating ?
+                <FaStar style={{ color: '#fbbf24' }} /> :
+
+                <FaRegStar style={{ color: '#94a3b8' }} />
+                }
                                     </button>
-                                ))}
+              )}
                             </div>
                         </div>
 
@@ -305,85 +306,85 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-muted)' }}>
                                 Your Review
                             </label>
-                            <textarea
-                                value={newReview.comment}
-                                onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
-                                placeholder="Share your experience with this business..."
-                                required
-                                style={{
-                                    width: '100%',
-                                    minHeight: '100px',
-                                    padding: '12px',
-                                    background: 'var(--bg-input)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    color: 'white',
-                                    fontSize: '0.95rem',
-                                    resize: 'vertical',
-                                    fontFamily: 'inherit'
-                                }}
-                            />
+                            <AppTextInput as="textarea"
+            value={newReview.comment}
+            onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
+            placeholder="Share your experience with this business..."
+            required
+            style={{
+              width: '100%',
+              minHeight: '100px',
+              padding: '12px',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '12px',
+              color: 'white',
+              fontSize: '0.95rem',
+              resize: 'vertical',
+              fontFamily: 'inherit'
+            }} />
+            
                         </div>
 
                         {/* Submit Button */}
                         <button
-                            type="submit"
-                            disabled={submitting}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                background: submitting ? 'var(--bg-input)' : 'linear-gradient(135deg, #10b981, #f59e0b)',
-                                border: 'none',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontWeight: '700',
-                                cursor: submitting ? 'not-allowed' : 'pointer',
-                                opacity: submitting ? 0.6 : 1
-                            }}
-                        >
+            type="submit"
+            disabled={submitting}
+            style={{
+              width: '100%',
+              padding: '12px',
+              background: submitting ? 'var(--bg-input)' : 'linear-gradient(135deg, #10b981, #f59e0b)',
+              border: 'none',
+              borderRadius: '12px',
+              color: 'white',
+              fontWeight: '700',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitting ? 0.6 : 1
+            }}>
+            
                             {submitting ? 'Submitting...' : 'Submit Review'}
                         </button>
                     </form>
                 </div>
-            )}
+      }
 
             {/* Reviews List */}
             <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '1rem' }}>
+                <AppText as="h4" style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '1rem' }}>
                     Customer Reviews ({stats.total})
-                </h4>
+                </AppText>
 
-                {reviews.length === 0 ? (
-                    <div style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '16px',
-                        padding: '2rem',
-                        textAlign: 'center'
-                    }}>
+                {reviews.length === 0 ?
+        <div style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center'
+        }}>
                         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
-                        <p style={{ color: 'var(--text-muted)' }}>No reviews yet. Be the first to review!</p>
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {reviews.map(review => (
-                            <div key={review.id} style={{
-                                background: 'var(--bg-card)',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '16px',
-                                padding: '1.25rem'
-                            }}>
+                        <AppText as="p" style={{ color: 'var(--text-muted)' }}>No reviews yet. Be the first to review!</AppText>
+                    </div> :
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {reviews.map((review) =>
+          <div key={review.id} style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '1.25rem'
+          }}>
                                 {/* User Info */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                                    {review.userPhoto ? (
-                                        <UserAvatar
-                                            user={{ photoURL: review.userPhoto, display_name: review.userName, gender: review.userGender }}
-                                            alt={review.userName}
-                                            style={{ width: 40, height: 40 }}
-                                        />
-                                    ) : (
-                                        <FaUserCircle style={{ fontSize: '40px', color: 'var(--text-muted)' }} />
-                                    )}
+                                    {review.userPhoto ?
+              <UserAvatar
+                user={{ photoURL: review.userPhoto, display_name: review.userName, gender: review.userGender }}
+                alt={review.userName}
+                style={{ width: 40, height: 40 }} /> :
+
+
+              <FaUserCircle style={{ fontSize: '40px', color: 'var(--text-muted)' }} />
+              }
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>
                                             {review.userName}
@@ -396,20 +397,20 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
                                 </div>
 
                                 {/* Comment */}
-                                <p style={{
-                                    color: 'var(--text-secondary)',
-                                    lineHeight: '1.6',
-                                    fontSize: '0.95rem'
-                                }}>
+                                <AppText as="p" style={{
+              color: 'var(--text-secondary)',
+              lineHeight: '1.6',
+              fontSize: '0.95rem'
+            }}>
                                     {review.comment}
-                                </p>
+                                </AppText>
                             </div>
-                        ))}
+          )}
                     </div>
-                )}
+        }
             </div>
-        </div>
-    );
+        </div>);
+
 };
 
 export default PartnerReviews;

@@ -3,10 +3,16 @@ import { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewFollower } from './notificationHelpers';
 import { getSafeAvatar } from './avatarUtils';
+import { isHiddenFromConsumerApp } from './consumerSearchExclusions';
 
 const functions = getFunctions();
 const listUserNetworkCallable = httpsCallable(functions, 'listUserNetwork');
 const getFollowerCountCallable = httpsCallable(functions, 'getFollowerCount');
+
+/** Per-user cache + in-flight dedup — Profile re-renders must not spam getFollowerCount (429). */
+const followerCountCache = new Map();
+const followerCountInflight = new Map();
+const FOLLOWER_COUNT_TTL_MS = 60_000;
 
 /** Coalesce identical in-flight listUserNetwork calls (Firestore/auth can fan out many at once). */
 const listUserNetworkInflight = new Map();
@@ -36,6 +42,9 @@ const mapNetworkUser = (user) => ({
     following: []
 });
 
+const filterVisibleNetworkUsers = (users) =>
+    (users || []).filter((user) => !isHiddenFromConsumerApp({ id: user?.id || user?.uid, role: user?.role, accountRole: user?.accountRole }));
+
 /**
  * Get users who follow a specific user
  */
@@ -48,7 +57,7 @@ export const getFollowers = async (userId) => {
             limit: 200
         });
         const followers = Array.isArray(result?.data?.followers) ? result.data.followers : [];
-        return followers.map(mapNetworkUser);
+        return filterVisibleNetworkUsers(followers).map(mapNetworkUser);
     } catch (error) {
         console.error('Error getting followers for user:', userId, error);
         return [];
@@ -72,21 +81,42 @@ export const getFollowing = async (userId, followingIds = []) => {
             limit: Math.min(200, followingIds.length)
         });
         const following = Array.isArray(result?.data?.following) ? result.data.following : [];
-        return following.map(mapNetworkUser);
+        return filterVisibleNetworkUsers(following).map(mapNetworkUser);
     } catch (error) {
         console.error('Error getting following:', error);
         return [];
     }
 };
 
-export const getFollowersCount = async (userId) => {
-    try {
-        const result = await getFollowerCountCallable({ userId });
-        return Number(result?.data?.followersCount || 0);
-    } catch (error) {
-        console.error('Error getting followers count:', error);
-        return 0;
+export const getFollowersCount = async (userId, { force = false } = {}) => {
+    if (!userId) return 0;
+
+    const cached = followerCountCache.get(userId);
+    if (!force && cached && Date.now() - cached.at < FOLLOWER_COUNT_TTL_MS) {
+        return cached.count;
     }
+
+    if (followerCountInflight.has(userId)) {
+        return followerCountInflight.get(userId);
+    }
+
+    const promise = getFollowerCountCallable({ userId })
+        .then((result) => {
+            const count = Number(result?.data?.followersCount || 0);
+            followerCountCache.set(userId, { count, at: Date.now() });
+            return count;
+        })
+        .catch((error) => {
+            if (cached) return cached.count;
+            console.error('Error getting followers count:', error);
+            return 0;
+        })
+        .finally(() => {
+            followerCountInflight.delete(userId);
+        });
+
+    followerCountInflight.set(userId, promise);
+    return promise;
 };
 
 /**
@@ -115,44 +145,43 @@ export const getMutualFollowersCount = (user1Following = [], user2Following = []
 
 /**
  * Follow a user
+ * @param {{ skipAlreadyCheck?: boolean }} [options] — skip getDoc when caller already verified state
  */
-export const followUser = async (currentUserId, targetUserId, currentUserData = null) => {
+export const followUser = async (currentUserId, targetUserId, currentUserData = null, options = {}) => {
+    const { skipAlreadyCheck = false } = options;
     try {
-        // 1. Check if already following (protection from duplicate follows)
         const currentUserRef = doc(db, 'users', currentUserId);
-        const currentUserDoc = await getDoc(currentUserRef);
-        const currentUserFollowing = currentUserDoc.data()?.following || [];
+        const targetUserRef = doc(db, 'users', targetUserId);
 
-        if (currentUserFollowing.includes(targetUserId)) {
-            console.log('Already following this user');
-            return { success: false, message: 'Already following' };
-        }
-
-        // 2. Get current user data if not provided
         let followerData = currentUserData;
-        if (!followerData) {
+        if (!skipAlreadyCheck) {
+            const currentUserDoc = await getDoc(currentUserRef);
+            const currentUserFollowing = currentUserDoc.data()?.following || [];
+            if (currentUserFollowing.includes(targetUserId)) {
+                return { success: false, message: 'Already following' };
+            }
+            if (!followerData) {
+                followerData = {
+                    id: currentUserId,
+                    name: currentUserDoc.data()?.name || 'Someone',
+                    avatar: getSafeAvatar(currentUserDoc.data())
+                };
+            }
+        } else if (!followerData) {
             followerData = {
                 id: currentUserId,
-                name: currentUserDoc.data()?.name || 'Someone',
-                avatar: getSafeAvatar(currentUserDoc.data())
+                name: 'Someone',
+                avatar: getSafeAvatar(null)
             };
         }
 
-        // 3. Add to current user's following list
-        await updateDoc(currentUserRef, {
-            following: arrayUnion(targetUserId)
-        });
+        await Promise.all([
+            updateDoc(currentUserRef, { following: arrayUnion(targetUserId) }),
+            updateDoc(targetUserRef, { followersCount: increment(1) })
+        ]);
 
-        // 4. Increment target user's followers count
-        const targetUserRef = doc(db, 'users', targetUserId);
-        await updateDoc(targetUserRef, {
-            followersCount: increment(1)
-        });
+        notifyNewFollower(targetUserId, followerData);
 
-        // 5. Send notification to target user
-        await notifyNewFollower(targetUserId, followerData);
-
-        console.log('✅ Successfully followed user and sent notification');
         return { success: true, message: 'Followed successfully' };
     } catch (error) {
         console.error('Error following user:', error);
@@ -168,15 +197,10 @@ export const unfollowUser = async (currentUserId, targetUserId) => {
         const currentUserRef = doc(db, 'users', currentUserId);
         const targetUserRef = doc(db, 'users', targetUserId);
 
-        // Remove from current user's following list
-        await updateDoc(currentUserRef, {
-            following: arrayRemove(targetUserId)
-        });
-
-        // Decrement target user's followers count
-        await updateDoc(targetUserRef, {
-            followersCount: increment(-1)
-        });
+        await Promise.all([
+            updateDoc(currentUserRef, { following: arrayRemove(targetUserId) }),
+            updateDoc(targetUserRef, { followersCount: increment(-1) })
+        ]);
 
         return true;
     } catch (error) {

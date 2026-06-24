@@ -3,7 +3,7 @@
  * Wipes user-generated data except privileged accounts (admin + owner / superOwner).
  *
  * Preserved Firestore config collections:
- *   subscriptionPlans, creditPacks, app_settings, global_config
+ *   app_settings, global_config
  *
  * Preserved Auth users (default):
  *   - UIDs in KEEP_AUTH_UIDS (comma-separated), plus
@@ -50,8 +50,6 @@ const EXECUTE = args.has('--execute');
 const DRY_RUN = !EXECUTE;
 
 const PRESERVE_COLLECTIONS = new Set([
-    'subscriptionPlans',
-    'creditPacks',
     'app_settings',
     'global_config',
 ]);

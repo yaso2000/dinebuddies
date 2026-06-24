@@ -1,0 +1,33 @@
+{
+  "counts": {
+    "en": 3694,
+    "ar": 3694
+  },
+  "missingInAr": [],
+  "sameAsEn": [
+    "admin_plans_env_stripe",
+    "admin_plans_to_production",
+    "admin_plans_to_sandbox",
+    "affiliate_dash_paypal_label",
+    "app_title",
+    "delivery_link_url_placeholder",
+    "feedback_phone_ph",
+    "invitation_inbox_counter",
+    "language_native_arabic",
+    "language_native_english",
+    "language_native_french",
+    "language_native_german",
+    "language_native_italian",
+    "language_native_portuguese",
+    "language_native_spanish",
+    "language_native_turkish",
+    "per_duration",
+    "social_color_hex_label",
+    "social_share_line_event",
+    "social_share_line_when",
+    "social_share_line_where",
+    "studio_layout_square",
+    "studio_layout_story"
+  ],
+  "englishLikeInAr": []
+}

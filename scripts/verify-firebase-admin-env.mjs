@@ -88,17 +88,34 @@ try {
         'image/png',
         'invitation',
     );
-    console.log('Storage upload          OK', uploaded.path);
+    console.log('Storage upload          OK', uploaded.path, `bucket=${uploaded.bucket}`);
+
+    const urlProbe = await fetch(uploaded.url, { method: 'GET' });
+    if (!urlProbe.ok) {
+        throw new Error(`uploaded URL not readable: HTTP ${urlProbe.status} — ${uploaded.url}`);
+    }
+    console.log('Storage download URL    OK', `status=${urlProbe.status}`);
 
     let cleaned = false;
-    for (const name of bucketCandidates()) {
-        const bucket = name ? getStorage().bucket(name) : getStorage().bucket();
+    const cleanupBucket = uploaded.bucket || bucketCandidates()[0];
+    if (cleanupBucket) {
         try {
-            await bucket.file(uploaded.path).delete();
+            await getStorage().bucket(cleanupBucket).file(uploaded.path).delete();
             cleaned = true;
-            break;
         } catch {
-            /* try next bucket */
+            /* fall through */
+        }
+    }
+    if (!cleaned) {
+        for (const name of bucketCandidates()) {
+            const bucket = name ? getStorage().bucket(name) : getStorage().bucket();
+            try {
+                await bucket.file(uploaded.path).delete();
+                cleaned = true;
+                break;
+            } catch {
+                /* try next bucket */
+            }
         }
     }
     console.log('Storage cleanup         ', cleaned ? 'OK' : 'skipped (delete manually if needed)');

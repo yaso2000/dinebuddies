@@ -1,0 +1,89 @@
+{
+  "faq": {
+    "title": "Aide et support",
+    "subtitle": "Trouvez des réponses à vos questions et découvrez comment tirer le meilleur parti de DineBuddies.",
+    "empty": "Aucune question disponible pour le moment.",
+    "user_questions": [
+      {
+        "q": "Qu'est-ce que DineBuddies ?",
+        "a": "La plateforme incontournable pour les amateurs de gastronomie ! DineBuddies est une application sociale innovante qui allie la découverte de restaurants raffinés, la rencontre de nouvelles personnes via des invitations culinaires sélectionnées et la création de véritables communautés autour de la table."
+      },
+      {
+        "q": "Comment créer une invitation et partager l'addition ?",
+        "a": "Appuyez sur le bouton (+), sélectionnez un restaurant et définissez la date et l'heure. Dans les paramètres, vous pouvez choisir si l'addition est « À la charge de l'hôte », « Partagée équitablement » ou « Chacun paie pour soi »."
+      },
+      {
+        "q": "Quelle est la différence entre les invitations publiques, privées et de rencontre ?",
+        "a": "• Publique : visible sur la carte principale, tout le monde peut demander à rejoindre.\n• Privée : invitation masquée envoyée exclusivement via un lien d'invitation électronique élégant à des personnes précises.\n• Rencontre : rencontres romantiques spécialement organisées, nécessitant un abonnement Premium, avec des filtres avancés et des avis de confiance."
+      },
+      {
+        "q": "Comment accepter les demandes de participation à mon invitation ?",
+        "a": "Lorsque quelqu'un demande à rejoindre, vous recevez une notification instantanée. Ouvrez les détails de l'invitation, consultez son profil et appuyez sur « Accepter » ou « Refuser ». Une fois accepté, un chat de groupe privé se débloque automatiquement."
+      },
+      {
+        "q": "Qu'est-ce que le chat communautaire ?",
+        "a": "Chaque restaurant de l'application possède sa propre « Communauté ». En rejoignant la communauté d'un restaurant, vous entrez dans un salon de discussion public avec le personnel et les autres clients pour poser des questions sur les plats, partager des recommandations et découvrir des offres exclusives."
+      },
+      {
+        "q": "Comment faire évoluer mon compte et gagner des points de réputation ?",
+        "a": "Les points de réputation reflètent votre fiabilité ! Ils augmentent lorsque vous assistez aux événements à l'heure et recevez des notes de 5 étoiles des hôtes ou des invités. Ils diminuent en cas d'absence ou de plaintes."
+      },
+      {
+        "q": "Comment passer à Premium (VIP) ?",
+        "a": "Accédez à Profil > Paramètres > Abonnements. Le niveau VIP vous offre des filtres de recherche exceptionnels, un accès complet aux invitations de rencontre, des informations sur les visiteurs de votre profil et des invitations privées illimitées."
+      },
+      {
+        "q": "Comment supprimer définitivement mon compte ?",
+        "a": "Allez dans Profil > Paramètres > Compte > Supprimer le compte. Veuillez noter que cette action est définitive et que les données ne peuvent pas être restaurées après 30 jours."
+      },
+      {
+        "q": "Comment filtrer les restaurants et cafés ?",
+        "a": "Utilisez la barre de recherche et les filtres pour trier par restaurants, cafés, établissements actuellement ouverts, ou les classer par meilleure note et distance la plus proche."
+      },
+      {
+        "q": "Comment fonctionnent les invitations électroniques directes ?",
+        "a": "Au lieu d'attendre les utilisateurs de l'application, créez une invitation « Privée », copiez le lien de sa carte électronique élégante et partagez-le via WhatsApp ! Toute personne qui clique sur le lien est guidée pour confirmer sa participation avec vous."
+      }
+    ],
+    "business_questions": [
+      {
+        "q": "Qu'est-ce que le tableau de bord Business Pro ?",
+        "a": "Un centre de contrôle professionnel conçu pour les partenaires restaurants DineBuddies. Il vous donne un contrôle total sur votre menu, vos horaires d'ouverture, vos discussions directes et la diffusion de publications marketing sur la plateforme."
+      },
+      {
+        "q": "Comment publier une publication promotionnelle mise en avant ?",
+        "a": "Depuis le tableau de bord Pro, accédez à « Publications mises en avant », téléversez votre image promotionnelle et rédigez une légende. Votre publication apparaîtra instantanément pour tous les utilisateurs dans le fil principal de l'application."
+      },
+      {
+        "q": "Comment diffuser des offres à ma communauté ?",
+        "a": "Chaque utilisateur qui rejoint votre « Communauté » apparaît dans votre onglet Membres. Vous pouvez publier d'importantes remises directement dans le « Chat communautaire » pour attirer du monde instantanément pendant les heures creuses."
+      },
+      {
+        "q": "Comment gérer mon menu numérique ?",
+        "a": "Dans « Menu et services » de votre tableau de bord, téléversez des plats avec des photos appétissantes et des prix. Le menu numérique élégant se met à jour instantanément pour tous les visiteurs de votre profil."
+      },
+      {
+        "q": "Quelle est la différence entre les niveaux partenaire Professionnel et Élite ?",
+        "a": "Le niveau « Pro » configure votre vitrine et votre fiche dans l'annuaire. Le niveau « Élite » est notre formule phare, boostant votre classement algorithmique et offrant des diapositives mises en avant illimitées et prioritaires pour une visibilité maximale."
+      },
+      {
+        "q": "Comment gérer les avis clients ?",
+        "a": "L'onglet « Avis » fournit des analyses détaillées de vos notes. Vous pouvez également répondre officiellement aux avis sous le nom vérifié de votre restaurant pour fidéliser durablement votre clientèle."
+      }
+    ]
+  },
+  "seo": {
+    "title": "DineBuddies | Restauration sociale premium et réseau gastronomique exclusif",
+    "description": "DineBuddies est un réseau social gastronomique exclusif où les amateurs de cuisine se rencontrent, rejoignent des invitations privées en restaurant et se connectent autour de repas premium."
+  },
+  "faq_create_answer": "Vous pouvez créer une nouvelle invitation en cliquant sur le bouton (+) dans le menu inférieur, puis en choisissant l'établissement et en définissant l'heure et le nombre d'invités.",
+  "faq_create_invitation": "Comment créer une nouvelle invitation ?",
+  "faq_delete_account": "Comment supprimer mon compte ?",
+  "faq_delete_answer": "Vous pouvez supprimer votre compte depuis la page des paramètres de votre profil, ou contacter le support technique.",
+  "faq_description": "Trouvez des réponses aux questions fréquentes ou contactez-nous directement.",
+  "faq_free_answer": "Oui, l'application est gratuite pour une utilisation de base. Vous pouvez vous abonner aux formules premium pour des fonctionnalités supplémentaires.",
+  "faq_is_free": "L'application est-elle gratuite ?",
+  "faq_reputation": "Que sont les points de réputation ?",
+  "faq_reputation_answer": "Les points de réputation mesurent votre crédibilité dans l'application. Ils augmentent lorsque vous respectez vos engagements aux invitations et recevez des évaluations positives, et diminuent en cas d'absences fréquentes.",
+  "faq_title": "Questions fréquentes"
+}

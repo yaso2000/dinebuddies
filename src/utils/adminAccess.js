@@ -1,11 +1,14 @@
-const ADMIN_EMAILS = [
+export const ADMIN_EMAILS = [
     'admin@dinebuddies.com',
     'yaser@dinebuddies.com',
     'info@dinebuddies.com.au',
-    'y.abohamed@gmail.com'
+    'y.abohamed@gmail.com',
 ];
 
-const SUPER_ADMIN_UIDS = ['xTgHC1v00LZIZ6ESA9YGjGU5zW33'];
+export const SUPER_ADMIN_UIDS = [
+    'xTgHC1v00LZIZ6ESA9YGjGU5zW33',
+    'xboOb7jxpGbYVRgZyP66d544nVi1',
+];
 
 /** Firestore roles that may use `/admin/*` (same set as AdminRoute allowedRoles). */
 const ADMIN_PANEL_ROLES = new Set(['admin', 'moderator', 'support', 'staff']);

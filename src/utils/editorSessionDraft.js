@@ -85,7 +85,7 @@ export function inlinePostDraftKey(uid) {
     return `${STORAGE_PREFIX}inline-post:${uid}`;
 }
 
-/** @param {string} uid @param {'private' | 'dating'} kind @param {string | null | undefined} editId */
+/** @param {string} uid @param {'social' | 'private'} kind @param {string | null | undefined} editId */
 export function privateInvitationEditorDraftKey(uid, kind, editId = null) {
     const base = `${STORAGE_PREFIX}private-invite:${kind}:${uid}`;
     return editId ? `${base}:edit:${editId}` : base;

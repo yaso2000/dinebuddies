@@ -51,7 +51,7 @@ export const completeInvitation = async (invitationId, invitation, currentUser) 
             console.log('✅ Location verified:', verification);
         }
 
-        // 4. Update invitation status to completed
+        // 4. Upprivate invite status to completed
         const invitationRef = doc(db, 'invitations', invitationId);
         await updateDoc(invitationRef, {
             status: 'completed',

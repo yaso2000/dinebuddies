@@ -69,7 +69,7 @@ export function isAuthorHiddenForViewer(viewerProfile, authorId) {
     return asUidArray(viewerProfile.blockedUserIds).includes(authorId);
 }
 
-/** Private / dating invitations from this author should be hidden (mute). */
+/** Private / private invites from this author should be hidden (mute). */
 export function isAuthorMutedForViewer(viewerProfile, authorId) {
     if (!authorId || !viewerProfile) return false;
     return asUidArray(viewerProfile.mutedUserIds).includes(authorId);

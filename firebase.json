@@ -1,4 +1,20 @@
 {
+    "auth": {
+        "providers": {
+            "googleSignIn": {
+                "oAuthBrandDisplayName": "DineBuddies",
+                "supportEmail": "admin@dinebuddies.com",
+                "authorizedRedirectUris": [
+                    "https://dinebuddies.firebaseapp.com/__/auth/handler",
+                    "https://dinebuddies.web.app/__/auth/handler",
+                    "https://www.dinebuddies.com/__/auth/handler",
+                    "https://dinebuddies.com/__/auth/handler",
+                    "http://localhost/__/auth/handler",
+                    "http://127.0.0.1/__/auth/handler"
+                ]
+            }
+        }
+    },
     "functions": {
         "source": "functions",
         "codebase": "default",
@@ -41,6 +57,24 @@
                         "value": "public, max-age=0, must-revalidate"
                     }
                 ]
+            },
+            {
+                "source": "/index.html",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    }
+                ]
+            },
+            {
+                "source": "/assets/**",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "public, max-age=31536000, immutable"
+                    }
+                ]
             }
         ],
         "redirects": [
@@ -58,6 +92,10 @@
             {
                 "source": "/api/place-photo",
                 "function": "placePhoto"
+            },
+            {
+                "source": "/invite/p/**",
+                "function": "privateInvitationSharePage"
             },
             {
                 "source": "**",

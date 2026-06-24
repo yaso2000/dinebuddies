@@ -1,6 +1,7 @@
 import { isValidE164 } from '../_phoneUtils.js';
 import { requireAuth } from '../_auth.js';
 import { completeBusinessPhoneSignup, completeBusinessEmailSignup } from '../_businessPhoneAccount.js';
+import { syncUserPublicProfile } from '../_publicProfileSync.js';
 import { applyApiCors, handleCorsPreflight } from '../_cors.js';
 
 function readJsonBody(req) {
@@ -64,6 +65,12 @@ export default async function handler(req, res) {
                   businessInfo: body.businessInfo || {},
                   referredBy: body.referredBy || null,
               });
+
+        try {
+            await syncUserPublicProfile(result.uid);
+        } catch (syncErr) {
+            console.warn('[complete-business-signup] public_profiles sync:', syncErr?.message || syncErr);
+        }
 
         return res.status(200).json({
             status: 'ok',

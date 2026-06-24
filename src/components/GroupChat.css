@@ -120,12 +120,25 @@
 .message-avatar {
     width: 32px;
     height: 32px;
+    min-width: 32px;
+    min-height: 32px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
     border: 2px solid rgba(139, 92, 246, 0.2);
     align-self: flex-end;
     margin-bottom: 4px;
+    overflow: hidden;
+}
+
+.message-avatar .user-avatar__img,
+.message-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: cover;
+    border-radius: 50%;
 }
 
 .message-content {

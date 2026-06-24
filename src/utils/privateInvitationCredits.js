@@ -1,34 +1,34 @@
 /**
- * Publish costs for private / dating invitations — must match `functions/creditsCore.js` CREDIT_COSTS.
+ * Publish costs for private / private invites — must match `functions/creditsCore.js` CREDIT_COSTS.
  * Spending uses the unified Dine Credits wallet (`freeCredits` + `paidCredits`), same as AI.
  * Public invitations (`invitations` collection) = 0 credits (not listed here).
  */
-export const PRIVATE_INVITATION_PUBLISH_CREDITS = 90;
-export const DATING_INVITATION_PUBLISH_CREDITS = 185;
+export const SOCIAL_INVITATION_PUBLISH_CREDITS = 90;
+export const PRIVATE_INVITATION_PUBLISH_CREDITS = 185;
 export const INVITATION_BOOST_CREDITS = 50;
 
 /** Minimum total Dine Credits to start private/dating draft flows (cheapest publish in this flow). */
-export const MIN_HOST_INVITATION_DRAFT_CREDITS = PRIVATE_INVITATION_PUBLISH_CREDITS;
+export const MIN_HOST_INVITATION_DRAFT_CREDITS = SOCIAL_INVITATION_PUBLISH_CREDITS;
 
 /**
  * Client-side cost hints. Server `publishPrivateInvitationDraft` charges **one purchased
  * private invitation credit** per publish (no subscription monthly allowance).
  * @param {Record<string, unknown>} inv
  */
-export function isDatingInvitationDoc(inv) {
+export function isPrivateInvitationDoc(inv) {
     if (!inv || typeof inv !== 'object') return false;
     const occasionLc = String(inv.occasionType || inv.type || '')
         .trim()
         .toLowerCase();
     return (
-        inv.type === 'Dating' ||
-        occasionLc === 'dating' ||
-        (inv.datingInvitationPreference != null && inv.datingInvitationPreference !== false)
+        inv.type === 'Private' ||
+        occasionLc === 'private' ||
+        (inv.privateInvitationPreference != null && inv.privateInvitationPreference !== false)
     );
 }
 
 export function getPrivateInvitationPublishCost(inv) {
-    return isDatingInvitationDoc(inv) ? DATING_INVITATION_PUBLISH_CREDITS : PRIVATE_INVITATION_PUBLISH_CREDITS;
+    return isPrivateInvitationDoc(inv) ? PRIVATE_INVITATION_PUBLISH_CREDITS : SOCIAL_INVITATION_PUBLISH_CREDITS;
 }
 
 export function getTotalDineCredits(userProfile) {

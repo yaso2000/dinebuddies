@@ -23,6 +23,34 @@ service firebase.storage {
       return fileName.matches('^' + request.auth.uid + '(_.*)?(\\..+)?$');
     }
 
+    function isAdminOrPanelStaff() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.uid == 'xTgHC1v00LZIZ6ESA9YGjGU5zW33' ||
+        (request.auth.token.email != null &&
+          request.auth.token.email.matches('(?i)^(admin@dinebuddies\\.com|yaser@dinebuddies\\.com|info@dinebuddies\\.com\\.au|y\\.abohamed@gmail\\.com)$')) ||
+        (
+          firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'moderator', 'support', 'staff']
+        )
+      );
+    }
+
+    // Host of a hosted invitation (social + personal — Firestore social_invitations, legacy private_invitations).
+    function isPrivateInvitationHost(invitationId) {
+      let socialDoc = firestore.get(/databases/(default)/documents/social_invitations/$(invitationId));
+      let legacyDoc = firestore.get(/databases/(default)/documents/private_invitations/$(invitationId));
+      return (socialDoc != null && (
+               socialDoc.data.authorId == request.auth.uid ||
+               (socialDoc.data.author is map && socialDoc.data.author.get('id', '') == request.auth.uid)
+             )) ||
+             (legacyDoc != null && (
+               legacyDoc.data.authorId == request.auth.uid ||
+               (legacyDoc.data.author is map && legacyDoc.data.author.get('id', '') == request.auth.uid)
+             ));
+    }
+
     // Quarantine: user uploads here; Cloud Function moves to public path after Vision scan
     match /quarantine/{userId}/{fileName} {
       allow read: if isSignedIn() && request.auth.uid == userId;
@@ -256,6 +284,22 @@ service firebase.storage {
                    && request.resource.size < 30 * 1024 * 1024;
     }
 
+    // Business-imported restaurant cover images (server upload on publish)
+    match /restaurants/covers/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Private invitation share card JPEG (9:16) — public read for WhatsApp/Facebook OG crawlers
+    match /private-invitations/{invitationId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && fileName == 'share-og.jpg'
+                   && isImage()
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isPrivateInvitationHost(invitationId);
+    }
+
     // Google Business source photos (synced during registration)
     match /business_photos/{userId}/{fileName} {
       allow read: if true;
@@ -268,6 +312,16 @@ service firebase.storage {
                      request.resource.contentType == null ||
                      fileName.matches('.*\\.(jpg|jpeg|png|webp|gif)$')
                    );
+    }
+
+    // Admin demo user profile uploads (manual seeding from admin panel)
+    match /demo-users/uploads/{adminUid}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == adminUid
+                   && isAdminOrPanelStaff()
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
     }
 
     // Deny everything else by default

@@ -5,170 +5,171 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { AppText } from "./base";
 
 export const ICON_OPTIONS = {
-    none: null,
-    star: '⭐',
-    crown: '👑',
-    fire: '🔥',
-    heart: '❤️',
-    check: '✅',
-    gift: '🎁',
-    trophy: '🏆',
+  none: null,
+  star: '⭐',
+  crown: '👑',
+  fire: '🔥',
+  heart: '❤️',
+  check: '✅',
+  gift: '🎁',
+  trophy: '🏆'
 };
 export const EMOJI_GRID = ['', '⭐', '👑', '🔥', '❤️', '✅', '🎁', '🏆', '✨', '💎', '🌟', '🎯', '👍', '💪', '🎉'];
 
 export const FONT_FAMILIES = [
-    'Inter, sans-serif',
-    'Playfair Display, serif',
-    'Oswald, sans-serif',
-    'Montserrat, sans-serif',
-    'Pacifico, cursive',
-    'system-ui, sans-serif',
-];
+'Inter, sans-serif',
+'Playfair Display, serif',
+'Oswald, sans-serif',
+'Montserrat, sans-serif',
+'Pacifico, cursive',
+'system-ui, sans-serif'];
+
 
 export const LAYOUT_OPTIONS = [
-    { value: 'center',  label: 'Center', justifyContent: 'center',     alignItems: 'center' },
-    { value: 'top',     label: 'Top',    justifyContent: 'flex-start',  alignItems: 'center' },
-    { value: 'bottom',  label: 'Bottom', justifyContent: 'flex-end',    alignItems: 'center' },
-    { value: 'left',    label: 'Left',   justifyContent: 'center',      alignItems: 'flex-start' },
-    { value: 'right',   label: 'Right',  justifyContent: 'center',      alignItems: 'flex-end' },
-];
+{ value: 'center', label: 'Center', justifyContent: 'center', alignItems: 'center' },
+{ value: 'top', label: 'Top', justifyContent: 'flex-start', alignItems: 'center' },
+{ value: 'bottom', label: 'Bottom', justifyContent: 'flex-end', alignItems: 'center' },
+{ value: 'left', label: 'Left', justifyContent: 'center', alignItems: 'flex-start' },
+{ value: 'right', label: 'Right', justifyContent: 'center', alignItems: 'flex-end' }];
+
 
 export const ANIMATION_OPTIONS = ['none', 'stagger', 'fade', 'slideUp', 'slideLeft', 'scale'];
 
 export function getBackgroundStyle(background) {
-    if (!background) return { background: '#1e1e2e' };
-    const { type, value } = background;
-    if (type === 'gradient' && value) return { background: value };
-    if (type === 'image' && value) return { backgroundImage: `url(${pickSafeDisplayImageUrl(value)})`, backgroundSize: 'cover', backgroundPosition: 'center' };
-    return { background: value || '#1e1e2e' };
+  if (!background) return { background: '#1e1e2e' };
+  const { type, value } = background;
+  if (type === 'gradient' && value) return { background: value };
+  if (type === 'image' && value) return { backgroundImage: `url(${pickSafeDisplayImageUrl(value)})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  return { background: value || '#1e1e2e' };
 }
 
 export default function FeaturedPostSlideCard({ data, businessName, businessLogoUrl, playEntrance = true, compact = false, onOverflow, noRadius = false }) {
-    const [animState, setAnimState] = useState(() => {
-        const animKey = data?.animation || 'stagger';
-        return (!playEntrance || animKey === 'none') ? 'static' : 'waiting';
-    });
-    
-    const containerRef = useRef(null);
-    const contentRef   = useRef(null);
+  const [animState, setAnimState] = useState(() => {
+    const animKey = data?.animation || 'stagger';
+    return !playEntrance || animKey === 'none' ? 'static' : 'waiting';
+  });
 
-    const title       = data?.title       || {};
-    const description = data?.description || {};
-    const rawDur = typeof data?.animationDuration === 'number' ? data.animationDuration : 0.5;
-    const dur    = Math.min(5, Math.max(0.1, rawDur));
+  const containerRef = useRef(null);
+  const contentRef = useRef(null);
 
-    // Scroll-triggered animation: wait until 50% visible, play once, stop at final frame
-    useEffect(() => {
-        if (animState !== 'waiting') return;
+  const title = data?.title || {};
+  const description = data?.description || {};
+  const rawDur = typeof data?.animationDuration === 'number' ? data.animationDuration : 0.5;
+  const dur = Math.min(5, Math.max(0.1, rawDur));
 
-        const observer = new IntersectionObserver(([entry]) => {
-            if (entry.isIntersecting) {
-                setAnimState('entrance');
-                observer.disconnect();
-            }
-        }, { threshold: 0.5 });
+  // Scroll-triggered animation: wait until 50% visible, play once, stop at final frame
+  useEffect(() => {
+    if (animState !== 'waiting') return;
 
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
-        }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setAnimState('entrance');
+        observer.disconnect();
+      }
+    }, { threshold: 0.5 });
 
-        return () => observer.disconnect();
-    }, [animState]);
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
 
-    // Overflow detection — notifies parent when content exceeds card height
-    useEffect(() => {
-        if (!contentRef.current || !onOverflow) return;
-        const el = contentRef.current;
-        const overflowed = el.scrollHeight > el.clientHeight + 4;
-        onOverflow(overflowed);
-    });
+    return () => observer.disconnect();
+  }, [animState]);
 
-    // ── Styles ──────────────────────────────────────────────────────────────
-    const bgStyle      = getBackgroundStyle(data?.background);
-    const borderWidth  = title?.borderWidth != null ? Number(title.borderWidth) : 0;
-    const borderColor  = title?.borderColor  || '#000000';
-    const shadowColor  = title?.shadowColor  || 'rgba(0,0,0,0.4)';
-    const hasShadow    = title?.shadow !== false && title?.shadow !== 'off';
+  // Overflow detection — notifies parent when content exceeds card height
+  useEffect(() => {
+    if (!contentRef.current || !onOverflow) return;
+    const el = contentRef.current;
+    const overflowed = el.scrollHeight > el.clientHeight + 4;
+    onOverflow(overflowed);
+  });
 
-    const descBW       = description?.borderWidth != null ? Number(description.borderWidth) : 0;
-    const descBC       = description?.borderColor  || '#000000';
-    const descSC       = description?.shadowColor  || 'rgba(0,0,0,0.4)';
-    const descShadow   = description?.shadow !== false && description?.shadow !== 'off';
+  // ── Styles ──────────────────────────────────────────────────────────────
+  const bgStyle = getBackgroundStyle(data?.background);
+  const borderWidth = title?.borderWidth != null ? Number(title.borderWidth) : 0;
+  const borderColor = title?.borderColor || '#000000';
+  const shadowColor = title?.shadowColor || 'rgba(0,0,0,0.4)';
+  const hasShadow = title?.shadow !== false && title?.shadow !== 'off';
 
-    const layoutKey = data?.layout || 'center';
-    const layoutStyle = LAYOUT_OPTIONS.find((l) => l.value === layoutKey) || LAYOUT_OPTIONS[0];
-    const feedCentered = compact && !noRadius;
-    const contentLayout = feedCentered ? LAYOUT_OPTIONS[0] : layoutStyle;
-    const titleTextAlign = feedCentered ? 'center' : title?.textAlign || 'left';
-    const descTextAlign = feedCentered ? 'center' : description?.textAlign || 'left';
+  const descBW = description?.borderWidth != null ? Number(description.borderWidth) : 0;
+  const descBC = description?.borderColor || '#000000';
+  const descSC = description?.shadowColor || 'rgba(0,0,0,0.4)';
+  const descShadow = description?.shadow !== false && description?.shadow !== 'off';
 
-    const descStyle = {
-        fontFamily: description?.fontFamily || 'system-ui, sans-serif',
-        fontSize:   description?.fontSize ? `${description.fontSize}px` : '0.95rem',
-        color:      description?.color    || 'rgba(255,255,255,0.9)',
-        fontWeight: description?.fontWeight === 'bold'   ? 700     : 400,
-        fontStyle:  description?.fontStyle  === 'italic' ? 'italic': 'normal',
-        textAlign:  descTextAlign,
-        margin:     0,
-        lineHeight: 1.5,
-        whiteSpace: 'pre-wrap',
-        wordBreak:  'break-word',
-        ...(descBW > 0 && { WebkitTextStroke: `${descBW}px ${descBC}` }),
-        ...(descShadow  && { textShadow: `0 2px 8px ${descSC}` }),
-    };
+  const layoutKey = data?.layout || 'center';
+  const layoutStyle = LAYOUT_OPTIONS.find((l) => l.value === layoutKey) || LAYOUT_OPTIONS[0];
+  const feedCentered = compact && !noRadius;
+  const contentLayout = feedCentered ? LAYOUT_OPTIONS[0] : layoutStyle;
+  const titleTextAlign = feedCentered ? 'center' : title?.textAlign || 'left';
+  const descTextAlign = feedCentered ? 'center' : description?.textAlign || 'left';
 
-    const paragraphs = description?.mode === 'paragraphs' && Array.isArray(description?.paragraphs)
-        ? description.paragraphs
-        : [description?.singleText || description?.text].filter(Boolean);
-    const paragraphIcons      = Array.isArray(description?.paragraphIcons)      ? description.paragraphIcons      : ['','','','',''];
-    const paragraphIconsAfter = Array.isArray(description?.paragraphIconsAfter) ? description.paragraphIconsAfter : ['','','','',''];
-    const titleStyle = {
-        fontFamily: title?.fontFamily || 'Inter, sans-serif',
-        fontSize:   title?.fontSize   ? `${title.fontSize}px` : '1.75rem',
-        color:      title?.color      || '#fff',
-        fontWeight: title?.fontWeight === 'bold'   ? 700     : 400,
-        fontStyle:  title?.fontStyle  === 'italic' ? 'italic': 'normal',
-        textAlign:  titleTextAlign,
-        margin: 0, lineHeight: 1.2, width: '100%',
-        wordBreak: 'break-word', overflowWrap: 'break-word',
-        ...(borderWidth > 0 && { WebkitTextStroke: `${borderWidth}px ${borderColor}` }),
-        ...(hasShadow      && { textShadow: `0 2px 8px ${shadowColor}` }),
-    };
+  const descStyle = {
+    fontFamily: description?.fontFamily || 'system-ui, sans-serif',
+    fontSize: description?.fontSize ? `${description.fontSize}px` : '0.95rem',
+    color: description?.color || 'rgba(255,255,255,0.9)',
+    fontWeight: description?.fontWeight === 'bold' ? 700 : 400,
+    fontStyle: description?.fontStyle === 'italic' ? 'italic' : 'normal',
+    textAlign: descTextAlign,
+    margin: 0,
+    lineHeight: 1.5,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    ...(descBW > 0 && { WebkitTextStroke: `${descBW}px ${descBC}` }),
+    ...(descShadow && { textShadow: `0 2px 8px ${descSC}` })
+  };
 
-    const animKey     = data?.animation || 'stagger';
-    const baseClass   = `elite-slide-${animState} elite-slide-anim-${animKey}`;
-    const cardStyle   = {
-        position: 'relative',
-        overflow: 'hidden',
-        borderRadius: noRadius ? 0 : 16,
-        boxSizing: 'border-box',
-        padding: compact ? '24px 16px' : '80px 24px',
+  const paragraphs = description?.mode === 'paragraphs' && Array.isArray(description?.paragraphs) ?
+  description.paragraphs :
+  [description?.singleText || description?.text].filter(Boolean);
+  const paragraphIcons = Array.isArray(description?.paragraphIcons) ? description.paragraphIcons : ['', '', '', '', ''];
+  const paragraphIconsAfter = Array.isArray(description?.paragraphIconsAfter) ? description.paragraphIconsAfter : ['', '', '', '', ''];
+  const titleStyle = {
+    fontFamily: title?.fontFamily || 'Inter, sans-serif',
+    fontSize: title?.fontSize ? `${title.fontSize}px` : '1.75rem',
+    color: title?.color || '#fff',
+    fontWeight: title?.fontWeight === 'bold' ? 700 : 400,
+    fontStyle: title?.fontStyle === 'italic' ? 'italic' : 'normal',
+    textAlign: titleTextAlign,
+    margin: 0, lineHeight: 1.2, width: '100%',
+    wordBreak: 'break-word', overflowWrap: 'break-word',
+    ...(borderWidth > 0 && { WebkitTextStroke: `${borderWidth}px ${borderColor}` }),
+    ...(hasShadow && { textShadow: `0 2px 8px ${shadowColor}` })
+  };
+
+  const animKey = data?.animation || 'stagger';
+  const baseClass = `elite-slide-${animState} elite-slide-anim-${animKey}`;
+  const cardStyle = {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: noRadius ? 0 : 16,
+    boxSizing: 'border-box',
+    padding: compact ? '24px 16px' : '80px 24px',
+    width: '100%',
+    maxWidth: feedCentered ? 420 : '100%',
+    marginInline: feedCentered ? 'auto' : undefined,
+    minHeight: feedCentered ? undefined : '56.25cqw',
+    maxHeight: feedCentered ? undefined : '177.77cqw',
+    aspectRatio: feedCentered ? '16 / 9' : undefined,
+    height: feedCentered ? 'auto' : 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...bgStyle
+  };
+
+  return (
+    <div
+      className="elite-featured-slide-outer"
+      style={{
+        containerType: 'inline-size',
         width: '100%',
-        maxWidth: feedCentered ? 420 : '100%',
-        marginInline: feedCentered ? 'auto' : undefined,
-        minHeight: feedCentered ? undefined : '56.25cqw',
-        maxHeight: feedCentered ? undefined : '177.77cqw',
-        aspectRatio: feedCentered ? '16 / 9' : undefined,
-        height: feedCentered ? 'auto' : 'auto',
         display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        ...bgStyle,
-    };
-
-    return (
-        <div
-            className="elite-featured-slide-outer"
-            style={{
-                containerType: 'inline-size',
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-            }}
-        >
+        justifyContent: 'center'
+      }}>
+      
             <div ref={containerRef} className={`elite-featured-slide ${baseClass}`} style={cardStyle}>
             <style>{`
                 .elite-slide-waiting .elite-slide-title, .elite-slide-waiting .elite-slide-desc, .elite-slide-waiting .elite-slide-para { opacity: 0; }
@@ -209,84 +210,84 @@ export default function FeaturedPostSlideCard({ data, businessName, businessLogo
             `}</style>
 
             <div
-                ref={contentRef}
-                className="elite-slide-content"
-                style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: '1 1 auto',
-                    width: '100%',
-                    minHeight: 0,
-                    justifyContent: contentLayout.justifyContent,
-                    alignItems: contentLayout.alignItems,
-                }}
-            >
+          ref={contentRef}
+          className="elite-slide-content"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1 1 auto',
+            width: '100%',
+            minHeight: 0,
+            justifyContent: contentLayout.justifyContent,
+            alignItems: contentLayout.alignItems
+          }}>
+          
                 {/* Title + Description — centered as a block in feed (compact) */}
                 <div
-                    style={{
-                        width: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: feedCentered ? 'center' : 'stretch',
-                    }}
-                >
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: feedCentered ? 'center' : 'stretch'
+            }}>
+            
                     {/* Title */}
-                    <h2 className="elite-slide-title" style={{ ...titleStyle, marginBottom: 20 }}>
+                    <AppText as="h2" className="elite-slide-title" style={{ ...titleStyle, marginBottom: 20 }}>
                         {title?.text || 'Title'}
-                    </h2>
+                    </AppText>
 
                     {/* Paragraphs */}
                     <div
-                        className="elite-slide-desc"
-                        style={{
-                            textAlign: descTextAlign,
-                            width: '100%',
-                            alignItems: feedCentered ? 'center' : 'stretch',
-                        }}
-                    >
+              className="elite-slide-desc"
+              style={{
+                textAlign: descTextAlign,
+                width: '100%',
+                alignItems: feedCentered ? 'center' : 'stretch'
+              }}>
+              
                         {paragraphs.map((p, i) => {
-                            if (!p || !String(p).trim()) return null;
-                            const isBoxOn = !!description?.boxEnabled;
-                            const bBg = (typeof description?.boxBg === 'string' ? description.boxBg : null) || '#000000';
-                            const bOp = (typeof description?.boxOpacity === 'number' ? description.boxOpacity : null) ?? 0.4;
-                            const bBW = (typeof description?.boxBorderWidth === 'number' ? description.boxBorderWidth : null) ?? 0;
-                            const bBC = (typeof description?.boxBorderColor === 'string' ? description.boxBorderColor : null) || '#ffffff';
-                            const bBR = (typeof description?.boxBorderRadius === 'number' ? description.boxBorderRadius : null) ?? 12;
-                            const rr = parseInt(bBg.slice(1, 3), 16) || 0;
-                            const gg = parseInt(bBg.slice(3, 5), 16) || 0;
-                            const bb = parseInt(bBg.slice(5, 7), 16) || 0;
-                            const paraBoxStyle = isBoxOn ? {
-                                background:   `rgba(${rr},${gg},${bb},${bOp})`,
-                                border:       bBW > 0 ? `${bBW}px solid ${bBC}` : 'none',
-                                borderRadius: bBR,
-                                padding:      '6px 10px',
-                            } : {};
-                            return (
-                                <div
-                                    key={i}
-                                    className={`elite-slide-para elite-slide-para-${i}`}
-                                    style={{ ...paraBoxStyle, textAlign: descTextAlign }}
-                                >
-                                    <p style={{ ...descStyle, margin: 0 }}>
-                                        {paragraphIcons[i] && (
-                                            <span style={{ fontSize: descStyle.fontSize, marginRight: 6, display: 'inline-block' }}>
+                if (!p || !String(p).trim()) return null;
+                const isBoxOn = !!description?.boxEnabled;
+                const bBg = (typeof description?.boxBg === 'string' ? description.boxBg : null) || '#000000';
+                const bOp = (typeof description?.boxOpacity === 'number' ? description.boxOpacity : null) ?? 0.4;
+                const bBW = (typeof description?.boxBorderWidth === 'number' ? description.boxBorderWidth : null) ?? 0;
+                const bBC = (typeof description?.boxBorderColor === 'string' ? description.boxBorderColor : null) || '#ffffff';
+                const bBR = (typeof description?.boxBorderRadius === 'number' ? description.boxBorderRadius : null) ?? 12;
+                const rr = parseInt(bBg.slice(1, 3), 16) || 0;
+                const gg = parseInt(bBg.slice(3, 5), 16) || 0;
+                const bb = parseInt(bBg.slice(5, 7), 16) || 0;
+                const paraBoxStyle = isBoxOn ? {
+                  background: `rgba(${rr},${gg},${bb},${bOp})`,
+                  border: bBW > 0 ? `${bBW}px solid ${bBC}` : 'none',
+                  borderRadius: bBR,
+                  padding: '6px 10px'
+                } : {};
+                return (
+                  <div
+                    key={i}
+                    className={`elite-slide-para elite-slide-para-${i}`}
+                    style={{ ...paraBoxStyle, textAlign: descTextAlign }}>
+                    
+                                    <AppText as="p" style={{ ...descStyle, margin: 0 }}>
+                                        {paragraphIcons[i] &&
+                      <AppText as="span" style={{ fontSize: descStyle.fontSize, marginRight: 6, display: 'inline-block' }}>
                                                 {paragraphIcons[i]}
-                                            </span>
-                                        )}
+                                            </AppText>
+                      }
                                         {p}
-                                        {paragraphIconsAfter[i] && (
-                                            <span style={{ fontSize: descStyle.fontSize, marginLeft: 6, display: 'inline-block' }}>
+                                        {paragraphIconsAfter[i] &&
+                      <AppText as="span" style={{ fontSize: descStyle.fontSize, marginLeft: 6, display: 'inline-block' }}>
                                                 {paragraphIconsAfter[i]}
-                                            </span>
-                                        )}
-                                    </p>
-                                </div>
-                            );
-                        })}
+                                            </AppText>
+                      }
+                                    </AppText>
+                                </div>);
+
+              })}
                     </div>
                 </div>
             </div>
             </div>
-        </div>
-    );
+        </div>);
+
 }

@@ -63,9 +63,22 @@ service cloud.firestore {
       let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
       let joined = me.get('joinedCommunities', []);
       let members = partner.get('communityMembers', []);
-      return request.auth.uid == partnerId ||
+      let blocked = partner.get('communityBlockedUserIds', []);
+      return (request.auth.uid == partnerId ||
              request.auth.uid in members ||
-             partnerId in joined;
+             partnerId in joined) &&
+             !(request.auth.uid in blocked);
+    }
+
+    function isCommunityChatMuted(partnerId) {
+      let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
+      let muted = partner.get('communityMutedUserIds', []);
+      return request.auth.uid in muted;
+    }
+
+    function canWriteCommunityChat(partnerId) {
+      return (isCommunityMember(partnerId) || isAdmin()) &&
+             (request.auth.uid == partnerId || !isCommunityChatMuted(partnerId));
     }
 
     function isChatParticipant(chatId) {
@@ -85,14 +98,59 @@ service cloud.firestore {
     // Invitation chat: only host or accepted invitees (private invitations).
     // LEGACY-DATA RISK: If rsvps is missing or a user has no rsvps entry, they will be denied;
     // ensure the app sets rsvps when users accept, and consider migrating old docs if needed.
+    function isPrivateInvitationHost(data) {
+      return data.authorId == request.auth.uid ||
+             (data.author is map && data.author.get('id', '') == request.auth.uid);
+    }
+
+    function isUidInPrivateInviteList(invited) {
+      return invited is list && request.auth.uid in invited;
+    }
+
+    function hasPrivateInvitationRsvp(data) {
+      let rsvps = data.get('rsvps', {});
+      return rsvps is map && rsvps.get(request.auth.uid, null) != null;
+    }
+
+    function canReadPrivateInvitationDoc(data) {
+      return isAdminOrPanelStaff() ||
+             isPrivateInvitationHost(data) ||
+             isUidInPrivateInviteList(data.get('invitedFriends', [])) ||
+             hasPrivateInvitationRsvp(data);
+    }
+
+    // List queries: only host + invitedFriends branches (must match client where() filters).
+    // Do NOT add hasPrivateInvitationRsvp or isAdminOrPanelStaff here — Firestore rejects the query.
+
     function isPrivateInvitationChatParticipant(invitationId) {
       let inv = get(/databases/$(database)/documents/private_invitations/$(invitationId)).data;
-      let isHost = inv.get(['author', 'id'], '') == request.auth.uid || inv.get('authorId', '') == request.auth.uid;
-      let invitedFriends = inv.get('invitedFriends', []);
+      let isHost = isPrivateInvitationHost(inv);
+      let invited = isUidInPrivateInviteList(inv.get('invitedFriends', []));
       let rsvps = inv.get('rsvps', {});
-      let invited = request.auth.uid in invitedFriends;
-      let accepted = rsvps[request.auth.uid] == 'accepted';
+      let accepted = rsvps is map && rsvps.get(request.auth.uid, null) == 'accepted';
       return isHost || (invited && accepted);
+    }
+
+    function isSocialInvitationChatParticipant(invitationId) {
+      let inv = get(/databases/$(database)/documents/social_invitations/$(invitationId)).data;
+      let isHost = isPrivateInvitationHost(inv);
+      let invited = isUidInPrivateInviteList(inv.get('invitedFriends', []));
+      let rsvps = inv.get('rsvps', {});
+      let accepted = rsvps is map && rsvps.get(request.auth.uid, null) == 'accepted';
+      return isHost || (invited && accepted);
+    }
+
+    // Invited guests may post (e.g. RSVP apology before/after respond); read stays accepted-only.
+    function canPostPrivateInvitationMessage(invitationId) {
+      let inv = get(/databases/$(database)/documents/private_invitations/$(invitationId)).data;
+      return isPrivateInvitationHost(inv) ||
+             isUidInPrivateInviteList(inv.get('invitedFriends', []));
+    }
+
+    function canPostSocialInvitationMessage(invitationId) {
+      let inv = get(/databases/$(database)/documents/social_invitations/$(invitationId)).data;
+      return isPrivateInvitationHost(inv) ||
+             isUidInPrivateInviteList(inv.get('invitedFriends', []));
     }
 
     // True when Firestore doc has never stored `role` (e.g. email-only stub from auth sync).
@@ -251,6 +309,12 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isAdminOrPanelStaff();
       }
 
+      // Read-only invitation history (Cloud Functions write on archive)
+      match /invitation_archives/{archiveId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdminOrPanelStaff());
+        allow create, update, delete: if false;
+      }
+
       // USER REVIEWS SUBCOLLECTION
       match /reviews/{reviewId} {
         // Anyone can read reviews
@@ -365,47 +429,97 @@ service cloud.firestore {
     }
 
     // ============================================
+    // PUBLIC INVITATION ARCHIVES (read-only history; Cloud Functions only write)
+    // ============================================
+
+    match /invitation_archives/{archiveId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
     // PRIVATE INVITATIONS COLLECTION (separate from public)
     // ============================================
 
     match /private_invitations/{invitationId} {
-      // Host, invitees, or admin-panel roles (dashboard list queries need staff, not only role==admin)
-      allow get, list: if isSignedIn() &&
-                         (
-                           isAdminOrPanelStaff() ||
-                           resource.data.authorId == request.auth.uid ||
-                           (resource.data.author != null &&
-                            resource.data.author.id == request.auth.uid) ||
-                           request.auth.uid in resource.data.invitedFriends
-                         );
+      // Single-doc reads: host, invitees, RSVP holders, or admin-panel staff
+      allow get: if isSignedIn() && canReadPrivateInvitationDoc(resource.data);
+      // Collection queries must mirror where() filters exactly (no get() / extra OR branches).
+      allow list: if isSignedIn() && (
+        resource.data.get('authorId', '') == request.auth.uid ||
+        request.auth.uid in resource.data.get('invitedFriends', [])
+      );
 
       // Any signed-in user can create (author must be self)
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                        (request.resource.data.author is map &&
+                         request.resource.data.author.get('id', '') == request.auth.uid));
 
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
-                        (request.auth.uid in resource.data.invitedFriends &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
-                         request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
+                       (isPrivateInvitationHost(resource.data) ||
+                        (isUidInPrivateInviteList(resource.data.get('invitedFriends', [])) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['rsvps', 'updatedAt']) &&
+                         request.resource.data.rsvps
+                           .diff(resource.data.get('rsvps', {}))
+                           .affectedKeys()
+                           .hasOnly([request.auth.uid])));
 
       // Only host or admin-panel staff can delete
       allow delete: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
-                        isAdminOrPanelStaff());
+                       (isPrivateInvitationHost(resource.data) || isAdminOrPanelStaff());
 
       // MESSAGES SUBCOLLECTION (Private Group Chat) — only host or accepted invitees
       match /messages/{messageId} {
         allow read: if isSignedIn() && isPrivateInvitationChatParticipant(invitationId);
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
-                         isPrivateInvitationChatParticipant(invitationId);
+                         canPostPrivateInvitationMessage(invitationId);
+        allow update: if isSignedIn() &&
+                         resource.data.senderId == request.auth.uid;
+        allow delete: if isSignedIn() &&
+                         (resource.data.senderId == request.auth.uid || isAdminOrPanelStaff());
+      }
+    }
+
+    // ============================================
+    // SOCIAL + PERSONAL INVITATIONS (hosted invites — social & 1-on-1)
+    // Client writes here via addHostedInvitation / persistPrivateInvitationEditorDraft.
+    // Legacy docs may still exist in private_invitations above.
+    // ============================================
+
+    match /social_invitations/{invitationId} {
+      allow get: if isSignedIn() && canReadPrivateInvitationDoc(resource.data);
+      allow list: if isSignedIn() && (
+        resource.data.get('authorId', '') == request.auth.uid ||
+        request.auth.uid in resource.data.get('invitedFriends', [])
+      );
+
+      allow create: if isSignedIn() &&
+                       (request.resource.data.authorId == request.auth.uid ||
+                        (request.resource.data.author is map &&
+                         request.resource.data.author.get('id', '') == request.auth.uid));
+
+      allow update: if isSignedIn() &&
+                       (isPrivateInvitationHost(resource.data) ||
+                        (isUidInPrivateInviteList(resource.data.get('invitedFriends', [])) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['rsvps', 'updatedAt']) &&
+                         request.resource.data.rsvps
+                           .diff(resource.data.get('rsvps', {}))
+                           .affectedKeys()
+                           .hasOnly([request.auth.uid])));
+
+      allow delete: if isSignedIn() &&
+                       (isPrivateInvitationHost(resource.data) || isAdminOrPanelStaff());
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && isSocialInvitationChatParticipant(invitationId);
+        allow create: if isSignedIn() &&
+                         request.resource.data.senderId == request.auth.uid &&
+                         canPostSocialInvitationMessage(invitationId);
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
         allow delete: if isSignedIn() &&
@@ -692,26 +806,29 @@ service cloud.firestore {
         // Only community members/owner/admin can read
         allow read: if isSignedIn() && (isCommunityMember(partnerId) || isAdmin());
 
-        // Only community members/owner/admin can send
+        // Only community members/owner/admin can send (muted members cannot post)
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
-                         (isCommunityMember(partnerId) || isAdmin());
+                         canWriteCommunityChat(partnerId);
 
         // Sender can update their own message (edit text, etc.)
         allow update: if isSignedIn() &&
-                         resource.data.senderId == request.auth.uid;
+                         resource.data.senderId == request.auth.uid &&
+                         canWriteCommunityChat(partnerId);
 
-        // Community members can update reactions only
+        // Community members can update reactions only (muted members cannot react)
         allow update: if isSignedIn() &&
-                         (isCommunityMember(partnerId) || isAdmin()) &&
+                         canWriteCommunityChat(partnerId) &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
 
         // Admin can update anything
         allow update: if isAdmin();
 
-        // Sender or admin can delete
+        // Sender, community owner, or admin can delete
         allow delete: if isSignedIn() &&
-                         (resource.data.senderId == request.auth.uid || isAdmin());
+                         (resource.data.senderId == request.auth.uid ||
+                          isOwner(partnerId) ||
+                          isAdmin());
       }
     }
 
@@ -817,6 +934,67 @@ service cloud.firestore {
 
       allow delete: if isSignedIn() &&
                        (resource.data.ownerId == request.auth.uid || isAdminOrPanelStaff());
+    }
+
+    // ============================================
+    // RESTAURANTS (admin Google imports + claimed ownership)
+    // ============================================
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create: if isAdminOrPanelStaff();
+      allow update: if isAdminOrPanelStaff() ||
+                       (isSignedIn() &&
+                        resource.data.isClaimed == true &&
+                        resource.data.ownerId == request.auth.uid &&
+                        request.resource.data.ownerId == request.auth.uid &&
+                        request.resource.data.isClaimed == true) ||
+                       (isSignedIn() &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['businessInfo']) &&
+                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
+                          .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']));
+      allow delete: if isAdminOrPanelStaff();
+    }
+
+    // Discovery feed profile likes ("Liked You" source data)
+    match /discovery_likes/{likeId} {
+      // getDoc on a missing doc has resource == null — must allow before checking fields.
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.likerId == request.auth.uid ||
+        resource.data.targetUserId == request.auth.uid
+      );
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.likerId == request.auth.uid &&
+        request.resource.data.targetUserId is string &&
+        request.resource.data.targetUserId != request.auth.uid &&
+        request.resource.data.keys().hasAll(['targetUserId', 'likerId', 'createdAt', 'mutual']) &&
+        request.resource.data.mutual is bool;
+      // Match completion: the second liker may flip mutual on the existing reverse doc.
+      allow update: if isSignedIn() &&
+        resource.data.targetUserId == request.auth.uid &&
+        resource.data.mutual != true &&
+        request.resource.data.mutual == true &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mutual']);
+      allow delete: if false;
+    }
+
+    // Discovery wave greetings — one per sender→target per UTC day (doc id includes dayKey)
+    match /discovery_greetings/{greetingId} {
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.senderId == request.auth.uid ||
+        resource.data.targetUserId == request.auth.uid
+      );
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.targetUserId is string &&
+        request.resource.data.targetUserId != request.auth.uid &&
+        request.resource.data.dayKey is string &&
+        request.resource.data.keys().hasAll(['targetUserId', 'senderId', 'createdAt', 'dayKey']);
+      allow update, delete: if false;
     }
 
     // ============================================

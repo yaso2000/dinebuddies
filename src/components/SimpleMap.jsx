@@ -17,7 +17,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: iconShadow,
 });
 
-const SimpleMap = ({ lat, lng, businessName, address }) => {
+const SimpleMap = ({ lat, lng, businessName, address, readOnly = false }) => {
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
@@ -33,9 +33,13 @@ const SimpleMap = ({ lat, lng, businessName, address }) => {
             const map = L.map(mapRef.current, {
                 center: [latNum, lngNum],
                 zoom: 14,
-                scrollWheelZoom: false,
-                dragging: true,
-                zoomControl: true,
+                scrollWheelZoom: !readOnly,
+                dragging: !readOnly,
+                zoomControl: !readOnly,
+                doubleClickZoom: !readOnly,
+                boxZoom: !readOnly,
+                keyboard: !readOnly,
+                tap: !readOnly,
             });
 
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -53,7 +57,7 @@ const SimpleMap = ({ lat, lng, businessName, address }) => {
         }
 
         const marker = L.marker([latNum, lngNum]).addTo(mapInstanceRef.current);
-        if (businessName || address) {
+        if (!readOnly && (businessName || address)) {
             const popupContent = `
                 ${businessName ? `<b>${businessName}</b><br />` : ''}
                 ${address || ''}
@@ -69,14 +73,14 @@ const SimpleMap = ({ lat, lng, businessName, address }) => {
         return () => {
             resizeTimers.forEach(clearTimeout);
         };
-    }, [lat, lng, businessName, address]);
+    }, [lat, lng, businessName, address, readOnly]);
 
     useEffect(() => () => detachLeafletMap(mapInstanceRef), []);
 
     return (
         <div
             ref={mapRef}
-            className="leaflet-container-home"
+            className={`leaflet-container-home${readOnly ? ' leaflet-map-readonly' : ''}`}
             style={{
                 height: '100%',
                 width: '100%',

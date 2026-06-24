@@ -1,88 +1,98 @@
-/* Comment streaming overlay — bottom-left, max 240px crawl + fade */
+/* Advanced waterfall — profile pic + CSS-variable motion path */
+
 .story-comment-stream {
     position: absolute;
-    bottom: 72px;
-    left: 12px;
-    right: 64px;
-    max-height: 240px;
+    bottom: 88px;
+    left: 0;
+    width: 100%;
+    height: 70%;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
     pointer-events: none;
-    z-index: 15;
-    mask-image: linear-gradient(to top, transparent 0%, black 18%, black 100%);
-    -webkit-mask-image: linear-gradient(to top, transparent 0%, black 18%, black 100%);
+    z-index: 18;
 }
 
-.story-comment-stream__item {
+.story-comment-stream__bubble {
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    will-change: transform, opacity;
+    opacity: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-    animation: storyCommentCrawl 3.5s linear forwards;
-    will-change: transform, opacity;
+    gap: 10px;
+    animation: advancedWaterfallFlow 4s cubic-bezier(0.2, 0.9, 0.5, 1) forwards;
 }
 
 .story-comment-stream__avatar {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: #555;
-    overflow: hidden;
-    flex-shrink: 0;
-    border: 1.5px solid rgba(255, 255, 255, 0.4);
-}
-
-.story-comment-stream__avatar img {
-    width: 100%;
-    height: 100%;
     object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-.story-comment-stream__bubble {
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(8px);
-    border-radius: 18px;
-    padding: 5px 12px;
-    max-width: min(280px, 75vw);
+.story-comment-stream__avatar--fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.story-comment-stream__content {
+    flex: 1;
+    min-width: 0;
 }
 
 .story-comment-stream__name {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.7rem;
-    font-weight: 600;
-    margin-inline-end: 5px;
+    color: #ffd700;
+    font-weight: 700;
+    display: block;
+    line-height: 1.2;
+    margin-bottom: 2px;
 }
 
 .story-comment-stream__text {
     color: #fff;
-    font-size: 0.85rem;
+    word-break: break-word;
+    line-height: 1.35;
 }
 
 .story-comment-stream__emoji {
-    color: #fff;
-    font-size: 1.2rem;
+    font-size: 1.15rem;
+    line-height: 1.2;
 }
 
-@keyframes storyCommentCrawl {
+@keyframes advancedWaterfallFlow {
     0% {
-        transform: translateY(48px);
         opacity: 0;
+        transform: translate(var(--initial-x, 0px), var(--initial-y, 20px)) scale(0.9);
     }
-    8% {
+    15% {
         opacity: 1;
+        transform: translate(var(--initial-x, 0px), var(--actual-y, 0px)) scale(1);
     }
-    50% {
-        transform: translateY(-120px);
+    85% {
         opacity: 1;
-    }
-    75% {
-        transform: translateY(-180px);
-        opacity: 0.5;
     }
     100% {
-        transform: translateY(-240px);
         opacity: 0;
+        transform: translate(var(--initial-x, 0px), var(--terminal-y, -350px)) scale(0.95);
     }
+}
+
+[dir='rtl'] .story-comment-stream__bubble {
+    flex-direction: row-reverse;
 }

@@ -18,7 +18,7 @@ export function isChunkLoadError(error) {
     );
 }
 
-import { getPrivateDraftRecoveryCreatePath } from './privateInvitationDraft';
+import { getPrivateDraftRecoveryCreatePath } from './socialInvitationDraft';
 
 const INVITE_FATAL_RELOAD_KEY = 'dineb_invite_fatal_reload';
 
@@ -28,8 +28,8 @@ function isInvitationFlowPath(pathname = '') {
     return (
         p.startsWith('/invitation/private/') ||
         p.startsWith('/invite/p/') ||
-        p === '/create-dating' ||
         p === '/create-private' ||
+        p === '/create-social' ||
         p === '/create' ||
         p.startsWith('/create/')
     );
@@ -42,14 +42,19 @@ export function getFatalUiRecoveryTarget(pathname = '') {
     if (p.startsWith('/admin')) return '/login';
     if (p.startsWith('/business')) return '/business-dashboard';
     if (p === '/login' || p.startsWith('/login')) return '/login';
-    if (p.startsWith('/invitation/private/preview/')) return getPrivateDraftRecoveryCreatePath();
+    if (p.startsWith('/invitation/social/preview/') || p.startsWith('/invitation/private/preview/')) {
+        return getPrivateDraftRecoveryCreatePath();
+    }
     if (p.startsWith('/invitation/private/')) return p.split('?')[0] || '/invitation/private';
     if (p.startsWith('/invite/p/')) return p.split('?')[0] || '/invite/p';
-    if (p.startsWith('/create-dating')) return '/create-dating';
     if (p.startsWith('/create-private')) return '/create-private';
+    if (p.startsWith('/create-social')) return '/create-social';
     if (p === '/invitations' || p.startsWith('/invitations/')) return '/invitations';
     if (p === '/create-featured-post') return '/create-featured-post';
     if (p === '/create-post') return '/create-post';
+    if (p.startsWith('/community/')) return p.split('?')[0];
+    if (p.startsWith('/chat/')) return p.split('?')[0];
+    if (p === '/messages' || p.startsWith('/messages')) return p.split('?')[0];
     return '/posts-feed';
 }
 
@@ -97,6 +102,13 @@ export function recoverFromFatalUiError(error, options = {}) {
             return true;
         }
         sessionStorage.removeItem(INVITE_FATAL_RELOAD_KEY);
+        return false;
+    }
+
+    const stayOnPath =
+        window.location.pathname.startsWith('/community/') ||
+        window.location.pathname.startsWith('/chat/');
+    if (stayOnPath) {
         return false;
     }
 

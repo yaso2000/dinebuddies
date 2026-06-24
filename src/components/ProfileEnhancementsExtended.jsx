@@ -1,548 +1,521 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import {
-    FaMapMarkerAlt,
-    FaInstagram,
-    FaTwitter,
-    FaGlobe,
-    FaPlus,
-    FaTimes,
-    FaStar,
-    FaTrash
-} from 'react-icons/fa';
-import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+  FaMapMarkerAlt,
+  FaInstagram,
+  FaTwitter,
+  FaGlobe,
+  FaPlus,
+  FaTimes,
+  FaStar,
+  FaTrash,
+  FaSearch } from
+'react-icons/fa';
+import { doc, getDoc, getDocFromServer, updateDoc, onSnapshot, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import './ProfileEnhancements.css';
 
-import MediaSelector from './Invitations/MediaSelector';
-import { uploadImage } from '../utils/imageUpload';
-import { ImageUploadZone } from '../services/imageUploadZones';
-import { notifyImageUploadError } from '../utils/imageModerationErrors';
-import LocationAutocomplete from './LocationAutocomplete';
+import { pickCityFromReverseGeocode } from '../utils/locationUtils';
+import { searchPublishedAppVenues, mapAppVenueToFavoritePlace } from '../utils/appVenueDirectory';
+import { readFavoritePlaces, pickFavoritePlaces } from '../utils/favoritePlacesUtils';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
-import { Country } from 'country-state-city';
+import { AppText, AppTextInput } from "./base";
+
+function FavoritePlaceThumb({ image, name, className = 'place-item__thumb' }) {
+  const [broken, setBroken] = useState(false);
+  const safeUrl = pickSafeDisplayImageUrl(image);
+
+  if (!safeUrl || broken) {
+    return (
+      <div className={`${className} ${className}--placeholder`} aria-hidden>
+                <FaMapMarkerAlt />
+            </div>);
+
+  }
+
+  return (
+    <img
+      src={safeUrl}
+      alt={name || ''}
+      className={className}
+      onError={() => setBroken(true)} />);
+
+
+}
 
 // ================================
 // 4. FAVORITE PLACES COMPONENT
 // ================================
-export const FavoritePlaces = ({ userId, readOnly = false }) => {
-    const { t } = useTranslation();
-    const { showToast } = useToast();
-    const [places, setPlaces] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [adding, setAdding] = useState(false);
-    const [pendingPlace, setPendingPlace] = useState(null);
-    const [selectedMedia, setSelectedMedia] = useState(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
+export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }) => {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [remotePlaces, setRemotePlaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [venueQuery, setVenueQuery] = useState('');
+  const [venueScope, setVenueScope] = useState('local');
+  const [venueResults, setVenueResults] = useState([]);
+  const [venueSearchLoading, setVenueSearchLoading] = useState(false);
+  const [savingVenueId, setSavingVenueId] = useState(null);
 
-    const [searchData, setSearchData] = useState({
-        city: '',
-        country: 'AU', // Default
-        location: '',
-        lat: null,
-        lng: null
-    });
-    const [userLoc, setUserLoc] = useState({ lat: null, lng: null });
+  const [searchData, setSearchData] = useState({
+    city: '',
+    country: 'AU'
+  });
+  const [userLoc, setUserLoc] = useState({ lat: null, lng: null });
 
-    // Auto-detect user location
-    useEffect(() => {
-        if (adding && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const { latitude, longitude } = position.coords;
-                setUserLoc({ lat: latitude, lng: longitude });
+  // Auto-detect user location for local venue sorting
+  useEffect(() => {
+    if (!adding || !navigator.geolocation) return;
 
-                try {
-                    // Use BigDataCloud API - Free and CORS friendly for client-side
-                    const response = await fetch(
-                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-                    );
-
-                    if (!response.ok) throw new Error('Geocoding failed');
-
-                    const data = await response.json();
-
-                    if (data) {
-                        // Priority order for city/locality
-                        const detectedCity = data.city || data.locality || data.principalSubdivision || '';
-                        const detectedCountryCode = (data.countryCode || 'AU').toUpperCase();
-
-                        if (detectedCity) {
-                            setSearchData(prev => ({
-                                ...prev,
-                                country: detectedCountryCode,
-                                city: detectedCity
-                            }));
-                            console.log('📍 Location detected (Auto):', detectedCity, detectedCountryCode);
-                        }
-                    }
-                } catch (e) {
-                    console.warn("Auto-detect city failed:", e.message);
-                }
-            }, (err) => {
-                console.log("Location detection denied/failed", err);
-            });
-        }
-    }, [adding]);
-
-    useEffect(() => {
-        if (readOnly) {
-            setAdding(false);
-            setPendingPlace(null);
-            setSelectedMedia(null);
-        }
-    }, [readOnly]);
-
-    useEffect(() => {
-        const fetchPlaces = async () => {
-            try {
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                const data = userDoc.data();
-                // Support both camelCase (new standard) and snake_case (legacy)
-                const favoritePlaces = data?.favoritePlaces || data?.favorite_places || [];
-                setPlaces(favoritePlaces);
-            } catch (error) {
-                console.error('Error fetching favorite places:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (userId) {
-            fetchPlaces();
-        }
-    }, [userId]);
-
-    const handleSelectPlace = (place) => {
-        // Check if already exists
-        if (places.some(p => p.id === place.id || p.businessId === place.id)) {
-            showToast(t('place_already_added', 'Place already in favorites'), 'error');
-            return;
-        }
-        setPendingPlace(place);
-        setSelectedMedia(null);
-    };
-
-    const handleConfirmAdd = async () => {
-        if (!pendingPlace) return;
-
-        let finalImage = pendingPlace.image || '';
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLoc({ lat: latitude, lng: longitude });
 
         try {
-            if (selectedMedia) {
-                if (selectedMedia.file) {
-                    // Upload file (Custom Image)
-                    const path = `users/${userId}/places/${Date.now()}_${selectedMedia.file.name}`;
-                    finalImage = await uploadImage(selectedMedia.file, path, setUploadProgress, {}, {
-                        moderationZone: ImageUploadZone.PLACE,
-                        userId,
-                    });
-                } else if (selectedMedia.url) {
-                    // Handle Remote URL (Google Place or Venue)
-                    if ((selectedMedia.source === 'google_place' || selectedMedia.source === 'venue') && !selectedMedia.url.includes('firebasestorage')) {
-                        try {
-                            setUploadProgress(10); // Start progress
-                            const response = await fetch(selectedMedia.url);
-                            if (response.ok) {
-                                const blob = await response.blob();
-                                const file = new File([blob], `place_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                                const path = `users/${userId}/places/${Date.now()}_place.jpg`;
-                                finalImage = await uploadImage(file, path, setUploadProgress, {}, {
-                                    moderationZone: ImageUploadZone.PLACE,
-                                    userId,
-                                });
-                            } else {
-                                finalImage = selectedMedia.url; // Fallback
-                            }
-                        } catch (e) {
-                            console.warn("Failed to upload remote image, using URL:", e);
-                            finalImage = selectedMedia.url; // Fallback
-                        }
-                    } else {
-                        finalImage = selectedMedia.url;
-                    }
-                }
-            } else if (pendingPlace.photos && pendingPlace.photos.length > 0) {
-                // Legacy: only non-Google URLs (we do not persist Places PhotoService links).
-                const defaultUrl = pickSafeDisplayImageUrl(pendingPlace.image, ...pendingPlace.photos);
-                if (!defaultUrl) {
-                    finalImage = '';
-                } else if (!defaultUrl.includes('firebasestorage')) {
-                    try {
-                        setUploadProgress(10);
-                        const response = await fetch(defaultUrl);
-                        if (response.ok) {
-                            const blob = await response.blob();
-                            const file = new File([blob], `place_default_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                            const path = `users/${userId}/places/${Date.now()}_default.jpg`;
-                            finalImage = await uploadImage(file, path, setUploadProgress, {}, {
-                                moderationZone: ImageUploadZone.PLACE,
-                                userId,
-                            });
-                        } else {
-                            finalImage = defaultUrl;
-                        }
-                    } catch (e) {
-                        finalImage = defaultUrl;
-                    }
-                } else {
-                    finalImage = defaultUrl;
-                }
-            }
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+          );
+          if (!response.ok) throw new Error('Geocoding failed');
 
-            const newFavorite = {
-                id: pendingPlace.id || Date.now().toString(), // Use place_id for google, uid for partners
-                businessId: pendingPlace.businessId || pendingPlace.id, // Ensure we have a reference ID
-                name: pendingPlace.name,
-                address: pendingPlace.address || '',
-                image: finalImage,
-                source: pendingPlace.source || 'manual',
-                location: pendingPlace.location || null,
-                visitCount: 0,
-                addedAt: new Date().toISOString()
-            };
+          const data = await response.json();
+          const detectedCity = pickCityFromReverseGeocode(data) || data.city || data.locality || '';
+          const detectedCountryCode = (data.countryCode || 'AU').toUpperCase();
 
-            const updatedPlaces = [...places, newFavorite];
-
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-                favoritePlaces: updatedPlaces, // Write to new camelCase field
-                favorite_places: updatedPlaces // Keep legacy sync for safety if needed
-            });
-
-            setPlaces(updatedPlaces);
-            setAdding(false);
-            setPendingPlace(null);
-            setSelectedMedia(null);
-            setUploadProgress(0);
-        } catch (error) {
-            console.error('Error adding place:', error);
-            showToast('Failed to add place', 'error');
-            setUploadProgress(0);
+          if (detectedCity) {
+            setSearchData((prev) => ({
+              ...prev,
+              country: detectedCountryCode,
+              city: detectedCity
+            }));
+          }
+        } catch (e) {
+          console.warn('Auto-detect city failed:', e.message);
         }
-    };
+      },
+      (err) => {
+        console.log('Location detection denied/failed', err);
+      }
+    );
+  }, [adding]);
 
-    const handleVenueSelect = (placeData) => {
-        // Adapt LocationAutocomplete result to pendingPlace structure
-        const place = {
-            id: placeData.placeId || Date.now().toString(),
-            name: placeData.name,
-            address: placeData.fullAddress,
-            location: {
-                lat: placeData.lat,
-                lng: placeData.lng
-            },
-            photos: [],
-            image: null,
-            source: placeData.types?.includes('restaurant') || placeData.types?.includes('food') ? 'google_restaurant' : 'google_place',
-            businessId: placeData.placeId // Important for dupe check
-        };
-        handleSelectPlace(place);
-    };
+  const loadVenues = useCallback(async () => {
+    if (!adding) return;
+    if (venueScope === 'local' && !searchData.city) return;
 
-    const handleRemovePlace = async (placeId) => {
-        if (readOnly) return;
-        try {
-            const updatedPlaces = places.filter(p => p.id !== placeId);
+    setVenueSearchLoading(true);
+    try {
+      const results = await searchPublishedAppVenues({
+        queryText: venueQuery,
+        city: searchData.city,
+        countryCode: searchData.country,
+        scope: venueScope,
+        userLat: userLoc.lat,
+        userLng: userLoc.lng,
+        maxResults: 16
+      });
+      setVenueResults(results);
+    } catch (e) {
+      console.error('Venue search failed:', e);
+      setVenueResults([]);
+    } finally {
+      setVenueSearchLoading(false);
+    }
+  }, [adding, venueQuery, venueScope, searchData.city, searchData.country, userLoc.lat, userLoc.lng]);
 
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-                favoritePlaces: updatedPlaces,
-                favorite_places: updatedPlaces
-            });
+  useEffect(() => {
+    if (!adding) {
+      setVenueResults([]);
+      return;
+    }
+    const timer = setTimeout(loadVenues, venueQuery ? 280 : 80);
+    return () => clearTimeout(timer);
+  }, [adding, loadVenues, venueQuery]);
 
-            setPlaces(updatedPlaces);
-        } catch (error) {
-            console.error('Error removing place:', error);
-        }
-    };
+  useEffect(() => {
+    if (readOnly) {
+      setAdding(false);
+      setVenueQuery('');
+      setVenueResults([]);
+    }
+  }, [readOnly]);
 
-    const toggleAdding = () => {
-        if (readOnly) return;
-        if (adding) {
-            setAdding(false);
-            setPendingPlace(null);
-            setSelectedMedia(null);
-            setSearchData(prev => ({ ...prev, city: '', location: '' }));
-        } else {
-            setAdding(true);
-        }
-    };
+  const syncedList = Array.isArray(syncedPlaces) ? syncedPlaces : null;
+  const places = pickFavoritePlaces(
+    syncedList ? { favoritePlaces: syncedList } : null,
+    { favoritePlaces: remotePlaces }
+  );
 
-    if (loading) {
-        return <div className="favorite-places loading">Loading...</div>;
+  useEffect(() => {
+    if (!userId) {
+      setRemotePlaces([]);
+      setLoading(false);
+      return undefined;
     }
 
-    return (
-        <div className="favorite-places-section">
+    if (syncedList?.length) {
+      setLoading(false);
+    }
+
+    const userRef = doc(db, 'users', userId);
+
+    const applyPlaces = (data) => {
+      const next = readFavoritePlaces(data);
+      setRemotePlaces(next);
+      setLoading(false);
+    };
+
+    const unsub = onSnapshot(
+      userRef,
+      async (snap) => {
+        let favoritePlaces = readFavoritePlaces(snap.data());
+
+        if (snap.metadata.fromCache && favoritePlaces.length === 0) {
+          try {
+            const serverSnap = await getDocFromServer(userRef);
+            if (serverSnap.exists()) {
+              favoritePlaces = readFavoritePlaces(serverSnap.data());
+            }
+          } catch (e) {
+            console.warn('Favorite places server refresh failed:', e?.message || e);
+          }
+        }
+
+        applyPlaces({ favoritePlaces });
+      },
+      (error) => {
+        console.error('Error listening to favorite places:', error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [userId, syncedList?.length]);
+
+  const handleAddVenue = async (venue) => {
+    if (places.some((p) => p.id === venue.id || p.businessId === venue.businessId)) {
+      showToast(t('place_already_added', 'Place already in favorites'), 'error');
+      return;
+    }
+
+    const venueId = venue.businessId || venue.id;
+    setSavingVenueId(venueId);
+
+    try {
+      const newFavorite = mapAppVenueToFavoritePlace(venue);
+      const updatedPlaces = [...places, newFavorite];
+
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        favoritePlaces: updatedPlaces,
+        favorite_places: updatedPlaces
+      });
+
+      setRemotePlaces(updatedPlaces);
+      showToast(t('place_added', 'Place added to favorites'), 'success');
+    } catch (error) {
+      console.error('Error adding place:', error);
+      showToast(t('place_add_failed', 'Failed to add place'), 'error');
+    } finally {
+      setSavingVenueId(null);
+    }
+  };
+
+  const handleRemovePlace = async (placeId) => {
+    if (readOnly) return;
+    try {
+      const updatedPlaces = places.filter((p) => p.id !== placeId);
+
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        favoritePlaces: updatedPlaces,
+        favorite_places: updatedPlaces
+      });
+
+      setRemotePlaces(updatedPlaces);
+    } catch (error) {
+      console.error('Error removing place:', error);
+    }
+  };
+
+  const toggleAdding = () => {
+    if (readOnly) return;
+    if (adding) {
+      setAdding(false);
+      setVenueQuery('');
+      setVenueResults([]);
+      setVenueScope('local');
+    } else {
+      setAdding(true);
+    }
+  };
+
+  const scopeOptions = [
+  { value: 'local', label: t('venue_scope_local', 'Local') },
+  { value: 'country', label: t('venue_scope_country', 'Country') },
+  { value: 'all', label: t('venue_scope_all', 'All') }];
+
+
+  if (loading && places.length === 0) {
+    return <div className="favorite-places loading">Loading...</div>;
+  }
+
+  return (
+    <div className="favorite-places-section">
             <div className="section-header">
-                <h3>
+                <AppText as="h3">
                     <FaMapMarkerAlt style={{ color: 'var(--secondary)', marginRight: '0.5rem' }} />
                     {t('favorite_places', 'Favorite Places')}
-                </h3>
-                {!readOnly && (
-                    <button
-                        className="add-place-btn"
-                        onClick={toggleAdding}
-                        type="button"
-                    >
+                </AppText>
+                {!readOnly &&
+        <button
+          className="add-place-btn"
+          onClick={toggleAdding}
+          type="button">
+          
                         {adding ? <FaTimes /> : <FaPlus />}
                     </button>
-                )}
+        }
             </div>
 
-            {adding && !pendingPlace && (
-                <div className="add-place-form venue-search-stack" style={{ padding: '0 0 1rem 0' }}>
-
-                    {/* Location Context Header */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        marginBottom: '12px',
-                        padding: '8px 12px',
-                        background: 'rgba(139, 92, 246, 0.1)',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(139, 92, 246, 0.2)'
-                    }}>
-                        <span style={{ fontSize: '1.2rem' }}>📍</span>
-                        <div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('current_location', 'Location')}</div>
-                            <div style={{ fontWeight: '700', color: 'var(--primary)' }}>
-                                {searchData.city ? searchData.city : t('detecting_location', 'Detecting location...')}
+            {adding &&
+      <div className="add-place-form venue-search-stack favorite-places-picker">
+                    <div className="favorite-places-picker__location">
+                        <AppText as="span" className="favorite-places-picker__location-icon" aria-hidden>📍</AppText>
+                        <div className="favorite-places-picker__location-text">
+                            <div className="favorite-places-picker__location-label">
+                                {t('current_location', 'Location')}
+                            </div>
+                            <div className="favorite-places-picker__location-city">
+                                {searchData.city ?
+              searchData.city :
+              t('detecting_location', 'Detecting location...')}
                             </div>
                         </div>
                     </div>
 
-                    {/* Venue Search */}
-                    <div className="step-label" style={{ marginBottom: '8px', fontWeight: '600', fontSize: '0.9rem' }}>
-                        {t('find_place', 'Find Place')}
+                    <div className="favorite-places-picker__scope-row">
+                        {scopeOptions.map((opt) =>
+          <button
+            key={opt.value}
+            type="button"
+            className={`favorite-places-picker__scope-btn${venueScope === opt.value ? ' favorite-places-picker__scope-btn--active' : ''}`}
+            onClick={() => setVenueScope(opt.value)}>
+            
+                                {opt.label}
+                            </button>
+          )}
                     </div>
-                    <LocationAutocomplete
-                        value={searchData.location}
-                        onChange={(e) => setSearchData(prev => ({ ...prev, location: e.target.value }))}
-                        onSelect={handleVenueSelect}
-                        city={searchData.city}
-                        // Bias with city location if available, otherwise User Location
-                        userLat={userLoc.lat}
-                        userLng={userLoc.lng}
-                        countryCode={searchData.country || 'AU'}
-                    />
-                    <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {searchData.city
-                            ? t('search_place_in_city', { city: searchData.city })
-                            : t('search_place_placeholder', 'Search for restaurants, cafes, or venues near you')
-                        }
+
+                    <div className="favorite-places-picker__search-wrap">
+                        <FaSearch className="favorite-places-picker__search-icon" aria-hidden />
+                        <AppTextInput
+            type="search"
+            className="ui-form-field favorite-places-picker__search-input"
+            value={venueQuery}
+            onChange={(e) => setVenueQuery(e.target.value)}
+            placeholder={t(
+              'search_app_venues_placeholder',
+              'Search DineBuddies venues…'
+            )} />
+          
+                    </div>
+
+                    <AppText as="p" className="favorite-places-picker__hint">
+                        {venueScope === 'local' && searchData.city ?
+          t('favorite_places_local_hint', {
+            city: searchData.city,
+            defaultValue: `Showing venues in ${searchData.city}`
+          }) :
+          t(
+            'favorite_places_app_venues_hint',
+            'Pick from venues listed on DineBuddies'
+          )}
+                    </AppText>
+
+                    <div className="favorite-places-picker__results">
+                        {venueSearchLoading ?
+          <AppText as="p" className="favorite-places-picker__status">
+                                {t('searching', 'Searching…')}
+                            </AppText> :
+          venueScope === 'local' && !searchData.city ?
+          <AppText as="p" className="favorite-places-picker__status">
+                                {t('waiting_for_location', 'Waiting for your city…')}
+                            </AppText> :
+          venueResults.length === 0 ?
+          <AppText as="p" className="favorite-places-picker__status">
+                                {t('no_venues_found', 'No venues found')}
+                            </AppText> :
+
+          venueResults.map((venue) => {
+            const venueId = venue.businessId || venue.id;
+            const alreadyAdded = places.some(
+              (p) => p.id === venueId || p.businessId === venueId
+            );
+            return (
+              <button
+                key={venueId}
+                type="button"
+                className="favorite-places-picker__result"
+                onClick={() => handleAddVenue(venue)}
+                disabled={alreadyAdded || savingVenueId === venueId}>
+                
+                                        <FavoritePlaceThumb
+                  image={venue.image}
+                  name={venue.name}
+                  className="favorite-places-picker__result-img" />
+                
+                                        <div className="favorite-places-picker__result-body">
+                                            <div className="favorite-places-picker__result-name">
+                                                {venue.name}
+                                            </div>
+                                            {(venue.address || venue.city) &&
+                  <div className="favorite-places-picker__result-address">
+                                                    {venue.address || venue.city}
+                                                </div>
+                  }
+                                        </div>
+                                        <AppText as="span" className="favorite-places-picker__result-action">
+                                            {alreadyAdded ?
+                  t('added', 'Added') :
+                  savingVenueId === venueId ?
+                  '…' :
+                  '+'}
+                                        </AppText>
+                                    </button>);
+
+          })
+          }
                     </div>
                 </div>
-            )}
-
-            {adding && pendingPlace && (
-                <div className="media-selection-form" style={{ padding: '1rem', background: 'var(--bg-body)', borderRadius: '12px', marginBottom: '1rem', border: '1px solid var(--border-color)' }}>
-                    <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '800' }}>
-                        {t('select_photo_for', { name: pendingPlace.name }) || `Select Photo for ${pendingPlace.name}`}
-                    </h4>
-
-                    <MediaSelector
-                        restaurant={pendingPlace}
-                        suggestedImages={pendingPlace.photos || []}
-                        onMediaSelect={setSelectedMedia}
-                    />
-
-                    {uploadProgress > 0 && uploadProgress < 100 && (
-                        <div style={{ margin: '10px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            Uploading... {Math.round(uploadProgress)}%
-                        </div>
-                    )}
-
-                    <div className="actions" style={{ marginTop: '1.5rem', display: 'flex', gap: '10px' }}>
-                        <button
-                            onClick={handleConfirmAdd}
-                            style={{
-                                flex: 2,
-                                padding: '12px',
-                                background: 'var(--primary)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                opacity: uploadProgress > 0 ? 0.7 : 1,
-                                fontSize: '1rem'
-                            }}
-                            disabled={uploadProgress > 0}
-                        >
-                            {t('save_place', 'Save Place')}
-                        </button>
-                        <button
-                            onClick={() => setPendingPlace(null)}
-                            style={{
-                                flex: 1,
-                                padding: '12px',
-                                background: 'transparent',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                cursor: 'pointer',
-                                fontWeight: '600',
-                                color: 'var(--text-main)'
-                            }}
-                        >
-                            {t('back', 'Back')}
-                        </button>
-                    </div>
-                </div>
-            )}
+      }
 
             <div className="places-list">
-                {places.length === 0 ? (
-                    <div className="empty-state">
+                {places.length === 0 ?
+        <div className="empty-state">
                         <FaMapMarkerAlt style={{ fontSize: '2rem', opacity: 0.3 }} />
-                        <p>{t('no_favorite_places', 'No favorite places yet')}</p>
-                    </div>
-                ) : (
-                    places.map((place, idx) => (
-                        <div key={place.id || place.businessId || idx} className="place-item" style={{ alignItems: 'flex-start' }}>
-                            <div className="place-icon" style={{ flexShrink: 0 }}>
-                                {place.image ? (
-                                    <img
-                                        src={place.image}
-                                        alt={place.name}
-                                        style={{ width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover' }}
-                                    />
-                                ) : (
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <FaStar style={{ color: 'var(--luxury-gold)' }} />
-                                    </div>
-                                )}
+                        <AppText as="p">{t('no_favorite_places', 'No favorite places yet')}</AppText>
+                    </div> :
+
+        places.map((place, idx) =>
+        <div key={place.id || place.businessId || idx} className="place-item">
+                            <FavoritePlaceThumb image={place.image} name={place.name} />
+                            <div className="place-info">
+                                <div className="place-name">{place.name}</div>
+                                {place.address &&
+            <div className="place-address">{place.address}</div>
+            }
+                                {place.source === 'business' &&
+            <AppText as="span" className="place-partner-badge">PARTNER</AppText>
+            }
                             </div>
-                            <div className="place-info" style={{ marginLeft: '12px', flex: 1, minWidth: 0 }}>
-                                <div className="place-name" style={{ fontWeight: '700', fontSize: '0.95rem' }}>{place.name}</div>
-                                {place.address && (
-                                    <div className="place-address" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {place.address}
-                                    </div>
-                                )}
-                                {place.source === 'business' && (
-                                    <span style={{
-                                        display: 'inline-block',
-                                        marginTop: '4px',
-                                        color: 'var(--luxury-gold)',
-                                        fontSize: '0.65rem',
-                                        border: '1px solid var(--luxury-gold)',
-                                        borderRadius: '4px',
-                                        padding: '1px 6px',
-                                        fontWeight: '700'
-                                    }}>
-                                        PARTNER
-                                    </span>
-                                )}
-                            </div>
-                            {!readOnly && (
-                                <button
-                                    type="button"
-                                    className="remove-place-btn"
-                                    onClick={() => handleRemovePlace(place.id)}
-                                    title={t('remove', 'Remove')}
-                                    style={{ alignSelf: 'center', marginLeft: '10px', background: 'rgba(239,68,68,0.1)', color: 'var(--secondary)', border: 'none', borderRadius: '8px', padding: '8px', cursor: 'pointer' }}
-                                >
+                            {!readOnly &&
+          <button
+            type="button"
+            className="remove-place-btn"
+            onClick={() => handleRemovePlace(place.id)}
+            title={t('remove', 'Remove')}>
+            
                                     <FaTrash />
                                 </button>
-                            )}
+          }
                         </div>
-                    ))
-                )}
+        )
+        }
             </div>
-        </div>
-    );
+        </div>);
+
 };
 
 // ================================
 // 5. REVIEWS SECTION COMPONENT
 // ================================
 export const ReviewsSection = ({ userId }) => {
-    const { t } = useTranslation();
-    const [reviews, setReviews] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchReviews = async () => {
-            try {
-                const reviewsRef = collection(db, 'users', userId, 'reviews');
-                const q = query(reviewsRef, orderBy('createdAt', 'desc'), limit(3));
-                const snapshot = await getDocs(q);
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const reviewsRef = collection(db, 'users', userId, 'reviews');
+        const q = query(reviewsRef, orderBy('createdAt', 'desc'), limit(3));
+        const snapshot = await getDocs(q);
 
-                const reviewsData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    createdAt: doc.data().createdAt?.toDate() || new Date()
-                }));
+        const reviewsData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date()
+        }));
 
-                setReviews(reviewsData);
-            } catch (error) {
-                console.error('Error fetching reviews:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (userId) {
-            fetchReviews();
-        }
-    }, [userId]);
-
-    const renderStars = (rating) => {
-        return Array(5).fill(0).map((_, idx) => (
-            <FaStar
-                key={idx}
-                style={{
-                    color: idx < rating ? 'var(--luxury-gold)' : 'var(--text-muted)',
-                    fontSize: '0.9rem'
-                }}
-            />
-        ));
+        setReviews(reviewsData);
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const formatTimeAgo = (date) => {
-        const now = new Date();
-        const diff = now - date;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-        if (days === 0) return t('today', 'Today');
-        if (days === 1) return t('yesterday', 'Yesterday');
-        if (days < 7) return `${days} ${t('days_ago', 'days ago')}`;
-        if (days < 30) return `${Math.floor(days / 7)} ${t('weeks_ago', 'weeks ago')}`;
-        return date.toLocaleDateString();
-    };
-
-    if (loading) {
-        return <div className="reviews-section loading">Loading reviews...</div>;
+    if (userId) {
+      fetchReviews();
     }
+  }, [userId]);
 
-    return (
-        <div className="reviews-section">
+  const renderStars = (rating) => {
+    return Array(5).fill(0).map((_, idx) =>
+    <FaStar
+      key={idx}
+      style={{
+        color: idx < rating ? 'var(--luxury-gold)' : 'var(--text-muted)',
+        fontSize: '0.9rem'
+      }} />
+
+    );
+  };
+
+  const formatTimeAgo = (date) => {
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return t('today', 'Today');
+    if (days === 1) return t('yesterday', 'Yesterday');
+    if (days < 7) return `${days} ${t('days_ago', 'days ago')}`;
+    if (days < 30) return `${Math.floor(days / 7)} ${t('weeks_ago', 'weeks ago')}`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
+    return <div className="reviews-section loading">Loading reviews...</div>;
+  }
+
+  return (
+    <div className="reviews-section">
             <div className="section-header">
-                <h3>
+                <AppText as="h3">
                     <FaStar style={{ color: 'var(--luxury-gold)', marginRight: '0.5rem' }} />
                     {t('reviews', 'Reviews')} ({reviews.length})
-                </h3>
+                </AppText>
             </div>
 
-            {reviews.length === 0 ? (
-                <div className="empty-state">
+            {reviews.length === 0 ?
+      <div className="empty-state">
                     <FaStar style={{ fontSize: '2rem', opacity: 0.3 }} />
-                    <p>{t('no_reviews_yet', 'No reviews yet')}</p>
-                </div>
-            ) : (
-                <div className="reviews-list">
-                    {reviews.map(review => (
-                        <div key={review.id} className="review-item">
+                    <AppText as="p">{t('no_reviews_yet', 'No reviews yet')}</AppText>
+                </div> :
+
+      <div className="reviews-list">
+                    {reviews.map((review) =>
+        <div key={review.id} className="review-item">
                             <div className="review-header">
                                 <div className="reviewer-info">
                                     <img
-                                        src={review.fromUserAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.fromUserId}`}
-                                        alt={review.fromUserName}
-                                        className="reviewer-avatar"
-                                    />
+                src={review.fromUserAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.fromUserId}`}
+                alt={review.fromUserName}
+                className="reviewer-avatar" />
+              
                                     <div>
                                         <div className="reviewer-name">{review.fromUserName}</div>
                                         <div className="review-stars">{renderStars(review.rating)}</div>
@@ -550,178 +523,178 @@ export const ReviewsSection = ({ userId }) => {
                                 </div>
                                 <div className="review-date">{formatTimeAgo(review.createdAt)}</div>
                             </div>
-                            {review.comment && (
-                                <div className="review-comment">"{review.comment}"</div>
-                            )}
+                            {review.comment &&
+          <div className="review-comment">"{review.comment}"</div>
+          }
                         </div>
-                    ))}
+        )}
                 </div>
-            )}
-        </div>
-    );
+      }
+        </div>);
+
 };
 
 // ================================
 // 6. SOCIAL LINKS COMPONENT
 // ================================
 export const SocialLinks = ({ userId }) => {
-    const { t } = useTranslation();
-    const { showToast } = useToast();
-    const [links, setLinks] = useState({
-        instagram: '',
-        twitter: '',
-        website: ''
-    });
-    const [editing, setEditing] = useState(false);
-    const [tempLinks, setTempLinks] = useState(links);
-    const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [links, setLinks] = useState({
+    instagram: '',
+    twitter: '',
+    website: ''
+  });
+  const [editing, setEditing] = useState(false);
+  const [tempLinks, setTempLinks] = useState(links);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchLinks = async () => {
-            try {
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                const socialLinks = userDoc.data()?.social_links || {};
-                setLinks(socialLinks);
-                setTempLinks(socialLinks);
-            } catch (error) {
-                console.error('Error fetching social links:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (userId) {
-            fetchLinks();
-        }
-    }, [userId]);
-
-    const validateLink = (type, value) => {
-        if (!value.trim()) return true; // Empty is ok
-
-        const patterns = {
-            instagram: /^@?[a-zA-Z0-9._]{1,30}$/,
-            twitter: /^@?[a-zA-Z0-9_]{1,15}$/,
-            website: /^(https?:\/\/)?([\w\d-]+\.){1,}[\w]{2,}(\/.*)?$/
-        };
-
-        return patterns[type].test(value);
+  useEffect(() => {
+    const fetchLinks = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        const socialLinks = userDoc.data()?.social_links || {};
+        setLinks(socialLinks);
+        setTempLinks(socialLinks);
+      } catch (error) {
+        console.error('Error fetching social links:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const handleSave = async () => {
-        // Validate all links
-        for (const [type, value] of Object.entries(tempLinks)) {
-            if (value && !validateLink(type, value)) {
-                showToast(`Invalid ${type} format`, 'error');
-                return;
-            }
-        }
+    if (userId) {
+      fetchLinks();
+    }
+  }, [userId]);
 
-        try {
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-                social_links: tempLinks
-            });
+  const validateLink = (type, value) => {
+    if (!value.trim()) return true; // Empty is ok
 
-            setLinks(tempLinks);
-            setEditing(false);
-        } catch (error) {
-            console.error('Error saving social links:', error);
-            showToast('Failed to save links', 'error');
-        }
+    const patterns = {
+      instagram: /^@?[a-zA-Z0-9._]{1,30}$/,
+      twitter: /^@?[a-zA-Z0-9_]{1,15}$/,
+      website: /^(https?:\/\/)?([\w\d-]+\.){1,}[\w]{2,}(\/.*)?$/
     };
 
-    const handleCancel = () => {
-        setTempLinks(links);
-        setEditing(false);
-    };
+    return patterns[type].test(value);
+  };
 
-    if (loading) {
-        return <div className="social-links loading">Loading...</div>;
+  const handleSave = async () => {
+    // Validate all links
+    for (const [type, value] of Object.entries(tempLinks)) {
+      if (value && !validateLink(type, value)) {
+        showToast(`Invalid ${type} format`, 'error');
+        return;
+      }
     }
 
-    const hasAnyLink = links.instagram || links.twitter || links.website;
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        social_links: tempLinks
+      });
 
-    return (
-        <div className="social-links-section">
+      setLinks(tempLinks);
+      setEditing(false);
+    } catch (error) {
+      console.error('Error saving social links:', error);
+      showToast('Failed to save links', 'error');
+    }
+  };
+
+  const handleCancel = () => {
+    setTempLinks(links);
+    setEditing(false);
+  };
+
+  if (loading) {
+    return <div className="social-links loading">Loading...</div>;
+  }
+
+  const hasAnyLink = links.instagram || links.twitter || links.website;
+
+  return (
+    <div className="social-links-section">
             <div className="section-header">
-                <h3>
+                <AppText as="h3">
                     <FaGlobe style={{ color: '#3b82f6', marginRight: '0.5rem' }} />
                     {t('social_links', 'Social Links')}
-                </h3>
-                {!editing && (
-                    <button className="edit-links-btn" onClick={() => setEditing(true)}>
+                </AppText>
+                {!editing &&
+        <button className="edit-links-btn" onClick={() => setEditing(true)}>
                         {hasAnyLink ? t('edit', 'Edit') : t('add', 'Add')}
                     </button>
-                )}
+        }
             </div>
 
-            {editing ? (
-                <div className="edit-links-form">
+            {editing ?
+      <div className="edit-links-form">
                     <div className="link-input">
                         <FaInstagram style={{ color: '#e4405f' }} />
-                        <input
-                            type="text"
-                            placeholder="@username"
-                            value={tempLinks.instagram || ''}
-                            onChange={(e) => setTempLinks({ ...tempLinks, instagram: e.target.value })}
-                        />
+                        <AppTextInput
+            type="text"
+            placeholder="@username"
+            value={tempLinks.instagram || ''}
+            onChange={(e) => setTempLinks({ ...tempLinks, instagram: e.target.value })} />
+          
                     </div>
                     <div className="link-input">
                         <FaTwitter style={{ color: '#1da1f2' }} />
-                        <input
-                            type="text"
-                            placeholder="@username"
-                            value={tempLinks.twitter || ''}
-                            onChange={(e) => setTempLinks({ ...tempLinks, twitter: e.target.value })}
-                        />
+                        <AppTextInput
+            type="text"
+            placeholder="@username"
+            value={tempLinks.twitter || ''}
+            onChange={(e) => setTempLinks({ ...tempLinks, twitter: e.target.value })} />
+          
                     </div>
                     <div className="link-input">
                         <FaGlobe style={{ color: '#3b82f6' }} />
-                        <input
-                            type="text"
-                            placeholder="yourwebsite.com"
-                            value={tempLinks.website || ''}
-                            onChange={(e) => setTempLinks({ ...tempLinks, website: e.target.value })}
-                        />
+                        <AppTextInput
+            type="text"
+            placeholder="yourwebsite.com"
+            value={tempLinks.website || ''}
+            onChange={(e) => setTempLinks({ ...tempLinks, website: e.target.value })} />
+          
                     </div>
                     <div className="link-actions">
                         <button onClick={handleSave} className="save-btn">{t('save', 'Save')}</button>
                         <button onClick={handleCancel} className="cancel-btn">{t('cancel', 'Cancel')}</button>
                     </div>
-                </div>
-            ) : (
-                <div className="links-display">
-                    {!hasAnyLink ? (
-                        <div className="empty-state">
+                </div> :
+
+      <div className="links-display">
+                    {!hasAnyLink ?
+        <div className="empty-state">
                             <FaGlobe style={{ fontSize: '2rem', opacity: 0.3 }} />
-                            <p>{t('no_social_links', 'No social links added')}</p>
-                        </div>
-                    ) : (
-                        <div className="links-list">
-                            {links.instagram && (
-                                <a href={`https://instagram.com/${links.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="social-link">
+                            <AppText as="p">{t('no_social_links', 'No social links added')}</AppText>
+                        </div> :
+
+        <div className="links-list">
+                            {links.instagram &&
+          <a href={`https://instagram.com/${links.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="social-link">
                                     <FaInstagram style={{ color: '#e4405f' }} />
-                                    <span>{links.instagram}</span>
+                                    <AppText as="span">{links.instagram}</AppText>
                                 </a>
-                            )}
-                            {links.twitter && (
-                                <a href={`https://twitter.com/${links.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="social-link">
+          }
+                            {links.twitter &&
+          <a href={`https://twitter.com/${links.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="social-link">
                                     <FaTwitter style={{ color: '#1da1f2' }} />
-                                    <span>{links.twitter}</span>
+                                    <AppText as="span">{links.twitter}</AppText>
                                 </a>
-                            )}
-                            {links.website && (
-                                <a href={links.website.startsWith('http') ? links.website : `https://${links.website}`} target="_blank" rel="noopener noreferrer" className="social-link">
+          }
+                            {links.website &&
+          <a href={links.website.startsWith('http') ? links.website : `https://${links.website}`} target="_blank" rel="noopener noreferrer" className="social-link">
                                     <FaGlobe style={{ color: '#3b82f6' }} />
-                                    <span>{links.website}</span>
+                                    <AppText as="span">{links.website}</AppText>
                                 </a>
-                            )}
+          }
                         </div>
-                    )}
+        }
                 </div>
-            )}
-        </div>
-    );
+      }
+        </div>);
+
 };
 
 export default { FavoritePlaces, ReviewsSection, SocialLinks };

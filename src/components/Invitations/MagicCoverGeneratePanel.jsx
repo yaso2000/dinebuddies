@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import {
-    generateAIMagicCover,
-    formatAiErrorMessage,
-    isInsufficientCreditsError,
-} from '../../services/generateAIContent';
+  generateAIMagicCover,
+  formatAiErrorMessage,
+  isInsufficientCreditsError } from
+'../../services/generateAIContent';
 import {
-    AI_IMAGE_GENERATION_CREDITS,
-    CREDITS_WALLET_PATH,
-} from '../../utils/aiCreditCosts';
+  AI_IMAGE_GENERATION_CREDITS,
+  CREDITS_WALLET_PATH } from
+'../../utils/aiCreditCosts';
 import { extractAIImageUrl } from '../../utils/aiContentFieldMapper';
 import { AI_USER_PROMPT_MAX_CHARS } from '../../constants/aiPromptLimits';
 import { getAiUserPromptFallback } from '../../utils/aiPromptLocale';
@@ -34,269 +34,269 @@ import '../AIGenerateBar.css';
  *   requireVenue?: boolean,
  *   embedded?: boolean,
  * }} props
- */
+ */import { AppText, AppTextInput } from "../base";
 export default function MagicCoverGeneratePanel({
-    subType = 'public',
-    venueType = '',
-    venueName = '',
-    aspectRatio: defaultAspectRatio = '4:5',
-    buildBrief,
-    onImageGenerated,
-    disabled = false,
-    prepareBusy = false,
-    requireVenue = true,
-    embedded = false,
+  subType = 'public',
+  venueType = '',
+  venueName = '',
+  aspectRatio: defaultAspectRatio = '4:5',
+  buildBrief,
+  onImageGenerated,
+  disabled = false,
+  prepareBusy = false,
+  requireVenue = true,
+  embedded = false
 }) {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
-    const { showToast } = useToast();
-    const [prompt, setPrompt] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [aspectRatio, setAspectRatio] = useState(defaultAspectRatio);
-    const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState('');
-    const generationSeqRef = useRef(0);
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const [prompt, setPrompt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(defaultAspectRatio);
+  const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState('');
+  const generationSeqRef = useRef(0);
 
-    const isBusy = loading || prepareBusy;
+  const isBusy = loading || prepareBusy;
 
-    useEffect(() => {
-        setAspectRatio(defaultAspectRatio);
-    }, [defaultAspectRatio]);
+  useEffect(() => {
+    setAspectRatio(defaultAspectRatio);
+  }, [defaultAspectRatio]);
 
-    const lockAspectRatio = subType === 'private' || subType === 'date' || subType === 'public';
-    const effectiveAspectRatio =
-        subType === 'private' || subType === 'date'
-            ? '9:16'
-            : subType === 'public'
-              ? defaultAspectRatio || '4:5'
-              : aspectRatio;
+  const lockAspectRatio = subType === 'social' || subType === 'private' || subType === 'public';
+  const effectiveAspectRatio =
+  subType === 'social' || subType === 'private' ?
+  '9:16' :
+  subType === 'public' ?
+  defaultAspectRatio || '4:5' :
+  aspectRatio;
 
-    const needsVenue = requireVenue && !String(venueName || '').trim();
+  const needsVenue = requireVenue && !String(venueName || '').trim();
 
-    const handleGenerate = async () => {
-        if (isBusy || disabled || needsVenue) return;
+  const handleGenerate = async () => {
+    if (isBusy || disabled || needsVenue) return;
 
-        const userPrompt = resolveAiUserPrompt({
-            manualPrompt: prompt,
-            buildContextPrompt: buildBrief,
-            fallback: getAiUserPromptFallback('invitation', subType, t),
-        });
+    const userPrompt = resolveAiUserPrompt({
+      manualPrompt: prompt,
+      buildContextPrompt: buildBrief,
+      fallback: getAiUserPromptFallback('invitation', subType, t)
+    });
 
-        const generationId = ++generationSeqRef.current;
-        setLoading(true);
-        try {
-            const result = await generateAIMagicCover({
-                userPrompt,
-                subType,
-                venueType,
-                venueName,
-                aspectRatio: effectiveAspectRatio,
-            });
+    const generationId = ++generationSeqRef.current;
+    setLoading(true);
+    try {
+      const result = await generateAIMagicCover({
+        userPrompt,
+        subType,
+        venueType,
+        venueName,
+        aspectRatio: effectiveAspectRatio
+      });
 
-            if (generationId !== generationSeqRef.current) {
-                return;
-            }
+      if (generationId !== generationSeqRef.current) {
+        return;
+      }
 
-            if (!result.success) {
-                if (isInsufficientCreditsError(result)) {
-                    setInsufficientCreditsMessage(
-                        result.message ||
-                            t('ai_insufficient_credits_default')
-                    );
-                    return;
-                }
-
-                if (result.code === 'MODERATION_FAILED' || result.status === 422) {
-                    showToast(t('magic_cover_moderation_failed'), 'error');
-                    return;
-                }
-
-                if (result.code === 'AI_REQUEST_TIMEOUT') {
-                    showToast(
-                        t('ai_request_timeout', {
-                            defaultValue:
-                                'Image generation timed out. The server may still be working — wait and try again.',
-                        }),
-                        'error'
-                    );
-                    return;
-                }
-
-                showToast(formatAiErrorMessage(result, t), 'error');
-                if (result.detail) {
-                    console.error('[MagicCoverGeneratePanel] API detail:', result.detail);
-                }
-                return;
-            }
-
-            const imageUrl = extractAIImageUrl(result.data);
-            if (!imageUrl) {
-                showToast(t('ai_generate_failed'), 'error');
-                return;
-            }
-
-            if (generationId !== generationSeqRef.current) {
-                return;
-            }
-
-            onImageGenerated(imageUrl);
-            showToast(t('magic_cover_generated_review'), 'success');
-
-            const creditsCharged = result.meta?.creditsCharged ?? AI_IMAGE_GENERATION_CREDITS;
-            if (creditsCharged) {
-                showToast(t('magic_cover_charged_notice', { cost: creditsCharged }), 'info');
-            }
-        } catch (err) {
-            console.error('[MagicCoverGeneratePanel]', err);
-            showToast(
-                t('ai_generate_failed'),
-                'error'
-            );
-        } finally {
-            setLoading(false);
+      if (!result.success) {
+        if (isInsufficientCreditsError(result)) {
+          setInsufficientCreditsMessage(
+            result.message ||
+            t('ai_insufficient_credits_default')
+          );
+          return;
         }
-    };
 
-    const closeInsufficientModal = () => setInsufficientCreditsMessage('');
+        if (result.code === 'MODERATION_FAILED' || result.status === 422) {
+          showToast(t('magic_cover_moderation_failed'), 'error');
+          return;
+        }
 
-    const goToTopUp = () => {
-        closeInsufficientModal();
-        navigate(CREDITS_WALLET_PATH);
-    };
+        if (result.code === 'AI_REQUEST_TIMEOUT') {
+          showToast(
+            t('ai_request_timeout', {
+              defaultValue:
+              'Image generation timed out. The server may still be working — wait and try again.'
+            }),
+            'error'
+          );
+          return;
+        }
 
-    return (
-        <>
+        showToast(formatAiErrorMessage(result, t), 'error');
+        if (result.detail) {
+          console.error('[MagicCoverGeneratePanel] API detail:', result.detail);
+        }
+        return;
+      }
+
+      const imageUrl = extractAIImageUrl(result.data);
+      if (!imageUrl) {
+        showToast(t('ai_generate_failed'), 'error');
+        return;
+      }
+
+      if (generationId !== generationSeqRef.current) {
+        return;
+      }
+
+      onImageGenerated(imageUrl);
+      showToast(t('magic_cover_generated_review'), 'success');
+
+      const creditsCharged = result.meta?.creditsCharged ?? AI_IMAGE_GENERATION_CREDITS;
+      if (creditsCharged) {
+        showToast(t('magic_cover_charged_notice', { cost: creditsCharged }), 'info');
+      }
+    } catch (err) {
+      console.error('[MagicCoverGeneratePanel]', err);
+      showToast(
+        t('ai_generate_failed'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeInsufficientModal = () => setInsufficientCreditsMessage('');
+
+  const goToTopUp = () => {
+    closeInsufficientModal();
+    navigate(CREDITS_WALLET_PATH);
+  };
+
+  return (
+    <>
             <div
-                className={`ai-generate-bar ai-generate-bar--magic magic-cover-panel${embedded ? ' ai-generate-bar--embedded' : ''}`}
-                aria-busy={isBusy}
-                style={embedded ? undefined : { marginBottom: 14 }}
-            >
+        className={`ai-generate-bar ai-generate-bar--magic magic-cover-panel${embedded ? ' ai-generate-bar--embedded' : ''}`}
+        aria-busy={isBusy}
+        style={embedded ? undefined : { marginBottom: 14 }}>
+
                 <div className="ai-generate-bar__magic-header">
-                    <p className="ai-generate-bar__magic-title">{t('magic_cover_cta_title')}</p>
-                    <p className="ai-generate-bar__magic-intro">{t('magic_cover_optional_intro')}</p>
+                    <AppText as="p" className="ai-generate-bar__magic-title">{t('magic_cover_cta_title')}</AppText>
+                    <AppText as="p" className="ai-generate-bar__magic-intro">{t('magic_cover_optional_intro')}</AppText>
                 </div>
 
-                {!lockAspectRatio ? (
-                    <fieldset className="ai-generate-bar__aspect" disabled={isBusy || disabled}>
+                {!lockAspectRatio ?
+        <fieldset className="ai-generate-bar__aspect" disabled={isBusy || disabled}>
                         <legend className="ai-generate-bar__aspect-legend">{t('magic_cover_aspect_label')}</legend>
-                        <p className="ai-generate-bar__aspect-hint">{t('magic_cover_aspect_hint')}</p>
+                        <AppText as="p" className="ai-generate-bar__aspect-hint">{t('magic_cover_aspect_hint')}</AppText>
                         <div className="ai-generate-bar__aspect-options">
                             <label
-                                className={`ai-generate-bar__aspect-option${aspectRatio === '1:1' ? ' ai-generate-bar__aspect-option--active' : ''}`}
-                            >
+              className={`ai-generate-bar__aspect-option${aspectRatio === '1:1' ? ' ai-generate-bar__aspect-option--active' : ''}`}>
+
                                 <input
-                                    type="radio"
-                                    name="magic-cover-aspect"
-                                    value="1:1"
-                                    checked={aspectRatio === '1:1'}
-                                    onChange={() => setAspectRatio('1:1')}
-                                />
+                type="radio"
+                name="magic-cover-aspect"
+                value="1:1"
+                checked={aspectRatio === '1:1'}
+                onChange={() => setAspectRatio('1:1')} />
+
                                 {t('magic_cover_aspect_1_1')}
                             </label>
                             <label
-                                className={`ai-generate-bar__aspect-option${aspectRatio === '9:16' ? ' ai-generate-bar__aspect-option--active' : ''}`}
-                            >
+              className={`ai-generate-bar__aspect-option${aspectRatio === '9:16' ? ' ai-generate-bar__aspect-option--active' : ''}`}>
+
                                 <input
-                                    type="radio"
-                                    name="magic-cover-aspect"
-                                    value="9:16"
-                                    checked={aspectRatio === '9:16'}
-                                    onChange={() => setAspectRatio('9:16')}
-                                />
+                type="radio"
+                name="magic-cover-aspect"
+                value="9:16"
+                checked={aspectRatio === '9:16'}
+                onChange={() => setAspectRatio('9:16')} />
+
                                 {t('magic_cover_aspect_9_16')}
                             </label>
                         </div>
-                    </fieldset>
-                ) : null}
+                    </fieldset> :
+        null}
 
-                {needsVenue ? (
-                    <p className="ai-generate-bar__venue-hint" role="status">
+                {needsVenue ?
+        <AppText as="p" className="ai-generate-bar__venue-hint" role="status">
                         {t('magic_cover_requires_venue')}
-                    </p>
-                ) : null}
+                    </AppText> :
+        null}
 
-                <textarea
-                    className="ai-generate-bar__input"
-                    rows={2}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value.slice(0, AI_USER_PROMPT_MAX_CHARS))}
-                    placeholder={t('magic_cover_empty_brief_fallback')}
-                    maxLength={AI_USER_PROMPT_MAX_CHARS}
-                    disabled={isBusy || disabled}
-                />
-                <p className="ai-generate-bar__prompt-meta" aria-live="polite">
-                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                <AppTextInput as="textarea"
+        className="ai-generate-bar__input"
+        rows={2}
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value.slice(0, AI_USER_PROMPT_MAX_CHARS))}
+        placeholder={t('magic_cover_empty_brief_fallback')}
+        maxLength={AI_USER_PROMPT_MAX_CHARS}
+        disabled={isBusy || disabled} />
+
+                <AppText as="p" className="ai-generate-bar__prompt-meta" aria-live="polite">
+                    <AppText as="span" dir="ltr" style={{ unicodeBidi: 'isolate' }}>
                         {prompt.length} / {AI_USER_PROMPT_MAX_CHARS}
-                    </span>
-                </p>
+                    </AppText>
+                </AppText>
 
                 <div className="ai-generate-bar__actions">
                     <button
-                        type="button"
-                        className="ai-generate-bar__btn ios-tap-target"
-                        onClick={handleGenerate}
-                        disabled={isBusy || disabled || needsVenue}
-                        aria-busy={loading}
-                    >
-                        {loading ? (
-                            <>
-                                <span className="ai-generate-bar__spinner" aria-hidden />
+            type="button"
+            className="ai-generate-bar__btn ios-tap-target"
+            onClick={handleGenerate}
+            disabled={isBusy || disabled || needsVenue}
+            aria-busy={loading}>
+
+                        {loading ?
+            <>
+                                <AppText as="span" className="ai-generate-bar__spinner" aria-hidden />
                                 {t('ai_generate_loading')}
-                            </>
-                        ) : (
-                            <>
+                            </> :
+
+            <>
                                 <FaMagic aria-hidden />
                                 {t('magic_cover_generate_cover_btn', {
-                                    cost: AI_IMAGE_GENERATION_CREDITS,
-                                    defaultValue: `Generate Cover with AI (Costs ${AI_IMAGE_GENERATION_CREDITS} credits)`,
-                                })}
+                cost: AI_IMAGE_GENERATION_CREDITS,
+                defaultValue: `Generate Cover with AI (Costs ${AI_IMAGE_GENERATION_CREDITS} credits)`
+              })}
                             </>
-                        )}
+            }
                     </button>
                 </div>
             </div>
 
-            {insufficientCreditsMessage ? (
-                <div
-                    className="ai-credits-modal__backdrop"
-                    role="presentation"
-                    onClick={closeInsufficientModal}
-                >
+            {insufficientCreditsMessage ?
+      <div
+        className="ai-credits-modal__backdrop"
+        role="presentation"
+        onClick={closeInsufficientModal}>
+
                     <div
-                        className="ai-credits-modal"
-                        role="alertdialog"
-                        aria-modal="true"
-                        aria-labelledby="magic-cover-credits-modal-title"
-                        aria-describedby="magic-cover-credits-modal-desc"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+          className="ai-credits-modal"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="magic-cover-credits-modal-title"
+          aria-describedby="magic-cover-credits-modal-desc"
+          onClick={(e) => e.stopPropagation()}>
+
                         <div className="ai-credits-modal__icon" aria-hidden>
                             <FaWallet />
                         </div>
-                        <h3 id="magic-cover-credits-modal-title" className="ai-credits-modal__title">
+                        <AppText as="h3" id="magic-cover-credits-modal-title" className="ai-credits-modal__title">
                             {t('ai_insufficient_credits_title')}
-                        </h3>
-                        <p id="magic-cover-credits-modal-desc" className="ai-credits-modal__message">
+                        </AppText>
+                        <AppText as="p" id="magic-cover-credits-modal-desc" className="ai-credits-modal__message">
                             {insufficientCreditsMessage}
-                        </p>
+                        </AppText>
                         <div className="ai-credits-modal__actions">
                             <button
-                                type="button"
-                                className="ai-credits-modal__btn ai-credits-modal__btn--primary ios-tap-target"
-                                onClick={goToTopUp}
-                            >
+              type="button"
+              className="ai-credits-modal__btn ai-credits-modal__btn--primary ios-tap-target"
+              onClick={goToTopUp}>
+
                                 {t('ai_top_up_now')}
                             </button>
                             <button
-                                type="button"
-                                className="ai-credits-modal__btn ai-credits-modal__btn--ghost ios-tap-target"
-                                onClick={closeInsufficientModal}
-                            >
+              type="button"
+              className="ai-credits-modal__btn ai-credits-modal__btn--ghost ios-tap-target"
+              onClick={closeInsufficientModal}>
+
                                 {t('close')}
                             </button>
                         </div>
                     </div>
-                </div>
-            ) : null}
-        </>
-    );
+                </div> :
+      null}
+        </>);
+
 }

@@ -1,0 +1,131 @@
+.users-directory-page {
+    width: 100%;
+    min-height: 100%;
+    background: var(--bg-main);
+    box-sizing: border-box;
+}
+
+.users-directory-toolbar {
+    padding: 12px 14px 0;
+}
+
+.users-directory-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    height: 44px;
+    border-radius: 14px;
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.users-directory-field:focus-within {
+    border-color: var(--primary);
+}
+
+.users-directory-field-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.users-directory-field-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 1rem;
+    outline: none;
+}
+
+.users-directory-field-clear {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    padding: 4px;
+    cursor: pointer;
+}
+
+.users-directory-header {
+    padding: 14px 14px 10px;
+}
+
+.users-directory-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.users-directory-feed-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: rgba(232, 110, 46, 0.12);
+    color: var(--primary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.users-directory-title {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.users-directory-subtitle {
+    margin: 6px 0 0;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.users-directory-main {
+    padding: 0 14px 28px;
+}
+
+.users-directory-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.users-directory-message {
+    text-align: center;
+    padding: 28px 12px;
+    color: var(--text-muted);
+}
+
+.users-directory-message--error {
+    color: #f87171;
+    font-weight: 600;
+}
+
+.users-directory-load-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 18px;
+}
+
+.users-directory-load-more-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+    border-radius: 999px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.users-directory-load-more-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}

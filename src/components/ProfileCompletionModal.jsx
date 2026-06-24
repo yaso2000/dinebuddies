@@ -11,337 +11,337 @@ import { updateProfile as updateAuthProfile } from 'firebase/auth';
 
 /**
  * Full-screen onboarding — only mounted when AuthContext consumerShellGate === 'needs_onboarding'.
- */
+ */import { AppText, AppTextInput } from "./base";
 export default function ProfileCompletionModal() {
-    const { t } = useTranslation();
-    const { showToast } = useToast();
-    const { currentUser, userProfile, consumerShellGate } = useAuth();
-    const { isDark } = useTheme();
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formData, setFormData] = useState({
-        displayName: '',
-        ageCategory: '',
-        gender: ''
-    });
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const { currentUser, userProfile, consumerShellGate } = useAuth();
+  const { isDark } = useTheme();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    displayName: '',
+    ageCategory: '',
+    gender: ''
+  });
 
-    useEffect(() => {
-        if (consumerShellGate !== 'needs_onboarding' || !userProfile) return;
-        setFormData((prev) => ({
-            displayName:
-                userProfile.displayName ||
-                userProfile.display_name ||
-                userProfile.nickname ||
-                prev.displayName ||
-                '',
-            ageCategory: userProfile.ageCategory || userProfile.age_category || prev.ageCategory || '',
-            gender: userProfile.gender || prev.gender || ''
-        }));
-    }, [consumerShellGate, userProfile]);
+  useEffect(() => {
+    if (consumerShellGate !== 'needs_onboarding' || !userProfile) return;
+    setFormData((prev) => ({
+      displayName:
+      userProfile.displayName ||
+      userProfile.display_name ||
+      userProfile.nickname ||
+      prev.displayName ||
+      '',
+      ageCategory: userProfile.ageCategory || userProfile.age_category || prev.ageCategory || '',
+      gender: userProfile.gender || prev.gender || ''
+    }));
+  }, [consumerShellGate, userProfile]);
 
-    if (consumerShellGate !== 'needs_onboarding') {
-        return null;
+  if (consumerShellGate !== 'needs_onboarding') {
+    return null;
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!formData.displayName || !formData.ageCategory || !formData.gender) {
+      showToast(t('fill_all_fields', 'Please fill all required fields'), 'error');
+      return;
     }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    setIsSubmitting(true);
 
-        if (!formData.displayName || !formData.ageCategory || !formData.gender) {
-            showToast(t('fill_all_fields', 'Please fill all required fields'), 'error');
-            return;
+    try {
+      let derivedAge = 18;
+      if (formData.ageCategory) {
+        const parts = formData.ageCategory.split('-');
+        if (parts[0]) {
+          derivedAge = parseInt(parts[0].replace(/\D/g, ''), 10) || 18;
         }
+      }
 
-        setIsSubmitting(true);
+      const updateData = {
+        displayName: formData.displayName,
+        display_name: formData.displayName,
+        nickname: formData.displayName,
+        ageCategory: formData.ageCategory,
+        gender: formData.gender,
+        age: derivedAge,
+        isProfileComplete: true,
+        updatedAt: new Date(),
+        email: currentUser.email || '',
+        photoURL: currentUser.photoURL || userProfile.photoURL || '',
+        photo_url: currentUser.photoURL || userProfile.photoURL || ''
+      };
 
+      const userRef = doc(db, 'users', currentUser.uid);
+      await setDoc(userRef, updateData, { merge: true });
+
+      if (currentUser) {
         try {
-            let derivedAge = 18;
-            if (formData.ageCategory) {
-                const parts = formData.ageCategory.split('-');
-                if (parts[0]) {
-                    derivedAge = parseInt(parts[0].replace(/\D/g, ''), 10) || 18;
-                }
-            }
-
-            const updateData = {
-                displayName: formData.displayName,
-                display_name: formData.displayName,
-                nickname: formData.displayName,
-                ageCategory: formData.ageCategory,
-                gender: formData.gender,
-                age: derivedAge,
-                isProfileComplete: true,
-                updatedAt: new Date(),
-                email: currentUser.email || '',
-                photoURL: currentUser.photoURL || userProfile.photoURL || '',
-                photo_url: currentUser.photoURL || userProfile.photoURL || ''
-            };
-
-            const userRef = doc(db, 'users', currentUser.uid);
-            await setDoc(userRef, updateData, { merge: true });
-
-            if (currentUser) {
-                try {
-                    await updateAuthProfile(currentUser, {
-                        displayName: formData.displayName,
-                        photoURL: updateData.photoURL || currentUser.photoURL
-                    });
-                } catch (err) {
-                    console.warn('Auth update warning:', err);
-                }
-            }
-
-            const verifySnap = await getDoc(userRef);
-            if (verifySnap.exists()) {
-                const newData = verifySnap.data();
-                if (newData.ageCategory && newData.gender && newData.displayName) {
-                    /* AuthContext onSnapshot picks up isProfileComplete */
-                }
-            }
-        } catch (error) {
-            console.error('Error saving profile:', error);
-            showToast(t('error_saving_profile', 'Error saving profile. Please try again.'), 'error');
-        } finally {
-            setIsSubmitting(false);
+          await updateAuthProfile(currentUser, {
+            displayName: formData.displayName,
+            photoURL: updateData.photoURL || currentUser.photoURL
+          });
+        } catch (err) {
+          console.warn('Auth update warning:', err);
         }
-    };
+      }
 
-    const ageOptions = [
-        { value: '18-24', label: '18-24' },
-        { value: '25-34', label: '25-34' },
-        { value: '35-44', label: '35-44' },
-        { value: '45-54', label: '45-54' },
-        { value: '55+', label: '55+' }
-    ];
+      const verifySnap = await getDoc(userRef);
+      if (verifySnap.exists()) {
+        const newData = verifySnap.data();
+        if (newData.ageCategory && newData.gender && newData.displayName) {
 
-    const genderOptions = [
-        { value: 'male', label: t('male'), icon: IoMale },
-        { value: 'female', label: t('female'), icon: IoFemale },
-        { value: 'unspecified', label: t('non_binary', 'Non-Binary'), icon: IoMaleFemale }
-    ];
+          /* AuthContext onSnapshot picks up isProfileComplete */}
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      showToast(t('error_saving_profile', 'Error saving profile. Please try again.'), 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-    const reqStar = <span style={{ color: '#f97316', fontWeight: 800 }} aria-hidden="true"> *</span>;
+  const ageOptions = [
+  { value: '18-24', label: '18-24' },
+  { value: '25-34', label: '25-34' },
+  { value: '35-44', label: '35-44' },
+  { value: '45-54', label: '45-54' },
+  { value: '55+', label: '55+' }];
 
-    return (
-        <div
-            style={{
-                position: 'fixed',
-                inset: 0,
-                width: '100%',
-                maxWidth: '100vw',
-                minHeight: '100dvh',
-                backgroundColor: 'var(--bg-body)',
-                zIndex: 10000,
-                overflowY: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
-                paddingBottom: 'max(20px, env(safe-area-inset-bottom, 0px))',
-                paddingLeft: 12,
-                paddingRight: 12,
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'center'
-            }}
-        >
+
+  const genderOptions = [
+  { value: 'male', label: t('male'), icon: IoMale },
+  { value: 'female', label: t('female'), icon: IoFemale },
+  { value: 'unspecified', label: t('non_binary', 'Non-Binary'), icon: IoMaleFemale }];
+
+
+  const reqStar = <AppText as="span" style={{ color: '#f97316', fontWeight: 800 }} aria-hidden="true"> *</AppText>;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100%',
+        maxWidth: '100vw',
+        minHeight: '100dvh',
+        backgroundColor: 'var(--bg-body)',
+        zIndex: 10000,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(20px, env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 12,
+        paddingRight: 12,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center'
+      }}>
+      
             <div
-                style={{
-                    background: 'var(--bg-card)',
-                    borderRadius: '20px',
-                    padding: '1.15rem 1.1rem',
-                    width: '100%',
-                    maxWidth: '480px',
-                    marginTop: 'clamp(8px, 3vh, 24px)',
-                    marginBottom: '24px',
-                    maxHeight: 'min(92dvh, 720px)',
-                    overflowY: 'auto',
-                    boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 10px 30px rgba(0, 0, 0, 0.1)',
-                    border: '1px solid var(--border-color)',
-                    position: 'relative',
-                    animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                }}
-            >
+        style={{
+          background: 'var(--bg-card)',
+          borderRadius: '20px',
+          padding: '1.15rem 1.1rem',
+          width: '100%',
+          maxWidth: '480px',
+          marginTop: 'clamp(8px, 3vh, 24px)',
+          marginBottom: '24px',
+          maxHeight: 'min(92dvh, 720px)',
+          overflowY: 'auto',
+          boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 10px 30px rgba(0, 0, 0, 0.1)',
+          border: '1px solid var(--border-color)',
+          position: 'relative',
+          animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+        
                 <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
                     <div
-                        style={{
-                            width: '48px',
-                            height: '48px',
-                            background: 'linear-gradient(135deg, var(--premium-orange), #f97316)',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 0.65rem auto',
-                            fontSize: '1.25rem',
-                            color: '#fff',
-                            boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)'
-                        }}
-                    >
+            style={{
+              width: '48px',
+              height: '48px',
+              background: 'linear-gradient(135deg, var(--premium-orange), #f97316)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 0.65rem auto',
+              fontSize: '1.25rem',
+              color: '#fff',
+              boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)'
+            }}>
+            
                         <FaUser />
                     </div>
-                    <h2
-                        style={{
-                            fontSize: '1.25rem',
-                            fontWeight: 'bold',
-                            marginBottom: '0.35rem',
-                            color: 'var(--text-main)'
-                        }}
-                    >
+                    <AppText as="h2"
+          style={{
+            fontSize: '1.25rem',
+            fontWeight: 'bold',
+            marginBottom: '0.35rem',
+            color: 'var(--text-main)'
+          }}>
+            
                         {t('complete_profile', 'Complete Your Profile')}
-                    </h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.4, marginBottom: '0.35rem' }}>
+                    </AppText>
+                    <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.4, marginBottom: '0.35rem' }}>
                         {t('complete_profile_desc', 'Please provide a few details to get the best experience.')}
-                    </p>
-                    <p style={{ color: '#f97316', fontSize: '0.75rem', fontWeight: 700, margin: 0 }}>
+                    </AppText>
+                    <AppText as="p" style={{ color: '#f97316', fontSize: '0.75rem', fontWeight: 700, margin: 0 }}>
                         {t('required_fields_note', 'Fields marked with * are required.')}
-                    </p>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.68rem', lineHeight: 1.35, margin: '0.45rem 0 0', opacity: 0.95 }}>
+                    </AppText>
+                    <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.68rem', lineHeight: 1.35, margin: '0.45rem 0 0', opacity: 0.95 }}>
                         {t('warning_permanent_demographics_short', 'Gender and age category cannot be changed after saving.')}
-                    </p>
+                    </AppText>
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                    {!userProfile?.displayName && !userProfile?.display_name && !userProfile?.nickname && (
-                        <div style={{ marginBottom: '0.85rem' }}>
+                    {!userProfile?.displayName && !userProfile?.display_name && !userProfile?.nickname &&
+          <div style={{ marginBottom: '0.85rem' }}>
                             <label
-                                style={{
-                                    display: 'block',
-                                    color: 'var(--text-secondary)',
-                                    marginBottom: '6px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600
-                                }}
-                            >
+              style={{
+                display: 'block',
+                color: 'var(--text-secondary)',
+                marginBottom: '6px',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}>
+              
                                 {t('display_name', 'Display Name / Nickname')}
                                 {reqStar}
                             </label>
-                            <input
-                                type="text"
-                                value={formData.displayName}
-                                onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                                placeholder={t('enter_name', 'Enter your name')}
-                                style={{
-                                    width: '100%',
-                                    padding: '12px',
-                                    borderRadius: '12px',
-                                    background: 'var(--bg-input)',
-                                    border: '1px solid var(--border-color)',
-                                    color: 'var(--text-main)',
-                                    fontSize: '1rem'
-                                }}
-                            />
+                            <AppTextInput
+              type="text"
+              value={formData.displayName}
+              onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+              placeholder={t('enter_name', 'Enter your name')}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '12px',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-main)',
+                fontSize: '1rem'
+              }} />
+            
                         </div>
-                    )}
+          }
 
-                    {!userProfile?.gender && (
-                        <div style={{ marginBottom: '0.85rem' }}>
+                    {!userProfile?.gender &&
+          <div style={{ marginBottom: '0.85rem' }}>
                             <label
-                                style={{
-                                    display: 'block',
-                                    color: 'var(--text-secondary)',
-                                    marginBottom: '6px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600
-                                }}
-                            >
+              style={{
+                display: 'block',
+                color: 'var(--text-secondary)',
+                marginBottom: '6px',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}>
+              
                                 {t('select_gender', 'Select Gender')}
                                 {reqStar}
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                                 {genderOptions.map((option) => {
-                                    const isSelected = formData.gender === option.value;
-                                    return (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, gender: option.value })}
-                                            style={{
-                                                padding: '8px 6px',
-                                                borderRadius: '10px',
-                                                border: isSelected
-                                                    ? '2px solid var(--primary)'
-                                                    : '1px solid var(--border-color)',
-                                                background: isSelected
-                                                    ? 'rgba(139, 92, 246, 0.2)'
-                                                    : 'var(--bg-input)',
-                                                color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                gap: '2px',
-                                                transition: 'all 0.2s'
-                                            }}
-                                        >
+                const isSelected = formData.gender === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, gender: option.value })}
+                    style={{
+                      padding: '8px 6px',
+                      borderRadius: '10px',
+                      border: isSelected ?
+                      '2px solid var(--primary)' :
+                      '1px solid var(--border-color)',
+                      background: isSelected ?
+                      'rgba(139, 92, 246, 0.2)' :
+                      'var(--bg-input)',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '2px',
+                      transition: 'all 0.2s'
+                    }}>
+                    
                                             <option.icon style={{ fontSize: '1.4rem' }} />
-                                            <span style={{ fontSize: '0.75rem' }}>{option.label}</span>
-                                        </button>
-                                    );
-                                })}
+                                            <AppText as="span" style={{ fontSize: '0.75rem' }}>{option.label}</AppText>
+                                        </button>);
+
+              })}
                             </div>
                         </div>
-                    )}
+          }
 
-                    {!userProfile?.ageCategory && !userProfile?.age_category && (
-                        <div style={{ marginBottom: '0.85rem' }}>
+                    {!userProfile?.ageCategory && !userProfile?.age_category &&
+          <div style={{ marginBottom: '0.85rem' }}>
                             <label
-                                style={{
-                                    display: 'block',
-                                    color: 'var(--text-secondary)',
-                                    marginBottom: '6px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600
-                                }}
-                            >
+              style={{
+                display: 'block',
+                color: 'var(--text-secondary)',
+                marginBottom: '6px',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}>
+              
                                 {t('select_age_category', 'Select Age Category')}
                                 {reqStar}
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                                 {ageOptions.map((option) => {
-                                    const isSelected = formData.ageCategory === option.value;
-                                    return (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, ageCategory: option.value })}
-                                            style={{
-                                                padding: '8px 6px',
-                                                borderRadius: '10px',
-                                                border: isSelected
-                                                    ? '2px solid var(--primary)'
-                                                    : '1px solid var(--border-color)',
-                                                background: isSelected
-                                                    ? 'rgba(139, 92, 246, 0.2)'
-                                                    : 'var(--bg-input)',
-                                                color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                fontSize: '0.82rem'
-                                            }}
-                                        >
+                const isSelected = formData.ageCategory === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, ageCategory: option.value })}
+                    style={{
+                      padding: '8px 6px',
+                      borderRadius: '10px',
+                      border: isSelected ?
+                      '2px solid var(--primary)' :
+                      '1px solid var(--border-color)',
+                      background: isSelected ?
+                      'rgba(139, 92, 246, 0.2)' :
+                      'var(--bg-input)',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      fontSize: '0.82rem'
+                    }}>
+                    
                                             {option.label}
-                                        </button>
-                                    );
-                                })}
+                                        </button>);
+
+              })}
                             </div>
                         </div>
-                    )}
+          }
 
                     <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        style={{
-                            width: '100%',
-                            padding: '12px',
-                            borderRadius: '14px',
-                            background: 'linear-gradient(135deg, var(--premium-orange), #fbbf24)',
-                            color: 'white',
-                            fontSize: '0.95rem',
-                            fontWeight: 'bold',
-                            border: 'none',
-                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                            opacity: isSubmitting ? 0.7 : 1,
-                            boxShadow: '0 4px 15px rgba(249, 115, 22, 0.3)',
-                            marginTop: '4px'
-                        }}
-                    >
+            type="submit"
+            disabled={isSubmitting}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, var(--premium-orange), #fbbf24)',
+              color: 'white',
+              fontSize: '0.95rem',
+              fontWeight: 'bold',
+              border: 'none',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.7 : 1,
+              boxShadow: '0 4px 15px rgba(249, 115, 22, 0.3)',
+              marginTop: '4px'
+            }}>
+            
                         {isSubmitting ? t('saving', 'Saving...') : t('save_and_continue', 'Save & Continue')}
                     </button>
                 </form>
@@ -349,6 +349,6 @@ export default function ProfileCompletionModal() {
             <style>{`
                 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
             `}</style>
-        </div>
-    );
+        </div>);
+
 }

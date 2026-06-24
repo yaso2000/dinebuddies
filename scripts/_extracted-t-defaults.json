@@ -1,0 +1,4571 @@
+{
+  "home_affiliate_dashboard": {
+    "en": "Partner dashboard"
+  },
+  "home_affiliate_portal": {
+    "en": "Affiliate sign-in"
+  },
+  "home_affiliate_signup": {
+    "en": "Become a partner"
+  },
+  "affiliate_links_aria": {
+    "en": "Affiliate program"
+  },
+  "affiliate_program_title": {
+    "en": "Partner program"
+  },
+  "private_ai_schedule_venue_required": {
+    "en": "Set the date, time, and location first — then AI can draft your message."
+  },
+  "ai_prompt_optional_hint": {
+    "en": "Optional — leave blank to use form details."
+  },
+  "loading_app_session": {
+    "en": "Preparing your session…"
+  },
+  "loading_app_profile": {
+    "en": "Syncing your profile…"
+  },
+  "loading_app_route": {
+    "en": "Loading…"
+  },
+  "continue_with_facebook": {
+    "en": "Continue with Facebook"
+  },
+  "social_invite_continue_google": {
+    "en": "Continue with Google"
+  },
+  "social_invite_continue_apple": {
+    "en": "Continue with Apple"
+  },
+  "business_notification_settings": {
+    "en": "Notifications"
+  },
+  "open_notification_settings": {
+    "en": "Your notification preferences"
+  },
+  "open_notification_settings_desc": {
+    "en": "Push, email, sounds, and quiet hours"
+  },
+  "business_member_notifications": {
+    "en": "Member alerts & offers"
+  },
+  "paid_plan": {
+    "en": "Paid"
+  },
+  "business_member_notifications_desc": {
+    "en": "Send offers and updates to your community members via direct message (with push)."
+  },
+  "business_member_notifications_paid_only": {
+    "en": "Upgrade to send promotional alerts and offers to all community members."
+  },
+  "members_count": {
+    "en": "members"
+  },
+  "send_offers_to_members": {
+    "en": "Message members"
+  },
+  "upgrade_for_member_notifications": {
+    "en": "Upgrade to unlock member alerts"
+  },
+  "biz_plan_upgrade_cta": {
+    "en": "Upgrade to Paid"
+  },
+  "reviews": {
+    "en": "reviews"
+  },
+  "share": {
+    "en": "Share"
+  },
+  "download": {
+    "en": "Download"
+  },
+  "claim_business_failed": {
+    "en": "Could not claim this business"
+  },
+  "claim_business_success": {
+    "en": "Business claimed successfully"
+  },
+  "claim_business_request": {
+    "en": "Claim Business"
+  },
+  "close": {
+    "en": "Close"
+  },
+  "claim_business_phone_hint": {
+    "en": "Verify the business phone via SMS to transfer ownership to your account."
+  },
+  "email": {
+    "en": "Email"
+  },
+  "claim_business_submitting": {
+    "en": "Claiming…"
+  },
+  "claim_business_confirm": {
+    "en": "Confirm claim"
+  },
+  "claim_business_for": {
+    "en": "Claim {{name}}"
+  },
+  "feedback_resolve_confirm": {
+    "en": "Are you sure you want to mark this issue as resolved?"
+  },
+  "feedback_resolved_success": {
+    "en": "Message marked as resolved ✅"
+  },
+  "feedback_resolved_error": {
+    "en": "An error occurred, please try again later."
+  },
+  "feedback_empty_title": {
+    "en": "Inbox is Empty"
+  },
+  "feedback_empty_desc": {
+    "en": "You haven\\"
+  },
+  "open_tickets": {
+    "en": "Open Tickets"
+  },
+  "guest": {
+    "en": "Guest"
+  },
+  "view_more": {
+    "en": "View More"
+  },
+  "suggestion": {
+    "en": "Suggestion"
+  },
+  "complaint": {
+    "en": "Complaint"
+  },
+  "contact_phone": {
+    "en": "Contact Number"
+  },
+  "feedback_mark_resolved": {
+    "en": "Mark as Resolved"
+  },
+  "closed_today": {
+    "en": "Closed today"
+  },
+  "closes_soon": {
+    "en": "Closes at ${close}"
+  },
+  "closes_at": {
+    "en": "Closes at ${close}"
+  },
+  "opens_at": {
+    "en": "Opens at ${open}"
+  },
+  "closed_now": {
+    "en": "Closed"
+  },
+  "sunday": {
+    "en": "Sunday"
+  },
+  "monday": {
+    "en": "Monday"
+  },
+  "tuesday": {
+    "en": "Tuesday"
+  },
+  "wednesday": {
+    "en": "Wednesday"
+  },
+  "thursday": {
+    "en": "Thursday"
+  },
+  "friday": {
+    "en": "Friday"
+  },
+  "saturday": {
+    "en": "Saturday"
+  },
+  "save_error": {
+    "en": "Failed to save hours"
+  },
+  "business_hours": {
+    "en": "Business Hours"
+  },
+  "edit": {
+    "en": "Edit"
+  },
+  "open_now": {
+    "en": "OPEN NOW"
+  },
+  "closed": {
+    "en": "CLOSED"
+  },
+  "opens_next": {
+    "en": "Opens next:"
+  },
+  "saving": {
+    "en": "Saving..."
+  },
+  "save": {
+    "en": "Save"
+  },
+  "cancel": {
+    "en": "Cancel"
+  },
+  "map_loading": {
+    "en": "Loading map…"
+  },
+  "map_preview_unavailable": {
+    "en": "Map preview unavailable"
+  },
+  "open_in_maps": {
+    "en": "Open in Maps"
+  },
+  "business_phone_otp_sent": {
+    "en": "Verification code sent via SMS"
+  },
+  "business_phone_send_failed": {
+    "en": "Request a new code first"
+  },
+  "business_signup_err_fill_all": {
+    "en": "Please fill in all required fields"
+  },
+  "error_password_length": {
+    "en": "Password must be at least 6 characters"
+  },
+  "error_passwords_match": {
+    "en": "Passwords do not match"
+  },
+  "auth_email_in_use": {
+    "en": "This email is already registered"
+  },
+  "business_signup_err_create": {
+    "en": "Failed to create account"
+  },
+  "business_signup_err_name_required": {
+    "en": "Enter your business name (not your email)."
+  },
+  "business_signup_err_name_not_email": {
+    "en": "Use your trading or venue name — not your email address."
+  },
+  "business_signup_err_details": {
+    "en": "Please search and select your business first."
+  },
+  "business_signup_verify_email_failed": {
+    "en": "Account created, but we could not send the activation email. Use “Resend” in the banner at the top of your profile."
+  },
+  "business_signup_title": {
+    "en": "Grow Your Business"
+  },
+  "password": {
+    "en": "Password"
+  },
+  "confirm_password": {
+    "en": "Confirm Password"
+  },
+  "creating_profile": {
+    "en": "Creating profile…"
+  },
+  "next": {
+    "en": "Next Step"
+  },
+  "back": {
+    "en": "Back"
+  },
+  "business_signup_step2_title": {
+    "en": "Business information"
+  },
+  "business_signup_business_name_label": {
+    "en": "Business name"
+  },
+  "business_signup_google_search_label": {
+    "en": "Find your business on Google Maps"
+  },
+  "create_and_finish": {
+    "en": "Create Business Profile"
+  },
+  "already_have_account": {
+    "en": "Already have an account?"
+  },
+  "sign_in": {
+    "en": "Sign in"
+  },
+  "business_phone_claim_banner": {
+    "en": "We found an existing profile for this number: {{name}}. Verify to claim it."
+  },
+  "comment_by_author": {
+    "en": "Author"
+  },
+  "like": {
+    "en": "Like"
+  },
+  "comment_view_replies": {
+    "en": "View {{count}} replies"
+  },
+  "reply": {
+    "en": "Reply"
+  },
+  "block_member_confirm": {
+    "en": "Block this member? They will be removed and cannot rejoin until unblocked."
+  },
+  "community_blocked_title": {
+    "en": "Removed from community"
+  },
+  "community_blocked_message": {
+    "en": "You have been blocked from {{name}}\\"
+  },
+  "this_business": {
+    "en": "this business"
+  },
+  "member_blocked_success": {
+    "en": "Member blocked successfully"
+  },
+  "member_blocked_error": {
+    "en": "Failed to block member"
+  },
+  "member_unblocked_success": {
+    "en": "Member unblocked — they can join again"
+  },
+  "member_unblocked_error": {
+    "en": "Failed to unblock member"
+  },
+  "member_unmuted_success": {
+    "en": "Member unmuted"
+  },
+  "member_muted_success": {
+    "en": "Member muted in group chat"
+  },
+  "member_mute_error": {
+    "en": "Failed to update mute status"
+  },
+  "member_notifications_locked": {
+    "en": "Member messaging is included in the paid business plan."
+  },
+  "please_enter_message": {
+    "en": "Please enter a message"
+  },
+  "please_select_member": {
+    "en": "Please select at least one member"
+  },
+  "message_sent": {
+    "en": "Message sent to"
+  },
+  "message_sent_error": {
+    "en": "Failed to send messages"
+  },
+  "loading_members": {
+    "en": "Loading members..."
+  },
+  "community_management": {
+    "en": "Community Management"
+  },
+  "group_messaging": {
+    "en": "Group messaging"
+  },
+  "upgrade_now": {
+    "en": "Upgrade Now"
+  },
+  "message_selected": {
+    "en": "Message Selected"
+  },
+  "deselect_all": {
+    "en": "Deselect All"
+  },
+  "select_all_broadcast": {
+    "en": "Select All (Group Message)"
+  },
+  "selected_count": {
+    "en": "selected"
+  },
+  "no_community_members_yet": {
+    "en": "No community members yet"
+  },
+  "member_muted_badge": {
+    "en": "Muted in chat"
+  },
+  "unmute_member": {
+    "en": "Unmute"
+  },
+  "mute_member": {
+    "en": "Mute in chat"
+  },
+  "block_member": {
+    "en": "Block member"
+  },
+  "blocked_members": {
+    "en": "Blocked members"
+  },
+  "no_blocked_members": {
+    "en": "No blocked members yet."
+  },
+  "unblock_member": {
+    "en": "Unblock"
+  },
+  "send_message_to_members": {
+    "en": "Send Message to"
+  },
+  "type_message_placeholder": {
+    "en": "Type your message here..."
+  },
+  "btn_cancel": {
+    "en": "Cancel"
+  },
+  "sending_message": {
+    "en": "Sending..."
+  },
+  "send_message": {
+    "en": "Send Message"
+  },
+  "insufficient_dine_credits_wallet": {
+    "en": "Not enough Dine Credits. Open Settings → Dine Credits to top up."
+  },
+  "invite_create_title": {
+    "en": "Create invitation"
+  },
+  "invite_create_subtitle": {
+    "en": "Choose the type of invitation you want to create."
+  },
+  "detecting_location": {
+    "en": "Detecting location…"
+  },
+  "invite_create_public_title": {
+    "en": "Public invitation"
+  },
+  "invite_create_public_desc": {
+    "en": "A discoverable invitation others can browse and join."
+  },
+  "invite_create_social_title": {
+    "en": "Social Invite"
+  },
+  "invite_create_social_desc": {
+    "en": "Invite specific guests with a private link."
+  },
+  "invite_create_private_title": {
+    "en": "Personal Invite"
+  },
+  "invite_create_private_desc": {
+    "en": "A private-style invitation for matched dining."
+  },
+  "order_online": {
+    "en": "Order Online"
+  },
+  "edit_delivery_links": {
+    "en": "Edit delivery links"
+  },
+  "delivery_links_edit_hint": {
+    "en": "Paste any delivery link, then tap Fetch to detect the service name and icon. Up to {{max}} links."
+  },
+  "delivery_link_number": {
+    "en": "Link {{n}}"
+  },
+  "remove_link": {
+    "en": "Remove link"
+  },
+  "delivery_link_url_placeholder": {
+    "en": "https://example.com/your-restaurant"
+  },
+  "fetching": {
+    "en": "Fetching…"
+  },
+  "delivery_link_fetch": {
+    "en": "Fetch name & icon"
+  },
+  "delivery_link_name_placeholder": {
+    "en": "Display name"
+  },
+  "add_delivery_link": {
+    "en": "Add another link"
+  },
+  "save_links": {
+    "en": "Save Links"
+  },
+  "delivery_links_empty_owner": {
+    "en": "Add delivery links so customers can order from your profile."
+  },
+  "locked": {
+    "en": "Locked"
+  },
+  "delivery_links_upgrade": {
+    "en": "Upgrade to Pro to unlock delivery links"
+  },
+  "inbox_liked_you_title": {
+    "en": "Liked You"
+  },
+  "inbox_liked_you_desc": {
+    "en": "Subscribe to see who liked your profile and connect."
+  },
+  "inbox_liked_you_cta": {
+    "en": "See who liked you"
+  },
+  "inbox_loading": {
+    "en": "Loading…"
+  },
+  "inbox_empty_chats": {
+    "en": "No conversations yet — start chatting from a member profile."
+  },
+  "user": {
+    "en": "User"
+  },
+  "shared_content_preview": {
+    "en": "Shared content"
+  },
+  "no_messages_yet": {
+    "en": "No messages yet"
+  },
+  "inbox_view_all_chats": {
+    "en": "View all conversations"
+  },
+  "inbox_empty_invites": {
+    "en": "No pending invites — when someone sends you a private invite, it will appear here."
+  },
+  "inbox_gifts_coming_soon": {
+    "en": "Gifts are coming soon — they will show in this tab when available."
+  },
+  "inbox_private_invite_fallback": {
+    "en": "Private invite"
+  },
+  "inbox_social_invite_fallback": {
+    "en": "Social invite"
+  },
+  "someone": {
+    "en": "Someone"
+  },
+  "notif_msg_follow": {
+    "en": "{{name}} started following you"
+  },
+  "inbox_activity_like": {
+    "en": "{{name}} liked your profile"
+  },
+  "inbox_empty_activity": {
+    "en": "No recent activity — follows and profile likes will show here."
+  },
+  "inbox_tab_chats": {
+    "en": "Conversations"
+  },
+  "inbox_tab_invites": {
+    "en": "Invites & gifts"
+  },
+  "inbox_tab_activity": {
+    "en": "Activity"
+  },
+  "inbox_title": {
+    "en": "Inbox"
+  },
+  "inbox_invite_from": {
+    "en": "From ${hostName} · ${formatTime(inv)}"
+  },
+  "draft_modal_title": {
+    "en": "Your profile is starting to look amazing! ✨"
+  },
+  "draft_modal_description": {
+    "en": "Don"
+  },
+  "explore_packages": {
+    "en": "Explore Packages Now"
+  },
+  "continue_customizing": {
+    "en": "Continue Customizing"
+  },
+  "auth_reset_failed": {
+    "en": "Could not send verification email."
+  },
+  "business_email_verify_banner_title": {
+    "en": "Verify your email to appear publicly"
+  },
+  "business_email_verify_banner_desc": {
+    "en": "Your business works in the app, but it stays hidden from the Partners page and public discovery until you verify your email. Changing your email requires verifying the new address."
+  },
+  "dismiss": {
+    "en": "Dismiss"
+  },
+  "business_email_verify_btn_resend": {
+    "en": "Resend activation link"
+  },
+  "business_email_verify_btn_recheck": {
+    "en": "I"
+  },
+  "drag_to_reorder": {
+    "en": "Drag to reorder"
+  },
+  "add_caption": {
+    "en": "Add caption..."
+  },
+  "set_as_header": {
+    "en": "Set as header"
+  },
+  "edit_caption": {
+    "en": "Edit caption"
+  },
+  "move_to_category": {
+    "en": "Move to category"
+  },
+  "delete": {
+    "en": "Delete"
+  },
+  "gallery_max_reached": {
+    "en": "Your current plan allows up to ${MAX_IMAGES} images. Upgrade to add more."
+  },
+  "upload_error": {
+    "en": "Failed to upload image"
+  },
+  "confirm_delete_image": {
+    "en": "Delete this image?"
+  },
+  "delete_error": {
+    "en": "Failed to delete image"
+  },
+  "update_error": {
+    "en": "Failed to update caption"
+  },
+  "header_updated": {
+    "en": "Header image updated"
+  },
+  "image_moved": {
+    "en": "Image moved"
+  },
+  "move_error": {
+    "en": "Failed to move image"
+  },
+  "order_updated": {
+    "en": "Order updated"
+  },
+  "gallery": {
+    "en": "Gallery"
+  },
+  "done": {
+    "en": "Done"
+  },
+  "all": {
+    "en": "All"
+  },
+  "add_images_above": {
+    "en": "Add images by category:"
+  },
+  "gallery_limit_reached": {
+    "en": "Limit reached"
+  },
+  "add": {
+    "en": "Add"
+  },
+  "uploading": {
+    "en": "Uploading..."
+  },
+  "no_images": {
+    "en": "No images yet"
+  },
+  "write_review": {
+    "en": "Write Review"
+  },
+  "filter": {
+    "en": "Filter"
+  },
+  "all_ratings": {
+    "en": "All Ratings"
+  },
+  "stars": {
+    "en": "Stars"
+  },
+  "sort": {
+    "en": "Sort"
+  },
+  "no_reviews_filter": {
+    "en": "No reviews for this rating yet"
+  },
+  "no_reviews": {
+    "en": "No reviews yet. Be the first to review!"
+  },
+  "business_response": {
+    "en": "Business Response"
+  },
+  "write_reply": {
+    "en": "Write your response..."
+  },
+  "posting": {
+    "en": "Posting..."
+  },
+  "post_reply": {
+    "en": "Post Reply"
+  },
+  "show_all_reviews": {
+    "en": "Show All Reviews"
+  },
+  "page": {
+    "en": "Page"
+  },
+  "of": {
+    "en": "of"
+  },
+  "show_less": {
+    "en": "Show Less"
+  },
+  "feedback_owner_blocked": {
+    "en": "Business owners cannot send feedback to their own profile."
+  },
+  "feedback_req_message": {
+    "en": "Please write your message details"
+  },
+  "feedback_req_phone": {
+    "en": "Please enter a phone number to contact you"
+  },
+  "feedback_success": {
+    "en": "Your message has been sent successfully. We will contact you soon."
+  },
+  "feedback_error": {
+    "en": "An error occurred while sending, please try again later."
+  },
+  "feedback_title": {
+    "en": "Feedback & Complaints"
+  },
+  "feedback_intro": {
+    "en": "Your opinion matters! If you faced an issue, share it with us so we can resolve it. This message is private and goes directly to management."
+  },
+  "feedback_type": {
+    "en": "Message Type"
+  },
+  "feedback_content": {
+    "en": "Message Details"
+  },
+  "feedback_ph_complaint": {
+    "en": "Tell us about the issue you faced..."
+  },
+  "feedback_ph_suggestion": {
+    "en": "Share your idea to improve the place..."
+  },
+  "feedback_phone": {
+    "en": "Contact Phone Number"
+  },
+  "feedback_phone_ph": {
+    "en": "+971 50 123 4567"
+  },
+  "feedback_phone_hint": {
+    "en": "Management will contact you soon."
+  },
+  "sending": {
+    "en": "Sending..."
+  },
+  "send_feedback": {
+    "en": "Send"
+  },
+  "image_upload_please_wait": {
+    "en": "Please wait — do not close the app"
+  },
+  "only_images_allowed": {
+    "en": "Please select an image file."
+  },
+  "post_draft_restored": {
+    "en": "Your unsaved post was restored."
+  },
+  "post_created": {
+    "en": "Post created successfully!"
+  },
+  "remove": {
+    "en": "Remove"
+  },
+  "whats_on_your_mind": {
+    "en": "What"
+  },
+  "post": {
+    "en": "Post"
+  },
+  "uploading_image_progress": {
+    "en": "Uploading image... {{progress}}%"
+  },
+  "photo": {
+    "en": "Photo"
+  },
+  "emoji": {
+    "en": "Emoji"
+  },
+  "post_body_char_limit": {
+    "en": "Post text (not the AI prompt)"
+  },
+  "post_body_label": {
+    "en": "Post"
+  },
+  "install_modal_title": {
+    "en": "Install DineBuddies"
+  },
+  "install_modal_subtitle": {
+    "en": "Add to your home screen for faster loading and a smoother experience."
+  },
+  "install_modal_install_cta": {
+    "en": "Install"
+  },
+  "install_modal_ios_step1": {
+    "en": "Tap Share ↗️ (Safari toolbar)."
+  },
+  "install_modal_ios_step2": {
+    "en": "Tap “Add to Home Screen”, then Add."
+  },
+  "install_modal_not_now": {
+    "en": "Not now"
+  },
+  "failed_to_send": {
+    "en": "Failed to send."
+  },
+  "send_in_chat": {
+    "en": "Send in Chat"
+  },
+  "chats": {
+    "en": "Chats"
+  },
+  "communities": {
+    "en": "Communities"
+  },
+  "search": {
+    "en": "Search..."
+  },
+  "no_chats_found": {
+    "en": "No recent chats found."
+  },
+  "send": {
+    "en": "Send"
+  },
+  "loading": {
+    "en": "Loading..."
+  },
+  "no_communities_found": {
+    "en": "No communities found."
+  },
+  "tbd": {
+    "en": "TBD"
+  },
+  "category": {
+    "en": "Category"
+  },
+  "venue": {
+    "en": "Venue"
+  },
+  "payment_label": {
+    "en": "Payment"
+  },
+  "waiting_host_complete": {
+    "en": "Waiting for host to complete..."
+  },
+  "updating_progress": {
+    "en": "Updating..."
+  },
+  "members_list_title": {
+    "en": "Who\\"
+  },
+  "host": {
+    "en": "Host"
+  },
+  "private_splash_tap_open": {
+    "en": "Tap to open your message ❤️"
+  },
+  "private_splash_sent_invite": {
+    "en": "sent you a private invite"
+  },
+  "at": {
+    "en": "at"
+  },
+  "view_invitation": {
+    "en": "View Invitation"
+  },
+  "later": {
+    "en": "Later"
+  },
+  "business_cannot_join": {
+    "en": "Business accounts cannot join invitations"
+  },
+  "guests": {
+    "en": "Guests"
+  },
+  "km_away": {
+    "en": "km away"
+  },
+  "guests_cannot_post": {
+    "en": "Sign in to share to the feed."
+  },
+  "login_to_join": {
+    "en": "Login to Join"
+  },
+  "share_to_feed": {
+    "en": "Share to feed"
+  },
+  "invitation": {
+    "en": "Invitation"
+  },
+  "decline": {
+    "en": "Decline"
+  },
+  "accept": {
+    "en": "Accept"
+  },
+  "invitation_inbox_aria": {
+    "en": "Invitation"
+  },
+  "invitation_inbox_counter": {
+    "en": "{{current}} / {{total}}"
+  },
+  "invitation_inbox_swipe_hint": {
+    "en": "Swipe to see other invitations"
+  },
+  "ai_request_timeout": {
+    "en": "Image generation timed out. The server may still be working — wait and try again."
+  },
+  "magic_cover_generate_cover_btn": {
+    "en": "Generate Cover with AI (Costs ${AI_IMAGE_GENERATION_CREDITS} credits)"
+  },
+  "media_dinebuddies_venue_cover": {
+    "en": "Venue on DineBuddies"
+  },
+  "media_dinebuddies_venue_cover_hint": {
+    "en": "Optional: use the cover image from the business profile you selected — not from map listings."
+  },
+  "media_use_venue_cover": {
+    "en": "Use this cover"
+  },
+  "media_tab_upload_device": {
+    "en": "From device"
+  },
+  "media_tab_upload_photo": {
+    "en": "Upload photo"
+  },
+  "media_tab_camera": {
+    "en": "Camera"
+  },
+  "record_video": {
+    "en": "Record video"
+  },
+  "take_photo": {
+    "en": "Take photo"
+  },
+  "remove_preview": {
+    "en": "Remove"
+  },
+  "image_rejected_choose_another": {
+    "en": "Choose another photo"
+  },
+  "video_library_hint": {
+    "en": "Your selfie video is saved. Tap to use it on the card, or delete it permanently to record or upload a different one."
+  },
+  "selfie_video": {
+    "en": "Selfie video"
+  },
+  "delete_video_permanent": {
+    "en": "Delete video permanently"
+  },
+  "camera_tab_hint": {
+    "en": "Take a photo or record a video with your camera (no file upload here)."
+  },
+  "saving_video": {
+    "en": "Saving video…"
+  },
+  "upload_photo_only_hint": {
+    "en": "Choose an image from your device. Videos are not accepted here — use the Camera tab to record."
+  },
+  "saved_media_library": {
+    "en": "Saved media library"
+  },
+  "private_card_show_content_title": {
+    "en": "Off: date and place only on the card. On: show title, message, and profile photo."
+  },
+  "private_card_hide_text": {
+    "en": "Hide text"
+  },
+  "private_card_show_text": {
+    "en": "Show text"
+  },
+  "private_color_presets_aria": {
+    "en": "Card color choices"
+  },
+  "private_card_style_btn": {
+    "en": "Font & card color"
+  },
+  "social_card_font_label": {
+    "en": "Font"
+  },
+  "private_card_theme_color_reset": {
+    "en": "Default"
+  },
+  "private_camera_retake": {
+    "en": "Re-record"
+  },
+  "private_camera_insert": {
+    "en": "Insert & close"
+  },
+  "private_pair_accepted": {
+    "en": "Date confirmed"
+  },
+  "private_pair_declined": {
+    "en": "Not available"
+  },
+  "private_pair_pending": {
+    "en": "Awaiting response"
+  },
+  "private_pair_aria": {
+    "en": "Date pairing"
+  },
+  "private_pair_heading": {
+    "en": "Your date"
+  },
+  "social_card_background_label": {
+    "en": "Card background"
+  },
+  "private_rail_upload_label": {
+    "en": "Your photo"
+  },
+  "private_rail_camera_label": {
+    "en": "Video"
+  },
+  "private_upload_library_title": {
+    "en": "Choose from library"
+  },
+  "private_upload_library_short": {
+    "en": "Library"
+  },
+  "private_upload_capture_title": {
+    "en": "Take a photo"
+  },
+  "private_upload_capture_short": {
+    "en": "Camera"
+  },
+  "choose_color_theme": {
+    "en": "Choose Color Theme"
+  },
+  "invitation_card_font": {
+    "en": "Title & message font"
+  },
+  "invitation_font_default": {
+    "en": "Default"
+  },
+  "social_card_export_error": {
+    "en": "Could not create the image."
+  },
+  "social_invitation": {
+    "en": "Private invitation"
+  },
+  "social_card_share_unavailable": {
+    "en": "Sharing is not available on this device. Use download instead."
+  },
+  "social_card_host_section_title": {
+    "en": "Your invitation card"
+  },
+  "social_card_download_png": {
+    "en": "Download image"
+  },
+  "social_card_share": {
+    "en": "Share"
+  },
+  "studio_close_title": {
+    "en": "Save your work?"
+  },
+  "save_changes": {
+    "en": "Save Changes"
+  },
+  "editor_leave_dont_save": {
+    "en": "Don"
+  },
+  "social_card_copy_font_larger": {
+    "en": "Larger title and message"
+  },
+  "social_card_copy_font_smaller": {
+    "en": "Smaller title and message"
+  },
+  "social_card_copy_font_scale_label": {
+    "en": "Title and message size"
+  },
+  "social_card_copy_move_up": {
+    "en": "Move text up"
+  },
+  "social_card_copy_move_down": {
+    "en": "Move text down"
+  },
+  "social_card_copy_wider": {
+    "en": "Wider text area"
+  },
+  "social_card_copy_narrower": {
+    "en": "Narrower text area"
+  },
+  "social_card_copy_layout_label": {
+    "en": "Text position and width"
+  },
+  "social_card_frame_text_label": {
+    "en": "Frame & text"
+  },
+  "social_card_motion_label": {
+    "en": "Text & photo motion"
+  },
+  "social_card_show_content_title": {
+    "en": "Off: date and place only on the card. On: show title, message, and profile photo."
+  },
+  "social_card_hide_text": {
+    "en": "Hide text"
+  },
+  "social_card_show_text": {
+    "en": "Show text"
+  },
+  "private_typography_sheet_title": {
+    "en": "Font & card color"
+  },
+  "private_card_theme_color_label": {
+    "en": "Card color"
+  },
+  "private_card_theme_color_hint": {
+    "en": "One color for the frame and all text. Plain — no shadow on text."
+  },
+  "social_card_text_backdrop_tone_aria": {
+    "en": "Text panel tone"
+  },
+  "social_card_text_backdrop_tone_label": {
+    "en": "Panel"
+  },
+  "social_cover_ai_preview_failed": {
+    "en": "The cover was generated but the preview could not load. Try again in a moment."
+  },
+  "magic_cover_panel_title": {
+    "en": "Optional AI cover"
+  },
+  "magic_cover_preview_heading": {
+    "en": "Preview — not applied yet"
+  },
+  "magic_cover_discard_credits_note": {
+    "en": "Discarding does not refund credits — they were already charged when generation succeeded."
+  },
+  "social_cover_ai_use_image": {
+    "en": "Use as cover"
+  },
+  "social_cover_ai_retry": {
+    "en": "Try again"
+  },
+  "private_card_template_label": {
+    "en": "Card templates"
+  },
+  "social_card_occasion_art_label": {
+    "en": "Occasion artwork"
+  },
+  "social_cover_upload_rail_label": {
+    "en": "Your photos ({{count}}/{{max}})"
+  },
+  "social_cover_ai_rail_label": {
+    "en": "AI photos ({{count}}/{{max}})"
+  },
+  "social_cover_video_rail_label": {
+    "en": "Your videos ({{count}}/{{max}})"
+  },
+  "social_cover_no_templates_category": {
+    "en": "No artwork files for this category yet. Add images under invitation-card-backgrounds in the app."
+  },
+  "social_cover_upload_rail_empty": {
+    "en": "Tap “Upload photo” to add from your device (up to {{max}})."
+  },
+  "social_cover_ai_rail_empty": {
+    "en": "Use “Generate with AI” to create covers (up to {{max}})."
+  },
+  "social_cover_video_rail_empty": {
+    "en": "Tap “Record video” to capture a clip (up to {{max}})."
+  },
+  "close_editor": {
+    "en": "Close"
+  },
+  "save_invitation_draft": {
+    "en": "Save invitation"
+  },
+  "social_share_image_missing": {
+    "en": "Could not capture the invitation card."
+  },
+  "social_share_message_copied": {
+    "en": "Invitation message copied"
+  },
+  "copy_failed": {
+    "en": "Could not copy link"
+  },
+  "social_share_android_preparing": {
+    "en": "Preparing invitation image…"
+  },
+  "social_share_ios_paste_hint": {
+    "ar": "تم نسخ نص الدعوة والرابط! يمكنك لصقهما مباشرة في حال لم يظهرا أثناء مشاركة الصورة."
+  },
+  "social_share_android_retry_hint": {
+    "en": "Invitation is ready — tap Share once more to open the share menu."
+  },
+  "social_share_sheet_failed": {
+    "en": "Could not open the share menu. Copy the message below or try again."
+  },
+  "social_share_app_link_hint": {
+    "en": "Shared the invitation card. Recipients can join you on DineBuddies via the link."
+  },
+  "social_share_preparing": {
+    "en": "Preparing…"
+  },
+  "social_share_send_sms_social": {
+    "en": "Send via SMS & social"
+  },
+  "social_share_outside_app_title": {
+    "en": "Share outside the app (WhatsApp & SMS)"
+  },
+  "social_share_outside_app_hint": {
+    "en": "Sends the invitation image and a link to DineBuddies. App members should be invited with «Send to app members» above."
+  },
+  "social_share_copy_message": {
+    "en": "Copy message"
+  },
+  "social_share_card_and_app_hint": {
+    "en": "Shares the invitation card image with event details and your DineBuddies profile link."
+  },
+  "follow_people_first": {
+    "en": "Follow people first to invite them"
+  },
+  "select_your_date": {
+    "en": "Select your date"
+  },
+  "private_pick_date_preview": {
+    "en": "Choose who you are inviting below (optional for external link)."
+  },
+  "social_no_in_app_invitees": {
+    "en": "No in-app guests yet — you can still share externally after sending."
+  },
+  "invited_friends": {
+    "en": "Invited friends"
+  },
+  "private_no_available_invitees": {
+    "en": "No one you follow is open to private invites. Follow members who accept Private Invite."
+  },
+  "private_pick_date_create": {
+    "en": "Who are you inviting?"
+  },
+  "invite_friends_on_app": {
+    "en": "Friends on the app (optional)"
+  },
+  "private_pick_date_create_hint": {
+    "en": "Only members who accept private invites appear here (consumer accounts only)."
+  },
+  "unhandled_invitations_reminder_title": {
+    "en": "You have invitations waiting for your response"
+  },
+  "unhandled_invitations_reminder_body": {
+    "en": "Private and private invites are still pending. Review them and accept or decline."
+  },
+  "unhandled_invitations_reminder_private_label": {
+    "en": "Private invitations"
+  },
+  "unhandled_invitations_reminder_view_cta": {
+    "en": "View invitations"
+  },
+  "latest_invitations": {
+    "en": "Latest Invitations"
+  },
+  "see_all": {
+    "en": "See all"
+  },
+  "trending_partners": {
+    "en": "Trending Businesses"
+  },
+  "members": {
+    "en": "members"
+  },
+  "settings": {
+    "en": "Settings"
+  },
+  "ai_design_studio_nav": {
+    "en": "AI Design Studio"
+  },
+  "login_signup": {
+    "en": "Login / Sign Up"
+  },
+  "nav_login": {
+    "en": "Login"
+  },
+  "nav_invitations": {
+    "en": "Invitations"
+  },
+  "create_invitation": {
+    "en": "Create Invitation"
+  },
+  "nav_partners": {
+    "en": "Businesses"
+  },
+  "user_directory_nav": {
+    "en": "Members"
+  },
+  "nav_messages": {
+    "en": "Messages"
+  },
+  "notifications": {
+    "en": "Notifications"
+  },
+  "dashboard": {
+    "en": "Dashboard"
+  },
+  "profile": {
+    "en": "Profile"
+  },
+  "business_nav_create_posts": {
+    "en": "Create posts"
+  },
+  "profile_title": {
+    "en": "My Profile"
+  },
+  "business_dashboard": {
+    "en": "Dashboard"
+  },
+  "invite_create_menu": {
+    "en": "Create invitation"
+  },
+  "business_create_menu": {
+    "en": "Create"
+  },
+  "business_create_title": {
+    "en": "Create"
+  },
+  "business_create_subtitle": {
+    "en": "Choose what you want to publish"
+  },
+  "business_create_featured_title": {
+    "en": "Featured Post"
+  },
+  "business_create_featured_desc": {
+    "en": "Elite slide on the home feed for all users."
+  },
+  "business_create_studio_title": {
+    "en": "Motion post"
+  },
+  "business_create_studio_desc": {
+    "en": "Animated studio post in the community feed."
+  },
+  "local_dev_oauth_lan_blocked": {
+    "en": "Social sign-in does not work on the network IP address."
+  },
+  "local_dev_oauth_lan_hint": {
+    "en": "You opened {{origin}}. Firebase only allows localhost for OAuth — not 192.168.x.x."
+  },
+  "local_dev_oauth_summary": {
+    "en": "Local dev: OAuth setup (expand if sign-in fails)"
+  },
+  "local_dev_oauth_use_localhost": {
+    "en": "Always use the Local URL from Vite (localhost), not the Network IP (192.168.x.x)."
+  },
+  "local_dev_oauth_body": {
+    "en": "Google Cloud → Credentials → Web client → add these values (use the exact origin below — port may be 5176 or 5177):"
+  },
+  "copy": {
+    "en": "Copy"
+  },
+  "local_dev_oauth_cursor_hint": {
+    "en": "Cursor preview: open login in Chrome if redirect fails —"
+  },
+  "localhost_preview_title": {
+    "en": "Localhost — app preview"
+  },
+  "localhost_preview_body": {
+    "en": "Run npm run dev and open this URL in your browser to see the live listing preview below. For Google Maps search on localhost, add your dev origin to the Maps API key: Application restrictions → HTTP referrers → {{origin}}/*"
+  },
+  "localhost_preview_copied": {
+    "en": "Copied"
+  },
+  "localhost_preview_copy": {
+    "en": "Copy page URL"
+  },
+  "location_search_failed": {
+    "en": "Search failed"
+  },
+  "location_no_results": {
+    "en": "No matching places. Try a different name or widen the area."
+  },
+  "search_places_placeholder": {
+    "en": "Search places"
+  },
+  "item_name": {
+    "en": "Item Name"
+  },
+  "price": {
+    "en": "Price"
+  },
+  "description": {
+    "en": "Description"
+  },
+  "image": {
+    "en": "Image"
+  },
+  "optional": {
+    "en": "Optional"
+  },
+  "change_image": {
+    "en": "Change Image"
+  },
+  "fill_required_fields": {
+    "en": "Please fill in required fields"
+  },
+  "confirm_delete_item": {
+    "en": "Delete this menu item?"
+  },
+  "menu": {
+    "en": "Menu"
+  },
+  "add_item": {
+    "en": "Add Item"
+  },
+  "add_menu_item": {
+    "en": "Add Menu Item"
+  },
+  "item_name_placeholder": {
+    "en": "e.g., Margherita Pizza"
+  },
+  "description_placeholder": {
+    "en": "Describe this item..."
+  },
+  "choose_image": {
+    "en": "Choose Image"
+  },
+  "add_another": {
+    "en": "+ Add"
+  },
+  "add_first_item": {
+    "en": "Press + above to add your first menu item"
+  },
+  "no_menu_items": {
+    "en": "No menu items yet"
+  },
+  "Are you sure you want to leave": {
+    "en": "Are you sure you want to leave"
+  },
+  "Loading communities...": {
+    "en": "Loading communities..."
+  },
+  "No communities found": {
+    "en": "No communities found"
+  },
+  "No communities yet": {
+    "en": "No communities yet"
+  },
+  "Try a different search": {
+    "en": "Try a different search"
+  },
+  "Join communities from partner profiles": {
+    "en": "Join communities from partner profiles"
+  },
+  "Explore Partners": {
+    "en": "Explore Partners"
+  },
+  "Leave Community": {
+    "en": "Leave Community"
+  },
+  "business": {
+    "en": "Business"
+  },
+  "motion_post": {
+    "en": "Motion post"
+  },
+  "profile_action_report": {
+    "en": "Report"
+  },
+  "mute_user": {
+    "en": "Mute"
+  },
+  "notification_toast_keep": {
+    "en": "Keep"
+  },
+  "notification_toast_saved": {
+    "en": "Saved"
+  },
+  "new_notification": {
+    "en": "New Notification"
+  },
+  "notification_toast_swipe_hint": {
+    "en": "Swipe left to keep"
+  },
+  "badge_discount": {
+    "en": "Discount"
+  },
+  "badge_hot": {
+    "en": "Hot"
+  },
+  "badge_special": {
+    "en": "Special"
+  },
+  "badge_sale": {
+    "en": "Sale"
+  },
+  "badge_premium": {
+    "en": "Premium"
+  },
+  "create_special_offer": {
+    "en": "Create Special Offer"
+  },
+  "banner_preview_label": {
+    "en": "Banner Preview:"
+  },
+  "offer_title_placeholder_preview": {
+    "en": "Offer Title here..."
+  },
+  "offer_desc_placeholder_preview": {
+    "en": "Short description will appear here..."
+  },
+  "offer": {
+    "en": "Offer"
+  },
+  "your_business": {
+    "en": "Business"
+  },
+  "select_theme_label": {
+    "en": "Select Visual Theme:"
+  },
+  "glass_effect_toggle": {
+    "en": "Glassmorphism"
+  },
+  "shimmer_effect_toggle": {
+    "en": "Animated Shimmer"
+  },
+  "offer_info_label": {
+    "en": "Basic Offer Information:"
+  },
+  "offer_title_placeholder": {
+    "en": "Offer Title (e.g. 20% Discount)"
+  },
+  "offer_desc_placeholder": {
+    "en": "Offer Description (Appears in banner)"
+  },
+  "offer_image_label": {
+    "en": "Offer Image:"
+  },
+  "select_identity_type": {
+    "en": "Display Identity:"
+  },
+  "use_logo": {
+    "en": "Logo"
+  },
+  "use_badge": {
+    "en": "Badge"
+  },
+  "offer_status_label": {
+    "en": "Status:"
+  },
+  "status_active": {
+    "en": "Active"
+  },
+  "status_draft": {
+    "en": "Draft"
+  },
+  "expiration_type_label": {
+    "en": "Expire:"
+  },
+  "fixed": {
+    "en": "Fixed"
+  },
+  "perpetual": {
+    "en": "Always"
+  },
+  "expiration_date_label": {
+    "en": "Ends:"
+  },
+  "update_offer": {
+    "en": "Update Offer"
+  },
+  "publish_offer_now": {
+    "en": "Publish Offer Now"
+  },
+  "you": {
+    "en": "You"
+  },
+  "comment_reply_to": {
+    "en": "Reply to {{name}}"
+  },
+  "comment_as": {
+    "en": "Comment as {{name}}"
+  },
+  "Just now": {
+    "en": "Just now"
+  },
+  "time_m": {
+    "en": "m"
+  },
+  "time_h": {
+    "en": "h"
+  },
+  "time_d": {
+    "en": "d"
+  },
+  "hide": {
+    "en": "Hide"
+  },
+  "report_post": {
+    "en": "Report Post"
+  },
+  "upcoming_event": {
+    "en": "UPCOMING EVENT"
+  },
+  "view_event_details": {
+    "en": "View Event Details"
+  },
+  "tap_for_sound": {
+    "en": "Tap for sound"
+  },
+  "comments": {
+    "en": "Comments"
+  },
+  "comment": {
+    "en": "Comment"
+  },
+  "comment_view_all": {
+    "en": "View all {{count}} comments"
+  },
+  "comments_most_relevant": {
+    "en": "Most relevant"
+  },
+  "comments_scroll_load_older": {
+    "en": "Scroll up for older comments"
+  },
+  "freeze": {
+    "en": "Freeze"
+  },
+  "republish": {
+    "en": "Re-Publish"
+  },
+  "frozen": {
+    "en": "FROZEN"
+  },
+  "private_invite_social_only_toast": {
+    "en": "This member only accepts social/public invites — private invites are turned off."
+  },
+  "user_directory_dating_unavailable": {
+    "en": "Not open to private invites"
+  },
+  "private_send_invite_confirm": {
+    "en": "Send a Private Invite invitation to ${displayName}?"
+  },
+  "private_send_invite_badge_title": {
+    "en": "Send a private invite to ${displayName}"
+  },
+  "private_profile_invite_pref_title": {
+    "en": "Who can send you Private Invites?"
+  },
+  "join_reason_title": {
+    "en": "Reason for Joining"
+  },
+  "join_reason_hint": {
+    "en": "Pick up to 2 — helps others know what you are here for."
+  },
+  "private_profile_taste_title": {
+    "en": "Vibe & Interests"
+  },
+  "private_profile_taste_desc": {
+    "en": "Help others know your favorite activities for 1-on-1 meetups"
+  },
+  "pick_emoji": {
+    "en": "Pick emoji"
+  },
+  "private_profile_custom_tag_placeholder": {
+    "en": "Add your own…"
+  },
+  "private_meetup_spot_title": {
+    "en": "Ideal meetup spot"
+  },
+  "private_meetup_spot_placeholder": {
+    "en": "e.g. cozy café, art gallery, walking track..."
+  },
+  "file_too_large_5mb": {
+    "en": "File too large. Max 5MB"
+  },
+  "profile_gallery_photo_added": {
+    "en": "Photo added to gallery"
+  },
+  "profile_gallery_title": {
+    "en": "Photo gallery"
+  },
+  "profile_gallery_hint": {
+    "en": "Add up to 3 portrait photos (9:16). Tap the star to choose which one appears in Discover & the member list."
+  },
+  "profile_gallery_cover_badge": {
+    "en": "Cover"
+  },
+  "profile_gallery_set_cover": {
+    "en": "Use as discovery cover"
+  },
+  "profile_gallery_add_photo": {
+    "en": "Add photo"
+  },
+  "fill_all_fields": {
+    "en": "Please fill all required fields"
+  },
+  "error_saving_profile": {
+    "en": "Error saving profile. Please try again."
+  },
+  "non_binary": {
+    "en": "Non-Binary"
+  },
+  "complete_profile": {
+    "en": "Complete Your Profile"
+  },
+  "complete_profile_desc": {
+    "en": "Please provide a few details to get the best experience."
+  },
+  "required_fields_note": {
+    "en": "Fields marked with * are required."
+  },
+  "warning_permanent_demographics_short": {
+    "en": "Gender and age category cannot be changed after saving."
+  },
+  "display_name": {
+    "en": "Display Name / Nickname"
+  },
+  "enter_name": {
+    "en": "Enter your name"
+  },
+  "select_gender": {
+    "en": "Select Gender"
+  },
+  "select_age_category": {
+    "en": "Select Age Category"
+  },
+  "save_and_continue": {
+    "en": "Save & Continue"
+  },
+  "edit_cover": {
+    "en": "Edit Cover"
+  },
+  "posted_invites": {
+    "en": "Posted"
+  },
+  "attended_events": {
+    "en": "Attended"
+  },
+  "avg_rating": {
+    "en": "Rating"
+  },
+  "attendance_rate": {
+    "en": "Rate"
+  },
+  "ach_first_event": {
+    "en": "First Event"
+  },
+  "ach_first_event_desc": {
+    "en": "Created your first invitation"
+  },
+  "ach_social_starter": {
+    "en": "5 Events"
+  },
+  "ach_social_starter_desc": {
+    "en": "Attended 5 events"
+  },
+  "ach_five_star": {
+    "en": "Five Star"
+  },
+  "ach_five_star_desc": {
+    "en": "Received a 5-star review"
+  },
+  "ach_host_master": {
+    "en": "Host Master"
+  },
+  "ach_host_master_desc": {
+    "en": "Hosted 10 events"
+  },
+  "ach_social_butterfly": {
+    "en": "Social Butterfly"
+  },
+  "ach_social_butterfly_desc": {
+    "en": "Attended 20 events"
+  },
+  "ach_popular": {
+    "en": "Popular"
+  },
+  "ach_popular_desc": {
+    "en": "50 followers"
+  },
+  "achievements": {
+    "en": "Achievements"
+  },
+  "place_already_added": {
+    "en": "Place already in favorites"
+  },
+  "place_added": {
+    "en": "Place added to favorites"
+  },
+  "place_add_failed": {
+    "en": "Failed to add place"
+  },
+  "venue_scope_local": {
+    "en": "Local"
+  },
+  "venue_scope_country": {
+    "en": "Country"
+  },
+  "venue_scope_all": {
+    "en": "All"
+  },
+  "favorite_places": {
+    "en": "Favorite Places"
+  },
+  "current_location": {
+    "en": "Location"
+  },
+  "search_app_venues_placeholder": {
+    "en": "Search DineBuddies venues…"
+  },
+  "favorite_places_app_venues_hint": {
+    "en": "Pick from venues listed on DineBuddies"
+  },
+  "searching": {
+    "en": "Searching…"
+  },
+  "waiting_for_location": {
+    "en": "Waiting for your city…"
+  },
+  "no_venues_found": {
+    "en": "No venues found"
+  },
+  "added": {
+    "en": "Added"
+  },
+  "no_favorite_places": {
+    "en": "No favorite places yet"
+  },
+  "today": {
+    "en": "Today"
+  },
+  "yesterday": {
+    "en": "Yesterday"
+  },
+  "days_ago": {
+    "en": "days ago"
+  },
+  "weeks_ago": {
+    "en": "weeks ago"
+  },
+  "no_reviews_yet": {
+    "en": "No reviews yet"
+  },
+  "social_links": {
+    "en": "Social Links"
+  },
+  "no_social_links": {
+    "en": "No social links added"
+  },
+  "favorite_places_local_hint": {
+    "en": "Showing venues in ${searchData.city}"
+  },
+  "ios_push_settings_hint": {
+    "en": "On iPhone: Safari → Share → Add to Home Screen, then open DineBuddies from that icon."
+  },
+  "push_config_error": {
+    "en": "Push is not configured on this build. Contact support."
+  },
+  "push_permission_denied_ios": {
+    "en": "Notifications are blocked. iPhone Settings → Notifications → DineBuddies → Allow."
+  },
+  "push_sw_not_ready": {
+    "en": "Almost ready — the app will refresh once, then tap Register again."
+  },
+  "push_token_failed": {
+    "en": "Could not register this device. Check your connection and try again."
+  },
+  "push_register_failed": {
+    "en": "Could not register this device. Open Settings → Notifications and try again."
+  },
+  "notifications_enabled": {
+    "en": "Push notifications enabled for this device."
+  },
+  "notifications_failed": {
+    "en": "Failed to enable notifications."
+  },
+  "ios_push_title": {
+    "en": "Install to Get Notifications"
+  },
+  "push_finish_register_title": {
+    "en": "Finish Push Setup"
+  },
+  "enable_push_title": {
+    "en": "Turn on Notifications"
+  },
+  "ios_push_desc": {
+    "en": "On iPhone, tap Share below and choose “Add to Home Screen”. Open the app from that icon, then tap Enable again."
+  },
+  "push_finish_register_desc": {
+    "en": "Notifications are allowed but this device is not registered yet. Tap below to complete setup."
+  },
+  "enable_push_desc": {
+    "en": "Tap Enable — iPhone will ask to allow alerts. Then lock the screen to receive them."
+  },
+  "got_it": {
+    "en": "Got it"
+  },
+  "enabling": {
+    "en": "Enabling…"
+  },
+  "push_finish_register_button": {
+    "en": "Register this device"
+  },
+  "enable": {
+    "en": "Enable"
+  },
+  "push_no_device_saved": {
+    "en": "No device token saved on the server yet."
+  },
+  "not_now": {
+    "en": "Not Now"
+  },
+  "rankings_top_paid": {
+    "en": "Top Paid Ranking"
+  },
+  "rankings_points": {
+    "en": "pts"
+  },
+  "seo.title": {
+    "en": "DineBuddies | Premium Social Dining"
+  },
+  "seo.description": {
+    "en": "DineBuddies is an exclusive social dining network where food lovers meet, join private restaurant invitations, and connect over premium meals."
+  },
+  "link_copied_clipboard": {
+    "en": "Link copied!"
+  },
+  "share_image_download_hint": {
+    "en": "Download the image, then attach it in WhatsApp with the link."
+  },
+  "share_failed": {
+    "en": "Could not generate share card. Please try again."
+  },
+  "share_chat": {
+    "en": "Send in Chat"
+  },
+  "share_card": {
+    "en": "Share Card"
+  },
+  "copy_link": {
+    "en": "Copy Link"
+  },
+  "download_image": {
+    "en": "Download Image"
+  },
+  "save_then_share": {
+    "en": "Save then share on WhatsApp / Instagram"
+  },
+  "processing": {
+    "en": "Processing…"
+  },
+  "media_invalid_file": {
+    "en": "Please choose a photo or video file."
+  },
+  "media_select_photo_or_video": {
+    "en": "Choose photo or video"
+  },
+  "media_video_limits": {
+    "en": "Video max {{duration}}s, {{size}}MB"
+  },
+  "new": {
+    "en": "New"
+  },
+  "your_story": {
+    "en": "Your Story"
+  },
+  "quick_emojis": {
+    "en": "Quick reactions"
+  },
+  "story_comments": {
+    "en": "Comments"
+  },
+  "social_replies": {
+    "en": "Private replies"
+  },
+  "story_owner_privacy_note": {
+    "en": "Only you can see these replies"
+  },
+  "story_viewer_privacy_note": {
+    "en": "Visible only to you and the story owner"
+  },
+  "no_comments_yet": {
+    "en": "No comments yet"
+  },
+  "like_label": {
+    "en": "Like"
+  },
+  "person": {
+    "en": "Person"
+  },
+  "people": {
+    "en": "People"
+  },
+  "story_owner_comments_playing": {
+    "en": "Showing all comments — story paused. Tap again to skip."
+  },
+  "story_owner_no_comments": {
+    "en": "Reactions and replies will appear here."
+  },
+  "story_owner_hint": {
+    "en": "Tap comments to watch all reactions — story will pause until done."
+  },
+  "story_owner": {
+    "en": "them"
+  },
+  "story_message_placeholder": {
+    "en": "Message {{name}}…"
+  },
+  "story_message_short": {
+    "en": "Message…"
+  },
+  "stripe_test_mode_banner": {
+    "en": "Stripe test mode — use card 4242 4242 4242 4242. No real charges."
+  },
+  "camera_error_permission": {
+    "en": "Camera access was blocked. Allow camera in browser settings, then try again."
+  },
+  "camera_error_generic": {
+    "en": "Could not open the camera. Check permissions and try again."
+  },
+  "camera_close": {
+    "en": "Close camera"
+  },
+  "camera_retake": {
+    "en": "Retake"
+  },
+  "camera_use_video": {
+    "en": "Use video"
+  },
+  "camera_use_photo": {
+    "en": "Use photo"
+  },
+  "business_publish_verify_email_first": {
+    "en": "Verify your email before publishing to the Partners page."
+  },
+  "business_publish_success": {
+    "en": "Your business is now visible on the Partners page."
+  },
+  "business_publish_error": {
+    "en": "Failed to publish profile: "
+  },
+  "unpublished_business_reminder_title": {
+    "en": "Your business is currently unpublished or hidden"
+  },
+  "unpublished_business_reminder_desc": {
+    "en": "Please publish it from your dashboard so customers can find you."
+  },
+  "publishing": {
+    "en": "Publishing..."
+  },
+  "publish_now": {
+    "en": "Publish Now"
+  },
+  "dont_show_again": {
+    "en": "Don"
+  },
+  "user_directory_gift_coming_soon": {
+    "en": "Gifts are coming soon — we will add them in a future update."
+  },
+  "user_directory_like": {
+    "en": "Like profile"
+  },
+  "user_directory_icebreaker": {
+    "en": "Ice breaker"
+  },
+  "user_directory_send_dating_invite": {
+    "en": "Send private invite"
+  },
+  "user_directory_send_gift": {
+    "en": "Send gift"
+  },
+  "dinbuddies_venues": {
+    "en": "DineBuddies Venues"
+  },
+  "dinbuddies_venues_short": {
+    "en": "db places"
+  },
+  "google_places": {
+    "en": "Google Places"
+  },
+  "google_places_short": {
+    "en": "Google places"
+  },
+  "venue_google_search_hint": {
+    "en": "Search by Google Places within your detected city."
+  },
+  "search_dineBuddies_venue": {
+    "en": "Search registered venues on DineBuddies..."
+  },
+  "try_osm_places_hint": {
+    "en": "Search all places (OpenStreetMap) for unregistered venues"
+  },
+  "switch_to_google": {
+    "en": "Search Google Places instead"
+  },
+  "for_unregistered_venues": {
+    "en": "For venues not yet on DineBuddies"
+  },
+  "failed_publish_invitation": {
+    "en": "Failed to publish invitation"
+  },
+  "just_now": {
+    "en": "Just now"
+  },
+  "time_ago": {
+    "en": "ago"
+  },
+  "studio_tap_image": {
+    "en": "Tap to add image"
+  },
+  "studio_tap_change_image": {
+    "en": "Tap to change image"
+  },
+  "studio_title_placeholder": {
+    "en": "Write title here"
+  },
+  "studio_body_placeholder": {
+    "en": "Write message here"
+  },
+  "studio_banner_image_zone": {
+    "en": "Image area"
+  },
+  "studio_banner_text_zone": {
+    "en": "Text area"
+  },
+  "studio_layer_title": {
+    "en": "Title"
+  },
+  "studio_layer_body": {
+    "en": "Message"
+  },
+  "studio_edit_text": {
+    "en": "Edit text"
+  },
+  "studio_composer_apply": {
+    "en": "OK"
+  },
+  "studio_fx_color_scroll": {
+    "en": "Effect colors"
+  },
+  "auth_unauthorized_domain_lan": {
+    "en": "This address is not allowed for sign-in. Open ${getLocalDevOAuthLoginUrl()} instead of the network IP."
+  },
+  "auth_open_chrome_for_oauth": {
+    "en": "Open this URL in Chrome: ${window.location.origin}/login"
+  },
+  "auth_in_app_browser_hint": {
+    "en": "Open this site in Safari or Chrome to sign in."
+  },
+  "account_deletion_request": {
+    "en": "Account Deletion Request"
+  },
+  "last_updated": {
+    "en": "Last Updated"
+  },
+  "account_deletion_intro": {
+    "en": "You can request permanent deletion of your DineBuddies account at any time. This page explains what is removed and how to proceed."
+  },
+  "what_happens": {
+    "en": "What happens when you delete"
+  },
+  "account_deletion_irreversible": {
+    "en": "Account deletion is permanent and cannot be undone."
+  },
+  "we_will_remove": {
+    "en": "We will remove:"
+  },
+  "deletion_profile": {
+    "en": "Your profile and account data"
+  },
+  "deletion_invitations": {
+    "en": "Your dining invitations and related content"
+  },
+  "deletion_messages": {
+    "en": "Your messages and chat history"
+  },
+  "deletion_preferences": {
+    "en": "Your preferences and settings"
+  },
+  "deletion_backups": {
+    "en": "Deleted accounts may remain in backups for a limited period in accordance with our Privacy Policy."
+  },
+  "how_to_delete": {
+    "en": "How to delete your account"
+  },
+  "delete_from_settings": {
+    "en": "You are signed in. To permanently delete your account, go to Settings and use the "
+  },
+  "go_to_settings": {
+    "en": "Go to Settings"
+  },
+  "delete_need_login": {
+    "en": "You need to be signed in to delete your account. Sign in, then go to Settings and use "
+  },
+  "log_in": {
+    "en": "Log in"
+  },
+  "contact_support": {
+    "en": "Contact support"
+  },
+  "deletion_contact_intro": {
+    "en": "If you cannot access your account or need help with deletion, contact us and we will process your request in line with our policies."
+  },
+  "website": {
+    "en": "Website"
+  },
+  "affiliate_partner": {
+    "en": "Partner"
+  },
+  "affiliate_verify_to_share": {
+    "en": "Verify your email to use your referral link."
+  },
+  "affiliate_payout_submitted": {
+    "en": "Withdrawal request submitted."
+  },
+  "affiliate_payout_failed": {
+    "en": "Could not submit payout request."
+  },
+  "affiliate_link_not_ready": {
+    "en": "Your referral link is still being generated. Try again in a moment."
+  },
+  "affiliate_link_copied": {
+    "en": "Referral link copied to clipboard."
+  },
+  "affiliate_copy_failed": {
+    "en": "Could not copy. Select the link and copy manually."
+  },
+  "affiliate_share_default_text": {
+    "en": "Join me on DineBuddies:"
+  },
+  "affiliate_account_banned": {
+    "en": "Account suspended"
+  },
+  "affiliate_account_banned_hint": {
+    "en": "This affiliate account has been permanently disabled."
+  },
+  "affiliate_dashboard_frozen": {
+    "en": "Dashboard access paused"
+  },
+  "affiliate_dashboard_frozen_hint": {
+    "en": "Your partner dashboard is temporarily frozen. Contact support."
+  },
+  "affiliate_dashboard_welcome": {
+    "en": "Welcome"
+  },
+  "affiliate_dashboard_sub": {
+    "en": "Track your reach and share your personal invite link."
+  },
+  "affiliate_settings_short": {
+    "en": "Settings"
+  },
+  "affiliate_back_home": {
+    "en": "Back to home"
+  },
+  "logout": {
+    "en": "Log out"
+  },
+  "affiliate_verify_banner_title": {
+    "en": "Verify your email"
+  },
+  "affiliate_verify_banner_body": {
+    "en": "Confirm your email to view your referral link, share it, and request payouts."
+  },
+  "affiliate_verify_banner_cta": {
+    "en": "Go to email verification"
+  },
+  "affiliate_dash_payout_title": {
+    "en": "Payout & mailing details"
+  },
+  "affiliate_dash_payout_sub": {
+    "en": "PayPal and your address are required before withdrawals can be processed. You can edit them anytime."
+  },
+  "affiliate_dash_paypal_label": {
+    "en": "PayPal"
+  },
+  "affiliate_dash_paypal_missing": {
+    "en": "Not set — add in Settings"
+  },
+  "affiliate_dash_location_label": {
+    "en": "City & country"
+  },
+  "affiliate_dash_location_missing": {
+    "en": "Not set — pick a place in Settings"
+  },
+  "affiliate_dash_address_label": {
+    "en": "Mailing address"
+  },
+  "affiliate_dash_address_missing": {
+    "en": "Not set — add in Settings"
+  },
+  "affiliate_dash_payout_incomplete": {
+    "en": "Add a valid PayPal email, full mailing address, and city & country in Settings to be payout-ready."
+  },
+  "affiliate_dash_edit_payout": {
+    "en": "Edit in Settings"
+  },
+  "affiliate_stats_section": {
+    "en": "Performance summary"
+  },
+  "affiliate_stat_clicks": {
+    "en": "Total clicks"
+  },
+  "affiliate_stat_clicks_hint": {
+    "en": "Visits on your referral link (updates in real time)."
+  },
+  "affiliate_stat_pending": {
+    "en": "Pending referrals"
+  },
+  "affiliate_stat_pending_hint": {
+    "en": "Users you referred who signed up but have not yet triggered a commission."
+  },
+  "affiliate_stat_earnings": {
+    "en": "Earnings"
+  },
+  "affiliate_stat_balance_line": {
+    "en": "Available for payout: {{amount}}"
+  },
+  "affiliate_stat_pending_payout_line": {
+    "en": "Pending withdrawal: {{amount}}"
+  },
+  "affiliate_auth_submitting": {
+    "en": "Please wait…"
+  },
+  "affiliate_payout_request": {
+    "en": "Request withdrawal"
+  },
+  "affiliate_marketing_title": {
+    "en": "Your referral link"
+  },
+  "affiliate_marketing_body": {
+    "en": "Share this URL anywhere you promote DineBuddies. Clicks are counted when someone opens your link."
+  },
+  "affiliate_code_label": {
+    "en": "Code"
+  },
+  "affiliate_code_generating": {
+    "en": "Your unique code is being created… Refresh in a few seconds if it does not appear."
+  },
+  "affiliate_link_placeholder": {
+    "en": "Link will appear here"
+  },
+  "affiliate_referral_url": {
+    "en": "Referral URL"
+  },
+  "affiliate_copy_link": {
+    "en": "Copy link"
+  },
+  "affiliate_share_more": {
+    "en": "Share on"
+  },
+  "affiliate_share_native": {
+    "en": "Share…"
+  },
+  "affiliate_share_email": {
+    "en": "Email"
+  },
+  "affiliate_activity_title": {
+    "en": "Referral activity"
+  },
+  "affiliate_col_date": {
+    "en": "Date"
+  },
+  "affiliate_col_event": {
+    "en": "Event"
+  },
+  "affiliate_col_detail": {
+    "en": "Detail"
+  },
+  "affiliate_table_empty": {
+    "en": "Commission events appear here when a referred user subscribes to a business plan."
+  },
+  "affiliate_event_business_sub": {
+    "en": "Business subscription"
+  },
+  "affiliate_col_user": {
+    "en": "User"
+  },
+  "affiliate_auth_err_required": {
+    "en": "Please fill email and password."
+  },
+  "affiliate_login_not_agent": {
+    "en": "This login is only for affiliate partners. Use the main app login for personal or business accounts."
+  },
+  "affiliate_login_failed": {
+    "en": "Sign-in failed."
+  },
+  "affiliate_login_title": {
+    "en": "Affiliate sign-in"
+  },
+  "affiliate_login_intro": {
+    "en": "Email and password only — no social login on this page."
+  },
+  "affiliate_auth_email": {
+    "en": "Email"
+  },
+  "affiliate_auth_password": {
+    "en": "Password"
+  },
+  "affiliate_login_submit": {
+    "en": "Sign in"
+  },
+  "affiliate_auth_no_account": {
+    "en": "New affiliate?"
+  },
+  "affiliate_signup_link": {
+    "en": "Create an account"
+  },
+  "affiliate_sign_out_escape_link": {
+    "en": "Session stuck? Sign out here"
+  },
+  "affiliate_settings_phone_invalid": {
+    "en": "Enter a valid phone number."
+  },
+  "affiliate_settings_paypal_invalid": {
+    "en": "Enter a valid PayPal email."
+  },
+  "affiliate_settings_address_invalid": {
+    "en": "Please enter your mailing address."
+  },
+  "affiliate_signup_maps_required": {
+    "en": "Search Google Maps and pick a place to set your city and country."
+  },
+  "affiliate_settings_saved": {
+    "en": "Settings saved."
+  },
+  "affiliate_settings_save_failed": {
+    "en": "Could not save settings."
+  },
+  "affiliate_settings_title": {
+    "en": "Affiliate settings"
+  },
+  "affiliate_settings_sub": {
+    "en": "Update your payout contact details. Balances are managed by the system."
+  },
+  "affiliate_settings_back_dashboard": {
+    "en": "Back to dashboard"
+  },
+  "affiliate_auth_phone": {
+    "en": "Phone number"
+  },
+  "affiliate_signup_maps_label": {
+    "en": "City & country (Google Maps)"
+  },
+  "affiliate_settings_maps_hint": {
+    "en": "Pick a place to update city and country, or keep the values shown below."
+  },
+  "affiliate_signup_maps_placeholder": {
+    "en": "e.g. Dubai, London, Sydney…"
+  },
+  "affiliate_signup_maps_selected": {
+    "en": "Selected"
+  },
+  "affiliate_signup_maps_clear": {
+    "en": "Clear"
+  },
+  "affiliate_auth_paypal": {
+    "en": "PayPal email"
+  },
+  "affiliate_settings_address": {
+    "en": "Mailing address"
+  },
+  "affiliate_settings_save": {
+    "en": "Save changes"
+  },
+  "password_min_6_chars": {
+    "en": "Password must be at least 6 characters"
+  },
+  "affiliate_auth_err_password_match": {
+    "en": "Passwords do not match."
+  },
+  "affiliate_auth_err_profile_fields": {
+    "en": "Please complete all contact and payout fields."
+  },
+  "affiliate_signup_success": {
+    "en": "Your affiliate account is ready."
+  },
+  "affiliate_signup_failed": {
+    "en": "Could not complete signup."
+  },
+  "affiliate_signup_title": {
+    "en": "Affiliate registration"
+  },
+  "affiliate_signup_intro": {
+    "en": "Create a partner account with email and password only. PayPal is used for future payouts."
+  },
+  "affiliate_auth_password_confirm": {
+    "en": "Confirm password"
+  },
+  "affiliate_auth_display_name": {
+    "en": "Full name"
+  },
+  "affiliate_signup_maps_hint": {
+    "en": "Type a city or address, then choose a result to fill country and city automatically."
+  },
+  "affiliate_signup_submit": {
+    "en": "Create affiliate account"
+  },
+  "affiliate_auth_has_account": {
+    "en": "Already have an account?"
+  },
+  "affiliate_login_link": {
+    "en": "Sign in"
+  },
+  "please_sign_in": {
+    "en": "Please sign in to continue."
+  },
+  "ai_design_studio_generate": {
+    "en": "Generate image (${AI_IMAGE_GENERATION_CREDITS} credits)"
+  },
+  "auth_page_chrome_a11y": {
+    "en": "Sign-in options"
+  },
+  "login_toggle_open_business_a11y": {
+    "en": "Switch to business account sign-in"
+  },
+  "login_toggle_business": {
+    "en": "Business"
+  },
+  "login_toggle_open_personal_a11y": {
+    "en": "Switch to personal account sign-in"
+  },
+  "login_toggle_personal": {
+    "en": "Personal"
+  },
+  "login_affiliate_corner_a11y": {
+    "en": "Affiliate partner sign-in"
+  },
+  "auth_language_toggle_a11y": {
+    "en": "Language"
+  },
+  "light_mode": {
+    "en": "Light Mode"
+  },
+  "dark_mode": {
+    "en": "Dark Mode"
+  },
+  "business_auth_back_to_signin": {
+    "en": "Back to business sign-in"
+  },
+  "auth_affiliate_portal_only": {
+    "en": "This account is an affiliate partner. Use the affiliate sign-in page only."
+  },
+  "business_login_only": {
+    "en": "This login is for business accounts only. Use Google, Facebook, or Apple on the personal login page."
+  },
+  "auth_reset_email_sent": {
+    "en": "Check your inbox for a password reset link."
+  },
+  "auth_enter_email_reset": {
+    "en": "Enter your email or phone above."
+  },
+  "business_login": {
+    "en": "Business"
+  },
+  "business_login_title": {
+    "en": "Business Login"
+  },
+  "business_login_subtitle": {
+    "en": "Sign in to your DineBuddies business account"
+  },
+  "hide_password": {
+    "en": "Hide password"
+  },
+  "show_password": {
+    "en": "Show password"
+  },
+  "forgot_password": {
+    "en": "Forgot password?"
+  },
+  "no_business_account": {
+    "en": "Don"
+  },
+  "create_business_account": {
+    "en": "Create Business Account"
+  },
+  "regular_user_sign_in": {
+    "en": "Regular user? Sign in here"
+  },
+  "password_reset_done_sign_in_social": {
+    "en": "Password updated. Sign in with Google, Facebook, or Apple for your personal account."
+  },
+  "auth_business_portal_only": {
+    "en": "This account is a business account. Use Business sign-in (email and password)."
+  },
+  "auth_oauth_redirect_failed": {
+    "en": "Sign-in was cancelled or OAuth is not configured for localhost. Expand the yellow setup box below."
+  },
+  "account_type_personal_title": {
+    "en": "Personal account"
+  },
+  "auth_personal_step1_subtitle": {
+    "en": "Sign in or create a personal account with Google, Facebook, or Apple only."
+  },
+  "login_already_signed_in": {
+    "en": "You are already signed in."
+  },
+  "continue_to_app": {
+    "en": "Continue to the app →"
+  },
+  "auth_firebase_env_missing": {
+    "en": "Firebase is not configured. Copy .env.example → .env and restart npm run dev. Missing: {{keys}}"
+  },
+  "auth_open_login_in_browser": {
+    "en": "Open login in Chrome / Safari"
+  },
+  "continue_with_google": {
+    "en": "Continue with Google"
+  },
+  "continue_with_apple": {
+    "en": "Continue with Apple"
+  },
+  "continue_as_guest": {
+    "en": "Continue as guest"
+  },
+  "user_unblocked_toast": {
+    "en": "User unblocked."
+  },
+  "error_update_settings": {
+    "en": "Failed to update settings. Please try again."
+  },
+  "settings_blocked_users": {
+    "en": "Blocked users"
+  },
+  "blocked_users_title": {
+    "en": "People you blocked"
+  },
+  "blocked_users_desc": {
+    "en": "Blocked users cannot see your activity in the same way, and you will not see their profile, posts, or invitations. You can unblock someone anytime."
+  },
+  "blocked_users_empty": {
+    "en": "No blocked users."
+  },
+  "unblock_user": {
+    "en": "Unblock"
+  },
+  "post_not_found": {
+    "en": "Post not found."
+  },
+  "post_edit_denied": {
+    "en": "You can only edit your own posts."
+  },
+  "post_failed": {
+    "en": "Failed to load post."
+  },
+  "featured_draft_restored": {
+    "en": "Your unsaved work was restored."
+  },
+  "studio_close_kept_session": {
+    "en": "Your work will be restored when you return."
+  },
+  "featured_post_paid_only": {
+    "en": "Featured posts require a paid business plan."
+  },
+  "featured_post_updated": {
+    "en": "Featured post updated."
+  },
+  "featured_post_published_notify_members": {
+    "en": "Published! {{count}} followers and members notified."
+  },
+  "featured_post_published_notify_followers": {
+    "en": "Published! {{count}} followers notified."
+  },
+  "featured_post_published": {
+    "en": "Featured post published to the home feed!"
+  },
+  "featured_title_required": {
+    "en": "Add a headline for your featured post."
+  },
+  "business_edit_featured_title": {
+    "en": "Edit featured post"
+  },
+  "featured_editor_workspace": {
+    "en": "Featured post editor"
+  },
+  "publish_to_feed": {
+    "en": "Publish to home feed"
+  },
+  "studio_close_question": {
+    "en": "Do you want to save this post as a draft before closing?"
+  },
+  "studio_save_draft": {
+    "en": "Save draft"
+  },
+  "studio_close_discard": {
+    "en": "Discard"
+  },
+  "studio_close_keep_editing": {
+    "en": "Keep editing"
+  },
+  "studio_close": {
+    "en": "Close"
+  },
+  "studio_draft_restored": {
+    "en": "Your unsaved work was restored."
+  },
+  "biz_plan_checkout_error": {
+    "en": "Could not start checkout: "
+  },
+  "biz_plan_portal_no_url": {
+    "en": "Could not open billing portal."
+  },
+  "biz_plan_portal_error": {
+    "en": "Could not open billing: "
+  },
+  "month": {
+    "en": "month"
+  },
+  "biz_plan_btn_current": {
+    "en": "Current Plan"
+  },
+  "biz_plan_btn_not_current": {
+    "en": "Not current"
+  },
+  "biz_plan_current_label": {
+    "en": "Current Plan"
+  },
+  "biz_plan_paid_name": {
+    "en": "Paid Business"
+  },
+  "biz_plan_free_name": {
+    "en": "Free Business"
+  },
+  "biz_plan_paid_banner_suffix": {
+    "en": "/month — full manual feature set. Buy Dine Credits for AI."
+  },
+  "biz_plan_free_banner_desc": {
+    "en": "Core profile and community. Motion limits apply; AI uses Dine Credits."
+  },
+  "biz_plan_manage_billing": {
+    "en": "Manage billing"
+  },
+  "biz_plan_compare_heading": {
+    "en": "Plans"
+  },
+  "biz_plan_credits_lead": {
+    "en": "Need AI?"
+  },
+  "biz_plan_credits_link": {
+    "en": "Open Dine Credits wallet"
+  },
+  "biz_dashboard_inbox": {
+    "en": "Complaints & Suggestions"
+  },
+  "loading_dashboard": {
+    "en": "Loading dashboard..."
+  },
+  "offer_updated": {
+    "en": "✅ Offer updated successfully!"
+  },
+  "offer_published": {
+    "en": "✅ Offer published successfully!"
+  },
+  "offer_published_err": {
+    "en": "Failed to publish offer:"
+  },
+  "offer_freeze_confirm": {
+    "en": "Are you sure you want to freeze this offer? It will be removed from the active carousel."
+  },
+  "offer_freeze_err": {
+    "en": "Error freezing offer: "
+  },
+  "offer_republish_confirm": {
+    "en": "Are you sure you want to republish this offer?"
+  },
+  "offer_republish_err": {
+    "en": "Could not republish: "
+  },
+  "offer_delete_confirm": {
+    "en": "Are you sure you want to delete this offer permanently?"
+  },
+  "offer_delete_err": {
+    "en": "Error deleting offer: "
+  },
+  "business_unpublish_confirm": {
+    "en": "Hide your business from the Partners page? (e.g. temporarily closed) You can republish anytime."
+  },
+  "business_unpublish_success": {
+    "en": "Your business is now hidden from the Partners page."
+  },
+  "business_unpublish_error": {
+    "en": "Failed to hide profile: "
+  },
+  "elite_partner": {
+    "en": "Elite Partner"
+  },
+  "professional_tier": {
+    "en": "Professional"
+  },
+  "free_plan": {
+    "en": "Free Plan"
+  },
+  "location": {
+    "en": "Location"
+  },
+  "try_elite_free": {
+    "en": "Try Elite Partner FREE!"
+  },
+  "get_elite_features_promo": {
+    "en": "Get a full month of Elite features"
+  },
+  "business_visible_page": {
+    "en": "Your business is visible on the Businesses page."
+  },
+  "please_wait": {
+    "en": "Please wait..."
+  },
+  "unpublish_profile": {
+    "en": "Hide from Partners (e.g. temporarily closed)"
+  },
+  "business_publish_need_verify_title": {
+    "en": "Verify your email to publish"
+  },
+  "business_publish_need_verify_desc": {
+    "en": "After you verify, you can publish your profile below or hide it anytime (e.g. vacation)."
+  },
+  "business_not_visible_title": {
+    "en": "Your business is not visible on the Partners page"
+  },
+  "business_not_visible_desc": {
+    "en": "Publish your profile to appear in the directory and be discoverable by users."
+  },
+  "publish_profile": {
+    "en": "Publish Profile"
+  },
+  "btn_view_profile": {
+    "en": "View Profile"
+  },
+  "btn_edit_profile": {
+    "en": "Edit Profile"
+  },
+  "btn_settings": {
+    "en": "Settings"
+  },
+  "stat_cmty_members": {
+    "en": "Community Members"
+  },
+  "stat_active_invites": {
+    "en": "Active Invitations"
+  },
+  "stat_profile_views": {
+    "en": "Profile Views"
+  },
+  "stat_rating_reviews": {
+    "en": "Rating"
+  },
+  "stat_reviews": {
+    "en": "reviews"
+  },
+  "recent_activity": {
+    "en": "Recent Activity"
+  },
+  "no_recent_activity": {
+    "en": "No recent activity"
+  },
+  "new_invitation": {
+    "en": "New Invitation"
+  },
+  "recent": {
+    "en": "Recent"
+  },
+  "feedback_box_title": {
+    "en": "Feedback & Complaints Inbox"
+  },
+  "analytics": {
+    "en": "Analytics"
+  },
+  "biz_plan_analytics_paid_only": {
+    "en": "Advanced analytics is a Paid Business feature"
+  },
+  "biz_plan_analytics_paid_hint": {
+    "en": "Upgrade to see ranking breakdown, engagement points, and performance insights."
+  },
+  "biz_points_total": {
+    "en": "Total ranking points"
+  },
+  "biz_dashboard_analytics_hint": {
+    "en": "Points determine your position in business rankings."
+  },
+  "biz_points_hosting": {
+    "en": "Completed hosted invitations"
+  },
+  "biz_points_hosting_unit": {
+    "en": "invitations"
+  },
+  "biz_points_multiplier_5": {
+    "en": "5 pts each"
+  },
+  "biz_points_profile_likes": {
+    "en": "Profile likes"
+  },
+  "biz_points_like_unit": {
+    "en": "likes"
+  },
+  "biz_points_multiplier_1": {
+    "en": "1 pt each"
+  },
+  "biz_points_post_likes": {
+    "en": "Post likes"
+  },
+  "biz_points_rating_stars": {
+    "en": "Review stars"
+  },
+  "biz_points_star_unit": {
+    "en": "stars"
+  },
+  "rankings_title": {
+    "en": "Business Rankings"
+  },
+  "like_failed": {
+    "en": "Could not update like. Try again."
+  },
+  "unlike": {
+    "en": "Unlike"
+  },
+  "type_bar": {
+    "en": "Bar"
+  },
+  "type_nightclub": {
+    "en": "Night Club"
+  },
+  "type_foodtruck": {
+    "en": "Food Truck"
+  },
+  "type_fastfood": {
+    "en": "Fast Food"
+  },
+  "business_directory": {
+    "en": "Business"
+  },
+  "exit_fullscreen": {
+    "en": "Exit Fullscreen"
+  },
+  "fullscreen": {
+    "en": "Fullscreen"
+  },
+  "zoom_in": {
+    "en": "Zoom In"
+  },
+  "zoom_out": {
+    "en": "Zoom Out"
+  },
+  "recenter_map": {
+    "en": "Recenter Map"
+  },
+  "active_businesses": {
+    "en": "Active Businesses"
+  },
+  "biz_dashboard_archive": {
+    "en": "Hosted Invitations"
+  },
+  "biz_dashboard_archive_empty": {
+    "en": "No hosted invitations in the archive yet."
+  },
+  "completed": {
+    "en": "Completed"
+  },
+  "save_failed": {
+    "en": "Something went wrong"
+  },
+  "business_onboarding_required": {
+    "en": "Please add business name, phone, and location."
+  },
+  "business_onboarding_city": {
+    "en": "City is still missing — wait for location detection or pick a fuller address."
+  },
+  "business_onboarding_saved": {
+    "en": "Your business listing is ready."
+  },
+  "business_onboarding_title": {
+    "en": "Complete your business listing"
+  },
+  "business_onboarding_sub": {
+    "en": "We detect your area first, then you search for your business on Google Maps. Picking a listing fills name, description (when available), phone, website, and opening hours — edit anything before saving."
+  },
+  "business_onboarding_detected_city_label": {
+    "en": "Detected city / area (automatic)"
+  },
+  "business_onboarding_area_unknown": {
+    "en": "Could not detect city — search still works; pick your business below."
+  },
+  "business_onboarding_area_detecting": {
+    "en": "Detecting approximate city…"
+  },
+  "business_onboarding_location_section": {
+    "en": "Find your business on Google Maps"
+  },
+  "business_onboarding_address_autocomplete_hint": {
+    "en": "Search by business name or address. Choosing a Google listing fills the fields below when Google provides them."
+  },
+  "form_location_placeholder": {
+    "en": "Search address or venue"
+  },
+  "business_onboarding_details_section": {
+    "en": "Business details"
+  },
+  "business_name_label": {
+    "en": "Business name"
+  },
+  "business_type_label": {
+    "en": "Business type"
+  },
+  "phone": {
+    "en": "Phone"
+  },
+  "business_onboarding_hours_imported": {
+    "en": "Opening hours (from Google)"
+  },
+  "business_onboarding_hours_imported_hint": {
+    "en": "Saved with your listing. You can adjust hours later on your profile if needed."
+  },
+  "business_onboarding_preview_title": {
+    "en": "Listing preview"
+  },
+  "business_onboarding_preview_hint": {
+    "en": "Approximate look in listings. You can add photos and more details on your profile after saving."
+  },
+  "business_onboarding_preview_cover_placeholder": {
+    "en": "Cover photo — add after setup"
+  },
+  "business_onboarding_preview_name_placeholder": {
+    "en": "Business name"
+  },
+  "business_onboarding_preview_location_placeholder": {
+    "en": "Address"
+  },
+  "save_pending": {
+    "en": "Saving…"
+  },
+  "business_onboarding_submit": {
+    "en": "Save and open my profile"
+  },
+  "business_profile_setup_toast": {
+    "en": "Complete your business details below so customers can find you."
+  },
+  "business_signup_verify_toast": {
+    "en": "We sent an activation link to your email. Check your inbox to verify your business account."
+  },
+  "loading_business": {
+    "en": "Loading this profile…"
+  },
+  "loading_business_hint": {
+    "en": "This usually takes a moment."
+  },
+  "business_profile_not_public_yet_title": {
+    "en": "Profile not available"
+  },
+  "business_profile_not_public_until_email": {
+    "en": "This page is not shown to the public until the business verifies their email. The owner can still open and edit their profile from the business dashboard."
+  },
+  "back_to_home": {
+    "en": "Back to Home"
+  },
+  "retry": {
+    "en": "Retry"
+  },
+  "business_not_found": {
+    "en": "Business not found"
+  },
+  "business_profile_setup_banner_title": {
+    "en": "Finish your business profile"
+  },
+  "business_profile_setup_banner_desc": {
+    "en": "Add your name, contact, address, and photos so customers can discover you."
+  },
+  "share_image": {
+    "en": "Share Image"
+  },
+  "open": {
+    "en": "OPEN"
+  },
+  "invites": {
+    "en": "Invites"
+  },
+  "community_member": {
+    "en": "Community Member"
+  },
+  "join_community": {
+    "en": "Join Community"
+  },
+  "about_us": {
+    "en": "About Us"
+  },
+  "no_description_available": {
+    "en": "No description available"
+  },
+  "click_edit_to_add": {
+    "en": "Click Edit to add one"
+  },
+  "feedback_box": {
+    "en": "Feedback & Complaints"
+  },
+  "feedback_desc": {
+    "en": "Have a complaint or suggestion? Contact the management directly and privately."
+  },
+  "send_feedback_btn": {
+    "en": "Send Feedback"
+  },
+  "offers": {
+    "en": "Offers"
+  },
+  "featured_posts": {
+    "en": "Featured Posts"
+  },
+  "events": {
+    "en": "Events"
+  },
+  "business_services": {
+    "en": "Business Services"
+  },
+  "contact_information": {
+    "en": "Contact Information"
+  },
+  "btn_website": {
+    "en": "Website"
+  },
+  "biz_plan_links_paid_to_open": {
+    "en": "Upgrade to open links"
+  },
+  "address": {
+    "en": "Address"
+  },
+  "biz_plan_map_paid_to_open": {
+    "en": "Map — upgrade to interact"
+  },
+  "follow_us": {
+    "en": "Follow Us"
+  },
+  "biz_plan_paid_features": {
+    "en": "Paid features"
+  },
+  "rankings_global": {
+    "en": "Global"
+  },
+  "rankings_paid_only": {
+    "en": "Only Paid Business subscribers are included in the ranking."
+  },
+  "rankings_businesses": {
+    "en": "businesses"
+  },
+  "rankings_top": {
+    "en": "top"
+  },
+  "rankings_no_businesses": {
+    "en": "No businesses in this scope."
+  },
+  "rankings_no_in_scope": {
+    "en": "No businesses in this area. Try Global."
+  },
+  "chat_messaging_restricted": {
+    "en": "Messaging is not available with this user."
+  },
+  "Search communities...": {
+    "en": "Search communities..."
+  },
+  "messages_tab_chats": {
+    "en": "Chats"
+  },
+  "messages_tab_communities": {
+    "en": "Communities"
+  },
+  "community_chat_muted": {
+    "en": "You are muted in this community chat."
+  },
+  "community_chat_muted_notice": {
+    "en": "You are muted in this chat and cannot send messages."
+  },
+  "community_guidelines": {
+    "en": "Community Guidelines"
+  },
+  "profile_photo_optional": {
+    "en": "Profile photo (optional)"
+  },
+  "failed_save_draft": {
+    "en": "Could not save draft. Try again."
+  },
+  "invitation_type_venue_search_hint": {
+    "en": "Choose the venue type first so search suggests matching places (café, bar, etc.)."
+  },
+  "gps_location_detected": {
+    "en": "GPS location detected"
+  },
+  "form_message_label": {
+    "en": "Message"
+  },
+  "form_message_placeholder": {
+    "en": "Write your message to the invitees here..."
+  },
+  "delete_failed": {
+    "en": "Could not delete video"
+  },
+  "video_removed_from_library": {
+    "en": "Video removed. You can record a new one."
+  },
+  "please_select_gender_group": {
+    "en": "Please select at least one gender group"
+  },
+  "please_select_age_group": {
+    "en": "Please select at least one age group"
+  },
+  "invitation_updated": {
+    "en": "Invitation updated successfully"
+  },
+  "edit_invitation": {
+    "en": "Edit Invitation"
+  },
+  "create_section_venue_location": {
+    "en": "Venue & location"
+  },
+  "create_section_venue_location_hint": {
+    "en": "Pick a place and venue category — this drives the hero background and venue image options."
+  },
+  "venue_category_label": {
+    "en": "Venue category"
+  },
+  "create_section_geo_search_note": {
+    "en": "Use DineBuddies venues or Google Places; city and country context refine suggestions."
+  },
+  "create_section_core": {
+    "en": "Invitation details"
+  },
+  "guests_needed_label": {
+    "en": "Guests Needed"
+  },
+  "public_guests_max_hint": {
+    "en": "Max ${MAX_PUBLIC_GUESTS}"
+  },
+  "multi_select": {
+    "en": "(Select multiple)"
+  },
+  "cannot_remove_gender_group": {
+    "en": "Cannot remove a previously selected group. You can only add more."
+  },
+  "select_at_least_one_gender": {
+    "en": "Please select at least one option"
+  },
+  "cannot_remove_age_group": {
+    "en": "Cannot remove a previously selected age group. You can only add more."
+  },
+  "select_at_least_one_age": {
+    "en": "Please select at least one age group"
+  },
+  "create_section_media": {
+    "en": "Photo or video"
+  },
+  "invitation_card_layout": {
+    "en": "Card layout"
+  },
+  "invitation_layout_live_carousel_hint": {
+    "en": "Swipe or drag sideways to compare layouts. Your colors, font, and media apply to each preview — tap a card to select it."
+  },
+  "preview_invitation": {
+    "en": "Preview invitation"
+  },
+  "public_invitation_guests_hint": {
+    "en": "Public invitations appear in the feed; guests tap join on the card after you publish."
+  },
+  "video_too_long": {
+    "en": "Video too long. Max 30s."
+  },
+  "post_button": {
+    "en": "Post"
+  },
+  "whats_happening": {
+    "en": "What"
+  },
+  "caption_placeholder": {
+    "en": "Caption..."
+  },
+  "stroke": {
+    "en": "Stroke"
+  },
+  "video": {
+    "en": "Video"
+  },
+  "record": {
+    "en": "Record"
+  },
+  "size": {
+    "en": "Size"
+  },
+  "text_color": {
+    "en": "Text Color"
+  },
+  "auto_color": {
+    "en": "Auto"
+  },
+  "background_color": {
+    "en": "Background Color"
+  },
+  "dine_credits_dating_insufficient": {
+    "en": "Publishing costs ${PRIVATE_INVITATION_PUBLISH_CREDITS} Dine Credits. Open Settings → Dine Credits to top up."
+  },
+  "personal_invite_badge": {
+    "en": "Personal invite"
+  },
+  "personal_invite_title": {
+    "en": "Personal invite"
+  },
+  "personal_invite_subtitle": {
+    "en": "Invite one person for a spontaneous meetup — pick the category that fits."
+  },
+  "unlimited_date_invitations": {
+    "en": "Unlimited private invites"
+  },
+  "dine_credits_dating_banner": {
+    "en": "{{balance}} Dine Credits — publishing uses {{cost}} credits."
+  },
+  "personal_invite_category_label": {
+    "en": "Invite category"
+  },
+  "date_and_time": {
+    "en": "Date & time"
+  },
+  "private_invitee_not_available": {
+    "en": "This member is not available for private invites."
+  },
+  "social_cover_stash_max_images": {
+    "en": "You can add up to ${PRIVATE_COVER_STASH_MAX_IMAGES} photos. Remove one from the thumbnails to add another."
+  },
+  "social_cover_stash_max_ai": {
+    "en": "You can keep up to ${PRIVATE_COVER_STASH_MAX_AI_IMAGES} AI covers. Remove one from the thumbnails to generate another."
+  },
+  "social_cover_stash_max_videos": {
+    "en": "You can add up to ${PRIVATE_COVER_STASH_MAX_VIDEOS} videos. Remove one from the thumbnails to record another."
+  },
+  "magic_cover_applied_toast": {
+    "en": "AI cover applied to this invitation."
+  },
+  "media_upload_failed": {
+    "en": "Failed to upload media."
+  },
+  "image_only_upload": {
+    "en": "Please choose an image file."
+  },
+  "social_editor_draft_restored": {
+    "en": "Your unsaved invitation was restored."
+  },
+  "social_cover_ai_uploading": {
+    "en": "Saving your AI cover to storage…"
+  },
+  "social_invitation_draft_saved": {
+    "en": "Invitation saved. You can continue editing or open preview."
+  },
+  "social_editor_nothing_to_save": {
+    "en": "Add invitation details before saving."
+  },
+  "social_cover_tab_camera_record": {
+    "en": "Record video"
+  },
+  "social_cover_tab_upload_device": {
+    "en": "Upload from device"
+  },
+  "private_cover_tab_template": {
+    "en": "Template"
+  },
+  "social_cover_tab_ai_generate": {
+    "en": "Generate AI cover"
+  },
+  "private_ai_text_fields_hint": {
+    "en": "Use AI above to draft the title and message, or write them yourself."
+  },
+  "social_section_templates_title": {
+    "en": "Ready card looks"
+  },
+  "private_cover_tabs_label": {
+    "en": "Cover source"
+  },
+  "social_cover_tab_camera_open": {
+    "en": "Video"
+  },
+  "social_cover_tab_upload_open": {
+    "en": "From device"
+  },
+  "dine_credits_private_insufficient": {
+    "en": "Publishing costs ${SOCIAL_INVITATION_PUBLISH_CREDITS} Dine Credits. Open Settings → Dine Credits to top up."
+  },
+  "dinebuddy_private": {
+    "en": "DineBuddy Private"
+  },
+  "social_invitation_desc": {
+    "en": "This invitation will not be visible to the public. Only people you invite can see and join."
+  },
+  "unlimited_private_invitations": {
+    "en": "Unlimited private invitations"
+  },
+  "dine_credits_private_banner": {
+    "en": "{{balance}} Dine Credits — publishing uses {{cost}} credits (free pool is used first)."
+  },
+  "social_cover_video_uploading": {
+    "en": "Uploading your video cover… this may take a moment."
+  },
+  "guests_no_story": {
+    "en": "Guests cannot post stories. Please sign up."
+  },
+  "only_image_stories": {
+    "en": "Only image files are supported for stories."
+  },
+  "create_story_title": {
+    "en": "Create Story"
+  },
+  "edit_story_title": {
+    "en": "Edit Story"
+  },
+  "share_btn": {
+    "en": "Share"
+  },
+  "tap_to_type": {
+    "en": "Tap to type..."
+  },
+  "add_a_caption": {
+    "en": "Add a caption..."
+  },
+  "tool_text": {
+    "en": "Text"
+  },
+  "emojis_label": {
+    "en": "Emojis"
+  },
+  "tool_bg": {
+    "en": "Background"
+  },
+  "upload_photo": {
+    "en": "Upload Photo"
+  },
+  "tool_camera": {
+    "en": "Camera"
+  },
+  "checkout_start_failed": {
+    "en": "Could not start checkout. Check Stripe functions config."
+  },
+  "dine_credits": {
+    "en": "Dine Credits"
+  },
+  "credits_wallet_subtitle": {
+    "en": "One balance for invites, dates & AI"
+  },
+  "your_balance": {
+    "en": "Your balance"
+  },
+  "credits_unit": {
+    "en": "credits"
+  },
+  "free_credits": {
+    "en": "Free"
+  },
+  "paid_credits": {
+    "en": "Paid"
+  },
+  "lifetime_stats": {
+    "en": "Lifetime purchased"
+  },
+  "lifetime_spent": {
+    "en": "spent"
+  },
+  "credits_how_title": {
+    "en": "How it works"
+  },
+  "credit_hint_rate": {
+    "en": "1 credit ≈ $0.01 USD when you buy packs."
+  },
+  "credit_hint_free": {
+    "en": "Free credits: up to 20, +10 refreshed each month."
+  },
+  "credit_hint_paid": {
+    "en": "Paid credits never expire. Free pool is used first."
+  },
+  "credit_hint_uses": {
+    "en": "Same balance for private invites, dates & AI."
+  },
+  "credits_ai_pricing_title": {
+    "en": "AI credit costs"
+  },
+  "credits_ai_pricing_lead": {
+    "en": "Each AI action deducts credits from your Dine balance."
+  },
+  "credits_ai_text_generation": {
+    "en": "Text generation — {{cost}} credits"
+  },
+  "credits_ai_image_generation": {
+    "en": "Image generation — {{cost}} credits"
+  },
+  "credits_ai_invitation_bundle": {
+    "en": "Invitation text + image — {{cost}} credits"
+  },
+  "buy_credits": {
+    "en": "Buy credits"
+  },
+  "buy_credits_lead": {
+    "en": "Pay once — no subscription. Choose a pack below."
+  },
+  "best_value": {
+    "en": "Best value"
+  },
+  "buy_now_short": {
+    "en": "Buy"
+  },
+  "desktop_landing_launch_app": {
+    "en": "Launch App"
+  },
+  "desktop_landing_hero_prefix": {
+    "en": "Never dine"
+  },
+  "desktop_landing_hero_highlight": {
+    "en": "alone"
+  },
+  "desktop_landing_hero_suffix": {
+    "en": "again."
+  },
+  "desktop_landing_hero_subtitle": {
+    "en": "The social dining app for meeting people and sharing meals. Connect with food lovers, discover amazing restaurants, and create unforgettable memories over great food."
+  },
+  "desktop_landing_start_exploring": {
+    "en": "Start Exploring"
+  },
+  "privacy_policy": {
+    "en": "Privacy Policy"
+  },
+  "terms_of_service": {
+    "en": "Terms of Use"
+  },
+  "contact_us": {
+    "en": "Contact Us"
+  },
+  "desktop_landing_copyright": {
+    "en": "© {{year}} DineBuddies. All rights reserved."
+  },
+  "discovery_follow_failed": {
+    "en": "Could not follow. Try again."
+  },
+  "user_directory_login_required": {
+    "en": "Sign in to browse members."
+  },
+  "user_directory_load_more": {
+    "en": "Load more"
+  },
+  "user_directory_feed_view": {
+    "en": "Swipe view"
+  },
+  "error_same_email": {
+    "en": "Please enter a different email address"
+  },
+  "error_reauth_email": {
+    "en": "Please log out and log back in before changing your email"
+  },
+  "error_email_in_use": {
+    "en": "This email is already in use"
+  },
+  "error_update_email": {
+    "en": "Failed to update email. Please try again."
+  },
+  "email_settings_title": {
+    "en": "Email Settings"
+  },
+  "update_email_address": {
+    "en": "Update Email Address"
+  },
+  "your_current_email": {
+    "en": "Your current email:"
+  },
+  "verified": {
+    "en": "Verified"
+  },
+  "email_not_verified": {
+    "en": "Email not verified"
+  },
+  "new_email_address": {
+    "en": "New Email Address"
+  },
+  "enter_new_email": {
+    "en": "Enter new email"
+  },
+  "email_updated_success": {
+    "en": "Email updated successfully! Verification email sent."
+  },
+  "updating": {
+    "en": "Updating..."
+  },
+  "update_email_btn": {
+    "en": "Update Email"
+  },
+  "note": {
+    "en": "Note:"
+  },
+  "email_verification_note": {
+    "en": "You will receive a verification email at your new address. Please verify it to complete the change."
+  },
+  "network_of": {
+    "en": "Network of"
+  },
+  "faq.title": {
+    "en": "Help & Support"
+  },
+  "faq.subtitle": {
+    "en": "Find answers to your questions and learn how to get the most out of DineBuddies."
+  },
+  "faq.empty": {
+    "en": "No questions currently available."
+  },
+  "type_cinema": {
+    "en": "Cinema"
+  },
+  "type_concert": {
+    "en": "Concert"
+  },
+  "type_sportsmatch": {
+    "en": "Sports match"
+  },
+  "search_invitations_placeholder": {
+    "en": "Search invitations..."
+  },
+  "partner": {
+    "en": "business"
+  },
+  "view_profile": {
+    "en": "View Profile"
+  },
+  "on_way_too_early": {
+    "en": "You can only send "
+  },
+  "arrived_too_far": {
+    "en": "You must be near the restaurant (within 100-200 meters) to send "
+  },
+  "failed_update_status": {
+    "en": "Failed to update status. Please try again."
+  },
+  "something_went_wrong": {
+    "en": "Failed to cancel invitation"
+  },
+  "invitation_completed_success": {
+    "en": "Invitation completed successfully!"
+  },
+  "invitation_ended_hint": {
+    "en": "This invitation may have ended or been removed."
+  },
+  "group_chat_title": {
+    "en": "Group Chat"
+  },
+  "check_updates_details": {
+    "en": "Check updates & details"
+  },
+  "location_map": {
+    "en": "Location"
+  },
+  "link_copied": {
+    "en": "Link copied!"
+  },
+  "no_results_found": {
+    "en": "No Results Found"
+  },
+  "no_invitations_yet": {
+    "en": "No Invitations Yet"
+  },
+  "try_different_filters": {
+    "en": "Try adjusting your filters or search terms"
+  },
+  "be_first_to_create": {
+    "en": "Be the first to create an invitation and start connecting!"
+  },
+  "invitations": {
+    "en": "Invitations"
+  },
+  "invitations_screen_subtitle": {
+    "en": "Discover open invites nearby or start your own."
+  },
+  "filters": {
+    "en": "Filters"
+  },
+  "location_filter": {
+    "en": "Location filter"
+  },
+  "near_me": {
+    "en": "Near me"
+  },
+  "in_my_city": {
+    "en": "In my city"
+  },
+  "in_my_country": {
+    "en": "In my country"
+  },
+  "dinebuddy_open": {
+    "en": "DineBuddy Open"
+  },
+  "clear_filters": {
+    "en": "Clear Filters"
+  },
+  "language_settings_title": {
+    "en": "Language"
+  },
+  "choose_language": {
+    "en": "Choose Language"
+  },
+  "language_settings_description": {
+    "en": "Select your preferred language for the app"
+  },
+  "language_changed_success": {
+    "en": "Language changed successfully!"
+  },
+  "note_label": {
+    "en": "Note:"
+  },
+  "language_settings_restart_note": {
+    "en": "The app will restart to apply the language change."
+  },
+  "My Communities": {
+    "en": "My Communities"
+  },
+  "business_profile": {
+    "en": "Business profile"
+  },
+  "engagement_tooltip": {
+    "en": "Likes and comments on your community posts"
+  },
+  "engagement": {
+    "en": "Engagement"
+  },
+  "engagement_hint": {
+    "en": "Likes + comments"
+  },
+  "chat": {
+    "en": "Chat"
+  },
+  "inbox": {
+    "en": "Inbox"
+  },
+  "archive": {
+    "en": "Archive"
+  },
+  "page_not_found_title": {
+    "en": "Page not found"
+  },
+  "page_not_found_hint": {
+    "en": "This link may be wrong or the page has moved. Check the address or open the home screen."
+  },
+  "nav_home": {
+    "en": "Home"
+  },
+  "feed_header": {
+    "en": "Feed"
+  },
+  "notif_title_follow": {
+    "en": "New Follower"
+  },
+  "notif_title_accepted": {
+    "en": "Invitation Accepted"
+  },
+  "notif_title_rejected": {
+    "en": "Invitation Declined"
+  },
+  "notif_title_message": {
+    "en": "New Message"
+  },
+  "notif_title_reminder": {
+    "en": "Upcoming Invitation"
+  },
+  "notif_title_like": {
+    "en": "Invitation Liked"
+  },
+  "notif_title_comment": {
+    "en": "New Comment"
+  },
+  "notif_title_comment_reply": {
+    "en": "New reply"
+  },
+  "notif_title_comment_like": {
+    "en": "Comment liked"
+  },
+  "notif_title_full": {
+    "en": "Invitation Complete"
+  },
+  "notif_title_booking_confirmed": {
+    "en": "Booking Confirmed"
+  },
+  "notif_title_cancelled": {
+    "en": "Invitation Cancelled"
+  },
+  "notif_title_booking_cancelled": {
+    "en": "Booking Cancelled"
+  },
+  "notif_title_completed": {
+    "en": "Invitation Completed! 🎉"
+  },
+  "notif_title_updated": {
+    "en": "Invitation Time Updated"
+  },
+  "notification_private_invitation_title": {
+    "en": "New private invitation"
+  },
+  "notif_title_private_declined": {
+    "en": "Invitation declined"
+  },
+  "notif_title_private_accepted": {
+    "en": "Invitation accepted"
+  },
+  "notif_title_join_request": {
+    "en": "New Join Request"
+  },
+  "notif_title_request_approved": {
+    "en": "Request Approved"
+  },
+  "notif_title_business_message": {
+    "en": "Message from Business"
+  },
+  "notif_title_new_booking": {
+    "en": "New booking"
+  },
+  "notif_title_business_feedback": {
+    "en": "Customer feedback"
+  },
+  "notif_title_business_post": {
+    "en": "New post"
+  },
+  "notification": {
+    "en": "Notification"
+  },
+  "notif_msg_accepted": {
+    "en": "{{name}} accepted your invitation"
+  },
+  "notif_msg_rejected": {
+    "en": "{{name}} declined your invitation"
+  },
+  "notif_msg_message": {
+    "en": "You have a new message from {{name}}"
+  },
+  "notif_msg_reminder": {
+    "en": "Your invitation is coming up soon"
+  },
+  "notif_msg_like": {
+    "en": "{{name}} liked your invitation"
+  },
+  "notif_msg_comment": {
+    "en": "{{name}} commented on your post"
+  },
+  "notif_msg_comment_reply": {
+    "en": "{{name}} replied to your comment"
+  },
+  "notif_msg_comment_like": {
+    "en": "{{name}} liked your comment"
+  },
+  "notif_msg_full": {
+    "en": "Great news! Your invitation is now complete with all guests confirmed."
+  },
+  "notif_msg_booking_confirmed": {
+    "en": "A booking at your venue is now confirmed."
+  },
+  "notif_msg_cancelled": {
+    "en": "An invitation has been cancelled."
+  },
+  "notif_msg_booking_cancelled": {
+    "en": "A booking at your venue has been cancelled."
+  },
+  "notif_msg_completed": {
+    "en": "The invitation has been completed. Hope you had a great time!"
+  },
+  "notif_msg_updated": {
+    "en": "The invitation time has been updated. Please confirm your attendance."
+  },
+  "notification_private_invitation_message": {
+    "en": "{{name}} has invited you to a private occasion: {{title}}"
+  },
+  "notif_msg_join_request": {
+    "en": "{{name}} requested to join your invitation"
+  },
+  "notif_msg_request_approved": {
+    "en": "Your request to join was approved"
+  },
+  "notification_mute_unavailable": {
+    "en": "Cannot mute this notification."
+  },
+  "user_muted_toast": {
+    "en": "User muted for invitations and messages."
+  },
+  "notification_report_unavailable": {
+    "en": "Cannot report this notification."
+  },
+  "notification_invite_unavailable": {
+    "en": "This invitation is no longer available."
+  },
+  "notification_settings": {
+    "en": "Notification Settings"
+  },
+  "notification_prefs_short": {
+    "en": "Alerts"
+  },
+  "mark_all_read": {
+    "en": "Mark all read"
+  },
+  "delete_all": {
+    "en": "Delete all"
+  },
+  "search_notifications": {
+    "en": "Search notifications..."
+  },
+  "all_types": {
+    "en": "All"
+  },
+  "messages": {
+    "en": "Messages"
+  },
+  "likes": {
+    "en": "Likes"
+  },
+  "reminders": {
+    "en": "Reminders"
+  },
+  "system": {
+    "en": "System"
+  },
+  "no_results": {
+    "en": "No results found"
+  },
+  "try_different_filter": {
+    "en": "Try a different filter or search term"
+  },
+  "push_enable_failed": {
+    "en": "Could not enable push. Try again from the Home Screen app."
+  },
+  "push_enabled_success": {
+    "en": "Push notifications enabled for this device."
+  },
+  "push_disabled_success": {
+    "en": "Push notifications turned off."
+  },
+  "error_saving_settings": {
+    "en": "Failed to save settings. Please try again."
+  },
+  "settings_saved": {
+    "en": "Settings saved successfully!"
+  },
+  "follows": {
+    "en": "New Followers"
+  },
+  "invitations_accepted": {
+    "en": "Invitation Accepted"
+  },
+  "invitations_rejected": {
+    "en": "Invitation Rejected"
+  },
+  "push_blocked_title": {
+    "en": "Notifications blocked"
+  },
+  "general": {
+    "en": "General"
+  },
+  "ios_allow_push_button": {
+    "en": "Allow notifications on this iPhone"
+  },
+  "push_ios_already_allowed": {
+    "en": "This iPhone already allows notifications. Turn on the switch below to register this device."
+  },
+  "push_notifications": {
+    "en": "Push Notifications"
+  },
+  "push_notifications_desc": {
+    "en": "Alerts on this device when the app is closed"
+  },
+  "email_notifications": {
+    "en": "Email Notifications"
+  },
+  "email_notifications_desc": {
+    "en": "Receive notifications via email"
+  },
+  "sound": {
+    "en": "Sound"
+  },
+  "sound_desc": {
+    "en": "Play sound for notifications"
+  },
+  "vibration": {
+    "en": "Vibration"
+  },
+  "vibration_desc": {
+    "en": "Vibrate for notifications"
+  },
+  "push_notification_types": {
+    "en": "Push Notification Types"
+  },
+  "email_notification_types": {
+    "en": "Email Notification Types"
+  },
+  "do_not_disturb": {
+    "en": "Do Not Disturb"
+  },
+  "enable_dnd": {
+    "en": "Enable Do Not Disturb"
+  },
+  "dnd_desc": {
+    "en": "Silence notifications during specific hours"
+  },
+  "start_time": {
+    "en": "Start Time"
+  },
+  "end_time": {
+    "en": "End Time"
+  },
+  "save_settings": {
+    "en": "Save Settings"
+  },
+  "error_current_password": {
+    "en": "Current password is incorrect"
+  },
+  "error_weak_password": {
+    "en": "Password is too weak"
+  },
+  "error_update_password": {
+    "en": "Failed to update password. Please try again."
+  },
+  "password_settings_title": {
+    "en": "Password Settings"
+  },
+  "change_password": {
+    "en": "Change Password"
+  },
+  "change_password_desc": {
+    "en": "Update your password to keep your account secure"
+  },
+  "current_password": {
+    "en": "Current Password"
+  },
+  "enter_current_password": {
+    "en": "Enter current password"
+  },
+  "new_password": {
+    "en": "New Password"
+  },
+  "enter_new_password": {
+    "en": "Enter new password"
+  },
+  "confirm_new_password": {
+    "en": "Confirm New Password"
+  },
+  "confirm_new_password_placeholder": {
+    "en": "Confirm new password"
+  },
+  "update_password_btn": {
+    "en": "Update Password"
+  },
+  "password_requirements": {
+    "en": "Password Requirements:"
+  },
+  "req_min_length": {
+    "en": "At least 6 characters long"
+  },
+  "req_mix_chars": {
+    "en": "Mix of letters and numbers recommended"
+  },
+  "req_avoid_common": {
+    "en": "Avoid common passwords"
+  },
+  "post_deleted": {
+    "en": "This post may have been deleted."
+  },
+  "btn_go_back": {
+    "en": "Go Back"
+  },
+  "post_title": {
+    "en": "Post"
+  },
+  "global": {
+    "en": "Global"
+  },
+  "feed_scope_all_users": {
+    "en": "Everyone"
+  },
+  "following": {
+    "en": "Following"
+  },
+  "feed_scope_geo_aria": {
+    "en": "Area"
+  },
+  "feed_scope_audience_aria": {
+    "en": "People"
+  },
+  "search_posts": {
+    "en": "Search..."
+  },
+  "close_search": {
+    "en": "Close search"
+  },
+  "guest_post_prompt": {
+    "en": "Sign in to share a post with the community."
+  },
+  "no_posts_yet": {
+    "en": "No posts yet."
+  },
+  "credits_pricing_page_title": {
+    "en": "Credits & add-ons"
+  },
+  "credits_pricing_page_subtitle": {
+    "en": "Dine Credits are shared by all accounts: private invites, date invites, AI, and more. Buy packs in your wallet — final per-use pricing may be announced later."
+  },
+  "dine_credits_wallet_card_title": {
+    "en": "Dine Credits wallet"
+  },
+  "dine_credits_wallet_card_body": {
+    "en": "Buy credit packs in one place. The same balance covers private invitations, private invites, AI tools, and other in-app features."
+  },
+  "open_dine_credits_wallet": {
+    "en": "Open Dine Credits wallet"
+  },
+  "Secure payment processed by Stripe": {
+    "en": "Secure payment processed by Stripe"
+  },
+  "settings_privacy": {
+    "en": "Privacy & Security"
+  },
+  "privacy_settings": {
+    "en": "Privacy Settings"
+  },
+  "privacy_settings_desc": {
+    "en": "Control who can see your information and interact with you"
+  },
+  "profile_visibility": {
+    "en": "Profile Visibility"
+  },
+  "public": {
+    "en": "Public"
+  },
+  "public_desc": {
+    "en": "Anyone can see your profile"
+  },
+  "friends_only": {
+    "en": "Friends Only"
+  },
+  "friends_only_desc": {
+    "en": "Only your friends can see your profile"
+  },
+  "private": {
+    "en": "Private"
+  },
+  "social_desc": {
+    "en": "Only you can see your profile"
+  },
+  "privacy_options": {
+    "en": "Privacy Options"
+  },
+  "show_email": {
+    "en": "Show Email"
+  },
+  "show_email_desc": {
+    "en": "Display your email on your profile"
+  },
+  "show_location": {
+    "en": "Show Location"
+  },
+  "show_location_desc": {
+    "en": "Display your location on your profile"
+  },
+  "allow_messages": {
+    "en": "Allow Messages"
+  },
+  "allow_messages_desc": {
+    "en": "Let others send you messages"
+  },
+  "allow_invitations": {
+    "en": "Allow Invitations"
+  },
+  "allow_invitations_desc": {
+    "en": "Let others send you invitations"
+  },
+  "show_activity": {
+    "en": "Show Activity"
+  },
+  "show_activity_desc": {
+    "en": "Display your activity status"
+  },
+  "allow_following": {
+    "en": "Allow Following"
+  },
+  "following_disabled_desc": {
+    "en": "Let other users follow your profile. When off, no one can follow you (existing followers are unaffected)."
+  },
+  "privacy_saved_success": {
+    "en": "Privacy settings saved successfully!"
+  },
+  "invitation_archived_badge": {
+    "en": "Archived"
+  },
+  "type_public": {
+    "en": "Public"
+  },
+  "loading_profile": {
+    "en": "Loading Profile..."
+  },
+  "private_invitation_preference_title": {
+    "en": "Private Invite preference"
+  },
+  "private_invitation_preference_desc": {
+    "en": "Control whether others can send you private invites."
+  },
+  "private_invites_accept": {
+    "en": "Accept Private Invites"
+  },
+  "private_invites_reject": {
+    "en": "Reject"
+  },
+  "profile_standard_account": {
+    "en": "Standard"
+  },
+  "subscription_plan_label": {
+    "en": "Subscription plan"
+  },
+  "credits_wallet_heading": {
+    "en": "Credits"
+  },
+  "dine_credits_use_hint": {
+    "en": "Used for private & date invites, AI, and boosts. Free pool is used first."
+  },
+  "trial_ends_label": {
+    "en": "✨ Trial Pro Plan Active - Ends:"
+  },
+  "upgrade_plan_btn": {
+    "en": "Upgrade plan"
+  },
+  "my_private_posts": {
+    "en": "My Private Posts"
+  },
+  "confirm_delete_all_private": {
+    "en": "Are you sure you want to delete all your private invitations?"
+  },
+  "clear_all": {
+    "en": "Clear All"
+  },
+  "invitation_draft_badge": {
+    "en": "Draft"
+  },
+  "please_enter_name": {
+    "en": "Please enter your name"
+  },
+  "guest_welcome_title": {
+    "en": "Join DineBuddies"
+  },
+  "guest_profile_desc": {
+    "en": "Create an account to customize your profile and join events."
+  },
+  "social_invite_claim_failed": {
+    "en": "Could not open this invitation. Try again."
+  },
+  "social_invite_opening": {
+    "en": "Opening your invitation…"
+  },
+  "social_invite_signing_in": {
+    "en": "Completing sign-in…"
+  },
+  "social_invite_link_invalid": {
+    "en": "This invitation link is invalid or has expired."
+  },
+  "back_home": {
+    "en": "Back home"
+  },
+  "social_invite_guest_title": {
+    "en": "You are invited!"
+  },
+  "social_invite_viewing_now": {
+    "en": "You are viewing a private invitation"
+  },
+  "social_invite_landing_headline_named": {
+    "en": "{{host}} invites you"
+  },
+  "social_invite_landing_subtitle_named": {
+    "en": "Join DineBuddies free to accept or decline {{host}}\\"
+  },
+  "social_invite_landing_subtitle": {
+    "en": "Join DineBuddies free to accept or decline — it only takes a few seconds."
+  },
+  "social_invite_oauth_hint": {
+    "en": "Free account · no password needed"
+  },
+  "social_invite_more_options": {
+    "en": "More sign-in options"
+  },
+  "password_updated_success": {
+    "en": "Password updated successfully!"
+  },
+  "incorrect_password": {
+    "en": "Incorrect password. Please try again."
+  },
+  "failed_delete_account": {
+    "en": "Failed to delete account. Please try again."
+  },
+  "settings_account": {
+    "en": "Account"
+  },
+  "settings_preferences": {
+    "en": "Preferences"
+  },
+  "enabled": {
+    "en": "Enabled"
+  },
+  "language": {
+    "en": "Language"
+  },
+  "appearance": {
+    "en": "Appearance"
+  },
+  "install_app": {
+    "en": "Install App"
+  },
+  "install_ios_desc": {
+    "en": "Tap Share → Add to Home Screen"
+  },
+  "install_android_desc": {
+    "en": "Add to your home screen"
+  },
+  "none": {
+    "en": "None"
+  },
+  "settings_about": {
+    "en": "About & Legal"
+  },
+  "help_and_support": {
+    "en": "Help & Support"
+  },
+  "my_business_profile": {
+    "en": "My Business Profile"
+  },
+  "view_edit_inline": {
+    "en": "View & edit inline"
+  },
+  "settings_business_plan_value_paid": {
+    "en": "Paid (${{amount}}/mo)"
+  },
+  "settings_business_plan_value_free": {
+    "en": "Free"
+  },
+  "subscription_billing": {
+    "en": "Subscription & Billing"
+  },
+  "settings_business_plan_row": {
+    "en": "Business plan"
+  },
+  "upgrade_available": {
+    "en": "Upgrade Available"
+  },
+  "payment_method": {
+    "en": "Payment Method"
+  },
+  "not_set": {
+    "en": "Not set"
+  },
+  "billing_history": {
+    "en": "Billing History"
+  },
+  "dine_credits_section": {
+    "en": "Dine Credits"
+  },
+  "wallet": {
+    "en": "Wallet"
+  },
+  "top_up_dine_credits": {
+    "en": "Top up Dine Credits"
+  },
+  "view_inline": {
+    "en": "View"
+  },
+  "settings_title_page": {
+    "en": "Settings"
+  },
+  "guest_mode": {
+    "en": "Guest Mode"
+  },
+  "guest_mode_desc": {
+    "en": "You\\"
+  },
+  "sign_in_up": {
+    "en": "Sign In / Sign Up"
+  },
+  "continue_browsing": {
+    "en": "Continue Browsing"
+  },
+  "welcome_language": {
+    "en": "Language"
+  },
+  "business_account_badge": {
+    "en": "Business Account"
+  },
+  "danger_zone": {
+    "en": "Danger Zone"
+  },
+  "tap_again_confirm": {
+    "en": "Tap again to confirm"
+  },
+  "delete_account_confirm": {
+    "en": "Delete Account"
+  },
+  "action_cannot_undone": {
+    "en": "This action cannot be undone"
+  },
+  "re_enter_password": {
+    "en": "Re-enter password"
+  },
+  "security_confirm_deletion": {
+    "en": "For your security, please enter your password to confirm account deletion."
+  },
+  "deleting": {
+    "en": "Deleting..."
+  },
+  "app_version": {
+    "en": "DineBuddies v1.0.0"
+  },
+  "message_to_friends": {
+    "en": "Message to Friends"
+  },
+  "username_fallback": {
+    "en": "user"
+  },
+  "confirm_delete_invitation": {
+    "en": "Are you sure you want to delete this invitation?"
+  },
+  "social_invitation_access_denied": {
+    "en": "You do not have access to this invitation."
+  },
+  "social_invitation_not_published": {
+    "en": "This invitation has not been sent yet."
+  },
+  "social_invitation_blocked_host": {
+    "en": "You cannot view invitations from this person."
+  },
+  "back_to_profile": {
+    "en": "Back to profile"
+  },
+  "social_invitation_draft_banner": {
+    "en": "This invitation is still a draft — guests have not been notified yet. Open preview to review and send."
+  },
+  "continue_to_preview": {
+    "en": "Continue to preview & send"
+  },
+  "social_preview_leave_question": {
+    "en": "Save your invitation draft before leaving preview?"
+  },
+  "social_draft_permission_denied": {
+    "en": "Could not open the draft. Sign in again and retry."
+  },
+  "social_preview_draft_saved": {
+    "en": "Invitation draft saved."
+  },
+  "social_invite_sent_to_members": {
+    "en": "Invitation sent to selected members."
+  },
+  "error_loading_draft": {
+    "en": "Could not load the invitation draft."
+  },
+  "back_to_create": {
+    "en": "Back to create invitation"
+  },
+  "sent": {
+    "en": "Sent"
+  },
+  "send_to_app_members": {
+    "en": "Send to app members"
+  },
+  "your_account": {
+    "en": "Your account"
+  },
+  "consumer_no_plans": {
+    "en": "Your Dine Credits pay for private invites, date invites, AI, and boosts — one balance (free + paid; free is used first). Partners use the same credit model from their wallet. Final per-use prices may be tuned later."
+  },
+  "credits_balance_short": {
+    "en": "Credits"
+  },
+  "free": {
+    "en": "free"
+  },
+  "paid": {
+    "en": "paid"
+  },
+  "user_unmuted_toast": {
+    "en": "User unmuted."
+  },
+  "block_user_confirm": {
+    "en": "Block this user? You will no longer see their profile, posts, or invitations."
+  },
+  "user_blocked_stay_on_page_toast": {
+    "en": "User blocked. You can keep viewing this page until you leave."
+  },
+  "go_back": {
+    "en": "Go back"
+  },
+  "profile_unavailable_blocked_you": {
+    "en": "This profile is unavailable."
+  },
+  "you_blocked_this_user": {
+    "en": "You blocked this user."
+  },
+  "unmute_user": {
+    "en": "Unmute"
+  },
+  "block_user": {
+    "en": "Block"
+  },
+  "block_grace_banner": {
+    "en": "This person is blocked. You can keep viewing this page; the simplified blocked view will show when you open their profile again."
+  },
+  "invitation_history": {
+    "en": "Invitation History"
+  },
+  "invitation_history_scroll_hint": {
+    "en": "Scroll to see more"
+  },
+  "followers": {
+    "en": "Followers"
+  },
+  "no_network_yet": {
+    "en": "No connections yet"
+  },
+  "view_all": {
+    "en": "View All"
+  },
+  "user_directory_search_placeholder": {
+    "en": "Search members by name…"
+  },
+  "clear": {
+    "en": "Clear"
+  },
+  "user_directory_title": {
+    "en": "Members directory"
+  },
+  "user_directory_subtitle": {
+    "en": "Discover members, send private invites, or send a gift."
+  },
+  "user_directory_empty": {
+    "en": "No members to show yet."
+  },
+  "verify_email_resent": {
+    "en": "Verification email sent. Check your inbox."
+  },
+  "verify_email_confirmed": {
+    "en": "Email verified. Welcome!"
+  },
+  "verify_email_still_pending": {
+    "en": "Not verified yet. Open the link in the email we sent."
+  },
+  "verify_email_check_failed": {
+    "en": "Could not refresh status. Try again."
+  },
+  "verify_email_logout_error": {
+    "en": "Could not sign out."
+  },
+  "verify_email_title": {
+    "en": "Activate your account"
+  },
+  "verify_email_subtitle": {
+    "en": "We sent a verification link to:"
+  },
+  "verify_email_hint": {
+    "en": "Open the email and tap “Verify Account”. Then return here and tap “I’ve verified”."
+  },
+  "verify_email_checking": {
+    "en": "Checking…"
+  },
+  "verify_email_cta_done": {
+    "en": "I’ve verified — continue"
+  },
+  "verify_email_resend": {
+    "en": "Resend email"
+  },
+  "verify_email_wrong_account": {
+    "en": "Sign out and use another email"
+  },
+  "ai_design_studio_prompt_placeholder": {
+    "en": "e.g. warm sunset beach scene, earthy tones, no text…"
+  },
+  "age_all": {
+    "en": "All Ages"
+  },
+  "venue_tbd": {
+    "en": "the venue"
+  },
+  "datetime_tbd": {
+    "en": "TBD"
+  },
+  "social_share_greeting_named": {
+    "en": "🎉 {{host}} invites you!"
+  },
+  "social_share_greeting": {
+    "en": "🎉 You"
+  },
+  "social_share_line_event": {
+    "en": "📌 {{title}}"
+  },
+  "social_share_line_when": {
+    "en": "📅 {{when}}"
+  },
+  "social_share_line_where": {
+    "en": "📍 {{location}}"
+  },
+  "social_share_cta_app_named": {
+    "en": "Join {{host}} on DineBuddies:"
+  },
+  "social_share_cta_app": {
+    "en": "Join us on DineBuddies:"
+  }
+}

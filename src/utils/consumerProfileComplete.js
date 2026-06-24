@@ -1,7 +1,10 @@
 /**
  * Consumer login gate: name + gender + age on Firestore before entering the app.
- * Not re-checked inside Layout during normal usage — see ConsumerAppEntryGate.
+ * Business / partner accounts never use this flow — see shouldSkipConsumerProfileCompletion.
  */
+
+import { accountKindFromProfileData, AUTH_PORTAL } from './authPortalGate';
+import { mergeProfileSnapshot } from './profileGallery';
 
 export function isConsumerProfileComplete(profile) {
     if (!profile) return false;
@@ -22,25 +25,21 @@ export function mergeConsumerProfiles(prev, next) {
     if (shouldSkipConsumerProfileCompletion(prev)) return prev;
     const prevOk = prev.isProfileComplete === true || isConsumerProfileComplete(prev);
     const nextOk = next.isProfileComplete === true || isConsumerProfileComplete(next);
-    if (prevOk && !nextOk) return prev;
+    if (prevOk && !nextOk) {
+        return mergeProfileSnapshot(prev, { ...prev, ...next, isProfileComplete: prev.isProfileComplete });
+    }
     return next;
 }
 
 export function shouldSkipConsumerProfileCompletion(profile) {
     if (!profile) return false;
+    if (profile.isBusiness === true || profile.pendingBusinessRegistration === true) return true;
+    const kind = accountKindFromProfileData(profile);
+    if (kind === AUTH_PORTAL.BUSINESS || kind === AUTH_PORTAL.AFFILIATE) return true;
     const roleLc = String(profile.role || '').toLowerCase();
-    const accountLc = String(profile.accountType || '').toLowerCase();
-    const hasBizInfo =
-        profile.businessInfo &&
-        typeof profile.businessInfo === 'object' &&
-        Object.keys(profile.businessInfo).length > 0;
-    return (
-        profile.isBusiness ||
-        profile.pendingBusinessRegistration ||
-        hasBizInfo ||
-        ['admin', 'staff', 'support', 'partner', 'business', 'affiliate_agent', 'guest'].includes(roleLc) ||
-        accountLc === 'business'
-    );
+    if (['admin', 'staff', 'support', 'guest'].includes(roleLc)) return true;
+    if (String(profile.registrationIntent || '').toLowerCase() === 'business') return true;
+    return false;
 }
 
 /** May this profile enter the consumer app? */
@@ -48,4 +47,10 @@ export function canConsumerEnterApp(profile) {
     if (!profile) return false;
     if (shouldSkipConsumerProfileCompletion(profile)) return true;
     return isConsumerProfileComplete(profile);
+}
+
+/** Raw Firestore `users/{uid}` — same skip rules before profile is normalized in AuthContext. */
+export function shouldSkipConsumerProfileCompletionFromUserDoc(data) {
+    if (!data || typeof data !== 'object') return false;
+    return shouldSkipConsumerProfileCompletion(data);
 }

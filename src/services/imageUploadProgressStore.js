@@ -81,6 +81,14 @@ export function stopCheckingPulse() {
     }
 }
 
+/** After logout / hard navigation — drop any stuck full-screen upload overlay. */
+export function resetImageUploadProgress() {
+    depth = 0;
+    stopCheckingPulse();
+    state = { ...INITIAL };
+    notify();
+}
+
 /**
  * @template T
  * @param {(report: (pct: number, phase?: ImageUploadPhase) => void) => Promise<T>} fn

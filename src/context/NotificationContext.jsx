@@ -5,6 +5,7 @@ import { isBusinessUser } from '../utils/accountRole';
 import { useToast } from './ToastContext';
 import { useTranslation } from 'react-i18next';
 import { db } from '../firebase/config';
+import { navigateToHostedInvitationDetails } from '../utils/hostedInvitationRoutes';
 import {
     collection,
     query,
@@ -25,16 +26,41 @@ const NotificationContext = createContext();
 
 /** True if user is already on the screen this notification points to (avoids toast + badge noise). */
 function shouldSuppressInAppToastForPath(pathname, notif) {
-    if (!notif?.actionUrl || notif.read) return false;
-    const url = String(notif.actionUrl);
-    if (pathname === url) return true;
-    if (notif.type !== 'message') return false;
+    if (!notif || notif.read) return false;
+    const path = String(pathname || '');
+
+    // No foreground toasts while browsing messages, notifications, or discovery inbox.
+    if (path === '/messages' || path === '/notifications' || path.startsWith('/chat/') || path === '/search/inbox') {
+        return true;
+    }
+
+    const url = notif.actionUrl ? String(notif.actionUrl) : '';
+    if (url && path === url) return true;
+
+    const type = String(notif.type || '');
+
+    if (
+        type === 'social_invitation' ||
+        type === 'social_invitation_response' ||
+        type === 'reminder' ||
+        type === 'join_request' ||
+        type === 'request_approved' ||
+        type === 'invitation_accepted' ||
+        type === 'invitation_rejected'
+    ) {
+        // Private invites are shown only on app entry (/invite/received), not as in-app toasts.
+        return true;
+    }
+
+    if (type !== 'message') return false;
+
+    if (path === '/messages') return true;
     if (url.startsWith('/community/')) {
         const base = url.replace(/\/chat\/?$/, '');
-        return pathname === base || pathname === url;
+        return path === base || path === url;
     }
-    if (url.startsWith('/chat/')) return pathname === url;
-    if (url.includes('/invitation/') && url.includes('/chat')) return pathname === url;
+    if (url.startsWith('/chat/')) return path === url;
+    if (url.includes('/invitation/') && url.includes('/chat')) return path === url;
     return false;
 }
 
@@ -160,7 +186,17 @@ export const NotificationProvider = ({ children }) => {
                             body: newNotif.message,
                             icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
                             onClick: () => {
-                                if (newNotif.actionUrl) navigate(newNotif.actionUrl);
+                                const invId =
+                                    newNotif.invitationId || newNotif.metadata?.invitationId;
+                                if (
+                                    (newNotif.type === 'social_invitation' ||
+                                        newNotif.type === 'social_invitation_response') &&
+                                    invId
+                                ) {
+                                    void navigateToHostedInvitationDetails(invId, navigate);
+                                } else if (newNotif.actionUrl) {
+                                    navigate(newNotif.actionUrl);
+                                }
                             },
                         },
                         'notification'
@@ -345,14 +381,17 @@ export const NotificationProvider = ({ children }) => {
     };
 
     const markMessageNotificationsAsRead = async (actionUrlSubstring) => {
-        if (!currentUser?.uid || !actionUrlSubstring) return;
-        const unreadToClear = notifications.filter(
-            (n) =>
-                !n.read &&
-                n.type === 'message' &&
-                n.actionUrl &&
-                (n.actionUrl.includes(actionUrlSubstring) || actionUrlSubstring.includes(n.actionUrl))
-        );
+        if (!currentUser?.uid) return;
+
+        const unreadToClear = notifications.filter((n) => {
+            if (n.read || n.type !== 'message') return false;
+            if (actionUrlSubstring === '/messages') return true;
+            if (!actionUrlSubstring || !n.actionUrl) return false;
+            return (
+                n.actionUrl.includes(actionUrlSubstring) ||
+                actionUrlSubstring.includes(n.actionUrl)
+            );
+        });
 
         if (unreadToClear.length === 0) return;
 

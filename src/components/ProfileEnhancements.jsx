@@ -3,21 +3,21 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-    FaCamera,
-    FaCog,
-    FaStar,
-    FaTrophy,
-    FaFire,
-    FaHeart,
-    FaMapMarkerAlt,
-    FaInstagram,
-    FaTwitter,
-    FaGlobe,
-    FaPlus,
-    FaTimes,
-    FaLock,
-    FaCheckCircle
-} from 'react-icons/fa';
+  FaCamera,
+  FaCog,
+  FaStar,
+  FaTrophy,
+  FaFire,
+  FaHeart,
+  FaMapMarkerAlt,
+  FaInstagram,
+  FaTwitter,
+  FaGlobe,
+  FaPlus,
+  FaTimes,
+  FaLock,
+  FaCheckCircle } from
+'react-icons/fa';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { uploadManagedImage } from '../services/managedImageUpload';
 import { ImageUploadZone } from '../services/imageUploadZones';
@@ -28,394 +28,414 @@ import './ProfileEnhancements.css';
 // ================================
 // 1. COVER PHOTO COMPONENT
 // ================================
-export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true }) => {
-    const { t } = useTranslation();
-    const { showToast } = useToast();
-    const { updateProfile } = useAuth();
-    const [uploading, setUploading] = useState(false);
-    const [hovered, setHovered] = useState(false);
+import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true }) => {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const { updateProfile } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
-    const handleCoverUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file || !editable) return;
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !editable) return;
 
-        if (!file.type.startsWith('image/')) {
-            showToast(t('only_images_allowed', 'Please select an image file.'), 'error');
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            showToast(t('file_too_large_5mb', 'File too large. Max 5MB'), 'error');
-            return;
-        }
-
-        setUploading(true);
-        try {
-            const downloadURL = await uploadManagedImage(file, userId, ImageUploadZone.COVER);
-
-            if (updateProfile) {
-                await updateProfile({ cover_photo: downloadURL });
-            } else {
-                await updateDoc(doc(db, 'users', userId), { cover_photo: downloadURL });
-            }
-
-            onUpdate?.(downloadURL);
-            showToast(t('cover_photo_updated'), 'success');
-        } catch (error) {
-            console.error('Error uploading cover:', error);
-            notifyImageUploadError(showToast, error, t, 'failed_upload_image');
-        } finally {
-            setUploading(false);
-            e.target.value = '';
-        }
-    };
-
-    const defaultCover = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-
-    if (!editable && !coverPhoto) {
-        return null;
+    if (!file.type.startsWith('image/')) {
+      showToast(t('only_images_allowed', 'Please select an image file.'), 'error');
+      return;
     }
 
-    const inputId = `profile-cover-upload-${userId}`;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast(t('file_too_large_5mb', 'File too large. Max 5MB'), 'error');
+      return;
+    }
 
-    return (
-        <div
-            className={`profile-cover${editable ? ' profile-cover--editable' : ' profile-cover--readonly'}`}
-            onMouseEnter={() => editable && setHovered(true)}
-            onMouseLeave={() => editable && setHovered(false)}
-            style={{
-                background: coverPhoto ? `url(${coverPhoto})` : defaultCover,
-            }}
-        >
-            {editable ? (
-                <>
+    setUploading(true);
+    try {
+      const downloadURL = await uploadManagedImage(file, userId, ImageUploadZone.COVER);
+
+      onUpdate?.(downloadURL);
+
+      if (editable) {
+        showToast(
+          t('cover_photo_save_profile_hint', 'Cover uploaded — tap Save to keep it on your profile.'),
+          'info'
+        );
+      } else if (updateProfile) {
+        await updateProfile({ cover_photo: downloadURL });
+        showToast(t('cover_photo_updated'), 'success');
+      } else {
+        await updateDoc(doc(db, 'users', userId), { cover_photo: downloadURL });
+        showToast(t('cover_photo_updated'), 'success');
+      }
+    } catch (error) {
+      console.error('Error uploading cover:', error);
+      notifyImageUploadError(showToast, error, t, 'failed_upload_image');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const defaultCover = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+
+  const inputId = `profile-cover-upload-${userId}`;
+
+  return (
+    <div
+      className={`profile-cover${editable ? ' profile-cover--editable' : ' profile-cover--readonly'}`}
+      onMouseEnter={() => editable && setHovered(true)}
+      onMouseLeave={() => editable && setHovered(false)}
+      style={{
+        background: coverPhoto ? `url(${coverPhoto})` : defaultCover
+      }}>
+      
+            {editable ?
+      <>
                     <div className="cover-overlay" style={{ opacity: hovered ? 1 : undefined }}>
                         <label className="cover-upload-btn" htmlFor={inputId}>
                             <FaCamera aria-hidden />
-                            <span>
-                                {uploading
-                                    ? t('uploading', 'Uploading...')
-                                    : t('edit_cover', 'Edit Cover')}
-                            </span>
+                            <AppText as="span">
+                                {uploading ?
+              t('uploading', 'Uploading...') :
+              t('edit_cover', 'Edit Cover')}
+                            </AppText>
                         </label>
                     </div>
                     <label className="cover-edit-fab ios-tap-target" htmlFor={inputId} aria-label={t('edit_cover', 'Edit Cover')}>
                         <FaCamera aria-hidden />
                     </label>
                     <input
-                        id={inputId}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverUpload}
-                        disabled={uploading}
-                        hidden
-                    />
-                </>
-            ) : null}
-        </div>
-    );
+          id={inputId}
+          type="file"
+          accept="image/*"
+          onChange={handleCoverUpload}
+          disabled={uploading}
+          hidden />
+        
+                </> :
+      null}
+        </div>);
+
 };
 
 // ================================
 // 2. STATISTICS CARDS COMPONENT
 // ================================
 export const StatisticsCards = ({ userId }) => {
-    const { t } = useTranslation();
-    const { userProfile: viewerProfile } = useAuth();
-    const [stats, setStats] = useState({
-        totalPosts: 0,
-        publicPosts: 0,
-        privatePosts: 0,
-        totalJoined: 0,
-        avgRating: 0,
-        attendanceRate: 0,
-        reviewCount: 0
-    });
-    const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
+  const { userProfile: viewerProfile } = useAuth();
+  const [stats, setStats] = useState({
+    totalPosts: 0,
+    publicPosts: 0,
+    privatePosts: 0,
+    totalJoined: 0,
+    avgRating: 0,
+    attendanceRate: 0,
+    reviewCount: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const viewerId = viewerProfile?.uid || viewerProfile?.id;
-                const isOwner = viewerId === userId;
+  useEffect(() => {
+    let cancelled = false;
 
-                // Fetch invitations where user is host
-                const invitationsRef = collection(db, 'invitations');
-                const postedQuery = query(invitationsRef, where('hostId', '==', userId));
-                const postedSnap = await getDocs(postedQuery);
-                const allPosted = postedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const fetchStats = async () => {
+      try {
+        const viewerId = viewerProfile?.uid || viewerProfile?.id;
+        const isOwner = viewerId === userId;
 
-                // Filter based on visibility
-                const visiblePosted = allPosted.filter(inv => {
-                    if (inv.privacy !== 'private') return true;
-                    if (isOwner) return true;
-                    if (inv.invitedFriends?.includes(viewerId)) return true;
-                    return false;
-                });
+        // Fetch invitations where user is host
+        const invitationsRef = collection(db, 'invitations');
+        const postedQuery = query(invitationsRef, where('hostId', '==', userId));
+        const postedSnap = await getDocs(postedQuery);
+        const allPosted = postedSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-                // Fetch invitations where user joined
-                const joinedQuery = query(invitationsRef, where('attendees', 'array-contains', userId));
-                const joinedSnap = await getDocs(joinedQuery);
-                const allJoined = joinedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Filter based on visibility
+        const visiblePosted = allPosted.filter((inv) => {
+          if (inv.privacy !== 'private') return true;
+          if (isOwner) return true;
+          if (inv.invitedFriends?.includes(viewerId)) return true;
+          return false;
+        });
 
-                // Filter joined based on visibility
-                const visibleJoined = allJoined.filter(inv => {
-                    if (inv.privacy !== 'private') return true;
-                    if (isOwner) return true;
-                    if (inv.invitedFriends?.includes(viewerId)) return true;
-                    return false;
-                });
+        // Fetch invitations where user joined
+        const joinedQuery = query(invitationsRef, where('attendees', 'array-contains', userId));
+        const joinedSnap = await getDocs(joinedQuery);
+        const allJoined = joinedSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-                const totalJoined = visibleJoined.length;
+        // Filter joined based on visibility
+        const visibleJoined = allJoined.filter((inv) => {
+          if (inv.privacy !== 'private') return true;
+          if (isOwner) return true;
+          if (inv.invitedFriends?.includes(viewerId)) return true;
+          return false;
+        });
 
-                // Fetch reviews
-                const reviewsRef = collection(db, 'users', userId, 'reviews');
-                const reviewsSnap = await getDocs(reviewsRef);
-                const reviews = reviewsSnap.docs.map(doc => doc.data());
-                const totalReviews = reviews.length;
-                const avgRating = totalReviews > 0
-                    ? reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
-                    : 0;
+        const totalJoined = visibleJoined.length;
 
-                // Calculate REAL attendance rate
-                let attendedCount = 0;
-                if (totalJoined > 0) {
-                    visibleJoined.forEach(inv => {
-                        const userStatus = inv.participantStatus?.[userId];
-                        const isCompleted = inv.meetingStatus === 'completed';
+        // Fetch reviews
+        const reviewsRef = collection(db, 'users', userId, 'reviews');
+        const reviewsSnap = await getDocs(reviewsRef);
+        const reviews = reviewsSnap.docs.map((doc) => doc.data());
+        const totalReviews = reviews.length;
+        const avgRating = totalReviews > 0 ?
+        reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews :
+        0;
 
-                        if (isCompleted || userStatus === 'arrived' || userStatus === 'completed') {
-                            attendedCount++;
-                        }
-                    });
-                }
+        // Calculate REAL attendance rate
+        let attendedCount = 0;
+        if (totalJoined > 0) {
+          visibleJoined.forEach((inv) => {
+            const userStatus = inv.participantStatus?.[userId];
+            const isCompleted = inv.meetingStatus === 'completed';
 
-                const attendanceRate = totalJoined > 0
-                    ? Math.round((attendedCount / totalJoined) * 100)
-                    : 0;
-
-                setStats({
-                    totalPosts: visiblePosted.length,
-                    publicPosts: visiblePosted.filter(p => p.privacy !== 'private').length,
-                    privatePosts: visiblePosted.filter(p => p.privacy === 'private').length,
-                    totalJoined,
-                    avgRating: avgRating.toFixed(1),
-                    attendanceRate,
-                    reviewCount: totalReviews
-                });
-            } catch (error) {
-                console.error('Error fetching stats:', error);
-            } finally {
-                setLoading(false);
+            if (isCompleted || userStatus === 'arrived' || userStatus === 'completed') {
+              attendedCount++;
             }
-        };
-
-        if (userId) {
-            fetchStats();
+          });
         }
-    }, [userId, viewerProfile]);
 
-    if (loading) {
-        return (
-            <div className="statistics-cards loading">
-                <div className="skeleton-card"></div>
-                <div className="skeleton-card"></div>
-                <div className="skeleton-card"></div>
-                <div className="skeleton-card"></div>
-            </div>
-        );
+        const attendanceRate = totalJoined > 0 ?
+        Math.round(attendedCount / totalJoined * 100) :
+        0;
+
+        setStats({
+          totalPosts: visiblePosted.length,
+          publicPosts: visiblePosted.filter((p) => p.privacy !== 'private').length,
+          privatePosts: visiblePosted.filter((p) => p.privacy === 'private').length,
+          totalJoined,
+          avgRating: avgRating.toFixed(1),
+          attendanceRate,
+          reviewCount: totalReviews
+        });
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    if (!userId) {
+      setLoading(false);
+      return undefined;
     }
 
-    const cards = [
-        {
-            icon: '📝',
-            value: stats.totalPosts,
-            label: t('posted_invites', 'Posted'),
-            sublabel: (stats.publicPosts > 0 || stats.privatePosts > 0)
-                ? `🌐 ${stats.publicPosts} | 🔒 ${stats.privatePosts}`
-                : '',
-            color: '#8b5cf6'
-        },
-        {
-            icon: '✅',
-            value: stats.totalJoined,
-            label: t('attended_events', 'Attended'),
-            color: '#10b981'
-        },
-        {
-            icon: '⭐',
-            value: stats.avgRating > 0 ? `${stats.avgRating}` : '-',
-            label: t('avg_rating', 'Rating'),
-            sublabel: stats.reviewCount > 0 ? `${stats.reviewCount} ${t('reviews', 'reviews')}` : '',
-            color: '#f59e0b'
-        },
-        {
-            icon: '📊',
-            value: stats.attendanceRate > 0 ? `${stats.attendanceRate}%` : '-',
-            label: t('attendance_rate', 'Rate'),
-            color: '#3b82f6'
-        }
-    ];
+    setLoading(true);
+    fetchStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, viewerProfile]);
 
+  if (loading) {
     return (
-        <div className="statistics-cards">
-            {cards.map((card, idx) => (
-                <div key={idx} className="stat-card" style={{ '--accent': card.color }}>
+      <div className="statistics-cards loading">
+                <div className="skeleton-card"></div>
+                <div className="skeleton-card"></div>
+                <div className="skeleton-card"></div>
+                <div className="skeleton-card"></div>
+            </div>);
+
+  }
+
+  const cards = [
+  {
+    icon: '📝',
+    value: stats.totalPosts,
+    label: t('posted_invites', 'Posted'),
+    sublabel: stats.publicPosts > 0 || stats.privatePosts > 0 ?
+    `🌐 ${stats.publicPosts} | 🔒 ${stats.privatePosts}` :
+    '',
+    color: '#8b5cf6'
+  },
+  {
+    icon: '✅',
+    value: stats.totalJoined,
+    label: t('attended_events', 'Attended'),
+    color: '#10b981'
+  },
+  {
+    icon: '⭐',
+    value: stats.avgRating > 0 ? `${stats.avgRating}` : '-',
+    label: t('avg_rating', 'Rating'),
+    sublabel: stats.reviewCount > 0 ? `${stats.reviewCount} ${t('reviews', 'reviews')}` : '',
+    color: '#f59e0b'
+  },
+  {
+    icon: '📊',
+    value: stats.attendanceRate > 0 ? `${stats.attendanceRate}%` : '-',
+    label: t('attendance_rate', 'Rate'),
+    color: '#3b82f6'
+  }];
+
+
+  return (
+    <div className="statistics-cards">
+            {cards.map((card, idx) =>
+      <div key={idx} className="stat-card" style={{ '--accent': card.color }}>
                     <div className="stat-icon">{card.icon}</div>
                     <div className="stat-value">{card.value}</div>
                     <div className="stat-label">{card.label}</div>
                     {card.sublabel && <div className="stat-sublabel">{card.sublabel}</div>}
                 </div>
-            ))}
-        </div>
-    );
+      )}
+        </div>);
+
 };
 
 // ================================
 // 3. ACHIEVEMENTS COMPONENT
 // ================================
 export const Achievements = ({ userId }) => {
-    const { t } = useTranslation();
-    const [achievements, setAchievements] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
+  const [achievements, setAchievements] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    // Define all possible achievements
-    const achievementDefinitions = [
-        {
-            id: 'first_event',
-            title: t('ach_first_event', 'First Event'),
-            description: t('ach_first_event_desc', 'Created your first invitation'),
-            icon: '🥇',
-            condition: (stats) => stats.totalPosts >= 1
-        },
-        {
-            id: 'social_starter',
-            title: t('ach_social_starter', '5 Events'),
-            description: t('ach_social_starter_desc', 'Attended 5 events'),
-            icon: '🎉',
-            condition: (stats) => stats.totalJoined >= 5
-        },
-        {
-            id: 'five_star',
-            title: t('ach_five_star', 'Five Star'),
-            description: t('ach_five_star_desc', 'Received a 5-star review'),
-            icon: '⭐',
-            condition: (stats) => stats.hasFiveStarReview
-        },
-        {
-            id: 'host_master',
-            title: t('ach_host_master', 'Host Master'),
-            description: t('ach_host_master_desc', 'Hosted 10 events'),
-            icon: '👑',
-            condition: (stats) => stats.totalPosts >= 10
-        },
-        {
-            id: 'social_butterfly',
-            title: t('ach_social_butterfly', 'Social Butterfly'),
-            description: t('ach_social_butterfly_desc', 'Attended 20 events'),
-            icon: '🦋',
-            condition: (stats) => stats.totalJoined >= 20
-        },
-        {
-            id: 'popular',
-            title: t('ach_popular', 'Popular'),
-            description: t('ach_popular_desc', '50 followers'),
-            icon: '🌟',
-            condition: (stats) => stats.followersCount >= 50
-        }
-    ];
+  // Define all possible achievements
+  const achievementDefinitions = [
+  {
+    id: 'first_event',
+    title: t('ach_first_event', 'First Event'),
+    description: t('ach_first_event_desc', 'Created your first invitation'),
+    icon: '🥇',
+    condition: (stats) => stats.totalPosts >= 1
+  },
+  {
+    id: 'social_starter',
+    title: t('ach_social_starter', '5 Events'),
+    description: t('ach_social_starter_desc', 'Attended 5 events'),
+    icon: '🎉',
+    condition: (stats) => stats.totalJoined >= 5
+  },
+  {
+    id: 'five_star',
+    title: t('ach_five_star', 'Five Star'),
+    description: t('ach_five_star_desc', 'Received a 5-star review'),
+    icon: '⭐',
+    condition: (stats) => stats.hasFiveStarReview
+  },
+  {
+    id: 'host_master',
+    title: t('ach_host_master', 'Host Master'),
+    description: t('ach_host_master_desc', 'Hosted 10 events'),
+    icon: '👑',
+    condition: (stats) => stats.totalPosts >= 10
+  },
+  {
+    id: 'social_butterfly',
+    title: t('ach_social_butterfly', 'Social Butterfly'),
+    description: t('ach_social_butterfly_desc', 'Attended 20 events'),
+    icon: '🦋',
+    condition: (stats) => stats.totalJoined >= 20
+  },
+  {
+    id: 'popular',
+    title: t('ach_popular', 'Popular'),
+    description: t('ach_popular_desc', '50 followers'),
+    icon: '🌟',
+    condition: (stats) => stats.followersCount >= 50
+  }];
 
-    useEffect(() => {
-        const checkAchievements = async () => {
-            try {
-                // Fetch user stats
-                const invitationsRef = collection(db, 'invitations');
-                const postedQuery = query(invitationsRef, where('hostId', '==', userId));
-                const joinedQuery = query(invitationsRef, where('attendees', 'array-contains', userId));
 
-                const [postedSnap, joinedSnap] = await Promise.all([
-                    getDocs(postedQuery),
-                    getDocs(joinedQuery)
-                ]);
+  useEffect(() => {
+    let cancelled = false;
 
-                // Fetch reviews
-                const reviewsRef = collection(db, 'users', userId, 'reviews');
-                const reviewsSnap = await getDocs(reviewsRef);
-                const reviews = reviewsSnap.docs.map(doc => doc.data());
-                const hasFiveStarReview = reviews.some(r => r.rating === 5);
+    const checkAchievements = async () => {
+      try {
+        // Fetch user stats
+        const invitationsRef = collection(db, 'invitations');
+        const postedQuery = query(invitationsRef, where('hostId', '==', userId));
+        const joinedQuery = query(invitationsRef, where('attendees', 'array-contains', userId));
 
-                // Fetch user doc for followers
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                const followersCount = userDoc.data()?.followersCount || 0;
+        const [postedSnap, joinedSnap] = await Promise.all([
+        getDocs(postedQuery),
+        getDocs(joinedQuery)]
+        );
 
-                const stats = {
-                    totalPosts: postedSnap.size,
-                    totalJoined: joinedSnap.size,
-                    hasFiveStarReview,
-                    followersCount
-                };
+        // Fetch reviews
+        const reviewsRef = collection(db, 'users', userId, 'reviews');
+        const reviewsSnap = await getDocs(reviewsRef);
+        const reviews = reviewsSnap.docs.map((doc) => doc.data());
+        const hasFiveStarReview = reviews.some((r) => r.rating === 5);
 
-                // Check which achievements are unlocked
-                const achievementsStatus = achievementDefinitions.map(ach => ({
-                    ...ach,
-                    unlocked: ach.condition(stats)
-                }));
+        // Fetch user doc for followers
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        const followersCount = userDoc.data()?.followersCount || 0;
 
-                setAchievements(achievementsStatus);
-            } catch (error) {
-                console.error('Error checking achievements:', error);
-            } finally {
-                setLoading(false);
-            }
+        const stats = {
+          totalPosts: postedSnap.size,
+          totalJoined: joinedSnap.size,
+          hasFiveStarReview,
+          followersCount
         };
 
-        if (userId) {
-            checkAchievements();
-        }
-    }, [userId]);
+        // Check which achievements are unlocked
+        const achievementsStatus = achievementDefinitions.map((ach) => ({
+          ...ach,
+          unlocked: ach.condition(stats)
+        }));
 
-    if (loading) {
-        return <div className="achievements loading">Loading achievements...</div>;
+        setAchievements(achievementsStatus);
+      } catch (error) {
+        console.error('Error checking achievements:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    if (!userId) {
+      setLoading(false);
+      return undefined;
     }
 
-    const unlockedCount = achievements.filter(a => a.unlocked).length;
+    setLoading(true);
+    checkAchievements();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
-    return (
-        <div className="achievements-section">
+  if (loading) {
+    return <div className="achievements loading">Loading achievements...</div>;
+  }
+
+  const unlockedCount = achievements.filter((a) => a.unlocked).length;
+
+  return (
+    <div className="achievements-section">
             <div className="section-header">
-                <h3>
+                <AppText as="h3">
                     <FaTrophy style={{ color: '#fbbf24', marginRight: '0.5rem' }} />
                     {t('achievements', 'Achievements')}
-                </h3>
-                <span className="achievement-count">
+                </AppText>
+                <AppText as="span" className="achievement-count">
                     {unlockedCount}/{achievements.length}
-                </span>
+                </AppText>
             </div>
 
             <div className="achievements-grid">
-                {achievements.map(ach => (
-                    <div
-                        key={ach.id}
-                        className={`achievement ${ach.unlocked ? 'unlocked' : 'locked'}`}
-                        title={ach.description}
-                    >
+                {achievements.map((ach) =>
+        <div
+          key={ach.id}
+          className={`achievement ${ach.unlocked ? 'unlocked' : 'locked'}`}
+          title={ach.description}>
+          
                         <div className="ach-icon">{ach.icon}</div>
                         <div className="ach-title">{ach.title}</div>
-                        {ach.unlocked && (
-                            <div className="ach-check">
+                        {ach.unlocked &&
+          <div className="ach-check">
                                 <FaCheckCircle />
                             </div>
-                        )}
-                        {!ach.unlocked && (
-                            <div className="ach-lock">
+          }
+                        {!ach.unlocked &&
+          <div className="ach-lock">
                                 <FaLock />
                             </div>
-                        )}
+          }
                     </div>
-                ))}
+        )}
             </div>
-        </div>
-    );
+        </div>);
+
 };
 
 export default { CoverPhoto, StatisticsCards, Achievements };

@@ -1,4 +1,4 @@
-import { isPrivateInvitationPublished } from './privateInvitationDraft';
+import { isPrivateInvitationPublished } from './socialInvitationDraft';
 
 /** @param {unknown} v */
 export function normInvitationUid(v) {
@@ -59,15 +59,20 @@ export function shouldSuppressInvitationInbox(pathname = '') {
         '/verify-email',
         '/complete-profile',
         '/auth',
+        '/create-social',
         '/create-private',
-        '/create-dating',
         '/create',
         '/admin',
         '/affiliate',
         '/business/onboarding',
-        '/business-signup'
+        '/business-signup',
+        '/messages',
+        '/notifications',
+        '/invite/received',
     ];
     if (prefixes.some((p) => path === p || path.startsWith(`${p}/`))) return true;
+
+    if (path.startsWith('/chat/')) return true;
 
     if (/^\/invitation\/private\/[^/]+\/preview/.test(path)) return true;
     if (/^\/invitation\/private\/preview\//.test(path)) return true;
@@ -75,4 +80,10 @@ export function shouldSuppressInvitationInbox(pathname = '') {
     if (/^\/invite\/p\//.test(path)) return true;
 
     return false;
+}
+
+/** True while user is browsing messages or the notifications inbox. */
+export function isMessagingOrNotificationsRoute(pathname = '') {
+    const path = String(pathname || '');
+    return path === '/messages' || path === '/notifications' || path.startsWith('/chat/');
 }

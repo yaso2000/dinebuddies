@@ -10,6 +10,10 @@ import { requireAuth } from '../_auth.js';
 import { ensureFirebaseClientApp } from '../_firebaseClient.js';
 import { takeRateLimit } from '../_rateLimit.js';
 import { uploadInvitationAiImage, persistUserMediaLibraryItem } from '../_aiStorage.js';
+import {
+    buildClientDeliveredInvitationImage,
+    shouldDeliverInvitationImageToClient,
+} from '../_aiInvitationImageDeliver.js';
 import { resolveInvitationCallerContext } from '../_aiInvitationContext.js';
 import { parseAiGenerateBody } from './parseAiRequest.js';
 import { refundAiCredits, spendAiCredits } from './_runAiWithCredits.js';
@@ -212,6 +216,9 @@ export default async function handler(req, res) {
         const responseData = { ...pipelineResult.data };
 
         if (pipelineResult.pendingImage) {
+            if (shouldDeliverInvitationImageToClient(request.postType, request.generationPackage)) {
+                responseData.image = buildClientDeliveredInvitationImage(pipelineResult.pendingImage);
+            } else {
             let uploaded;
             try {
                 uploaded = await uploadInvitationAiImage(
@@ -257,6 +264,7 @@ export default async function handler(req, res) {
                 moderation: pipelineResult.pendingImage.moderation,
                 imagePrompt: pipelineResult.pendingImage.imagePrompt,
             };
+            }
         }
 
         return res.status(200).json({

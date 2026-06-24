@@ -12,46 +12,92 @@ export function isFirebaseAuthorizedDevHost() {
     return host === 'localhost' || host === '127.0.0.1';
 }
 
+const DEFAULT_VITE_DEV_PORTS = ['5176', '5177', '5178', '5179'];
+
+/** Current Vite dev port (defaults to 5176). */
+export function getLocalDevPort() {
+    if (typeof window === 'undefined') return '5176';
+    return window.location.port || '5176';
+}
+
+/** Origins to register in Google Cloud → OAuth Web client → Authorized JavaScript origins. */
+export function getLocalDevOAuthJavascriptOrigins(port = getLocalDevPort()) {
+    const ports = new Set([port, ...DEFAULT_VITE_DEV_PORTS]);
+    const origins = [];
+    for (const p of ports) {
+        origins.push(`http://localhost:${p}`, `http://127.0.0.1:${p}`);
+    }
+    return [...new Set(origins)];
+}
+
+/** Firebase OAuth handler redirect URIs (same for Google / Facebook / Apple on web). */
+export function getFirebaseOAuthRedirectUris(projectId, authDomain) {
+    const pid = projectId || 'dinebuddies';
+    const domain = authDomain || `${pid}.firebaseapp.com`;
+    return [
+        `https://${domain}/__/auth/handler`,
+        `https://${pid}.web.app/__/auth/handler`,
+    ];
+}
+
 /** Login URL that works with Firebase OAuth on the current dev port. */
 export function getLocalDevOAuthLoginUrl() {
     if (typeof window === 'undefined') return 'http://localhost:5176/login';
-    const port = window.location.port || '5176';
+    const port = getLocalDevPort();
     return `http://localhost:${port}/login`;
 }
 
 /**
- * Cursor Simple Browser / Glass preview, VS Code webview, etc.
- * Popups may be blocked; fallback to redirect when needed.
+ * Cursor Simple Browser / VS Code preview — OAuth popups (window.open) are blocked.
+ * Use signInWithRedirect instead; see preferOAuthRedirectOnThisDevice().
  */
 export function isEmbeddedPreviewBrowser() {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
     if (/Electron/i.test(ua)) return true;
-    if (/Cursor/i.test(ua)) return true;
+    if (/\bCursor\b/i.test(ua)) return true;
+    if (/VSCode|Visual Studio Code/i.test(ua)) return true;
+    try {
+        const brands = navigator.userAgentData?.brands;
+        if (Array.isArray(brands) && brands.some((b) => /electron|cursor/i.test(String(b.brand)))) {
+            return true;
+        }
+    } catch {
+        /* ignore */
+    }
     try {
         if (window.self !== window.top) return true;
     } catch {
         return true;
     }
+    if (import.meta.env.DEV && import.meta.env.VITE_DEV_EMBEDDED_PREVIEW === 'true') return true;
     return false;
 }
 
 /**
- * Firebase OAuth redirect (not popup) — reliable on localhost and Safari.
- * Embedded preview (Cursor iframe): use popup; redirect often breaks in iframes.
+ * Firebase OAuth redirect (not popup) — Safari / iOS only.
+ * Desktop production uses popup (reliable with authDomain on *.firebaseapp.com).
+ * Cursor / VS Code preview: use Chrome link in UI — redirect state is unreliable there.
  */
-export function preferOAuthRedirectOnThisDevice() {
-    if (isEmbeddedPreviewBrowser()) return false;
-    // Chrome/Firefox on localhost: popup is more reliable than redirect + getRedirectResult.
-    if (isLocalDevHost()) return false;
+export function isMacSafariBrowser() {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
-    if (/iPad|iPhone|iPod/i.test(ua)) return true;
-    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+    if (/iPad|iPhone|iPod/i.test(ua)) return false;
     if (!/Macintosh|Mac OS X/i.test(ua)) return false;
     if (/Chrome|Chromium|Edg[/\s]|Firefox|OPR|Brave/i.test(ua)) return false;
     const vendor = navigator.vendor || '';
     return /Safari/i.test(ua) && /Apple/i.test(vendor);
+}
+
+export function preferOAuthRedirectOnThisDevice() {
+    if (isEmbeddedPreviewBrowser()) return false;
+    if (isLocalDevHost()) return false;
+    return isIosTouchDevice() || isMacSafariBrowser();
+}
+
+/** Use popup for all providers. Facebook on iOS uses Meta SDK — not Firebase redirect. */
+export function preferOAuthRedirectForProvider(_providerId) {
+    return false;
 }
 
 /** @deprecated Use preferOAuthRedirectOnThisDevice */
@@ -59,16 +105,71 @@ export function preferGoogleOAuthRedirect() {
     return preferOAuthRedirectOnThisDevice();
 }
 
+/** iPhone / iPad / iOS Safari (including iPadOS desktop UA). */
+export function isIosTouchDevice() {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/i.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
+const OAUTH_PENDING_KEY = 'dineb_oauth_redirect_pending';
+const OAUTH_PROVIDER_KEY = 'dineb_oauth_redirect_provider';
+const OAUTH_STARTED_KEY = 'dineb_oauth_redirect_started';
+const OAUTH_COMPLETE_KEY = 'dineb_oauth_redirect_complete';
+const OAUTH_ERROR_KEY = 'dineb_oauth_redirect_error';
+const POST_LOGOUT_KEY = 'dineb_post_logout';
+const OAUTH_PENDING_MAX_MS = 5 * 60 * 1000;
+
+/** iOS Safari may drop sessionStorage across OAuth redirects — mirror to localStorage. */
+function oauthRead(key) {
+    const stores = isIosTouchDevice() ? [localStorage, sessionStorage] : [sessionStorage];
+    for (const store of stores) {
+        try {
+            const value = store.getItem(key);
+            if (value != null && value !== '') return value;
+        } catch {
+            /* ignore */
+        }
+    }
+    return null;
+}
+
+function oauthWrite(key, value) {
+    const stores = isIosTouchDevice() ? [localStorage, sessionStorage] : [sessionStorage];
+    for (const store of stores) {
+        try {
+            store.setItem(key, value);
+        } catch {
+            /* ignore */
+        }
+    }
+}
+
+function oauthRemove(key) {
+    for (const store of [localStorage, sessionStorage]) {
+        try {
+            store.removeItem(key);
+        } catch {
+            /* ignore */
+        }
+    }
+}
+
 /** Remove Firebase OAuth hash/query after redirect so the SPA URL stays clean. */
 export function stripFirebaseAuthParamsFromUrl() {
     if (typeof window === 'undefined') return;
     if (!hasFirebaseAuthReturnInUrl()) return;
     try {
-        const { pathname, search } = window.location;
+        const { pathname, search, hash } = window.location;
         const params = new URLSearchParams(search);
         ['apiKey', 'authType', 'mode', 'oobCode', 'continueUrl', 'lang'].forEach((k) => params.delete(k));
         const nextSearch = params.toString();
-        const clean = pathname + (nextSearch ? `?${nextSearch}` : '');
+        let nextHash = hash || '';
+        if (/apiKey=|authType=|oobCode=/i.test(nextHash)) {
+            nextHash = '';
+        }
+        const clean = pathname + (nextSearch ? `?${nextSearch}` : '') + nextHash;
         window.history.replaceState({}, document.title, clean);
     } catch {
         /* ignore */
@@ -78,8 +179,8 @@ export function stripFirebaseAuthParamsFromUrl() {
 export function stashOAuthRedirectError(error) {
     if (!error) return;
     try {
-        sessionStorage.setItem(
-            'dineb_oauth_redirect_error',
+        oauthWrite(
+            OAUTH_ERROR_KEY,
             JSON.stringify({
                 code: error.code || '',
                 message: error.message || String(error),
@@ -93,8 +194,8 @@ export function stashOAuthRedirectError(error) {
 /** @returns {{ code?: string, message?: string } | null} */
 export function consumeOAuthRedirectError() {
     try {
-        const raw = sessionStorage.getItem('dineb_oauth_redirect_error');
-        sessionStorage.removeItem('dineb_oauth_redirect_error');
+        const raw = oauthRead(OAUTH_ERROR_KEY);
+        oauthRemove(OAUTH_ERROR_KEY);
         if (!raw) return null;
         return JSON.parse(raw);
     } catch {
@@ -104,9 +205,37 @@ export function consumeOAuthRedirectError() {
 
 export function clearOAuthRedirectPending() {
     try {
-        sessionStorage.removeItem('dineb_oauth_redirect_pending');
+        oauthRemove(OAUTH_PENDING_KEY);
+        oauthRemove(OAUTH_PROVIDER_KEY);
+        oauthRemove(OAUTH_STARTED_KEY);
     } catch {
         /* ignore */
+    }
+}
+
+function readOAuthRedirectStartedAt() {
+    try {
+        const raw = oauthRead(OAUTH_STARTED_KEY);
+        const n = Number(raw);
+        return Number.isFinite(n) && n > 0 ? n : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Pending flag with auto-expire — stale flags were freezing the login page on iPhone. */
+export function peekOAuthRedirectPending() {
+    try {
+        if (oauthRead(OAUTH_PENDING_KEY) !== '1') return false;
+        const started = readOAuthRedirectStartedAt();
+        if (!started) return true;
+        if (Date.now() - started > OAUTH_PENDING_MAX_MS) {
+            clearOAuthRedirectPending();
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -115,10 +244,49 @@ export function getLocalDevLoginUrl() {
     return `${window.location.origin}/login`;
 }
 
+/** Drop guest browsing before OAuth — guestMode during Apple redirect caused a stuck login UI. */
+export function clearGuestModeForSignIn() {
+    try {
+        localStorage.removeItem('guestMode');
+    } catch {
+        /* ignore */
+    }
+}
+
+export function markPostLogoutRedirect() {
+    try {
+        sessionStorage.setItem(POST_LOGOUT_KEY, '1');
+    } catch {
+        /* ignore */
+    }
+}
+
+export function peekPostLogoutRedirect() {
+    try {
+        return sessionStorage.getItem(POST_LOGOUT_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+export function clearPostLogoutRedirect() {
+    try {
+        sessionStorage.removeItem(POST_LOGOUT_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
 export function clearStaleOAuthRedirectFlags() {
     try {
         if (hasFirebaseAuthReturnInUrl()) return;
-        sessionStorage.removeItem('dineb_oauth_redirect_pending');
+        peekOAuthRedirectPending();
+        const started = readOAuthRedirectStartedAt();
+        const stale = !started || Date.now() - started > OAUTH_PENDING_MAX_MS;
+        if (stale) {
+            clearOAuthRedirectPending();
+            oauthRemove(OAUTH_COMPLETE_KEY);
+        }
     } catch {
         /* ignore */
     }
@@ -133,26 +301,42 @@ export function hasFirebaseAuthReturnInUrl() {
 
 export function markOAuthRedirectComplete() {
     try {
-        sessionStorage.removeItem('dineb_oauth_redirect_pending');
-        sessionStorage.setItem('dineb_oauth_redirect_complete', '1');
+        oauthRemove(OAUTH_PENDING_KEY);
+        oauthRemove(OAUTH_PROVIDER_KEY);
+        oauthWrite(OAUTH_COMPLETE_KEY, '1');
     } catch {
         /* ignore */
     }
 }
 
 /** Call immediately before signInWithRedirect so we can detect a failed return. */
-export function markOAuthRedirectPending() {
+export function markOAuthRedirectPending(providerId) {
     try {
-        sessionStorage.setItem('dineb_oauth_redirect_pending', '1');
-        sessionStorage.removeItem('dineb_oauth_redirect_complete');
+        clearGuestModeForSignIn();
+        oauthWrite(OAUTH_PENDING_KEY, '1');
+        oauthWrite(OAUTH_STARTED_KEY, String(Date.now()));
+        oauthRemove(OAUTH_COMPLETE_KEY);
+        if (providerId) {
+            oauthWrite(OAUTH_PROVIDER_KEY, String(providerId));
+        }
     } catch {
         /* ignore */
     }
 }
 
+/** @returns {string | null} */
+export function peekOAuthRedirectProvider() {
+    try {
+        const raw = oauthRead(OAUTH_PROVIDER_KEY);
+        return raw && String(raw).trim() ? String(raw).trim() : null;
+    } catch {
+        return null;
+    }
+}
+
 export function peekOAuthRedirectComplete() {
     try {
-        return sessionStorage.getItem('dineb_oauth_redirect_complete') === '1';
+        return oauthRead(OAUTH_COMPLETE_KEY) === '1';
     } catch {
         return false;
     }
@@ -161,8 +345,8 @@ export function peekOAuthRedirectComplete() {
 /** @returns {boolean} */
 export function consumeOAuthRedirectComplete() {
     try {
-        if (sessionStorage.getItem('dineb_oauth_redirect_complete') === '1') {
-            sessionStorage.removeItem('dineb_oauth_redirect_complete');
+        if (oauthRead(OAUTH_COMPLETE_KEY) === '1') {
+            oauthRemove(OAUTH_COMPLETE_KEY);
             return true;
         }
     } catch {
@@ -174,8 +358,8 @@ export function consumeOAuthRedirectComplete() {
 /** @returns {boolean} */
 export function consumeOAuthRedirectPending() {
     try {
-        if (sessionStorage.getItem('dineb_oauth_redirect_pending') === '1') {
-            sessionStorage.removeItem('dineb_oauth_redirect_pending');
+        if (oauthRead(OAUTH_PENDING_KEY) === '1') {
+            clearOAuthRedirectPending();
             return true;
         }
     } catch {

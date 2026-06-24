@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
+import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
 import { FaExclamationCircle, FaTimes } from 'react-icons/fa';
 
 const UnpublishedBusinessReminder = () => {
@@ -52,6 +53,11 @@ const UnpublishedBusinessReminder = () => {
             setPublishing(true);
             const userRef = doc(db, 'users', currentUser.uid);
             await updateDoc(userRef, { 'businessInfo.isPublished': true });
+            try {
+                await syncBusinessPublicProfile(currentUser.uid);
+            } catch (syncErr) {
+                console.warn('public_profiles sync after publish:', syncErr?.message || syncErr);
+            }
             setPublishSucceeded(true);
             showToast(
                 t('business_publish_success', 'Your business is now visible on the Partners page.'),

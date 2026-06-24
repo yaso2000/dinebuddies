@@ -1,10 +1,10 @@
 /* Mobile Feed Styling - Standard Full Width Feed */
 @media screen and (max-width: 768px) {
 
-    /* 1. Page & Scroll Container */
+    /* 1. Page — scroll lives on .app-main; avoid nested scroll here */
     .home-page {
         height: auto !important;
-        overflow-y: auto !important;
+        overflow: visible !important;
         background: transparent !important;
         padding: 0 !important;
         padding-bottom: 80px !important;

@@ -52,6 +52,10 @@
             "destination": "/api/business-login-resolver"
         },
         {
+            "source": "/invite/p/:token",
+            "destination": "/api/invite-preview?token=:token"
+        },
+        {
             "source": "/((?!api/)(?!@vite)(?!@react-refresh)(?!@fs/)(?!@id/)(?!src/)(?!node_modules/)(?!__dev/)(?!firebase-messaging-sw\\.js)(?!manifest\\.json)(?!sw\\.js).*)",
             "destination": "/index.html"
         }

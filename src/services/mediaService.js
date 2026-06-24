@@ -584,6 +584,27 @@ const getVideoDuration = (file) => {
 };
 
 /**
+ * Upload a small list/archive thumbnail alongside the main invitation image.
+ * @param {File | Blob | undefined} file
+ * @param {string} userId
+ * @returns {Promise<string | null>}
+ */
+async function uploadInvitationListThumbnail(file, userId) {
+    if (!file || !file.type?.startsWith('image/')) return null;
+    try {
+        const thumbBlob = await compressImage(file, { maxSizeMB: 0.12, maxWidthOrHeight: 320 });
+        const thumbFile =
+            thumbBlob instanceof File
+                ? thumbBlob
+                : new File([thumbBlob], 'list-thumb.jpg', { type: 'image/jpeg' });
+        return await uploadMedia(thumbFile, userId, 'thumbnail', 'invitation-thumbs');
+    } catch (e) {
+        console.warn('List thumbnail upload skipped:', e?.message);
+        return null;
+    }
+}
+
+/**
  * Process and upload invitation media based on source
  * @param {Object} mediaData - Media data from MediaSelector
  * @param {string} userId - User ID
@@ -609,8 +630,10 @@ export const processInvitationMedia = async (mediaData, userId) => {
             case 'custom_image':
                 // Upload custom image if file present; otherwise persist remote/AI URL to public folder
                 let imageUrl;
+                let listThumbnailUrl = null;
                 if (file) {
                     imageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                    listThumbnailUrl = await uploadInvitationListThumbnail(file, userId);
                 } else if (mediaData.publishedUrl) {
                     imageUrl = mediaData.publishedUrl;
                 } else {
@@ -620,21 +643,25 @@ export const processInvitationMedia = async (mediaData, userId) => {
                 return {
                     mediaSource: 'custom_image',
                     customImage: imageUrl,
+                    listThumbnailUrl: listThumbnailUrl || undefined,
                     mediaType: 'image'
                 };
 
             case 'ai_generated':
                 let aiImageUrl;
+                let aiListThumbnailUrl = null;
                 if (mediaData.publishedUrl) {
                     aiImageUrl = mediaData.publishedUrl;
                 } else if (file) {
                     aiImageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                    aiListThumbnailUrl = await uploadInvitationListThumbnail(file, userId);
                 } else {
                     aiImageUrl = await ensurePublicImageUrl(url || mediaData.preview, userId, 'invitations');
                 }
                 return {
                     mediaSource: 'custom_image',
                     customImage: aiImageUrl,
+                    listThumbnailUrl: aiListThumbnailUrl || undefined,
                     mediaType: 'image'
                 };
 
@@ -659,6 +686,7 @@ export const processInvitationMedia = async (mediaData, userId) => {
                     mediaSource: 'custom_video',
                     customVideo,
                     videoThumbnail,
+                    listThumbnailUrl: videoThumbnail || undefined,
                     videoDuration,
                     mediaType: 'video'
                 };

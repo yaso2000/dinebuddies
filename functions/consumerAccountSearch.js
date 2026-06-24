@@ -2,12 +2,12 @@
  * Consumer account search (users + businesses) via Admin SDK.
  */
 const functions = require('firebase-functions');
-
-const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent']);
-
-function isExcludedRole(role) {
-    return TEAM_ROLES.has(String(role || '').toLowerCase());
-}
+const {
+    isConsumerHiddenPublicProfile,
+    isConsumerHiddenUserDoc,
+    isConsumerHiddenUid,
+    isConsumerHiddenRole,
+} = require('./consumerAccountVisibility');
 
 function mapRow(id, data) {
     const isBiz = data.profileType === 'business';
@@ -32,11 +32,15 @@ function mapRow(id, data) {
     };
 }
 
-function acceptProfile(data, profileType) {
+function acceptProfile(data, profileType, id) {
     if ((data.profileType || 'user') !== profileType) return false;
-    if (data?.isGuest === true) return false;
-    if (data?.searchable === false) return false;
-    if (isExcludedRole(data.accountRole)) return false;
+    if (isConsumerHiddenPublicProfile(data, id)) return false;
+    if (profileType === 'user') {
+        if (data.searchable === false) return false;
+        const accountRole = String(data.accountRole || '').toLowerCase();
+        if (accountRole && isConsumerHiddenRole(accountRole)) return false;
+        if (!String(data.displayName || '').trim()) return false;
+    }
     if (profileType === 'business' && data.businessPublic?.isPublished !== true) return false;
     return true;
 }
@@ -52,7 +56,7 @@ async function queryProfilesByType(db, term, profileType) {
     const collect = (snap) => {
         snap.docs.forEach((d) => {
             const data = d.data();
-            if (!acceptProfile(data, profileType)) return;
+            if (!acceptProfile(data, profileType, d.id)) return;
             merged.set(d.id, mapRow(d.id, data));
         });
     };
@@ -95,9 +99,9 @@ async function searchUsersCollectionAdmin(db, term) {
     const merged = new Map();
 
     const add = (id, data) => {
+        if (isConsumerHiddenUserDoc(data, id)) return;
         const role = String(data?.role || '').toLowerCase();
-        if (role === 'business' || role === 'partner' || role === 'guest' || data?.isGuest) return;
-        if (isExcludedRole(role)) return;
+        if (role === 'business' || role === 'partner' || data?.isBusiness === true) return;
         const display = data?.display_name || data?.displayName || data?.name || '';
         if (!display.toLowerCase().includes(lower)) return;
         merged.set(id, {
@@ -144,9 +148,13 @@ async function runConsumerAccountSearch(db, rawTerm) {
         queryProfilesByType(db, term, 'user'),
     ]);
 
+    users = users.filter((row) => !isConsumerHiddenUid(row.id));
+
     if (!users.length) {
         users = await searchUsersCollectionAdmin(db, term);
     }
+
+    users = users.filter((row) => !isConsumerHiddenUid(row.id));
 
     return { businesses, users };
 }

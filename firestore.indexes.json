@@ -141,6 +141,34 @@
             ]
         },
         {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inviteCategory",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "invitation_archives",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "hostId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "archivedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "reviews",
             "queryScope": "COLLECTION",
             "fields": [
@@ -239,6 +267,25 @@
             "queryScope": "COLLECTION",
             "fields": [
                 { "fieldPath": "profileType", "order": "ASCENDING" },
+                { "fieldPath": "searchable", "order": "ASCENDING" },
+                { "fieldPath": "accountRole", "order": "ASCENDING" },
+                { "fieldPath": "updatedAt", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "profileType", "order": "ASCENDING" },
+                { "fieldPath": "updatedAt", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "profileType", "order": "ASCENDING" },
+                { "fieldPath": "businessPublic.isPublished", "order": "ASCENDING" },
                 { "fieldPath": "updatedAt", "order": "DESCENDING" }
             ]
         },

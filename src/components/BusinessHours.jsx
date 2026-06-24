@@ -5,324 +5,327 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useToast } from '../context/ToastContext';
 import './BusinessHours.css';
+import { AppText } from "./base";
 
 const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
-    const { t } = useTranslation();
-    const { showToast } = useToast();
-    const tc = theme?.colors || null;
-    const th = (themed, fallback) => tc ? themed : fallback;
-    const [isEditing, setIsEditing] = useState(false);
-    const [hours, setHours] = useState(businessInfo?.hours || getDefaultHours());
-    const [saving, setSaving] = useState(false);
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const tc = theme?.colors || null;
+  const th = (themed, fallback) => tc ? themed : fallback;
+  const [isEditing, setIsEditing] = useState(false);
+  const [hours, setHours] = useState(businessInfo?.hours || getDefaultHours());
+  const [saving, setSaving] = useState(false);
 
-    // Get today's day name for highlighting
-    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+  // Get today's day name for highlighting
+  const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
 
-    // Get current status
-    const getCurrentStatus = () => {
-        if (!hours) return { isOpen: false, message: '' };
+  // Get current status
+  const getCurrentStatus = () => {
+    if (!hours) return { isOpen: false, message: '' };
 
-        const now = new Date();
-        const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
-        const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const now = new Date();
+    const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-        const todayHours = hours[dayName];
+    const todayHours = hours[dayName];
 
-        if (!todayHours || todayHours.closed) {
-            return {
-                isOpen: false,
-                message: t('closed_today', 'Closed today'),
-                nextOpen: getNextOpenTime()
-            };
-        }
+    if (!todayHours || todayHours.closed) {
+      return {
+        isOpen: false,
+        message: t('closed_today', 'Closed today'),
+        nextOpen: getNextOpenTime()
+      };
+    }
 
-        const { open, close } = todayHours;
+    const { open, close } = todayHours;
+    const closesAtMessage = (time) => `${t('closes_at', 'Closes at')} ${time}`.trim();
+    const opensAtMessage = (time) => `${t('opens_at', 'Opens at')} ${time}`.trim();
 
-        // Check if currently open
-        if (currentTime >= open && currentTime < close) {
-            // Check if closing soon (within 30 minutes)
-            const closeTime = new Date();
-            const [closeHour, closeMin] = close.split(':');
-            closeTime.setHours(parseInt(closeHour), parseInt(closeMin), 0);
+    // Check if currently open
+    if (currentTime >= open && currentTime < close) {
+      // Check if closing soon (within 30 minutes)
+      const closeTime = new Date();
+      const [closeHour, closeMin] = close.split(':');
+      closeTime.setHours(parseInt(closeHour), parseInt(closeMin), 0);
 
-            const timeDiff = (closeTime - now) / 1000 / 60; // minutes
+      const timeDiff = (closeTime - now) / 1000 / 60; // minutes
 
-            if (timeDiff <= 30 && timeDiff > 0) {
-                return {
-                    isOpen: true,
-                    closingSoon: true,
-                    message: t('closes_soon', `Closes at ${close}`)
-                };
-            }
-
-            return {
-                isOpen: true,
-                message: t('closes_at', `Closes at ${close}`)
-            };
-        }
-
-        // Check if will open today
-        if (currentTime < open) {
-            return {
-                isOpen: false,
-                message: t('opens_at', `Opens at ${open}`)
-            };
-        }
-
-        // Closed for today, find next opening
+      if (timeDiff <= 30 && timeDiff > 0) {
         return {
-            isOpen: false,
-            message: t('closed_now', 'Closed'),
-            nextOpen: getNextOpenTime()
+          isOpen: true,
+          closingSoon: true,
+          message: closesAtMessage(close)
         };
+      }
+
+      return {
+        isOpen: true,
+        message: closesAtMessage(close)
+      };
+    }
+
+    // Check if will open today
+    if (currentTime < open) {
+      return {
+        isOpen: false,
+        message: opensAtMessage(open)
+      };
+    }
+
+    // Closed for today, find next opening
+    return {
+      isOpen: false,
+      message: t('closed_now', 'Closed'),
+      nextOpen: getNextOpenTime()
     };
+  };
 
-    const getNextOpenTime = () => {
-        const now = new Date();
-        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const getNextOpenTime = () => {
+    const now = new Date();
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-        for (let i = 1; i <= 7; i++) {
-            const nextDay = new Date(now);
-            nextDay.setDate(now.getDate() + i);
-            const dayName = days[nextDay.getDay()];
-            const dayHours = hours[dayName];
+    for (let i = 1; i <= 7; i++) {
+      const nextDay = new Date(now);
+      nextDay.setDate(now.getDate() + i);
+      const dayName = days[nextDay.getDay()];
+      const dayHours = hours[dayName];
 
-            if (dayHours && !dayHours.closed) {
-                const dayNames = {
-                    sunday: t('sunday', 'Sunday'),
-                    monday: t('monday', 'Monday'),
-                    tuesday: t('tuesday', 'Tuesday'),
-                    wednesday: t('wednesday', 'Wednesday'),
-                    thursday: t('thursday', 'Thursday'),
-                    friday: t('friday', 'Friday'),
-                    saturday: t('saturday', 'Saturday')
-                };
+      if (dayHours && !dayHours.closed) {
+        const dayNames = {
+          sunday: t('sunday', 'Sunday'),
+          monday: t('monday', 'Monday'),
+          tuesday: t('tuesday', 'Tuesday'),
+          wednesday: t('wednesday', 'Wednesday'),
+          thursday: t('thursday', 'Thursday'),
+          friday: t('friday', 'Friday'),
+          saturday: t('saturday', 'Saturday')
+        };
 
-                return `${dayNames[dayName]} ${dayHours.open}`;
-            }
-        }
-        return null;
-    };
+        return `${dayNames[dayName]} ${dayHours.open}`;
+      }
+    }
+    return null;
+  };
 
-    const status = getCurrentStatus();
+  const status = getCurrentStatus();
 
-    // Visitor: do not show section at all if hours were never set
-    if (!isOwner && !businessInfo?.hours) return null;
+  // Visitor: do not show section at all if hours were never set
+  if (!isOwner && !businessInfo?.hours) return null;
 
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            const businessRef = doc(db, 'users', businessId);
-            await updateDoc(businessRef, {
-                'businessInfo.hours': hours
-            });
-            setIsEditing(false);
-        } catch (error) {
-            console.error('Error saving hours:', error);
-            showToast(t('save_error', 'Failed to save hours'), 'error');
-        } finally {
-            setSaving(false);
-        }
-    };
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const businessRef = doc(db, 'users', businessId);
+      await updateDoc(businessRef, {
+        'businessInfo.hours': hours
+      });
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error saving hours:', error);
+      showToast(t('save_error', 'Failed to save hours'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    const handleCancel = () => {
-        setHours(businessInfo?.hours || getDefaultHours());
-        setIsEditing(false);
-    };
+  const handleCancel = () => {
+    setHours(businessInfo?.hours || getDefaultHours());
+    setIsEditing(false);
+  };
 
-    const handleDayChange = (day, field, value) => {
-        setHours(prev => ({
-            ...prev,
-            [day]: {
-                ...prev[day],
-                [field]: value
-            }
-        }));
-    };
+  const handleDayChange = (day, field, value) => {
+    setHours((prev) => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        [field]: value
+      }
+    }));
+  };
 
-    const toggleDayClosed = (day) => {
-        setHours(prev => ({
-            ...prev,
-            [day]: {
-                ...prev[day],
-                closed: !prev[day]?.closed
-            }
-        }));
-    };
+  const toggleDayClosed = (day) => {
+    setHours((prev) => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        closed: !prev[day]?.closed
+      }
+    }));
+  };
 
-    return (
-        <div className="business-hours-section" style={{ background: 'var(--bg-card)' }}>
+  return (
+    <div className="business-hours-section" style={{ background: 'var(--bg-card)' }}>
             <div className="section-header">
-                <h3 style={{ color: 'var(--text-main)' }}>
+                <AppText as="h3" style={{ color: 'var(--text-main)' }}>
                     <FaClock style={{ color: 'var(--primary)', marginRight: '0.5rem' }} />
                     {t('business_hours', 'Business Hours')}
-                </h3>
-                {isOwner && !isEditing && (
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <span title="Free Feature" style={{
-                            fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
-                            borderRadius: 20, border: '1px solid #22c55e',
-                            color: '#4ade80', background: 'rgba(34,197,94,0.12)',
-                            display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
-                        }}>🆓 Free</span>
+                </AppText>
+                {isOwner && !isEditing &&
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <AppText as="span" title="Free Feature" style={{
+            fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+            borderRadius: 20, border: '1px solid #22c55e',
+            color: '#4ade80', background: 'rgba(34,197,94,0.12)',
+            display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap'
+          }}>🆓 Free</AppText>
                         <button
-                            className="edit-hours-btn"
-                            onClick={() => setIsEditing(true)}
-                            style={tc ? {
-                                background: tc.footerBg,
-                                border: `1px solid ${tc.border}`,
-                                color: tc.accentText || '#fff',
-                                boxShadow: tc.btnShadow,
-                                borderRadius: tc.btnBorderRadius
-                            } : {}}
-                        >
+            className="edit-hours-btn"
+            onClick={() => setIsEditing(true)}
+            style={tc ? {
+              background: tc.footerBg,
+              border: `1px solid ${tc.border}`,
+              color: tc.accentText || '#fff',
+              boxShadow: tc.btnShadow,
+              borderRadius: tc.btnBorderRadius
+            } : {}}>
+            
                             <FaEdit /> {t('edit', 'Edit')}
                         </button>
                     </div>
-                )}
+        }
             </div>
 
             {/* Live Status Badge */}
             <div
-                className={`status-badge ${status.isOpen ? 'open' : 'closed'} ${status.closingSoon ? 'closing-soon' : ''}`}
-                style={tc ? {
-                    border: `1px solid ${status.isOpen ? tc.accent : tc.border}`,
-                    background: status.isOpen ? tc.badgeBg : 'rgba(239,68,68,0.1)',
-                    color: status.isOpen ? tc.accent : '#ef4444',
-                    boxShadow: status.isOpen ? `0 0 12px ${tc.accent}44` : undefined
-                } : {}}
-            >
-                {status.isOpen ? (
-                    <>
+        className={`status-badge ${status.isOpen ? 'open' : 'closed'} ${status.closingSoon ? 'closing-soon' : ''}`}
+        style={tc ? {
+          border: `1px solid ${status.isOpen ? tc.accent : tc.border}`,
+          background: status.isOpen ? tc.badgeBg : 'rgba(239,68,68,0.1)',
+          color: status.isOpen ? tc.accent : '#ef4444',
+          boxShadow: status.isOpen ? `0 0 12px ${tc.accent}44` : undefined
+        } : {}}>
+        
+                {status.isOpen ?
+        <>
                         <FaCheckCircle />
-                        <span className="status-text">{t('open_now', 'OPEN NOW')}</span>
-                    </>
-                ) : (
-                    <>
+                        <AppText as="span" className="status-text">{t('open_now', 'OPEN NOW')}</AppText>
+                    </> :
+
+        <>
                         <FaTimesCircle />
-                        <span className="status-text">{t('closed', 'CLOSED')}</span>
+                        <AppText as="span" className="status-text">{t('closed', 'CLOSED')}</AppText>
                     </>
-                )}
-                <span className="status-message">{status.message}</span>
+        }
+                <AppText as="span" className="status-message">{status.message}</AppText>
             </div>
 
-            {status.nextOpen && !status.isOpen && (
-                <div className="next-open-info">
+            {status.nextOpen && !status.isOpen &&
+      <div className="next-open-info">
                     {t('opens_next', 'Opens next:')} {status.nextOpen}
                 </div>
-            )}
+      }
 
             {/* Hours Display/Edit */}
-            {isEditing ? (
-                <div className="hours-edit-form">
-                    {Object.entries(hours).map(([day, dayHours]) => (
-                        <div key={day} className="day-row">
+            {isEditing ?
+      <div className="hours-edit-form">
+                    {Object.entries(hours).map(([day, dayHours]) =>
+        <div key={day} className="day-row">
                             <div className="day-name">
                                 {t(day, day.charAt(0).toUpperCase() + day.slice(1))}
                             </div>
                             <div className="day-controls">
                                 <label className="closed-checkbox">
                                     <input
-                                        type="checkbox"
-                                        checked={dayHours?.closed || false}
-                                        onChange={() => toggleDayClosed(day)}
-                                    />
+                type="checkbox"
+                checked={dayHours?.closed || false}
+                onChange={() => toggleDayClosed(day)} />
+              
                                     {t('closed', 'Closed')}
                                 </label>
-                                {!dayHours?.closed && (
-                                    <>
+                                {!dayHours?.closed &&
+            <>
                                         <input
-                                            type="time"
-                                            value={dayHours?.open || '09:00'}
-                                            onChange={(e) => handleDayChange(day, 'open', e.target.value)}
-                                            className="time-input"
-                                        />
-                                        <span>-</span>
+                type="time"
+                value={dayHours?.open || '09:00'}
+                onChange={(e) => handleDayChange(day, 'open', e.target.value)}
+                className="time-input" />
+              
+                                        <AppText as="span">-</AppText>
                                         <input
-                                            type="time"
-                                            value={dayHours?.close || '22:00'}
-                                            onChange={(e) => handleDayChange(day, 'close', e.target.value)}
-                                            className="time-input"
-                                        />
+                type="time"
+                value={dayHours?.close || '22:00'}
+                onChange={(e) => handleDayChange(day, 'close', e.target.value)}
+                className="time-input" />
+              
                                     </>
-                                )}
+            }
                             </div>
                         </div>
-                    ))}
+        )}
                     <div className="edit-actions">
                         <button
-                            onClick={handleSave}
-                            className="save-btn"
-                            disabled={saving}
-                            style={tc ? {
-                                background: tc.footerBg,
-                                border: `1px solid ${tc.border}`,
-                                color: tc.accentText || '#fff',
-                                boxShadow: tc.btnShadow,
-                                borderRadius: tc.btnBorderRadius
-                            } : {}}
-                        >
+            onClick={handleSave}
+            className="save-btn"
+            disabled={saving}
+            style={tc ? {
+              background: tc.footerBg,
+              border: `1px solid ${tc.border}`,
+              color: tc.accentText || '#fff',
+              boxShadow: tc.btnShadow,
+              borderRadius: tc.btnBorderRadius
+            } : {}}>
+            
                             <FaSave /> {saving ? t('saving', 'Saving...') : t('save', 'Save')}
                         </button>
                         <button
-                            onClick={handleCancel}
-                            className="cancel-btn"
-                            disabled={saving}
-                            style={tc ? {
-                                background: tc.badgeBg,
-                                border: `1px solid ${tc.border}`,
-                                color: tc.accent
-                            } : {}}
-                        >
+            onClick={handleCancel}
+            className="cancel-btn"
+            disabled={saving}
+            style={tc ? {
+              background: tc.badgeBg,
+              border: `1px solid ${tc.border}`,
+              color: tc.accent
+            } : {}}>
+            
                             <FaTimes /> {t('cancel', 'Cancel')}
                         </button>
                     </div>
-                </div>
-            ) : (
-                <div className="hours-display">
+                </div> :
+
+      <div className="hours-display">
                     {Object.entries(hours).map(([day, dayHours]) => {
-                        const isToday = day === todayKey;
-                        return (
-                            <div
-                                key={day}
-                                className="day-row"
-                                style={isToday && tc ? {
-                                    background: tc.badgeBg || 'var(--hover-overlay)',
-                                    borderLeft: `3px solid ${tc.accent || 'var(--primary)'}`,
-                                    borderRadius: '8px',
-                                    paddingLeft: '8px'
-                                } : {}}
-                            >
+          const isToday = day === todayKey;
+          return (
+            <div
+              key={day}
+              className="day-row"
+              style={isToday && tc ? {
+                background: tc.badgeBg || 'var(--hover-overlay)',
+                borderLeft: `3px solid ${tc.accent || 'var(--primary)'}`,
+                borderRadius: '8px',
+                paddingLeft: '8px'
+              } : {}}>
+              
                                 <div className="day-name" style={{ color: 'var(--text-main)', fontWeight: isToday ? '800' : '600' }}>
                                     {t(day, day.charAt(0).toUpperCase() + day.slice(1))}
                                 </div>
                                 <div className="day-hours" style={{ color: 'var(--text-secondary)' }}>
-                                    {dayHours?.closed ? (
-                                        <span className="closed-text">{t('closed', 'Closed')}</span>
-                                    ) : (
-                                        <span style={{ color: 'var(--text-main)' }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</span>
-                                    )}
+                                    {dayHours?.closed ?
+                <AppText as="span" className="closed-text">{t('closed', 'Closed')}</AppText> :
+
+                <AppText as="span" style={{ color: 'var(--text-main)' }}>{dayHours?.open || '09:00'} - {dayHours?.close || '22:00'}</AppText>
+                }
                                 </div>
-                            </div>
-                        );
-                    })}
+                            </div>);
+
+        })}
                 </div>
-            )}
-        </div>
-    );
+      }
+        </div>);
+
 };
 
 // Default hours helper
 function getDefaultHours() {
-    return {
-        monday: { open: '09:00', close: '22:00', closed: false },
-        tuesday: { open: '09:00', close: '22:00', closed: false },
-        wednesday: { open: '09:00', close: '22:00', closed: false },
-        thursday: { open: '09:00', close: '22:00', closed: false },
-        friday: { open: '09:00', close: '23:00', closed: false },
-        saturday: { open: '09:00', close: '23:00', closed: false },
-        sunday: { open: '10:00', close: '22:00', closed: false }
-    };
+  return {
+    monday: { open: '09:00', close: '22:00', closed: false },
+    tuesday: { open: '09:00', close: '22:00', closed: false },
+    wednesday: { open: '09:00', close: '22:00', closed: false },
+    thursday: { open: '09:00', close: '22:00', closed: false },
+    friday: { open: '09:00', close: '23:00', closed: false },
+    saturday: { open: '09:00', close: '23:00', closed: false },
+    sunday: { open: '10:00', close: '22:00', closed: false }
+  };
 }
 
 export default BusinessHours;

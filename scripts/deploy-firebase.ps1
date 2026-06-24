@@ -8,7 +8,8 @@
 
 param(
     [switch]$FunctionsOnly,
-    [switch]$SkipVerify
+    [switch]$SkipVerify,
+    [string]$Only = ''
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,8 +20,20 @@ if (-not $env:NODE_OPTIONS) {
     $env:NODE_OPTIONS = "--use-system-ca"
 }
 
-$KeyPath = $env:GOOGLE_APPLICATION_CREDENTIALS
+$KeyPath = if ($env:GOOGLE_APPLICATION_CREDENTIALS) { $env:GOOGLE_APPLICATION_CREDENTIALS.Trim() } else { '' }
 $UsingServiceAccount = $KeyPath -and (Test-Path -LiteralPath $KeyPath)
+
+if ($KeyPath -and -not $UsingServiceAccount) {
+    Write-Host ""
+    Write-Host "GOOGLE_APPLICATION_CREDENTIALS is set but the file was not found:" -ForegroundColor Red
+    Write-Host "  $KeyPath" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Create a JSON key in Google Cloud Console, then set the real path:" -ForegroundColor Yellow
+    Write-Host '  $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\keys\dinebuddies-deploy.json"' -ForegroundColor Cyan
+    Write-Host "  https://console.cloud.google.com/iam-admin/serviceaccounts?project=dinebuddies" -ForegroundColor Cyan
+    Write-Host ""
+    exit 1
+}
 
 if ($UsingServiceAccount) {
     $KeyPath = (Resolve-Path -LiteralPath $KeyPath).Path
@@ -72,16 +85,19 @@ Pop-Location
 
 $deployArgs = @("--project", "dinebuddies", "--non-interactive")
 
+$deployTarget = if ($Only) {
+    $Only
+} elseif ($FunctionsOnly) {
+    'functions'
+} else {
+    'functions,hosting'
+}
+
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
-    if ($FunctionsOnly) {
-        Write-Host "Deploying functions only..." -ForegroundColor Cyan
-        firebase deploy --only functions @deployArgs
-    } else {
-        Write-Host "Deploying functions + hosting..." -ForegroundColor Cyan
-        firebase deploy --only "functions,hosting" @deployArgs
-    }
+    Write-Host "Deploying: $deployTarget" -ForegroundColor Cyan
+    firebase deploy --only $deployTarget @deployArgs
     $deployExit = $LASTEXITCODE
 } finally {
     $ErrorActionPreference = $prevEap

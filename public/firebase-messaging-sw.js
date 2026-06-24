@@ -8,7 +8,7 @@
 importScripts('https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.8.0/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'dinebuddies-v29-wake-resume';
+const CACHE_NAME = 'dinebuddies-v30-invite-access';
 const SITE_ORIGIN = 'https://www.dinebuddies.com';
 const DEFAULT_ICON = '/icon-light-192.png';
 

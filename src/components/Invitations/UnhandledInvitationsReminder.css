@@ -1,0 +1,128 @@
+.unhandled-invitations-reminder {
+    position: fixed;
+    inset: 0;
+    z-index: 150000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: unhandled-invitations-reminder-fade-in 0.25s ease-out;
+}
+
+.unhandled-invitations-reminder__card {
+    width: 100%;
+    max-width: 380px;
+    border-radius: 24px;
+    padding: 28px 24px 22px;
+    background: var(--surface-elevated, #1a1a24);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    box-shadow:
+        0 24px 48px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    color: var(--text-primary, #fff);
+    text-align: center;
+}
+
+.unhandled-invitations-reminder__icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(236, 72, 153, 0.2));
+    border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+.unhandled-invitations-reminder__title {
+    margin: 0 0 10px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.unhandled-invitations-reminder__body {
+    margin: 0 0 18px;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+}
+
+.unhandled-invitations-reminder__counts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 20px;
+}
+
+.unhandled-invitations-reminder__count-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.unhandled-invitations-reminder__count-badge {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.85rem;
+}
+
+.unhandled-invitations-reminder__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.unhandled-invitations-reminder__btn {
+    width: 100%;
+    border: none;
+    border-radius: 16px;
+    padding: 13px 16px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.unhandled-invitations-reminder__btn:active {
+    transform: scale(0.98);
+}
+
+.unhandled-invitations-reminder__btn--primary {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.35);
+}
+
+.unhandled-invitations-reminder__btn--ghost {
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+}
+
+@keyframes unhandled-invitations-reminder-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}

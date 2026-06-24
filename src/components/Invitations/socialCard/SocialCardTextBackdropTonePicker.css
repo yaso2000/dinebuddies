@@ -1,0 +1,195 @@
+.private-card-show-content-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.private-card-show-content-block .private-card-show-content-toggle {
+    margin-bottom: 0;
+}
+
+.private-card-text-backdrop-tone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.private-card-text-backdrop-tone__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+    margin-inline-end: 4px;
+}
+
+.private-card-text-backdrop-tone__chip {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.35);
+    color: #f8fafc;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.private-card-text-backdrop-tone__chip--light {
+    background: rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.private-card-text-backdrop-tone__chip--none {
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.72));
+    border-style: dashed;
+}
+
+.private-card-text-backdrop-tone__chip--sel {
+    border-color: var(--luxury-gold, #d4af37);
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+}
+
+.private-card-text-backdrop-tone__chip:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Overlaid on the card preview — sits on the text panel band */
+.private-card-text-backdrop-tone--on-panel {
+    position: absolute;
+    z-index: 4;
+    top: 38%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(72%, 168px);
+    margin: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.62);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    pointer-events: auto;
+}
+
+.private-card-text-backdrop-tone--on-panel .private-card-text-backdrop-tone__chip {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 0.65rem;
+}
+
+/* Top of card preview — below show/hide text toggle */
+.private-card-text-backdrop-tone--on-preview-top {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    margin: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.62);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    pointer-events: auto;
+}
+
+.private-card-text-backdrop-tone--on-preview-top .private-card-text-backdrop-tone__chip {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 4px 6px;
+    font-size: 0.62rem;
+}
+
+/* Three icon buttons: white / black / none */
+.private-card-text-backdrop-tone--icons {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+}
+
+.private-card-text-backdrop-tone__chip--icon {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.private-card-text-backdrop-tone__chip--icon.private-card-text-backdrop-tone__chip--sel {
+    border-color: var(--luxury-gold, #d4af37);
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.4);
+}
+
+.private-card-text-backdrop-tone__swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    display: block;
+}
+
+.private-card-text-backdrop-tone__swatch--light {
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.25);
+}
+
+.private-card-text-backdrop-tone__swatch--dark {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.private-card-text-backdrop-tone__swatch--glass {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(148, 163, 184, 0.35) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.35);
+}
+
+.private-card-text-backdrop-tone__chip--glass {
+    background: rgba(148, 163, 184, 0.35);
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.private-card-preview-stage__top .private-card-text-backdrop-tone__chip--icon {
+    width: 24px;
+    height: 24px;
+}
+
+.private-card-preview-stage__top .private-card-text-backdrop-tone--icons {
+    gap: 3px;
+}
+
+.private-card-preview-stage__top .private-card-text-backdrop-tone__swatch--glass {
+    background: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.55) 0%,
+        rgba(148, 163, 184, 0.4) 55%,
+        rgba(30, 41, 59, 0.35) 100%
+    );
+}
+
+.private-card-text-backdrop-tone__ban-icon {
+    font-size: 0.7rem;
+    color: rgba(248, 250, 252, 0.88);
+}

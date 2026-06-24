@@ -28,6 +28,7 @@ const CODE_TO_I18N_KEY = {
     'auth/personal-portal-only': 'auth_personal_portal_only',
     'auth/operation-not-allowed': 'auth_operation_not_allowed',
     'auth/configuration-not-found': 'auth_configuration_not_found',
+    'auth/embedded-oauth-redirect-lost': 'auth_embedded_oauth_redirect_lost',
     'auth/missing-email': 'auth_missing_email',
     'auth/invalid-email': 'auth_invalid_email',
     'permission-denied': 'auth_permission_denied',
@@ -47,6 +48,13 @@ function tAuth(key, defaultValue) {
 export function getAuthErrorMessage(error) {
     const combined = `${error?.code || ''} ${error?.message || ''}`;
     if (/redirect_uri_mismatch|invalid_client|OAuth 2 parameters/i.test(combined)) {
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            const origin = window.location.origin;
+            return tAuth(
+                'auth_oauth_localhost_setup',
+                `Google OAuth is not configured for ${origin}. Run "npm run oauth:local-setup" and add that origin in Google Cloud → Credentials → Web client → Authorized JavaScript origins.`
+            );
+        }
         return tAuth('auth_oauth_setup_hint', 'OAuth setup error. Check Google Cloud and Firebase Auth domains.');
     }
     if (/disallowed_useragent|doesn't comply with Google's OAuth 2.0 policy/i.test(combined)) {
@@ -55,11 +63,25 @@ export function getAuthErrorMessage(error) {
             'Google blocks sign-in inside embedded browsers. Open this page in Chrome instead.'
         );
     }
-    if (/apple\.com|Sign in with Apple|invalid.*apple/i.test(combined) && error?.code === 'auth/operation-not-allowed') {
-        return tAuth(
-            'auth_apple_not_enabled',
-            'Apple sign-in is not enabled yet. Enable it in Firebase Console → Authentication.'
-        );
+    if (/apple\.com|Sign in with Apple|invalid.*apple/i.test(combined)) {
+        if (error?.code === 'auth/operation-not-allowed') {
+            return tAuth(
+                'auth_apple_not_enabled',
+                'Apple sign-in is not enabled yet. Enable it in Firebase Console → Authentication.'
+            );
+        }
+        if (error?.code === 'auth/internal-error' || error?.code === 'auth/invalid-credential') {
+            return tAuth(
+                'auth_apple_config_mismatch',
+                'Apple Sign-In failed. In Apple Developer, set Return URL to your Firebase handler (run npm run oauth:apple-setup for the exact URL). Also verify Services ID and key in Firebase → Apple provider.'
+            );
+        }
+        if (error?.code === 'auth/unauthorized-domain') {
+            return tAuth(
+                'auth_apple_unauthorized_domain',
+                'This website domain is not authorized. Add www.dinebuddies.com and dinebuddies.com in Firebase → Authentication → Authorized domains, and in Apple Developer → Services ID → Domains.'
+            );
+        }
     }
     if (error?.code === 'auth/unauthorized-domain') {
         const host = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -84,7 +106,12 @@ export function getAuthErrorMessage(error) {
         return i18n.t(i18nKey);
     }
     if (i18nKey) {
-        return i18n.t(i18nKey, { defaultValue: error.message || '' });
+        const defaults = {
+            auth_embedded_oauth_redirect_lost:
+                'Sign-in could not finish after redirect. On iPhone, use Safari at www.dinebuddies.com/login (not an in-app browser).',
+        };
+        return i18n.t(i18nKey, { defaultValue: defaults[i18nKey] || error.message || '' });
     }
-    return tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
+    const codeSuffix = error?.code ? ` (${error.code})` : '';
+    return tAuth('auth_error_fallback', `Something went wrong. Please try again.${codeSuffix}`);
 }

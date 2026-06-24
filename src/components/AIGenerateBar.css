@@ -325,11 +325,11 @@
     white-space: pre-wrap;
 }
 
-.dating-ai-text-fields--pulse {
-    animation: dating-ai-fields-pulse 1.4s ease;
+.private-ai-text-fields--pulse {
+    animation: private-ai-fields-pulse 1.4s ease;
 }
 
-@keyframes dating-ai-fields-pulse {
+@keyframes private-ai-fields-pulse {
     0% {
         box-shadow: 0 0 0 0 color-mix(in srgb, #ec4899 35%, transparent);
     }

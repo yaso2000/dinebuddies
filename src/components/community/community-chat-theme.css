@@ -1,0 +1,240 @@
+/**
+ * Community chat follows the global app theme (html[data-theme] via ThemeContext).
+ * Maps chat-specific surfaces onto app design tokens — no separate chat theme toggle.
+ */
+
+.community-chat-root {
+    --cchat-surface: var(--bg-secondary);
+    --cchat-surface-alt: var(--bg-elevated);
+    --cchat-shell-bg: var(--bg-body);
+    --cchat-border: var(--border-color);
+    --cchat-border-strong: color-mix(in srgb, var(--text-main) 14%, transparent);
+    --cchat-text: var(--text-main);
+    --cchat-text-muted: var(--text-muted);
+    --cchat-text-subtle: color-mix(in srgb, var(--text-muted) 88%, transparent);
+    --cchat-bubble-in-bg: color-mix(in srgb, var(--bg-card) 82%, var(--text-main) 18%);
+    --cchat-bubble-in-border: color-mix(in srgb, var(--text-main) 22%, transparent);
+    --cchat-bubble-in-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+    --cchat-bubble-in-text: var(--text-main);
+    --cchat-composer-bg: color-mix(in srgb, var(--bg-card) 94%, transparent);
+    --cchat-input-row-bg: var(--bg-input);
+    --cchat-input-row-border: var(--border-color);
+    --cchat-control-bg: var(--bg-card);
+    --cchat-control-text: var(--text-main);
+    --cchat-pinned-bg: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+    --cchat-pinned-border: var(--border-color);
+    --cchat-banner-frame-bg: var(--bg-card);
+    --cchat-banner-frame-border: var(--border-color);
+    --cchat-hover: var(--hover-overlay);
+    --cchat-header-btn-bg: var(--bg-card);
+    --cchat-header-btn-border: var(--border-color);
+    --cchat-pattern-fill: %23ffffff;
+}
+
+[data-theme='light'] .community-chat-root {
+    --cchat-bubble-in-bg: #ffffff;
+    --cchat-bubble-in-border: rgba(15, 23, 42, 0.16);
+    --cchat-bubble-in-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    --cchat-pattern-fill: %230f172a;
+}
+
+[data-theme='dark'] .community-chat-root {
+    --cchat-bubble-in-bg: rgba(255, 255, 255, 0.14);
+    --cchat-bubble-in-border: rgba(255, 255, 255, 0.22);
+    --cchat-bubble-in-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+/* Surfaces */
+.community-chat-root.community-chat-swipe-shell,
+.community-chat-root.chat-screen {
+    background: var(--cchat-shell-bg);
+    color: var(--cchat-text);
+}
+
+.community-chat-root .community-chat-swipe__page--main,
+.community-chat-root .community-chat-swipe__page--center-stage,
+.community-chat-root .community-chat-swipe__page--full-chat,
+.community-chat-root .community-center-stage,
+.community-chat-root .community-full-chat {
+    background: var(--cchat-surface);
+}
+
+.community-chat-root .community-chat-swipe__page--participants {
+    background: var(--cchat-surface-alt);
+}
+
+.community-chat-root .community-guest-chat--center {
+    border-top-color: var(--cchat-border);
+    background: color-mix(in srgb, var(--cchat-surface) 92%, var(--bg-input) 8%);
+}
+
+/* Header + pattern */
+.community-chat-root.chat-screen::before {
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1h2v2H1V1zm4 0h2v2H5V1zm4 0h2v2H9V1z' fill='var(--cchat-pattern-fill)' fill-opacity='1' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+.community-chat-root .chat-header {
+    background: var(--cchat-shell-bg);
+    border-bottom-color: var(--cchat-border);
+    color: var(--cchat-text);
+}
+
+.community-chat-root .header-close-btn,
+.community-chat-root .header-back-btn {
+    background: var(--cchat-header-btn-bg);
+    border-color: var(--cchat-header-btn-border);
+    color: var(--cchat-text);
+}
+
+.community-chat-root .input-area {
+    border-top-color: var(--cchat-border);
+    background: var(--cchat-composer-bg) !important;
+}
+
+.community-chat-root .input-wrapper {
+    background: var(--cchat-input-row-bg);
+    border-color: var(--cchat-input-row-border);
+}
+
+.community-chat-root .composer-icon-btn:hover {
+    background: var(--cchat-hover);
+}
+
+/* Pinned bar */
+.community-chat-root .community-pinned-host-bar {
+    background: var(--cchat-pinned-bg);
+    border-color: var(--cchat-pinned-border);
+    box-shadow: var(--shadow-premium);
+}
+
+.community-chat-root .community-pinned-host-bar__title {
+    color: var(--cchat-text);
+}
+
+.community-chat-root .community-pinned-host-bar__subtitle {
+    color: var(--cchat-text-muted);
+}
+
+.community-chat-root .community-pinned-host-bar__time,
+.community-chat-root .community-pinned-host-bar__pin,
+.community-chat-root .community-pinned-host-bar__pin-btn {
+    color: var(--cchat-text-subtle);
+}
+
+/* Banner frame */
+.community-chat-root .community-main-chat__banner-wrap {
+    background: var(--cchat-banner-frame-bg);
+    border-color: var(--cchat-banner-frame-border);
+}
+
+.community-chat-root .community-main-chat__banner-placeholder {
+    color: var(--cchat-text-muted);
+    background:
+        radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 55%),
+        linear-gradient(160deg, color-mix(in srgb, var(--text-main) 6%, transparent) 0%, var(--cchat-surface) 100%);
+}
+
+.community-chat-root .community-center-stage__hint {
+    color: var(--cchat-text-subtle);
+}
+
+/* Messages */
+.community-chat-root .community-main-chat__bubble:not(.community-main-chat__bubble--outgoing):not(.community-main-chat__bubble--host):not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image) {
+    color: var(--cchat-bubble-in-text);
+    background: var(--cchat-bubble-in-bg);
+    border: 1px solid var(--cchat-bubble-in-border);
+    box-shadow: var(--cchat-bubble-in-shadow);
+}
+
+.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) {
+    background: var(--cchat-bubble-in-bg);
+    color: var(--cchat-bubble-in-text);
+    border: 1px solid var(--cchat-bubble-in-border);
+    box-shadow: var(--cchat-bubble-in-shadow);
+}
+
+.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment:not(:first-child)::before {
+    background: var(--cchat-border-strong);
+}
+
+.community-chat-root .community-main-chat__sender {
+    color: var(--cchat-text-muted);
+}
+
+.community-chat-root .community-main-chat__message-menu-btn {
+    background: var(--cchat-control-bg);
+    color: var(--cchat-control-text);
+    border: 1px solid var(--cchat-border);
+}
+
+.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__message:not(.community-main-chat__message--outgoing):not(.community-main-chat__message--host) .community-main-chat__bubble-time {
+    color: var(--cchat-text-muted);
+    opacity: 1;
+}
+
+.community-chat-root .community-chat-message-menu {
+    background: var(--cchat-control-bg);
+    border-color: var(--cchat-border-strong);
+    box-shadow: var(--shadow-premium);
+}
+
+.community-chat-root .community-chat-message-menu__item {
+    color: var(--cchat-text);
+}
+
+.community-chat-root .community-chat-message-menu__item:hover {
+    background: var(--cchat-hover);
+}
+
+/* Composer */
+.community-chat-root .community-main-chat__composer {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+    border-top-color: var(--cchat-border);
+    background: var(--cchat-composer-bg);
+}
+
+.community-chat-root .community-composer-bar .community-main-chat__input-row {
+    background: var(--cchat-input-row-bg);
+    border-color: var(--cchat-input-row-border);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cchat-text) 4%, transparent);
+}
+
+.community-chat-root .community-main-chat__attach-btn {
+    background: var(--cchat-control-bg);
+    border-color: var(--cchat-border-strong);
+    color: var(--cchat-control-text);
+}
+
+.community-chat-root .community-main-chat__input {
+    color: var(--cchat-text);
+}
+
+.community-chat-root .community-main-chat__input::placeholder {
+    color: var(--cchat-text-subtle);
+}
+
+.community-chat-root .community-composer-bar__reply-snippet {
+    color: var(--cchat-text-muted);
+}
+
+/* Participants */
+.community-chat-root .community-participants__title,
+.community-chat-root .community-participants__status {
+    color: var(--cchat-text-muted);
+}
+
+.community-chat-root .community-participants__name {
+    color: var(--cchat-text);
+}
+
+.community-chat-root .community-participants__row:hover {
+    background: var(--cchat-hover);
+}
+
+.community-chat-root .community-participants__online-dot {
+    border-color: var(--cchat-surface-alt);
+}

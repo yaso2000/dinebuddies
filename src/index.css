@@ -721,7 +721,7 @@ body {
 
   .chat-root.chat-container,
   .invitation-chat-root.chat-screen,
-  .community-chat-root.chat-room-container {
+  .community-chat-root.chat-room-container:not(.community-chat-fullscreen) {
     position: fixed;
     z-index: 50;
     box-sizing: border-box;
@@ -788,7 +788,7 @@ body {
 
   .chat-root.chat-container,
   .invitation-chat-root.chat-screen,
-  .community-chat-root.chat-room-container {
+  .community-chat-root.chat-room-container:not(.community-chat-fullscreen) {
     position: relative !important;
     left: auto !important;
     right: auto !important;
@@ -856,6 +856,11 @@ body {
   display: none;
 }
 
+/* Community chat: always hide app shell header (uses in-chat header + close). */
+.app-header--community-fullscreen {
+  display: none !important;
+}
+
 /* Fullscreen pages (e.g. Create Story, Smart Post Studio): no bottom padding, no outer scroll */
 .app-main--fullscreen {
   padding-bottom: 0 !important;
@@ -917,9 +922,13 @@ body {
 }
 
 .mobile-filter-bar.posts-feed-scope-bar {
-  padding: 6px 8px;
-  border-radius: 14px;
-  margin: 0 12px 10px;
+  padding: 5px 6px;
+  border-radius: 12px;
+  margin: 0 8px 8px;
+}
+
+.posts-feed-scope-toolbar-wrap {
+  min-width: 0;
 }
 
 .posts-feed-scope-bar--desktop {
@@ -941,8 +950,33 @@ body {
 .posts-feed-scope-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
+  width: 100%;
+}
+
+.posts-feed-scope-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: auto;
+  padding-inline-start: 4px;
+}
+
+.posts-feed-audience-chip {
+  max-width: 92px;
+}
+
+.posts-feed-scope-chips .home-geo-chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 5.5rem;
+}
+
+.posts-feed-audience-chip .home-geo-chip__label {
+  max-width: 4.5rem;
 }
 
 .posts-feed-scope-search-row {
@@ -1014,19 +1048,18 @@ body {
   opacity: 0.85;
 }
 
-.posts-feed-scope-chips .home-geo-chip--compact {
-  padding: 3px 7px;
-  font-size: 0.62rem;
-  font-weight: 600;
-  gap: 3px;
-  line-height: 1.2;
+@media (max-width: 1023px) {
+  .posts-feed-scope-actions .posts-feed-scope-icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+
+  .posts-feed-audience-chip {
+    max-width: 78px;
+  }
 }
 
-.posts-feed-scope-chips .home-geo-chip--compact .home-geo-chip__icon {
-  font-size: 0.68rem;
-}
-
-/* ChatList on messages page: show list on mobile, placeholder on desktop */
 .chat-list-desktop-placeholder {
   display: none;
 }
@@ -1815,7 +1848,7 @@ html:not([data-theme='light']) .app-header .app-name {
    .input-field: Input styling; overlaps with ui-form-field.
    WHEN TO USE:
    - New forms: prefer ui-form-surface + ui-form-field + ui-form-label
-   - CreateInvitation, CreatePrivateInvitation: .form-group + .input-field still used
+   - CreateInvitation, CreateSocialInvitation: .form-group + .input-field still used
    MIGRATION: ui-form-field for simple inputs; .form-group stays (structure). Keep
    .input-field where elegant-label + icon pattern used (CreateInvitation).
    ========================================================================== */
@@ -2140,6 +2173,24 @@ select.input-field {
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
 }
 
+.posts-feed-scope-chips .home-geo-chip--compact,
+.posts-feed-scope-actions .home-geo-chip {
+  padding: 3px 7px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  gap: 3px;
+  line-height: 1.2;
+}
+
+.posts-feed-scope-chips .home-geo-chip--compact .home-geo-chip__icon,
+.posts-feed-scope-actions .home-geo-chip .home-geo-chip__icon {
+  font-size: 0.68rem;
+}
+
+.posts-feed-scope-actions .home-geo-chip--active {
+  box-shadow: none;
+}
+
 .home-geo-chip:not(.home-geo-chip--active):hover {
   border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
   background: color-mix(in srgb, var(--primary) 5%, var(--bg-input));
@@ -2280,6 +2331,18 @@ select.input-field {
   height: 100%;
   width: 100%;
   background: #0f172a;
+}
+
+/* Free / display-only business maps — block attribution & tile external links */
+.leaflet-map-readonly .leaflet-control-attribution a {
+  pointer-events: none;
+  cursor: default;
+  text-decoration: none;
+  color: inherit;
+}
+
+.leaflet-map-readonly .leaflet-interactive {
+  cursor: default;
 }
 
 .btn-recenter {
@@ -2932,7 +2995,7 @@ button.notification-bell {
    LEGACY ELEGANT LABELS (.elegant-label, .label-icon)
    Phase 3B: Document role vs ui-form-label.
    --------------------------------------------------------------------------
-   .elegant-label: Icon + label in a row; used in CreateInvitation, CreatePrivateInvitation.
+   .elegant-label: Icon + label in a row; used in CreateInvitation, CreateSocialInvitation.
    .ui-form-label: Simpler block label; no icon slot.
    WHEN TO USE:
    - Icon + label pattern (CreateInvitation): keep .elegant-label
@@ -3126,29 +3189,36 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
   width: 100%;
+  min-height: 2.35rem;
 }
 
 .auth-page-chrome__lang {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  width: min(11.75rem, 46vw);
   min-width: 0;
-  max-width: min(100%, 220px);
+  max-width: 11.75rem;
+  align-self: center;
 }
 
 .auth-page-chrome__toolbar-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex-shrink: 0;
   margin-inline-start: auto;
 }
 
 .auth-page-chrome__icon-btn,
 .auth-page-chrome__account-btn {
   flex-shrink: 0;
+  height: 2.35rem;
+  min-height: 2.35rem;
+  box-sizing: border-box;
 }
 
 .auth-page-chrome .login-hub-corner-btn {
@@ -3161,12 +3231,16 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 0.4rem 0.65rem 0.4rem 0.55rem;
+  height: 2.35rem;
+  min-height: 2.35rem;
+  max-height: 2.35rem;
+  padding: 0 0.65rem 0 0.55rem;
   border-radius: 12px;
   border: 1px solid rgba(28, 25, 23, 0.12);
   background: rgba(255, 254, 251, 0.94);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
   cursor: pointer;
+  box-sizing: border-box;
   transition:
     border-color 0.15s ease,
     background 0.15s ease;
@@ -3186,13 +3260,14 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 .auth-shell-lang-select__field {
   flex: 1;
   min-width: 0;
+  height: 100%;
   border: none;
   background: transparent;
   color: #1c1917;
   font-size: 0.82rem;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 0.15rem 1.35rem 0.15rem 0;
+  line-height: 1;
+  padding: 0 1.35rem 0 0;
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2378716c' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
@@ -3213,11 +3288,12 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 
 @media (max-width: 380px) {
   .auth-page-chrome__toolbar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .auth-page-chrome__lang {
+    width: 100%;
     max-width: 100%;
   }
 
@@ -4342,6 +4418,24 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     grid-template-columns: 1fr !important;
   }
 
+  /* Community chat: single full-width column, no sidebars */
+  .ds-body-grid--community-fullscreen {
+    grid-template-columns: 1fr !important;
+    max-width: 100% !important;
+  }
+
+  .app-main--community-fullscreen {
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+    border-right: none !important;
+  }
+
+  .app-main--community-fullscreen > .community-chat-fullscreen {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+
   /* ── Column 1: Left nav (scrolls if tall) ── */
   .ds-left-sidebar {
     overflow-y: auto;
@@ -4438,7 +4532,13 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   /* Chat / fullscreen routes: let the shell fill vertical space */
   .app-main--chat > .chat-root.chat-container,
   .app-main--chat > .invitation-chat-root.chat-screen,
-  .app-main--chat > .community-chat-root {
+  .app-main--chat > .community-chat-root:not(.community-chat-fullscreen),
+  .app-main--chat > .community-chat-swipe-shell:not(.community-chat-fullscreen) {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+
+  .app-main--community-fullscreen > .community-chat-fullscreen {
     flex: 1 1 auto !important;
     min-height: 0 !important;
   }
@@ -4592,6 +4692,11 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     flex-direction: column !important;
     flex: 1 !important;
     min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app-main--community-fullscreen {
+    padding-bottom: 0 !important;
     overflow: hidden !important;
   }
 }
