@@ -117,10 +117,15 @@ if (!forceServiceAccount) {
     console.log('[deploy-functions] Forced service account from .env');
 }
 
-const result = runFirebase(
-    ['deploy', '--only', onlyArg, '--project', projectId, '--non-interactive'],
-    { cwd: root, env: deployEnv }
-);
+const forceDeleteOrphans = argv.includes('--force') || filterArg === 'all';
+
+const deployArgs = ['deploy', '--only', onlyArg, '--project', projectId, '--non-interactive'];
+if (forceDeleteOrphans) {
+    console.log('[deploy-functions] --force: remove cloud functions missing from local source');
+    deployArgs.push('--force');
+}
+
+const result = runFirebase(deployArgs, { cwd: root, env: deployEnv });
 
 cleanup();
 process.exit(result.status ?? 1);
