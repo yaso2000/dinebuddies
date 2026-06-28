@@ -639,7 +639,6 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            let grantedCredits = 0;
             let showWelcomeNotification = false;
 
             // Generate a unique identifier (email or phone)
@@ -652,7 +651,6 @@ export const AuthProvider = ({ children }) => {
                     const giftSnap = await getDoc(giftRef);
 
                     if (!giftSnap.exists()) {
-                        grantedCredits = 5;
                         showWelcomeNotification = true;
                         try {
                             await setDoc(giftRef, {
@@ -666,12 +664,10 @@ export const AuthProvider = ({ children }) => {
                     }
                 } catch (giftReadErr) {
                     console.warn('welcome gift eligibility check skipped:', giftReadErr?.message || giftReadErr);
-                    grantedCredits = 5;
                     showWelcomeNotification = true;
                 }
             } else {
                 // Fallback if no unique identity can be verified (rare in Firebase Auth)
-                grantedCredits = 5;
                 showWelcomeNotification = true;
             }
 
@@ -685,10 +681,6 @@ export const AuthProvider = ({ children }) => {
                 display_name: finalDisplayName,
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
-                reputation: 100,
-                purchasedPrivateCredits: grantedCredits,
-                usedPrivateCreditsThisMonth: 0,
-                lastPrivateResetMonth: '',
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
@@ -708,7 +700,7 @@ export const AuthProvider = ({ children }) => {
                         userId,
                         type: 'system_announcement',
                         title: '🎁 Welcome Gift!',
-                        message: 'Welcome to DineBuddies! You have received 5 free private invitations as a welcome gift. Enjoy!',
+                        message: 'Welcome to DineBuddies! Your profile is ready.',
                         style: 'success'
                     });
                 } catch (notifErr) {
