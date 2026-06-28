@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { goToLogin } from '../utils/goToLogin';
 import { useToast } from '../context/ToastContext';
-import { isUserAvailableForPrivateInvite, getPrivateInviteeDisplayName } from '../utils/privateInviteAvailability';
+import { isUserAvailableForPrivateInvite, getPrivateInviteeDisplayName, senderFollowsInvitee } from '../utils/privateInviteAvailability';
 import './PrivateInviteProfileBadge.css';
 
 /**
@@ -13,12 +13,15 @@ export default function PrivateInviteProfileBadge({
     user,
     currentUser,
     className = '',
+    logoSrc = '/db-logo.svg',
 }) {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { showToast } = useToast();
 
     const canInvite = isUserAvailableForPrivateInvite(user);
+    const senderFollowing = currentUser?.following || [];
+    const followsInvitee = senderFollowsInvitee(senderFollowing, user?.id);
     const displayName = getPrivateInviteeDisplayName(user) || t('user', 'User');
 
     const handleClick = useCallback(
@@ -31,6 +34,17 @@ export default function PrivateInviteProfileBadge({
                     t(
                         'private_invite_social_only_toast',
                         'This member only accepts social/public invites — private invites are turned off.'
+                    ),
+                    'info'
+                );
+                return;
+            }
+
+            if (!followsInvitee) {
+                showToast(
+                    t(
+                        'private_invite_follow_required',
+                        'Follow this member first to send a private invite.'
                     ),
                     'info'
                 );
@@ -65,7 +79,7 @@ export default function PrivateInviteProfileBadge({
                 },
             });
         },
-        [canInvite, currentUser, displayName, navigate, showToast, t, user]
+        [canInvite, followsInvitee, currentUser, displayName, navigate, showToast, t, user]
     );
 
     if (!user?.id) return null;
@@ -93,7 +107,7 @@ export default function PrivateInviteProfileBadge({
             }
             aria-disabled={!canInvite}
         >
-            <img src="/db-logo.svg" alt="" className="private-invite-profile-badge__logo" decoding="async" draggable={false} />
+            <img src={logoSrc} alt="" className="private-invite-profile-badge__logo" decoding="async" draggable={false} />
         </button>
     );
 }

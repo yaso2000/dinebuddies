@@ -1,10 +1,25 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, animate, motion, useMotionValue } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { FaGift, FaHeart } from 'react-icons/fa';
+import { FaComments, FaGift, FaHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
+import { useInvitations } from '../../context/InvitationContext';
+import { useToast } from '../../context/ToastContext';
+import {
+  likeDiscoveryProfile,
+  unlikeDiscoveryProfile,
+} from '../../utils/discoveryProfile';
+import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
+import { checkCanMessage } from '../../utils/chatHelpers';
+import { profileShowsLikeButton, connectionKindToCelebrationType, tryCelebrateConnectionComplete } from '../../utils/connectConnection';
 import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
-import { getJoinReasonLabel } from '../../constants/privateProfileOptions';
+import { useCanMessageMember } from '../../hooks/useCanMessageMember';
+import { useMatchCelebration } from '../../context/MatchCelebrationContext';
+import OnlineStatusBadge from '../profile/OnlineStatusBadge';
+import { useUserPresence } from '../../hooks/usePresence';
 import './discovery.css';
 import { AppText } from "../base";
 
@@ -20,35 +35,51 @@ export default function DiscoveryCard({
   isTop = true
 }) {
   const { t } = useTranslation();
-  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const { currentUser, userProfile } = useAuth();
+  const { toggleFollow, currentUser: invitationUser } = useInvitations();
+  const { celebrateMatch } = useMatchCelebration();
+  const targetUser = profile?.user || profile;
+  const isOnline = useUserPresence(profile?.id, { fallback: Boolean(targetUser?.isOnline) });
+  const viewerProfile = userProfile || currentUser || invitationUser;
+  const useDatingLike = profileShowsLikeButton(targetUser);
   const viewerUid = currentUser?.uid || currentUser?.id;
-  const { liked: likedAlready, greetedToday } =
-    useDiscoveryActionStatus(viewerUid, profile?.id);
+  const viewerFollowing = useMemo(
+    () => invitationUser?.following || [],
+    [invitationUser?.following]
+  );
+  const canMessageFromServer = useCanMessageMember(viewerUid, profile?.id, viewerFollowing);
+  const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
 
   const x = useMotionValue(0);
   const exitHandledRef = useRef(false);
   const draggingRef = useRef(false);
   const burstTimerRef = useRef(null);
 
-  const [liked, setLiked] = useState(false);
-  const [greeted, setGreeted] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
   const [greetingBusy, setGreetingBusy] = useState(false);
   const [likeBurst, setLikeBurst] = useState(false);
   const [waveBurst, setWaveBurst] = useState(false);
+  const [canChat, setCanChat] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
+
+  const refreshCanChat = useCallback(async () => {
+    if (!viewerUid || !profile?.id) return;
+    try {
+      const snap = await getDoc(doc(db, 'users', profile.id));
+      const targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
+      const allowed = await checkCanMessage(viewerUid, profile.id, viewerFollowing, targetFollowing);
+      setCanChat(allowed);
+    } catch {
+      setCanChat(false);
+    }
+  }, [profile?.id, viewerFollowing, viewerUid]);
 
   useEffect(() => {
-    setLiked(likedAlready);
-  }, [likedAlready]);
-
-  useEffect(() => {
-    setGreeted(greetedToday);
-  }, [greetedToday]);
-
-  const joinReasonLabels = (profile.joinReasons || [])
-    .map((id) => getJoinReasonLabel(id, t))
-    .filter(Boolean);
-  const interestTags = profile.interests || [];
+    setCanChat(canMessageFromServer);
+  }, [canMessageFromServer]);
 
   const triggerBurst = useCallback((setter) => {
     if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
@@ -90,33 +121,91 @@ export default function DiscoveryCard({
     resetPosition();
   };
 
-  const handleLike = async (e) => {
+  const handleToggleLike = async (e) => {
     e.stopPropagation();
-    if (!isTop || likeBusy || liked) return;
+    if (!isTop || likeBusy) return;
+
+    if (!viewerUid) {
+      onLike?.(profile);
+      return;
+    }
+
     setLikeBusy(true);
-    setLiked(true);
-    triggerBurst(setLikeBurst);
     try {
-      const result = await onLike?.(profile);
-      if (result?.ok === false && !result?.limited) {
-        setLiked(false);
+      if (liked) {
+        const result = await unlikeDiscoveryProfile(viewerUid, targetUser);
+        if (result?.ok) {
+          if (result.wasMutual) await refreshCanChat();
+        } else if (result?.reason === 'permission_denied') {
+          showToast(
+            t(
+              'discovery_unlike_rules_pending',
+              'Could not remove like yet — app rules may need updating. Try again shortly.'
+            ),
+            'error'
+          );
+        } else {
+          showToast(t('discovery_unlike_failed', 'Could not remove like. Try again.'), 'error');
+        }
+        return;
       }
+
+      triggerBurst(setLikeBurst);
+      const result = await likeDiscoveryProfile(viewerUid, targetUser, userProfile || currentUser);
+      if (!result?.ok) {
+        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
+        return;
+      }
+      if (result.mutual || result.match) {
+        setCanChat(true);
+        celebrateMatch({
+          type: connectionKindToCelebrationType(result.connectionKind || 'dating'),
+          otherUser: targetUser,
+          otherId: profile.id,
+          otherName: profile.name,
+        });
+      }
+    } catch (err) {
+      console.error('[DiscoveryCard] like', err);
+      showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
     } finally {
       setLikeBusy(false);
     }
   };
 
+  const handleFollow = async (e) => {
+    e.stopPropagation();
+    if (!isTop || followBusy) return;
+    setFollowBusy(true);
+    try {
+      const wasFollowing = isFollowingUser;
+      const result = await toggleFollow(profile.id);
+      if (result?.ok && result.connectionComplete && result.connectionKind) {
+        setCanChat(true);
+        celebrateMatch({
+          type: connectionKindToCelebrationType(result.connectionKind),
+          otherUser: targetUser,
+          otherId: profile.id,
+          otherName: profile.name,
+        });
+      } else if (result?.ok && wasFollowing) {
+        await refreshCanChat();
+      }
+    } catch (err) {
+      console.error('[DiscoveryCard] follow', err);
+      showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
   const handleGreeting = async (e) => {
     e.stopPropagation();
-    if (!isTop || greetingBusy || greeted) return;
+    if (!isTop || greetingBusy || greetedToday) return;
     setGreetingBusy(true);
-    setGreeted(true);
     triggerBurst(setWaveBurst);
     try {
-      const result = await onGreeting?.(profile);
-      if (result?.ok === false && !result?.limited) {
-        setGreeted(false);
-      }
+      await onGreeting?.(profile);
     } finally {
       setGreetingBusy(false);
     }
@@ -126,6 +215,12 @@ export default function DiscoveryCard({
     e.stopPropagation();
     if (!isTop) return;
     onSendGift?.(profile);
+  };
+
+  const handleOpenChat = (e) => {
+    e.stopPropagation();
+    if (!profile?.id) return;
+    navigate(`/chat/${profile.id}`);
   };
 
   return (
@@ -147,6 +242,8 @@ export default function DiscoveryCard({
 
       <div className="discovery-card__gradient" aria-hidden />
 
+      <OnlineStatusBadge isOnline={isOnline} className="discovery-card__online-badge" size="sm" />
+
       <div className="discovery-card__info discovery-card__info--profile">
         <div className="discovery-card__headline">
           <AppText as="h2" className="discovery-card__name">{profile.name}</AppText>
@@ -154,52 +251,34 @@ export default function DiscoveryCard({
           <AppText as="span" className="discovery-card__age-badge">{profile.ageCategory}</AppText> :
           null}
         </div>
-
-        {joinReasonLabels.length > 0 ?
-        <div className="discovery-card__section">
-          <AppText as="p" className="discovery-card__section-label">
-            {t('join_reason_title', 'Reason for joining')}
-          </AppText>
-          <div className="discovery-card__chips">
-            {joinReasonLabels.map((label) =>
-            <AppText as="span" key={label} className="discovery-card__chip discovery-card__chip--reason">
-              {label}
-            </AppText>
-            )}
-          </div>
-        </div> :
-        null}
-
-        {interestTags.length > 0 ?
-        <div className="discovery-card__section">
-          <AppText as="p" className="discovery-card__section-label">
-            {t('interests', 'Interests')}
-          </AppText>
-          <div className="discovery-card__chips">
-            {interestTags.map((tag) =>
-            <AppText as="span" key={tag} className="discovery-card__chip discovery-card__chip--interest">
-              {tag}
-            </AppText>
-            )}
-          </div>
-        </div> :
-        null}
       </div>
 
       <div className="discovery-card__actions discovery-card__actions--ghost">
+        {useDatingLike ?
         <button
           type="button"
-          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--like${liked ? ' discovery-card__action--liked' : ''}`}
-          disabled={likeBusy || liked}
-          aria-label={t('user_directory_like', 'Like profile')}
+          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--like${liked ? ' discovery-card__action--liked' : ' discovery-card__action--like-idle'}`}
+          disabled={likeBusy}
+          aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+          aria-pressed={liked}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleLike}>
+          onClick={handleToggleLike}>
           <FaHeart size={26} />
-        </button>
+        </button> :
         <button
           type="button"
-          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--greeting${greeted ? ' discovery-card__action--greeted' : ''}`}
-          disabled={greetingBusy || greeted}
+          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--follow${isFollowingUser ? ' discovery-card__action--following' : ''}`}
+          disabled={followBusy}
+          aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+          aria-pressed={isFollowingUser}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={handleFollow}>
+          {isFollowingUser ? <FaUserCheck size={24} /> : <FaUserPlus size={24} />}
+        </button>}
+        <button
+          type="button"
+          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--greeting${greetedToday ? ' discovery-card__action--greeted' : ''}`}
+          disabled={greetingBusy || greetedToday}
           aria-label={t('user_directory_greeting', 'Wave hi')}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={handleGreeting}>
@@ -213,6 +292,16 @@ export default function DiscoveryCard({
           onClick={handleGift}>
           <FaGift size={24} />
         </button>
+        {canChat ?
+        <button
+          type="button"
+          className="discovery-card__action discovery-card__action--ghost discovery-card__action--chat"
+          aria-label={t('chat', 'Chat')}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={handleOpenChat}>
+          <FaComments size={24} />
+        </button> :
+        null}
       </div>
 
       <AnimatePresence>

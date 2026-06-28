@@ -1,14 +1,12 @@
 .user-directory-card {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-color);
     background: var(--bg-card);
-    cursor: pointer;
     text-align: start;
-    color: inherit;
+    color: var(--text-main);
     display: block;
     padding: 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
@@ -24,128 +22,201 @@
     transform: scale(0.99);
 }
 
-.user-directory-card__cover {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center;
-    background-color: #1f2937;
+.user-directory-card__media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    min-height: 96px;
+    isolation: isolate;
+    container-type: size;
 }
 
-.user-directory-card__gradient {
+.user-directory-card__info-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.user-directory-card__cover-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.user-directory-card__cover-link {
+    display: block;
+    width: 100%;
+    height: 100%;
+    text-decoration: none;
+}
+
+.user-directory-card__cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    pointer-events: none;
+}
+
+.user-directory-card__cover-scrim {
     position: absolute;
     inset: 0;
     background: linear-gradient(
         to top,
-        rgba(0, 0, 0, 0.88) 0%,
-        rgba(0, 0, 0, 0.45) 42%,
-        rgba(0, 0, 0, 0.12) 100%
+        rgba(0, 0, 0, 0.82) 0%,
+        rgba(0, 0, 0, 0.38) 38%,
+        rgba(0, 0, 0, 0.12) 68%,
+        rgba(0, 0, 0, 0.28) 100%
     );
     pointer-events: none;
 }
 
-.user-directory-card__body {
-    position: relative;
-    z-index: 1;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding: 12px;
-    gap: 8px;
+.user-directory-card__avatar-wrap {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: 10px;
+    transform: translateY(-50%);
+    z-index: 2;
+    height: 50%;
+    aspect-ratio: 1;
+    overflow: visible;
+    pointer-events: none;
 }
 
-.user-directory-card__profile-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-    min-width: 0;
+.user-directory-card__avatar-link {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    text-decoration: none;
+    pointer-events: auto;
+    cursor: pointer;
 }
 
 .user-directory-card__avatar {
-    flex-shrink: 0;
-    width: 52px;
-    height: 52px;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.92);
     object-fit: cover;
+    object-position: center top;
+    display: block;
+    border: 3px solid rgba(255, 255, 255, 0.94);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.38);
     background: #374151;
+    pointer-events: none;
+}
+
+.user-directory-card__avatar-link .user-directory-card__avatar {
+    pointer-events: none;
+}
+
+.user-directory-card__private-invite.private-invite-profile-badge {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    z-index: 4;
+    width: 38%;
+    height: 38%;
+    padding: 0;
+    pointer-events: auto;
+    transform: translate(-50%, 50%);
+    background: linear-gradient(145deg, #fcd34d 0%, #b45309 100%);
+    border: 2px solid rgba(255, 255, 255, 0.94);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
-.user-directory-card__info {
-    flex: 1;
+.user-directory-card__private-invite.private-invite-profile-badge:hover {
+    transform: translate(-50%, 50%) scale(1.06);
+    box-shadow:
+        0 0 0 2px var(--luxury-gold, #d4af37),
+        0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.user-directory-card__private-invite.private-invite-profile-badge:active {
+    transform: translate(-50%, 50%) scale(0.98);
+}
+
+.user-directory-card__private-invite.private-invite-profile-badge--disabled:hover {
+    transform: translate(-50%, 50%);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.user-directory-card__private-invite .private-invite-profile-badge__logo {
+    width: 58%;
+    height: 58%;
+}
+
+.user-directory-card__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
     min-width: 0;
+    padding: 10px;
+    color: #fff;
+    pointer-events: none;
+}
+
+.user-directory-card__overlay a,
+.user-directory-card__overlay button {
+    pointer-events: auto;
+}
+
+.user-directory-card__online-badge {
+    position: absolute;
+    top: 8px;
+    inset-inline-end: 8px;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.user-directory-card__info-link {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+    padding-inline-end: 28px;
+    margin-inline-start: calc(50cqh + 6px);
+    margin-top: 2px;
 }
 
 .user-directory-card__name {
     margin: 0;
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 800;
-    color: #fff;
     line-height: 1.25;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.user-directory-card__meta {
-    margin: 2px 0 0;
-    font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.78);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-}
-
-.user-directory-card__meta-icon {
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-    opacity: 0.85;
-}
-
-.user-directory-card__bio {
-    margin: 0;
-    font-size: 0.78rem;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.86);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.user-directory-card__tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.user-directory-card__tag {
-    font-size: 0.7rem;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    white-space: nowrap;
+    max-width: 100%;
 }
 
 .user-directory-card__actions {
+    position: relative;
+    z-index: 4;
     display: flex;
-    gap: 8px;
+    gap: 7px;
     align-items: center;
+    justify-content: flex-end;
+    margin-top: auto;
+    padding-top: 8px;
 }
 
 .user-directory-card__action {
     flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border: none;
     border-radius: 50%;
     padding: 0;
@@ -153,7 +224,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    border: 1.5px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.user-directory-card__action:not(:disabled):hover {
+    transform: translateY(-1px) scale(1.05);
+    filter: brightness(1.06);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
 .user-directory-card__action:active {
@@ -162,47 +241,117 @@
 
 .user-directory-card__action:disabled {
     cursor: default;
-}
-
-.user-directory-card__action--like {
-    background: rgba(244, 63, 94, 0.22);
-    color: #fda4af;
-    border: 1px solid rgba(244, 63, 94, 0.35);
-}
-
-.user-directory-card__action--like.user-directory-card__action--liked,
-.user-directory-card__action--like:not(:disabled):hover {
-    background: rgba(244, 63, 94, 0.38);
-    color: #fb7185;
-}
-
-.user-directory-card__action--liked .user-directory-card__action-icon {
-    fill: currentColor;
-}
-
-.user-directory-card__action--greeting {
-    background: rgba(56, 189, 248, 0.18);
-    color: #7dd3fc;
-    border: 1px solid rgba(56, 189, 248, 0.32);
-}
-
-.user-directory-card__action--greeting.user-directory-card__action--greeted {
-    opacity: 0.45;
-}
-
-.user-directory-card__wave {
-    font-size: 1.15rem;
-    line-height: 1;
+    filter: none;
 }
 
 .user-directory-card__action--gift {
-    background: rgba(255, 255, 255, 0.14);
+    background: linear-gradient(145deg, #f59e0b 0%, #e86e2e 100%);
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 237, 213, 0.45);
+}
+
+.user-directory-card__action--gift:not(:disabled):hover {
+    background: linear-gradient(145deg, #fbbf24 0%, #ea580c 100%);
+    box-shadow: 0 4px 14px rgba(232, 110, 46, 0.45);
+}
+
+.user-directory-card__action--greeting {
+    background: linear-gradient(145deg, #38bdf8 0%, #0ea5e9 100%);
+    color: #fff;
+    border-color: rgba(186, 230, 253, 0.5);
+}
+
+.user-directory-card__action--greeting:not(:disabled):hover {
+    background: linear-gradient(145deg, #7dd3fc 0%, #0284c7 100%);
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.45);
+}
+
+.user-directory-card__action--greeting.user-directory-card__action--greeted {
+    opacity: 0.5;
+    filter: grayscale(0.35);
+}
+
+.user-directory-card__wave {
+    font-size: 1.05rem;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+}
+
+.user-directory-card__action--like {
+    background: linear-gradient(145deg, #fda4af 0%, #f43f5e 100%);
+    color: #fff;
+    border-color: rgba(254, 205, 211, 0.55);
+}
+
+.user-directory-card__action--like-idle .user-directory-card__action-icon {
+    opacity: 0.95;
+}
+
+.user-directory-card__action--like:not(:disabled):hover {
+    box-shadow: 0 4px 14px rgba(244, 63, 94, 0.45);
+}
+
+.user-directory-card__action--like.user-directory-card__action--liked {
+    background: linear-gradient(145deg, #ef4444 0%, #b91c1c 100%);
+    color: #fff;
+    border-color: #fca5a5;
+    box-shadow: 0 0 0 2px rgba(252, 165, 165, 0.4), 0 4px 14px rgba(220, 38, 38, 0.4);
+}
+
+.user-directory-card__action--like.user-directory-card__action--liked .user-directory-card__action-icon {
+    fill: currentColor;
+    opacity: 1;
+}
+
+.user-directory-card__action--follow {
+    background: linear-gradient(145deg, #a78bfa 0%, #6366f1 100%);
+    color: #fff;
+    border-color: rgba(199, 210, 254, 0.5);
+}
+
+.user-directory-card__action--follow:not(:disabled):hover {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.45);
+}
+
+.user-directory-card__action--follow.user-directory-card__action--following {
+    background: linear-gradient(145deg, #4ade80 0%, #16a34a 100%);
+    color: #fff;
+    border-color: rgba(187, 247, 208, 0.55);
+    box-shadow: 0 4px 14px rgba(22, 163, 74, 0.4);
+}
+
+.user-directory-card__action--chat {
+    background: linear-gradient(145deg, #34d399 0%, #059669 100%);
+    color: #fff;
+    border-color: rgba(167, 243, 208, 0.55);
+}
+
+.user-directory-card__action--chat:not(:disabled):hover {
+    background: linear-gradient(145deg, #6ee7b7 0%, #047857 100%);
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.5);
 }
 
 .user-directory-card__action-icon {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
     flex-shrink: 0;
+}
+
+[data-theme='light'] .user-directory-card {
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.1);
+}
+
+[data-theme='light'] .user-directory-card:hover {
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+}
+
+@media (min-width: 768px) {
+    .user-directory-card__name {
+        font-size: 1.05rem;
+    }
+
+    .user-directory-card__action {
+        width: 40px;
+        height: 40px;
+    }
 }
